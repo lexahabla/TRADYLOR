@@ -1,0 +1,892 @@
+---
+export interface Props {
+  title?: string;
+  description?: string;
+  image?: string;
+  canonicalUrl?: string;
+  type?: string;
+}
+
+const {
+  title = "Tradylor | Portal de Curación, Recomendaciones y Comparativas de Productos",
+  description = "Filtramos el ruido del mercado. Descubre análisis rigurosos, comparativas honestas y las mejores ofertas verificadas para tomar decisiones de compra inteligentes.",
+  image = "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=1200&auto=format&fit=crop",
+  canonicalUrl = Astro.url.href,
+  type = "website",
+} = Astro.props;
+
+const currentYear = new Date().getFullYear();
+---
+
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+
+    <!-- SEO Meta Tags Primarios -->
+    <title>{title}</title>
+    <meta name="title" content={title} />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    <meta name="robots" content="index, follow" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content={type} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={image} />
+    <meta property="og:site_name" content="Tradylor" />
+    <meta property="og:locale" content="es_ES" />
+
+    <!-- Twitter Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content={canonicalUrl} />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={image} />
+
+    <!-- Tipografía Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@600;700;800&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Estilos Globales & Sistema de Diseño Tradylor -->
+    <style is:global>
+      :root {
+        --font-body: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        --font-heading: 'Outfit', 'Inter', sans-serif;
+        
+        /* Paleta de colores de alta conversión */
+        --color-bg-body: #0a0e17;
+        --color-bg-card: #111827;
+        --color-bg-card-hover: #162032;
+        --color-surface-subtle: #1a2234;
+        
+        --color-primary: #3b82f6;
+        --color-primary-hover: #2563eb;
+        --color-accent: #10b981;
+        --color-accent-amber: #f59e0b;
+        
+        --color-border: #1f2937;
+        --color-border-hover: #374151;
+        
+        --color-text-main: #f3f4f6;
+        --color-text-muted: #9ca3af;
+        --color-text-dim: #6b7280;
+        
+        --max-width: 1200px;
+        --border-radius-sm: 8px;
+        --border-radius-md: 14px;
+        --border-radius-lg: 20px;
+        --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+        --shadow-glow: 0 0 25px rgba(59, 130, 246, 0.15);
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html {
+        font-family: var(--font-body);
+        background-color: var(--color-bg-body);
+        color: var(--color-text-main);
+        scroll-behavior: smooth;
+        text-rendering: optimizeLegibility;
+        -webkit-font-smoothing: antialiased;
+        /* Evita que elementos fixed desplazados (p. ej. el drawer del carrito)
+           ensanchen el área de scroll de la página */
+        overflow-x: clip;
+      }
+
+      body {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        line-height: 1.6;
+        overflow-x: hidden;
+      }
+
+      .container {
+        width: 100%;
+        max-width: var(--max-width);
+        margin-left: auto;
+        margin-right: auto;
+        padding-left: 1.5rem;
+        padding-right: 1.5rem;
+      }
+
+      /* 1. Barra de Transparencia */
+      .disclosure-bar {
+        background: linear-gradient(90deg, #111827 0%, #0f172a 100%);
+        border-bottom: 1px solid var(--color-border);
+        padding: 0.5rem 0;
+        font-size: 0.8rem;
+        color: var(--color-text-muted);
+      }
+      .disclosure-content {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+        justify-content: center;
+        flex-wrap: wrap;
+        text-align: center;
+      }
+      .disclosure-badge {
+        background: rgba(59, 130, 246, 0.15);
+        color: #60a5fa;
+        font-weight: 700;
+        font-size: 0.7rem;
+        padding: 0.15rem 0.6rem;
+        border-radius: 9999px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border: 1px solid rgba(59, 130, 246, 0.3);
+      }
+      .disclosure-text {
+        margin: 0;
+      }
+
+      /* 2. Header */
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+        background: rgba(10, 14, 23, 0.85);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .header-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 72px;
+      }
+      .brand-logo {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        text-decoration: none;
+        color: #ffffff;
+      }
+      .logo-symbol {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        background: linear-gradient(135deg, var(--color-primary) 0%, #60a5fa 100%);
+        border-radius: 10px;
+        color: #ffffff;
+        box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
+        flex-shrink: 0;
+      }
+      .brand-text {
+        font-family: var(--font-heading);
+        font-weight: 800;
+        font-size: 1.25rem;
+        letter-spacing: 0.02em;
+      }
+      .brand-text span {
+        color: var(--color-primary);
+      }
+
+      /* Navegación Principal */
+      .main-nav {
+        display: flex;
+      }
+      .nav-list {
+        display: flex;
+        align-items: center;
+        gap: 2rem;
+        list-style: none;
+      }
+      .nav-link {
+        color: var(--color-text-muted);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+        position: relative;
+        transition: color 0.2s ease;
+      }
+      .nav-link:hover {
+        color: #ffffff;
+      }
+      .nav-link::after {
+        content: '';
+        position: absolute;
+        bottom: -4px;
+        left: 0;
+        width: 0;
+        height: 2px;
+        background: var(--color-primary);
+        border-radius: 2px;
+        transition: width 0.25s ease;
+      }
+      .nav-link:hover::after {
+        width: 100%;
+      }
+
+      /* Acciones del Header (Carrito) */
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+      .header-cta-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: rgba(59, 130, 246, 0.12);
+        border: 1px solid rgba(59, 130, 246, 0.35);
+        color: #93c5fd;
+        font-size: 0.85rem;
+        font-weight: 600;
+        font-family: var(--font-body);
+        padding: 0.55rem 1.1rem;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: all 0.25s ease;
+      }
+      .header-cta-btn:hover {
+        background: var(--color-primary);
+        color: #ffffff;
+        border-color: transparent;
+        box-shadow: var(--shadow-glow);
+      }
+      .cart-count {
+        background: var(--color-accent);
+        color: #06281d;
+        font-size: 0.7rem;
+        font-weight: 800;
+        min-width: 18px;
+        height: 18px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+      }
+
+      /* Contenido Principal */
+      #main-content {
+        flex: 1;
+      }
+
+      /* Carrito Lateral (Drawer) */
+      .cart-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: min(400px, 92vw);
+        height: 100vh;
+        height: 100dvh;
+        background: #0f1623;
+        border-left: 1px solid var(--color-border);
+        box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
+        transform: translateX(105%);
+        transition: transform 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+        z-index: 300;
+        display: flex;
+        flex-direction: column;
+      }
+      .cart-drawer.is-open {
+        transform: translateX(0);
+      }
+      .cart-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(4, 8, 15, 0.65);
+        backdrop-filter: blur(2px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+        z-index: 250;
+      }
+      body.cart-is-open .cart-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      body.cart-is-open {
+        overflow: hidden;
+      }
+      .cart-drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--color-border);
+      }
+      .cart-kicker {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--color-text-dim);
+      }
+      .cart-drawer-header h2 {
+        font-family: var(--font-heading);
+        font-size: 1.35rem;
+        margin: 0.15rem 0 0;
+      }
+      .cart-close-btn {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--color-border);
+        color: var(--color-text-muted);
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        font-size: 1.25rem;
+        line-height: 1;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .cart-close-btn:hover {
+        color: #ffffff;
+        border-color: var(--color-border-hover);
+      }
+      .cart-items {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.25rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .cart-item {
+        display: flex;
+        gap: 0.85rem;
+        background: var(--color-bg-card);
+        border: 1px solid var(--color-border);
+        border-radius: var(--border-radius-sm);
+        padding: 0.75rem;
+      }
+      .cart-item img {
+        width: 56px;
+        height: 56px;
+        object-fit: contain;
+        border-radius: 6px;
+        background: #ffffff;
+        padding: 4px;
+        flex-shrink: 0;
+      }
+      .cart-item-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 0;
+      }
+      .cart-item-info a {
+        color: var(--color-text-main);
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-decoration: none;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .cart-item-info a:hover {
+        color: #60a5fa;
+      }
+      .cart-item-info span {
+        font-size: 0.78rem;
+        color: var(--color-text-muted);
+      }
+      .cart-remove-btn {
+        align-self: flex-start;
+        background: none;
+        border: none;
+        color: #f87171;
+        font-size: 0.75rem;
+        cursor: pointer;
+        padding: 0;
+      }
+      .cart-remove-btn:hover {
+        text-decoration: underline;
+      }
+      .cart-empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        color: var(--color-text-dim);
+        text-align: center;
+        padding: 2rem;
+      }
+      .cart-empty[hidden] {
+        display: none;
+      }
+      .cart-empty p {
+        color: var(--color-text-muted);
+        font-weight: 600;
+        margin: 0;
+      }
+      .cart-empty span {
+        font-size: 0.82rem;
+      }
+      .cart-drawer-footer {
+        padding: 1.25rem 1.5rem;
+        border-top: 1px solid var(--color-border);
+        display: flex;
+        flex-direction: column;
+        gap: 0.85rem;
+      }
+      .cart-total-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.9rem;
+        color: var(--color-text-muted);
+      }
+      .cart-total-row strong {
+        font-family: var(--font-heading);
+        font-size: 1.2rem;
+        color: #ffffff;
+      }
+      .cart-clear-btn {
+        width: 100%;
+        padding: 0.7rem;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #f87171;
+        font-size: 0.85rem;
+        font-weight: 600;
+        font-family: var(--font-body);
+        border-radius: var(--border-radius-sm);
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .cart-clear-btn:hover {
+        background: rgba(239, 68, 68, 0.2);
+      }
+
+      /* Footer */
+      .site-footer {
+        margin-top: auto;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        background: linear-gradient(180deg, #0a0e17 0%, #0d1321 100%);
+        padding-top: 4rem;
+      }
+      .footer-grid {
+        display: grid;
+        grid-template-columns: 1.6fr 1fr 1fr 1fr;
+        gap: 3rem;
+        padding-bottom: 3.5rem;
+      }
+      .footer-logo {
+        margin-bottom: 1.25rem;
+      }
+      .footer-desc {
+        font-size: 0.9rem;
+        color: var(--color-text-muted);
+        line-height: 1.7;
+        margin-bottom: 1.5rem;
+      }
+      .trust-shield {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.85rem;
+        color: #10b981;
+        background: rgba(16, 185, 129, 0.08);
+        border: 1px solid rgba(16, 185, 129, 0.2);
+        padding: 0.45rem 0.85rem;
+        border-radius: 8px;
+        width: fit-content;
+      }
+      .footer-heading {
+        font-family: var(--font-heading);
+        color: #ffffff;
+        font-size: 1rem;
+        font-weight: 700;
+        margin-bottom: 1.25rem;
+      }
+      .footer-links {
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+      }
+      .footer-links a {
+        color: var(--color-text-muted);
+        text-decoration: none;
+        font-size: 0.9rem;
+        transition: color 0.2s ease;
+      }
+      .footer-links a:hover {
+        color: #ffffff;
+      }
+
+      /* Tarjeta de Aviso Legal de Afiliación */
+      .affiliate-disclosure-box {
+        margin-bottom: 3rem;
+      }
+      .disclosure-card {
+        background: rgba(17, 24, 39, 0.6);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+        border-radius: var(--border-radius-md);
+        padding: 1.75rem;
+      }
+      .disclosure-header {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        margin-bottom: 0.85rem;
+      }
+      .disclosure-header h5 {
+        font-family: var(--font-heading);
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--color-accent-amber);
+        margin: 0;
+      }
+      .disclosure-body p {
+        font-size: 0.83rem;
+        color: var(--color-text-muted);
+        line-height: 1.6;
+        margin-bottom: 0.6rem;
+      }
+      .disclosure-body p:last-child {
+        margin-bottom: 0;
+      }
+      .disclosure-body strong {
+        color: #e5e7eb;
+      }
+
+      /* Barra inferior de Copyright */
+      .footer-bottom {
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        padding: 1.5rem 0;
+        font-size: 0.82rem;
+        color: var(--color-text-dim);
+      }
+      .footer-bottom-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 1rem;
+      }
+      .compliance-tags {
+        display: flex;
+        gap: 0.5rem;
+      }
+      .pill-tag {
+        background: rgba(255, 255, 255, 0.05);
+        color: var(--color-text-dim);
+        font-size: 0.72rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      /* Responsive */
+      @media (max-width: 960px) {
+        .footer-grid {
+          grid-template-columns: 1fr 1fr;
+        }
+        .brand-col {
+          grid-column: 1 / -1;
+        }
+        .main-nav {
+          display: none;
+        }
+      }
+      @media (max-width: 600px) {
+        .footer-grid {
+          grid-template-columns: 1fr;
+        }
+        .disclosure-content {
+          font-size: 0.75rem;
+        }
+        .footer-bottom-content {
+          flex-direction: column;
+          text-align: center;
+        }
+      }
+    </style>
+
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Tradylor",
+      "url": "https://tradylor.com",
+      "description": description,
+      "publisher": {
+        "@type": "Organization",
+        "name": "Tradylor Media",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://tradylor.com/logo.png"
+        }
+      }
+    })} />
+  </head>
+
+  <body>
+    <!-- 1. Barra Superior de Transparencia de Afiliación (Cumplimiento Legal & E-E-A-T) -->
+    <aside class="disclosure-bar" aria-label="Declaración de Afiliación">
+      <div class="container disclosure-content">
+        <span class="disclosure-badge">Transparencia Editorial</span>
+        <p class="disclosure-text">
+          En Tradylor probamos y seleccionamos productos de forma imparcial. Si compras a través de nuestros enlaces, podemos percibir una comisión de afiliación sin coste adicional para ti.
+        </p>
+      </div>
+    </aside>
+
+    <!-- 2. Header de Navegación Global -->
+    <header class="site-header">
+      <div class="container header-inner">
+        <a href="/" class="brand-logo" aria-label="Tradylor - Inicio">
+          <span class="logo-symbol">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+          </span>
+          <span class="brand-text">TRADY<span>LOR</span></span>
+        </a>
+
+        <nav class="main-nav" aria-label="Navegación Principal">
+          <ul class="nav-list">
+            <li><a href="#destacados" class="nav-link">Top Selecciones</a></li>
+            <li><a href="#metodologia" class="nav-link">Metodología</a></li>
+            <li><a href="#comparativas" class="nav-link">Comparativas</a></li>
+            <li><a href="#aviso-legal" class="nav-link">Aviso de Afiliación</a></li>
+          </ul>
+        </nav>
+
+        <div class="header-actions">
+          <button type="button" class="header-cta-btn cart-toggle-btn" aria-controls="cartDrawer" aria-expanded="false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+              <line x1="3" y1="6" x2="21" y2="6"></line>
+              <path d="M16 10a4 4 0 0 1-8 0"></path>
+            </svg>
+            <span>Carrito</span>
+            <span class="cart-count" id="cartCount" hidden>0</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 3. Contenido Principal -->
+    <main id="main-content">
+      <slot />
+    </main>
+
+    <aside id="cartDrawer" class="cart-drawer" aria-hidden="true" aria-labelledby="cartTitle">
+      <div class="cart-drawer-header">
+        <div>
+          <span class="cart-kicker">Tu selección</span>
+          <h2 id="cartTitle">Carrito</h2>
+        </div>
+        <button type="button" class="cart-close-btn" data-cart-close aria-label="Cerrar carrito">×</button>
+      </div>
+      <div id="cartItems" class="cart-items"></div>
+      <div id="cartEmpty" class="cart-empty">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+          <path d="M3 6h18"></path>
+          <path d="M16 10a4 4 0 0 1-8 0"></path>
+        </svg>
+        <p>Tu carrito está vacío</p>
+        <span>Añade productos para verlos aquí.</span>
+      </div>
+      <div class="cart-drawer-footer">
+        <div class="cart-total-row"><span>Total orientativo</span><strong id="cartTotal">0,00 €</strong></div>
+        <button type="button" class="cart-clear-btn" data-cart-clear>Vaciar carrito</button>
+      </div>
+    </aside>
+    <div class="cart-backdrop" data-cart-close></div>
+
+    <!-- 4. Footer Detallado con Aviso Legal de Afiliación Completo -->
+    <footer class="site-footer">
+      <div class="container footer-grid">
+        <!-- Columna Marca -->
+        <div class="footer-col brand-col">
+          <a href="/" class="brand-logo footer-logo">
+            <span class="logo-symbol">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+              </svg>
+            </span>
+            <span class="brand-text">TRADY<span>LOR</span></span>
+          </a>
+          <p class="footer-desc">
+            Portal independiente especializado en curación, análisis y guías de compra de alta fidelidad. Analizamos la tecnología y los productos más demandados para ayudarte a comprar con total seguridad.
+          </p>
+          <div class="trust-shield">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+            <span>Análisis independientes sin patrocinios de marcas</span>
+          </div>
+        </div>
+
+        <!-- Columna Navegación -->
+        <div class="footer-col">
+          <h4 class="footer-heading">Categorías Principales</h4>
+          <ul class="footer-links">
+            <li><a href="#destacados">Informática & Portátiles</a></li>
+            <li><a href="#destacados">Audio & Cancelación de Ruido</a></li>
+            <li><a href="#destacados">E-Readers & Lectura Digital</a></li>
+            <li><a href="#destacados">Hogar Inteligente & Robots</a></li>
+          </ul>
+        </div>
+
+        <!-- Columna Metodología & Compromiso -->
+        <div class="footer-col">
+          <h4 class="footer-heading">Criterio Editorial</h4>
+          <ul class="footer-links">
+            <li><a href="#metodologia">Protocolo de Pruebas</a></li>
+            <li><a href="#metodologia">Monitoreo de Precios en Vivo</a></li>
+            <li><a href="#metodologia">Política de Imparcialidad</a></li>
+            <li><a href="#aviso-legal">Aviso de Divulgación</a></li>
+          </ul>
+        </div>
+
+        <!-- Columna Enlaces Legales -->
+        <div class="footer-col">
+          <h4 class="footer-heading">Marco Legal</h4>
+          <ul class="footer-links">
+            <li><a href="#aviso-legal">Aviso Legal & Términos</a></li>
+            <li><a href="#aviso-legal">Política de Privacidad</a></li>
+            <li><a href="#aviso-legal">Política de Cookies</a></li>
+            <li><a href="#aviso-legal">Contacto & Soporte</a></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Sección Crítica de Aviso de Afiliación Obligatorio (Amazon Associates, FTC y UE) -->
+      <div id="aviso-legal" class="affiliate-disclosure-box container">
+        <div class="disclosure-card">
+          <div class="disclosure-header">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <h5>Aviso Legal Obligatorio de Monetización por Afiliación</h5>
+          </div>
+          <div class="disclosure-body">
+            <p>
+              <strong>Declaración de Afiliación:</strong> En cumplimiento de las directrices de la Comisión Federal de Comercio (FTC), la normativa europea de comercio electrónico y las políticas de los programas de asociados: <strong>Tradylor.com</strong> participa en el Programa de Afiliados de <em>Amazon EU Associates</em>, un programa de publicidad para afiliados diseñado para ofrecer a sitios web un modo de obtener comisiones por publicidad mediante la creación de enlaces a Amazon.es, así como en redes de afiliación de terceros (PcComponentes, Awin, entre otros).
+            </p>
+            <p>
+              <strong>Sin coste extra para el usuario:</strong> El uso de enlaces de afiliado no incrementa en ningún caso el precio final del producto para el comprador. Nuestras opiniones, selecciones y veredictos técnicos son 100% autónomos y jamás están condicionados por los acuerdos de afiliación.
+            </p>
+            <p>
+              <strong>Variabilidad de Precios y Stock:</strong> Los precios, disponibilidad y condiciones de envío mostrados en las fichas son exactos a la fecha de última actualización editorial, pero pueden diferir en el sitio web del comerciante final. Las compras quedan reguladas bajo los términos y condiciones de la tienda de destino.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra de Copyright -->
+      <div class="footer-bottom">
+        <div class="container footer-bottom-content">
+          <p>© {currentYear} Tradylor Media. Todos los derechos reservados. Diseñado para maximizar la confianza y el ahorro del comprador.</p>
+          <div class="compliance-tags">
+            <span class="pill-tag">Amazon Associate</span>
+            <span class="pill-tag">SSL 256-Bit</span>
+            <span class="pill-tag">GDPR Compliant</span>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script is:inline>
+      (() => {
+        const storageKey = 'tradylor-cart';
+        const cartDrawer = document.getElementById('cartDrawer');
+        const cartItems = document.getElementById('cartItems');
+        const cartEmpty = document.getElementById('cartEmpty');
+        const cartCount = document.getElementById('cartCount');
+        const cartTotal = document.getElementById('cartTotal');
+        const cartToggle = document.querySelector('.cart-toggle-btn');
+        let cart = JSON.parse(localStorage.getItem(storageKey) || '[]');
+
+        const formatPrice = (value) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
+        const saveCart = () => localStorage.setItem(storageKey, JSON.stringify(cart));
+
+        function renderCart() {
+          const itemCount = cart.reduce((total, item) => total + item.quantity, 0);
+          const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+          cartCount.textContent = itemCount;
+          cartCount.hidden = itemCount === 0;
+          cartTotal.textContent = formatPrice(total);
+          cartEmpty.hidden = cart.length > 0;
+          cartItems.innerHTML = cart.map((item) => `
+            <article class="cart-item">
+              <img src="${item.image}" alt="" loading="lazy" />
+              <div class="cart-item-info">
+                <a href="/producto/${item.id}">${item.title}</a>
+                <span>${formatPrice(item.price)} · Cantidad ${item.quantity}</span>
+                <button type="button" class="cart-remove-btn" data-cart-remove="${item.id}">Eliminar</button>
+              </div>
+            </article>
+          `).join('');
+        }
+
+        function openCart() {
+          cartDrawer.classList.add('is-open');
+          cartDrawer.setAttribute('aria-hidden', 'false');
+          cartToggle.setAttribute('aria-expanded', 'true');
+          document.body.classList.add('cart-is-open');
+        }
+
+        function closeCart() {
+          cartDrawer.classList.remove('is-open');
+          cartDrawer.setAttribute('aria-hidden', 'true');
+          cartToggle.setAttribute('aria-expanded', 'false');
+          document.body.classList.remove('cart-is-open');
+        }
+
+        document.addEventListener('click', (event) => {
+          const addButton = event.target.closest('.add-to-cart-btn');
+          const removeButton = event.target.closest('[data-cart-remove]');
+          if (addButton) {
+            const product = JSON.parse(addButton.dataset.product);
+            const existing = cart.find((item) => item.id === product.id);
+            if (existing) existing.quantity += 1;
+            else cart.push({ ...product, quantity: 1 });
+            saveCart();
+            renderCart();
+            openCart();
+            fetch('/api/analytics/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'cart_add', productId: product.id, path: window.location.pathname }) }).catch(() => {});
+          }
+          if (removeButton) {
+            cart = cart.filter((item) => item.id !== removeButton.dataset.cartRemove);
+            saveCart();
+            renderCart();
+          }
+          if (event.target.closest('.cart-toggle-btn')) openCart();
+          if (event.target.closest('[data-cart-close]')) closeCart();
+          if (event.target.closest('[data-cart-clear]')) {
+            cart = [];
+            saveCart();
+            renderCart();
+          }
+        });
+
+        renderCart();
+        fetch('/api/analytics/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'page_view', path: window.location.pathname }) }).catch(() => {});
+        document.addEventListener('click', (event) => {
+          const outboundLink = event.target.closest('a[href^="/out/"]');
+          if (outboundLink) fetch('/api/analytics/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'outbound_click', path: window.location.pathname }) }).catch(() => {});
+        });
+      })();
+    </script>
+  </body>
+</html>

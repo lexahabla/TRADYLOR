@@ -1,0 +1,425 @@
+---
+/**
+ * ==============================================================================
+ * TRADYLOR - TABLA COMPARATIVA DE PRODUCTOS (ComparisonTable)
+ * ==============================================================================
+ * Recibe varios productos de una misma categoría y maqueta una comparativa
+ * limpia orientada a conversión:
+ *   - Columna por producto con imagen, precio, puntuación y descuento.
+ *   - "Elección del Editor" destacada (por defecto, la mejor valorada).
+ *   - Características clave (pros) comparadas fila a fila.
+ *   - CTA de compra ENMASCARADO: /out/[id] (el affiliateUrl nunca se expone).
+ *
+ * Uso:
+ *   <ComparisonTable products={sameCategory} highlightId={product.id} />
+ * ==============================================================================
+ */
+
+import type { Product } from '../data/products';
+
+export interface Props {
+  products: Product[];
+  highlightId?: string;
+  title?: string;
+  maxItems?: number;
+}
+
+const {
+  products,
+  highlightId,
+  title = 'Comparativa rápida de la categoría',
+  maxItems = 4,
+} = Astro.props;
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(amount);
+
+// Selección ordenada: el destacado primero, luego por valoración
+const selection = [...products]
+  .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+  .slice(0, maxItems)
+  .sort((a, b) => (a.id === highlightId ? -1 : b.id === highlightId ? 1 : 0));
+
+const editorChoiceId = highlightId ?? selection[0]?.id;
+
+// Máximo de características a comparar por producto
+const MAX_FEATURES = 4;
+const getFeatures = (p: Product) => p.pros.slice(0, MAX_FEATURES);
+const discountOf = (p: Product) =>
+  p.originalPrice && p.originalPrice > p.price
+    ? Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100)
+    : null;
+---
+
+{selection.length >= 2 && (
+  <section class="comparison-block" aria-label={title}>
+    <div class="comparison-head">
+      <span class="comparison-tag">Análisis cruzado</span>
+      <h2 class="comparison-title">{title}</h2>
+    </div>
+
+    <div class="comparison-scroll">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th class="feature-col" scope="col"><span class="visually-hidden">Característica</span></th>
+            {selection.map((p) => (
+              <th scope="col" class:list={['product-col', { 'is-editor-choice': p.id === editorChoiceId }]}>
+                {p.id === editorChoiceId && (
+                  <>
+                    <span class="editor-ribbon">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                      </svg>
+                      Elección del Editor
+                    </span>
+                    <span class="best-badge">Mejor valorado</span>
+                  </>
+                )}
+                <a href={`/producto/${p.id}`} class="col-image-link" title={`Análisis completo de ${p.title}`}>
+                  <img src={p.image} alt={p.title} loading="lazy" width="160" height="160" />
+                </a>
+                <a href={`/producto/${p.id}`} class="col-title">{p.title}</a>
+                {p.rating != null && (
+                  <span class="col-rating">
+                    <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                    {p.rating.toFixed(1)}
+                    {p.reviewsCount != null && <span class="col-reviews">({p.reviewsCount.toLocaleString('es-ES')})</span>}
+                  </span>
+                )}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <!-- Fila: Precio -->
+          <tr class="price-row">
+            <th scope="row" class="feature-label">Precio verificado</th>
+            {selection.map((p) => {
+              const discount = discountOf(p);
+              return (
+                <td class:list={[{ 'is-editor-choice': p.id === editorChoiceId }]}>
+                  <span class="cell-price">{formatCurrency(p.price)}</span>
+                  {p.originalPrice && discount != null && (
+                    <span class="cell-original">{formatCurrency(p.originalPrice)}</span>
+                  )}
+                  {discount != null && <span class="cell-discount">-{discount}%</span>}
+                </td>
+              );
+            })}
+          </tr>
+
+          <!-- Filas: Características clave (pros comparados) -->
+          {Array.from({ length: MAX_FEATURES }).map((_, featureIndex) => {
+            const hasAny = selection.some((p) => getFeatures(p)[featureIndex]);
+            return hasAny ? (
+              <tr>
+                <th scope="row" class="feature-label">
+                  {['Punto fuerte principal', 'Segundo punto fuerte', 'Tercer punto fuerte', 'Cuarto punto fuerte'][featureIndex]}
+                </th>
+                {selection.map((p) => (
+                  <td class:list={[{ 'is-editor-choice': p.id === editorChoiceId }]}>
+                    {getFeatures(p)[featureIndex] ? (
+                      <span class="cell-feature">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">
+                          <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        {getFeatures(p)[featureIndex]}
+                      </span>
+                    ) : (
+                      <span class="cell-empty">—</span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ) : null;
+          })}
+
+          <!-- Fila: CTA hacia el análisis completo dentro de Tradylor -->
+          <tr class="cta-row">
+            <th scope="row" class="feature-label">Análisis completo</th>
+            {selection.map((p) => (
+              <td class:list={[{ 'is-editor-choice': p.id === editorChoiceId }]}>
+                <a
+                  href={`/producto/${p.id}`}
+                  class="cell-cta"
+                  aria-label={`Leer análisis completo de ${p.title}`}
+                >
+                  Ver análisis
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                  </svg>
+                </a>
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+)}
+
+<style>
+  .comparison-block {
+    margin: 4rem 0 2rem;
+  }
+
+  .comparison-head {
+    margin-bottom: 1.75rem;
+  }
+
+  .comparison-tag {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: #60a5fa;
+    margin-bottom: 0.6rem;
+  }
+
+  .comparison-title {
+    font-family: var(--font-heading);
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+    letter-spacing: -0.02em;
+  }
+
+  .comparison-scroll {
+    overflow-x: auto;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(17, 24, 39, 0.55);
+    backdrop-filter: blur(8px);
+  }
+
+  .comparison-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 640px;
+  }
+
+  .visually-hidden {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  /* ---- Cabecera de productos ---- */
+  .comparison-table thead th {
+    padding: 1.25rem 1rem 1rem;
+    text-align: center;
+    vertical-align: top;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .feature-col {
+    width: 170px;
+  }
+
+  .product-col {
+    position: relative;
+    min-width: 180px;
+  }
+
+  .editor-ribbon {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    background: linear-gradient(135deg, #f59e0b, #fbbf24);
+    color: #1a1207;
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.25rem 0.6rem;
+    border-radius: 999px;
+    margin-bottom: 0.5rem;
+  }
+
+  .best-badge {
+    display: inline-block;
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    font-size: 0.62rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    margin-bottom: 0.65rem;
+  }
+
+  .col-image-link {
+    display: block;
+    width: 110px;
+    height: 110px;
+    margin: 0 auto 0.75rem;
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 10px;
+    transition: transform 0.25s ease;
+  }
+
+  .col-image-link:hover {
+    transform: scale(1.05);
+  }
+
+  .col-image-link img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .col-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    color: #e5e7eb;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1.35;
+    text-decoration: none;
+    margin-bottom: 0.5rem;
+    min-height: 2.3em;
+  }
+
+  .col-title:hover {
+    color: #60a5fa;
+  }
+
+  .col-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    color: #fbbf24;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  .col-reviews {
+    color: var(--color-text-dim);
+    font-weight: 500;
+    font-size: 0.72rem;
+  }
+
+  /* ---- Celdas ---- */
+  .comparison-table tbody th,
+  .comparison-table tbody td {
+    padding: 0.9rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: center;
+    vertical-align: middle;
+  }
+
+  .comparison-table tbody tr:last-child th,
+  .comparison-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  .feature-label {
+    color: var(--color-text-dim);
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    text-align: left !important;
+    padding-left: 1.25rem !important;
+  }
+
+  /* Columna destacada "Elección del Editor" */
+  .product-col.is-editor-choice,
+  td.is-editor-choice {
+    background: rgba(59, 130, 246, 0.07);
+  }
+
+  .cell-price {
+    display: block;
+    font-family: var(--font-heading);
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #ffffff;
+  }
+
+  .cell-original {
+    display: block;
+    font-size: 0.78rem;
+    color: var(--color-text-dim);
+    text-decoration: line-through;
+  }
+
+  .cell-discount {
+    display: inline-block;
+    margin-top: 0.35rem;
+    background: rgba(239, 68, 68, 0.14);
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+    font-size: 0.7rem;
+    font-weight: 800;
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+  }
+
+  .cell-feature {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 0.4rem;
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+    line-height: 1.45;
+    text-align: left;
+  }
+
+  .cell-feature svg {
+    color: #10b981;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .cell-empty {
+    color: var(--color-text-dim);
+  }
+
+  /* ---- CTA enmascarado ---- */
+  .cell-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    width: 100%;
+    padding: 0.7rem 1rem;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #ffffff;
+    font-size: 0.82rem;
+    font-weight: 700;
+    border-radius: 10px;
+    text-decoration: none;
+    transition: all 0.25s ease;
+    box-shadow: 0 6px 18px rgba(59, 130, 246, 0.3);
+  }
+
+  .cell-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(59, 130, 246, 0.45);
+    background: linear-gradient(135deg, #60a5fa, #3b82f6);
+  }
+
+  @media (max-width: 640px) {
+    .comparison-table {
+      min-width: 540px;
+    }
+    .feature-label {
+      padding-left: 0.9rem !important;
+    }
+  }
+</style>

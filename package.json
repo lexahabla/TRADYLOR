@@ -1,0 +1,17 @@
+{
+  "name": "tradylor-web",
+  "type": "module",
+  "version": "1.0.0",
+  "description": "Tradylor - Portal de recomendación, curación y comparativas de productos de alta conversión",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/node": "^8.3.0",
+    "astro": "^4.15.0"
+  }
+}

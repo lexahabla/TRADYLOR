@@ -1,0 +1,635 @@
+---
+import Layout from '../layouts/Layout.astro';
+import ProductCard from '../components/ProductCard.astro';
+import { getCatalogProducts } from '../lib/catalog';
+
+export const prerender = false;
+const products = getCatalogProducts();
+
+const pageTitle = "Tradylor | Portal de Curación, Análisis y Ofertas Verificadas";
+const pageDescription = "Descubre las mejores selecciones y comparativas de producto. Análisis honestos, pros y contras objetivos y enlaces de compra verificados con las mejores ofertas.";
+---
+
+<Layout title={pageTitle} description={pageDescription}>
+  <!-- ============================================================
+       1. HERO SECTION: Propuesta de Valor Estratégica
+       ============================================================ -->
+  <section class="hero-section">
+    <div class="container hero-container">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        <span>Curación de Productos & Análisis Independientes</span>
+      </div>
+
+      <h1 class="hero-title">
+        Filtramos el ruido del mercado.<br />
+        <span class="gradient-text">Solo recomendamos lo que vale la pena comprar.</span>
+      </h1>
+
+      <p class="hero-subtitle">
+        En Tradylor desarmamos las campañas de marketing engañosas. Analizamos a fondo especificaciones, fiabilidad y relación calidad-precio para que ahorres tiempo, dinero y tomes decisiones de compra 100% acertadas.
+      </p>
+
+      <!-- Badges de Autoridad E-E-A-T (Google Search Quality Raters) -->
+      <div class="hero-trust-metrics">
+        <div class="metric-item">
+          <span class="metric-number">+500h</span>
+          <span class="metric-label">De análisis y pruebas de producto</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-number">0€</span>
+          <span class="metric-label">Aceptados de marcas por reviews favorables</span>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-number">24/7</span>
+          <span class="metric-label">Monitoreo activo de bajadas de precio</span>
+        </div>
+      </div>
+
+      <!-- Accesos Rápidos a Categorías -->
+      <div class="category-pills-nav">
+        <a href="#destacados" class="pill active">Todas las Selecciones</a>
+        <a href="#destacados" class="pill">Audio & Sonido</a>
+        <a href="#destacados" class="pill">Informática</a>
+        <a href="#destacados" class="pill">E-Readers</a>
+        <a href="#destacados" class="pill">Hogar Inteligente</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       2. SECCIÓN DESTACADOS: Cuadrícula Dinámica de Productos
+       ============================================================ -->
+  <section class="products-section" id="destacados">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">Selecciones Editoriales</div>
+        <h2 class="section-title">Recomendaciones Top de Alta Conversión</h2>
+        <p class="section-desc">
+          Evaluados bajo criterios de rendimiento real, tasa de devoluciones y mejor histórico de precios en comercio electrónico.
+        </p>
+      </div>
+
+      <div class="products-grid">
+        {products.map((item) => (
+          <ProductCard product={item} />
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       3. SECCIÓN E-E-A-T: Por Qué Confiar en Tradylor
+       ============================================================ -->
+  <section class="trust-section" id="metodologia">
+    <div class="container">
+      <div class="section-header center">
+        <div class="section-tag">Nuestra Promesa Editorial</div>
+        <h2 class="section-title">¿Por qué confiar en las recomendaciones de Tradylor?</h2>
+        <p class="section-desc max-600">
+          Internet está plagado de listas generadas automáticamente sin criterio. Tradylor nació para devolver la sensatez a las decisiones de compra en línea.
+        </p>
+      </div>
+
+      <div class="pillars-grid">
+        <!-- Pilar 1 -->
+        <div class="pillar-card">
+          <div class="pillar-icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <h3 class="pillar-title">Curación Técnica Implacable</h3>
+          <p class="pillar-text">
+            No listamos catálogos enteros. Descartamos el 90% de los productos que evaluamos y solo publicamos los que superan nuestros estándares de durabilidad y satisfacción real.
+          </p>
+        </div>
+
+        <!-- Pilar 2 -->
+        <div class="pillar-card">
+          <div class="pillar-icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+          </div>
+          <h3 class="pillar-title">Cero Patrocinios Encubiertos</h3>
+          <p class="pillar-text">
+            Ninguna marca puede pagar por figurar en nuestras guías ni por alterar nuestros veredictos. Nuestra única lealtad es con el lector que busca comprar con seguridad.
+          </p>
+        </div>
+
+        <!-- Pilar 3 -->
+        <div class="pillar-card">
+          <div class="pillar-icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+          </div>
+          <h3 class="pillar-title">Monitoreo de Precios Reales</h3>
+          <p class="pillar-text">
+            Comparamos históricos de ofertas para avisarte cuando una rebaja es genuina y cuándo se trata de una oferta inflada artificialmente por los algoritmos de las tiendas.
+          </p>
+        </div>
+
+        <!-- Pilar 4 -->
+        <div class="pillar-card">
+          <div class="pillar-icon-box">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </div>
+          <h3 class="pillar-title">Transparencia Radical en Afiliación</h3>
+          <p class="pillar-text">
+            Explicamos con total claridad cómo se financia este portal. Cuando compras a través de nuestros botones oficiales, la tienda nos abona una comisión sin cobrarte un céntimo de más.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       4. SECCIÓN GUÍA DE COMPRA RÁPIDA: CRO Boost
+       ============================================================ -->
+  <section class="guide-banner-section" id="comparativas">
+    <div class="container">
+      <div class="guide-banner-card">
+        <div class="guide-text">
+          <span class="banner-badge">Guía Express</span>
+          <h3 class="banner-heading">¿No tienes claro cuál elegir?</h3>
+          <p class="banner-sub">
+            Aplica nuestra regla de oro: prioriza productos con garantía directa del fabricante, disponibilidad inmediata de repuestos y un mínimo de 4.5 estrellas con más de 500 opiniones contrastadas.
+          </p>
+        </div>
+        <div class="guide-action">
+          <a href="#destacados" class="guide-btn">Explorar Todas las Ofertas</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</Layout>
+
+<style>
+  /* ============ DESIGN TOKENS & BASE ============ */
+  :root {
+    --gradient-primary: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+    --gradient-accent: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+    --gradient-surface: linear-gradient(135deg, rgba(17, 24, 39, 0.8) 0%, rgba(30, 41, 59, 0.6) 100%);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.4);
+    --shadow-glow-blue: 0 0 40px rgba(59, 130, 246, 0.2);
+  }
+
+  /* ============ HERO SECTION ============ */
+  .hero-section {
+    position: relative;
+    padding: 8rem 0 6rem;
+    background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+    overflow: hidden;
+  }
+
+  .hero-section::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: float 8s ease-in-out infinite;
+  }
+
+  .hero-section::after {
+    content: '';
+    position: absolute;
+    bottom: -50%;
+    left: -10%;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle, rgba(16, 185, 129, 0.15) 0%, transparent 70%);
+    border-radius: 50%;
+    animation: float 10s ease-in-out infinite reverse;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-30px); }
+  }
+
+  .hero-container {
+    position: relative;
+    z-index: 2;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 0.6rem 1.2rem;
+    border-radius: 999px;
+    margin-bottom: 2rem;
+    backdrop-filter: blur(8px);
+  }
+
+  .badge-dot {
+    width: 8px;
+    height: 8px;
+    background: #3b82f6;
+    border-radius: 50%;
+    box-shadow: 0 0 12px #3b82f6;
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+    50% { box-shadow: 0 0 0 8px rgba(59, 130, 246, 0); }
+  }
+
+  .hero-title {
+    font-family: var(--font-heading);
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    max-width: 950px;
+    margin-bottom: 1.5rem;
+    background: linear-gradient(135deg, #ffffff 0%, #60a5fa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 50%, #38bdf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-subtitle {
+    font-size: 1.25rem;
+    color: rgba(255, 255, 255, 0.8);
+    max-width: 800px;
+    margin-bottom: 3rem;
+    line-height: 1.7;
+    font-weight: 400;
+  }
+
+  /* ============ TRUST METRICS ============ */
+  .hero-trust-metrics {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 3rem;
+    background: var(--gradient-surface);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2rem 3rem;
+    border-radius: 20px;
+    margin-bottom: 3rem;
+    flex-wrap: wrap;
+    backdrop-filter: blur(12px);
+    box-shadow: var(--shadow-md), var(--shadow-glow-blue);
+  }
+
+  .metric-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .metric-number {
+    font-family: var(--font-heading);
+    font-size: 2rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .metric-label {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 500;
+  }
+
+  .metric-divider {
+    width: 1px;
+    height: 40px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%);
+  }
+
+  /* ============ CATEGORY PILLS ============ */
+  .category-pills-nav {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .pill {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 0.75rem 1.5rem;
+    border-radius: 999px;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.320, 1);
+    backdrop-filter: blur(8px);
+  }
+
+  .pill:hover,
+  .pill.active {
+    background: var(--gradient-primary);
+    color: #ffffff;
+    border-color: transparent;
+    box-shadow: var(--shadow-glow-blue);
+    transform: translateY(-2px);
+  }
+
+  /* ============ PRODUCTS SECTION ============ */
+  .products-section {
+    padding: 8rem 0;
+  }
+
+  .section-header {
+    margin-bottom: 4rem;
+  }
+
+  .section-header.center {
+    text-align: center;
+  }
+
+  .section-tag {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #3b82f6;
+    letter-spacing: 0.1em;
+    margin-bottom: 1rem;
+    display: inline-block;
+  }
+
+  .section-title {
+    font-family: var(--font-heading);
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 1rem;
+    color: #ffffff;
+  }
+
+  .section-desc {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.1rem;
+    max-width: 700px;
+    line-height: 1.7;
+  }
+
+  .section-header.center .section-desc {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* ============ PRODUCTS GRID ============ */
+  .products-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 2rem;
+  }
+
+  @media (max-width: 1280px) {
+    .products-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1.5rem;
+    }
+  }
+
+  @media (max-width: 960px) {
+    .products-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.5rem;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .products-grid {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+  }
+
+  /* ============ TRUST SECTION (E-E-A-T) ============ */
+  .trust-section {
+    padding: 8rem 0;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, transparent 100%);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .pillars-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 2rem;
+    margin-top: 4rem;
+  }
+
+  .pillar-card {
+    background: var(--gradient-surface);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    padding: 2.5rem;
+    transition: all 0.35s cubic-bezier(0.23, 1, 0.320, 1);
+    backdrop-filter: blur(8px);
+  }
+
+  .pillar-card:hover {
+    transform: translateY(-8px);
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: var(--shadow-glow-blue);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(30, 41, 59, 0.8) 100%);
+  }
+
+  .pillar-icon-box {
+    width: 56px;
+    height: 56px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.1) 100%);
+    color: #60a5fa;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+  }
+
+  .pillar-title {
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 0.75rem;
+  }
+
+  .pillar-text {
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.7;
+  }
+
+  /* ============ GUIDE BANNER ============ */
+  .guide-banner-section {
+    padding: 6rem 0 4rem;
+  }
+
+  .guide-banner-card {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(16, 185, 129, 0.1) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 24px;
+    padding: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 3rem;
+    flex-wrap: wrap;
+    backdrop-filter: blur(8px);
+    box-shadow: var(--shadow-glow-blue);
+  }
+
+  .guide-text {
+    flex: 1;
+    min-width: 300px;
+  }
+
+  .banner-badge {
+    background: var(--gradient-primary);
+    color: #ffffff;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 0.4rem 0.9rem;
+    border-radius: 8px;
+    display: inline-block;
+    margin-bottom: 1rem;
+  }
+
+  .banner-heading {
+    font-family: var(--font-heading);
+    font-size: 1.75rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin-bottom: 0.75rem;
+  }
+
+  .banner-sub {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+
+  .guide-btn {
+    background: #ffffff;
+    color: #1a202c;
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 1rem 2rem;
+    border-radius: 12px;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.320, 1);
+    display: inline-block;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    white-space: nowrap;
+  }
+
+  .guide-btn:hover {
+    background: #f0f4f8;
+    transform: translateY(-3px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  }
+
+  /* ============ RESPONSIVE ============ */
+  @media (max-width: 768px) {
+    .hero-section {
+      padding: 5rem 0 4rem;
+    }
+
+    .hero-title {
+      font-size: clamp(1.75rem, 5vw, 2.5rem);
+    }
+
+    .hero-trust-metrics {
+      gap: 1.5rem;
+      padding: 1.5rem 1.25rem;
+    }
+
+    .metric-divider {
+      display: none;
+    }
+
+    .products-section {
+      padding: 5rem 0;
+    }
+
+    .section-title {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+    }
+
+    .guide-banner-card {
+      padding: 2rem;
+      text-align: center;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .trust-section {
+      padding: 5rem 0;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .hero-badge {
+      font-size: 0.8rem;
+      padding: 0.5rem 1rem;
+    }
+
+    .hero-subtitle {
+      font-size: 1rem;
+      margin-bottom: 2rem;
+    }
+
+    .hero-trust-metrics {
+      gap: 1rem;
+    }
+
+    .category-pills-nav {
+      gap: 0.5rem;
+    }
+
+    .pill {
+      font-size: 0.8rem;
+      padding: 0.5rem 1rem;
+    }
+  }
+</style>

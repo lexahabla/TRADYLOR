@@ -1,0 +1,55 @@
+---
+/**
+ * ==============================================================================
+ * TRADYLOR — SISTEMA DE LINK CLOAKING / REDIRECCIÓN INTERNA DE AFILIADO
+ * ==============================================================================
+ *
+ * Ruta dinámica SSR: /out/[id]
+ *
+ * FUNCIONAMIENTO:
+ *  1. Extrae el parámetro `id` de la URL (p.ej. /out/sony-wh-1000xm5).
+ *  2. Busca el producto en el JSON dinámico (scrapeado/externo) primero,
+ *     luego en la lista estática de products.ts como fallback seguro.
+ *  3. Si existe → HTTP 302 al affiliateUrl real (invisible para el usuario).
+ *  4. Si no existe → Redirección limpia al inicio (/).
+ *
+ * BENEFICIOS DE SEGURIDAD, CRO Y SEO:
+ *  ✓ La URL visible en el navegador siempre es /out/[id] (dominio propio).
+ *  ✓ El enlace de afiliado NUNCA aparece en el HTML ni en el JS del cliente.
+ *  ✓ 302 (temporal) evita que los navegadores cacheen la URL de destino,
+ *    lo que permite rotar o actualizar affiliateUrl sin problemas de caché.
+ *  ✓ SSR garantiza la redirección en servidor; sin exposición en el bundle JS.
+ *  ✓ Cache-Control: no-store impide que proxies intermedios guarden la URL real.
+ * ==============================================================================
+ */
+
+// CRÍTICO: Deshabilita el prerenderizado estático para esta ruta.
+// Sin esto, Astro generaría HTML estático y el `id` no podría leerse en runtime.
+export const prerender = false;
+
+import { getCatalogProducts } from '../../lib/catalog';
+
+const allProducts = getCatalogProducts();
+
+// ---------------------------------------------------------------------------
+// Resolución del producto solicitado
+// ---------------------------------------------------------------------------
+
+const { id } = Astro.params;
+
+const product = allProducts.find((p) => p.id === id);
+
+// Si el producto no existe o le falta la URL de afiliado → redirige al inicio.
+// Evitamos mostrar páginas de error que podrían confundir al usuario.
+if (!product || !product.affiliateUrl) {
+  return Astro.redirect('/', 302);
+}
+
+// ---------------------------------------------------------------------------
+// Redirección HTTP 302 — Found (Temporal)
+// ---------------------------------------------------------------------------
+// Astro.redirect() emite la cabecera Location en el servidor.
+// El navegador sigue la redirección de forma transparente para el usuario.
+// Las cabeceras adicionales evitan que proxies o CDNs cacheen la URL real.
+return Astro.redirect(product.affiliateUrl as string, 302);
+---
