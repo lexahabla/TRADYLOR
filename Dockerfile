@@ -1,50 +1,57 @@
-# ==========================================
-# Fase 1: Construcción (Builder)
-# ==========================================
+# ==============================================================================
+# TRADYLOR - Imagen de producción (Easy Panel / Docker)
+# Astro 4 (SSR) con adaptador @astrojs/node en modo standalone.
+# ==============================================================================
+
+# -----------------------------------------------
+# Fase 1: build
+# -----------------------------------------------
 FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copiar ficheros de dependencias
-COPY package.json package-lock.json* ./
-
-# Instalar dependencias
+# Dependencias (incluye devDependencies: astro, tailwind, etc.)
+COPY package.json package-lock.json ./
 RUN npm ci
 
-# Copiar el resto del código fuente del proyecto
-COPY . .
+# Fuentes necesarias para `astro build`
+COPY astro.config.mjs tailwind.config.mjs tsconfig.json ./
+COPY public ./public
+COPY src ./src
 
-# Construir la aplicación para producción (genera la carpeta dist o .next)
 RUN npm run build
 
-# ==========================================
-# Fase 2: Producción (Runtime ligero)
-# ==========================================
+# -----------------------------------------------
+# Fase 2: runtime
+# -----------------------------------------------
 FROM node:20-alpine AS runner
 
 WORKDIR /app
 
-ENV NODE_ENV=production
+# su-exec: el entrypoint entra como root (para reclamar el volumen) y
+# arranca el servidor como usuario `node` sin privilegios.
+RUN apk add --no-cache su-exec
 
-# Crear usuario sin privilegios por seguridad
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+ENV NODE_ENV=production \
+    PORT=3000 \
+    HOST=0.0.0.0 \
+    HOSTNAME=0.0.0.0 \
+    TRADYLOR_DATA_DIR=/app/data \
+    TRADYLOR_IMAGES_DIR=/app/data/images/products
 
-# Copiar los artefactos necesarios desde el builder
-# (Ajusta según uses Astro con adaptador de Node o Next.js)
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/package.json ./package.json
+# Sólo dependencias de producción en la imagen final
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
 
-COPY --from=builder --chown=nextjs:nodejs /app/dist ./dist
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+# Build SSR + datos semilla (products/categories/analytics) + entrypoint
+COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --from=builder --chown=node:node /app/src/data ./seed
+COPY --chown=node:node docker/entrypoint.sh ./entrypoint.sh
 
-USER nextjs
-
-# Puerto en el que correrá la app dentro del contenedor
 EXPOSE 3000
 
-ENV PORT=3000
-ENV HOSTNAME="0.0.0.0"
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-# Comando de inicio para producción
-CMD ["node", "./dist/server/entry.mjs"]
+# Arranca como root para poder escribir en el volumen; baja a `node` en el entrypoint.
+ENTRYPOINT ["/bin/sh", "/app/entrypoint.sh"]

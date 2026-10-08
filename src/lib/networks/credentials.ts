@@ -21,12 +21,11 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import { NETWORKS, getNetworkDefinition } from './registry';
 import type { NetworkStatus, NetworkView } from './types';
+import { DATA_DIR, dataFile } from '../paths';
 
-const DATA_DIR = path.join(process.cwd(), 'src', 'data');
-const CREDENTIALS_PATH = path.join(DATA_DIR, 'credentials.json');
+const CREDENTIALS_PATH = dataFile('credentials.json');
 
 interface StoredNetworkCredentials {
   values: Record<string, string>;

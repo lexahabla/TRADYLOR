@@ -1,0 +1,6 @@
+# Normalización de fin de línea.
+# Los scripts de contenedor (entrypoint.sh, Dockerfile) se ejecutan en Linux:
+# si llegaran con CRLF el build/arranque fallaría.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.toml text eol=lf

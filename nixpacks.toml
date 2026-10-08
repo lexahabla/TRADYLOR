@@ -1,0 +1,17 @@
+# ==============================================================================
+# TRADYLOR - Configuración de despliegue Nixpacks (alternativa al Dockerfile)
+# En Easy Panel se recomienda el build pack "Dockerfile"; este archivo existe
+# por si se elige Nixpacks (Railway/Render/PeerCloud).
+# ==============================================================================
+
+[phases.setup]
+nixPkgs = ['nodejs-20']
+
+[phases.install]
+cmds = ['npm ci']
+
+[phases.build]
+cmds = ['npm run build']
+
+[start]
+cmd = 'node dist/server/entry.mjs'

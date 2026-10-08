@@ -13,11 +13,11 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
 import { products as staticProducts, type Product } from '../data/products';
 import { validateProducts, validateSingleProduct } from './validateProducts';
+import { dataFile } from './paths';
 
-const DATA_FILE_PATH = path.join(process.cwd(), 'src', 'data', 'products.json');
+const DATA_FILE_PATH = dataFile('products.json');
 
 /** Nested objects that must be merged field-by-field instead of replaced. */
 const NESTED_KEYS = [

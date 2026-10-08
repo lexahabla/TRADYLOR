@@ -1,0 +1,29 @@
+# Dependencias y builds locales
+node_modules
+dist
+.astro
+
+# Git e IDE
+.git
+.gitignore
+.kilo
+.idea
+.vscode
+
+# Secretos (NUNCA deben entrar en la imagen)
+.env
+.env.*
+src/data/credentials.json
+
+# Imágenes generadas en local (se regeneran en el volumen de producción)
+public/images/products
+
+# Artefactos y documentación no necesarios para compilar
+*.zip
+*.log
+docs
+AGENTS.md
+opencode.json
+test-navigation.ps1
+Dockerfile
+nixpacks.toml

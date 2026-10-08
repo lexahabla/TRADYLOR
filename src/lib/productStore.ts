@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { dataFile } from './paths';
 
 // Interfaz del producto (compartida por el panel admin y los endpoints de alta)
 export interface Product {
@@ -24,7 +25,7 @@ export interface Product {
 }
 
 // Ruta al archivo de persistencia JSON
-export const DATA_FILE_PATH = path.join(process.cwd(), 'src', 'data', 'products.json');
+export const DATA_FILE_PATH = dataFile('products.json');
 
 /**
  * Lee de forma segura los productos almacenados en el archivo JSON local.

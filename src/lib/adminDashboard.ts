@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import path from 'node:path';
+import { DATA_DIR, dataFile } from './paths';
 import {
   createCategory as createCategoryResult,
   getCategories as getRichCategories,
@@ -19,8 +19,7 @@ export const AFFILIATE_PROVIDERS = [
   { id: 'etsy', name: 'Etsy Affiliate Program', description: 'Productos y enlaces de Etsy.', envKeys: ['ETSY_API_KEY', 'ETSY_AFFILIATE_ID'] },
 ] as const;
 
-const DATA_DIR = path.join(process.cwd(), 'src', 'data');
-const ANALYTICS_PATH = path.join(DATA_DIR, 'analytics.json');
+const ANALYTICS_PATH = dataFile('analytics.json');
 
 function readJson<T>(filePath: string, fallback: T): T {
   try {

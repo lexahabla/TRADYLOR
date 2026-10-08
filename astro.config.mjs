@@ -6,6 +6,10 @@ import tailwind from '@astrojs/tailwind';
 export default defineConfig({
   site: 'https://tradylor.com',
   output: 'server',
+  // En producción (contenedor) hay que escuchar en 0.0.0.0; en local da igual.
+  server: {
+    host: true,
+  },
   adapter: node({
     mode: 'standalone',
   }),

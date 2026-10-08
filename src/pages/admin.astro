@@ -3,7 +3,7 @@ export const prerender = false;
 
 import Layout from '../layouts/Layout.astro';
 import fs from 'node:fs';
-import path from 'node:path';
+import { dataFile } from '../lib/paths';
 import type { Product } from './api/products/add';
 import { areValidCredentials, clearAdminSession, createAdminSession, isAdminAuthenticated } from '../lib/adminAuth';
 import { getAnalyticsSummary } from '../lib/adminDashboard';
@@ -34,7 +34,7 @@ if (Astro.request.method === 'POST') {
 }
 
 // Leer productos almacenados para renderizar inicialmente en el servidor (SSR)
-const DATA_FILE_PATH = path.join(process.cwd(), 'src', 'data', 'products.json');
+const DATA_FILE_PATH = dataFile('products.json');
 let initialProducts: Product[] = [];
 
 try {

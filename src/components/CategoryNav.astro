@@ -12,7 +12,7 @@
  * ==============================================================================
  */
 import fs from 'node:fs';
-import path from 'node:path';
+import { dataFile } from '../lib/paths';
 import { getCategories, type Category } from '../lib/categories';
 
 export interface Props {
@@ -30,7 +30,7 @@ const currentCategory = (propCategory ?? urlCategory ?? 'all').toLowerCase().tri
 let categories: Category[] = [];
 
 try {
-  const filePath = path.join(process.cwd(), 'src', 'data', 'categories.json');
+  const filePath = dataFile('categories.json');
   if (fs.existsSync(filePath)) {
     const raw = fs.readFileSync(filePath, 'utf-8');
     const parsed = JSON.parse(raw);

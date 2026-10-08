@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { CLIENT_IMAGES_DIR, IMAGES_DIR } from './paths';
 
 /**
  * Integración de IA para Compra Delegada.
@@ -249,17 +250,19 @@ function persistImage(bytes: Uint8Array, title: string): string {
   const filename = `${slugifyFilename(title)}-${Date.now().toString(36)}.png`;
   const relativeUrl = `/images/products/${filename}`;
 
-  // 1) Fuente persistente: public/images/products (se copia en cada build).
-  const publicDir = path.join(process.cwd(), 'public', 'images', 'products');
-  fs.mkdirSync(publicDir, { recursive: true });
-  fs.writeFileSync(path.join(publicDir, filename), bytes);
+  // 1) Fuente durable: IMAGES_DIR (volumen en producción, public/ en local).
+  try {
+    fs.mkdirSync(IMAGES_DIR, { recursive: true });
+    fs.writeFileSync(path.join(IMAGES_DIR, filename), bytes);
+  } catch (error) {
+    console.warn('[AI] No se pudo guardar la imagen en el almacenamiento durable:', error);
+  }
 
   // 2) Build actual: dist/client/images/products (lo sirve el standalone de Node).
   try {
-    const clientDir = path.join(process.cwd(), 'dist', 'client', 'images', 'products');
-    if (fs.existsSync(path.dirname(clientDir))) {
-      fs.mkdirSync(clientDir, { recursive: true });
-      fs.writeFileSync(path.join(clientDir, filename), bytes);
+    if (fs.existsSync(path.dirname(CLIENT_IMAGES_DIR))) {
+      fs.mkdirSync(CLIENT_IMAGES_DIR, { recursive: true });
+      fs.writeFileSync(path.join(CLIENT_IMAGES_DIR, filename), bytes);
     }
   } catch (error) {
     console.warn('[AI] No se pudo copiar la imagen al build actual:', error);

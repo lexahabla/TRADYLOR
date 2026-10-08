@@ -15,7 +15,7 @@
  */
 
 import fs from 'node:fs';
-import path from 'node:path';
+import { DATA_DIR, dataFile } from './paths';
 
 export interface Category {
   id: string;
@@ -25,8 +25,7 @@ export interface Category {
   keywords: string[];
 }
 
-const DATA_DIR = path.join(process.cwd(), 'src', 'data');
-const CATEGORIES_PATH = path.join(DATA_DIR, 'categories.json');
+const CATEGORIES_PATH = dataFile('categories.json');
 
 /** Categorías base: se escriben si el archivo no existe o está vacío/corrupto. */
 export const DEFAULT_CATEGORIES: Category[] = [

@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import fs from 'node:fs';
-import path from 'node:path';
+import { dataFile } from '../../../lib/paths';
 import {
   getCategories,
   createCategory,
@@ -12,7 +12,7 @@ import { requireAdminAuth } from '../../../lib/adminAuth';
 export const prerender = false;
 
 // Ruta a products.json para calcular conteo de productos por categor�a
-const PRODUCTS_PATH = path.join(process.cwd(), 'src', 'data', 'products.json');
+const PRODUCTS_PATH = dataFile('products.json');
 
 function getProductCounts(): Record<string, number> {
   const counts: Record<string, number> = {};

@@ -14,8 +14,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Product } from '../data/products';
+import { dataFile } from './paths';
 
-const DATA_FILE_PATH = path.join(process.cwd(), 'src', 'data', 'products.json');
+const DATA_FILE_PATH = dataFile('products.json');
 
 export function readCatalogFromFile(): Product[] {
   try {
