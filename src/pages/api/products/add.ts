@@ -1,64 +1,18 @@
 import type { APIRoute } from 'astro';
-import fs from 'node:fs';
-import path from 'node:path';
 import { requireAdminAuth } from '../../../lib/adminAuth';
+import { getCategories, suggestCategory } from '../../../lib/categories';
+import {
+  readProductsFromFile,
+  writeProductsToFile,
+  slugify,
+  type Product,
+} from '../../../lib/productStore';
 
 export const prerender = false;
 
-// Interfaz para el producto
-export interface Product {
-  id: string;
-  title: string;
-  description: string;
-  price: number;
-  originalPrice?: number;
-  image: string;
-  category: string;
-  merchant: string;
-  affiliateUrl: string;
-  pros: string[];
-  cons: string[];
-  badge?: string;
-  rating?: number;
-  reviewsCount?: number;
-  verdict?: string;
-}
-
-// Ruta al archivo de persistencia JSON
-const DATA_FILE_PATH = path.join(process.cwd(), 'src', 'data', 'products.json');
-
-/**
- * Lee de forma segura los productos almacenados en el archivo JSON local.
- */
-function readProductsFromFile(): Product[] {
-  try {
-    if (!fs.existsSync(DATA_FILE_PATH)) {
-      return [];
-    }
-    const raw = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
-    return JSON.parse(raw);
-  } catch (error) {
-    console.error('[API Products] Error al leer products.json:', error);
-    return [];
-  }
-}
-
-/**
- * Escribe los productos en el archivo JSON local garantizando el formateo.
- */
-function writeProductsToFile(products: Product[]): boolean {
-  try {
-    const dir = path.dirname(DATA_FILE_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(products, null, 2), 'utf-8');
-    return true;
-  } catch (error) {
-    console.error('[API Products] Error al guardar en products.json:', error);
-    return false;
-  }
-}
+// El modelo de producto vive en src/lib/productStore.ts (compartido con
+// /api/admin/add-product). Se re-exporta el tipo para no romper imports previos.
+export type { Product };
 
 /**
  * Decodifica entidades HTML básicas (e.g. &amp;, &quot;, &#39;, etc.)
@@ -231,7 +185,7 @@ function extractMetadata(html: string, targetUrl: string) {
             ? parsedJson.map(searchSchemaForPrice).find((p) => p !== null)
             : searchSchemaForPrice(parsedJson);
 
-          if (schemaPrice !== null) {
+          if (schemaPrice != null) {
             price = schemaPrice;
             break;
           }
@@ -317,19 +271,24 @@ function extractMetadata(html: string, targetUrl: string) {
     }
   }
 
-  // Deducir categoría inicial sugerida basada en título
-  let suggestedCategory = 'Tecnología';
+  // Deducir categoría inicial sugerida: primero por keywords del catálogo real,
+  // y si no hay coincidencia, por el heurístico histórico de palabras clave.
   const lowerTitle = (title + ' ' + description).toLowerCase();
-  if (/auricular|sonido|noise cancelling|altavoz|headphone|audio/i.test(lowerTitle)) {
-    suggestedCategory = 'Audio & Sonido';
-  } else if (/portátil|laptop|macbook|ordenador|procesador|ram|ssd/i.test(lowerTitle)) {
-    suggestedCategory = 'Informática & Laptops';
-  } else if (/kindle|e-reader|libro digital|ereader|tinta electrónica/i.test(lowerTitle)) {
-    suggestedCategory = 'Lectura Digital';
-  } else if (/aspirador|robot|fregasuelos|hogar|freidora|cafetera/i.test(lowerTitle)) {
-    suggestedCategory = 'Hogar Inteligente';
-  } else if (/cámara|objetivo|trípode|fotografía|gopro/i.test(lowerTitle)) {
-    suggestedCategory = 'Fotografía & Vídeo';
+  const keywordSuggestion = suggestCategory(lowerTitle);
+  let suggestedCategory = keywordSuggestion?.category.name ?? '';
+  if (!suggestedCategory) {
+    suggestedCategory = 'Tecnología';
+    if (/auricular|sonido|noise cancelling|altavoz|headphone|audio/i.test(lowerTitle)) {
+      suggestedCategory = 'Audio & Sonido';
+    } else if (/portátil|laptop|macbook|ordenador|procesador|ram|ssd/i.test(lowerTitle)) {
+      suggestedCategory = 'Informática & Laptops';
+    } else if (/kindle|e-reader|libro digital|ereader|tinta electrónica/i.test(lowerTitle)) {
+      suggestedCategory = 'Lectura Digital';
+    } else if (/aspirador|robot|fregasuelos|hogar|freidora|cafetera/i.test(lowerTitle)) {
+      suggestedCategory = 'Hogar Inteligente';
+    } else if (/cámara|objetivo|trípode|fotografía|gopro/i.test(lowerTitle)) {
+      suggestedCategory = 'Fotografía & Vídeo';
+    }
   }
 
   return {
@@ -351,17 +310,20 @@ function extractMetadata(html: string, targetUrl: string) {
 }
 
 /**
- * Genera un ID limpio tipo slug a partir del título
+ * Resuelve la categoría de un producto:
+ *  - Si el cliente envía una categoría explícita, se respeta tal cual.
+ *  - Si no, se sugiere automáticamente por palabras clave (keywords de categories.json)
+ *    y, en último caso, se usa la primera categoría disponible.
  */
-function slugify(text: string): string {
-  const base = text
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)+/g, '')
-    .slice(0, 50);
-  return base || `producto-${Date.now().toString(36)}`;
+function resolveCategory(explicit: unknown, haystack: string): string {
+  const given = String(explicit ?? '').trim();
+  if (given) return given;
+
+  const suggestion = suggestCategory(haystack);
+  if (suggestion) return suggestion.category.name;
+
+  const names = getCategories().map((category) => category.name);
+  return names[0] || 'Tecnología';
 }
 
 // ==============================================================================
@@ -467,9 +429,12 @@ export const POST: APIRoute = async ({ request }) => {
         price: Number(dataToSave.price) || 0,
         originalPrice: dataToSave.originalPrice ? Number(dataToSave.originalPrice) : undefined,
         image: String(dataToSave.image || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=800&auto=format&fit=crop').trim(),
-        category: String(dataToSave.category || 'Tecnología').trim(),
+        category: resolveCategory(dataToSave.category, `${dataToSave.title} ${dataToSave.description || ''}`),
         merchant: String(dataToSave.merchant || detectMerchantFromUrl(dataToSave.affiliateUrl)).trim(),
         affiliateUrl: String(dataToSave.affiliateUrl).trim(),
+        buyNowUrl: dataToSave.buyNowUrl
+          ? String(dataToSave.buyNowUrl).trim()
+          : currentProducts.find((p) => p.id === productId)?.buyNowUrl,
         pros: Array.isArray(dataToSave.pros)
           ? dataToSave.pros.filter(Boolean)
           : typeof dataToSave.pros === 'string'

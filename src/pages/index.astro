@@ -1,13 +1,70 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import ProductCard from '../components/ProductCard.astro';
+import CategoryMenu from '../components/CategoryMenu.astro';
 import { getCatalogProducts } from '../lib/catalog';
+import { getCategoryById } from '../lib/categories';
 
 export const prerender = false;
-const products = getCatalogProducts();
+
+const allProducts = getCatalogProducts();
+
+const categoryParam = (Astro.url.searchParams.get('category') ?? '').toLowerCase().trim();
+const activeCategory = categoryParam ? getCategoryById(categoryParam) ?? null : null;
+
+const categoryMatches = (productCategory: string, slug: string) =>
+  getCategoryById(productCategory)?.slug === slug;
+
+const visibleProducts = activeCategory
+  ? allProducts.filter((p) => categoryMatches(String(p.category ?? ''), activeCategory.slug))
+  : allProducts;
+
+const pageHref = (page: number) =>
+  `/?${activeCategory ? `category=${encodeURIComponent(activeCategory.slug)}&` : ''}page=${page}#catalogo`;
+
+// ─── Recommendation Score: rating(60%) + reviews(30%) + discount(10%) ───────
+const scoreOf = (p: typeof allProducts[0]) => {
+  const ratingScore = (p.rating ?? 0) / 5;
+  const reviewScore = Math.min(Math.log10((p.reviewsCount ?? 0) + 1) / 4, 1);
+  const discountScore = p.originalPrice && p.originalPrice > p.price
+    ? ((p.originalPrice - p.price) / p.originalPrice)
+    : 0;
+  return ratingScore * 0.6 + reviewScore * 0.3 + discountScore * 0.1;
+};
+
+const sorted = [...visibleProducts].sort((a, b) => scoreOf(b) - scoreOf(a));
+
+// ─── Top 4 for "Recomendaciones Top" ────────────────────────────────────────
+const topProducts = sorted.slice(0, 4);
+
+// ─── Pagination for "Todos los Productos" ────────────────────────────────────
+const PRODUCTS_PER_PAGE = 8;
+const pageParam = Astro.url.searchParams.get('page');
+const totalPages = Math.max(1, Math.ceil(sorted.length / PRODUCTS_PER_PAGE));
+const requestedPage = parseInt(pageParam ?? '1', 10) || 1;
+const currentPage = Math.min(Math.max(1, requestedPage), totalPages);
+const paginatedProducts = sorted.slice(
+  (currentPage - 1) * PRODUCTS_PER_PAGE,
+  currentPage * PRODUCTS_PER_PAGE
+);
 
 const pageTitle = "Tradylor | Portal de Curación, Análisis y Ofertas Verificadas";
 const pageDescription = "Descubre las mejores selecciones y comparativas de producto. Análisis honestos, pros y contras objetivos y enlaces de compra verificados con las mejores ofertas.";
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(amount);
+
+const totalSavings = allProducts.reduce(
+  (acc, p) => (p.originalPrice && p.originalPrice > p.price ? acc + (p.originalPrice - p.price) : acc),
+  0
+);
+const showSavingsMetric = totalSavings >= 5000;
+const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
+  style: 'currency',
+  currency: 'EUR',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+}).format(Math.round(totalSavings))}`;
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
@@ -30,50 +87,50 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
         En Tradylor desarmamos las campañas de marketing engañosas. Analizamos a fondo especificaciones, fiabilidad y relación calidad-precio para que ahorres tiempo, dinero y tomes decisiones de compra 100% acertadas.
       </p>
 
-      <!-- Badges de Autoridad E-E-A-T (Google Search Quality Raters) -->
+      <!-- Badges de Autoridad E-E-A-T -->
       <div class="hero-trust-metrics">
         <div class="metric-item">
           <span class="metric-number">+500h</span>
           <span class="metric-label">De análisis y pruebas de producto</span>
         </div>
-        <div class="metric-divider"></div>
-        <div class="metric-item">
-          <span class="metric-number">0€</span>
-          <span class="metric-label">Aceptados de marcas por reviews favorables</span>
-        </div>
+        {showSavingsMetric && (
+          <>
+            <div class="metric-divider"></div>
+            <div class="metric-item">
+              <span class="metric-number">{savingsDisplay}</span>
+              <span class="metric-label">Ahorrado a nuestros usuarios</span>
+            </div>
+          </>
+        )}
         <div class="metric-divider"></div>
         <div class="metric-item">
           <span class="metric-number">24/7</span>
           <span class="metric-label">Monitoreo activo de bajadas de precio</span>
         </div>
       </div>
-
-      <!-- Accesos Rápidos a Categorías -->
-      <div class="category-pills-nav">
-        <a href="#destacados" class="pill active">Todas las Selecciones</a>
-        <a href="#destacados" class="pill">Audio & Sonido</a>
-        <a href="#destacados" class="pill">Informática</a>
-        <a href="#destacados" class="pill">E-Readers</a>
-        <a href="#destacados" class="pill">Hogar Inteligente</a>
-      </div>
     </div>
   </section>
 
   <!-- ============================================================
-       2. SECCIÓN DESTACADOS: Cuadrícula Dinámica de Productos
+       2. SECCIÓN TOP: Recomendaciones de Alta Conversión (Top 4)
        ============================================================ -->
-  <section class="products-section" id="destacados">
+  <section class="products-section" id="destacados" hidden={sorted.length === 0}>
     <div class="container">
       <div class="section-header">
         <div class="section-tag">Selecciones Editoriales</div>
         <h2 class="section-title">Recomendaciones Top de Alta Conversión</h2>
         <p class="section-desc">
-          Evaluados bajo criterios de rendimiento real, tasa de devoluciones y mejor histórico de precios en comercio electrónico.
+          Los 4 productos mejor valorados según nuestro algoritmo de puntuación combinando satisfacción, volumen de opiniones y relación calidad-precio.
         </p>
+        {activeCategory && (
+          <p class="filter-note">
+            Filtrado por <strong>{activeCategory.name}</strong> · <a href="/">Ver todo el catálogo</a>
+          </p>
+        )}
       </div>
 
       <div class="products-grid">
-        {products.map((item) => (
+        {topProducts.map((item) => (
           <ProductCard product={item} />
         ))}
       </div>
@@ -81,7 +138,75 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
   </section>
 
   <!-- ============================================================
-       3. SECCIÓN E-E-A-T: Por Qué Confiar en Tradylor
+       3. SECCIÓN CATÁLOGO COMPLETO: Todos los Productos (paginado)
+       ============================================================ -->
+  <section class="catalog-section" id="catalogo">
+    <div class="container">
+      <div class="section-header">
+        <div class="section-tag">Catálogo Completo</div>
+        <h2 class="section-title">Todos los Productos Analizados</h2>
+        <p class="section-desc">
+          Explora nuestra selección completa ordenada por puntuación de recomendación. {sorted.length} productos verificados y en constante actualización.
+        </p>
+        {activeCategory && (
+          <p class="filter-note">
+            Filtrando por <strong>{activeCategory.name}</strong> · <a href="/">Ver todo el catálogo</a>
+          </p>
+        )}
+      </div>
+
+      <div class="products-grid">
+        {sorted.length === 0 ? (
+          <div class="empty-state">
+            <span class="empty-icon" aria-hidden="true">🔍</span>
+            <p>No hay productos disponibles en «{activeCategory?.name}» todavía.</p>
+            <a href="/">Ver todo el catálogo</a>
+          </div>
+        ) : paginatedProducts.map((item) => (
+          <ProductCard product={item} />
+        ))}
+      </div>
+
+      <!-- Pagination -->
+      {totalPages > 1 && (
+        <nav class="pagination" aria-label="Paginación de productos">
+          {currentPage > 1 && (
+            <a href={pageHref(currentPage - 1)} class="page-btn page-prev">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Anterior
+            </a>
+          )}
+
+          <div class="page-numbers">
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+              <a
+                href={pageHref(page)}
+                class:list={['page-num', { active: page === currentPage }]}
+                aria-label={`Página ${page}`}
+                aria-current={page === currentPage ? 'page' : undefined}
+              >
+                {page}
+              </a>
+            ))}
+          </div>
+
+          {currentPage < totalPages && (
+            <a href={pageHref(currentPage + 1)} class="page-btn page-next">
+              Siguiente
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </a>
+          )}
+        </nav>
+      )}
+    </div>
+  </section>
+
+  <!-- ============================================================
+       4. SECCIÓN E-E-A-T: Por Qué Confiar en Tradylor
        ============================================================ -->
   <section class="trust-section" id="metodologia">
     <div class="container">
@@ -94,7 +219,6 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
       </div>
 
       <div class="pillars-grid">
-        <!-- Pilar 1 -->
         <div class="pillar-card">
           <div class="pillar-icon-box">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -111,7 +235,6 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
           </p>
         </div>
 
-        <!-- Pilar 2 -->
         <div class="pillar-card">
           <div class="pillar-icon-box">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -124,7 +247,6 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
           </p>
         </div>
 
-        <!-- Pilar 3 -->
         <div class="pillar-card">
           <div class="pillar-icon-box">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -138,7 +260,6 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
           </p>
         </div>
 
-        <!-- Pilar 4 -->
         <div class="pillar-card">
           <div class="pillar-icon-box">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -156,7 +277,7 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
   </section>
 
   <!-- ============================================================
-       4. SECCIÓN GUÍA DE COMPRA RÁPIDA: CRO Boost
+       5. SECCIÓN GUÍA DE COMPRA RÁPIDA: CRO Boost
        ============================================================ -->
   <section class="guide-banner-section" id="comparativas">
     <div class="container">
@@ -169,11 +290,13 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
           </p>
         </div>
         <div class="guide-action">
-          <a href="#destacados" class="guide-btn">Explorar Todas las Ofertas</a>
+          <a href="#catalogo" class="guide-btn">Ver disponibilidad y tramitar</a>
         </div>
       </div>
     </div>
   </section>
+
+  <CategoryMenu activeSlug={activeCategory?.slug} />
 </Layout>
 
 <style>
@@ -191,7 +314,7 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
   /* ============ HERO SECTION ============ */
   .hero-section {
     position: relative;
-    padding: 8rem 0 6rem;
+    padding: 0;
     background: radial-gradient(ellipse at center, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
     overflow: hidden;
   }
@@ -245,7 +368,7 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
     font-weight: 600;
     padding: 0.6rem 1.2rem;
     border-radius: 999px;
-    margin-bottom: 2rem;
+    margin: 2rem 0;
     backdrop-filter: blur(8px);
   }
 
@@ -338,47 +461,28 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.2) 0%, transparent 100%);
   }
 
-  /* ============ CATEGORY PILLS ============ */
-  .category-pills-nav {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-
-  .pill {
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.7);
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 0.75rem 1.5rem;
-    border-radius: 999px;
-    text-decoration: none;
-    transition: all 0.3s cubic-bezier(0.23, 1, 0.320, 1);
-    backdrop-filter: blur(8px);
-  }
-
-  .pill:hover,
-  .pill.active {
-    background: var(--gradient-primary);
-    color: #ffffff;
-    border-color: transparent;
-    box-shadow: var(--shadow-glow-blue);
-    transform: translateY(-2px);
-  }
-
   /* ============ PRODUCTS SECTION ============ */
+  .products-section,
+  .catalog-section {
+    padding: 6rem 0;
+  }
+
   .products-section {
-    padding: 8rem 0;
+    padding-top: 0;
+  }
+
+  .catalog-section {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-top: 0;
   }
 
   .section-header {
-    margin-bottom: 4rem;
+    margin-bottom: 3rem;
   }
 
   .section-header.center {
     text-align: center;
+    padding-top: 2rem;
   }
 
   .section-tag {
@@ -412,6 +516,45 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
     margin-right: auto;
   }
 
+  .filter-note {
+    margin-top: 0.75rem;
+    font-size: 0.95rem;
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .filter-note strong {
+    color: #60a5fa;
+  }
+
+  .filter-note a {
+    color: #60a5fa;
+    font-weight: 600;
+  }
+
+  .empty-state {
+    grid-column: 1 / -1;
+    text-align: center;
+    padding: 4rem 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+  }
+
+  .empty-icon {
+    font-size: 2rem;
+  }
+
+  .empty-state p {
+    color: rgba(255, 255, 255, 0.75);
+    font-size: 1.05rem;
+    margin: 0.75rem 0 1rem;
+  }
+
+  .empty-state a {
+    color: #60a5fa;
+    font-weight: 600;
+  }
+
   /* ============ PRODUCTS GRID ============ */
   .products-grid {
     display: grid;
@@ -440,9 +583,77 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
     }
   }
 
+  /* ============ PAGINATION ============ */
+  .pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 3rem;
+    flex-wrap: wrap;
+  }
+
+  .page-numbers {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35rem;
+  }
+
+  .page-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-decoration: none;
+    transition: all 0.25s ease;
+  }
+
+  .page-num:hover {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+  }
+
+  .page-num.active {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border-color: transparent;
+    color: #ffffff;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+  }
+
+  .page-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1.1rem;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-decoration: none;
+    transition: all 0.25s ease;
+  }
+
+  .page-btn:hover {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+  }
+
   /* ============ TRUST SECTION (E-E-A-T) ============ */
   .trust-section {
-    padding: 8rem 0;
+    padding: 0 0 8rem;
     background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, transparent 100%);
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -450,7 +661,7 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
 
   .pillars-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    grid-template-columns: repeat(4, 1fr);
     gap: 2rem;
     margin-top: 4rem;
   }
@@ -459,7 +670,7 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
     background: var(--gradient-surface);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 20px;
-    padding: 2.5rem;
+    padding: 1.25rem;
     transition: all 0.35s cubic-bezier(0.23, 1, 0.320, 1);
     backdrop-filter: blur(8px);
   }
@@ -518,8 +729,8 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
   }
 
   .guide-text {
-    flex: 1;
-    min-width: 300px;
+    flex: 1 1 300px;
+    min-width: 0;
   }
 
   .banner-badge {
@@ -570,11 +781,13 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
   }
 
   /* ============ RESPONSIVE ============ */
-  @media (max-width: 768px) {
-    .hero-section {
-      padding: 5rem 0 4rem;
+  @media (max-width: 1100px) {
+    .pillars-grid {
+      grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr));
     }
+  }
 
+  @media (max-width: 768px) {
     .hero-title {
       font-size: clamp(1.75rem, 5vw, 2.5rem);
     }
@@ -588,12 +801,29 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
       display: none;
     }
 
+    .products-section,
+    .catalog-section {
+      padding: 4rem 0;
+    }
+
     .products-section {
-      padding: 5rem 0;
+      padding-top: 0;
+    }
+
+    .catalog-section {
+      padding-top: 0;
     }
 
     .section-title {
       font-size: clamp(1.5rem, 3vw, 2rem);
+    }
+
+    .section-desc {
+      font-size: 1rem;
+    }
+
+    .section-header {
+      margin-bottom: 2.25rem;
     }
 
     .guide-banner-card {
@@ -601,10 +831,19 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
       text-align: center;
       flex-direction: column;
       justify-content: center;
+      gap: 1.75rem;
+    }
+
+    .guide-btn {
+      white-space: normal;
     }
 
     .trust-section {
-      padding: 5rem 0;
+      padding: 0 0 5rem;
+    }
+
+    .pillar-card {
+      padding: 1rem;
     }
   }
 
@@ -623,13 +862,30 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
       gap: 1rem;
     }
 
-    .category-pills-nav {
-      gap: 0.5rem;
+    .metric-number {
+      font-size: 1.6rem;
     }
 
-    .pill {
+    .section-desc {
+      font-size: 0.95rem;
+    }
+
+    .pillar-card {
+      padding: 0.875rem;
+    }
+
+    .guide-banner-card {
+      padding: 1.5rem;
+    }
+
+    .banner-heading {
+      font-size: 1.35rem;
+    }
+
+    .page-num {
+      width: 36px;
+      height: 36px;
       font-size: 0.8rem;
-      padding: 0.5rem 1rem;
     }
   }
 </style>

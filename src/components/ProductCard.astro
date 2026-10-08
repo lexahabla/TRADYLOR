@@ -14,14 +14,43 @@ const compactText = (text: string, maxLength: number) => {
 
 const cleanMarketplaceSuffix = (text: string) => text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
 const catalogDescription = compactText(cleanMarketplaceSuffix(product.description), 118);
-const catalogTitle = compactText(cleanMarketplaceSuffix(product.title), 68);
-const catalogPros = product.pros.slice(0, 1).map((pro) => compactText(pro, 82));
-const catalogCons = product.cons.slice(0, 1).map((con) => compactText(con, 72));
+
+// Top 3 features (compact bullet list)
+const topFeatures = product.pros.slice(0, 3).map((pro) => compactText(pro, 60));
+
+// Build structured title: "{productType} {brand} {model}" or fallback to raw title
+const productTypeLabel: Record<string, string> = {
+  Laptop: 'Laptop',
+  Tablet: 'Tablet',
+  Smartphone: 'Smartphone',
+  Smartwatch: 'Smartwatch',
+  Auriculares: 'Auriculares inalámbricos',
+  Monitor: 'Monitor',
+  Electrodoméstico: 'Electrodoméstico',
+  Otros: '',
+};
+const buildTitle = () => {
+  if (product.productType && product.brand && product.model) {
+    const typeLabel = productTypeLabel[product.productType] ?? product.productType;
+    return `${typeLabel} ${product.brand} ${product.model}`;
+  }
+  return cleanMarketplaceSuffix(product.title);
+};
+const catalogTitle = compactText(buildTitle(), 68);
 
 // Cálculo de porcentaje de descuento si existe precio original
 const discountPercent = product.originalPrice
   ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
   : null;
+
+// Satisfaction score: use structured field or fallback to pros/cons ratio
+const satisfaction = product.conversionHooks?.satisfactionScore;
+const positivePercent = satisfaction?.positivePercentage
+  ?? (product.pros.length + product.cons.length > 0
+    ? Math.round((product.pros.length / (product.pros.length + product.cons.length)) * 100)
+    : 85);
+const negativePercent = satisfaction?.negativePercentage
+  ?? (100 - positivePercent);
 
 // Formateo de precio en formato moneda EUR
 const formatCurrency = (amount: number) => {
@@ -34,15 +63,18 @@ const formatCurrency = (amount: number) => {
 ---
 
 <article class="product-card" id={`product-${product.id}`}>
-  <!-- Contenedor Visual del Producto -->
-  <div class="image-wrapper">
+  <!-- Contenedor Visual del Producto
+       Tailwind: contenedor cuadrado con fondo neutro (#F8F9FA) y la imagen
+       contenida (object-contain) para que las fotos generadas con IA no se
+       deformen ni se recorten en los bordes. -->
+  <div class="image-wrapper aspect-square w-full rounded-xl">
     <img
       src={product.image}
       alt={`Fotografía y análisis técnico de ${product.title}`}
       loading="lazy"
-      class="product-image"
+      class="product-image aspect-square w-full object-contain p-4 bg-slate-50/50 rounded-xl"
       width="400"
-      height="260"
+      height="400"
     />
     {discountPercent !== null && discountPercent > 0 && (
       <span class="discount-pill" aria-label={`Descuento del ${discountPercent}%`}>
@@ -53,23 +85,21 @@ const formatCurrency = (amount: number) => {
 
   <!-- Contenido Editorial & Especificaciones -->
   <div class="card-content">
-    <div class="category-meta">
-      <span class="category-label">{product.category}</span>
-      {product.rating && (
-        <div class="rating-box" aria-label={`Puntuación: ${product.rating} sobre 5`}>
-          <svg class="star-icon" viewBox="0 0 20 20" fill="currentColor">
-            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-          </svg>
-          <span class="rating-value">{product.rating.toFixed(1)}</span>
-          {product.reviewsCount && <span class="reviews-count">({product.reviewsCount})</span>}
-        </div>
-      )}
-    </div>
+    <span class="category-label">{product.category}</span>
+
+    {product.rating && (
+      <div class="rating-box" aria-label={`Puntuación: ${product.rating} sobre 5`}>
+        <svg class="star-icon" viewBox="0 0 20 20" fill="currentColor">
+          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+        </svg>
+        <span class="rating-value">{product.rating.toFixed(1)}</span>
+        {product.reviewsCount && <span class="reviews-count">({product.reviewsCount})</span>}
+      </div>
+    )}
 
     <h3 class="product-title">
-      <!-- Enlace a la página de detalle propia de Tradylor (no al afiliado directamente) -->
       <a
-        href={`/producto/${product.id}`}
+        href={`/producto/${product.slug ?? product.id}`}
         title={`Análisis completo de ${product.title}`}
       >
         {catalogTitle}
@@ -78,44 +108,29 @@ const formatCurrency = (amount: number) => {
 
     <p class="product-summary">{catalogDescription}</p>
 
-    <!-- Bloque de Pros y Contras estructurado para alta conversión -->
-    <div class="analysis-box">
-      <div class="pros-list">
-        <h4 class="analysis-title pros-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-          Puntos Fuertes
-        </h4>
-        <ul>
-          {catalogPros.map((pro) => (
-            <li>
-              <span class="bullet pro-bullet">✓</span>
-              <span>{pro}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
+    {topFeatures.length > 0 && (
+      <ul class="features-list">
+        {topFeatures.map((feat) => (
+          <li class="feature-item">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" aria-hidden="true">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            <span>{feat}</span>
+          </li>
+        ))}
+      </ul>
+    )}
 
-      <div class="cons-list">
-        <h4 class="analysis-title cons-title">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-          A Mejorar
-        </h4>
-        <ul>
-          {catalogCons.map((con) => (
-            <li>
-              <span class="bullet con-bullet">✕</span>
-              <span>{con}</span>
-            </li>
-          ))}
-        </ul>
+    <!-- Satisfaction Bar -->
+    <div class="satisfaction-bar">
+      <div class="satisfaction-header">
+        <span class="satisfaction-label sat-positive">{positivePercent}%</span>
+        <span class="satisfaction-label sat-negative">{negativePercent}%</span>
+      </div>
+      <div class="satisfaction-track">
+        <div class="satisfaction-fill" style={`width: ${positivePercent}%`} />
       </div>
     </div>
-
   </div>
 
   <!-- Pie de la Tarjeta: Precio, CTA y Transparencia -->
@@ -130,20 +145,28 @@ const formatCurrency = (amount: number) => {
       </div>
     </div>
 
-    <button
-      type="button"
-      class="affiliate-cta-btn add-to-cart-btn"
-      id={`cta-btn-${product.id}`}
-      aria-label={`Añadir ${product.title} al carrito`}
-      data-product={JSON.stringify({ id: product.id, title: product.title, price: product.price, image: product.image })}
-    >
-      <span>Añadir al carrito</span>
-      <svg class="external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
-        <path d="M3 6h18"></path>
-        <path d="M16 10a4 4 0 0 1-8 0"></path>
-      </svg>
-    </button>
+    <div class="buy-actions">
+      <button
+        type="button"
+        class="card-cart-btn add-to-cart-btn"
+        data-product={JSON.stringify({ id: product.id, title: product.title, price: product.price, image: product.image })}
+        aria-label={`Añadir ${product.title} al carrito`}
+      >
+        Añadir al carrito
+      </button>
+      <a
+        href={`/checkout/${product.slug ?? product.id}`}
+        class="affiliate-cta-btn buy-now-btn"
+        id={`cta-btn-${product.id}`}
+        aria-label={`Comprar ya ${product.title}`}
+      >
+        <span>Comprar ya</span>
+        <svg class="external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+          <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>
+      </a>
+    </div>
 
     <!-- Microcopia de confianza -->
     <div class="trust-guarantee">
@@ -151,7 +174,7 @@ const formatCurrency = (amount: number) => {
         <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
         <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
       </svg>
-      <span>Compra segura en el sitio de destino</span>
+      <span>Pago y envío gestionados por el distribuidor oficial</span>
     </div>
   </div>
 </article>
@@ -178,30 +201,34 @@ const formatCurrency = (amount: number) => {
     box-shadow: 0 24px 64px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
   }
 
-  /* ============ IMAGE SECTION ============ */
+  /* ============ IMAGE SECTION ============
+     Refleja las utilidades Tailwind aplicadas en el marcado:
+     aspect-square · w-full · object-contain · p-4 · bg-slate-50/50 · rounded-xl */
   .image-wrapper {
     position: relative;
     width: 100%;
     aspect-ratio: 1 / 1;
     overflow: hidden;
-    background: linear-gradient(135deg, #0a0e17 0%, #111827 100%);
+    background: #f8fafc;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1.5rem;
+    padding: 5%;
   }
 
   .product-image {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
     object-position: center;
-    border-radius: 16px;
+    padding: 1rem;
+    background: rgba(248, 250, 252, 0.5);
+    border-radius: 0.75rem;
     transition: transform 0.5s cubic-bezier(0.23, 1, 0.320, 1);
   }
 
   .product-card:hover .product-image {
-    transform: scale(1.08);
+    transform: scale(1.03);
   }
 
   .discount-pill {
@@ -219,14 +246,8 @@ const formatCurrency = (amount: number) => {
   }
 
   @keyframes slideDown {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   /* ============ CONTENT SECTION ============ */
@@ -234,40 +255,37 @@ const formatCurrency = (amount: number) => {
     display: flex;
     flex-direction: column;
     flex: 1;
-    padding: 1.5rem;
-    gap: 1rem;
-  }
-
-  .category-meta {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
+    padding: 1.25rem 1.25rem 0.75rem;
+    gap: 0.6rem;
   }
 
   .category-label {
-    font-size: 0.8rem;
+    display: block;
+    width: 100%;
+    font-size: 0.7rem;
     font-weight: 700;
     color: #60a5fa;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    padding: 0.4rem 0.8rem;
+    padding: 0.3rem 0.6rem;
     background: rgba(96, 165, 250, 0.1);
-    border-radius: 8px;
+    border-radius: 6px;
     border: 1px solid rgba(96, 165, 250, 0.2);
+    text-align: center;
   }
 
   .rating-box {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    font-size: 0.85rem;
+    justify-content: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
     color: #fbbf24;
   }
 
   .star-icon {
-    width: 16px;
-    height: 16px;
+    width: 15px;
+    height: 15px;
     filter: drop-shadow(0 0 4px rgba(251, 191, 36, 0.5));
   }
 
@@ -278,7 +296,7 @@ const formatCurrency = (amount: number) => {
 
   .reviews-count {
     color: rgba(255, 255, 255, 0.6);
-    font-size: 0.75rem;
+    font-size: 0.72rem;
   }
 
   .product-title {
@@ -287,7 +305,7 @@ const formatCurrency = (amount: number) => {
     -webkit-line-clamp: 2;
     overflow: hidden;
     font-family: var(--font-heading);
-    font-size: 1.1rem;
+    font-size: 1rem;
     line-height: 1.3;
     min-height: 2.6em;
     margin: 0;
@@ -308,81 +326,78 @@ const formatCurrency = (amount: number) => {
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     overflow: hidden;
-    font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.7);
-    line-height: 1.5;
-    margin: 0;
-  }
-
-  /* ============ ANALYSIS BOX (PROS/CONS) ============ */
-  .analysis-box {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    background: rgba(10, 14, 23, 0.5);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 16px;
-    padding: 1rem;
-    backdrop-filter: blur(8px);
-  }
-
-  .analysis-title {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
     font-size: 0.8rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.65);
+    line-height: 1.45;
     margin: 0;
   }
 
-  .pros-title {
-    color: #10b981;
-  }
-
-  .cons-title {
-    color: #f87171;
-  }
-
-  .analysis-box ul {
+  /* ============ FEATURES LIST ============ */
+  .features-list {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.35rem;
     margin: 0;
     padding: 0;
   }
 
-  .analysis-box li {
-    font-size: 0.8rem;
-    line-height: 1.4;
+  .feature-item {
     display: flex;
     align-items: flex-start;
-    gap: 0.6rem;
-    color: rgba(255, 255, 255, 0.8);
+    gap: 0.45rem;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    color: rgba(255, 255, 255, 0.75);
   }
 
-  .bullet {
-    font-weight: 800;
+  .feature-item svg {
     flex-shrink: 0;
     margin-top: 2px;
   }
 
-  .pro-bullet {
-    color: #10b981;
+  /* ============ SATISFACTION BAR ============ */
+  .satisfaction-bar {
+    margin-top: auto;
+    padding-top: 0.4rem;
   }
 
-  .con-bullet {
-    color: #f87171;
+  .satisfaction-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.35rem;
+  }
+
+  .satisfaction-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .sat-positive { color: #10b981; }
+  .sat-negative { color: #f87171; }
+
+  .satisfaction-track {
+    width: 100%;
+    height: 6px;
+    background: rgba(248, 113, 113, 0.25);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .satisfaction-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #10b981, #34d399);
+    border-radius: 999px;
+    transition: width 0.6s ease;
   }
 
   /* ============ FOOTER SECTION ============ */
   .card-footer {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    padding: 1.5rem;
+    gap: 0.85rem;
+    padding: 1rem 1.25rem 1.25rem;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(10, 14, 23, 0.3);
   }
@@ -390,11 +405,11 @@ const formatCurrency = (amount: number) => {
   .price-container {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.35rem;
   }
 
   .price-label {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: rgba(255, 255, 255, 0.5);
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -409,7 +424,7 @@ const formatCurrency = (amount: number) => {
 
   .main-price {
     font-family: var(--font-heading);
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     font-weight: 800;
     color: #ffffff;
     background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
@@ -419,7 +434,7 @@ const formatCurrency = (amount: number) => {
   }
 
   .original-price {
-    font-size: 1rem;
+    font-size: 0.9rem;
     color: rgba(255, 255, 255, 0.5);
     text-decoration: line-through;
   }
@@ -431,14 +446,15 @@ const formatCurrency = (amount: number) => {
     justify-content: center;
     gap: 0.75rem;
     width: 100%;
-    padding: 0.875rem 1.5rem;
+    padding: 0.8rem 1.25rem;
     background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     color: #ffffff;
     font-weight: 700;
-    font-size: 0.95rem;
+    font-size: 0.9rem;
     border: none;
     border-radius: 12px;
     cursor: pointer;
+    text-decoration: none;
     transition: all 0.3s cubic-bezier(0.23, 1, 0.320, 1);
     box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
     position: relative;
@@ -478,13 +494,55 @@ const formatCurrency = (amount: number) => {
     transform: translate(3px, -3px);
   }
 
+  /* ============ AMAZON-STYLE BUY PAIR ============ */
+  .buy-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .buy-actions > * {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .card-cart-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    width: 100%;
+    padding: 0.8rem 1.25rem;
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.9rem;
+    font-family: inherit;
+    border: 1px solid rgba(96, 165, 250, 0.5);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+    box-shadow: 0 6px 18px rgba(96, 165, 250, 0.28);
+  }
+
+  .card-cart-btn:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%);
+    box-shadow: 0 10px 26px rgba(96, 165, 250, 0.42);
+  }
+
+  .card-cart-btn:active {
+    transform: translateY(0);
+  }
+
   /* ============ TRUST GUARANTEE ============ */
   .trust-guarantee {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
-    font-size: 0.8rem;
+    font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.5);
     padding-top: 0.5rem;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -495,18 +553,27 @@ const formatCurrency = (amount: number) => {
   }
 
   /* ============ RESPONSIVE ============ */
+  @media (max-width: 960px) {
+    .card-content {
+      padding: 1.1rem 1.1rem 0.65rem;
+    }
+
+    .card-footer {
+      padding: 0.9rem 1.1rem 1.1rem;
+    }
+
+    .product-title {
+      font-size: 0.95rem;
+    }
+  }
+
   @media (max-width: 640px) {
     .product-card {
       border-radius: 16px;
     }
 
-    .image-wrapper {
-      aspect-ratio: 16 / 9;
-      padding: 1rem;
-    }
-
     .product-title {
-      font-size: 1rem;
+      font-size: 0.95rem;
     }
 
     .card-content,
@@ -515,7 +582,7 @@ const formatCurrency = (amount: number) => {
     }
 
     .main-price {
-      font-size: 1.25rem;
+      font-size: 1.2rem;
     }
   }
 
@@ -524,19 +591,16 @@ const formatCurrency = (amount: number) => {
       border-radius: 12px;
     }
 
-    .category-meta {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
     .price-numbers {
       flex-direction: column;
       gap: 0.25rem;
     }
 
-    .affiliate-cta-btn {
-      padding: 0.75rem 1rem;
-      font-size: 0.9rem;
+    .buy-actions .affiliate-cta-btn,
+    .card-cart-btn {
+      padding: 0.7rem 1rem;
+      font-size: 0.85rem;
+      gap: 0.45rem;
     }
   }
 </style>

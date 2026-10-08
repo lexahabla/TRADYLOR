@@ -1,0 +1,452 @@
+---
+import { getCategories } from '../lib/categories';
+
+export interface Props {
+  activeSlug?: string;
+}
+
+const { activeSlug } = Astro.props;
+const categories = getCategories();
+---
+
+<nav id="categoryBar" class="category-bar" aria-label="Menú de categorías">
+  <button
+    type="button"
+    class="category-toggle"
+    aria-label="Categorías"
+    aria-expanded="false"
+    aria-controls="categoryFrame"
+  >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+      <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+      <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+      <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+    </svg>
+    <span class="category-toggle-label">Categorías</span>
+  </button>
+
+  <div class="category-frame" id="categoryFrame">
+      <button type="button" class="category-arrow arrow-left" aria-label="Ver categorías anteriores">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="15 18 9 12 15 6"></polyline>
+        </svg>
+      </button>
+
+      <div class="category-track" id="categoryTrack">
+        <a
+          href="/#catalogo"
+          class:list={['category-item', { 'is-active': !activeSlug }]}
+          aria-current={!activeSlug ? 'true' : undefined}
+        >
+          <span class="category-icon" aria-hidden="true">🎯</span>
+          <span class="category-label">Todos</span>
+        </a>
+        {categories.map((cat) => (
+          <a
+            href={`/?category=${encodeURIComponent(cat.slug)}#catalogo`}
+            class:list={['category-item', { 'is-active': activeSlug === cat.slug }]}
+            aria-current={activeSlug === cat.slug ? 'true' : undefined}
+          >
+            <span class="category-icon" aria-hidden="true">{cat.icon}</span>
+            <span class="category-label">{cat.name}</span>
+          </a>
+        ))}
+      </div>
+
+      <button type="button" class="category-arrow arrow-right" aria-label="Ver categorías siguientes">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="9 18 15 12 9 6"></polyline>
+        </svg>
+      </button>
+  </div>
+</nav>
+
+<style>
+  .category-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 110;
+    background: rgba(12, 16, 26, 0.94);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transform: translateY(-100%);
+    pointer-events: none;
+    transition:
+      transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+      opacity 0.3s ease;
+  }
+
+  .category-bar.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .category-toggle {
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.95rem;
+    background: #0c101a;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    color: #e5e7eb;
+    font-family: var(--font-body, inherit);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .category-toggle:hover,
+  .category-toggle[aria-expanded='true'] {
+    background: #3b82f6;
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #ffffff;
+  }
+
+  .category-frame {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0.5rem 1.5rem;
+  }
+
+  .category-track {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+    padding: 0.15rem 0;
+  }
+
+  .category-track::-webkit-scrollbar {
+    display: none;
+  }
+
+  .category-arrow {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    flex-shrink: 0;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    color: rgba(255, 255, 255, 0.75);
+    cursor: pointer;
+    transition:
+      background 0.2s ease,
+      border-color 0.2s ease,
+      color 0.2s ease,
+      opacity 0.2s ease;
+  }
+
+  .category-frame.has-arrows .category-arrow {
+    display: inline-flex;
+  }
+
+  .category-arrow:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border-color: transparent;
+    color: #ffffff;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.5);
+  }
+
+  .category-arrow.is-disabled {
+    opacity: 0.3;
+    pointer-events: none;
+  }
+
+  .category-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 0.85rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: var(--font-body, inherit);
+    color: rgba(255, 255, 255, 0.65);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-decoration: none;
+    white-space: nowrap;
+    flex-shrink: 0;
+    transition:
+      background 0.2s ease,
+      color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .category-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+    border-color: rgba(96, 165, 250, 0.35);
+  }
+
+  .category-item.is-active {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border-color: rgba(96, 165, 250, 0.6);
+    color: #ffffff;
+    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.5);
+  }
+
+  .category-icon {
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  @media (max-width: 640px) {
+    .category-bar {
+      background: transparent;
+      border-bottom: none;
+      box-shadow: none;
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+      padding: 0.55rem 0 0 0.6rem;
+      pointer-events: none;
+    }
+
+    .category-bar.is-visible {
+      pointer-events: none;
+    }
+
+    .category-bar.is-visible .category-toggle,
+    .category-bar.is-visible .category-frame {
+      pointer-events: auto;
+    }
+
+    .category-toggle {
+      display: inline-flex;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+    }
+
+    .category-frame {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      max-width: none;
+      margin: 0;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.2rem;
+      background: rgba(12, 16, 26, 0.99);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+      padding: 0.5rem 1rem 0.85rem;
+      max-height: min(62vh, 440px);
+      overflow-y: auto;
+    }
+
+    .category-bar.is-open .category-frame {
+      display: flex;
+    }
+
+    .category-arrow {
+      display: none !important;
+    }
+
+    .category-track {
+      position: static;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 0.2rem;
+      overflow-x: visible;
+      overflow-y: visible;
+      padding: 0;
+      scroll-behavior: auto;
+    }
+
+    .category-item {
+      justify-content: flex-start;
+      padding: 0.7rem 0.85rem;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      flex-shrink: auto;
+    }
+
+    .category-icon {
+      font-size: 1.1rem;
+    }
+  }
+
+  @media (max-width: 380px) {
+    .category-toggle {
+      padding: 0.5rem 0.65rem;
+    }
+
+    .category-toggle-label {
+      display: none;
+    }
+  }
+</style>
+
+<script>
+  const bar = document.getElementById('categoryBar');
+
+  if (bar) {
+    const frame = document.getElementById('categoryFrame');
+    const track = document.getElementById('categoryTrack');
+    const toggle = bar.querySelector<HTMLButtonElement>('.category-toggle');
+    const leftArrow = bar.querySelector<HTMLButtonElement>('.arrow-left');
+    const rightArrow = bar.querySelector<HTMLButtonElement>('.arrow-right');
+
+    const headerEl = document.querySelector('.site-header');
+    const mainNavEl = document.getElementById('mainNav');
+    const navToggleEl = document.querySelector('.nav-toggle-btn');
+
+    const mq = window.matchMedia('(max-width: 640px)');
+
+    let isVisible = false;
+
+    const applyOffset = () => {
+      const offset = isVisible && !mq.matches ? bar.offsetHeight : 0;
+      document.documentElement.style.setProperty('--category-bar-offset', `${offset}px`);
+    };
+
+    const applyLayout = () => {
+      applyOffset();
+      headerEl?.classList.toggle('is-hidden', isVisible && mq.matches);
+      if (isVisible && mq.matches && mainNavEl?.classList.contains('is-open')) {
+        mainNavEl.classList.remove('is-open');
+        navToggleEl?.setAttribute('aria-expanded', 'false');
+      }
+    };
+
+    const closePanel = () => {
+      bar.classList.remove('is-open');
+      toggle?.setAttribute('aria-expanded', 'false');
+    };
+
+    const targets = ['destacados', 'catalogo']
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el instanceof HTMLElement);
+
+    if (targets.length > 0 && 'IntersectionObserver' in window) {
+      const visible = new Set<Element>();
+      const observer = new IntersectionObserver(
+        (entries) => {
+          for (const entry of entries) {
+            if (entry.isIntersecting) visible.add(entry.target);
+            else visible.delete(entry.target);
+          }
+          const show = visible.size > 0;
+          isVisible = show;
+          bar.classList.toggle('is-visible', show);
+          if (!show) closePanel();
+          applyLayout();
+        },
+        { rootMargin: '-72px 0px 0px 0px' }
+      );
+      targets.forEach((target) => observer.observe(target));
+    }
+
+    if (frame && track && leftArrow && rightArrow) {
+      const STEP = 110;
+
+      const updateEdges = () => {
+        const max = track.scrollWidth - track.clientWidth;
+        const hasArrows = frame.classList.contains('has-arrows');
+        leftArrow.classList.toggle('is-disabled', !hasArrows || track.scrollLeft <= 2);
+        rightArrow.classList.toggle('is-disabled', !hasArrows || track.scrollLeft >= max - 2);
+      };
+
+      const updateOverflow = () => {
+        const has = track.scrollWidth - track.clientWidth > 4;
+        frame.classList.toggle('has-arrows', has);
+        updateEdges();
+      };
+
+      let hoverTimer: number | undefined;
+      const startSlide = (dir: number) => {
+        const slide = () => track.scrollBy({ left: dir * STEP, behavior: 'smooth' });
+        slide();
+        if (hoverTimer === undefined) hoverTimer = window.setInterval(slide, 260);
+      };
+      const stopSlide = () => {
+        if (hoverTimer !== undefined) {
+          clearInterval(hoverTimer);
+          hoverTimer = undefined;
+        }
+      };
+
+      leftArrow.addEventListener('mouseenter', () => startSlide(-1));
+      leftArrow.addEventListener('mouseleave', stopSlide);
+      leftArrow.addEventListener('click', () => track.scrollBy({ left: -track.clientWidth * 0.6, behavior: 'smooth' }));
+
+      rightArrow.addEventListener('mouseenter', () => startSlide(1));
+      rightArrow.addEventListener('mouseleave', stopSlide);
+      rightArrow.addEventListener('click', () => track.scrollBy({ left: track.clientWidth * 0.6, behavior: 'smooth' }));
+
+      track.addEventListener('scroll', updateEdges, { passive: true });
+      window.addEventListener('resize', () => {
+        stopSlide();
+        updateOverflow();
+        applyLayout();
+      });
+
+      if ('ResizeObserver' in window) {
+        new ResizeObserver(updateOverflow).observe(track);
+        new ResizeObserver(() => {
+          if (isVisible) applyOffset();
+        }).observe(bar);
+      }
+
+      updateOverflow();
+
+      const activeItem = track.querySelector<HTMLElement>('.category-item.is-active');
+      if (activeItem && track.scrollWidth > track.clientWidth) {
+        track.style.scrollBehavior = 'auto';
+        track.scrollLeft = Math.max(0, activeItem.offsetLeft - track.clientWidth / 2 + activeItem.clientWidth / 2);
+        track.style.scrollBehavior = '';
+        updateEdges();
+      }
+    }
+
+    toggle?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const open = bar.classList.toggle('is-open');
+      toggle.setAttribute('aria-expanded', String(open));
+    });
+
+    document.addEventListener('click', (event) => {
+      if (!bar.classList.contains('is-open')) return;
+      const target = event.target;
+      if (target.closest('a') || !target.closest('#categoryBar')) closePanel();
+    });
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closePanel();
+    });
+
+    applyLayout();
+
+    mq.addEventListener('change', () => applyLayout());
+  }
+</script>

@@ -8,7 +8,8 @@
  *   - Columna por producto con imagen, precio, puntuación y descuento.
  *   - "Elección del Editor" destacada (por defecto, la mejor valorada).
  *   - Características clave (pros) comparadas fila a fila.
- *   - CTA de compra ENMASCARADO: /out/[id] (el affiliateUrl nunca se expone).
+ *   - CTA de análisis interno: /producto/[slug] (el affiliateUrl nunca se expone;
+ *     la salida a la tienda ocurre después en /checkout/[id] → /api/redirect).
  *
  * Uso:
  *   <ComparisonTable products={sameCategory} highlightId={product.id} />
@@ -76,10 +77,10 @@ const discountOf = (p: Product) =>
                     <span class="best-badge">Mejor valorado</span>
                   </>
                 )}
-                <a href={`/producto/${p.id}`} class="col-image-link" title={`Análisis completo de ${p.title}`}>
+                <a href={`/producto/${p.slug ?? p.id}`} class="col-image-link" title={`Análisis completo de ${p.title}`}>
                   <img src={p.image} alt={p.title} loading="lazy" width="160" height="160" />
                 </a>
-                <a href={`/producto/${p.id}`} class="col-title">{p.title}</a>
+                <a href={`/producto/${p.slug ?? p.id}`} class="col-title">{p.title}</a>
                 {p.rating != null && (
                   <span class="col-rating">
                     <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -143,11 +144,11 @@ const discountOf = (p: Product) =>
             {selection.map((p) => (
               <td class:list={[{ 'is-editor-choice': p.id === editorChoiceId }]}>
                 <a
-                  href={`/producto/${p.id}`}
+                  href={`/producto/${p.slug ?? p.id}`}
                   class="cell-cta"
-                  aria-label={`Leer análisis completo de ${p.title}`}
+                  aria-label={`Consultar análisis de ${p.title}`}
                 >
-                  Ver análisis
+                  Consultar análisis
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                     <polyline points="12 5 19 12 12 19"></polyline>

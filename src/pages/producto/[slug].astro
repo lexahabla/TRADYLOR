@@ -1,0 +1,1597 @@
+---
+/**
+ * ==============================================================================
+ * TRADYLOR — FICHA DE PRODUCTO (ANÁLISIS TÉCNICO NEUTRAL)
+ * ==============================================================================
+ *
+ * Ruta dinámica SSR: /producto/[slug]
+ * (acepta también el id legado: /producto/sony-wh-1000xm5 sigue operativo)
+ *
+ * FLUJO DE COMPRA DELEGADA (Delegated Checkout):
+ *  ProductCard → /producto/[slug] → /checkout/[id] → /api/redirect → 302 → Tienda
+ *
+ * El affiliateUrl real NUNCA aparece en esta página ni en la pantalla puente:
+ * el CTA "Tramitar pedido" abre /checkout/[id] (resumen nativo) y sólo desde
+ * allí se sale con /api/redirect (registro de clic + 302 con enlace de afiliado).
+ * ==============================================================================
+ */
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import ComparisonTable from '../../components/ComparisonTable.astro';
+import { getCatalogProducts, findCatalogProduct, productKey } from '../../lib/catalog';
+
+const allProducts = getCatalogProducts();
+const cleanMarketplaceSuffix = (text: string) => text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
+
+// ---------------------------------------------------------------------------
+// Resolución del producto (slug canónico o id legado)
+// ---------------------------------------------------------------------------
+const product = findCatalogProduct(Astro.params.slug);
+const displayTitle = product ? cleanMarketplaceSuffix(product.title) : '';
+const displayDescription = product ? cleanMarketplaceSuffix(product.description) : '';
+
+// Si no existe el producto, redirigir al inicio
+if (!product) {
+  return Astro.redirect('/', 302);
+}
+
+const checkoutUrl = `/checkout/${productKey(product)}`;
+const specs = product.specs && Object.keys(product.specs).length > 0 ? product.specs : null;
+const fulfillmentProvider = product.fulfillmentProvider ?? product.merchant;
+
+// Comparativa: productos de la misma categoría (incluye el actual)
+const sameCategory = allProducts.filter((p) => p.category === product.category);
+const alternativesCount = sameCategory.filter((p) => p.id !== product.id).length;
+
+// ---------------------------------------------------------------------------
+// Cómputos de la página
+// ---------------------------------------------------------------------------
+const discountPercent = product.originalPrice
+  ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
+  : null;
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('es-ES', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+  }).format(amount);
+
+// Structured fields (new schema)
+const pricing = product.pricing;
+const conversionHooks = product.conversionHooks;
+const investigation = product.investigation;
+const affiliate = product.affiliate;
+const hasNewSchema = !!(pricing && conversionHooks && investigation && affiliate);
+
+// ─── Alternatives / Cross-Selling Resolution ─────────────────────────────────
+const alternatives = product.alternatives;
+const cheaperProduct = alternatives?.cheaperOptionId
+  ? allProducts.find((p) => p.id === alternatives.cheaperOptionId)
+  : null;
+const premiumProduct = alternatives?.premiumOptionId
+  ? allProducts.find((p) => p.id === alternatives.premiumOptionId)
+  : null;
+const similarProduct = alternatives?.similarOptionId
+  ? allProducts.find((p) => p.id === alternatives.similarOptionId)
+  : null;
+const hasAlternatives = !!(cheaperProduct || premiumProduct || similarProduct);
+
+// SEO: Datos estructurados de producto (Schema.org Product)
+const productSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'Product',
+  name: product.title,
+  description: product.description,
+  image: product.image,
+  brand: { '@type': 'Brand', name: product.merchant },
+  offers: {
+    '@type': 'Offer',
+    priceCurrency: 'EUR',
+    price: product.price.toFixed(2),
+    availability: 'https://schema.org/InStock',
+    seller: { '@type': 'Organization', name: product.merchant },
+  },
+  ...(product.rating && {
+    aggregateRating: {
+      '@type': 'AggregateRating',
+      ratingValue: product.rating,
+      reviewCount: product.reviewsCount ?? 1,
+      bestRating: 5,
+      worstRating: 1,
+    },
+  }),
+};
+---
+
+<Layout
+  title={`${product.title} — Análisis y Mejor Precio | Tradylor`}
+  description={product.description}
+  image={product.image}
+  type="product"
+>
+  <!-- Schema.org Product estructurado -->
+  <script type="application/ld+json" set:html={JSON.stringify(productSchema)} />
+
+  <div class="product-detail-page">
+
+    <!-- ======================================================
+         BREADCRUMB
+         ====================================================== -->
+    <nav class="breadcrumb-nav container" aria-label="Ruta de navegación">
+      <ol class="breadcrumb-list">
+        <li><a href="/">Inicio</a></li>
+        <li aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </li>
+        <li><a href="/#destacados">{product.category}</a></li>
+        <li aria-hidden="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </li>
+        <li aria-current="page">{product.title}</li>
+      </ol>
+    </nav>
+
+    <!-- ======================================================
+         LAYOUT PRINCIPAL: Imagen + Panel CTA (pegajoso)
+         ====================================================== -->
+    <section class="product-main container">
+
+      <!-- Columna izquierda: Imagen -->
+      <div class="product-gallery">
+        <div class="gallery-wrapper aspect-square w-full rounded-xl">
+          {discountPercent && discountPercent > 0 && (
+            <div class="discount-badge-lg" aria-label={`Descuento del ${discountPercent}%`}>
+              -{discountPercent}%
+            </div>
+          )}
+          {product.badge && (
+            <div class="editorial-badge-img">{product.badge}</div>
+          )}
+          <img
+            src={product.image}
+            alt={`Análisis técnico de ${product.title}`}
+            class="main-product-image object-contain p-4 bg-slate-50/50 rounded-xl"
+            width="600"
+            height="450"
+          />
+        </div>
+
+        <!-- Trust signals bajo la imagen -->
+        <div class="trust-row">
+          <div class="trust-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            </svg>
+            <span>Análisis independiente</span>
+          </div>
+          <div class="trust-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            <span>Precio verificado hoy</span>
+          </div>
+          <div class="trust-item">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            <span>Compra oficial protegida</span>
+          </div>
+          {hasNewSchema && investigation!.hoursInvestigated > 0 && (
+            <div class="trust-item trust-investigation">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <span>{investigation!.hoursInvestigated}h de análisis · {investigation!.modelsCompared} modelos comparados</span>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <!-- Columna derecha: Panel de información + CTA pegajoso -->
+      <div class="product-info-panel">
+
+        <!-- Cabecera: categoría + rating -->
+        <div class="panel-meta-top">
+          <span class="category-chip">{product.category}</span>
+          {product.rating && (
+            <div class="rating-inline" aria-label={`Puntuación: ${product.rating} sobre 5`}>
+              <svg class="star-svg" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+              </svg>
+              <strong>{product.rating.toFixed(1)}</strong>
+              {product.reviewsCount && (
+                <span class="review-count">({product.reviewsCount.toLocaleString('es-ES')} valoraciones)</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        <!-- Título H1 del producto -->
+        <h1 class="product-title-h1">{displayTitle}</h1>
+
+        <!-- Descripción editorial -->
+        <p class="product-desc-text">{displayDescription}</p>
+
+        <!-- Bloque de precio -->
+        <div class="price-block">
+          <div class="price-row">
+            <span class="price-main">{formatCurrency(product.price)}</span>
+            {product.originalPrice && (
+              <>
+                <span class="price-original">{formatCurrency(product.originalPrice)}</span>
+                {discountPercent && discountPercent > 0 && (
+                  <span class="savings-tag">Ahorras {formatCurrency(product.originalPrice - product.price)}</span>
+                )}
+              </>
+            )}
+          </div>
+          <p class="price-disclaimer">
+            Puede variar en el momento de la compra.
+          </p>
+        </div>
+
+        <!-- CTA principal: Compra ya → pantalla puente nativa /checkout/[id] -->
+        <a href={checkoutUrl} class="cta-primary-btn" id={`order-cta-${product.id}`}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+            <path d="M4 12h16" />
+            <polyline points="13 5 20 12 13 19" />
+          </svg>
+          Comprar ya
+          <svg class="arrow-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+          </svg>
+        </a>
+        <p class="cta-micro">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          Reserva tu opción sin compromiso: sólo se cobra en la pasarela oficial de {fulfillmentProvider}
+        </p>
+
+        <!-- Acciones secundarias: carrito Amazon-style y consulta técnica -->
+        <div class="cta-support-row">
+          <button
+            type="button"
+            class="detail-cart-btn add-to-cart-btn"
+            aria-label={`Añadir ${product.title} al carrito`}
+            data-product={JSON.stringify({ id: product.id, title: product.title, price: product.price, image: product.image })}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
+              <path d="M3 6h18"></path>
+              <path d="M16 10a4 4 0 0 1-8 0"></path>
+            </svg>
+            Añadir al carrito
+          </button>
+          <a href="#ficha-tecnica" class="detail-cart-btn cta-ghost-link" id={`specs-cta-${product.id}`}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <line x1="8" y1="6" x2="21" y2="6" />
+              <line x1="8" y1="12" x2="21" y2="12" />
+              <line x1="8" y1="18" x2="21" y2="18" />
+              <line x1="3" y1="6" x2="3.01" y2="6" />
+              <line x1="3" y1="12" x2="3.01" y2="12" />
+              <line x1="3" y1="18" x2="3.01" y2="18" />
+            </svg>
+            Ver ficha técnica
+          </a>
+        </div>
+
+        <!-- CTA terciario: análisis cruzado dentro de Tradylor -->
+        {alternativesCount > 0 ? (
+          <a href="#comparativa" class="cta-secondary-btn" id={`compare-cta-${product.id}`}>
+            Comparar con alternativas ({alternativesCount}) →
+          </a>
+        ) : (
+          <div class="cta-secondary-btn cta-compare-empty" role="note">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+            </svg>
+            Mejor producto de su categoría: no hay alternativas que lo superen
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- ======================================================
+         FICHA TÉCNICA OBJETIVA (specs del contrato n8n)
+         ====================================================== -->
+    <section class="specs-section container" id="ficha-tecnica">
+      <div class="specs-header">
+        <span class="specs-tag">Datos objetivos</span>
+        <h2 class="specs-title">Ficha técnica</h2>
+        <p class="specs-subtitle">
+          Especificaciones verificadas del fabricante, sin valoraciones comerciales.
+        </p>
+      </div>
+
+      {specs ? (
+        <dl class="specs-grid">
+          {Object.entries(specs).map(([label, value]) => (
+            <div class="spec-row">
+              <dt class="spec-label">{label}</dt>
+              <dd class="spec-value">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <div class="specs-empty" role="note">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
+          La ficha técnica detallada está en proceso de verificación. Los puntos
+          fuertes y el veredicto inferior reflejan el estado actual del análisis.
+        </div>
+      )}
+    </section>
+
+    <!-- ======================================================
+         COMPRA DELEGADA: cómo se tramita el pedido
+         ====================================================== -->
+    <section class="delegated-section container" aria-labelledby="delegated-title">
+      <div class="delegated-head">
+        <span class="specs-tag delegated-tag">Compra delegada</span>
+        <h2 class="specs-title" id="delegated-title">Tú eliges. El distribuidor oficial cobra y envía.</h2>
+        <p class="specs-subtitle">
+          Tradylor gestiona la selección y el análisis; el pago, la logística y la
+          garantía los administrará {fulfillmentProvider}.
+        </p>
+      </div>
+
+      <ol class="delegated-steps">
+        <li class="delegated-step">
+          <span class="step-index">1</span>
+          <div class="step-body">
+            <h3 class="step-title">Reservas tu opción</h3>
+            <p class="step-text">
+              Compruebas la ficha técnica, el veredicto y pulsas «Tramitar pedido».
+              Sin registro y sin coste.
+            </p>
+          </div>
+        </li>
+        <li class="delegated-step">
+          <span class="step-index">2</span>
+          <div class="step-body">
+            <h3 class="step-title">Confirmas el resumen</h3>
+            <p class="step-text">
+              Revisas artículo, precio, plazo estimado de entrega y quién figura
+              como distribuidor oficial antes de salir.
+            </p>
+          </div>
+        </li>
+        <li class="delegated-step">
+          <span class="step-index">3</span>
+          <div class="step-body">
+            <h3 class="step-title">Pagas en la pasarela oficial</h3>
+            <p class="step-text">
+              {fulfillmentProvider} procesa el pago de forma segura y te envía los
+              correos de confirmación, seguimiento y garantía.
+            </p>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- ======================================================
+         ANÁLISIS EDITORIAL: Pros, Contras & Veredicto
+         ====================================================== -->
+    <section class="editorial-section container">
+      <div class="editorial-grid">
+
+        <!-- Pros -->
+        <div class="pros-card">
+          <h2 class="analysis-h2 pros-h2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+            Puntos Fuertes
+          </h2>
+          {product.pros && product.pros.length > 0 ? (
+            <ul class="analysis-list pros-list">
+              {product.pros.map((pro) => (
+                <li class="analysis-item">
+                  <span class="item-bullet pro-bullet">✓</span>
+                  <span>{pro}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="no-data">Análisis en proceso de actualización.</p>
+          )}
+        </div>
+
+        <!-- Contras -->
+        <div class="cons-card">
+          <h2 class="analysis-h2 cons-h2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+            A Mejorar
+          </h2>
+          {product.cons && product.cons.length > 0 ? (
+            <ul class="analysis-list cons-list">
+              {product.cons.map((con) => (
+                <li class="analysis-item">
+                  <span class="item-bullet con-bullet">✕</span>
+                  <span>{con}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p class="no-data">Sin puntos negativos destacables detectados.</p>
+          )}
+        </div>
+
+        <!-- Lo que la marca NO te cuenta (Hidden Drawbacks) -->
+        {hasNewSchema && investigation!.hiddenDrawbacks.length > 0 && (
+          <div class="drawbacks-card">
+            <h2 class="analysis-h2 drawbacks-h2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                <line x1="12" y1="9" x2="12" y2="13" />
+                <line x1="12" y1="17" x2="12.01" y2="17" />
+              </svg>
+              Lo que la marca NO te cuenta
+            </h2>
+            <ul class="analysis-list drawbacks-list">
+              {investigation!.hiddenDrawbacks.map((item) => (
+                <li class="analysis-item">
+                  <span class="item-bullet drawback-bullet">⚠</span>
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <!-- Conversion Hooks: ¿Para quién es este producto? -->
+        {hasNewSchema && (conversionHooks!.idealFor || conversionHooks!.notRecommendedFor) && (
+          <div class="conversion-hooks-card">
+            <h2 class="analysis-h2 hooks-h2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                <line x1="9" y1="9" x2="9.01" y2="9" />
+                <line x1="15" y1="9" x2="15.01" y2="9" />
+              </svg>
+              ¿Para quién es este producto?
+            </h2>
+            {conversionHooks!.idealFor && (
+              <div class="hook-row hook-ideal">
+                <span class="hook-icon">✓</span>
+                <div>
+                  <span class="hook-label">Ideal para:</span>
+                  <span class="hook-text">{conversionHooks!.idealFor}</span>
+                </div>
+              </div>
+            )}
+            {conversionHooks!.notRecommendedFor && (
+              <div class="hook-row hook-not-ideal">
+                <span class="hook-icon">✕</span>
+                <div>
+                  <span class="hook-label">No recomendado para:</span>
+                  <span class="hook-text">{conversionHooks!.notRecommendedFor}</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        <!-- Veredicto -->
+        {product.verdict && (
+          <div class="verdict-card">
+            <h2 class="analysis-h2 verdict-h2">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+              </svg>
+              Veredicto Tradylor
+            </h2>
+            <p class="verdict-text">{product.verdict}</p>
+            <!-- CTA secundario: lleva a la comparativa de la categoría -->
+            {alternativesCount > 0 && (
+              <a
+                href="#comparativa"
+                class="cta-secondary-btn"
+                id={`verdict-cta-${product.id}`}
+              >
+                Ver comparativa con alternativas →
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    </section>
+
+    <!-- ======================================================
+         COMPARATIVA DE LA CATEGORÍA (Tabla dinámica)
+         ====================================================== -->
+    <div class="container" id="comparativa">
+      <ComparisonTable
+        products={sameCategory}
+        highlightId={product.id}
+        title={`Comparativa: ${product.category}`}
+      />
+      {alternativesCount === 0 && (
+        <div class="comparison-empty container">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+          <p>Este producto es actualmente <strong>la mejor opción analizada</strong> de la categoría <strong>{product.category}</strong>. No hay alternativas comparables que lo superen en nuestra selección editorial.</p>
+        </div>
+      )}
+    </div>
+
+    <!-- ======================================================
+         ALTERNATIVAS / CROSS-SELLING (Recomendaciones cruzadas)
+         ====================================================== -->
+    {hasAlternatives && (
+      <section class="cross-selling-section container">
+        <div class="cross-selling-header">
+          <span class="cross-selling-tag">También te puede interesar</span>
+          <h2 class="cross-selling-title">Alternativas a este producto</h2>
+          <p class="cross-selling-subtitle">
+            Según tu presupuesto y necesidades, estas opciones también podrían encajar contigo.
+          </p>
+        </div>
+
+        <div class="alternatives-grid">
+          {cheaperProduct && (
+            <a href={`/producto/${productKey(cheaperProduct)}`} class="alternative-card alt-cheaper">
+              <span class="alt-badge alt-badge-cheaper">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+                Más económico
+              </span>
+              <img
+                src={cheaperProduct.image}
+                alt={cheaperProduct.title}
+                loading="lazy"
+                width="120"
+                height="120"
+                class="alt-image"
+              />
+              <h3 class="alt-title">{cleanMarketplaceSuffix(cheaperProduct.title)}</h3>
+              <span class="alt-price">{formatCurrency(cheaperProduct.price)}</span>
+              {cheaperProduct.rating && (
+                <span class="alt-rating">
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="#f59e0b">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  {cheaperProduct.rating.toFixed(1)}
+                </span>
+              )}
+              <span class="alt-cta">Consultar análisis →</span>
+            </a>
+          )}
+
+          {premiumProduct && (
+            <a href={`/producto/${productKey(premiumProduct)}`} class="alternative-card alt-premium">
+              <span class="alt-badge alt-badge-premium">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                </svg>
+                Opción premium
+              </span>
+              <img
+                src={premiumProduct.image}
+                alt={premiumProduct.title}
+                loading="lazy"
+                width="120"
+                height="120"
+                class="alt-image"
+              />
+              <h3 class="alt-title">{cleanMarketplaceSuffix(premiumProduct.title)}</h3>
+              <span class="alt-price">{formatCurrency(premiumProduct.price)}</span>
+              {premiumProduct.rating && (
+                <span class="alt-rating">
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="#f59e0b">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  {premiumProduct.rating.toFixed(1)}
+                </span>
+              )}
+              <span class="alt-cta">Consultar análisis →</span>
+            </a>
+          )}
+
+          {similarProduct && (
+            <a href={`/producto/${productKey(similarProduct)}`} class="alternative-card alt-similar">
+              <span class="alt-badge alt-badge-similar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
+                </svg>
+                Competidor directo
+              </span>
+              <img
+                src={similarProduct.image}
+                alt={similarProduct.title}
+                loading="lazy"
+                width="120"
+                height="120"
+                class="alt-image"
+              />
+              <h3 class="alt-title">{cleanMarketplaceSuffix(similarProduct.title)}</h3>
+              <span class="alt-price">{formatCurrency(similarProduct.price)}</span>
+              {similarProduct.rating && (
+                <span class="alt-rating">
+                  <svg width="12" height="12" viewBox="0 0 20 20" fill="#f59e0b">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  {similarProduct.rating.toFixed(1)}
+                </span>
+              )}
+              <span class="alt-cta">Consultar análisis →</span>
+            </a>
+          )}
+        </div>
+      </section>
+    )}
+
+    <!-- ======================================================
+         AVISO DE AFILIACIÓN (Transparencia obligatoria)
+         ====================================================== -->
+    <section class="affiliate-notice container">
+      <div class="notice-inner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+          <circle cx="12" cy="12" r="10" />
+          <line x1="12" y1="16" x2="12" y2="12" />
+          <line x1="12" y1="8" x2="12.01" y2="8" />
+        </svg>
+        <p>
+          <strong>Aviso de afiliación:</strong> Este análisis puede contener enlaces de afiliado a {hasNewSchema ? affiliate!.primaryStore : product.merchant}.
+          {hasNewSchema && affiliate!.alternativeStore && (
+            <> También disponible en {affiliate!.alternativeStore}.</>
+          )}
+          Si realizas una compra a través de nuestros enlaces, Tradylor puede recibir una pequeña comisión
+          sin ningún coste adicional para ti. Nuestros análisis son siempre independientes e imparciales.
+        </p>
+      </div>
+    </section>
+
+  </div>
+</Layout>
+
+<style>
+  /* =====================================================
+     BASE DE LA PÁGINA
+     ===================================================== */
+  .product-detail-page {
+    padding-bottom: 5rem;
+  }
+
+  /* =====================================================
+     BREADCRUMB
+     ===================================================== */
+  .breadcrumb-nav {
+    padding-top: 1.5rem;
+    padding-bottom: 1rem;
+  }
+  .breadcrumb-list {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    list-style: none;
+    flex-wrap: wrap;
+    font-size: 0.82rem;
+    color: var(--color-text-dim);
+  }
+  .breadcrumb-list a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .breadcrumb-list a:hover {
+    color: var(--color-primary);
+  }
+  .breadcrumb-list li[aria-current="page"] {
+    color: var(--color-text-main);
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 260px;
+  }
+
+  /* =====================================================
+     LAYOUT PRINCIPAL (Imagen | Panel)
+     ===================================================== */
+  .product-main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3.5rem;
+    align-items: start;
+    padding-top: 1rem;
+    padding-bottom: 3rem;
+  }
+
+  /* ---- Galería / Imagen ----
+     Utilidades Tailwind aplicadas en el marcado: aspect-square · w-full ·
+     object-contain · p-4 · bg-slate-50/50 · rounded-xl (imagen sin recorte). */
+  .gallery-wrapper {
+    position: relative;
+    background: #f8fafc;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5%;
+  }
+  .main-product-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 1rem;
+    background: rgba(248, 250, 252, 0.5);
+    border-radius: 0.75rem;
+    transition: transform 0.5s ease;
+  }
+  .gallery-wrapper:hover .main-product-image {
+    transform: scale(1.02);
+  }
+  .discount-badge-lg {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: #dc2626;
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 800;
+    padding: 0.3rem 0.75rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(220, 38, 38, 0.5);
+    z-index: 2;
+  }
+  .editorial-badge-img {
+    position: absolute;
+    top: 1rem;
+    left: 1rem;
+    background: rgba(245, 158, 11, 0.15);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    z-index: 2;
+  }
+
+  .trust-row {
+    display: flex;
+    gap: 1.25rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+  .trust-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    color: #10b981;
+    font-weight: 500;
+  }
+
+  /* ---- Panel Información ---- */
+  .product-info-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.35rem;
+    position: sticky;
+    top: 100px;
+  }
+
+  .panel-meta-top {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .category-chip {
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .rating-inline {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.88rem;
+    color: #f3f4f6;
+  }
+  .star-svg {
+    width: 18px;
+    height: 18px;
+    color: #f59e0b;
+    fill: #f59e0b;
+  }
+  .review-count {
+    color: var(--color-text-dim);
+    font-size: 0.8rem;
+  }
+
+  .product-title-h1 {
+    font-family: var(--font-heading);
+    font-size: clamp(1.4rem, 2.5vw, 1.85rem);
+    line-height: 1.3;
+    color: #ffffff;
+    font-weight: 800;
+  }
+
+  .product-desc-text {
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+    line-height: 1.7;
+  }
+
+  /* ---- Bloque de Precio ---- */
+  .price-block {
+    background: rgba(13, 19, 31, 0.8);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem 1.5rem;
+  }
+  .price-row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.4rem;
+  }
+  .price-main {
+    font-family: var(--font-heading);
+    font-size: 2.2rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1;
+  }
+  .price-original {
+    font-size: 1.1rem;
+    color: var(--color-text-dim);
+    text-decoration: line-through;
+  }
+  .savings-tag {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    font-size: 0.78rem;
+    font-weight: 700;
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+  }
+  .price-disclaimer {
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+    margin: 0;
+  }
+
+  /* ---- Botón CTA Principal ---- */
+  .cta-primary-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 60%, #1e40af 100%);
+    color: #ffffff;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.05rem;
+    padding: 1rem 1.5rem;
+    border-radius: 12px;
+    text-decoration: none;
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45), 0 0 0 1px rgba(59, 130, 246, 0.2);
+    transition: all 0.25s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .cta-primary-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.08) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+  .cta-primary-btn:hover {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 60%, #1d4ed8 100%);
+    box-shadow: 0 10px 30px rgba(59, 130, 246, 0.55), 0 0 0 1px rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+  }
+  .cta-primary-btn:hover::before {
+    opacity: 1;
+  }
+  .cta-primary-btn:active {
+    transform: translateY(0);
+  }
+  .arrow-icon {
+    transition: transform 0.25s ease;
+    margin-left: auto;
+  }
+  .cta-primary-btn:hover .arrow-icon {
+    transform: translate(3px, -3px);
+  }
+
+  .detail-cart-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    width: 100%;
+    padding: 0.85rem 1.25rem;
+    color: #bfdbfe;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(96, 165, 250, 0.35);
+    border-radius: 10px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+    transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+  }
+  .detail-cart-btn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: #60a5fa;
+    transform: translateY(-1px);
+  }
+
+  .detail-cart-btn.add-to-cart-btn {
+    color: #ffffff;
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    border: 1px solid rgba(96, 165, 250, 0.5);
+    box-shadow: 0 6px 18px rgba(96, 165, 250, 0.28);
+    transition: background 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+  }
+  .detail-cart-btn.add-to-cart-btn:hover {
+    color: #ffffff;
+    background: linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%);
+    border-color: #93c5fd;
+    box-shadow: 0 10px 26px rgba(96, 165, 250, 0.42);
+    transform: translateY(-1px);
+  }
+
+  .cta-micro {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.76rem;
+    color: var(--color-text-dim);
+    text-align: center;
+    justify-content: center;
+    margin-top: -0.5rem;
+  }
+
+  /* Estado sin alternativas: mismo bloque visual que el CTA, desactivado */
+  .cta-compare-empty {
+    opacity: 0.55;
+    cursor: default;
+    pointer-events: none;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    text-align: center;
+  }
+  .cta-compare-empty::before {
+    display: none;
+  }
+
+  /* Aviso bajo la zona de comparativa cuando no hay alternativas */
+  .comparison-empty {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin: 2rem auto 3rem;
+    padding: 1.5rem 1.75rem;
+    max-width: 640px;
+    color: var(--color-text-muted);
+    background: rgba(17, 24, 39, 0.55);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    text-align: center;
+  }
+  .comparison-empty svg {
+    color: #60a5fa;
+    flex-shrink: 0;
+  }
+  .comparison-empty strong {
+    color: #e5e7eb;
+  }
+
+  .merchant-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .vendor-label {
+    color: var(--color-text-dim);
+  }
+  .vendor-name {
+    font-weight: 700;
+    color: #ffffff;
+    background: var(--color-surface-subtle);
+    padding: 0.2rem 0.65rem;
+    border-radius: 6px;
+    border: 1px solid var(--color-border);
+    font-size: 0.82rem;
+  }
+  .vendor-name[data-merchant="amazon"] { color: #f59e0b; }
+  .vendor-name[data-merchant="pccomponentes"] { color: #f87171; }
+
+  /* =====================================================
+     SECCIÓN EDITORIAL: PROS, CONTRAS, VEREDICTO
+     ===================================================== */
+  .editorial-section {
+    padding-bottom: 3rem;
+  }
+  .editorial-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+  }
+
+  .pros-card,
+  .cons-card,
+  .verdict-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.75rem;
+  }
+  .pros-card {
+    border-color: rgba(16, 185, 129, 0.2);
+    background: rgba(16, 185, 129, 0.03);
+  }
+  .cons-card {
+    border-color: rgba(248, 113, 113, 0.2);
+    background: rgba(248, 113, 113, 0.03);
+  }
+  .verdict-card {
+    grid-column: 1 / -1;
+    border-color: rgba(59, 130, 246, 0.25);
+    background: rgba(59, 130, 246, 0.04);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .analysis-h2 {
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1.1rem;
+  }
+  .pros-h2 { color: #10b981; }
+  .cons-h2 { color: #f87171; }
+  .verdict-h2 { color: #60a5fa; }
+
+  .analysis-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+  .analysis-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+  }
+  .item-bullet {
+    font-weight: 800;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .pro-bullet { color: #10b981; }
+  .con-bullet { color: #f87171; }
+
+  /* ---- Hidden Drawbacks Card ---- */
+  .drawbacks-card {
+    grid-column: 1 / -1;
+    background: rgba(245, 158, 11, 0.03);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: var(--border-radius-md);
+    padding: 1.75rem;
+  }
+  .drawbacks-h2 { color: #f59e0b; }
+  .drawback-bullet { color: #f59e0b; }
+
+  /* ---- Conversion Hooks Card ---- */
+  .conversion-hooks-card {
+    grid-column: 1 / -1;
+    background: rgba(139, 92, 246, 0.03);
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: var(--border-radius-md);
+    padding: 1.75rem;
+  }
+  .hooks-h2 { color: #a78bfa; }
+  .hook-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+  .hook-row:last-child { border-bottom: none; }
+  .hook-icon {
+    font-weight: 800;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .hook-ideal .hook-icon { color: #10b981; }
+  .hook-not-ideal .hook-icon { color: #f87171; }
+  .hook-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+  .hook-ideal .hook-label { color: #10b981; }
+  .hook-not-ideal .hook-label { color: #f87171; }
+  .hook-text {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+  }
+
+  /* ---- Investigation Trust Badge ---- */
+  .trust-investigation {
+    color: #60a5fa !important;
+  }
+
+  .verdict-text {
+    font-size: 1rem;
+    line-height: 1.7;
+    color: #d1d5db;
+    font-style: italic;
+  }
+
+  .cta-secondary-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(59, 130, 246, 0.1);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    padding: 0.65rem 1.25rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+    width: fit-content;
+  }
+  .cta-secondary-btn:hover {
+    background: var(--color-primary);
+    color: #ffffff;
+    border-color: var(--color-primary);
+    box-shadow: var(--shadow-glow);
+  }
+
+  .no-data {
+    font-size: 0.85rem;
+    color: var(--color-text-dim);
+    font-style: italic;
+  }
+
+  /* =====================================================
+     AVISO DE AFILIACIÓN
+     ===================================================== */
+  .affiliate-notice {
+    padding-bottom: 2rem;
+  }
+  .notice-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    background: rgba(245, 158, 11, 0.05);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: var(--border-radius-sm);
+    padding: 1rem 1.25rem;
+  }
+  .notice-inner svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .notice-inner p {
+    font-size: 0.8rem;
+    color: var(--color-text-dim);
+    line-height: 1.55;
+    margin: 0;
+  }
+  .notice-inner strong {
+    color: var(--color-accent-amber);
+  }
+
+  /* =====================================================
+     CROSS-SELLING / ALTERNATIVAS
+     ===================================================== */
+  .cross-selling-section {
+    padding-bottom: 3rem;
+  }
+  .cross-selling-header {
+    margin-bottom: 1.75rem;
+  }
+  .cross-selling-tag {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: #a78bfa;
+    margin-bottom: 0.6rem;
+  }
+  .cross-selling-title {
+    font-family: var(--font-heading);
+    font-size: clamp(1.3rem, 2.5vw, 1.75rem);
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.5rem;
+  }
+  .cross-selling-subtitle {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    margin: 0;
+  }
+
+  .alternatives-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .alternative-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.75rem;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 1.5rem 1.25rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+  }
+  .alternative-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  }
+  .alt-cheaper:hover { border-color: rgba(16, 185, 129, 0.5); }
+  .alt-premium:hover { border-color: rgba(245, 158, 11, 0.5); }
+  .alt-similar:hover { border-color: rgba(96, 165, 250, 0.5); }
+
+  .alt-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.25rem 0.65rem;
+    border-radius: 999px;
+  }
+  .alt-badge-cheaper {
+    background: rgba(16, 185, 129, 0.12);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+  }
+  .alt-badge-premium {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+  }
+  .alt-badge-similar {
+    background: rgba(96, 165, 250, 0.12);
+    color: #60a5fa;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+  }
+
+  .alt-image {
+    width: 100px;
+    height: 100px;
+    object-fit: contain;
+    border-radius: 12px;
+    background: #fff;
+    padding: 8px;
+  }
+
+  .alt-title {
+    font-family: var(--font-heading);
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #e5e7eb;
+    line-height: 1.35;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .alt-price {
+    font-family: var(--font-heading);
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #ffffff;
+  }
+
+  .alt-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #fbbf24;
+  }
+
+  .alt-cta {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #60a5fa;
+    transition: color 0.2s;
+  }
+  .alternative-card:hover .alt-cta {
+    color: #93bbfd;
+  }
+
+  /* =====================================================
+     ACCIONES SECUNDARIAS DEL PANEL CTA
+     ===================================================== */
+  .cta-support-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .cta-support-row > * {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    justify-content: center;
+    text-decoration: none;
+    font-size: 0.85rem;
+    padding: 0.85rem 0.6rem;
+  }
+  .cta-ghost-link {
+    color: #bfdbfe;
+  }
+
+  /* =====================================================
+     FICHA TÉCNICA OBJETIVA
+     ===================================================== */
+  .specs-section {
+    padding-bottom: 3rem;
+    scroll-margin-top: 100px;
+  }
+  .specs-header {
+    margin-bottom: 1.5rem;
+  }
+  .specs-tag {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: #60a5fa;
+    background: rgba(96, 165, 250, 0.1);
+    border: 1px solid rgba(96, 165, 250, 0.25);
+    padding: 0.22rem 0.7rem;
+    border-radius: 999px;
+    margin-bottom: 0.7rem;
+  }
+  .specs-title {
+    font-family: var(--font-heading);
+    font-size: clamp(1.3rem, 2.5vw, 1.7rem);
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.4rem;
+    letter-spacing: -0.01em;
+  }
+  .specs-subtitle {
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    margin: 0;
+    line-height: 1.6;
+  }
+  .specs-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 0.75rem;
+    margin: 0;
+  }
+  .spec-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    padding: 0.9rem 1.15rem;
+  }
+  .spec-label {
+    font-size: 0.76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-dim);
+    margin: 0;
+  }
+  .spec-value {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: #e5e7eb;
+    text-align: right;
+    margin: 0;
+  }
+  .specs-empty {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.7rem;
+    background: rgba(17, 24, 39, 0.55);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    border-radius: var(--border-radius-md);
+    padding: 1.25rem 1.4rem;
+    font-size: 0.87rem;
+    line-height: 1.6;
+    color: var(--color-text-muted);
+  }
+  .specs-empty svg {
+    color: #60a5fa;
+    flex-shrink: 0;
+    margin-top: 3px;
+  }
+
+  /* =====================================================
+     COMPRA DELEGADA (pasos del pedido)
+     ===================================================== */
+  .delegated-section {
+    padding-bottom: 3rem;
+  }
+  .delegated-head {
+    margin-bottom: 1.5rem;
+  }
+  .delegated-tag {
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.28);
+  }
+  .delegated-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+    list-style: none;
+    counter-reset: none;
+  }
+  .delegated-step {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.9rem;
+    background: rgba(59, 130, 246, 0.04);
+    border: 1px solid rgba(59, 130, 246, 0.18);
+    border-radius: var(--border-radius-md);
+    padding: 1.35rem;
+  }
+  .step-index {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+    color: #ffffff;
+    font-family: var(--font-heading);
+    font-weight: 800;
+    font-size: 0.92rem;
+  }
+  .step-body {
+    min-width: 0;
+  }
+  .step-title {
+    font-family: var(--font-heading);
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 0.35rem;
+  }
+  .step-text {
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  /* =====================================================
+     RESPONSIVE
+     ===================================================== */
+  @media (max-width: 900px) {
+    .product-main {
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+    .product-info-panel {
+      position: static;
+    }
+    .editorial-grid {
+      grid-template-columns: 1fr;
+    }
+    .verdict-card {
+      grid-column: auto;
+    }
+    .drawbacks-card,
+    .conversion-hooks-card {
+      grid-column: auto;
+    }
+    .alternatives-grid {
+      grid-template-columns: 1fr;
+    }
+    .delegated-steps {
+      grid-template-columns: 1fr;
+    }
+  }
+  @media (max-width: 600px) {
+    .trust-row {
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+    .price-main {
+      font-size: 1.8rem;
+    }
+    .cta-primary-btn {
+      font-size: 0.95rem;
+    }
+    .cta-support-row {
+      flex-direction: column;
+    }
+    .spec-row {
+      flex-direction: column;
+      gap: 0.3rem;
+      align-items: flex-start;
+    }
+    .spec-value {
+      text-align: left;
+    }
+    .breadcrumb-list li[aria-current="page"] {
+      max-width: 160px;
+    }
+  }
+</style>

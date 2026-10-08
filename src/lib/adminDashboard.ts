@@ -1,5 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  createCategory as createCategoryResult,
+  getCategories as getRichCategories,
+  getCategoryBySlug,
+  removeCategory as removeCategoryBySlug,
+} from './categories';
 
 export const AFFILIATE_PROVIDERS = [
   { id: 'amazon', name: 'Amazon Associates', description: 'Programa de asociados de Amazon.', envKeys: ['AMAZON_ASSOCIATE_TAG', 'AMAZON_PA_API_KEY', 'AMAZON_PA_SECRET'] },
@@ -14,7 +20,6 @@ export const AFFILIATE_PROVIDERS = [
 ] as const;
 
 const DATA_DIR = path.join(process.cwd(), 'src', 'data');
-const CATEGORIES_PATH = path.join(DATA_DIR, 'categories.json');
 const ANALYTICS_PATH = path.join(DATA_DIR, 'analytics.json');
 
 function readJson<T>(filePath: string, fallback: T): T {
@@ -31,22 +36,25 @@ function writeJson(filePath: string, value: unknown): void {
   fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf-8');
 }
 
+/** Nombres de categoría (esquema legado string[] consumido por el panel). */
 export function getCategories(): string[] {
-  return readJson<string[]>(CATEGORIES_PATH, ['Tecnología', 'Audio & Sonido', 'Informática & Laptops', 'Lectura Digital', 'Hogar Inteligente', 'Fotografía & Vídeo', 'Gaming & Accesorios']);
+  return getRichCategories().map((category) => category.name);
 }
 
 export function addCategory(name: string): string[] {
-  const normalized = name.trim();
-  const categories = getCategories();
-  if (normalized && !categories.includes(normalized)) categories.push(normalized);
-  writeJson(CATEGORIES_PATH, categories);
-  return categories;
+  const normalized = String(name ?? '').trim();
+  if (!normalized) return getCategories();
+  const existing = getRichCategories().some(
+    (category) => category.name.toLowerCase() === normalized.toLowerCase() || category.slug === normalized,
+  );
+  if (!existing) createCategoryResult({ name: normalized });
+  return getCategories();
 }
 
-export function removeCategory(name: string): string[] {
-  const categories = getCategories().filter((category) => category !== name);
-  writeJson(CATEGORIES_PATH, categories);
-  return categories;
+export function removeCategory(nameOrSlug: string): string[] {
+  const target = getCategoryBySlug(nameOrSlug) ?? getRichCategories().find((c) => c.name === nameOrSlug);
+  if (target) removeCategoryBySlug(target.slug);
+  return getCategories();
 }
 
 export interface AnalyticsEvent {

@@ -10,7 +10,8 @@
  *  1. Extrae el parámetro `id` de la URL (p.ej. /out/sony-wh-1000xm5).
  *  2. Busca el producto en el JSON dinámico (scrapeado/externo) primero,
  *     luego en la lista estática de products.ts como fallback seguro.
- *  3. Si existe → HTTP 302 al affiliateUrl real (invisible para el usuario).
+ *  3. Si existe → HTTP 302 a la URL de compra directa (deep link de cesta en
+ *     Amazon si hay ASIN, buyNowUrl si existe, si no el affiliateUrl real).
  *  4. Si no existe → Redirección limpia al inicio (/).
  *
  * BENEFICIOS DE SEGURIDAD, CRO Y SEO:
@@ -28,6 +29,7 @@
 export const prerender = false;
 
 import { getCatalogProducts } from '../../lib/catalog';
+import { buildPurchaseUrl } from '../../lib/purchaseUrl';
 
 const allProducts = getCatalogProducts();
 
@@ -51,5 +53,5 @@ if (!product || !product.affiliateUrl) {
 // Astro.redirect() emite la cabecera Location en el servidor.
 // El navegador sigue la redirección de forma transparente para el usuario.
 // Las cabeceras adicionales evitan que proxies o CDNs cacheen la URL real.
-return Astro.redirect(product.affiliateUrl as string, 302);
+return Astro.redirect(buildPurchaseUrl(product) || product.affiliateUrl, 302);
 ---

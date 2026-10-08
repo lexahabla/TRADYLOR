@@ -1,9 +1,154 @@
 [
-  "Tecnología",
-  "Audio & Sonido",
-  "Informática & Laptops",
-  "Lectura Digital",
-  "Hogar Inteligente",
-  "Fotografía & Vídeo",
-  "Gaming & Accesorios"
+  {
+    "id": "tecnologia",
+    "name": "Tecnología",
+    "slug": "tecnologia",
+    "icon": "📱",
+    "keywords": [
+      "tecnologia",
+      "gadget",
+      "smartphone",
+      "movil",
+      "accesorio tecnologico",
+      "wearable",
+      "reloj inteligente"
+    ]
+  },
+  {
+    "id": "audio-sonido",
+    "name": "Audio & Sonido",
+    "slug": "audio-sonido",
+    "icon": "🎧",
+    "keywords": [
+      "auriculares",
+      "auricular",
+      "altavoz",
+      "altavoces",
+      "soundbar",
+      "barra de sonido",
+      "microfono",
+      "noise cancelling",
+      "earbuds",
+      "cascos",
+      "audio"
+    ]
+  },
+  {
+    "id": "informatica-laptops",
+    "name": "Informática & Laptops",
+    "slug": "informatica-laptops",
+    "icon": "💻",
+    "keywords": [
+      "portatil",
+      "laptop",
+      "macbook",
+      "ordenador",
+      "monitor",
+      "teclado",
+      "raton",
+      "ssd",
+      "disco duro",
+      "memoria ram",
+      "procesador",
+      "chromebook",
+      "tablet"
+    ]
+  },
+  {
+    "id": "lectura-digital",
+    "name": "Lectura Digital",
+    "slug": "lectura-digital",
+    "icon": "📖",
+    "keywords": [
+      "kindle",
+      "e-reader",
+      "ereader",
+      "ebook",
+      "libro digital",
+      "tinta electronica",
+      "lector electronico"
+    ]
+  },
+  {
+    "id": "hogar-inteligente",
+    "name": "Hogar Inteligente",
+    "slug": "hogar-inteligente",
+    "icon": "🏠",
+    "keywords": [
+      "robot aspirador",
+      "aspirador",
+      "aspiradora",
+      "smart home",
+      "domotica",
+      "bombilla",
+      "enchufe inteligente",
+      "alexa",
+      "google home",
+      "termostato",
+      "camara vigilancia",
+      "timbre",
+      "fregasuelos",
+      "freidora",
+      "cafetera",
+      "roborock",
+      "roomba"
+    ]
+  },
+  {
+    "id": "fotografia-video",
+    "name": "Fotografía & Vídeo",
+    "slug": "fotografia-video",
+    "icon": "📷",
+    "keywords": [
+      "camara",
+      "objetivo",
+      "tripode",
+      "fotografia",
+      "gopro",
+      "lente",
+      "estabilizador",
+      "microfono video"
+    ]
+  },
+  {
+    "id": "gaming-accesorios",
+    "name": "Gaming & Accesorios",
+    "slug": "gaming-accesorios",
+    "icon": "🎮",
+    "keywords": [
+      "gaming",
+      "videojuego",
+      "consola",
+      "mando",
+      "raton gaming",
+      "teclado gaming",
+      "silla gaming",
+      "auriculares gaming",
+      "playstation",
+      "xbox",
+      "nintendo"
+    ]
+  },
+  {
+    "id": "herramientas",
+    "name": "Herramientas",
+    "slug": "herramientas",
+    "icon": "🛠️",
+    "keywords": [
+      "taladro",
+      "atornillador",
+      "sierra",
+      "herramienta",
+      "destornillador",
+      "martillo",
+      "lijadora",
+      "amoladora",
+      "broca",
+      "bosch",
+      "dewalt",
+      "makita",
+      "nivel laser",
+      "multimetro"
+    ]
+  }
 ]

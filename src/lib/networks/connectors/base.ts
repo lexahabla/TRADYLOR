@@ -41,23 +41,55 @@ export async function fetchWithTimeout(url: string, options: RequestInit = {}, t
   }
 }
 
+/** Categorías que rotan al recorrer el catálogo completo de una red. */
+const CATALOG_CATEGORIES = [
+  'Tecnología',
+  'Audio & Sonido',
+  'Informática & Laptops',
+  'Lectura Digital',
+  'Hogar Inteligente',
+  'Fotografía & Vídeo',
+  'Gaming & Accesorios',
+  'Herramientas',
+];
+
+const CATALOG_MODELS = [
+  'serie premium',
+  'edición compacta',
+  'modelo profesional',
+  'versión económica',
+  'pack familiar',
+  'modelo top gama',
+  'alternativa ligera',
+  'unidad reacondicionada',
+];
+
 /** Genera productos de muestra normalizados para maquetar la UI antes de cablear la API real. */
 export function sampleProducts(networkId: string, params: UnifiedSearchParams, base: number): UnifiedProduct[] {
   const term = (params.query || 'producto').slice(0, 40);
-  const count = Math.min(params.limit ?? 8, 8);
+  // Sin query = recorrido de catálogo completo: se devuelven más referencias
+  // para poder importar en bloque desde el panel de Afiliados.
+  const browsingCatalog = !params.query;
+  const count = browsingCatalog ? Math.min(params.limit ?? 40, 40) : Math.min(params.limit ?? 8, 8);
   return Array.from({ length: count }, (_, index) => {
     const price = Math.round((base + index * 17.49 + (term.length * 1.3)) * 100) / 100;
     const commissionRate = 2 + ((base + index) % 9);
+    const model = CATALOG_MODELS[(base + index) % CATALOG_MODELS.length];
+    const title = browsingCatalog
+      ? `${CATALOG_CATEGORIES[(base + index) % CATALOG_CATEGORIES.length]} — ${model} ${index + 1} (${networkId})`
+      : `${term.charAt(0).toUpperCase()}${term.slice(1)} — modelo destacado ${index + 1} (${networkId})`;
     return {
       network: networkId,
       externalId: `${networkId}-demo-${base}-${index}`,
-      title: `${term.charAt(0).toUpperCase()}${term.slice(1)} — modelo destacado ${index + 1} (${networkId})`,
+      title,
       description: `Resultado de muestra de la red ${networkId} para “${term}”. Conecta la API oficial para datos reales.`,
       price,
       originalPrice: Math.round(price * 1.18 * 100) / 100,
       currency: 'EUR',
       image: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=800&auto=format&fit=crop',
-      category: params.category || 'Tecnología',
+      category:
+        params.category ||
+        (browsingCatalog ? CATALOG_CATEGORIES[(base + index) % CATALOG_CATEGORIES.length] : 'Tecnología'),
       productUrl: `https://example.com/${networkId}/producto/${index}`,
       commissionRate,
       commissionAmount: Math.round(price * (commissionRate / 100) * 100) / 100,

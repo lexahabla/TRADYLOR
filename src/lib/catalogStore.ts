@@ -58,17 +58,60 @@ export interface CatalogSaveResult {
   updated?: boolean;
 }
 
+/**
+ * Payload tal y como lo emite n8n (contrato JSON documentado en docs/api-v1.md):
+ * referencePrice / analystVerdict / affiliateDeepLink / specs / fulfillmentProvider.
+ */
+export interface N8nContractPayload extends Partial<Product> {
+  affiliateDeepLink?: string;
+  referencePrice?: number | string;
+  analystVerdict?: string;
+}
+
+/**
+ * Normaliza el contrato de n8n al modelo interno del catálogo.
+ * El campo interno mantiene el nombre canónico (price, verdict, affiliateUrl).
+ */
+export function fromN8nContract(data: N8nContractPayload): Partial<Product> {
+  const normalized: Partial<Product> = { ...data };
+
+  if (!normalized.affiliateUrl && data.affiliateDeepLink) {
+    normalized.affiliateUrl = String(data.affiliateDeepLink).trim();
+  }
+  if (normalized.price == null && data.referencePrice != null) {
+    normalized.price = Number(data.referencePrice);
+  }
+  if (!normalized.verdict && data.analystVerdict) {
+    normalized.verdict = String(data.analystVerdict).trim();
+  }
+  if (data.slug) {
+    normalized.slug = slugifyProduct(data.slug);
+  }
+  if (data.specs && typeof data.specs === 'object') {
+    normalized.specs = data.specs;
+  }
+  if (data.fulfillmentProvider) {
+    normalized.fulfillmentProvider = String(data.fulfillmentProvider).trim();
+  }
+
+  return normalized;
+}
+
 /** Inserta o actualiza (upsert por id) un producto en products.json. */
-export function upsertCatalogProduct(data: Partial<Product>): CatalogSaveResult {
+export function upsertCatalogProduct(raw: N8nContractPayload): CatalogSaveResult {
+  const data = fromN8nContract(raw);
+
   if (!data.title || !data.affiliateUrl) {
-    return { ok: false, message: 'Los campos "title" y "affiliateUrl" son obligatorios.' };
+    return { ok: false, message: 'Los campos "title" y "affiliateUrl" (o "affiliateDeepLink") son obligatorios.' };
   }
 
   const products = readCatalogFromFile();
   const productId = data.id || slugifyProduct(data.title);
+  const existing = products.find((p) => p.id === productId);
 
   const product: Product = {
     id: productId,
+    slug: data.slug ?? existing?.slug,
     title: String(data.title).trim(),
     description: String(data.description ?? '').trim(),
     price: Number(data.price) || 0,
@@ -77,12 +120,15 @@ export function upsertCatalogProduct(data: Partial<Product>): CatalogSaveResult 
     category: String(data.category ?? 'Tecnología').trim(),
     merchant: String(data.merchant ?? 'Comercio Externo').trim(),
     affiliateUrl: String(data.affiliateUrl).trim(),
+    buyNowUrl: data.buyNowUrl ? String(data.buyNowUrl).trim() : existing?.buyNowUrl,
     pros: Array.isArray(data.pros) ? data.pros.filter(Boolean) : [],
     cons: Array.isArray(data.cons) ? data.cons.filter(Boolean) : [],
     badge: data.badge ? String(data.badge).trim() : undefined,
     rating: data.rating != null ? Number(data.rating) : undefined,
     reviewsCount: data.reviewsCount != null ? Number(data.reviewsCount) : undefined,
     verdict: data.verdict ? String(data.verdict).trim() : undefined,
+    specs: data.specs ?? existing?.specs,
+    fulfillmentProvider: data.fulfillmentProvider ?? existing?.fulfillmentProvider,
   };
 
   const existingIndex = products.findIndex((p) => p.id === productId);

@@ -1,0 +1,971 @@
+---
+/**
+ * ==============================================================================
+ * TRADYLOR — PANTALLA PUENTE DE CONFIRMACIÓN (COMPRA DELEGADA)
+ * ==============================================================================
+ *
+ * Ruta dinámica SSR: /checkout/[id]  (acepta slug o id legado)
+ *
+ * FLUJO:
+ *  /producto/[slug] → (CTA "Tramitar pedido") → /checkout/[id]
+ *                     → (CTA "Proceder al pago seguro") → /api/redirect → 302 → Tienda
+ *
+ * Esta pantalla es 100% nativa de Tradylor: resume el artículo, el plazo, el
+ * distribuidor oficial y los sellos de confianza. El enlace de afiliado jamás
+ * se expone aquí; sólo se revela en servidor dentro de /api/redirect.
+ * ==============================================================================
+ */
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import { findCatalogProduct, productKey } from '../../lib/catalog';
+
+// ---------------------------------------------------------------------------
+// Resolución del producto (slug canónico o id legado)
+// ---------------------------------------------------------------------------
+const product = findCatalogProduct(Astro.params.id);
+
+if (!product || !product.affiliateUrl) {
+  return Astro.redirect('/', 302);
+}
+
+const pricing = product.pricing;
+const hooks = product.conversionHooks;
+const stockStatus = pricing?.stockStatus ?? 'En stock';
+const freeShipping = pricing?.freeShipping ?? false;
+const provider = product.fulfillmentProvider ?? product.merchant;
+const returnDays = hooks?.returnPolicyDays ?? 30;
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('es-ES', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+  }).format(amount);
+
+const discountPercent = product.originalPrice
+  ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
+  : null;
+
+const deliveryEstimate =
+  stockStatus === 'Agotado'
+    ? 'Sin previsión de entrega'
+    : stockStatus === 'Pocas unidades'
+      ? '3 – 5 días laborables'
+      : freeShipping
+        ? '24 – 48 h'
+        : '2 – 4 días laborables';
+
+const specsPreview = product.specs
+  ? Object.entries(product.specs).slice(0, 4)
+  : [];
+
+const exitUrl = `/api/redirect?id=${encodeURIComponent(productKey(product))}&src=checkout`;
+const cleanMarketplaceSuffix = (text: string) =>
+  text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
+
+const shortTitle = cleanMarketplaceSuffix(product.title);
+const isSoldOut = stockStatus === 'Agotado';
+---
+
+<Layout
+  title={`Confirmación de pedido — ${shortTitle} | Tradylor`}
+  description={`Resumen de tu pedido de ${shortTitle}. El pago, el envío y la garantía los gestiona ${provider} desde su pasarela oficial.`}
+  image={product.image}
+  type="product"
+  noindex={true}
+>
+  <div class="checkout-page">
+
+    <!-- ======================================================
+         BARRRA SUPERIOR + STEPPER DE TRAMITACIÓN
+         ====================================================== -->
+    <nav class="checkout-topbar" aria-label="Progreso del pedido">
+      <div class="container checkout-topbar-inner">
+        <a href={`/producto/${productKey(product)}`} class="back-link">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+            <line x1="19" y1="12" x2="5" y2="12" />
+            <polyline points="12 19 5 12 12 5" />
+          </svg>
+          Volver al análisis
+        </a>
+
+        <ol class="stepper" aria-label="Pasos de la compra delegada">
+          <li class="step is-done">
+            <span class="step-dot">✓</span>
+            <span class="step-label">Selección</span>
+          </li>
+          <li class="step-sep" aria-hidden="true"></li>
+          <li class="step is-active" aria-current="step">
+            <span class="step-dot">2</span>
+            <span class="step-label">Confirmación</span>
+          </li>
+          <li class="step-sep" aria-hidden="true"></li>
+          <li class="step">
+            <span class="step-dot">3</span>
+            <span class="step-label">Pasarela oficial</span>
+          </li>
+        </ol>
+      </div>
+    </nav>
+
+    <section class="checkout-shell container">
+      <header class="checkout-head">
+        <span class="checkout-kicker">Resumen del pedido</span>
+        <h1 class="checkout-title">Confirma tu selección antes de salir</h1>
+        <p class="checkout-subtitle">
+          Revisa los detalles. Al continuar, te conectaremos con la pasarela oficial
+          de {provider} para completar el pago de forma segura.
+        </p>
+      </header>
+
+      <div class="checkout-grid">
+
+        <!-- ==================================================
+             COLUMNA IZQUIERDA: RESUMEN DEL ARTÍCULO
+             ================================================== -->
+        <article class="summary-card">
+          <div class="summary-product">
+            <div class="summary-image-wrap aspect-square">
+              {discountPercent && discountPercent > 0 && (
+                <span class="summary-discount">-{discountPercent}%</span>
+              )}
+              <img
+                src={product.image}
+                alt={shortTitle}
+                class="summary-image object-contain"
+                width="160"
+                height="160"
+              />
+            </div>
+            <div class="summary-info">
+              <span class="summary-category">{product.category}</span>
+              <h2 class="summary-title">{shortTitle}</h2>
+              {product.rating && (
+                <span class="summary-rating">
+                  <svg width="13" height="13" viewBox="0 0 20 20" fill="#f59e0b" aria-hidden="true">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                  <strong>{product.rating.toFixed(1)}</strong>
+                  {product.reviewsCount && (
+                    <span class="summary-reviews">({product.reviewsCount.toLocaleString('es-ES')} valoraciones)</span>
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <!-- Ficha técnica abreviada -->
+          {specsPreview.length > 0 && (
+            <div class="summary-specs">
+              <span class="summary-block-label">Ficha técnica</span>
+              <ul class="spec-chips">
+                {specsPreview.map(([label, value]) => (
+                  <li class="spec-chip">
+                    <span class="chip-key">{label}</span>
+                    <span class="chip-value">{value}</span>
+                  </li>
+                ))}
+              </ul>
+              <a href={`/producto/${productKey(product)}#ficha-tecnica`} class="specs-more-link">
+                Ver ficha técnica completa →
+              </a>
+            </div>
+          )}
+
+          <!-- Líneas del pedido -->
+          <dl class="order-lines">
+            <div class="order-line">
+              <dt>Artículo (uds. 1)</dt>
+              <dd>{formatCurrency(product.price)}</dd>
+            </div>
+            <div class="order-line">
+              <dt>Envío estimado</dt>
+              <dd class:list={['order-value', { 'is-free': freeShipping }]}>
+                {freeShipping ? 'Gratis' : 'Se calcula en la pasarela'}
+              </dd>
+            </div>
+            <div class="order-line order-line--delivery">
+              <dt>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <rect x="1" y="3" width="15" height="13" />
+                  <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+                  <circle cx="5.5" cy="18.5" r="2.5" />
+                  <circle cx="18.5" cy="18.5" r="2.5" />
+                </svg>
+                Plazo estimado de entrega
+              </dt>
+              <dd class="order-value">{deliveryEstimate}</dd>
+            </div>
+            <div class="order-line order-line--total">
+              <dt>Total orientativo</dt>
+              <dd>
+                {product.originalPrice && (
+                  <span class="total-original">{formatCurrency(product.originalPrice)}</span>
+                )}
+                <strong class="total-main">{formatCurrency(product.price)}</strong>
+              </dd>
+            </div>
+          </dl>
+
+          <p class="price-note">
+            Precio verificado el {pricing?.priceLastChecked ?? 'hoy'}. Puede variar en
+            el momento de la compra; el importe definitivo lo fija {provider}.
+          </p>
+        </article>
+
+        <!-- ==================================================
+             COLUMNA DERECHA: SALIDA SEGUURA A LA PASARELA
+             ================================================== -->
+        <aside class="exit-panel">
+          <div class="provider-block">
+            <span class="summary-block-label">Distribuidor oficial</span>
+            <p class="provider-name">{provider}</p>
+            <p class="provider-role">
+              Gestiona el cobro, el envío, los correos de seguimiento y la garantía
+              de este pedido.
+            </p>
+            <span class:list={['stock-pill', { 'is-low': stockStatus === 'Pocas unidades', 'is-out': isSoldOut }]}>
+              <span class="stock-dot" aria-hidden="true"></span>
+              {stockStatus}
+            </span>
+          </div>
+
+          <ul class="trust-seals">
+            <li class="trust-seal">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              Pasarela cifrada SSL 256-bit
+            </li>
+            <li class="trust-seal">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polyline points="1 4 1 10 7 10" />
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+              Devolución hasta {returnDays} días
+            </li>
+            <li class="trust-seal">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+              </svg>
+              Precio y disponibilidad verificados hoy
+            </li>
+          </ul>
+
+          <button
+            type="button"
+            class:list={['exit-cta', { 'is-disabled': isSoldOut }]}
+            id="exitBtn"
+            data-exit-url={exitUrl}
+            data-product-id={product.id}
+            disabled={isSoldOut}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+            {isSoldOut ? 'Producto agotado' : 'Proceder al pago seguro'}
+          </button>
+
+          {isSoldOut && (
+            <p class="sold-out-note">
+              Sin stock en este momento. Vuelve al análisis para ver alternativas
+              comparables de la categoría.
+            </p>
+          )}
+
+          <p class="exit-disclaimer">
+            Al hacer clic en <strong>«Proceder al pago seguro»</strong>, serás
+            conectado con la pasarela de pago oficial de <strong>{provider}</strong>,
+            quien procesará la transacción de forma segura y te enviará los correos
+            de confirmación y seguimiento.
+          </p>
+
+          <a
+            href={exitUrl}
+            id="exitFallback"
+            rel="sponsored nofollow noopener"
+            class="exit-fallback-link"
+          >
+            Continuar con la tramitación en la pasarela oficial
+          </a>
+
+          <div class="exit-disclosure">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="16" x2="12" y2="12" />
+              <line x1="12" y1="8" x2="12.01" y2="8" />
+            </svg>
+            <p>
+              <strong>Aviso de afiliación:</strong> Tradylor puede recibir una
+              comisión por este enlace, sin ningún coste adicional para ti. Tus
+              datos de pago nunca se gestionan en nuestros servidores.
+            </p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ======================================================
+         OVERLAY DE CONEXIÓN (transición de salida)
+         ====================================================== -->
+    <div class="exit-overlay" id="exitOverlay" role="status" aria-live="polite" hidden>
+      <div class="overlay-card">
+        <span class="overlay-spinner" aria-hidden="true"></span>
+        <p class="overlay-title">Conectando con el almacén oficial para procesar tu pedido…</p>
+        <p class="overlay-text">Estableciendo el enlace seguro de pago con {provider}. No cierres esta ventana.</p>
+        <div class="overlay-bar" aria-hidden="true"><span></span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const exitBtn = document.getElementById('exitBtn') as HTMLButtonElement | null;
+    const exitFallback = document.getElementById('exitFallback') as HTMLAnchorElement | null;
+    const overlay = document.getElementById('exitOverlay');
+
+    const startExit = (url: string) => {
+      if (!overlay || !overlay.hidden) return;
+      overlay.hidden = false;
+      document.body.style.overflow = 'hidden';
+
+      const productId = exitBtn?.dataset.productId;
+      fetch('/api/analytics/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'product_click', productId, path: window.location.pathname }),
+      }).catch(() => {});
+
+      window.setTimeout(() => {
+        window.location.href = url;
+      }, 950);
+    };
+
+    exitBtn?.addEventListener('click', () => {
+      const url = exitBtn.dataset.exitUrl;
+      if (url) startExit(url);
+    });
+
+    // Respetamos el clic nativo del enlace de respaldo (JS deshabilitado / botón medio)
+    exitFallback?.addEventListener('click', (event) => {
+      const url = exitFallback.getAttribute('href');
+      if (!url) return;
+      event.preventDefault();
+      startExit(url);
+    });
+  </script>
+</Layout>
+
+<style>
+  /* =====================================================
+     BASE DE LA PANTALLA PUENTE
+     ===================================================== */
+  .checkout-page {
+    padding-bottom: 5rem;
+  }
+
+  /* =====================================================
+     BARRA SUPERIOR + STEPPER
+     ===================================================== */
+  .checkout-topbar {
+    border-bottom: 1px solid var(--color-border);
+    background: rgba(13, 19, 31, 0.6);
+  }
+  .checkout-topbar-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    padding-top: 1rem;
+    padding-bottom: 1rem;
+    flex-wrap: wrap;
+  }
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+  .back-link:hover {
+    color: #ffffff;
+  }
+
+  .stepper {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    list-style: none;
+  }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+  }
+  .step-dot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: var(--color-text-dim);
+    background: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+  }
+  .step-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text-dim);
+  }
+  .step.is-done .step-dot {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.4);
+    color: #10b981;
+  }
+  .step.is-done .step-label {
+    color: #10b981;
+  }
+  .step.is-active .step-dot {
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    border-color: transparent;
+    color: #ffffff;
+  }
+  .step.is-active .step-label {
+    color: #ffffff;
+  }
+  .step-sep {
+    width: 26px;
+    height: 1px;
+    background: var(--color-border-hover);
+  }
+
+  /* =====================================================
+     CABECERA
+     ===================================================== */
+  .checkout-shell {
+    padding-top: 2.5rem;
+  }
+  .checkout-head {
+    max-width: 720px;
+    margin-bottom: 2rem;
+  }
+  .checkout-kicker {
+    display: inline-block;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #60a5fa;
+    margin-bottom: 0.6rem;
+  }
+  .checkout-title {
+    font-family: var(--font-heading);
+    font-size: clamp(1.5rem, 3vw, 2.1rem);
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.25;
+    margin: 0 0 0.6rem;
+  }
+  .checkout-subtitle {
+    font-size: 0.95rem;
+    color: var(--color-text-muted);
+    line-height: 1.65;
+    margin: 0;
+  }
+
+  /* =====================================================
+     GRID PRINCIPAL
+     ===================================================== */
+  .checkout-grid {
+    display: grid;
+    grid-template-columns: 1.55fr 1fr;
+    gap: 1.75rem;
+    align-items: start;
+  }
+
+  /* ---- Tarjeta de resumen ---- */
+  .summary-card {
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-lg);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  .summary-product {
+    display: flex;
+    gap: 1.25rem;
+    align-items: flex-start;
+  }
+  .summary-image-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 132px;
+    height: 132px;
+    background: #ffffff;
+    border-radius: 14px;
+    padding: 8px;
+    border: 1px solid var(--color-border);
+  }
+  .summary-image {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+  }
+  .summary-discount {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: #dc2626;
+    color: #ffffff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    box-shadow: 0 4px 10px rgba(220, 38, 38, 0.4);
+  }
+  .summary-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    min-width: 0;
+  }
+  .summary-category {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: #60a5fa;
+  }
+  .summary-title {
+    font-family: var(--font-heading);
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.35;
+    margin: 0;
+  }
+  .summary-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.84rem;
+    color: #fbbf24;
+  }
+  .summary-reviews {
+    color: var(--color-text-dim);
+    font-size: 0.78rem;
+  }
+
+  .summary-block-label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-dim);
+    margin-bottom: 0.6rem;
+  }
+
+  /* ---- Ficha abreviada ---- */
+  .summary-specs {
+    border-top: 1px solid var(--color-border);
+    padding-top: 1.25rem;
+  }
+  .spec-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    list-style: none;
+    margin: 0 0 0.65rem;
+    padding: 0;
+  }
+  .spec-chip {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+    background: rgba(59, 130, 246, 0.07);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    border-radius: 8px;
+    padding: 0.4rem 0.7rem;
+    font-size: 0.78rem;
+  }
+  .chip-key {
+    color: var(--color-text-dim);
+    font-weight: 600;
+  }
+  .chip-value {
+    color: #dbeafe;
+    font-weight: 700;
+  }
+  .specs-more-link {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #60a5fa;
+    text-decoration: none;
+  }
+  .specs-more-link:hover {
+    color: #93bbfd;
+  }
+
+  /* ---- Líneas del pedido ---- */
+  .order-lines {
+    margin: 0;
+    border-top: 1px solid var(--color-border);
+    padding-top: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+  }
+  .order-line {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: 0.9rem;
+  }
+  .order-line dt {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--color-text-muted);
+  }
+  .order-line dd {
+    margin: 0;
+    color: var(--color-text-main);
+    font-weight: 600;
+    text-align: right;
+  }
+  .order-value.is-free {
+    color: #10b981;
+  }
+  .order-line--delivery {
+    padding: 0.65rem 0;
+    border-top: 1px dashed var(--color-border);
+    border-bottom: 1px dashed var(--color-border);
+  }
+  .order-line--total {
+    align-items: flex-end;
+    padding-top: 0.35rem;
+  }
+  .order-line--total dt {
+    color: var(--color-text-main);
+    font-weight: 600;
+  }
+  .order-line--total dd {
+    display: flex;
+    align-items: baseline;
+    gap: 0.6rem;
+  }
+  .total-original {
+    font-size: 0.85rem;
+    color: var(--color-text-dim);
+    text-decoration: line-through;
+    font-weight: 500;
+  }
+  .total-main {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #ffffff;
+  }
+  .price-note {
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  /* =====================================================
+     PANEL DE SALIDA
+     ===================================================== */
+  .exit-panel {
+    position: sticky;
+    top: 100px;
+    background: linear-gradient(160deg, rgba(17, 24, 39, 0.95) 0%, rgba(13, 19, 31, 0.95) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: var(--border-radius-lg);
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.35);
+  }
+  .provider-block {
+    background: rgba(59, 130, 246, 0.06);
+    border: 1px solid rgba(59, 130, 246, 0.18);
+    border-radius: var(--border-radius-md);
+    padding: 1.1rem 1.2rem;
+  }
+  .provider-name {
+    font-family: var(--font-heading);
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.35rem;
+  }
+  .provider-role {
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    line-height: 1.55;
+    margin: 0 0 0.75rem;
+  }
+  .stock-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.28);
+    padding: 0.25rem 0.7rem;
+    border-radius: 999px;
+  }
+  .stock-pill.is-low {
+    color: #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+    border-color: rgba(245, 158, 11, 0.3);
+  }
+  .stock-pill.is-out {
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.1);
+    border-color: rgba(248, 113, 113, 0.3);
+  }
+  .stock-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
+  }
+
+  .trust-seals {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin: 0;
+    padding: 0;
+  }
+  .trust-seal {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+  }
+  .trust-seal svg {
+    color: #10b981;
+    flex-shrink: 0;
+  }
+
+  /* ---- CTA de salida ---- */
+  .exit-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 1rem 1.25rem;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 60%, #1e40af 100%);
+    color: #ffffff;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.02rem;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.45);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+  .exit-cta:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(37, 99, 235, 0.6);
+  }
+  .exit-cta:active:not(:disabled) {
+    transform: translateY(0);
+  }
+  .exit-cta.is-disabled,
+  .exit-cta:disabled {
+    background: #374151;
+    color: #9ca3af;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  .sold-out-note {
+    font-size: 0.8rem;
+    color: #f87171;
+    line-height: 1.55;
+    margin: 0;
+  }
+
+  .exit-disclaimer {
+    font-size: 0.78rem;
+    color: var(--color-text-dim);
+    line-height: 1.6;
+    margin: 0;
+    padding-top: 0.25rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .exit-disclaimer strong {
+    color: #e5e7eb;
+  }
+
+  .exit-fallback-link {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #60a5fa;
+    text-align: center;
+    text-decoration: none;
+    word-break: break-word;
+  }
+  .exit-fallback-link:hover {
+    color: #93bbfd;
+    text-decoration: underline;
+  }
+
+  .exit-disclosure {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    background: rgba(245, 158, 11, 0.05);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+    border-radius: var(--border-radius-sm);
+    padding: 0.8rem 0.9rem;
+  }
+  .exit-disclosure svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .exit-disclosure p {
+    font-size: 0.74rem;
+    color: var(--color-text-dim);
+    line-height: 1.55;
+    margin: 0;
+  }
+  .exit-disclosure strong {
+    color: var(--color-accent-amber);
+  }
+
+  /* =====================================================
+     OVERLAY DE CONEXIÓN
+     ===================================================== */
+  .exit-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: rgba(4, 8, 15, 0.92);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+  .exit-overlay[hidden] {
+    display: none;
+  }
+  .overlay-card {
+    width: min(440px, 100%);
+    text-align: center;
+    background: #0f1623;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: var(--border-radius-lg);
+    padding: 2.25rem 1.75rem;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  }
+  .overlay-spinner {
+    display: block;
+    width: 44px;
+    height: 44px;
+    margin: 0 auto 1.25rem;
+    border-radius: 999px;
+    border: 3px solid rgba(59, 130, 246, 0.2);
+    border-top-color: #60a5fa;
+    animation: overlay-spin 0.85s linear infinite;
+  }
+  @keyframes overlay-spin {
+    to { transform: rotate(360deg); }
+  }
+  .overlay-title {
+    font-family: var(--font-heading);
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.45;
+    margin: 0 0 0.55rem;
+  }
+  .overlay-text {
+    font-size: 0.83rem;
+    color: var(--color-text-muted);
+    line-height: 1.6;
+    margin: 0 0 1.25rem;
+  }
+  .overlay-bar {
+    width: 100%;
+    height: 5px;
+    background: rgba(59, 130, 246, 0.15);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  .overlay-bar span {
+    display: block;
+    height: 100%;
+    width: 40%;
+    background: linear-gradient(90deg, #2563eb, #60a5fa);
+    border-radius: 999px;
+    animation: overlay-progress 0.95s ease-in-out forwards;
+  }
+  @keyframes overlay-progress {
+    from { width: 8%; }
+    to { width: 100%; }
+  }
+
+  /* =====================================================
+     RESPONSIVE
+     ===================================================== */
+  @media (max-width: 960px) {
+    .checkout-grid {
+      grid-template-columns: 1fr;
+    }
+    .exit-panel {
+      position: static;
+    }
+  }
+  @media (max-width: 640px) {
+    .checkout-topbar-inner {
+      justify-content: center;
+    }
+    .step-label {
+      display: none;
+    }
+    .summary-card,
+    .exit-panel {
+      padding: 1.25rem;
+    }
+    .summary-product {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .summary-image-wrap {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 10;
+    }
+    .total-main {
+      font-size: 1.3rem;
+    }
+  }
+</style>

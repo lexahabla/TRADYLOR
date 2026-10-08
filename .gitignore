@@ -20,6 +20,9 @@ pnpm-debug.log*
 # credenciales de redes de afiliación (panel admin)
 src/data/credentials.json
 
+# imágenes de producto generadas con IA
+public/images/products/
+
 # macOS-specific files
 .DS_Store
 

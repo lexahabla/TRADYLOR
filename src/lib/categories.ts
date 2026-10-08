@@ -60,12 +60,42 @@ export const DEFAULT_CATEGORIES: Category[] = [
   },
 ];
 
+/** Normaliza cualquier entrada legible (nombre, slug o acentos) para comparar. */
+function normalizeKey(text: string): string {
+  return String(text)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/** Migra un array plano de nombres (esquema legado) al esquema rico. */
+function migrateLegacyNames(names: string[]): Category[] {
+  return names
+    .map((rawName) => String(rawName ?? '').trim())
+    .filter(Boolean)
+    .map((name) => {
+      const slug = slugifyCategory(name);
+      const suggestion = DEFAULT_CATEGORIES.find((c) => normalizeKey(c.name) === normalizeKey(name));
+      return {
+        id: slug,
+        name,
+        slug,
+        icon: suggestion?.icon ?? '📦',
+        keywords: suggestion?.keywords ?? [normalizeKey(name)].filter(Boolean),
+      };
+    });
+}
+
 function readCategories(): Category[] {
   try {
     if (fs.existsSync(CATEGORIES_PATH)) {
       const parsed = JSON.parse(fs.readFileSync(CATEGORIES_PATH, 'utf-8'));
-      if (Array.isArray(parsed) && parsed.length > 0 && parsed[0]?.slug) {
-        return parsed as Category[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        if (parsed[0]?.slug) return parsed as Category[];
+        // Esquema legado: array plano de nombres → migración perezosa en memoria.
+        return migrateLegacyNames(parsed.filter((item: unknown) => typeof item === 'string'));
       }
     }
   } catch (error) {
@@ -81,8 +111,20 @@ function writeCategories(categories: Category[]): void {
 
 /** Garantiza que el archivo existe con el esquema rico (migración perezosa). */
 export function ensureCategoriesFile(): Category[] {
+  const exists = fs.existsSync(CATEGORIES_PATH);
   const categories = readCategories();
-  if (!fs.existsSync(CATEGORIES_PATH)) writeCategories(categories);
+  // Reescribe cuando falta el archivo o cuando aún guarda el esquema legado
+  // (array de strings) para que todos los consumidores compartan un solo formato.
+  let isLegacy = false;
+  if (exists) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(CATEGORIES_PATH, 'utf-8'));
+      isLegacy = Array.isArray(parsed) && parsed.length > 0 && !parsed[0]?.slug;
+    } catch {
+      isLegacy = true;
+    }
+  }
+  if (!exists || isLegacy) writeCategories(categories);
   return categories;
 }
 
@@ -104,6 +146,16 @@ export function getCategories(): Category[] {
 
 export function getCategoryBySlug(slug: string): Category | undefined {
   return getCategories().find((category) => category.slug === slug);
+}
+
+/** Busca por id, slug o nombre normalizado (la API [id] acepta cualquiera de los tres). */
+export function getCategoryById(id: string): Category | undefined {
+  const key = normalizeKey(id);
+  if (!key) return undefined;
+  return (
+    getCategories().find((category) => category.id === id || category.slug === id) ??
+    getCategories().find((category) => normalizeKey(category.name) === key || normalizeKey(category.slug) === key)
+  );
 }
 
 export function getCategoryNames(): string[] {

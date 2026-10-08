@@ -1,0 +1,209 @@
+---
+/**
+ * ==============================================================================
+ * TRADYLOR - CategoryNav Component
+ * ==============================================================================
+ * Navegaci�n visual interactiva y responsive de categor�as.
+ * - Lee din�micamente src/data/categories.json (soporta array directo u objeto con propiedad).
+ * - Opci�n inicial 'Todos' con icono =%.
+ * - Scroll horizontal suave en m�viles (no-scrollbar) y adaptable en escritorio.
+ * - Resalta visualmente el estado activo seg�n el query param (?category=slug).
+ * - Totalmente escalable: nuevas categor�as creadas en el panel aparecen de inmediato.
+ * ==============================================================================
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import { getCategories, type Category } from '../lib/categories';
+
+export interface Props {
+  activeCategory?: string;
+  class?: string;
+}
+
+const { activeCategory: propCategory, class: customClass = '' } = Astro.props;
+
+// Detectar categor�a activa desde props o URL (?category=slug)
+const urlCategory = Astro.url.searchParams.get('category');
+const currentCategory = (propCategory ?? urlCategory ?? 'all').toLowerCase().trim();
+
+// Lectura resiliente del archivo persistente de categor�as
+let categories: Category[] = [];
+
+try {
+  const filePath = path.join(process.cwd(), 'src', 'data', 'categories.json');
+  if (fs.existsSync(filePath)) {
+    const raw = fs.readFileSync(filePath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      categories = parsed;
+    } else if (parsed && typeof parsed === 'object' && Array.isArray((parsed as any).categories)) {
+      categories = (parsed as any).categories;
+    }
+  }
+} catch (error) {
+  console.error('[CategoryNav] Error al leer src/data/categories.json:', error);
+}
+
+// Fallback al m�dulo lib/categories si estuviera vac�o
+if (!categories || categories.length === 0) {
+  categories = getCategories();
+}
+
+const isAllActive = currentCategory === 'all' || currentCategory === '' || !urlCategory;
+---
+
+<nav class:list={['category-nav-container', customClass]} aria-label="Navegaci�n por categor�as">
+  <div class="category-nav-track no-scrollbar" role="tablist">
+    <!-- 1. Opci�n inicial 'Todos' -->
+    <a
+      href="/#destacados"
+      role="tab"
+      aria-selected={isAllActive ? 'true' : 'false'}
+      class:list={['category-pill-item', { 'is-active': isAllActive }]}
+      data-category-slug="all"
+    >
+      <span class="pill-icon" aria-hidden="true">=%</span>
+      <span class="pill-label">Todos</span>
+      {isAllActive && <span class="active-indicator" aria-hidden="true"></span>}
+    </a>
+
+    <!-- 2. Categor�as din�micas le�das del backend -->
+    {categories.map((cat) => {
+      const slug = (cat.slug || cat.id || '').toLowerCase().trim();
+      const isActive = currentCategory === slug || currentCategory === (cat.id || '').toLowerCase().trim();
+
+      return (
+        <a
+          href={`/?category=${encodeURIComponent(slug)}#destacados`}
+          role="tab"
+          aria-selected={isActive ? 'true' : 'false'}
+          class:list={['category-pill-item', { 'is-active': isActive }]}
+          data-category-slug={slug}
+          title={cat.description || cat.name}
+        >
+          <span class="pill-icon" aria-hidden="true">{cat.icon || '=�'}</span>
+          <span class="pill-label">{cat.name}</span>
+          {isActive && <span class="active-indicator" aria-hidden="true"></span>}
+        </a>
+      );
+    })}
+  </div>
+</nav>
+
+<style>
+  /* Contenedor principal */
+  .category-nav-container {
+    width: 100%;
+    margin: 1.25rem 0;
+    position: relative;
+  }
+
+  /* Pista con scroll horizontal suave en m�vil */
+  .category-nav-track {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem 0.25rem 0.85rem;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    overscroll-behavior-x: contain;
+  }
+
+  /* Utilidad no-scrollbar: Oculta la barra nativa preservando la funcionalidad de scroll t�ctil */
+  .no-scrollbar {
+    -ms-overflow-style: none; /* IE / Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none; /* Chrome, Safari y Opera */
+  }
+
+  /* Pantallas medianas y grandes: distribuci�n centrada y flexible */
+  @media (min-width: 768px) {
+    .category-nav-track {
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.75rem;
+      padding: 0.5rem 0 0.5rem;
+    }
+  }
+
+  /* P�ldora individual de categor�a */
+  .category-pill-item {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.65rem 1.25rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.72);
+    background: rgba(17, 24, 39, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    user-select: none;
+    flex-shrink: 0;
+  }
+
+  .category-pill-item:hover {
+    color: #ffffff;
+    background: rgba(30, 41, 59, 0.9);
+    border-color: rgba(96, 165, 250, 0.35);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px -2px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Estado Activo: Azul corporativo con sombra luminosa (glow) */
+  .category-pill-item.is-active {
+    color: #ffffff;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border-color: #60a5fa;
+    box-shadow: 0 0 24px -2px rgba(37, 99, 235, 0.65), 0 4px 12px rgba(0, 0, 0, 0.35);
+    transform: translateY(-2px);
+  }
+
+  .pill-icon {
+    font-size: 1.15rem;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+  }
+
+  .pill-label {
+    letter-spacing: -0.01em;
+  }
+
+  /* Peque�o punto luminoso indicador en la p�ldora activa */
+  .active-indicator {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #93c5fd;
+    box-shadow: 0 0 8px #93c5fd;
+    display: inline-block;
+    margin-left: -0.15rem;
+  }
+
+  @media (max-width: 640px) {
+    .category-pill-item {
+      font-size: 0.82rem;
+      padding: 0.55rem 1rem;
+      gap: 0.45rem;
+    }
+
+    .pill-icon {
+      font-size: 1rem;
+    }
+  }
+</style>

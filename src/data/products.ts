@@ -2,14 +2,14 @@
  * ==============================================================================
  * TRADYLOR - ESTRATEGIA DE CONTENIDO Y AFILIACIÓN
  * ==============================================================================
- * 
+ *
  * 1. PROPÓSITO DEL PORTAL:
  *    Tradylor actúa como un motor de curación y recomendación imparcial de productos
  *    de alta conversión. Filtramos el ruido publicitario del mercado mediante
  *    evaluaciones técnicas, análisis de valor por euro y comparativas directas.
  *    Monetizamos a través de enlaces de afiliación regulados (Amazon Associates,
  *    Awin, CJ Affiliate, etc.) garantizando una experiencia de usuario transparente.
- * 
+ *
  * 2. DIRECTRICES EDITORIALES Y DE CONVERSIÓN (CRO):
  *    - Fichas estructuradas: Pros, Contras y Veredicto claro antes del pliegue (above-the-fold).
  *    - Intención de búsqueda transaccional: Artículos "Los mejores X de [año]" y comparativas "A vs B".
@@ -20,24 +20,142 @@
  * ==============================================================================
  */
 
+import type { Product as ProductSchema } from '../content/config';
+
+// ─── Flat Product Interface (backward-compatible with products.json) ──────────
 export interface Product {
   id: string;
+  slug?: string;
   title: string;
   description: string;
   price: number;
   originalPrice?: number;
   image: string;
   category: string;
-  merchant: 'Amazon' | 'PcComponentes' | 'El Corte Inglés' | 'Awin' | string;
+  merchant: string;
   affiliateUrl: string;
+  buyNowUrl?: string;
   pros: string[];
   cons: string[];
   badge?: string;
   rating?: number;
   reviewsCount?: number;
   verdict?: string;
+  specs?: Record<string, string>;
+  fulfillmentProvider?: string;
+
+  // ─── New structured fields (optional for backward compat) ──────────────────
+  awardBadge?: string;
+  productType?: 'Laptop' | 'Tablet' | 'Smartphone' | 'Smartwatch' | 'Auriculares' | 'Monitor' | 'Electrodoméstico' | 'Otros';
+  brand?: string;
+  model?: string;
+  pricing?: {
+    currentPrice: number;
+    originalPrice?: number;
+    discountPercentage?: number;
+    priceLastChecked: string;
+    freeShipping: boolean;
+    stockStatus: 'En stock' | 'Pocas unidades' | 'Agotado';
+  };
+  conversionHooks?: {
+    idealFor?: string;
+    notRecommendedFor?: string;
+    returnPolicyDays: number;
+    rating: number;
+    totalReviewsCount: number;
+    satisfactionScore?: {
+      positivePercentage: number;
+      negativePercentage: number;
+    };
+  };
+  investigation?: {
+    hoursInvestigated: number;
+    modelsCompared: number;
+    hiddenDrawbacks: string[];
+    pros: string[];
+    cons: string[];
+  };
+  affiliate?: {
+    primaryStore: string;
+    primaryUrl: string;
+    buyNowUrl?: string;
+    alternativeStore?: string;
+    alternativeUrl?: string;
+  };
+  alternatives?: {
+    cheaperOptionId?: string;
+    premiumOptionId?: string;
+    similarOptionId?: string;
+  };
 }
 
+// ─── Type guard: checks if a Product has the new structured fields ───────────
+export function hasStructuredFields(product: Product): boolean {
+  return (
+    product.pricing !== undefined &&
+    product.conversionHooks !== undefined &&
+    product.investigation !== undefined &&
+    product.affiliate !== undefined
+  );
+}
+
+// ─── Migration helper: converts flat Product to structured Product ───────────
+export function toStructuredProduct(flat: Product): ProductSchema {
+  return {
+    id: flat.id,
+    slug: flat.slug,
+    title: flat.title,
+    description: flat.description ?? '',
+    specs: flat.specs,
+    fulfillmentProvider: flat.fulfillmentProvider,
+    category: flat.category ?? 'General',
+    productType: (flat.productType as ProductSchema['productType']) ?? 'Otros',
+    brand: flat.brand ?? '',
+    model: flat.model ?? flat.title,
+    awardBadge: flat.awardBadge ?? flat.badge,
+    pricing: {
+      currentPrice: flat.price,
+      originalPrice: flat.originalPrice,
+      discountPercentage: flat.originalPrice
+        ? Math.round(((flat.originalPrice - flat.price) / flat.originalPrice) * 100)
+        : undefined,
+      priceLastChecked: new Date().toISOString().split('T')[0],
+      freeShipping: false,
+      stockStatus: 'En stock',
+    },
+    conversionHooks: {
+      idealFor: flat.conversionHooks?.idealFor,
+      notRecommendedFor: flat.conversionHooks?.notRecommendedFor,
+      returnPolicyDays: flat.conversionHooks?.returnPolicyDays ?? 30,
+      rating: flat.conversionHooks?.rating ?? flat.rating ?? 4.5,
+      totalReviewsCount: flat.conversionHooks?.totalReviewsCount ?? flat.reviewsCount ?? 0,
+      satisfactionScore: flat.conversionHooks?.satisfactionScore ?? {
+        positivePercentage: 85,
+        negativePercentage: 15,
+      },
+    },
+    investigation: {
+      hoursInvestigated: 10,
+      modelsCompared: 5,
+      hiddenDrawbacks: [],
+      pros: flat.pros ?? [],
+      cons: flat.cons ?? [],
+    },
+    affiliate: {
+      primaryStore: flat.merchant ?? 'Amazon',
+      primaryUrl: flat.affiliateUrl,
+      buyNowUrl: flat.buyNowUrl,
+      alternativeStore: undefined,
+      alternativeUrl: undefined,
+    },
+    alternatives: flat.alternatives,
+    image: flat.image,
+    badge: flat.badge,
+    verdict: flat.verdict,
+  };
+}
+
+// ─── Static product data (curated editorial entries) ─────────────────────────
 export const products: Product[] = [
   {
     id: 'sony-wh-1000xm5',
@@ -53,6 +171,23 @@ export const products: Product[] = [
     rating: 4.8,
     reviewsCount: 1420,
     verdict: 'Si buscas el mayor aislamiento acústico para trabajar o viajar con comodidad premium, no tiene rival en su gama de precio.',
+    productType: 'Auriculares',
+    brand: 'Sony',
+    model: 'WH-1000XM5',
+    fulfillmentProvider: 'Amazon Logistics',
+    specs: {
+      'Autonomía': 'Hasta 30 horas',
+      'Conectividad': 'Bluetooth 5.3 + cable 3,5 mm',
+      'Cancelación de ruido': 'Activa (ANC) adaptativa',
+      'Carga': '3 horas de audio en 3 minutos',
+      'Peso': '250 g',
+    },
+    conversionHooks: {
+      returnPolicyDays: 30,
+      rating: 4.8,
+      totalReviewsCount: 1420,
+      satisfactionScore: { positivePercentage: 92, negativePercentage: 8 },
+    },
     pros: [
       'Cancelación de ruido líder en la industria con calibración automática.',
       'Sonido Hi-Res con codec LDAC y ecualizador multibanda muy detallado.',
@@ -78,6 +213,23 @@ export const products: Product[] = [
     rating: 4.9,
     reviewsCount: 890,
     verdict: 'El equilibrio definitivo entre autonomía, ligereza y potencia sostenida para el 95% de estudiantes y profesionales.',
+    productType: 'Laptop',
+    brand: 'Apple',
+    model: 'MacBook Air M3',
+    fulfillmentProvider: 'Amazon Logistics',
+    specs: {
+      'Procesador': 'Apple M3 (8 núcleos)',
+      'Pantalla': 'Liquid Retina 13,6"',
+      'Memoria': '16 GB unificada',
+      'Almacenamiento': '256 GB SSD',
+      'Autonomía': 'Hasta 18 horas',
+    },
+    conversionHooks: {
+      returnPolicyDays: 30,
+      rating: 4.9,
+      totalReviewsCount: 890,
+      satisfactionScore: { positivePercentage: 95, negativePercentage: 5 },
+    },
     pros: [
       'Chip M3 con soporte para dos pantallas externas (con tapa cerrada).',
       'Silencioso al 100%: chasis unibody de aluminio con refrigeración pasiva.',
@@ -103,6 +255,23 @@ export const products: Product[] = [
     rating: 4.7,
     reviewsCount: 3150,
     verdict: 'La mejor experiencia de lectura digital jamás creada: pantalla nítida como papel impreso, autonomía de meses y cero distracciones.',
+    productType: 'Tablet',
+    brand: 'Amazon',
+    model: 'Kindle Paperwhite Signature',
+    fulfillmentProvider: 'Amazon Logistics',
+    specs: {
+      'Pantalla': '6,8" · 300 ppp antirreflejos',
+      'Almacenamiento': '32 GB',
+      'Resistencia': 'IPX8 (agua dulce)',
+      'Autonomía': 'Hasta 10 semanas',
+      'Carga': 'USB-C e inalámbrica Qi',
+    },
+    conversionHooks: {
+      returnPolicyDays: 30,
+      rating: 4.7,
+      totalReviewsCount: 3150,
+      satisfactionScore: { positivePercentage: 88, negativePercentage: 12 },
+    },
     pros: [
       'Sensor de luz ambiental automático y tono de pantalla de frío a cálido.',
       'Capacidad masiva de 32 GB ideal para audiolibros Audible y colecciones completas.',
@@ -128,6 +297,23 @@ export const products: Product[] = [
     rating: 4.8,
     reviewsCount: 620,
     verdict: 'Automatización total del fregado y aspirado doméstico sin gastar las cifras desorbitadas de modelos de más de 1200 euros.',
+    productType: 'Electrodoméstico',
+    brand: 'Roborock',
+    model: 'Q Revo',
+    fulfillmentProvider: 'PcComponentes',
+    specs: {
+      'Succión': '5.500 Pa',
+      'Mopas': 'Giratorias a 200 rpm',
+      'Navegación': 'LiDAR multizona',
+      'Base': 'Vaciado y autolavado con secado térmico',
+      'App': 'Roborock (iOS / Android)',
+    },
+    conversionHooks: {
+      returnPolicyDays: 30,
+      rating: 4.8,
+      totalReviewsCount: 620,
+      satisfactionScore: { positivePercentage: 85, negativePercentage: 15 },
+    },
     pros: [
       'Doble mopa giratoria presurizada que elimina manchas resecas con eficacia real.',
       'Base con lavado, secado térmico para evitar olores y vaciado de polvo hasta 7 semanas.',

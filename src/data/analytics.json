@@ -498,5 +498,137 @@
     "type": "page_view",
     "path": "/producto/sony-wh-1000xm5",
     "createdAt": "2026-09-16T11:26:46.030Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "vrurc-power-bank-30000mah",
+    "path": "/checkout",
+    "createdAt": "2026-10-04T11:30:43.477Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "vrurc-power-bank-30000mah",
+    "path": "/checkout",
+    "createdAt": "2026-10-04T12:20:24.585Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "vrurc-power-bank-30000mah",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:09:33.771Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "sony-wh-1000xm5",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:45:01.349Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "retrovisores-moto-homologados-8mm-10mm-espejos-mot",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:45:01.405Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "roborock-q-revo",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:45:01.423Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "auriculares-inalambricos-modelo-destacado-7-amazon",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:45:01.440Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "roborock-q-revo",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:45:40.349Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "vrurc-power-bank-30000mah",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:46:56.088Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "vrurc-power-bank-30000mah",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:48:08.758Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "vrurc-power-bank-30000mah",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:48:50.100Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "vrurc-power-bank-30000mah",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:49:12.355Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "vrurc-power-bank-30000mah",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:50:00.938Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "roborock-q-revo",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:50:00.960Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "sony-wh-1000xm5",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:50:00.978Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "sony-wh-1000xm5",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:50:22.887Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "retrovisores-moto-homologados-8mm-10mm-espejos-mot",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:50:22.909Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "roborock-q-revo",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:50:22.926Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "auriculares-inalambricos-modelo-destacado-7-amazon",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:50:22.943Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "vrurc-power-bank-30000mah",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:53:19.214Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "vrurc-power-bank-30000mah",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T09:53:49.257Z"
+  },
+  {
+    "type": "outbound_click",
+    "productId": "sony-wh-1000xm5",
+    "path": "/checkout",
+    "createdAt": "2026-10-07T17:47:37.031Z"
   }
 ]
