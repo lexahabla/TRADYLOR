@@ -26,8 +26,14 @@ RUN npm ci && npm cache clean --force
 
 # Fuentes + build SSR. /app/seed conserva los JSON originales para la siembra
 # del volumen en el primer arranque (no lleva credentials.json: .dockerignore).
+# Symlink: @astrojs/node 8.3 resuelve el clientDir con import.meta.url, pero el
+# bundler mete ese módulo en dist/server/chunks/ y la ruta cae en
+# dist/server/client (inexistente) → todos los estáticos 404. El symlink
+# repara la resolución (favicon, CSS de _astro, imágenes de producto...).
 COPY . .
-RUN npm run build && cp -r src/data /app/seed
+RUN npm run build \
+ && cp -r src/data /app/seed \
+ && ln -sfn ../client dist/server/client
 
 # Volumen persistente (Easy Panel → /app/data) y escucha detrás del proxy.
 ENV NODE_ENV=production \
