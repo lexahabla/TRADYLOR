@@ -1,0 +1,17 @@
+{
+  "name": "Tradylor",
+  "short_name": "Tradylor",
+  "description": "Portal de curación, recomendaciones y comparativas de productos",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "theme_color": "#0a0e17",
+  "background_color": "#0a0e17",
+  "display": "standalone",
+  "start_url": "/"
+}
