@@ -31,6 +31,9 @@ src/data/credentials.json
 # credenciales que puedan existir en el volumen montado
 /data/credentials.json
 
+# semilla incluida en la imagen (artefacto del build, no del repo)
+/seed/
+
 # imágenes de producto generadas con IA
 public/images/products/
 

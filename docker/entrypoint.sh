@@ -58,8 +58,9 @@ if [ ! -d /app/.git ] && command -v git >/dev/null 2>&1; then
      && git -C /app remote add origin "$GIT_REMOTE" \
      && git -C /app fetch -q --depth 1 origin main \
      && git -C /app reset -q --hard FETCH_HEAD; then
-    # Doble seguro: el volumen montado en /app/data jamás entra en un commit.
-    echo "/data/" >> /app/.git/info/exclude
+    # Doble seguro: el volumen montado en /app/data y el artefacto /app/seed
+    # jamás entran en un commit.
+    printf '/data/\n/seed/\n' >> /app/.git/info/exclude
     echo "[entrypoint] Repo git listo en /app (rama main)"
   else
     echo "[entrypoint] Aviso: no se pudo inicializar el repo git (¿GITHUB_PAT definido en Easy Panel?)"
