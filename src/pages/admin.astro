@@ -1947,10 +1947,10 @@ const scoredCatalog = getScoredCatalog();
             <div class="category-keywords">
               ${
                 keywords.length
-                  ? keywords.slice(0, 8).map((keyword) => `<span>${escapeHtml(keyword)}</span>`).join('')
+                  ? keywords.slice(0, 3).map((keyword) => `<span>${escapeHtml(keyword)}</span>`).join('')
                   : '<span class="is-empty">sin palabras clave</span>'
               }
-              ${keywords.length > 8 ? `<span class="is-more">+${keywords.length - 8}</span>` : ''}
+              ${keywords.length > 3 ? `<span class="is-more">+${keywords.length - 3}</span>` : ''}
             </div>
             <div class="category-card-actions">
               <button type="button" class="btn-secondary btn-sm category-edit" data-slug="${escapeHtml(category.slug)}">Editar</button>
@@ -2266,7 +2266,7 @@ const scoredCatalog = getScoredCatalog();
   .category-name { margin: 0; color: var(--color-text-main); font-family: var(--font-heading); font-size: .92rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .category-slug { color: var(--color-text-dim); font-size: .68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .category-count { flex-shrink: 0; padding: .2rem .5rem; color: #93c5fd; background: rgba(59, 130, 246, .1); border: 1px solid rgba(96, 165, 250, .25); border-radius: 999px; font-size: .66rem; font-weight: 800; white-space: nowrap; }
-  .category-keywords { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .category-keywords { display: flex; flex-wrap: wrap; gap: .35rem; min-width: 0; max-width: 100%; overflow: hidden; }
   .category-keywords span { padding: .2rem .5rem; color: var(--color-text-dim); background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 4px; font-size: .66rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; }
   .category-keywords span.is-empty { opacity: .7; font-style: italic; }
   .category-keywords span.is-more { color: #93c5fd; border-color: rgba(96, 165, 250, .25); }
