@@ -1,0 +1,405 @@
+---
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import AdminNav from '../../components/AdminNav.astro';
+import { getSessionUser } from '../../lib/adminAuth';
+import { listUsers } from '../../lib/userStore';
+
+const sessionUser = getSessionUser(Astro.request);
+if (!sessionUser) return Astro.redirect('/admin');
+if (sessionUser.role !== 'admin') return Astro.redirect('/admin/perfil');
+
+const users = listUsers();
+const isMaster = Boolean(sessionUser.master);
+const formatDate = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
+---
+
+<Layout title="Usuarios | Admin Tradylor" description="Crea y gestiona los usuarios del backend de Tradylor.">
+  <div class="admin-wrapper">
+    <header class="admin-header">
+      <div class="admin-header-main">
+        <div class="admin-tag-pill">
+          <span class="status-indicator"></span>
+          <span>Área de usuario</span>
+        </div>
+        <h1 class="admin-title">Usuarios del panel</h1>
+        <p class="admin-subtitle">Cuenta las personas con acceso a Tradylor Admin. El rol decide qué pueden ver: los usuarios comunes sólo llegan a su perfil.</p>
+      </div>
+    </header>
+
+    <AdminNav context="usuario" active="usuarios" user={sessionUser} />
+
+    <div id="usersAlert" class="users-alert" hidden role="status"></div>
+
+    <div class="users-layout">
+      <form id="createUserForm" class="admin-card">
+        <div class="card-header">
+          <div class="header-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+          </div>
+          <div>
+            <span class="card-title">Crear usuario</span>
+            <p class="card-desc">{isMaster ? 'Puedes crear administradores o usuarios comunes.' : 'Sólo puedes crear usuarios comunes.'}</p>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="field-label" for="newUsername">Usuario <span class="required">*</span></label>
+          <input id="newUsername" name="username" type="text" required minlength="3" maxlength="30" placeholder="p. ej. maria" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label class="field-label" for="newName">Nombre <span class="required">*</span></label>
+          <input id="newName" name="name" type="text" required maxlength="80" placeholder="Nombre y apellido" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label class="field-label" for="newEmail">Email</label>
+          <input id="newEmail" name="email" type="email" maxlength="120" placeholder="usuario@ejemplo.com" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label class="field-label" for="newPhone">Teléfono</label>
+          <input id="newPhone" name="phone" type="tel" maxlength="40" autocomplete="off" />
+        </div>
+        <div class="form-group">
+          <label class="field-label" for="newPassword">Contraseña <span class="label-hint">mín. 8 caracteres</span></label>
+          <input id="newPassword" name="password" type="password" required minlength="8" autocomplete="new-password" />
+        </div>
+        <div class="form-group">
+          <label class="field-label" for="newRole">Rol</label>
+          <select id="newRole" name="role">
+            <option value="user">Usuario (sólo su perfil)</option>
+            {isMaster && <option value="admin">Administrador (catálogo + usuarios)</option>}
+          </select>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-primary" id="btnCreateUser">Crear usuario</button>
+        </div>
+      </form>
+
+      <div class="users-main">
+        <form id="editUserForm" class="admin-card edit-card" hidden>
+          <div class="card-header">
+            <div class="header-icon icon-cyan">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            </div>
+            <div>
+              <span class="card-title">Editar usuario</span>
+              <p class="card-desc" id="editUserSubtitle">—</p>
+            </div>
+          </div>
+
+          <input type="hidden" id="editUserId" />
+          <div class="edit-grid">
+            <div class="form-group">
+              <label class="field-label" for="editName">Nombre <span class="required">*</span></label>
+              <input id="editName" type="text" required maxlength="80" />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="editEmail">Email</label>
+              <input id="editEmail" type="email" maxlength="120" />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="editPhone">Teléfono</label>
+              <input id="editPhone" type="tel" maxlength="40" />
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="editRole">Rol</label>
+              <select id="editRole" disabled={!isMaster}>
+                <option value="user">Usuario (sólo su perfil)</option>
+                <option value="admin">Administrador (catálogo + usuarios)</option>
+              </select>
+              {!isMaster && <span class="label-hint">Sólo el usuario master puede cambiar roles.</span>}
+            </div>
+            <div class="form-group">
+              <label class="field-label" for="editPassword">Nueva contraseña <span class="label-hint">en blanco = no cambiar (mín. 8)</span></label>
+              <input id="editPassword" type="password" minlength="8" autocomplete="new-password" />
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" id="btnSaveUser">Guardar cambios</button>
+            <button type="button" class="btn-secondary" id="btnCancelEdit">Cancelar</button>
+          </div>
+        </form>
+
+        <div class="admin-card users-list-card">
+          <div class="card-header">
+            <div class="header-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+            </div>
+            <div>
+              <span class="card-title">Listado <span class="user-count">{users.length}</span></span>
+              <p class="card-desc">{isMaster ? 'Gestionas todas las cuentas, incluidas las administradoras.' : 'Gestionas usuarios comunes; las cuentas admin y master las lleva el master.'}</p>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table class="users-table">
+              <thead>
+                <tr>
+                  <th>Usuario</th>
+                  <th>Rol</th>
+                  <th>Email</th>
+                  <th>Creado</th>
+                  <th class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody">
+                {users.map((u) => {
+                  const locked = u.master || (u.role === 'admin' && !isMaster);
+                  return (
+                    <tr data-user-id={u.id} data-username={u.username} data-name={u.name} data-email={u.email} data-phone={u.phone} data-role={u.role} data-locked={locked ? '1' : '0'}>
+                      <td>
+                        <div class="user-cell">
+                          {u.avatar ? (
+                            <img class="user-cell-avatar" src={`/api/admin/users/${u.id}/avatar?v=${encodeURIComponent(u.updatedAt)}`} alt="" />
+                          ) : (
+                            <span class="user-cell-avatar user-cell-initial" aria-hidden="true">{(u.name || u.username).charAt(0).toUpperCase()}</span>
+                          )}
+                          <div class="user-cell-info">
+                            <strong>{u.name || u.username}</strong>
+                            <span>@{u.username}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td><span class:list={['role-chip', `is-${u.master ? 'master' : u.role}`]}>{u.master ? 'Master' : u.role === 'admin' ? 'Admin' : 'Usuario'}</span></td>
+                      <td class="cell-muted">{u.email || '—'}</td>
+                      <td class="cell-muted">{formatDate(u.createdAt)}</td>
+                      <td class="col-actions">
+                        {!locked && (
+                          <div class="row-actions">
+                            <button type="button" class="btn-row-edit" data-action="edit">Editar</button>
+                            {u.id !== sessionUser.id && (
+                              <button type="button" class="btn-row-delete" data-action="delete">Eliminar</button>
+                            )}
+                          </div>
+                        )}
+                        {locked && <span class="row-locked">Protegida</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {users.length === 0 && <p class="users-empty">Todavía no hay usuarios.</p>}
+        </div>
+      </div>
+    </div>
+  </div>
+</Layout>
+
+<script define:vars={{ isMaster }}>
+  document.addEventListener('DOMContentLoaded', () => {
+    const alertBox = document.getElementById('usersAlert');
+    const createForm = document.getElementById('createUserForm');
+    const editForm = document.getElementById('editUserForm');
+
+    function showAlert(type, message) {
+      if (!alertBox) return;
+      alertBox.hidden = false;
+      alertBox.className = `users-alert is-${type}`;
+      alertBox.textContent = message;
+      if (type === 'success') {
+        window.clearTimeout(showAlert._timer);
+        showAlert._timer = window.setTimeout(() => { alertBox.hidden = true; }, 5000);
+      }
+    }
+
+    async function handle(res) {
+      if (res.status === 401) { window.location.href = '/admin'; return { ok: false, stop: true }; }
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { showAlert('error', data.message || 'La operación ha fallado.'); return { ok: false, stop: false, data }; }
+      return { ok: true, data };
+    }
+
+    // ---- Crear usuario ----
+    createForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = document.getElementById('btnCreateUser');
+      if (button) button.disabled = true;
+      try {
+        const res = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: document.getElementById('newUsername')?.value ?? '',
+            name: document.getElementById('newName')?.value ?? '',
+            email: document.getElementById('newEmail')?.value ?? '',
+            phone: document.getElementById('newPhone')?.value ?? '',
+            password: document.getElementById('newPassword')?.value ?? '',
+            role: document.getElementById('newRole')?.value ?? 'user',
+          }),
+        });
+        const result = await handle(res);
+        if (result.stop) return;
+        if (!result.ok) return;
+        showAlert('success', 'Usuario creado correctamente.');
+        window.setTimeout(() => window.location.reload(), 700);
+      } catch {
+        showAlert('error', 'Error de conexión con el servidor.');
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+
+    // ---- Editar ----
+    function openEditor(row) {
+      if (!editForm) return;
+      document.getElementById('editUserId').value = row.dataset.userId;
+      document.getElementById('editName').value = row.dataset.name ?? '';
+      document.getElementById('editEmail').value = row.dataset.email ?? '';
+      document.getElementById('editPhone').value = row.dataset.phone ?? '';
+      document.getElementById('editRole').value = row.dataset.role === 'admin' ? 'admin' : 'user';
+      document.getElementById('editPassword').value = '';
+      document.getElementById('editUserSubtitle').textContent = `@${row.dataset.username}`;
+      editForm.hidden = false;
+      editForm.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    document.getElementById('btnCancelEdit')?.addEventListener('click', () => {
+      if (editForm) editForm.hidden = true;
+    });
+
+    editForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const id = document.getElementById('editUserId')?.value;
+      const password = document.getElementById('editPassword')?.value ?? '';
+      const payload = {
+        name: document.getElementById('editName')?.value ?? '',
+        email: document.getElementById('editEmail')?.value ?? '',
+        phone: document.getElementById('editPhone')?.value ?? '',
+      };
+      if (password) payload.password = password;
+      if (isMaster) payload.role = document.getElementById('editRole')?.value ?? 'user';
+
+      const button = document.getElementById('btnSaveUser');
+      if (button) button.disabled = true;
+      try {
+        const res = await fetch(`/api/admin/users/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const result = await handle(res);
+        if (result.stop) return;
+        if (!result.ok) return;
+        showAlert('success', 'Usuario actualizado correctamente.');
+        window.setTimeout(() => window.location.reload(), 700);
+      } catch {
+        showAlert('error', 'Error de conexión con el servidor.');
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+
+    // ---- Acciones de fila (editar / eliminar) ----
+    document.getElementById('usersTableBody')?.addEventListener('click', async (event) => {
+      const button = event.target.closest('button[data-action]');
+      if (!button) return;
+      const row = button.closest('tr[data-user-id]');
+      if (!row) return;
+      const id = row.dataset.userId;
+
+      if (button.dataset.action === 'edit') {
+        openEditor(row);
+        return;
+      }
+
+      if (button.dataset.action === 'delete') {
+        const label = `@${row.dataset.username}`;
+        if (!window.confirm(`¿Eliminar ${label}? Esta acción no se puede deshacer.`)) return;
+        button.disabled = true;
+        try {
+          const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
+          const result = await handle(res);
+          if (result.stop) return;
+          if (!result.ok) { button.disabled = false; return; }
+          showAlert('success', `Usuario ${label} eliminado.`);
+          window.setTimeout(() => window.location.reload(), 700);
+        } catch {
+          showAlert('error', 'Error de conexión con el servidor.');
+          button.disabled = false;
+        }
+      }
+    });
+  });
+</script>
+
+<style>
+  .admin-wrapper { max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; display: flex; flex-direction: column; gap: 2.5rem; }
+  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
+  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.85rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 9999px; font-size: 0.75rem; font-weight: 600; color: #60a5fa; width: fit-content; }
+  .status-indicator { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 10px #10b981; animation: usersPulseGlow 2s infinite ease-in-out; }
+  @keyframes usersPulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
+  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
+
+  .users-alert { padding: .85rem 1rem; border-radius: var(--border-radius-sm); font-size: .85rem; font-weight: 600; border: 1px solid transparent; }
+  .users-alert.is-success { color: #6ee7b7; background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }
+  .users-alert.is-error { color: #fecaca; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); }
+
+  .users-layout { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+  .users-main { display: flex; flex-direction: column; gap: 1.5rem; min-width: 0; }
+  @media (max-width: 980px) { .users-layout { grid-template-columns: 1fr; } }
+
+  .admin-card { background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-lg); padding: 2rem; box-shadow: var(--shadow-card); }
+  .card-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.75rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+  .header-icon { width: 42px; height: 42px; border-radius: 12px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .icon-cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; }
+  .card-title { font-family: var(--font-heading); font-size: 1.25rem; font-weight: 700; color: var(--color-text-main); }
+  .card-desc { font-size: 0.85rem; color: var(--color-text-muted); margin-top: 0.2rem; }
+  .user-count { display: inline-flex; min-width: 1.6rem; justify-content: center; padding: .1rem .45rem; margin-left: .3rem; background: rgba(59, 130, 246, .15); border-radius: 999px; font-size: .8rem; color: #93c5fd; vertical-align: middle; }
+
+  .form-group { display: flex; flex-direction: column; gap: .4rem; margin-bottom: 1rem; }
+  .field-label { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 600; color: var(--color-text-main); }
+  .required { color: #f87171; }
+  .label-hint { font-size: 0.72rem; font-weight: 400; color: var(--color-text-dim); }
+
+  input[type="text"], input[type="email"], input[type="tel"], input[type="password"], select { width: 100%; box-sizing: border-box; background: #0d121f; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); padding: 0.75rem 1rem; color: var(--color-text-main); font-family: var(--font-body); font-size: 0.9rem; transition: all 0.2s ease; outline: none; }
+  select:disabled { opacity: .55; cursor: not-allowed; }
+  input:focus, select:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+
+  .form-actions { display: flex; gap: 1rem; margin-top: 1rem; padding-top: 1.25rem; border-top: 1px solid var(--color-border); }
+  .btn-primary, .btn-secondary { font-family: var(--font-body); font-weight: 600; border: none; border-radius: var(--border-radius-sm); display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s ease; cursor: pointer; padding: 0.75rem 1.25rem; }
+  .btn-primary { background: var(--color-primary); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+  .btn-secondary { background: var(--color-surface-subtle); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+  .btn-secondary:hover:not(:disabled) { color: var(--color-text-main); background: #242f45; }
+
+  .edit-card { border-color: rgba(34, 211, 238, .35); }
+  .edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
+  @media (max-width: 640px) { .edit-grid { grid-template-columns: 1fr; } }
+
+  .table-wrap { overflow-x: auto; }
+  .users-table { width: 100%; border-collapse: collapse; }
+  .users-table th { padding: .6rem .75rem; color: var(--color-text-dim); font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; text-align: left; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+  .users-table td { padding: .75rem; border-bottom: 1px solid rgba(255, 255, 255, .05); font-size: .84rem; color: var(--color-text-main); vertical-align: middle; }
+  .users-table tr:last-child td { border-bottom: 0; }
+  .cell-muted { color: var(--color-text-muted); white-space: nowrap; }
+  .col-actions { text-align: right; }
+  .users-table th.col-actions { text-align: right; }
+
+  .user-cell { display: flex; align-items: center; gap: .65rem; min-width: 0; }
+  .user-cell-avatar { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 50%; object-fit: cover; background: linear-gradient(135deg, #3b82f6, #60a5fa); color: #fff; font-size: .8rem; font-weight: 800; flex-shrink: 0; }
+  .user-cell-info { display: flex; flex-direction: column; min-width: 0; }
+  .user-cell-info strong { font-size: .85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+  .user-cell-info span { color: var(--color-text-dim); font-size: .74rem; }
+
+  .role-chip { display: inline-flex; padding: .2rem .55rem; border-radius: 999px; font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--color-text-dim); background: rgba(255, 255, 255, .05); border: 1px solid var(--color-border); white-space: nowrap; }
+  .role-chip.is-admin { color: #93c5fd; background: rgba(59, 130, 246, .12); border-color: rgba(96, 165, 250, .3); }
+  .role-chip.is-master { color: #fbbf24; background: rgba(245, 158, 11, .1); border-color: rgba(245, 158, 11, .3); }
+
+  .row-actions { display: inline-flex; gap: .4rem; justify-content: flex-end; }
+  .btn-row-edit, .btn-row-delete { padding: .35rem .65rem; border-radius: 6px; font-size: .7rem; font-weight: 700; font-family: var(--font-body); border: 1px solid transparent; cursor: pointer; transition: all .2s ease; }
+  .btn-row-edit { color: #93c5fd; background: transparent; border-color: rgba(96, 165, 250, .25); }
+  .btn-row-edit:hover { color: #dbeafe; background: rgba(59, 130, 246, .12); border-color: rgba(96, 165, 250, .5); }
+  .btn-row-delete { color: #fca5a5; background: transparent; border-color: rgba(239, 68, 68, .25); }
+  .btn-row-delete:hover:not(:disabled) { color: #fecaca; background: rgba(239, 68, 68, .15); border-color: rgba(239, 68, 68, .45); }
+  .btn-row-delete:disabled { opacity: .5; cursor: not-allowed; }
+  .row-locked { color: var(--color-text-dim); font-size: .7rem; font-weight: 700; }
+
+  .users-empty { padding: 1.5rem; color: var(--color-text-muted); font-size: .85rem; text-align: center; }
+</style>

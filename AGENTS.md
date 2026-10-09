@@ -57,12 +57,15 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `checkout/[id].astro` - Pantalla puente nativa de Compra Delegada (previa a la salida)
   - `out/[id].astro` - Redirecciones de afiliación (salida/out, legado)
   - `admin.astro` y `admin/curation.astro` - Panel de administración de curación
+  - `admin/perfil.astro` y `admin/usuarios.astro` - Perfil del usuario y gestión de usuarios del backend
   - `api/` - Endpoints internos y la API pública `v1` (`docs/api-v1.md`)
   - `api/redirect.ts` - Salida registrada (302) al enlace de afiliado del checkout
   - `api/health.ts` - Healthcheck público para Docker / Easy Panel (sin auth)
   - `api/admin/add-product.ts` - Alta/actualización de producto con IA (texto + imagen)
+  - `api/admin/users/` - CRUD de usuarios del backend (`index`, `[id]`, `[id]/avatar`)
 - `src/lib/` - Lógica de negocio
   - `adminAuth.ts`, `apiAuth.ts` - Autenticación (admin y API)
+  - `userStore.ts` - Usuarios del backend (roles admin/usuario, cuenta master, contraseñas scrypt)
   - `paths.ts` - Rutas persistentes: `DATA_DIR` / `IMAGES_DIR` (en prod: volumen vía env)
   - `catalog.ts`, `catalogStore.ts` - Catálogo de productos en memoria/almacenamiento
   - `productStore.ts` - Persistencia de `products.json` (lectura/escritura/upsert)
@@ -73,6 +76,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 - `src/data/` - Datos
   - `products.json`, `categories.json`, `analytics.json`
   - `credentials.json` - Credenciales de redes de afiliación (glitch: NO se sube a git)
+  - `users.json` - Usuarios del backend (sólo en local/prod, NO se crea en el repo: se genera en el volumen)
+- `src/components/AdminNav.astro` - Nav del backend: píldora de contexto + secciones + menú de usuario (perfil, crear usuarios, cerrar sesión)
 - `public/images/products/` - Imágenes de producto generadas con IA (ignorado en git)
 - Despliegue
   - `Dockerfile` - Imagen de producción de un solo stage (build SSR en Node 22 Bookworm,

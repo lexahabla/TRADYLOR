@@ -27,6 +27,9 @@ export const IMAGES_DIR =
 /** Directorio servible por el standalone de Node (build actual). */
 export const CLIENT_IMAGES_DIR = path.join(cwd, 'dist', 'client', 'images', 'products');
 
+/** Directorio de avatares de los usuarios del backend (perfil). */
+export const AVATARS_DIR = path.join(DATA_DIR, 'avatars');
+
 /** Ruta absoluta de un JSON dentro del directorio de datos. */
 export function dataFile(name: string): string {
   return path.join(DATA_DIR, name);

@@ -2,14 +2,16 @@
 export const prerender = false;
 
 import Layout from '../layouts/Layout.astro';
+import AdminNav from '../components/AdminNav.astro';
 import fs from 'node:fs';
 import { dataFile } from '../lib/paths';
 import type { Product } from './api/products/add';
-import { areValidCredentials, clearAdminSession, createAdminSession, isAdminAuthenticated } from '../lib/adminAuth';
+import { authenticateUser, clearAdminSession, createAdminSession, getSessionUser } from '../lib/adminAuth';
 import { getAnalyticsSummary } from '../lib/adminDashboard';
 import { getScoredCatalog } from '../lib/opportunity';
 
-const isAuthenticated = isAdminAuthenticated(Astro.request);
+const sessionUser = getSessionUser(Astro.request);
+const isAuthenticated = sessionUser !== null;
 let loginError = '';
 
 if (Astro.request.method === 'POST') {
@@ -23,14 +25,24 @@ if (Astro.request.method === 'POST') {
     });
   }
 
-  if (!isAuthenticated && areValidCredentials(String(formData.get('username') ?? '').trim(), String(formData.get('password') ?? ''))) {
+  const login = !isAuthenticated
+    ? authenticateUser(String(formData.get('username') ?? '').trim(), String(formData.get('password') ?? ''))
+    : null;
+
+  if (login) {
+    // Los usuarios sin rol admin sólo acceden a su perfil
     return new Response(null, {
       status: 303,
-      headers: { Location: '/admin', 'Set-Cookie': createAdminSession() },
+      headers: { Location: login.role === 'admin' ? '/admin' : '/admin/perfil', 'Set-Cookie': createAdminSession(login) },
     });
   }
 
   if (!isAuthenticated) loginError = 'El usuario o la contraseña no son correctos.';
+}
+
+// Un usuario sin rol admin no puede ver el catálogo: va a su perfil
+if (sessionUser && sessionUser.role !== 'admin') {
+  return new Response(null, { status: 303, headers: { Location: '/admin/perfil' } });
 }
 
 // Leer productos almacenados para renderizar inicialmente en el servidor (SSR)
@@ -58,7 +70,7 @@ const scoredCatalog = getScoredCatalog();
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
-  {isAuthenticated ? (
+  {isAuthenticated && sessionUser ? (
   <div class="admin-wrapper">
     <!-- 1. HEADER DEL PANEL -->
     <header class="admin-header">
@@ -74,34 +86,7 @@ const scoredCatalog = getScoredCatalog();
       </div>
     </header>
 
-    <nav class="admin-section-nav" aria-label="Secciones del backend">
-      <button type="button" class="admin-nav-toggle" id="adminNavToggle" aria-expanded="false" aria-controls="adminNavLinks" aria-label="Abrir menú de secciones">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <line x1="3" y1="6" x2="21" y2="6"></line>
-          <line x1="3" y1="12" x2="21" y2="12"></line>
-          <line x1="3" y1="18" x2="21" y2="18"></line>
-        </svg>
-        <span>Secciones</span>
-      </button>
-      <div class="admin-nav-links" id="adminNavLinks">
-        <a class:list={['admin-nav-item', { 'is-active': initialSection === 'products' }]} href="/admin?section=products" data-admin-tab="products">Añadir productos</a>
-        <a class:list={['admin-nav-item', { 'is-active': initialSection === 'affiliates' }]} href="/admin?section=affiliates" data-admin-tab="affiliates">Afiliados</a>
-        <a class:list={['admin-nav-item', { 'is-active': initialSection === 'categories' }]} href="/admin?section=categories" data-admin-tab="categories">Categorías</a>
-        <a class:list={['admin-nav-item', { 'is-active': initialSection === 'analytics' }]} href="/admin?section=analytics" data-admin-tab="analytics">Tráfico y ventas</a>
-        <a class:list={['admin-nav-item', { 'is-active': initialSection === 'marketing' }]} href="/admin?section=marketing" data-admin-tab="marketing">Marketing</a>
-      </div>
-      <form method="post" class="admin-logout-form">
-        <input type="hidden" name="action" value="logout" />
-        <button type="submit" class="admin-logout-button" title="Cerrar sesión" aria-label="Cerrar sesión">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-            <polyline points="16 17 21 12 16 7"></polyline>
-            <line x1="21" y1="12" x2="9" y2="12"></line>
-          </svg>
-          <span class="logout-label">Cerrar sesión</span>
-        </button>
-      </form>
-    </nav>
+    <AdminNav context="catalogo" active={initialSection} user={sessionUser} />
 
     <!-- 2. SECCIÓN PRINCIPAL: FORMULARIO + LIVE PREVIEW -->
     <section data-admin-view="products" class:list={['admin-grid-section', 'hidden-section', { 'is-visible': initialSection === 'products' }]}>
@@ -857,20 +842,6 @@ const scoredCatalog = getScoredCatalog();
 <script is:inline>
   // Inicialización de estado y elementos DOM
   document.addEventListener('DOMContentLoaded', () => {
-    // Menú responsive del backend: despliega las secciones en pantallas estrechas
-    const navToggle = document.getElementById('adminNavToggle');
-    const navLinks = document.getElementById('adminNavLinks');
-    navToggle?.addEventListener('click', () => {
-      const isOpen = navLinks?.classList.toggle('is-open');
-      navToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-    });
-    navLinks?.addEventListener('click', (event) => {
-      if (event.target.closest('.admin-nav-item')) {
-        navLinks.classList.remove('is-open');
-        navToggle?.setAttribute('aria-expanded', 'false');
-      }
-    });
-
     // Inputs
     const inputScrapeUrl = document.getElementById('inputScrapeUrl');
     const btnScrape = document.getElementById('btnScrape');
@@ -2176,18 +2147,6 @@ const scoredCatalog = getScoredCatalog();
 </script>
 
 <style>
-  .admin-section-nav { position: relative; display: flex; align-items: center; gap: .5rem; padding: .65rem; background: rgba(17, 24, 39, .65); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
-  .admin-nav-links { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; flex: 1; min-width: 0; }
-  .admin-nav-toggle { display: none; align-items: center; gap: .45rem; padding: .6rem .8rem; color: var(--color-text-muted); background: transparent; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 700; }
-  .admin-nav-toggle:hover { color: var(--color-text-main); border-color: rgba(96, 165, 250, .3); }
-  .admin-nav-item { display: inline-flex; padding: .7rem .9rem; color: var(--color-text-muted); background: transparent; border: 1px solid transparent; border-radius: var(--border-radius-sm); cursor: pointer; font: inherit; font-size: .82rem; font-weight: 700; text-decoration: none; }
-  .admin-nav-item:hover, .admin-nav-item.is-active { color: var(--color-text-main); background: rgba(59, 130, 246, .13); border-color: rgba(96, 165, 250, .3); }
-
-  /* Logout dentro del nav: más pequeño, siempre visible y alineado a la derecha */
-  .admin-logout-form { margin: 0 0 0 auto; flex-shrink: 0; }
-  .admin-logout-button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; padding: .55rem .7rem; color: #fca5a5; background: rgba(239, 68, 68, .08); border: 1px solid rgba(239, 68, 68, .25); border-radius: var(--border-radius-sm); cursor: pointer; font: inherit; font-size: .75rem; font-weight: 700; transition: all .2s ease; }
-  .admin-logout-button:hover { color: #fecaca; background: rgba(239, 68, 68, .18); border-color: rgba(239, 68, 68, .45); }
-  .admin-logout-button svg { flex-shrink: 0; }
   .admin-dashboard-view { flex-direction: column; gap: 1.5rem; }
   .view-heading { padding-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
   .view-heading .admin-title { margin: .75rem 0 .5rem; }
@@ -2379,13 +2338,6 @@ const scoredCatalog = getScoredCatalog();
   .products-list-card.is-visible { display: flex; }
 
   @media (max-width: 900px) {
-    .admin-nav-toggle { display: inline-flex; }
-    .admin-nav-links { display: none; position: absolute; top: calc(100% + .5rem); left: 0; right: 0; flex-direction: column; align-items: stretch; padding: .65rem; background: rgba(13, 19, 33, .97); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); box-shadow: 0 18px 40px rgba(0, 0, 0, .45); z-index: 60; }
-    .admin-nav-links.is-open { display: flex; }
-    .admin-nav-item { white-space: normal; width: 100%; }
-    /* En el menú responsive el logout se queda solo en icono, fijo en la barra a la derecha */
-    .admin-logout-button { padding: .55rem; }
-    .admin-logout-button .logout-label { display: none; }
     .category-form { flex-direction: column; }
     .dashboard-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }

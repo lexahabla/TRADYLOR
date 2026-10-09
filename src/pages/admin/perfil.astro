@@ -1,0 +1,321 @@
+---
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import AdminNav from '../../components/AdminNav.astro';
+import { getSessionUser } from '../../lib/adminAuth';
+import { findUserById, toPublicUser } from '../../lib/userStore';
+
+const sessionUser = getSessionUser(Astro.request);
+if (!sessionUser) return Astro.redirect('/admin');
+
+const profile = findUserById(sessionUser.id);
+if (!profile) return Astro.redirect('/admin');
+const user = toPublicUser(profile);
+
+const avatarUrl = user.avatar ? `/api/admin/users/${user.id}/avatar?v=${encodeURIComponent(user.updatedAt)}` : null;
+const initial = (user.name || user.username).trim().charAt(0).toUpperCase();
+const roleLabel = user.master ? 'Master' : user.role === 'admin' ? 'Administrador' : 'Usuario';
+const memberSince = new Date(user.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' });
+---
+
+<Layout title="Mi perfil | Admin Tradylor" description="Gestiona tu foto, tus datos de contacto y tu contraseña en el backend de Tradylor.">
+  <div class="admin-wrapper" data-user-id={user.id}>
+    <header class="admin-header">
+      <div class="admin-header-main">
+        <div class="admin-tag-pill">
+          <span class="status-indicator"></span>
+          <span>Área de usuario</span>
+        </div>
+        <h1 class="admin-title">Mi perfil</h1>
+        <p class="admin-subtitle">Actualiza tu foto, tus datos de contacto y tu contraseña de acceso al panel.</p>
+      </div>
+    </header>
+
+    <AdminNav context="usuario" active="perfil" user={user} />
+
+    <div id="profileAlert" class="profile-alert" hidden role="status"></div>
+
+    <section class="profile-grid">
+      <div class="admin-card identity-card">
+        <div class="profile-avatar-wrap">
+          {avatarUrl ? (
+            <img id="profileAvatarImg" class="profile-avatar" src={avatarUrl} alt="Foto de perfil" />
+          ) : (
+            <span id="profileAvatarImg" class="profile-avatar profile-avatar-initial" aria-hidden="true">{initial}</span>
+          )}
+        </div>
+        <h2 class="profile-name">{user.name || user.username}</h2>
+        <p class="profile-username">@{user.username}</p>
+        <span class:list={['profile-role', `is-${user.master ? 'master' : user.role}`]}>{roleLabel}</span>
+
+        <dl class="profile-meta">
+          <div>
+            <dt>Email</dt>
+            <dd>{user.email || '—'}</dd>
+          </div>
+          <div>
+            <dt>Teléfono</dt>
+            <dd>{user.phone || '—'}</dd>
+          </div>
+          <div>
+            <dt>Miembro desde</dt>
+            <dd>{memberSince}</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div class="profile-forms">
+        <form id="profileDataForm" class="admin-card">
+          <div class="card-header">
+            <div class="header-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            </div>
+            <div>
+              <span class="card-title">Datos personales</span>
+              <p class="card-desc">Nombre, contacto y foto de perfil.</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="profileAvatar">Foto de perfil <span class="label-hint">JPG, PNG o WebP · máx. 2MB</span></label>
+            <input id="profileAvatar" name="avatar" type="file" accept="image/jpeg,image/png,image/webp" />
+          </div>
+          <div class="form-group">
+            <label class="field-label" for="profileName">Nombre <span class="required">*</span></label>
+            <input id="profileName" name="name" type="text" value={user.name} required maxlength="80" autocomplete="name" />
+          </div>
+          <div class="form-group">
+            <label class="field-label" for="profileEmail">Email</label>
+            <input id="profileEmail" name="email" type="email" value={user.email} maxlength="120" autocomplete="email" />
+          </div>
+          <div class="form-group">
+            <label class="field-label" for="profilePhone">Teléfono</label>
+            <input id="profilePhone" name="phone" type="tel" value={user.phone} maxlength="40" autocomplete="tel" />
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn-primary" id="btnSaveProfile">Guardar cambios</button>
+          </div>
+        </form>
+
+        <form id="profilePasswordForm" class="admin-card">
+          <div class="card-header">
+            <div class="header-icon icon-cyan">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+            </div>
+            <div>
+              <span class="card-title">Contraseña</span>
+              <p class="card-desc">Se pide la actual. Al cambiarla se cierran tus demás sesiones.</p>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="field-label" for="currentPassword">Contraseña actual <span class="required">*</span></label>
+            <input id="currentPassword" name="currentPassword" type="password" required autocomplete="current-password" />
+          </div>
+          <div class="form-group">
+            <label class="field-label" for="newPassword">Nueva contraseña <span class="label-hint">mín. 8 caracteres</span></label>
+            <input id="newPassword" name="newPassword" type="password" required minlength="8" autocomplete="new-password" />
+          </div>
+          <div class="form-group">
+            <label class="field-label" for="repeatPassword">Repetir nueva contraseña</label>
+            <input id="repeatPassword" name="repeatPassword" type="password" required minlength="8" autocomplete="new-password" />
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn-secondary" id="btnSavePassword">Cambiar contraseña</button>
+          </div>
+        </form>
+      </div>
+    </section>
+  </div>
+</Layout>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const wrapper = document.querySelector('.admin-wrapper[data-user-id]');
+    const userId = wrapper?.getAttribute('data-user-id');
+    const alertBox = document.getElementById('profileAlert');
+
+    function showAlert(type, message) {
+      if (!alertBox) return;
+      alertBox.hidden = false;
+      alertBox.className = `profile-alert is-${type}`;
+      alertBox.textContent = message;
+      if (type === 'success') {
+        window.clearTimeout(showAlert._timer);
+        showAlert._timer = window.setTimeout(() => { alertBox.hidden = true; }, 5000);
+      }
+    }
+
+    function handleAuth(res) {
+      if (res.status === 401) {
+        window.location.href = '/admin';
+        return true;
+      }
+      return false;
+    }
+
+    // Preview de la foto seleccionada
+    const avatarInput = document.getElementById('profileAvatar');
+    avatarInput?.addEventListener('change', () => {
+      const file = avatarInput.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        let img = document.getElementById('profileAvatarImg');
+        if (img && img.tagName === 'IMG') {
+          img.src = String(reader.result);
+        } else if (img) {
+          const replacement = document.createElement('img');
+          replacement.id = 'profileAvatarImg';
+          replacement.className = 'profile-avatar';
+          replacement.alt = 'Foto de perfil';
+          replacement.src = String(reader.result);
+          img.replaceWith(replacement);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Datos personales (+ foto opcional)
+    document.getElementById('profileDataForm')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = document.getElementById('btnSaveProfile');
+      if (button) button.disabled = true;
+      try {
+        const file = avatarInput?.files?.[0];
+        if (file) {
+          const formData = new FormData();
+          formData.append('avatar', file);
+          const avatarRes = await fetch(`/api/admin/users/${userId}/avatar`, { method: 'POST', body: formData });
+          if (handleAuth(avatarRes)) return;
+          const avatarData = await avatarRes.json().catch(() => ({}));
+          if (!avatarRes.ok) {
+            showAlert('error', avatarData.message || 'No se pudo subir la imagen.');
+            return;
+          }
+        }
+
+        const payload = {
+          name: document.getElementById('profileName')?.value ?? '',
+          email: document.getElementById('profileEmail')?.value ?? '',
+          phone: document.getElementById('profilePhone')?.value ?? '',
+        };
+        const res = await fetch(`/api/admin/users/${userId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (handleAuth(res)) return;
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showAlert('error', data.message || 'No se pudieron guardar los cambios.');
+          return;
+        }
+        showAlert('success', 'Perfil actualizado correctamente.');
+        window.setTimeout(() => window.location.reload(), 800);
+      } catch {
+        showAlert('error', 'Error de conexión con el servidor.');
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+
+    // Contraseña
+    document.getElementById('profilePasswordForm')?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const newPassword = document.getElementById('newPassword')?.value ?? '';
+      const repeat = document.getElementById('repeatPassword')?.value ?? '';
+      if (newPassword !== repeat) {
+        showAlert('error', 'La nueva contraseña y su repetición no coinciden.');
+        return;
+      }
+      const button = document.getElementById('btnSavePassword');
+      if (button) button.disabled = true;
+      try {
+        const res = await fetch(`/api/admin/users/${userId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: newPassword,
+            currentPassword: document.getElementById('currentPassword')?.value ?? '',
+          }),
+        });
+        if (handleAuth(res)) return;
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          showAlert('error', data.message || 'No se pudo cambiar la contraseña.');
+          return;
+        }
+        document.getElementById('profilePasswordForm')?.reset();
+        showAlert('success', 'Contraseña actualizada correctamente.');
+      } catch {
+        showAlert('error', 'Error de conexión con el servidor.');
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+  });
+</script>
+
+<style>
+  .admin-wrapper { max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; display: flex; flex-direction: column; gap: 2.5rem; }
+  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
+  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.85rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 9999px; font-size: 0.75rem; font-weight: 600; color: #60a5fa; width: fit-content; }
+  .status-indicator { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 10px #10b981; animation: profilePulseGlow 2s infinite ease-in-out; }
+  @keyframes profilePulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
+  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
+
+  .profile-alert { padding: .85rem 1rem; border-radius: var(--border-radius-sm); font-size: .85rem; font-weight: 600; border: 1px solid transparent; }
+  .profile-alert.is-success { color: #6ee7b7; background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }
+  .profile-alert.is-error { color: #fecaca; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); }
+
+  .profile-grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+  @media (max-width: 900px) { .profile-grid { grid-template-columns: 1fr; } }
+
+  .identity-card { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .35rem; }
+  .profile-avatar-wrap { margin-bottom: .75rem; }
+  .profile-avatar { display: inline-flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: linear-gradient(135deg, #3b82f6, #60a5fa); color: #fff; font-size: 2.2rem; font-weight: 800; border: 3px solid rgba(96, 165, 250, .35); }
+  .profile-name { font-family: var(--font-heading); font-size: 1.35rem; font-weight: 800; color: var(--color-text-main); margin: .25rem 0 0; }
+  .profile-username { color: var(--color-text-dim); font-size: .85rem; }
+  .profile-role { display: inline-flex; margin-top: .5rem; padding: .25rem .7rem; border-radius: 999px; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-dim); background: rgba(255, 255, 255, .05); border: 1px solid var(--color-border); }
+  .profile-role.is-admin { color: #93c5fd; background: rgba(59, 130, 246, .12); border-color: rgba(96, 165, 250, .3); }
+  .profile-role.is-master { color: #fbbf24; background: rgba(245, 158, 11, .1); border-color: rgba(245, 158, 11, .3); }
+
+  .profile-meta { display: flex; flex-direction: column; gap: .65rem; width: 100%; margin: 1.25rem 0 0; padding-top: 1.1rem; border-top: 1px solid var(--color-border); text-align: left; }
+  .profile-meta div { display: flex; justify-content: space-between; gap: .75rem; align-items: baseline; }
+  .profile-meta dt { color: var(--color-text-dim); font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .profile-meta dd { margin: 0; color: var(--color-text-main); font-size: .84rem; text-align: right; overflow-wrap: anywhere; }
+
+  .profile-forms { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  .admin-card { background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-lg); padding: 2rem; box-shadow: var(--shadow-card); }
+  .card-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.75rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+  .header-icon { width: 42px; height: 42px; border-radius: 12px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .icon-cyan { background: rgba(6, 182, 212, 0.15); color: #22d3ee; }
+  .card-title { font-family: var(--font-heading); font-size: 1.25rem; font-weight: 700; color: var(--color-text-main); }
+  .card-desc { font-size: 0.85rem; color: var(--color-text-muted); margin-top: 0.2rem; }
+
+  .form-group { display: flex; flex-direction: column; gap: .4rem; margin-bottom: 1rem; }
+  .field-label { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 600; color: var(--color-text-main); }
+  .required { color: #f87171; }
+  .label-hint { font-size: 0.72rem; font-weight: 400; color: var(--color-text-dim); }
+
+  input[type="text"], input[type="email"], input[type="tel"], input[type="password"], input[type="file"] { width: 100%; box-sizing: border-box; background: #0d121f; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); padding: 0.75rem 1rem; color: var(--color-text-main); font-family: var(--font-body); font-size: 0.9rem; transition: all 0.2s ease; outline: none; }
+  input[type="file"] { padding: .6rem .75rem; font-size: .8rem; color: var(--color-text-muted); }
+  input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+  input[type="file"]::file-selector-button { margin-right: .75rem; padding: .4rem .8rem; color: var(--color-text-main); background: rgba(255, 255, 255, .06); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
+
+  .form-actions { display: flex; gap: 1rem; margin-top: 1rem; padding-top: 1.25rem; border-top: 1px solid var(--color-border); }
+
+  .btn-primary, .btn-secondary { font-family: var(--font-body); font-weight: 600; border: none; border-radius: var(--border-radius-sm); display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s ease; cursor: pointer; padding: 0.75rem 1.25rem; }
+  .btn-primary { background: var(--color-primary); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+  .btn-secondary { background: var(--color-surface-subtle); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+  .btn-secondary:hover:not(:disabled) { color: var(--color-text-main); background: #242f45; }
+  .btn-secondary:disabled { opacity: .6; cursor: not-allowed; }
+</style>

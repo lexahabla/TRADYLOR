@@ -23,6 +23,10 @@ pnpm-debug.log*
 # credenciales de redes de afiliación (panel admin)
 src/data/credentials.json
 
+# usuarios y avatares del backend (se generan en el volumen, nunca en el repo)
+src/data/users.json
+src/data/avatars/
+
 # volumen de datos de producción (montado en /app/data dentro del contenedor).
 # NUNCA debe subirse al repo desde el contenedor: contiene products.json,
 # credentials.json (secretos) y las imágenes del volumen.
