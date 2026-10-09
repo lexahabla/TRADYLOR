@@ -43,18 +43,24 @@ chown -R node:node "$DATA_DIR" "$CLIENT_IMAGES_DIR" 2>/dev/null || true
 # Desarrollo remoto en el contenedor (git + opencode desde la Terminal de Easy Panel)
 # ------------------------------------------------------------------------------
 # EasyPanel construye la imagen SIN historial git (el contexto no incluye .git).
-# Si falta, se recrea el repo desde el remoto público para poder commitear y
-# pushear desde la consola. El working tree de la imagen es efímero: lo que no
-# se haga `git push` se pierde en el siguiente redeploy.
+# Si falta, se recrea el repo desde el remoto (repo privado: usa GITHUB_PAT) para
+# poder commitear y pushear desde la consola. El working tree de la imagen es
+# efímero: lo que no se haga `git push` se pierde en el siguiente redeploy.
+if [ -n "${GITHUB_PAT:-}" ]; then
+  GIT_REMOTE="https://x-access-token:${GITHUB_PAT}@github.com/lexahabla/TRADYLOR.git"
+else
+  GIT_REMOTE="https://github.com/lexahabla/TRADYLOR.git"
+fi
+
 if [ ! -d /app/.git ] && command -v git >/dev/null 2>&1; then
   echo "[entrypoint] /app/.git ausente: recreando historial desde GitHub"
   if git -C /app init -q \
-     && git -C /app remote add origin https://github.com/lexahabla/TRADYLOR.git \
+     && git -C /app remote add origin "$GIT_REMOTE" \
      && git -C /app fetch -q --depth 1 origin main \
      && git -C /app reset -q --hard FETCH_HEAD; then
     echo "[entrypoint] Repo git listo en /app (rama main)"
   else
-    echo "[entrypoint] Aviso: no se pudo inicializar el repo git"
+    echo "[entrypoint] Aviso: no se pudo inicializar el repo git (¿GITHUB_PAT definido en Easy Panel?)"
     rm -rf /app/.git 2>/dev/null || true
   fi
 fi
@@ -66,10 +72,9 @@ if command -v git >/dev/null 2>&1; then
   if [ -n "${GIT_USER_NAME:-}" ]; then git config --global user.name "$GIT_USER_NAME"; fi
   if [ -n "${GIT_USER_EMAIL:-}" ]; then git config --global user.email "$GIT_USER_EMAIL"; fi
 
-  # Push a GitHub con PAT opcional (env GITHUB_PAT en Easy Panel).
-  # El token queda sólo en .git/config DENTRO del contenedor, nunca en la imagen.
-  if [ -n "${GITHUB_PAT:-}" ]; then
-    git remote set-url origin "https://x-access-token:${GITHUB_PAT}@github.com/lexahabla/TRADYLOR.git" || true
+  # Remote con PAT para push (el token queda sólo en .git/config DEL contenedor).
+  if [ -n "${GITHUB_PAT:-}" ] && [ -d /app/.git ]; then
+    git -C /app remote set-url origin "$GIT_REMOTE" || true
   fi
 fi
 
