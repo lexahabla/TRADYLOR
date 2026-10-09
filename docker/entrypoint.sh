@@ -54,10 +54,12 @@ fi
 
 if [ ! -d /app/.git ] && command -v git >/dev/null 2>&1; then
   echo "[entrypoint] /app/.git ausente: recreando historial desde GitHub"
-  if git -C /app init -q \
+  if git -C /app init -q -b main \
      && git -C /app remote add origin "$GIT_REMOTE" \
      && git -C /app fetch -q --depth 1 origin main \
      && git -C /app reset -q --hard FETCH_HEAD; then
+    # Doble seguro: el volumen montado en /app/data jamás entra en un commit.
+    echo "/data/" >> /app/.git/info/exclude
     echo "[entrypoint] Repo git listo en /app (rama main)"
   else
     echo "[entrypoint] Aviso: no se pudo inicializar el repo git (¿GITHUB_PAT definido en Easy Panel?)"
