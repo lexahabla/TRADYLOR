@@ -140,3 +140,28 @@ Notas:
 - Variables: `TRADYLOR_DATA_DIR=/app/data`, `TRADYLOR_IMAGES_DIR=/app/data/images/products`,
   `PORT=4321`, `HOST=0.0.0.0`. Opcionales de desarrollo: `GITHUB_PAT`,
   `GIT_USER_NAME`, `GIT_USER_EMAIL`.
+
+## 9. Auto-deploy (webhook de GitHub)
+
+Cada `git push origin main` dispara un redespliegue automático. El webhook lo creó
+la IA manualmente vía API porque el botón *Enable Auto Deploy* de Easy Panel no
+funciona si el token de GitHub conectado en **Settings → GitHub** carece del
+permiso `admin:repo_hook` (PAT clásico) o *Webhooks: Read and write* (fine-grained).
+
+- Webhook del repo: evento `push`, `content_type: json`, apuntando a la
+  **Deployment Trigger URL** de la app (`http://<ip-vps>:3000/api/deploy/<token>`).
+- La URL del trigger (con su token) está en Easy Panel → app → pestaña
+  *Deployments*. Con un `POST` a esa URL también se puede forzar un deploy
+  manual desde cualquier sitio (CI, scripts).
+- Si algún día se regenera el token de deploy de la app, el webhook hay que
+  actualizarlo (o borrarlo y crearlo de nuevo con el token nuevo).
+
+## 10. Nota: estáticos (favicon, CSS, imágenes) y el symlink `dist/server/client`
+
+El Dockerfile crea `dist/server/client → ../client` tras el build. No es un
+adorno: en Astro 4.16 + `@astrojs/node` 8.3, `serve-static.js` resuelve el
+directorio de clientes con `import.meta.url`, pero el bundler coloca ese módulo
+en `dist/server/chunks/` y la ruta resuelta queda en `dist/server/client`
+(inexistente). Sin el symlink, **todos** los ficheros estáticos devuelven 404
+(favicon, CSS de `_astro`, imágenes de producto). Quitarlo solo si se actualiza
+Astro y se comprueba que `/favicon.svg` responde 200.
