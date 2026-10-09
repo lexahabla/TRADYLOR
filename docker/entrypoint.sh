@@ -39,6 +39,32 @@ done
 # El volumen puede llegar con propietario root desde Easy Panel: lo reclama node.
 chown -R node:node "$DATA_DIR" "$CLIENT_IMAGES_DIR" 2>/dev/null || true
 
+# ------------------------------------------------------------------------------
+# Desarrollo remoto en el contenedor (git + opencode desde la Terminal de Easy Panel)
+# ------------------------------------------------------------------------------
+# El working tree vive en la imagen: lo que no se haga `git push` se pierde en
+# el siguiente redeploy.
+if command -v git >/dev/null 2>&1; then
+  git config --global safe.directory /app || true
+
+  # Identidad de commit (opcional, definir en Easy Panel)
+  if [ -n "${GIT_USER_NAME:-}" ]; then git config --global user.name "$GIT_USER_NAME"; fi
+  if [ -n "${GIT_USER_EMAIL:-}" ]; then git config --global user.email "$GIT_USER_EMAIL"; fi
+
+  # Push a GitHub con PAT opcional (env GITHUB_PAT en Easy Panel).
+  # El token queda sólo en .git/config DENTRO del contenedor, nunca en la imagen.
+  if [ -n "${GITHUB_PAT:-}" ]; then
+    git remote set-url origin "https://x-access-token:${GITHUB_PAT}@github.com/lexahabla/TRADYLOR.git" || true
+  fi
+fi
+
+# Persiste la config de opencode (proveedor/key de IA) en el volumen para que
+# sobreviva a los redeploy. Best effort: si la ruta cambia, se reconecta a mano.
+if [ -d "$DATA_DIR" ] && [ ! -e "$HOME/.config/opencode" ]; then
+  mkdir -p "$DATA_DIR/opencode-config" "$HOME/.config"
+  ln -s "$DATA_DIR/opencode-config" "$HOME/.config/opencode" 2>/dev/null || true
+fi
+
 echo "[entrypoint] DATA_DIR=$DATA_DIR | IMAGES_DIR=$IMAGES_DIR | PORT=${PORT:-4321} | HOST=$HOST"
 
 cd /app

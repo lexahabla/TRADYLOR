@@ -4,7 +4,6 @@ dist
 .astro
 
 # Git e IDE
-.git
 .gitignore
 .kilo
 .idea
@@ -18,12 +17,12 @@ src/data/credentials.json
 # Imágenes generadas en local (se regeneran en el volumen de producción)
 public/images/products
 
-# Artefactos y documentación no necesarios para compilar
+# Artefactos locales no necesarios para compilar ni para desarrollar
 *.zip
 *.log
-docs
-AGENTS.md
-opencode.json
 test-navigation.ps1
 Dockerfile
 nixpacks.toml
+
+# NOTA: .git, AGENTS.md, opencode.json y docs SÍ van a la imagen:
+# permiten desarrollar con opencode/git dentro del contenedor de Easy Panel.

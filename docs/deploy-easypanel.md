@@ -89,7 +89,39 @@ open https://tradylor.com/admin             # login con ADMIN_USERNAME/PASSWORD
 Comprobar también: portada con productos, ficha `/producto/<slug>`, salida `/out/<id>`
 y un alta desde el panel admin (escribe en el volumen).
 
-## 6. Comandos de mantenimiento
+## 6. Desarrollo remoto con opencode (Terminal de Easy Panel)
+
+La imagen incluye **`git`** y **`opencode`** (agente de IA en la terminal) para seguir
+desarrollando sin salir de Easy Panel:
+
+1. Easy Panel → app → pestaña **Terminal**.
+2. Arranca el agente: `opencode` (la imagen ya lleva `AGENTS.md` y `opencode.json`,
+   así que arranca con el contexto del proyecto).
+3. Conecta la IA la primera vez: `/connect` dentro del TUI → pega la key. La config
+   se guarda en el volumen (`/app/data/opencode-config`) y **sobrevive a los redeploy**.
+4. Trabaja en `/app` como en local (hay `node_modules`, puedes usar `npm run dev`, etc.).
+
+**Publicar cambios** (el código vive en la imagen: si no lo haces push, se pierde en el
+siguiente redeploy):
+
+```bash
+git add -A
+git commit -m "descripcion"
+git push origin main        # requiere GITHUB_PAT en Environment
+```
+
+El push a `main` dispara el auto-redeploy y tus cambios quedan publicados.
+
+Notas:
+
+- Sin `GITHUB_PAT` puedes commitear, pero no pushear desde el contenedor.
+- La identidad de commit sale de `GIT_USER_NAME` / `GIT_USER_EMAIL` (Environment).
+- Si dentro haces `npm run build`, el servidor sigue con el build anterior en memoria:
+  reinicia el servicio desde Easy Panel (o push) para servirlo.
+- Ojo con editar `dist/` o tocar el volumen a mano: los JSON canónicos son los de
+  `/app/data`.
+
+## 7. Comandos de mantenimiento
 
 - **Actualizar**: `git push origin main` → Easy Panel reconstruye la imagen y reinicia.
   Los datos siguen en el volumen.
@@ -97,12 +129,14 @@ y un alta desde el panel admin (escribe en el volumen).
 - **Consola Node**: `npm run build` ya está hecho dentro de la imagen; para una sesión
   interactiva usar el terminal de Easy Panel (`node dist/server/entry.mjs`).
 
-## 7. Estructura del contenedor
+## 8. Estructura del contenedor
 
-- `Dockerfile` (un solo stage, `node:22-bookworm-slim`): `npm ci` + `npm run build`
-  y arranque del SSR con `node dist/server/entry.mjs`.
-- `docker/entrypoint.sh`: siembra datos, sincroniza imágenes, baja a usuario `node`
-  (vía `gosu`) y lanza el servidor.
+- `Dockerfile` (un solo stage, `node:22-bookworm-slim`): `npm ci` + `npm run build`,
+  `git`/`openssh-client`/`curl` y `opencode` (agente IA), arranque del SSR con
+  `node dist/server/entry.mjs`.
+- `docker/entrypoint.sh`: siembra datos, sincroniza imágenes, configura git
+  (PAT opcional), baja a usuario `node` (vía `gosu`) y lanza el servidor.
 - `nixpacks.toml`: alternativa de build pack (mismo `start`).
 - Variables: `TRADYLOR_DATA_DIR=/app/data`, `TRADYLOR_IMAGES_DIR=/app/data/images/products`,
-  `PORT=4321`, `HOST=0.0.0.0`.
+  `PORT=4321`, `HOST=0.0.0.0`. Opcionales de desarrollo: `GITHUB_PAT`,
+  `GIT_USER_NAME`, `GIT_USER_EMAIL`.

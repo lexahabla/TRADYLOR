@@ -43,7 +43,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `credentials.json` - Credenciales de redes de afiliación (glitch: NO se sube a git)
 - `public/images/products/` - Imágenes de producto generadas con IA (ignorado en git)
 - Despliegue
-  - `Dockerfile` - Imagen de producción de un solo stage (build SSR en Node 22 Bookworm)
+  - `Dockerfile` - Imagen de producción de un solo stage (build SSR en Node 22 Bookworm,
+    con `git` + `opencode` para desarrollo remoto desde la Terminal de Easy Panel)
   - `docker/entrypoint.sh` - Siembra datos en el volumen y arranca el SSR
   - `.dockerignore` - Excluye `.env`, `credentials.json`, `node_modules`, etc.
   - `nixpacks.toml` - Build pack alternativo (Easy Panel / Railway)
@@ -60,6 +61,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   `OPENAI_API_KEY` / `FLUX_API_KEY` para las imágenes; selectores
   `TEXT_AI_PROVIDER` y `IMAGE_AI_PROVIDER` (`openai` por defecto, `anthropic`/`flux`).
 - Claves de cada red de afiliación (opcional; activa los conectores correspondientes).
+- **Desarrollo remoto (opcional)**: `GITHUB_PAT` (push a GitHub desde el contenedor),
+  `GIT_USER_NAME` / `GIT_USER_EMAIL` (identidad de commit).
 - **Producción (contenedor)**: `TRADYLOR_DATA_DIR` (por defecto `src/data`, en prod
   `/app/data` = volumen), `TRADYLOR_IMAGES_DIR` (imágenes IA), `PORT=4321`, `HOST=0.0.0.0`.
 
@@ -79,6 +82,9 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   `analytics.json`, `credentials.json` y las imágenes IA. Sin volumen se pierden al redeploy.
 - Las variables (sobre todo `ADMIN_USERNAME`/`ADMIN_PASSWORD` y `TRADYLOR_API_TOKEN`)
   se configuran en Easy Panel, nunca en el repositorio.
+- **Desarrollo dentro del contenedor**: la Terminal de Easy Panel trae `git` + `opencode`
+  (config y contexto en la imagen/volumen). Los cambios sólo se publican con
+  `git push origin main` (requiere `GITHUB_PAT`); ver `docs/deploy-easypanel.md` §6.
 - `/api/health` y `/api/redirect` son públicos a propósito (healthcheck y salida de afiliado).
 
 ## Convenciones y avisos

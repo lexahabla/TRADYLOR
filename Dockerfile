@@ -8,12 +8,17 @@ FROM node:22-bookworm-slim
 WORKDIR /app
 
 # ca-certificates: TLS en el build (npm) y en runtime (redes de afiliación).
+# git/openssh/curl: desarrollo remoto dentro del contenedor (commit/push).
 # gosu: el entrypoint entra como root (reclama el volumen) y baja a `node`.
 # Si gosu no estuviera disponible, el contenedor sigue arrancando como root.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates \
+ && apt-get install -y --no-install-recommends ca-certificates git openssh-client curl \
  && (apt-get install -y --no-install-recommends gosu || true) \
  && rm -rf /var/lib/apt/lists/*
+
+# opencode: agente de desarrollo en la terminal (se usa desde la Terminal de
+# Easy Panel). La config/keys se persisten en el volumen vía entrypoint.
+RUN npm install -g opencode-ai && npm cache clean --force
 
 # Dependencias (incluye devDependencies: astro, tailwind, etc.)
 COPY package*.json ./
