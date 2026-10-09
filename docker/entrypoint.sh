@@ -42,8 +42,23 @@ chown -R node:node "$DATA_DIR" "$CLIENT_IMAGES_DIR" 2>/dev/null || true
 # ------------------------------------------------------------------------------
 # Desarrollo remoto en el contenedor (git + opencode desde la Terminal de Easy Panel)
 # ------------------------------------------------------------------------------
-# El working tree vive en la imagen: lo que no se haga `git push` se pierde en
-# el siguiente redeploy.
+# EasyPanel construye la imagen SIN historial git (el contexto no incluye .git).
+# Si falta, se recrea el repo desde el remoto público para poder commitear y
+# pushear desde la consola. El working tree de la imagen es efímero: lo que no
+# se haga `git push` se pierde en el siguiente redeploy.
+if [ ! -d /app/.git ] && command -v git >/dev/null 2>&1; then
+  echo "[entrypoint] /app/.git ausente: recreando historial desde GitHub"
+  if git -C /app init -q \
+     && git -C /app remote add origin https://github.com/lexahabla/TRADYLOR.git \
+     && git -C /app fetch -q --depth 1 origin main \
+     && git -C /app reset -q --hard FETCH_HEAD; then
+    echo "[entrypoint] Repo git listo en /app (rama main)"
+  else
+    echo "[entrypoint] Aviso: no se pudo inicializar el repo git"
+    rm -rf /app/.git 2>/dev/null || true
+  fi
+fi
+
 if command -v git >/dev/null 2>&1; then
   git config --global safe.directory /app || true
 
