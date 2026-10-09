@@ -81,23 +81,30 @@ if command -v git >/dev/null 2>&1; then
   fi
 fi
 
-# Persiste la key de IA de opencode (~/.config/opencode/auth.json) en el volumen
-# para que sobreviva a los redeploys. El directorio que traiga la imagen se migra
-# al volumen (sin pisar lo que ya haya) y se sustituye por un symlink.
-OPENCODE_CONFIG_DIR="${HOME:-/root}/.config/opencode"
-OPENCODE_CONFIG_PERSIST="$DATA_DIR/opencode-config"
-if [ -d "$OPENCODE_CONFIG_DIR" ] && [ ! -L "$OPENCODE_CONFIG_DIR" ]; then
-  mkdir -p "$OPENCODE_CONFIG_PERSIST"
-  cp -a "$OPENCODE_CONFIG_DIR/." "$OPENCODE_CONFIG_PERSIST/" 2>/dev/null || true
-  rm -rf "$OPENCODE_CONFIG_DIR"
-  ln -s "$OPENCODE_CONFIG_PERSIST" "$OPENCODE_CONFIG_DIR" 2>/dev/null || true
-elif [ ! -e "$OPENCODE_CONFIG_DIR" ]; then
-  mkdir -p "$OPENCODE_CONFIG_PERSIST" "$HOME/.config"
-  ln -s "$OPENCODE_CONFIG_PERSIST" "$OPENCODE_CONFIG_DIR" 2>/dev/null || true
-fi
-if [ -L "$OPENCODE_CONFIG_DIR" ]; then
-  echo "[entrypoint] opencode config -> $OPENCODE_CONFIG_PERSIST (persistente en el volumen)"
-fi
+# Persiste la configuración de opencode en el volumen para que las credenciales
+# de IA (auth.json) y su estado sobrevivan a los redeploys:
+#   ~/.config/opencode    -> $DATA_DIR/opencode-config  (config y plugins)
+#   ~/.local/share/opencode -> $DATA_DIR/opencode-data   (auth.json de /connect, log, db)
+# El directorio que traiga la imagen se migra al volumen (sin pisar lo que ya
+# haya) y se sustituye por un symlink.
+persist_dir() {
+  _src="$1"
+  _dst="$2"
+  if [ -d "$_src" ] && [ ! -L "$_src" ]; then
+    mkdir -p "$_dst"
+    cp -a "$_src/." "$_dst/" 2>/dev/null || true
+    rm -rf "$_src"
+    ln -s "$_dst" "$_src" 2>/dev/null || true
+  elif [ ! -e "$_src" ]; then
+    mkdir -p "$_dst"
+    ln -s "$_dst" "$_src" 2>/dev/null || true
+  fi
+  if [ -L "$_src" ]; then
+    echo "[entrypoint] opencode $_src -> $_dst (persistente en el volumen)"
+  fi
+}
+persist_dir "${HOME:-/root}/.config/opencode" "$DATA_DIR/opencode-config"
+persist_dir "${HOME:-/root}/.local/share/opencode" "$DATA_DIR/opencode-data"
 
 echo "[entrypoint] DATA_DIR=$DATA_DIR | IMAGES_DIR=$IMAGES_DIR | PORT=${PORT:-4321} | HOST=$HOST"
 
