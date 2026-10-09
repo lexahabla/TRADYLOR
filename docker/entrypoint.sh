@@ -81,11 +81,22 @@ if command -v git >/dev/null 2>&1; then
   fi
 fi
 
-# Persiste la config de opencode (proveedor/key de IA) en el volumen para que
-# sobreviva a los redeploy. Best effort: si la ruta cambia, se reconecta a mano.
-if [ -d "$DATA_DIR" ] && [ ! -e "$HOME/.config/opencode" ]; then
-  mkdir -p "$DATA_DIR/opencode-config" "$HOME/.config"
-  ln -s "$DATA_DIR/opencode-config" "$HOME/.config/opencode" 2>/dev/null || true
+# Persiste la key de IA de opencode (~/.config/opencode/auth.json) en el volumen
+# para que sobreviva a los redeploys. El directorio que traiga la imagen se migra
+# al volumen (sin pisar lo que ya haya) y se sustituye por un symlink.
+OPENCODE_CONFIG_DIR="${HOME:-/root}/.config/opencode"
+OPENCODE_CONFIG_PERSIST="$DATA_DIR/opencode-config"
+if [ -d "$OPENCODE_CONFIG_DIR" ] && [ ! -L "$OPENCODE_CONFIG_DIR" ]; then
+  mkdir -p "$OPENCODE_CONFIG_PERSIST"
+  cp -a "$OPENCODE_CONFIG_DIR/." "$OPENCODE_CONFIG_PERSIST/" 2>/dev/null || true
+  rm -rf "$OPENCODE_CONFIG_DIR"
+  ln -s "$OPENCODE_CONFIG_PERSIST" "$OPENCODE_CONFIG_DIR" 2>/dev/null || true
+elif [ ! -e "$OPENCODE_CONFIG_DIR" ]; then
+  mkdir -p "$OPENCODE_CONFIG_PERSIST" "$HOME/.config"
+  ln -s "$OPENCODE_CONFIG_PERSIST" "$OPENCODE_CONFIG_DIR" 2>/dev/null || true
+fi
+if [ -L "$OPENCODE_CONFIG_DIR" ]; then
+  echo "[entrypoint] opencode config -> $OPENCODE_CONFIG_PERSIST (persistente en el volumen)"
 fi
 
 echo "[entrypoint] DATA_DIR=$DATA_DIR | IMAGES_DIR=$IMAGES_DIR | PORT=${PORT:-4321} | HOST=$HOST"
