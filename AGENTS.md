@@ -1,5 +1,37 @@
 # Tradylor - Instrucciones para agentes de IA
 
+## Flujo de trabajo (obligatorio, cualquier modelo)
+
+Estas reglas aplican **siempre**, sea cual sea el modelo activo en opencode
+(Mimo, u otro seleccionado con `/model`): las carga opencode vía `opencode.json`
+al abrir el proyecto, y el agente debe seguirlas en cada sesión.
+
+1. **El desarrollo se hace en local** (Antigravity + opencode en la copia del
+   repo del PC). No desarrollar dentro del contenedor de producción: su working
+   tree es efímero y se pierde en el siguiente redeploy.
+2. **Al terminar cada tarea con cambios de código: publicarlos** sin pedir
+   permiso adicional (el dueño del proyecto lo tiene configurado así):
+
+   ```bash
+   git add -A
+   git commit -m "descripcion breve del cambio"
+   git push origin main
+   ```
+
+3. El push a `main` **despliega automáticamente** en https://tradylor.com
+   (webhook de GitHub → Easy Panel → build Docker, ~2-3 minutos). No hace falta
+   tocar ningún panel. Para confirmar que el deploy terminó:
+   `curl https://tradylor.com/api/health` debe devolver `"status":"ok"`.
+4. **Los datos NO van en git**: productos, categorías, analytics,
+   `credentials.json` e imágenes IA viven en el **volumen** del servidor
+   (`/app/data`). Es normal que falten ficheros en `src/data/` o en
+   `public/images/` respecto al entorno de producción: no intentar "regenerarlos"
+   ni "arreglar" nada por eso.
+5. **Nunca subir secretos**: `.env`, `credentials.json` y claves están en
+   `.gitignore`; no forzar su inclusión ni pegar claves en el código.
+6. Tras un push, si el deploy falla (webhook/health), informar al usuario en vez
+   de reintentar deploys a ciegas.
+
 ## Qué es este proyecto
 
 Tradylor es un portal de recomendación, curación y comparativas de productos de alta
