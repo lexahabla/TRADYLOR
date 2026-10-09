@@ -39,10 +39,14 @@ done
 # El volumen puede llegar con propietario root desde Easy Panel: lo reclama node.
 chown -R node:node "$DATA_DIR" "$CLIENT_IMAGES_DIR" 2>/dev/null || true
 
-echo "[entrypoint] DATA_DIR=$DATA_DIR | IMAGES_DIR=$IMAGES_DIR | PORT=${PORT:-3000} | HOST=$HOST"
+echo "[entrypoint] DATA_DIR=$DATA_DIR | IMAGES_DIR=$IMAGES_DIR | PORT=${PORT:-4321} | HOST=$HOST"
 
 cd /app
-if [ "$(id -u)" = "0" ]; then
-  exec su-exec node:node node dist/server/entry.mjs
+if [ "$#" -eq 0 ]; then
+  set -- node dist/server/entry.mjs
 fi
-exec node dist/server/entry.mjs
+
+if [ "$(id -u)" = "0" ] && command -v gosu >/dev/null 2>&1; then
+  exec gosu node:node "$@"
+fi
+exec "$@"

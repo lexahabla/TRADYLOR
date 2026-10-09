@@ -43,7 +43,7 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `credentials.json` - Credenciales de redes de afiliación (glitch: NO se sube a git)
 - `public/images/products/` - Imágenes de producto generadas con IA (ignorado en git)
 - Despliegue
-  - `Dockerfile` - Imagen multi-stage de producción (build + runtime Node 20 Alpine)
+  - `Dockerfile` - Imagen de producción de un solo stage (build SSR en Node 22 Bookworm)
   - `docker/entrypoint.sh` - Siembra datos en el volumen y arranca el SSR
   - `.dockerignore` - Excluye `.env`, `credentials.json`, `node_modules`, etc.
   - `nixpacks.toml` - Build pack alternativo (Easy Panel / Railway)
@@ -61,7 +61,7 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   `TEXT_AI_PROVIDER` y `IMAGE_AI_PROVIDER` (`openai` por defecto, `anthropic`/`flux`).
 - Claves de cada red de afiliación (opcional; activa los conectores correspondientes).
 - **Producción (contenedor)**: `TRADYLOR_DATA_DIR` (por defecto `src/data`, en prod
-  `/app/data` = volumen), `TRADYLOR_IMAGES_DIR` (imágenes IA), `PORT=3000`, `HOST=0.0.0.0`.
+  `/app/data` = volumen), `TRADYLOR_IMAGES_DIR` (imágenes IA), `PORT=4321`, `HOST=0.0.0.0`.
 
 ## Comandos
 
@@ -73,7 +73,7 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 
 ## Despliegue en producción (Easy Panel / Hostinger)
 
-- Build pack **Dockerfile**, puerto **3000**, healthcheck **`/api/health`**, rama `main`
+- Build pack **Dockerfile**, puerto **4321**, healthcheck **`/api/health`**, rama `main`
   con auto-redeploy. Guía completa en `docs/deploy-easypanel.md`.
 - **Volumen obligatorio en `/app/data`**: ahí viven `products.json`, `categories.json`,
   `analytics.json`, `credentials.json` y las imágenes IA. Sin volumen se pierden al redeploy.

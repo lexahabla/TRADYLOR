@@ -2,7 +2,7 @@
 
 Tradylor corre como **SSR de Astro (adaptador Node standalone)** dentro de un contenedor
 Docker. En Easy Panel la app se sirve detrás de su proxy (HTTPS con Let's Encrypt) y
-escucha en el puerto **3000**.
+escucha en el puerto **4321**.
 
 ## 1. Crear la aplicación en Easy Panel
 
@@ -10,7 +10,7 @@ escucha en el puerto **3000**.
 2. Repositorio: `https://github.com/lexahabla/TRADYLOR.git`, rama `main`.
 3. **Build pack**: `Dockerfile` (recomendado). Si se elige Nixpacks, usa `nixpacks.toml`
    (mismo build y mismo `start`), pero sin volumen configurado los datos no persisten.
-4. **Puerto / port detection**: `3000`.
+4. **Puerto / port detection**: `4321`.
 5. **Health check path**: `/api/health` (devuelve `200` con JSON `status: ok`).
 6. Activar **Auto redeploy** (o desplegar a mano tras cada `git push`).
 
@@ -54,7 +54,7 @@ TRADYLOR_API_TOKEN=<token largo para la API pública v1>
 
 # Recomendado
 HOST=0.0.0.0
-PORT=3000
+PORT=4321
 N8N_CLICK_WEBHOOK_URL=https://<tu-n8n>/webhook/tradylor-click   # opcional
 
 # IA (alta de productos con texto + imagen)
@@ -99,9 +99,10 @@ y un alta desde el panel admin (escribe en el volumen).
 
 ## 7. Estructura del contenedor
 
-- `Dockerfile` (multi-stage): `builder` ejecuta `npm ci` + `npm run build`;
-  `runner` instala sólo dependencias de producción y arranca el SSR.
-- `docker/entrypoint.sh`: siembra datos, sincroniza imágenes y lanza el servidor.
+- `Dockerfile` (un solo stage, `node:22-bookworm-slim`): `npm ci` + `npm run build`
+  y arranque del SSR con `node dist/server/entry.mjs`.
+- `docker/entrypoint.sh`: siembra datos, sincroniza imágenes, baja a usuario `node`
+  (vía `gosu`) y lanza el servidor.
 - `nixpacks.toml`: alternativa de build pack (mismo `start`).
 - Variables: `TRADYLOR_DATA_DIR=/app/data`, `TRADYLOR_IMAGES_DIR=/app/data/images/products`,
-  `PORT=3000`, `HOST=0.0.0.0`.
+  `PORT=4321`, `HOST=0.0.0.0`.

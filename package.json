@@ -5,9 +5,9 @@
   "description": "Tradylor - Portal de recomendación, curación y comparativas de productos de alta conversión",
   "scripts": {
     "dev": "astro dev",
-    "start": "node ./dist/server/entry.mjs",
     "build": "astro build",
-    "preview": "astro preview",
+    "start": "node ./dist/server/entry.mjs",
+    "preview": "astro preview --host 0.0.0.0 --port 4321",
     "astro": "astro"
   },
   "dependencies": {
