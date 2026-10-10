@@ -656,8 +656,10 @@ export const POST: APIRoute = async ({ request }) => {
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+          'Accept':
+            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
           'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+          'Accept-Encoding': 'gzip, deflate, br',
           'Cache-Control': 'no-cache',
           'Pragma': 'no-cache',
           'Sec-Ch-Ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
@@ -668,6 +670,7 @@ export const POST: APIRoute = async ({ request }) => {
           'Sec-Fetch-Site': 'none',
           'Sec-Fetch-User': '?1',
           'Upgrade-Insecure-Requests': '1',
+          'Connection': 'keep-alive',
         },
         signal: controller.signal,
         redirect: 'follow',
@@ -699,6 +702,36 @@ export const POST: APIRoute = async ({ request }) => {
       }
     } finally {
       clearTimeout(timeout);
+    }
+
+    // Detección de página de bloqueo / CAPTCHA (Amazon y otras tiendas). Aunque
+    // el status sea 200, si el HTML es un verificador de humanos no hay datos que
+    // extraer: se trata como bloqueo para no devolver una ficha vacía como "éxito".
+    const botPageRe = /validatecaptcha|robot check|enter the characters you see below|introduce los caracteres que ves|api-services-support@amazon|captcha-form|g-recaptcha|hcaptcha/i;
+    if (!fetchBlockedOrFailed && html && botPageRe.test(html)) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          scraped: false,
+          message:
+            'La tienda (Amazon) bloqueó la extracción automática desde el servidor con un verificador de humanos. Rellena los datos manualmente o usa un enlace de otra tienda.',
+          data: {
+            title: '',
+            description: '',
+            price: null,
+            originalPrice: null,
+            image: '',
+            category: 'Tecnología',
+            merchant: detectedMerchant,
+            affiliateUrl: parsedUrl.href,
+            badge: '',
+            verdict: '',
+            pros: [],
+            cons: ['Amazon protege su página contra bots de servidor; completar a manual es la opción fiable.'],
+          },
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
     }
 
     // SI LA PÁGINA BLOQUEA EL SCRAPING O FALLA LA RED:
