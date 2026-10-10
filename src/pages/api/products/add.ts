@@ -129,6 +129,17 @@ function extractMetadata(html: string, targetUrl: string) {
 
   // 2. IMAGEN
   let image = findMetaContent('og:image', 'og:image:secure_url', 'twitter:image', 'twitter:image:src');
+  // Galería: colección de imágenes del producto (se deduplica y limpia al final).
+  const gallerySet = new Set<string>();
+  const addGallery = (url?: string | null) => {
+    if (!url || typeof url !== 'string') return;
+    let u = decodeHtmlEntities(url).trim();
+    if (!/^https?:\/\//i.test(u)) return;
+    // Omite miniaturas de tracking/1x1 y logos de reseñas.
+    if (/sprite|icon|logo|spacer|blank|pixel|transparent|1x1/i.test(u)) return;
+    gallerySet.add(u);
+  };
+  addGallery(image);
   
   // 3. DESCRIPCIÓN
   let description = findMetaContent('og:description', 'twitter:description', 'description');
@@ -164,6 +175,14 @@ function extractMetadata(html: string, targetUrl: string) {
             if (!image && obj.image) {
               const schemaImg = Array.isArray(obj.image) ? obj.image[0] : obj.image;
               image = typeof schemaImg === 'string' ? schemaImg : schemaImg?.url || '';
+            }
+            // Galería: recolecta todas las imágenes del schema (si hay varias).
+            if (Array.isArray(obj.image)) {
+              for (const img of obj.image) {
+                addGallery(typeof img === 'string' ? img : img?.url);
+              }
+            } else if (typeof obj.image === 'string') {
+              addGallery(obj.image);
             }
             if (!description && obj.description) description = cleanExtractedText(obj.description);
             if (obj.offers) {
@@ -246,14 +265,28 @@ function extractMetadata(html: string, targetUrl: string) {
           (secondSize[0] * secondSize[1]) - (firstSize[0] * firstSize[1])
         )[0];
         if (largestImage?.[0]) image = largestImage[0];
-      } catch {
-        // Amazon puede entregar el atributo incompleto; se usa el fallback siguiente.
+        // La galería se lleva las URLs de mayor resolución de cada imagen.
+        for (const [url, size] of Object.entries(imageMap)) {
+          if (Array.isArray(size) && size[0] >= 500) addGallery(url);
+        }
+      } catch {        // Amazon puede entregar el atributo incompleto; se usa el fallback siguiente.
       }
     }
 
     if (!image) {
       const amazonImageMatch = html.match(/data-old-hires=["']([^"']+)["']/i);
       if (amazonImageMatch?.[1]) image = decodeHtmlEntities(amazonImageMatch[1]);
+    }
+
+    // Vistas distintas del producto: Amazon las guarda en ImageBlockAtlas/colorImages
+    // (cada objeto tiene "large"/"initial" con una foto diferente: frente, dorso, laterales…).
+    const colorImagesMatch = html.match(/"colorImages"\s*:\s*\[([\s\S]*?)\]\s*(?:,|\})/i);
+    if (colorImagesMatch?.[1]) {
+      const largeUrls = colorImagesMatch[1].match(/"large"\s*:\s*"([^"]+)"/gi) || [];
+      for (const raw of largeUrls) {
+        const urlMatch = raw.match(/"large"\s*:\s*"([^"]+)"/i);
+        if (urlMatch?.[1]) addGallery(urlMatch[1].replace(/\\u002F/g, '/').replace(/\\\//g, '/'));
+      }
     }
   }
 
@@ -367,9 +400,29 @@ function extractMetadata(html: string, targetUrl: string) {
     }
   }
 
+  // Galería final: la imagen principal la encabeza, sin duplicados y limitada.
+  // En Amazon, la misma foto aparece a varios tamaños (mismo ID antes de "._AC_",
+  // "_SX", etc.), así que se deduplica por ID de imagen para quedarse con vistas distintas.
+  const imageIdOf = (url: string): string => {
+    const m = url.match(/\/images\/([IOr])\/([A-Za-z0-9%]+)\./i);
+    return m ? `${m[1]}/${m[2]}` : url.split('?')[0];
+  };
+  const seenIds = new Set<string>();
+  const finalGallery: string[] = [];
+  const pushUnique = (url: string) => {
+    if (!url || finalGallery.length >= 10) return;
+    const id = imageIdOf(url);
+    if (seenIds.has(id)) return;
+    seenIds.add(id);
+    finalGallery.push(url);
+  };
+  if (image) pushUnique(image);
+  for (const url of gallerySet) pushUnique(url);
+
   return {
     title: title || '',
     image: image || '',
+    gallery: finalGallery,
     description: description || '',
     price: price !== null ? price : undefined,
     originalPrice: originalPrice !== null && price !== null && originalPrice > price ? originalPrice : undefined,
@@ -506,6 +559,12 @@ export const POST: APIRoute = async ({ request }) => {
         price: Number(dataToSave.price) || 0,
         originalPrice: dataToSave.originalPrice ? Number(dataToSave.originalPrice) : undefined,
         image: String(dataToSave.image || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=800&auto=format&fit=crop').trim(),
+        gallery: Array.isArray(dataToSave.gallery)
+          ? dataToSave.gallery
+              .map((g: unknown) => String(g ?? '').trim())
+              .filter((g: string) => /^https?:\/\//i.test(g) || g.startsWith('/images/'))
+              .slice(0, 10)
+          : undefined,
         category: resolveCategory(dataToSave.category, `${dataToSave.title} ${dataToSave.description || ''}`),
         merchant: String(dataToSave.merchant || detectMerchantFromUrl(dataToSave.affiliateUrl)).trim(),
         affiliateUrl: String(dataToSave.affiliateUrl).trim(),
@@ -691,6 +750,7 @@ export const POST: APIRoute = async ({ request }) => {
           price: extracted.price ?? null,
           originalPrice: extracted.originalPrice ?? extracted.price ?? null,
           image: extracted.image,
+          gallery: extracted.gallery ?? [],
           category: extracted.category,
           merchant: finalMerchant,
           affiliateUrl: effectiveUrl,

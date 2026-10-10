@@ -10,6 +10,8 @@ export interface Product {
   price: number;
   originalPrice?: number;
   image: string;
+  /** Galería de imágenes del producto (la primera suele ser la principal). */
+  gallery?: string[];
   category: string;
   merchant: string;
   affiliateUrl: string;

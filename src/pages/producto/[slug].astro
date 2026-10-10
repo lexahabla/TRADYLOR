@@ -159,8 +159,25 @@ const productSchema = {
             class="main-product-image object-contain p-4 bg-slate-50/50 rounded-xl"
             width="600"
             height="450"
+            id="mainProductImg"
           />
         </div>
+
+        {/* Galería de imágenes: miniaturas que cambian la imagen principal */}
+        {Array.isArray(product.gallery) && product.gallery.length > 1 && (
+          <div class="product-thumbs" id="productThumbs">
+            {product.gallery.map((img, i) => (
+              <button
+                type="button"
+                class={`product-thumb${i === 0 ? ' is-active' : ''}`}
+                data-full={img}
+                aria-label={`Ver imagen ${i + 1} de ${product.gallery.length}`}
+              >
+                <img src={img} alt="" loading="lazy" />
+              </button>
+            ))}
+          </div>
+        )}
 
         <!-- Trust signals bajo la imagen -->
         <div class="trust-row">
@@ -665,6 +682,23 @@ const productSchema = {
   </div>
 </Layout>
 
+<script>
+  // Galería de imágenes: cambiar la imagen principal al pulsar una miniatura.
+  document.addEventListener('DOMContentLoaded', () => {
+    const mainImg = document.getElementById('mainProductImg');
+    const thumbs = document.getElementById('productThumbs');
+    if (!mainImg || !thumbs) return;
+    thumbs.addEventListener('click', (e) => {
+      const btn = e.target.closest('.product-thumb');
+      if (!btn) return;
+      const full = btn.getAttribute('data-full');
+      if (full) mainImg.src = full;
+      thumbs.querySelectorAll('.product-thumb').forEach((t) => t.classList.remove('is-active'));
+      btn.classList.add('is-active');
+    });
+  });
+</script>
+
 <style>
   /* =====================================================
      BASE DE LA PÁGINA
@@ -744,6 +778,37 @@ const productSchema = {
   }
   .gallery-wrapper:hover .main-product-image {
     transform: scale(1.02);
+  }
+  .product-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+  .product-thumb {
+    width: 64px;
+    height: 64px;
+    padding: 0;
+    border: 2px solid #e2e8f0;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    background: #fff;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .product-thumb:hover {
+    transform: translateY(-2px);
+    border-color: #f59e0b;
+  }
+  .product-thumb.is-active {
+    border-color: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+  }
+  .product-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
   }
   .discount-badge-lg {
     position: absolute;

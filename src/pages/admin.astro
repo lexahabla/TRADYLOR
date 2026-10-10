@@ -220,6 +220,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
           <div class="form-row">
             <div class="form-group full-width">
+              <label class="field-label">
+                <span>Galería de Imágenes</span>
+                <span class="label-hint">Pulsa una miniatura para fijarla como imagen principal</span>
+              </label>
+              <div id="galleryThumbs" class="gallery-thumbs"></div>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group full-width">
               <label for="prodDescription" class="field-label">Descripción Técnica Concisa</label>
               <textarea id="prodDescription" rows="3"></textarea>
             </div>
@@ -757,6 +767,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     // Extras del último scrape (specs, marca, valoración, reseñas) para el enriquecimiento local.
     let scrapeExtras = { brand: '', rating: null, reviewsCount: null, specs: null };
+    // Galería de imágenes del último scrape (la primera es la principal).
+    let scrapedGallery = [];
+    const galleryThumbs = document.getElementById('galleryThumbs');
 
     // Preview
     const previewImg = document.getElementById('previewImg');
@@ -806,6 +819,35 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (!field || value === undefined || value === null) return;
       field.value = String(value);
       field.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    // Renderiza la galería de imágenes como miniaturas seleccionables.
+    // La imagen principal (prodImage) se marca con un borde destacado.
+    function renderGallery() {
+      if (!galleryThumbs) return;
+      galleryThumbs.innerHTML = '';
+      const current = (prodImage.value || '').trim();
+      if (!scrapedGallery.length) {
+        galleryThumbs.innerHTML = '<span class="gallery-empty">Sin galería. Analiza un enlace para cargar las imágenes.</span>';
+        return;
+      }
+      scrapedGallery.forEach((url) => {
+        const thumb = document.createElement('button');
+        thumb.type = 'button';
+        thumb.className = 'gallery-thumb' + (url === current ? ' is-main' : '');
+        thumb.title = 'Fijar como imagen principal';
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = 'Imagen del producto';
+        img.loading = 'lazy';
+        thumb.appendChild(img);
+        thumb.addEventListener('click', () => {
+          setProductField(prodImage, url);
+          renderGallery();
+          updatePreview();
+        });
+        galleryThumbs.appendChild(thumb);
+      });
     }
 
     // Actualiza la vista previa interactiva en tiempo real
@@ -954,6 +996,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             specs: data.specs && typeof data.specs === 'object' ? data.specs : null,
           };
 
+          // Galería de imágenes: la principal encabeza, luego el resto de vistas.
+          scrapedGallery = Array.isArray(data.gallery) && data.gallery.length
+            ? data.gallery
+            : (data.image ? [data.image] : []);
+          renderGallery();
+
           updatePreview();
 
           if (result.scraped) {
@@ -1027,6 +1075,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           merchant: prodMerchant.value || 'Amazon',
           affiliateUrl: prodAffiliateUrl.value.trim(),
           image: prodImage.value.trim(),
+          gallery: scrapedGallery.length ? scrapedGallery : undefined,
           badge: prodBadge.value.trim() || undefined,
           description: prodDescription.value.trim(),
           verdict: prodVerdict.value.trim() || undefined,
@@ -2758,6 +2807,48 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     font-size: 0.72rem;
     font-weight: 400;
     color: var(--color-text-dim);
+  }
+
+  .gallery-thumbs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.3rem;
+  }
+
+  .gallery-thumb {
+    width: 72px;
+    height: 72px;
+    padding: 0;
+    border: 2px solid var(--color-border, #333);
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    background: #fff;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+
+  .gallery-thumb:hover {
+    transform: translateY(-2px);
+    border-color: var(--color-accent, #f59e0b);
+  }
+
+  .gallery-thumb.is-main {
+    border-color: var(--color-accent, #f59e0b);
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+  }
+
+  .gallery-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .gallery-empty {
+    font-size: 0.78rem;
+    color: var(--color-text-dim);
+    font-style: italic;
   }
 
   .form-actions {
