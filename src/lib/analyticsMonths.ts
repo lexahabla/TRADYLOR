@@ -256,7 +256,7 @@ export function computeFuentes(events: AnalyticsEvent[]): FuenteMes[] {
   return FUENTES.map(({ id, etiqueta }) => {
     const sesiones = counts.get(id) ?? 0;
     return { id, etiqueta, sesiones, porcentaje: redondear((sesiones / total) * 100) };
-  }).filter((fuente) => fuente.sesiones > 0 || fuente.id === 'directo');
+  });
 }
 
 /** Serie diaria de visitas de un conjunto de eventos. */
