@@ -170,8 +170,9 @@ export async function enrichProductText(input: {
 
   if (provider === 'groq') {
     // Groq es compatible con la API de OpenAI; nivel gratuito para desarrolladores.
-    // Usamos GPT OSS (de OpenAI, alojado en Groq): disponible en el plan free.
-    const model = env('GROQ_MODEL') || 'openai/gpt-oss-120b';
+    // Modelo fijo openai/gpt-oss-120b (disponible en el plan free; llama-3.3-70b es Enterprise).
+    // Se ignora GROQ_MODEL para evitar modelos no disponibles en el nivel gratuito.
+    const model = 'openai/gpt-oss-120b';
     const response = await fetchWithTimeout(
       'https://api.groq.com/openai/v1/chat/completions',
       {
