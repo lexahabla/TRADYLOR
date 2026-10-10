@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import { DATA_DIR, dataFile } from './paths';
 import {
   createCategory as createCategoryResult,
   getCategories as getRichCategories,
@@ -19,23 +17,6 @@ export const AFFILIATE_PROVIDERS = [
   { id: 'etsy', name: 'Etsy Affiliate Program', description: 'Productos y enlaces de Etsy.', envKeys: ['ETSY_API_KEY', 'ETSY_AFFILIATE_ID'] },
 ] as const;
 
-const ANALYTICS_PATH = dataFile('analytics.json');
-
-function readJson<T>(filePath: string, fallback: T): T {
-  try {
-    if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as T;
-  } catch (error) {
-    console.error('[Admin dashboard] Error leyendo datos:', error);
-  }
-  return fallback;
-}
-
-function writeJson(filePath: string, value: unknown): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf-8');
-}
-
-/** Nombres de categoría (esquema legado string[] consumido por el panel). */
 export function getCategories(): string[] {
   return getRichCategories().map((category) => category.name);
 }
@@ -54,23 +35,6 @@ export function removeCategory(nameOrSlug: string): string[] {
   const target = getCategoryBySlug(nameOrSlug) ?? getRichCategories().find((c) => c.name === nameOrSlug);
   if (target) removeCategoryBySlug(target.slug);
   return getCategories();
-}
-
-export interface AnalyticsEvent {
-  type: 'page_view' | 'product_click' | 'cart_add' | 'outbound_click';
-  productId?: string;
-  path?: string;
-  createdAt: string;
-}
-
-export function getAnalyticsEvents(): AnalyticsEvent[] {
-  return readJson<AnalyticsEvent[]>(ANALYTICS_PATH, []);
-}
-
-export function recordAnalyticsEvent(event: AnalyticsEvent): void {
-  const events = getAnalyticsEvents();
-  events.push(event);
-  writeJson(ANALYTICS_PATH, events.slice(-10000));
 }
 
 export function getMarketingTools() {

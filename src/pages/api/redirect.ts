@@ -26,7 +26,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { findCatalogProduct, productKey } from '../../lib/catalog';
-import { recordAnalyticsEvent } from '../../lib/adminDashboard';
+import { trackEvent } from '../../lib/analytics';
 import { buildPurchaseUrl } from '../../lib/purchaseUrl';
 
 function redirectHeaders(location: string): Headers {
@@ -94,17 +94,13 @@ export const GET: APIRoute = async ({ url }) => {
 
   const destination = buildPurchaseUrl(product) || product.affiliateUrl;
 
-  // 1. Registro del clic de salida (síncrono, fichero local de analítica).
-  try {
-    recordAnalyticsEvent({
-      type: 'outbound_click',
-      productId: product.id,
-      path: source ? `/${source}` : undefined,
-      createdAt: new Date().toISOString(),
-    });
-  } catch (error) {
-    console.warn('[Redirect] No se pudo registrar el evento de analítica:', error);
-  }
+  // 1. Registro del clic de salida (cola en memoria, se persiste en segundo plano).
+  trackEvent({
+    type: 'outbound_click',
+    productId: product.id,
+    path: source ? `/${source}` : undefined,
+    source: 'redirect',
+  });
 
   // 2. Telemetría opcional hacia n8n (fire-and-forget, no bloquea la salida).
   const webhookUrl = process.env.N8N_CLICK_WEBHOOK_URL ?? import.meta.env.N8N_CLICK_WEBHOOK_URL;

@@ -1,23 +1,68 @@
+/**
+ * TRADYLOR — Endpoint de analítica (beacons de cliente).
+ * Acepta POST con acciones del usuario (compras, clics de contacto, añadidos
+ * al carrito, salidas a tienda...) y las registra en la cola de
+ * src/lib/analytics.ts, que persiste en segundo plano sin bloquear.
+ */
 import type { APIRoute } from 'astro';
-import { recordAnalyticsEvent } from '../../../lib/adminDashboard';
+import { trackEvent, type TipoEvento } from '../../../lib/analytics';
 
 export const prerender = false;
 
+const ALLOWED_TYPES: readonly TipoEvento[] = [
+  'page_view',
+  'product_click',
+  'cart_add',
+  'outbound_click',
+  'purchase',
+  'contact_click',
+];
+
+const MAX_BODY_BYTES = 4_096;
+
 export const POST: APIRoute = async ({ request }) => {
+  const contentType = request.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    return json({ success: false, message: 'Se esperaba application/json.' }, 415);
+  }
+
+  const contentLength = Number(request.headers.get('content-length') ?? '0');
+  if (contentLength > MAX_BODY_BYTES) {
+    return json({ success: false, message: 'Cuerpo demasiado grande.' }, 413);
+  }
+
   try {
-    const body = await request.json();
-    const allowedTypes = ['page_view', 'product_click', 'cart_add', 'outbound_click'] as const;
-    if (!allowedTypes.includes(body.type)) {
-      return new Response(JSON.stringify({ success: false, message: 'Tipo de evento no válido.' }), { status: 400 });
+    const body: unknown = await request.json();
+    const payload = (body ?? {}) as Record<string, unknown>;
+
+    if (
+      typeof payload.type !== 'string' ||
+      !ALLOWED_TYPES.includes(payload.type as TipoEvento)
+    ) {
+      return json({ success: false, message: 'Tipo de evento no válido.' }, 400);
     }
-    recordAnalyticsEvent({
-      type: body.type,
-      productId: typeof body.productId === 'string' ? body.productId.slice(0, 160) : undefined,
-      path: typeof body.path === 'string' ? body.path.slice(0, 300) : undefined,
-      createdAt: new Date().toISOString(),
-    });
-    return new Response(JSON.stringify({ success: true }), { status: 202, headers: { 'Content-Type': 'application/json' } });
+
+    const productId =
+      typeof payload.productId === 'string' && payload.productId.trim()
+        ? payload.productId.trim().slice(0, 160)
+        : undefined;
+    const path =
+      typeof payload.path === 'string' && payload.path.trim()
+        ? payload.path.slice(0, 300)
+        : undefined;
+
+    // Cola en memoria + persistencia diferida: respuesta inmediata.
+    trackEvent({ type: payload.type as TipoEvento, productId, path, source: 'api' });
+
+    return json({ success: true }, 202);
   } catch {
-    return new Response(JSON.stringify({ success: false, message: 'Petición inválida.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+    return json({ success: false, message: 'Petición inválida.' }, 400);
   }
 };
+
+function json(body: Record<string, unknown>, status: number): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  });
+}
