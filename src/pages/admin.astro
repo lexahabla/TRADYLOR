@@ -1088,7 +1088,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     //     Rellena el formulario en modo vista previa: quien decide guarda.
     // =========================================================================
     // Enriquecer con IA (usado por el botón y de forma automática tras analizar un enlace).
-    const runAiEnrich = async ({ auto = false }: { auto?: boolean } = {}) => {
+    const runAiEnrich = async ({ auto = false } = {}) => {
       const title = (prodTitle.value || '').trim();
       if (!title) {
         if (!auto) {
