@@ -141,13 +141,21 @@ export const POST: APIRoute = async ({ request }) => {
             category: body?.category,
             url: body?.url,
           });
-          // Overlay: la IA mejora lo local, pero no borra datos que ya había.
+          // Overlay: la IA mejora lo local, pero NO borra datos con campos vacíos.
+          const pick = (aiValue: any, localValue: any) => {
+            if (typeof aiValue === 'string') return aiValue.trim() ? aiValue : localValue;
+            if (Array.isArray(aiValue)) return aiValue.length ? aiValue : localValue;
+            return aiValue ?? localValue;
+          };
           enrichment = {
             ...localEnrichment,
             ...aiEnrichment,
+            description: pick(aiEnrichment.description, localEnrichment.description),
+            verdict: pick(aiEnrichment.verdict, localEnrichment.verdict),
+            category: pick(aiEnrichment.category, localEnrichment.category),
             specs: { ...(localEnrichment.specs ?? {}), ...(aiEnrichment.specs ?? {}) },
-            pros: aiEnrichment.pros?.length ? aiEnrichment.pros : localEnrichment.pros,
-            cons: aiEnrichment.cons?.length ? aiEnrichment.cons : localEnrichment.cons,
+            pros: pick(aiEnrichment.pros, localEnrichment.pros),
+            cons: pick(aiEnrichment.cons, localEnrichment.cons),
           };
           textStatus = 'ok';
         } catch (error: any) {
