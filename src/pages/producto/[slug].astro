@@ -161,6 +161,13 @@ const productSchema = {
             height="450"
             id="mainProductImg"
           />
+          {Array.isArray(product.gallery) && product.gallery.length > 1 && (
+            <>
+              <button type="button" id="galleryPrev" class="gallery-nav gallery-nav-prev" aria-label="Imagen anterior">‹</button>
+              <button type="button" id="galleryNext" class="gallery-nav gallery-nav-next" aria-label="Imagen siguiente">›</button>
+              <span id="galleryCounter" class="gallery-counter">1 / {product.gallery.length}</span>
+            </>
+          )}
         </div>
 
         {/* Galería de imágenes: miniaturas que cambian la imagen principal */}
@@ -683,19 +690,37 @@ const productSchema = {
 </Layout>
 
 <script>
-  // Galería de imágenes: cambiar la imagen principal al pulsar una miniatura.
+  // Galería de imágenes: miniaturas + flechas laterales (carrusel).
   document.addEventListener('DOMContentLoaded', () => {
     const mainImg = document.getElementById('mainProductImg');
     const thumbs = document.getElementById('productThumbs');
-    if (!mainImg || !thumbs) return;
-    thumbs.addEventListener('click', (e) => {
-      const btn = e.target.closest('.product-thumb');
-      if (!btn) return;
-      const full = btn.getAttribute('data-full');
-      if (full) mainImg.src = full;
-      thumbs.querySelectorAll('.product-thumb').forEach((t) => t.classList.remove('is-active'));
-      btn.classList.add('is-active');
-    });
+    const prevBtn = document.getElementById('galleryPrev');
+    const nextBtn = document.getElementById('galleryNext');
+    const counter = document.getElementById('galleryCounter');
+    if (!mainImg) return;
+
+    const thumbBtns = thumbs ? Array.from(thumbs.querySelectorAll('.product-thumb')) : [];
+    const gallery = thumbBtns.map((b) => b.getAttribute('data-full')).filter(Boolean);
+    let index = 0;
+
+    function show(i) {
+      if (!gallery.length) return;
+      index = (i + gallery.length) % gallery.length;
+      mainImg.src = gallery[index];
+      thumbBtns.forEach((t, ti) => t.classList.toggle('is-active', ti === index));
+      if (counter) counter.textContent = `${index + 1} / ${gallery.length}`;
+    }
+
+    if (thumbs) {
+      thumbs.addEventListener('click', (e) => {
+        const btn = e.target.closest('.product-thumb');
+        if (!btn) return;
+        const i = thumbBtns.indexOf(btn);
+        if (i >= 0) show(i);
+      });
+    }
+    if (prevBtn) prevBtn.addEventListener('click', () => show(index - 1));
+    if (nextBtn) nextBtn.addEventListener('click', () => show(index + 1));
   });
 </script>
 
@@ -810,6 +835,45 @@ const productSchema = {
     object-fit: contain;
     padding: 5px;
     display: block;
+  }
+  .gallery-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.55);
+    color: #fff;
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s;
+    z-index: 3;
+  }
+  .gallery-nav:hover {
+    background: rgba(15, 23, 42, 0.8);
+  }
+  .gallery-nav-prev { left: 12px; }
+  .gallery-nav-next { right: 12px; }
+  .gallery-counter {
+    position: absolute;
+    bottom: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.6);
+    color: #fff;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 9999px;
+    z-index: 3;
+    pointer-events: none;
   }
   .discount-badge-lg {
     position: absolute;
