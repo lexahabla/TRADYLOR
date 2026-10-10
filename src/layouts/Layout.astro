@@ -1112,11 +1112,57 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           });
         }
 
-        fetch('/api/analytics/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'page_view', path: window.location.pathname }) }).catch(() => {});
-        document.addEventListener('click', (event) => {
-          const outboundLink = event.target.closest('a[href^="/out/"]');
-          if (outboundLink) fetch('/api/analytics/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'outbound_click', path: window.location.pathname }) }).catch(() => {});
+        // --- Analítica: sesión, visitor id, duración y beacons ---------------
+        const crearId = () =>
+          (typeof crypto !== 'undefined' && 'randomUUID' in crypto)
+            ? crypto.randomUUID()
+            : `${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+        const leerId = (storage, key) => {
+          try { return storage.getItem(key) || null; } catch { return null; }
+        };
+        const guardarId = (storage, key, value) => {
+          try { storage.setItem(key, value); } catch { /* modo privado */ }
+        };
+        let analyticsSessionId = leerId(sessionStorage, 'tradylor_sid');
+        if (!analyticsSessionId) {
+          analyticsSessionId = crearId();
+          guardarId(sessionStorage, 'tradylor_sid', analyticsSessionId);
+        }
+        let analyticsVisitorId = leerId(localStorage, 'tradylor_vid');
+        if (!analyticsVisitorId) {
+          analyticsVisitorId = crearId();
+          guardarId(localStorage, 'tradylor_vid', analyticsVisitorId);
+        }
+        const analyticsStartedAt = Date.now();
+        const enviarEvento = (payload) => {
+          fetch('/api/analytics/event', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            keepalive: true,
+            body: JSON.stringify({
+              sessionId: analyticsSessionId,
+              visitorId: analyticsVisitorId,
+              referrer: document.referrer || '',
+              path: window.location.pathname,
+              ...payload,
+            }),
+          }).catch(() => {});
+        };
+        enviarEvento({ type: 'page_view' });
+        let duracionEnviada = false;
+        const enviarDuracion = () => {
+          if (duracionEnviada) return;
+          const durationMs = Date.now() - analyticsStartedAt;
+          if (durationMs < 1500) return;
+          duracionEnviada = true;
+          enviarEvento({ type: 'page_duration', durationMs });
+        };
+        window.addEventListener('pagehide', enviarDuracion);
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'hidden') enviarDuracion();
         });
+        // Las salidas a tienda NO se envían desde aquí: las registra /api/redirect
+        // (fuente única, sin doble conteo con el beacon de cliente).
 
         const backToTop = document.querySelector('.back-to-top');
         if (backToTop) {

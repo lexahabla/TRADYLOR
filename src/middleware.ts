@@ -8,7 +8,7 @@
  * respuesta del servidor no se bloquean.
  */
 import type { MiddlewareHandler } from 'astro';
-import { trackProductVisit } from './lib/analytics';
+import { clientIpFrom, trackProductVisit } from './lib/analytics';
 import { findCatalogProduct } from './lib/catalog';
 
 /** /producto/<slug> o /productos/<slug>, con o sin barra final. */
@@ -24,7 +24,8 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
         const slug = decodeURIComponent(match[2]);
         // Sólo fichas reales del catálogo; nunca lanza ni bloquea.
         if (findCatalogProduct(slug)) {
-          trackProductVisit(slug, context.url.pathname);
+          // La IP sólo se usa para descartar el ordenador de desarrollo.
+          trackProductVisit(slug, context.url.pathname, clientIpFrom(context.request));
         }
       }
     }

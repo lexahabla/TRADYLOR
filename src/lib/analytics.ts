@@ -1,20 +1,23 @@
 /**
  * ==============================================================================
- * TRADYLOR — ANALITICA REAL DE PRODUCTOS
+ * TRADYLOR — ANALITICA REAL
  * ==============================================================================
- * Registro y persistencia de visitas y eventos de interaccion (clics y
- * conversiones) por producto, con escritura en segundo plano:
+ * Registro y persistencia de visitas y eventos de interacción con contexto de
+ * sesión (sessionId / visitorId / referrer / duración), con escritura en
+ * segundo plano:
  *
  *   - trackProductVisit(): la llama el middleware en cada ficha de producto.
  *   - trackEvent():        la llaman los endpoints (/api/analytics/event y
- *                          /api/redirect) y cualquier beacon de cliente.
+ *                          /api/redirect) y los beacons de cliente.
  *
  * Modelo no bloqueante: registrar un evento SÓLO actualiza una cola en
  * memoria (O(1), sin I/O); la persistencia en analytics.json se hace de
- * forma diferida (debounce ~750 ms), atomica (tmp + rename) y con el timer
- * "unref" para no mantener vivo el proceso. El formato del fichero sigue
- * siendo un array de eventos (maximo 10.000) compatible con el historial
- * existente.
+ * forma diferida (debounce ~750 ms), atómica (tmp + rename) y con el timer
+ * "unref" para no mantener vivo el proceso.
+ *
+ * La IP nunca se guarda: se usa SÓLO en el momento del registro para
+ * descartar las IPs de trabajo definidas en ANALYTICS_IGNORE_IPS (por
+ * defecto el ordenador de desarrollo).
  * ==============================================================================
  */
 import fs from 'node:fs';
@@ -24,6 +27,7 @@ import { DATA_DIR, dataFile } from './paths';
 /** Tipos de evento admitidos (compatibles con los beacons de Layout.astro). */
 export type TipoEvento =
   | 'page_view'
+  | 'page_duration'
   | 'product_click'
   | 'cart_add'
   | 'outbound_click'
@@ -37,6 +41,16 @@ export interface AnalyticsEvent {
   path?: string;
   /** Quién registró el evento (informativo). */
   source?: 'middleware' | 'api' | 'redirect' | 'cliente';
+  /** Identificador de sesión de navegador (sessionStorage). */
+  sessionId?: string;
+  /** Identificador persistente de navegador (localStorage). */
+  visitorId?: string;
+  /** Referente que trajo la visita (document.referrer). */
+  referrer?: string;
+  /** Milisegundos de permanencia en la página (evento page_duration). */
+  durationMs?: number;
+  /** Importe del pedido cuando el beacon de compra lo incluye. */
+  amount?: number;
   createdAt: string;
 }
 
@@ -44,10 +58,45 @@ const ANALYTICS_PATH = dataFile('analytics.json');
 const MAX_EVENTS = 10_000;
 const FLUSH_DELAY_MS = 750;
 
+/** IPs que no se contabilizan (ordenador de desarrollo). */
+const DEFAULT_IGNORED_IPS = ['26.95.41.235'];
+
 let cache: AnalyticsEvent[] | null = null;
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 let dirty = false;
 let flushing = false;
+const flushListeners: Array<() => void> = [];
+
+/** IPs ignoradas: variable ANALYTICS_IGNORE_IPS (coma) o la lista por defecto. */
+export function getIgnoredIps(): string[] {
+  const raw = process.env.ANALYTICS_IGNORE_IPS ?? '';
+  const list = raw
+    .split(',')
+    .map((ip) => ip.trim())
+    .filter(Boolean);
+  return list.length ? list : DEFAULT_IGNORED_IPS;
+}
+
+/** Extrae la IP del cliente (proxy reverso primero). */
+export function clientIpFrom(request: Request): string | undefined {
+  const forwarded = request.headers.get('x-forwarded-for');
+  if (forwarded) {
+    const first = forwarded.split(',')[0]?.trim();
+    if (first) return first;
+  }
+  return request.headers.get('x-real-ip')?.trim() || request.headers.get('cf-connecting-ip')?.trim() || undefined;
+}
+
+/** ¿Hay que descartar esta IP (ordenador de desarrollo / red interna)? */
+export function isIgnoredIp(ip: string | undefined): boolean {
+  if (!ip) return false;
+  return getIgnoredIps().includes(ip);
+}
+
+/** Registra un callback que se ejecuta tras cada persistencia (p.ej. agregados mensuales). */
+export function onAnalyticsFlush(listener: () => void): void {
+  flushListeners.push(listener);
+}
 
 /** Carga (una sola vez) el historial de analytics.json en memoria. */
 function load(): AnalyticsEvent[] {
@@ -76,8 +125,10 @@ function load(): AnalyticsEvent[] {
  */
 export function trackEvent(
   event: Omit<AnalyticsEvent, 'createdAt'> & { createdAt?: string },
+  options: { ip?: string } = {},
 ): void {
   try {
+    if (isIgnoredIp(options.ip)) return; // IP de desarrollo: no se contabiliza
     const events = load();
     events.push({ ...event, createdAt: event.createdAt ?? new Date().toISOString() });
     if (events.length > MAX_EVENTS) events.splice(0, events.length - MAX_EVENTS);
@@ -89,8 +140,8 @@ export function trackEvent(
 }
 
 /** Visita a una ficha de producto (la llama el middleware de Astro). */
-export function trackProductVisit(productId: string, pathname: string): void {
-  trackEvent({ type: 'page_view', productId, path: pathname, source: 'middleware' });
+export function trackProductVisit(productId: string, pathname: string, ip?: string): void {
+  trackEvent({ type: 'page_view', productId, path: pathname, source: 'middleware' }, { ip });
 }
 
 /** Copia en memoria de todos los eventos (para el panel admin). */
@@ -136,6 +187,21 @@ export function getProductAnalytics(): ProductoMetricas[] {
   return [...byProduct.values()].sort((a, b) => b.visitas - a.visitas);
 }
 
+/** Vacia por completo la medición (eventos en memoria y en disco). */
+export function resetAnalytics(): void {
+  cache = [];
+  dirty = false;
+  if (pendingTimer) {
+    clearTimeout(pendingTimer);
+    pendingTimer = null;
+  }
+  try {
+    fs.writeFileSync(ANALYTICS_PATH, JSON.stringify([], null, 2), 'utf-8');
+  } catch (error) {
+    console.warn('[Analytics] No se pudo vaciar analytics.json:', error);
+  }
+}
+
 function scheduleFlush(): void {
   if (pendingTimer) return;
   pendingTimer = setTimeout(() => {
@@ -157,6 +223,13 @@ export async function flushAnalytics(): Promise<void> {
     await fsp.writeFile(tmpPath, snapshot, 'utf-8');
     await fsp.rename(tmpPath, ANALYTICS_PATH);
     dirty = false;
+    for (const listener of flushListeners) {
+      try {
+        listener();
+      } catch (error) {
+        console.warn('[Analytics] Listener de persistencia falló:', error);
+      }
+    }
   } catch (error) {
     console.warn('[Analytics] No se pudo persistir analytics.json:', error);
   } finally {

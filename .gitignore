@@ -49,3 +49,7 @@ public/images/products/
 
 # jetbrains setting folder
 .idea/
+
+# analitica real (eventos en bruto y agregados mensuales: viven en el volumen)
+src/data/analytics.json
+src/data/analytics-months.json

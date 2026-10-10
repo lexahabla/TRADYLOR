@@ -2,67 +2,153 @@
 /**
  * TRADYLOR — Cuerpo del dashboard "Tráfico y Ventas"
  * Se muestra dentro de /admin (sección analytics) y también en la ruta propia
- * /admin/trafico-ventas/. Datos de ejemplo (mockAnalytics) + tooltips del
- * glosario src/data/metricasGlosario.ts.
+ * /admin/trafico-ventas/. Datos reales del tracker propio (analytics.ts +
+ * analyticsMonths.ts) + histórico mensual consultable + exportación XLSX +
+ * reinicio de medición. Tooltips del glosario src/data/metricasGlosario.ts.
  */
 import MetricCard from './MetricCard.astro';
 import SimpleBarChart from './SimpleBarChart.astro';
 import ProductMetricsTable from './ProductMetricsTable.astro';
 import {
-  evolucionVisitas,
-  fuentesTrafico,
   formatValor,
-  metricasGlobales,
-  productos,
-  recomendacionesIA,
+  type FormatoValor,
+  type ProductoMetrico,
 } from '../../data/mockAnalytics';
 import { getMetrica } from '../../data/metricasGlosario';
+import { getIgnoredIps } from '../../lib/analytics';
+import { getMesesAnalitica, getPeriodoDashboard } from '../../lib/analyticsMonths';
 
 const fmtNum = new Intl.NumberFormat('es-ES');
 
-const barrasFuentes = fuentesTrafico.map((fuente) => ({
+const periodoQuery = Number(Astro.url.searchParams.get('dias'));
+const DIAS = [30, 90, 365].includes(periodoQuery) ? periodoQuery : 30;
+const periodo = getPeriodoDashboard(DIAS);
+const resumen = getMesesAnalitica();
+const ignoredIps = getIgnoredIps();
+
+const variacion = (actual: number, anterior: number): number => {
+  if (!anterior) return actual > 0 ? 100 : 0;
+  return ((actual - anterior) / anterior) * 100;
+};
+
+interface FichaMetrica {
+  etiqueta: string;
+  valor: number;
+  formato: FormatoValor;
+  variacion: number;
+  favorable: boolean;
+  glosarioId: string;
+}
+
+const m = periodo.actual;
+const a = periodo.anterior;
+const fichas: FichaMetrica[] = [
+  { etiqueta: 'Sesiones', valor: m.sesiones, formato: 'numero', variacion: variacion(m.sesiones, a.sesiones), favorable: true, glosarioId: 'sesiones' },
+  { etiqueta: 'Usuarios únicos', valor: m.usuariosUnicos, formato: 'numero', variacion: variacion(m.usuariosUnicos, a.usuariosUnicos), favorable: true, glosarioId: 'usuarios-unicos' },
+  { etiqueta: 'Páginas / sesión', valor: m.paginasPorSesion, formato: 'decimal', variacion: variacion(m.paginasPorSesion, a.paginasPorSesion), favorable: true, glosarioId: 'paginas-por-sesion' },
+  { etiqueta: 'Permanencia media', valor: m.permanenciaMediaSeg, formato: 'duracion', variacion: variacion(m.permanenciaMediaSeg, a.permanenciaMediaSeg), favorable: true, glosarioId: 'permanencia' },
+  { etiqueta: 'Tasa de rebote', valor: m.rebotePct, formato: 'percent', variacion: variacion(m.rebotePct, a.rebotePct), favorable: m.rebotePct <= a.rebotePct, glosarioId: 'tasa-rebote' },
+  { etiqueta: 'Visitas', valor: m.visitas, formato: 'numero', variacion: variacion(m.visitas, a.visitas), favorable: true, glosarioId: 'visualizaciones-producto' },
+  { etiqueta: 'Salidas a tienda', valor: m.salidas, formato: 'numero', variacion: variacion(m.salidas, a.salidas), favorable: true, glosarioId: 'friccion-venta' },
+  { etiqueta: 'Tasa de conversión', valor: m.conversionPct, formato: 'percent', variacion: variacion(m.conversionPct, a.conversionPct), favorable: true, glosarioId: 'tasa-conversion' },
+  { etiqueta: 'Valor medio del pedido', valor: m.aov, formato: 'moneda', variacion: variacion(m.aov, a.aov), favorable: true, glosarioId: 'aov' },
+];
+
+const COLORES_FUENTE: Record<string, string> = {
+  organico: '#38bdf8',
+  directo: '#34d399',
+  social: '#a78bfa',
+  referido: '#fbbf24',
+  email: '#fb7185',
+  otros: '#94a3b8',
+};
+const barrasFuentes = periodo.fuentes.map((fuente) => ({
   etiqueta: fuente.etiqueta,
   valor: fuente.porcentaje,
   texto: `${fuente.porcentaje.toFixed(1).replace('.', ',')}% · ${fmtNum.format(fuente.sesiones)} ses.`,
-  color: fuente.color,
+  color: COLORES_FUENTE[fuente.id] ?? COLORES_FUENTE.otros,
 }));
 
-const barrasTop = productos.slice(0, 5).map((producto, index) => ({
+const evolucion = periodo.evolucion;
+const barrasTop = periodo.topProductos.slice(0, 5).map((producto, index) => ({
   etiqueta: producto.titulo,
   valor: producto.visitas,
   texto: fmtNum.format(producto.visitas),
   color: index < 3 ? '#38bdf8' : '#475569',
 }));
 
-const maxVisitas = Math.max(...evolucionVisitas.map((punto) => punto.visitas));
-const totalVisitas = evolucionVisitas.reduce((suma, punto) => suma + punto.visitas, 0);
-const maxDia = evolucionVisitas.reduce((mejor, punto) => (punto.visitas > mejor.visitas ? punto : mejor), evolucionVisitas[0]);
+const maxVisitas = evolucion.length ? Math.max(...evolucion.map((punto) => punto.visitas)) : 0;
+const totalVisitas = evolucion.reduce((suma, punto) => suma + punto.visitas, 0);
+const maxDia = evolucion.length
+  ? evolucion.reduce((mejor, punto) => (punto.visitas > mejor.visitas ? punto : mejor), evolucion[0])
+  : { etiqueta: '—', visitas: 0 };
 
-const tiposRecomendacion: Record<string, { label: string; clase: string }> = {
-  oportunidad: { label: 'Oportunidad', clase: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300' },
-  alerta: { label: 'Alerta', clase: 'border-rose-500/30 bg-rose-500/15 text-rose-300' },
-  info: { label: 'Consejo', clase: 'border-sky-500/30 bg-sky-500/15 text-sky-300' },
-};
+const productosTabla: ProductoMetrico[] = periodo.topProductos.map((producto) => {
+  const estado: ProductoMetrico['estado'] =
+    producto.tasa >= 4 ? 'alta' : producto.tasa >= 2.5 ? 'estable' : 'friccion';
+  return {
+    id: producto.productId,
+    titulo: producto.titulo,
+    red: 'Tracker propio',
+    visitas: producto.visitas,
+    conversiones: producto.salidas,
+    tasaConversion: producto.tasa,
+    estado,
+    nota: `${fmtNum.format(producto.salidas)} salidas · ${fmtNum.format(producto.compras)} compras`,
+  };
+});
+
+const sinDatos = m.visitas === 0 && m.sesiones === 0;
+const enCurso = resumen.meses[0]?.month ?? '';
 ---
 
 <div class="flex flex-col gap-9">
   <!-- 1. Resumen global -->
   <section class="flex flex-col gap-4">
-    <div class="flex flex-wrap items-end justify-between gap-2">
+    <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
         <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Resumen global</h2>
-        <p class="mt-1 text-xs text-slate-400">Indicadores clave de los últimos 30 días frente al periodo anterior.</p>
+        <p class="mt-1 text-xs text-slate-400">
+          Indicadores reales de los últimos {DIAS} días frente al periodo anterior.
+        </p>
       </div>
+      <nav class="flex items-center gap-1.5" aria-label="Periodo">
+        {[30, 90, 365].map((dias) => (
+          <a
+            href={`?dias=${dias}`}
+            class:list={[
+              'rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider transition',
+              dias === DIAS
+                ? 'border-sky-400/40 bg-sky-500/20 text-sky-300'
+                : 'border-white/10 bg-white/[0.03] text-slate-400 hover:border-sky-400/30 hover:text-sky-300',
+            ]}
+          >
+            {dias === 365 ? '1 año' : `${dias} días`}
+          </a>
+        ))}
+      </nav>
     </div>
+
+    {sinDatos && (
+      <div class="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-200">
+        Aún no hay visitas reales registradas. Las métricas empezarán a rellenarse
+        automáticamente con las visitas a fichas de producto, clics de salida a
+        tienda y compras.
+        {ignoredIps.length > 0 && (
+          <> Las IPs de trabajo ({ignoredIps.join(', ')}) quedan excluidas de la medición.</>
+        )}
+      </div>
+    )}
+
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-      {metricasGlobales.map((metrica) => (
+      {fichas.map((ficha) => (
         <MetricCard
-          etiqueta={metrica.etiqueta}
-          valor={formatValor(metrica.valor, metrica.formato)}
-          variacion={metrica.variacion}
-          favorable={metrica.favorable}
-          ayuda={getMetrica(metrica.glosarioId)?.definicionCorta}
-          periodo={metrica.periodo}
+          etiqueta={ficha.etiqueta}
+          valor={formatValor(ficha.valor, ficha.formato)}
+          variacion={ficha.variacion}
+          favorable={ficha.favorable}
+          ayuda={getMetrica(ficha.glosarioId)?.definicionCorta}
+          periodo={`Últimos ${DIAS} días`}
         />
       ))}
     </div>
@@ -74,35 +160,41 @@ const tiposRecomendacion: Record<string, { label: string; clase: string }> = {
       <div class="flex flex-wrap items-start justify-between gap-2">
         <div class="min-w-0">
           <h3 class="text-sm font-extrabold uppercase tracking-wider text-white">Evolución de visitas</h3>
-          <p class="mt-1 text-xs leading-relaxed text-slate-400">Últimos 14 días · {fmtNum.format(totalVisitas)} visitas en total</p>
+          <p class="mt-1 text-xs leading-relaxed text-slate-400">
+            {evolucion.length === 1 ? 'Último día' : `Últimos ${evolucion.length} días`} del periodo · {fmtNum.format(totalVisitas)} visitas
+          </p>
         </div>
         <span class="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-extrabold text-emerald-300">
           Mejor día: {maxDia.etiqueta} ({fmtNum.format(maxDia.visitas)})
         </span>
       </div>
 
-      <div class="mt-6 flex h-44 items-end gap-1.5">
-        {evolucionVisitas.map((punto, index) => {
-          const pct = Math.max(Math.round((punto.visitas / maxVisitas) * 100), 8);
-          return (
-            <div class="group/bar flex min-w-0 flex-1 flex-col items-center gap-1.5" title={`${punto.etiqueta}: ${fmtNum.format(punto.visitas)} visitas`}>
-              <span class="text-[10px] font-bold text-slate-400 opacity-0 transition group-hover/bar:opacity-100">
-                {fmtNum.format(punto.visitas)}
-              </span>
-              <div
-                class="[width:100%] rounded-t-md bg-gradient-to-t from-sky-600 to-sky-300 transition group-hover/bar:from-violet-500 group-hover/bar:to-violet-300"
-                style={`height:${pct}%`}
-              ></div>
-              <span class="text-[9px] text-slate-500">{index % 2 === 0 ? punto.etiqueta : ''}</span>
-            </div>
-          );
-        })}
-      </div>
+      {evolucion.length === 0 ? (
+        <p class="mt-10 flex h-44 items-center justify-center text-xs text-slate-500">Sin visitas en el periodo seleccionado.</p>
+      ) : (
+        <div class="mt-6 flex h-44 items-end gap-1.5">
+          {evolucion.map((punto, index) => {
+            const pct = Math.max(Math.round((punto.visitas / maxVisitas) * 100), 8);
+            return (
+              <div class="group/bar flex min-w-0 flex-1 flex-col items-center gap-1.5" title={`${punto.etiqueta}: ${fmtNum.format(punto.visitas)} visitas`}>
+                <span class="text-[10px] font-bold text-slate-400 opacity-0 transition group-hover/bar:opacity-100">
+                  {fmtNum.format(punto.visitas)}
+                </span>
+                <div
+                  class="[width:100%] rounded-t-md bg-gradient-to-t from-sky-600 to-sky-300 transition group-hover/bar:from-violet-500 group-hover/bar:to-violet-300"
+                  style={`height:${pct}%`}
+                ></div>
+                <span class="text-[9px] text-slate-500">{index % 2 === 0 ? punto.etiqueta : ''}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
 
     <SimpleBarChart
       titulo="Fuentes de tráfico"
-      subtitulo="Reparto de sesiones por origen durante el periodo."
+      subtitulo="Reparto de sesiones por origen (referrer) durante el periodo."
       items={barrasFuentes}
       ayuda={getMetrica('fuentes-trafico')?.definicionCorta}
     />
@@ -121,30 +213,16 @@ const tiposRecomendacion: Record<string, { label: string; clase: string }> = {
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
           <h3 class="text-sm font-extrabold uppercase tracking-wider text-white">Recomendaciones de IA</h3>
-          <p class="mt-1 text-xs leading-relaxed text-slate-400">Acciones priorizadas a partir de las métricas del periodo.</p>
+          <p class="mt-1 text-xs leading-relaxed text-slate-400">Acciones priorizadas (versión orientativa; se conectarán al analizador real).</p>
         </div>
         <span class="rounded-full border border-violet-500/30 bg-violet-500/15 px-2.5 py-1 text-[11px] font-extrabold text-violet-300">IA</span>
       </div>
 
-      <ul class="mt-5 flex flex-col gap-3">
-        {recomendacionesIA.map((rec) => (
-          <li class="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] p-3.5 transition hover:border-sky-500/30">
-            <div class="flex flex-wrap items-center gap-2">
-              <span class:list={['rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider', tiposRecomendacion[rec.tipo].clase]}>
-                {tiposRecomendacion[rec.tipo].label}
-              </span>
-              <h4 class="text-sm font-bold text-white">{rec.titulo}</h4>
-            </div>
-            <p class="text-xs leading-relaxed text-slate-400">{rec.detalle}</p>
-            <a
-              href={`/admin/trafico-ventas/guia#${rec.glosarioId}`}
-              class="mt-1 w-fit text-[11px] font-bold text-sky-400 transition hover:text-sky-300 hover:underline"
-            >
-              Ver métrica en la guía →
-            </a>
-          </li>
-        ))}
-      </ul>
+      <p class="mt-6 text-xs leading-relaxed text-slate-500">
+        Este bloque se rellenará con recomendaciones generadas a partir de los datos
+        reales del periodo (productos con fricción, categorías en crecimiento...).
+        De momento muestra ejemplos de referencia.
+      </p>
     </div>
   </section>
 
@@ -154,17 +232,160 @@ const tiposRecomendacion: Record<string, { label: string; clase: string }> = {
       <div>
         <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Rendimiento por producto</h2>
         <p class="mt-1 text-xs text-slate-400">
-          Visitas, conversiones y estado de fricción de cada ficha del catálogo.
+          Visitas, salidas a tienda y estado de fricción de cada ficha del catálogo.
         </p>
       </div>
-      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{productos.length} productos</span>
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{productosTabla.length} productos</span>
     </div>
-    <ProductMetricsTable productos={productos} />
+    {productosTabla.length === 0 ? (
+      <p class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-8 text-center text-xs text-slate-500">
+        Todavía no hay visitas a fichas de producto en el periodo.
+      </p>
+    ) : (
+      <ProductMetricsTable productos={productosTabla} />
+    )}
+  </section>
+
+  <!-- 5. Histórico mensual + exportación + reset -->
+  <section class="flex flex-col gap-4" data-historico>
+    <div class="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Histórico mensual</h2>
+        <p class="mt-1 text-xs text-slate-400">
+          Meses cerrados y mes en curso ({enCurso ? `actual: ${resumen.meses[0]?.label ?? ''}` : 'sin datos'}). Selecciona meses para exportarlos a Excel.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-export-seleccion
+          class="rounded-full border border-sky-400/40 bg-sky-500/20 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-sky-300 transition hover:bg-sky-500/30 disabled:cursor-not-allowed disabled:opacity-40"
+          disabled
+        >
+          Exportar selección (.xlsx)
+        </button>
+        <button
+          type="button"
+          data-export-todo
+          class="rounded-full border border-white/15 bg-white/[0.05] px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-300 transition hover:border-sky-400/30 hover:text-sky-300 disabled:opacity-40"
+          disabled={resumen.meses.length === 0}
+        >
+          Exportar todo (.xlsx)
+        </button>
+        <button
+          type="button"
+          data-reset
+          class="rounded-full border border-rose-500/30 bg-rose-500/10 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-rose-300 transition hover:bg-rose-500/20"
+        >
+          Reiniciar a cero
+        </button>
+      </div>
+    </div>
+
+    {resumen.meses.length === 0 ? (
+      <p class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-8 text-center text-xs text-slate-500">
+        No hay meses registrados todavía.
+      </p>
+    ) : (
+      <div class="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03]">
+        <table class="min-w-[760px] border-collapse text-left" style="width: 100%">
+          <thead>
+            <tr class="border-b border-white/10 bg-white/[0.02] text-[11px] uppercase tracking-wider text-slate-400">
+              <th class="w-10 px-4 py-3 font-bold"></th>
+              <th class="px-4 py-3 font-bold">Mes</th>
+              <th class="px-4 py-3 [text-align:right] font-bold">Sesiones</th>
+              <th class="px-4 py-3 [text-align:right] font-bold">Visitas</th>
+              <th class="px-4 py-3 [text-align:right] font-bold">Salidas</th>
+              <th class="px-4 py-3 [text-align:right] font-bold">Compras</th>
+              <th class="px-4 py-3 [text-align:right] font-bold">Conversión</th>
+              <th class="px-4 py-3 [text-align:right] font-bold">AOV</th>
+            </tr>
+          </thead>
+          <tbody>
+            {resumen.meses.map((mes) => (
+              <tr class="border-b border-white/5 transition last:border-b-0 hover:bg-sky-500/5">
+                <td class="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    data-mes-check
+                    value={mes.month}
+                    class="h-4 w-4 cursor-pointer rounded border-white/20 bg-white/5 accent-sky-500"
+                    aria-label={`Seleccionar ${mes.label}`}
+                  />
+                </td>
+                <td class="px-4 py-3">
+                  <span class="text-sm font-bold text-white">{mes.label}</span>
+                  {mes.month === enCurso && (
+                    <span class="ml-2 rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2 py-0.5 text-[10px] font-extrabold uppercase text-emerald-300">En curso</span>
+                  )}
+                </td>
+                <td class="px-4 py-3 [text-align:right] text-sm font-bold text-white">{fmtNum.format(mes.metrics.sesiones)}</td>
+                <td class="px-4 py-3 [text-align:right] text-sm font-semibold text-slate-300">{fmtNum.format(mes.metrics.visitas)}</td>
+                <td class="px-4 py-3 [text-align:right] text-sm font-semibold text-slate-300">{fmtNum.format(mes.metrics.salidas)}</td>
+                <td class="px-4 py-3 [text-align:right] text-sm font-semibold text-slate-300">{fmtNum.format(mes.metrics.compras)}</td>
+                <td class="px-4 py-3 [text-align:right] text-sm font-bold text-emerald-300">{mes.metrics.conversionPct.toFixed(1).replace('.', ',')}%</td>
+                <td class="px-4 py-3 [text-align:right] text-sm font-semibold text-slate-300">{mes.metrics.aov.toFixed(2).replace('.', ',')} €</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+
+    <p class="text-[11px] leading-relaxed text-slate-500">
+      El Excel incluye una hoja «Resumen», una hoja por año y una hoja por mes con
+      KPIs, fuentes, evolución diaria y top de productos (tablas con barras de datos).
+      {ignoredIps.length > 0 && (
+        <> Las visitas desde {ignoredIps.join(', ')} no se contabilizan.</>
+      )}
+    </p>
   </section>
 
   <p class="border-t border-white/10 pt-6 text-[11px] leading-relaxed text-slate-500">
-    Los datos de este panel son de ejemplo (mock) hasta conectar las fuentes reales
-    (Google Analytics 4, Google Search Console y el tracker propio).
+    Datos del tracker propio de Tradylor (visitas de fichas, duración, salidas y compras).
     Consulta la <a href="/admin/trafico-ventas/guia" class="font-bold text-sky-400 hover:underline">Guía y Glosario de Métricas</a> para entender cada indicador.
   </p>
 </div>
+
+<script>
+  // Exportación y reinicio del histórico mensual (sin framework, vanilla).
+  const contenedor = document.querySelector('[data-historico]');
+  if (contenedor) {
+    const checks = Array.from(contenedor.querySelectorAll<HTMLInputElement>('[data-mes-check]'));
+    const btnSeleccion = contenedor.querySelector<HTMLButtonElement>('[data-export-seleccion]');
+    const btnTodo = contenedor.querySelector<HTMLButtonElement>('[data-export-todo]');
+    const btnReset = contenedor.querySelector<HTMLButtonElement>('[data-reset]');
+
+    const sincronizar = () => {
+      if (btnSeleccion) btnSeleccion.disabled = !checks.some((check) => check.checked);
+    };
+    checks.forEach((check) => check.addEventListener('change', sincronizar));
+    sincronizar();
+
+    btnSeleccion?.addEventListener('click', () => {
+      const meses = checks.filter((check) => check.checked).map((check) => check.value);
+      if (!meses.length) return;
+      window.location.href = `/api/admin/analytics/export?months=${encodeURIComponent(meses.join(','))}`;
+    });
+
+    btnTodo?.addEventListener('click', () => {
+      window.location.href = '/api/admin/analytics/export';
+    });
+
+    btnReset?.addEventListener('click', async () => {
+      const confirmado = window.confirm(
+        '¿Reiniciar la medición a cero? Se borrarán todos los eventos y el histórico mensual. Esta acción no se puede deshacer.',
+      );
+      if (!confirmado) return;
+      btnReset.disabled = true;
+      try {
+        const respuesta = await fetch('/api/admin/analytics/reset', { method: 'POST' });
+        if (!respuesta.ok) throw new Error('No se pudo reiniciar');
+        window.location.reload();
+      } catch {
+        window.alert('No se pudo reiniciar la medición. Inténtalo de nuevo.');
+        btnReset.disabled = false;
+      }
+    });
+  }
+</script>
