@@ -139,10 +139,13 @@ const total = glosarioMetricas.length;
     let visibles = 0;
     cards.forEach((card) => {
       const ok = cat === 'todas' || card.dataset.catCard === cat;
-      card.hidden = !ok;
+      // Se usa style.display y no el atributo `hidden`: las tarjetas llevan
+      // `class="flex"` y una regla de autor (.flex{display:flex}) siempre
+      // gana al display:none del navegador sobre [hidden].
+      card.style.display = ok ? '' : 'none';
       if (ok) visibles += 1;
     });
-    if (vacio) vacio.hidden = visibles > 0;
+    if (vacio) vacio.style.display = visibles > 0 ? '' : 'none';
     tabs.forEach((tab) => {
       const activo = tab.dataset.catTab === cat;
       tab.setAttribute('aria-selected', String(activo));
