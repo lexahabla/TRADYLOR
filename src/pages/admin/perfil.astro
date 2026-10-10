@@ -9,6 +9,9 @@ import { findUserById, toPublicUser } from '../../lib/userStore';
 const sessionUser = getSessionUser(Astro.request);
 if (!sessionUser) return Astro.redirect('/admin');
 
+// El panel nunca se cachea: un deploy nuevo tiene que verse a la primera.
+Astro.response.headers.set('Cache-Control', 'no-store');
+
 const profile = findUserById(sessionUser.id);
 if (!profile) return Astro.redirect('/admin');
 const user = toPublicUser(profile);

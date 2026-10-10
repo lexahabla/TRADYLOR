@@ -43,6 +43,9 @@ if (sessionUser && sessionUser.role !== 'admin') {
   return new Response(null, { status: 303, headers: { Location: '/admin/perfil' } });
 }
 
+// El panel nunca se cachea: un deploy nuevo tiene que verse a la primera.
+Astro.response.headers.set('Cache-Control', 'no-store');
+
 // Leer productos almacenados para renderizar inicialmente en el servidor (SSR)
 const DATA_FILE_PATH = dataFile('products.json');
 let initialProducts: Product[] = [];

@@ -1,21 +1,32 @@
 import type { APIRoute } from 'astro';
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 import { DATA_DIR } from '../../lib/paths';
 
 export const prerender = false;
 
-/** Commit corto del despliegue (una sola vez en memoria); null si no hay git. */
-let cachedCommit: string | null = null;
+/**
+ * Commit corto del despliegue, leyendo .git directamente (sin invocar git:
+ * en el contenedor el volumen/propiedad puede bloquear el binario).
+ */
+let cachedCommit: string | null | undefined;
 function buildCommit(): string | null {
-  if (cachedCommit !== null) return cachedCommit;
+  if (cachedCommit !== undefined) return cachedCommit;
   try {
-    cachedCommit = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
-      cwd: process.cwd(),
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 2000,
-    }).trim();
+    const gitDir = path.join(process.cwd(), '.git');
+    const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf-8').trim();
+    if (!head.startsWith('ref:')) {
+      cachedCommit = head.slice(0, 7);
+      return cachedCommit;
+    }
+    const ref = head.slice(4).trim();
+    try {
+      cachedCommit = fs.readFileSync(path.join(gitDir, ref), 'utf-8').trim().slice(0, 7);
+    } catch {
+      const packed = fs.readFileSync(path.join(gitDir, 'packed-refs'), 'utf-8');
+      const line = packed.split('\n').find((row) => row.endsWith(` ${ref}`));
+      cachedCommit = line ? line.split(' ')[0].slice(0, 7) : null;
+    }
   } catch {
     cachedCommit = null;
   }

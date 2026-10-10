@@ -20,6 +20,9 @@ const sessionUser = getSessionUser(Astro.request);
 if (!sessionUser) return Astro.redirect('/admin');
 if (sessionUser.role !== 'admin') return Astro.redirect('/admin/perfil');
 
+// El panel nunca se cachea: un deploy nuevo tiene que verse a la primera.
+Astro.response.headers.set('Cache-Control', 'no-store');
+
 const catInfo: Record<CategoriaMetrica, { label: string; clase: string }> = {
   trafico: { label: 'Tráfico', clase: 'border-sky-500/30 bg-sky-500/15 text-sky-300' },
   seo: { label: 'SEO', clase: 'border-violet-500/30 bg-violet-500/15 text-violet-300' },
