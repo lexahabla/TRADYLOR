@@ -23,46 +23,71 @@ import {
   getPeriodoDashboard,
   getPeriodoRango,
 } from '../../lib/analyticsMonths';
+import { getPeriodoOptimo } from '../../lib/analyticsOptimo';
 
 const fmtNum = new Intl.NumberFormat('es-ES');
 
 const params = Astro.url.searchParams;
-const basePath = Astro.url.pathname + (Astro.url.searchParams.has('section') ? '?section=analytics' : '');
+const esOptimo = params.get('optimo') === '1';
+
+/** Query base que deben conservar el calendario y el conmutador. */
+function queryBase(incluirOptimo: boolean): string {
+  const q = new URLSearchParams();
+  if (params.has('section')) q.set('section', params.get('section')!);
+  if (incluirOptimo && esOptimo) q.set('optimo', '1');
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
 
 const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
+interface ResolucionPeriodo {
+  periodo: ReturnType<typeof getPeriodoDashboard>;
+  seleccion: SeleccionPeriodo;
+  etiquetaPeriodo: string;
+}
+
 /** Resuelve los query params del calendario a un periodo + etiqueta. */
-function resolverPeriodo(): { periodo: ReturnType<typeof getPeriodoDashboard>; seleccion: SeleccionPeriodo; etiquetaPeriodo: string } {
+function resolverPeriodo(): ResolucionPeriodo {
   const dia = params.get('dia');
   const mes = params.get('mes');
   const anio = params.get('anio');
   const diasRaw = params.get('dias');
 
+  const construir = (desde: string, hasta: string, seleccion: SeleccionPeriodo, etiqueta: string): ResolucionPeriodo => ({
+    periodo: esOptimo ? getPeriodoOptimo(desde, hasta) : getPeriodoRango(desde, hasta),
+    seleccion,
+    etiquetaPeriodo: etiqueta,
+  });
+
   if (dia && /^\d{4}-\d{2}-\d{2}$/.test(dia)) {
     const [y, m, d] = dia.split('-');
-    return {
-      periodo: getPeriodoRango(dia, dia),
-      seleccion: { tipo: 'dia', valor: dia, etiqueta: `${Number(d)} ${MESES_CORTOS[Number(m) - 1]} ${y}` },
-      etiquetaPeriodo: `el día ${Number(d)} de ${MESES_CORTOS[Number(m) - 1]} de ${y}`,
-    };
+    return construir(dia, dia,
+      { tipo: 'dia', valor: dia, etiqueta: `${Number(d)} ${MESES_CORTOS[Number(m) - 1]} ${y}` },
+      `el día ${Number(d)} de ${MESES_CORTOS[Number(m) - 1]} de ${y}`);
   }
   if (mes && /^\d{4}-\d{2}$/.test(mes)) {
     const [y, m] = mes.split('-');
     const ultimo = new Date(Number(y), Number(m), 0).getDate();
-    return {
-      periodo: getPeriodoRango(`${mes}-01`, `${mes}-${ultimo}`),
-      seleccion: { tipo: 'mes', valor: mes, etiqueta: `${MESES_CORTOS[Number(m) - 1]} ${y}` },
-      etiquetaPeriodo: `de ${MESES_CORTOS[Number(m) - 1]} de ${y}`,
-    };
+    return construir(`${mes}-01`, `${mes}-${ultimo}`,
+      { tipo: 'mes', valor: mes, etiqueta: `${MESES_CORTOS[Number(m) - 1]} ${y}` },
+      `de ${MESES_CORTOS[Number(m) - 1]} de ${y}`);
   }
   if (anio && /^\d{4}$/.test(anio)) {
-    return {
-      periodo: getPeriodoRango(`${anio}-01-01`, `${anio}-12-31`),
-      seleccion: { tipo: 'anio', valor: anio, etiqueta: `Año ${anio}` },
-      etiquetaPeriodo: `del año ${anio}`,
-    };
+    return construir(`${anio}-01-01`, `${anio}-12-31`,
+      { tipo: 'anio', valor: anio, etiqueta: `Año ${anio}` },
+      `del año ${anio}`);
   }
+
   const n = [7, 30, 90, 365].includes(Number(diasRaw)) ? Number(diasRaw) : 30;
+  if (esOptimo) {
+    const hoy = new Date();
+    const hasta = hoy.toISOString().slice(0, 10);
+    const desde = new Date(hoy.getTime() - (n - 1) * 86_400_000).toISOString().slice(0, 10);
+    return construir(desde, hasta,
+      { tipo: 'dias', valor: String(n), etiqueta: n === 365 ? 'Último año' : `Últimos ${n} días` },
+      `de los últimos ${n} días`);
+  }
   return {
     periodo: getPeriodoDashboard(n),
     seleccion: { tipo: 'dias', valor: String(n), etiqueta: n === 365 ? 'Último año' : `Últimos ${n} días` },
@@ -74,6 +99,17 @@ const { periodo, seleccion, etiquetaPeriodo } = resolverPeriodo();
 const fechas = getFechasConDatos();
 const resumen = getMesesAnalitica();
 const ignoredIps = getIgnoredIps();
+
+/** URL del conmutador: añade o quita `optimo=1` conservando el periodo. */
+function urlConmutador(): string {
+  const q = new URLSearchParams();
+  for (const k of ['dia', 'mes', 'anio', 'dias']) {
+    if (params.has(k)) q.set(k, params.get(k)!);
+  }
+  if (params.has('section')) q.set('section', params.get('section')!);
+  if (!esOptimo) q.set('optimo', '1');
+  return `?${q.toString()}`;
+}
 
 const variacion = (actual: number, anterior: number): number => {
   if (!anterior) return actual > 0 ? 100 : 0;
@@ -87,22 +123,20 @@ interface FichaMetrica {
   variacion: number;
   favorable: boolean;
   glosarioId: string;
-  /** Valor objetivo/óptimo estimado (ficticio de referencia). */
-  optimo: number;
 }
 
 const m = periodo.actual;
 const a = periodo.anterior;
 const fichas: FichaMetrica[] = [
-  { etiqueta: 'Sesiones', valor: m.sesiones, formato: 'numero', variacion: variacion(m.sesiones, a.sesiones), favorable: true, glosarioId: 'sesiones', optimo: 1200 },
-  { etiqueta: 'Usuarios únicos', valor: m.usuariosUnicos, formato: 'numero', variacion: variacion(m.usuariosUnicos, a.usuariosUnicos), favorable: true, glosarioId: 'usuarios-unicos', optimo: 900 },
-  { etiqueta: 'Páginas / sesión', valor: m.paginasPorSesion, formato: 'decimal', variacion: variacion(m.paginasPorSesion, a.paginasPorSesion), favorable: true, glosarioId: 'paginas-por-sesion', optimo: 3.5 },
-  { etiqueta: 'Permanencia media', valor: m.permanenciaMediaSeg, formato: 'duracion', variacion: variacion(m.permanenciaMediaSeg, a.permanenciaMediaSeg), favorable: true, glosarioId: 'permanencia', optimo: 120 },
-  { etiqueta: 'Tasa de rebote', valor: m.rebotePct, formato: 'percent', variacion: variacion(m.rebotePct, a.rebotePct), favorable: m.rebotePct <= a.rebotePct, glosarioId: 'tasa-rebote', optimo: 45 },
-  { etiqueta: 'Visitas', valor: m.visitas, formato: 'numero', variacion: variacion(m.visitas, a.visitas), favorable: true, glosarioId: 'visualizaciones-producto', optimo: 2400 },
-  { etiqueta: 'Salidas a tienda', valor: m.salidas, formato: 'numero', variacion: variacion(m.salidas, a.salidas), favorable: true, glosarioId: 'friccion-venta', optimo: 180 },
-  { etiqueta: 'Tasa de conversión', valor: m.conversionPct, formato: 'percent', variacion: variacion(m.conversionPct, a.conversionPct), favorable: true, glosarioId: 'tasa-conversion', optimo: 7.5 },
-  { etiqueta: 'Valor medio del pedido', valor: m.aov, formato: 'moneda', variacion: variacion(m.aov, a.aov), favorable: true, glosarioId: 'aov', optimo: 65 },
+  { etiqueta: 'Sesiones', valor: m.sesiones, formato: 'numero', variacion: variacion(m.sesiones, a.sesiones), favorable: true, glosarioId: 'sesiones' },
+  { etiqueta: 'Usuarios únicos', valor: m.usuariosUnicos, formato: 'numero', variacion: variacion(m.usuariosUnicos, a.usuariosUnicos), favorable: true, glosarioId: 'usuarios-unicos' },
+  { etiqueta: 'Páginas / sesión', valor: m.paginasPorSesion, formato: 'decimal', variacion: variacion(m.paginasPorSesion, a.paginasPorSesion), favorable: true, glosarioId: 'paginas-por-sesion' },
+  { etiqueta: 'Permanencia media', valor: m.permanenciaMediaSeg, formato: 'duracion', variacion: variacion(m.permanenciaMediaSeg, a.permanenciaMediaSeg), favorable: true, glosarioId: 'permanencia' },
+  { etiqueta: 'Tasa de rebote', valor: m.rebotePct, formato: 'percent', variacion: variacion(m.rebotePct, a.rebotePct), favorable: m.rebotePct <= a.rebotePct, glosarioId: 'tasa-rebote' },
+  { etiqueta: 'Visitas', valor: m.visitas, formato: 'numero', variacion: variacion(m.visitas, a.visitas), favorable: true, glosarioId: 'visualizaciones-producto' },
+  { etiqueta: 'Salidas a tienda', valor: m.salidas, formato: 'numero', variacion: variacion(m.salidas, a.salidas), favorable: true, glosarioId: 'friccion-venta' },
+  { etiqueta: 'Tasa de conversión', valor: m.conversionPct, formato: 'percent', variacion: variacion(m.conversionPct, a.conversionPct), favorable: true, glosarioId: 'tasa-conversion' },
+  { etiqueta: 'Valor medio del pedido', valor: m.aov, formato: 'moneda', variacion: variacion(m.aov, a.aov), favorable: true, glosarioId: 'aov' },
 ];
 
 const COLORES_FUENTE: Record<string, string> = {
@@ -155,48 +189,73 @@ const enCurso = resumen.meses[0]?.month ?? '';
 
 <div class="flex flex-col gap-9">
   <!-- 1. Resumen global -->
-  <section class="flex flex-col gap-4" data-resumen data-objetivo="off">
+  <section class="flex flex-col gap-4">
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
-        <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Resumen global</h2>
+        <h2 class="text-base font-extrabold uppercase tracking-wider text-white">
+          {esOptimo ? 'Métrica óptima (ficticia)' : 'Resumen global'}
+        </h2>
         <p class="mt-1 text-xs text-slate-400">
-          Indicadores reales {etiquetaPeriodo} frente al periodo anterior.
+          {esOptimo
+            ? `Estimación de tráfico óptimo ${etiquetaPeriodo} para un portal de afiliación de éxito. Datos ficticios de referencia.`
+            : `Indicadores reales ${etiquetaPeriodo} frente al periodo anterior.`}
         </p>
       </div>
       <div class="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          data-objetivo-toggle
-          class="flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-violet-300 transition hover:bg-violet-500/20"
+        <a
+          href={urlConmutador()}
+          class:list={[
+            'flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-wider transition',
+            esOptimo
+              ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25'
+              : 'border-violet-500/30 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20',
+          ]}
         >
-          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 2v20M2 12h20"></path>
-            <circle cx="12" cy="12" r="9"></circle>
-          </svg>
-          <span data-objetivo-texto>Métrica estimada óptima</span>
-          <span class="relative flex h-4 w-4 items-center justify-center rounded-full border border-white/20 bg-white/5 text-[9px] font-bold" tabindex="0" aria-label="Ayuda: métrica estimada óptima">
+          {esOptimo ? (
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          ) : (
+            <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 2v20M2 12h20"></path>
+              <circle cx="12" cy="12" r="9"></circle>
+            </svg>
+          )}
+          <span>{esOptimo ? 'Ver datos reales' : 'Métrica óptima'}</span>
+          <span class="relative flex h-4 w-4 items-center justify-center rounded-full border border-white/20 bg-white/5 text-[9px] font-bold" tabindex="0" aria-label="Ayuda: métrica óptima">
             ?
-            <span class="pointer-events-none absolute right-0 top-full z-30 mt-2 w-60 rounded-lg border border-violet-500/30 bg-slate-950 px-3 py-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-300 opacity-0 shadow-xl transition group-hover/help:opacity-100 group-focus-within/help:opacity-100" role="tooltip">
-              Muestra valores objetivo ficticios de referencia (no son datos reales). Sirven para fijar metas y comparar el rendimiento real frente a un escenario óptimo.
+            <span class="pointer-events-none absolute right-0 top-full z-30 mt-2 w-64 rounded-lg border border-violet-500/30 bg-slate-950 px-3 py-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-300 opacity-0 shadow-xl transition" role="tooltip">
+              {esOptimo
+                ? 'Estás viendo datos ficticios de referencia (tráfico óptimo). Pulsa para volver a los datos reales.'
+                : 'Muestra un escenario óptimo ficticio con tráfico coherente para un portal de afiliación de éxito. Pulsa el calendario para ver cualquier día, mes o año.'}
             </span>
           </span>
-        </button>
-        <PeriodPicker seleccion={seleccion} fechas={fechas} basePath={basePath} />
+        </a>
+        <PeriodPicker seleccion={seleccion} fechas={fechas} basePath={Astro.url.pathname} queryExtra={queryBase(true)} />
       </div>
     </div>
 
-    {sinDatos && (
+    {esOptimo && (
+      <div class="rounded-2xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-xs leading-relaxed text-violet-200">
+        <strong class="font-extrabold">Métrica óptima:</strong> estos números son una simulación ficticia pero coherente
+        del tráfico que tendría un portal de afiliación rentable (estacionalidad semanal, crecimiento suave y reparto de
+        fuentes realista). Sirven como meta de referencia; no son datos reales.
+      </div>
+    )}
+
+    {!esOptimo && sinDatos && (
       <div class="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs leading-relaxed text-amber-200">
         Aún no hay visitas reales registradas. Las métricas empezarán a rellenarse
         automáticamente con las visitas a fichas de producto, clics de salida a
-        tienda y compras.
+        tienda y compras. Pulsa «Métrica óptima» para ver un escenario de referencia.
         {ignoredIps.length > 0 && (
           <> Las IPs de trabajo ({ignoredIps.join(', ')}) quedan excluidas de la medición.</>
         )}
       </div>
     )}
 
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-fichas>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {fichas.map((ficha) => (
         <MetricCard
           etiqueta={ficha.etiqueta}
@@ -205,7 +264,6 @@ const enCurso = resumen.meses[0]?.month ?? '';
           favorable={ficha.favorable}
           ayuda={getMetrica(ficha.glosarioId)?.definicionCorta}
           periodo={seleccion.etiqueta}
-          valorObjetivo={formatValor(ficha.optimo, ficha.formato)}
         />
       ))}
     </div>
@@ -405,27 +463,6 @@ const enCurso = resumen.meses[0]?.month ?? '';
 </div>
 
 <script>
-  // Conmutador "Métrica estimada óptima": alterna valor real / objetivo en las tarjetas.
-  const resumen = document.querySelector<HTMLElement>('[data-resumen]');
-  const btnObjetivo = document.querySelector<HTMLButtonElement>('[data-objetivo-toggle]');
-  if (resumen && btnObjetivo) {
-    const textoBtn = btnObjetivo.querySelector<HTMLElement>('[data-objetivo-texto]');
-    const aplicar = (activo: boolean) => {
-      resumen.setAttribute('data-objetivo', activo ? 'on' : 'off');
-      resumen.querySelectorAll<HTMLElement>('[data-valor-real]').forEach((el) => el.classList.toggle('hidden', activo));
-      resumen.querySelectorAll<HTMLElement>('[data-valor-objetivo]').forEach((el) => el.classList.toggle('hidden', !activo));
-      resumen.querySelectorAll<HTMLElement>('[data-badge-real]').forEach((el) => el.classList.toggle('hidden', activo));
-      resumen.querySelectorAll<HTMLElement>('[data-badge-objetivo]').forEach((el) => {
-        el.classList.toggle('hidden', !activo);
-        el.classList.toggle('inline-flex', activo);
-      });
-      if (textoBtn) textoBtn.textContent = activo ? 'Ver datos reales' : 'Métrica estimada óptima';
-    };
-    btnObjetivo.addEventListener('click', () => {
-      aplicar(resumen.getAttribute('data-objetivo') !== 'on');
-    });
-  }
-
   // Exportación y reinicio del histórico mensual (sin framework, vanilla).
   const contenedor = document.querySelector('[data-historico]');
   if (contenedor) {

@@ -14,11 +14,9 @@ export interface Props {
   /** definicionCorta del glosario para el tooltip `?`. */
   ayuda?: string;
   periodo?: string;
-  /** Valor objetivo/óptimo estimado (ficticio de referencia). */
-  valorObjetivo?: string;
 }
 
-const { etiqueta, valor, variacion, favorable = true, ayuda, periodo, valorObjetivo } = Astro.props;
+const { etiqueta, valor, variacion, favorable = true, ayuda, periodo } = Astro.props;
 
 const sube = variacion >= 0;
 const deltaTexto = `${sube ? '+' : ''}${variacion.toFixed(1).replace('.', ',')}%`;
@@ -40,21 +38,13 @@ const deltaClase = favorable
     )}
   </div>
 
-  <strong class="truncate text-2xl font-extrabold text-white" data-valor-real>{valor}</strong>
-  {valorObjetivo && (
-    <strong class="hidden truncate text-2xl font-extrabold text-violet-300" data-valor-objetivo>{valorObjetivo}</strong>
-  )}
+  <strong class="truncate text-2xl font-extrabold text-white">{valor}</strong>
 
   <div class="flex flex-wrap items-center justify-between gap-2">
-    <span class:list={['inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-extrabold', deltaClase]} data-badge-real>
+    <span class:list={['inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-extrabold', deltaClase]}>
       <span aria-hidden="true">{sube ? '▲' : '▼'}</span>
       {deltaTexto}
     </span>
-    {valorObjetivo && (
-      <span class="hidden items-center gap-1 rounded-full border border-violet-500/30 bg-violet-500/15 px-2 py-0.5 text-[11px] font-extrabold text-violet-300" data-badge-objetivo>
-        Objetivo
-      </span>
-    )}
-    {periodo && <span class="text-[11px] text-slate-500" data-periodo>{periodo}</span>}
+    {periodo && <span class="text-[11px] text-slate-500">{periodo}</span>}
   </div>
 </div>

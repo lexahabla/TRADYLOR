@@ -20,11 +20,13 @@ export interface SeleccionPeriodo {
 export interface Props {
   seleccion: SeleccionPeriodo;
   fechas: FechasConDatos;
-  /** Ruta base para la navegación (p.ej. /admin?section=analytics). */
+  /** Ruta base sin query (p.ej. /admin). */
   basePath: string;
+  /** Query adicional a conservar en la navegación (p.ej. "?section=analytics&optimo=1"). */
+  queryExtra?: string;
 }
 
-const { seleccion, fechas, basePath } = Astro.props;
+const { seleccion, fechas, basePath, queryExtra = '' } = Astro.props;
 ---
 
 <div class="relative" data-periodo-picker>
@@ -137,7 +139,7 @@ const { seleccion, fechas, basePath } = Astro.props;
   </div>
 </div>
 
-<script define:vars={{ fechas, basePath, seleccion }}>
+<script define:vars={{ fechas, basePath, seleccion, queryExtra }}>
   const root = document.querySelector('[data-periodo-picker]');
   if (root) {
     const trigger = root.querySelector('[data-periodo-trigger]');
@@ -153,7 +155,10 @@ const { seleccion, fechas, basePath } = Astro.props;
     let anioSel = Number(seleccion.tipo === 'anio' ? seleccion.valor : calYear);
 
     const navegar = (params) => {
-      const qs = new URLSearchParams(params);
+      // Partimos del query base (section, optimo…) y añadimos el periodo.
+      const qs = new URLSearchParams(queryExtra.startsWith('?') ? queryExtra.slice(1) : queryExtra);
+      for (const k of ['dias', 'dia', 'mes', 'anio']) qs.delete(k);
+      for (const [k, v] of Object.entries(params)) qs.set(k, v);
       window.location.href = `${basePath}?${qs.toString()}`;
     };
 
