@@ -457,7 +457,7 @@ const scoredCatalog = getScoredCatalog();
 
       <div class="affiliates-layout">
         <!-- Columna 1: Gestor de credenciales multi-red -->
-        <div class="admin-card">
+        <div class="admin-card" id="networksCard">
           <div class="card-header">
             <div class="header-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -474,6 +474,7 @@ const scoredCatalog = getScoredCatalog();
             <div class="loading-panel">Cargando redes...</div>
           </div>
           <div id="removedNetworks" class="removed-networks"></div>
+          <div id="networkNewHost" class="network-new-host"></div>
         </div>
 
         <!-- Columna 2: Buscador global unificado -->
@@ -1464,6 +1465,8 @@ const scoredCatalog = getScoredCatalog();
     // 5. MÓDULO DE AFILIADOS Y MULTI-CATÁLOGO
     // =========================================================================
     const networkList = document.getElementById('networkList');
+    const networksCard = document.getElementById('networksCard');
+    const networkNewHost = document.getElementById('networkNewHost');
     const removedNetworks = document.getElementById('removedNetworks');
     const unifiedQuery = document.getElementById('unifiedQuery');
     const btnUnifiedSearch = document.getElementById('btnUnifiedSearch');
@@ -1616,7 +1619,7 @@ const scoredCatalog = getScoredCatalog();
             </form>
           </div>
         </details>
-      `).join('') + newNetworkPanelHtml();
+      `).join('');
     }
 
     /** Redibuja la lista activa y el aviso de redes predefinidas eliminadas. */
@@ -1648,7 +1651,7 @@ const scoredCatalog = getScoredCatalog();
       }
     }
 
-    networkList?.addEventListener('submit', async (event) => {
+    networksCard?.addEventListener('submit', async (event) => {
       const newForm = event.target.closest('.network-new-form');
       if (newForm) {
         event.preventDefault();
@@ -1672,6 +1675,7 @@ const scoredCatalog = getScoredCatalog();
         if (submitBtn) submitBtn.disabled = false;
         if (data.success) {
           applyNetworks(data);
+          if (networkNewHost) networkNewHost.innerHTML = newNetworkPanelHtml();
           const created = networkList.querySelector(`details[data-network-id="${data.network.id}"]`);
           if (created) created.open = true;
         } else if (feedback) {
@@ -1695,10 +1699,10 @@ const scoredCatalog = getScoredCatalog();
       }
     });
 
-    networkList?.addEventListener('click', async (event) => {
+    networksCard?.addEventListener('click', async (event) => {
       const addFieldBtn = event.target.closest('[data-add-field]');
       if (addFieldBtn) {
-        const rows = networkList.querySelector('.new-field-rows');
+        const rows = addFieldBtn.closest('.new-field-rows');
         if (rows) rows.insertAdjacentHTML('beforeend', newFieldRowHtml('', true, true));
         return;
       }
@@ -2010,6 +2014,7 @@ const scoredCatalog = getScoredCatalog();
       await reloadProductsTable();
     });
 
+    if (networkNewHost) networkNewHost.innerHTML = newNetworkPanelHtml();
     if (networkList) loadNetworks();
 
     // =========================================================================
@@ -2361,17 +2366,18 @@ const scoredCatalog = getScoredCatalog();
   .network-feedback { margin: .5rem 0 0; color: var(--color-text-muted); font-size: .74rem; line-height: 1.4; }
   .integration-status.is-error { color: #fca5a5; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); }
 
-  /* Alta y eliminación de afiliados */
-  .network-new { border: 1px dashed rgba(56, 189, 248, .55); background: linear-gradient(180deg, rgba(56, 189, 248, .08), rgba(56, 189, 248, .02)); }
-  .network-new summary { justify-content: center; gap: .8rem; padding: 1.05rem 1rem; }
-  .network-new summary:hover { background: rgba(56, 189, 248, .12); }
-  .network-add-icon { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; flex-shrink: 0; color: #7dd3fc; background: rgba(56, 189, 248, .14); border: 1px solid rgba(56, 189, 248, .45); border-radius: 50%; }
+  /* Alta de afiliado: bloque propio FUERA de la lista, estilo botón CTA */
+  .network-new-host { margin-top: 1.15rem; padding-top: 1.15rem; border-top: 1px dashed var(--color-border); }
+  .network-new { border: 2px dashed rgba(56, 189, 248, .6); border-radius: 14px; background: linear-gradient(180deg, rgba(56, 189, 248, .12), rgba(56, 189, 248, .04)); box-shadow: 0 8px 24px rgba(56, 189, 248, .1); }
+  .network-new summary { justify-content: center; gap: .85rem; padding: 1.3rem 1rem; border-radius: 12px; }
+  .network-new summary:hover { background: rgba(56, 189, 248, .16); }
+  .network-add-icon { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; color: #06121f; background: #38bdf8; border-radius: 50%; box-shadow: 0 0 18px rgba(56, 189, 248, .55); }
   .network-add-main { align-items: center; text-align: center; }
-  .network-new .network-name { color: #7dd3fc; font-size: .92rem; letter-spacing: .02em; }
-  .network-new .network-region { color: var(--color-text-dim); font-size: .7rem; }
-  .network-add-chip { padding: .25rem .65rem; color: #0b1220; background: #38bdf8; border-radius: 999px; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; flex-shrink: 0; }
-  .network-new .network-body { border-top: none; }
-  .network-new[open] summary { border-bottom: 1px solid rgba(56, 189, 248, .3); }
+  .network-new .network-name { color: #7dd3fc; font-size: .98rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+  .network-new .network-region { color: var(--color-text-dim); font-size: .72rem; }
+  .network-add-chip { padding: .3rem .8rem; color: #06121f; background: #38bdf8; border-radius: 999px; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0; }
+  .network-new[open] summary { border-bottom: 2px dashed rgba(56, 189, 248, .35); border-radius: 12px 12px 0 0; }
+  .network-new .network-body { padding-top: 1rem; background: rgba(4, 10, 18, .45); border-top: none; border-radius: 0 0 12px 12px; }
   .new-fields { display: flex; flex-direction: column; gap: .55rem; }
   .new-fields-title { color: var(--color-text-muted); font-size: .72rem; font-weight: 700; }
   .new-field-rows { display: flex; flex-direction: column; gap: .5rem; }
