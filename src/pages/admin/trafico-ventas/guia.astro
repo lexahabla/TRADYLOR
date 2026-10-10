@@ -65,7 +65,8 @@ const total = glosarioMetricas.length;
 
     <!-- Filtros por categoría -->
     <section class="flex flex-col gap-4">
-      <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-wrap items-end justify-between gap-2">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{total} términos</span>
         <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Categorías del glosario">
           <button
             type="button"
@@ -88,7 +89,6 @@ const total = glosarioMetricas.length;
               </button>
             ))}
         </div>
-        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{total} términos</span>
       </div>
 
       <!-- Tarjetas del glosario -->
