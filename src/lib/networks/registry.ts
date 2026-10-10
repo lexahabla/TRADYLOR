@@ -6,10 +6,19 @@
  *   1. Añade su definición aquí (id, campos de credenciales, documentación).
  *   2. Crea su conector en src/lib/networks/connectors/<id>.ts
  *   3. Regístralo en src/lib/networks/index.ts (CONNECTORS).
+ *
+ * Además, el panel de admin permite crear afiliados nuevos y eliminar los que
+ * no interesen SIN tocar el código: ver createNetwork() y customNetworks.ts
+ * (persistencia en src/data/networks.json).
  * ==============================================================================
  */
 
-import type { NetworkDefinition } from './types';
+import {
+  addCustomNetwork,
+  listCustomNetworks,
+  listRemovedIds,
+} from './customNetworks';
+import type { CredentialField, NetworkDefinition } from './types';
 
 export const NETWORKS: NetworkDefinition[] = [
   {
@@ -163,6 +172,107 @@ export const NETWORKS: NetworkDefinition[] = [
   },
 ];
 
+/** Convierte un texto en un id slug tipo `amazon-associates`. */
+function slugify(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+const FALLBACK_COLORS = ['#38bdf8', '#a78bfa', '#f472b6', '#34d399', '#fbbf24', '#fb7185'];
+
+/** Lista ACTIVA de redes: predefinidas no eliminadas + afiliados personalizados. */
+export function getAllNetworks(): NetworkDefinition[] {
+  const removed = new Set(listRemovedIds());
+  return [...NETWORKS.filter((network) => !removed.has(network.id)), ...listCustomNetworks()];
+}
+
+/** Redes predefinidas eliminadas desde el panel (restaurables). */
+export function getRemovedNetworks(): NetworkDefinition[] {
+  const removed = new Set(listRemovedIds());
+  return NETWORKS.filter((network) => removed.has(network.id));
+}
+
 export function getNetworkDefinition(id: string): NetworkDefinition | undefined {
-  return NETWORKS.find((network) => network.id === id);
+  return getAllNetworks().find((network) => network.id === id);
+}
+
+export interface NewNetworkInput {
+  name?: unknown;
+  region?: unknown;
+  description?: unknown;
+  docUrl?: unknown;
+  color?: unknown;
+  fields?: unknown;
+}
+
+export type CreateNetworkResult = { ok: true; network: NetworkDefinition } | { ok: false; message: string };
+
+/** Crea un afiliado nuevo desde el panel y lo persiste en networks.json. */
+export function createNetwork(input: NewNetworkInput): CreateNetworkResult {
+  const name = String(input.name ?? '').trim().slice(0, 80);
+  if (name.length < 2) {
+    return { ok: false, message: 'El nombre del afiliado debe tener al menos 2 caracteres.' };
+  }
+
+  const rawFields = Array.isArray(input.fields) ? input.fields : [];
+  const fields: CredentialField[] = [];
+  const takenKeys = new Set<string>();
+  for (const raw of rawFields) {
+    const item = (raw ?? {}) as Record<string, unknown>;
+    const label = String(item.label ?? '').trim().slice(0, 60);
+    if (!label) continue;
+    const base = slugify(label) || `campo-${fields.length + 1}`;
+    let key = base;
+    let suffix = 2;
+    while (takenKeys.has(key)) key = `${base}-${suffix++}`;
+    takenKeys.add(key);
+    const placeholder = String(item.placeholder ?? '').trim().slice(0, 60);
+    fields.push({
+      key,
+      label,
+      secret: Boolean(item.secret),
+      required: Boolean(item.required),
+      ...(placeholder ? { placeholder } : {}),
+    });
+  }
+  if (fields.length === 0) {
+    return { ok: false, message: 'Añade al menos un campo de credencial con etiqueta.' };
+  }
+
+  const takenIds = new Set<string>([
+    ...NETWORKS.map((network) => network.id),
+    ...listCustomNetworks().map((network) => network.id),
+    ...listRemovedIds(),
+  ]);
+  let id = slugify(name) || 'red';
+  if (takenIds.has(id)) {
+    let suffix = 2;
+    while (takenIds.has(`${id}-${suffix}`)) suffix++;
+    id = `${id}-${suffix}`;
+  }
+
+  let docUrl = String(input.docUrl ?? '').trim().slice(0, 300);
+  if (docUrl && !/^https?:\/\//i.test(docUrl)) docUrl = `https://${docUrl}`;
+
+  const colorInput = String(input.color ?? '').trim();
+  const color = /^#[0-9a-f]{6}$/i.test(colorInput)
+    ? colorInput
+    : FALLBACK_COLORS[slugify(name).length % FALLBACK_COLORS.length];
+
+  const network: NetworkDefinition = {
+    id,
+    name,
+    region: String(input.region ?? '').trim().slice(0, 60) || 'Personalizada',
+    color,
+    description: String(input.description ?? '').trim().slice(0, 300) || 'Red de afiliación creada desde el panel.',
+    docUrl,
+    fields,
+  };
+
+  addCustomNetwork(network);
+  return { ok: true, network };
 }

@@ -11,7 +11,7 @@
  * ==============================================================================
  */
 
-import { NETWORKS } from './registry';
+import { getAllNetworks } from './registry';
 import { getConnectedNetworkIds, getAllNetworkViews } from './credentials';
 import type { NetworkConnector } from './connectors/base';
 import { AmazonConnector } from './connectors/amazon';
@@ -34,7 +34,7 @@ const CONNECTORS: Record<string, NetworkConnector> = {
 };
 
 export function getConnector(networkId: string): NetworkConnector | null {
-  if (!NETWORKS.some((network) => network.id === networkId)) return null;
+  if (!getAllNetworks().some((network) => network.id === networkId)) return null;
   return CONNECTORS[networkId] ?? new GenericConnector(networkId);
 }
 

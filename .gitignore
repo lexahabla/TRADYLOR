@@ -27,6 +27,9 @@ src/data/credentials.json
 src/data/users.json
 src/data/avatars/
 
+# afiliados creados/eliminados desde el panel (se generan en local/volumen)
+src/data/networks.json
+
 # volumen de datos de producción (montado en /app/data dentro del contenedor).
 # NUNCA debe subirse al repo desde el contenedor: contiene products.json,
 # credentials.json (secretos) y las imágenes del volumen.

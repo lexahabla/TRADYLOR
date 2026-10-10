@@ -21,7 +21,7 @@
  */
 
 import fs from 'node:fs';
-import { NETWORKS, getNetworkDefinition } from './registry';
+import { getAllNetworks, getNetworkDefinition } from './registry';
 import type { NetworkStatus, NetworkView } from './types';
 import { DATA_DIR, dataFile } from '../paths';
 
@@ -131,13 +131,13 @@ export function getNetworkView(networkId: string): NetworkView | null {
 
 /** Vista pública de todas las redes registradas. */
 export function getAllNetworkViews(): NetworkView[] {
-  return NETWORKS.map((network) => getNetworkView(network.id)).filter(Boolean) as NetworkView[];
+  return getAllNetworks().map((network) => getNetworkView(network.id)).filter(Boolean) as NetworkView[];
 }
 
 /** IDs de redes con credenciales completas (todos los campos requeridos con valor). */
 export function getConnectedNetworkIds(): string[] {
   const data = readFile();
-  return NETWORKS
+  return getAllNetworks()
     .filter((network) => {
       const stored = data.networks[network.id];
       if (!stored) return false;

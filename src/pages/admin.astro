@@ -473,6 +473,7 @@ const scoredCatalog = getScoredCatalog();
           <div id="networkList" class="network-list">
             <div class="loading-panel">Cargando redes...</div>
           </div>
+          <div id="removedNetworks" class="removed-networks"></div>
         </div>
 
         <!-- Columna 2: Buscador global unificado -->
@@ -1463,6 +1464,7 @@ const scoredCatalog = getScoredCatalog();
     // 5. MÓDULO DE AFILIADOS Y MULTI-CATÁLOGO
     // =========================================================================
     const networkList = document.getElementById('networkList');
+    const removedNetworks = document.getElementById('removedNetworks');
     const unifiedQuery = document.getElementById('unifiedQuery');
     const btnUnifiedSearch = document.getElementById('btnUnifiedSearch');
     const btnFullCatalog = document.getElementById('btnFullCatalog');
@@ -1504,29 +1506,94 @@ const scoredCatalog = getScoredCatalog();
       return status === 'connected' ? 'Conectada' : status === 'error' ? 'Error' : 'Pendiente';
     }
 
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function newFieldRowHtml(label = '', secret = true, required = true) {
+      return `
+        <div class="new-field-row">
+          <input class="nf-label" type="text" maxlength="60" placeholder="Etiqueta (ej: API Token)" value="${escapeHtml(label)}" />
+          <label class="nf-check"><input type="checkbox" class="nf-secret" ${secret ? 'checked' : ''} /> Secreto</label>
+          <label class="nf-check"><input type="checkbox" class="nf-required" ${required ? 'checked' : ''} /> Obligatorio</label>
+          <button type="button" class="nf-remove" data-remove-field title="Quitar campo">✕</button>
+        </div>`;
+    }
+
+    function newNetworkPanelHtml() {
+      return `
+        <details class="network-item network-new" data-network-new>
+          <summary>
+            <span class="network-color network-color-add">+</span>
+            <span class="network-main">
+              <span class="network-name">Añadir afiliado nuevo</span>
+              <span class="network-region">Crea una red propia con sus campos de credenciales</span>
+            </span>
+          </summary>
+          <div class="network-body">
+            <form class="network-new-form">
+              <label class="cred-field">
+                <span>Nombre *</span>
+                <input type="text" name="name" maxlength="80" required placeholder="Ej: Programa de afiliados de MiTienda" />
+              </label>
+              <label class="cred-field">
+                <span>Región</span>
+                <input type="text" name="region" maxlength="60" placeholder="Global / UE" />
+              </label>
+              <label class="cred-field">
+                <span>Descripción</span>
+                <input type="text" name="description" maxlength="300" placeholder="Qué ofrece esta red" />
+              </label>
+              <label class="cred-field">
+                <span>URL de documentación</span>
+                <input type="text" name="docUrl" maxlength="300" placeholder="https://..." />
+              </label>
+              <div class="cred-field">
+                <span>Color identificativo</span>
+                <input type="color" name="color" value="#38bdf8" class="nf-color" />
+              </div>
+              <div class="new-fields">
+                <span class="new-fields-title">Campos de credenciales *</span>
+                <div class="new-field-rows">${newFieldRowHtml()}</div>
+                <button type="button" class="btn-secondary btn-sm" data-add-field>+ Añadir campo</button>
+              </div>
+              <div class="network-actions">
+                <button type="submit" class="btn-primary btn-sm">Crear afiliado</button>
+              </div>
+              <p class="network-feedback" data-new-feedback></p>
+            </form>
+          </div>
+        </details>`;
+    }
+
     function renderNetworks(networks) {
       networksCache = networks;
       if (!networkList) return;
       networkList.innerHTML = networks.map((network) => `
-        <details class="network-item" data-network-id="${network.id}">
+        <details class="network-item" data-network-id="${escapeHtml(network.id)}">
           <summary>
-            <span class="network-color" style="background:${network.color}"></span>
+            <span class="network-color" style="background:${escapeHtml(network.color)}"></span>
             <span class="network-main">
-              <span class="network-name">${network.name}</span>
-              <span class="network-region">${network.region}</span>
+              <span class="network-name">${escapeHtml(network.name)}</span>
+              <span class="network-region">${escapeHtml(network.region)}</span>
             </span>
             <span class="integration-status ${network.status === 'connected' ? 'is-configured' : ''} ${network.status === 'error' ? 'is-error' : ''}">${statusLabel(network.status)}</span>
           </summary>
           <div class="network-body">
-            <p class="network-desc">${network.description}</p>
-            <form class="network-cred-form" data-network-id="${network.id}">
+            <p class="network-desc">${escapeHtml(network.description)}</p>
+            <form class="network-cred-form" data-network-id="${escapeHtml(network.id)}">
               ${network.fields.map((field) => `
                 <label class="cred-field">
-                  <span>${field.label}${field.required ? ' *' : ''}</span>
+                  <span>${escapeHtml(field.label)}${field.required ? ' *' : ''}</span>
                   <input
                     type="${field.secret ? 'password' : 'text'}"
-                    name="${field.key}"
-                    placeholder="${field.hasValue ? '•••••••• (guardado)' : (field.placeholder || 'Sin configurar')}"
+                    name="${escapeHtml(field.key)}"
+                    placeholder="${escapeHtml(field.hasValue ? '•••••••• (guardado)' : (field.placeholder || 'Sin configurar'))}"
                     autocomplete="off"
                   />
                   <br />
@@ -1534,28 +1601,79 @@ const scoredCatalog = getScoredCatalog();
               `).join('')}
               <div class="network-actions">
                 <button type="submit" class="btn-primary btn-sm">Guardar</button>
-                <button type="button" class="btn-secondary btn-sm" data-network-validate="${network.id}">Validar</button>
-                <button type="button" class="btn-danger-ghost btn-sm" data-network-delete="${network.id}">Desconectar</button>
-                <a class="network-doc" href="${network.docUrl}" target="_blank" rel="noopener noreferrer">Documentación</a>
+                <button type="button" class="btn-secondary btn-sm" data-network-validate="${escapeHtml(network.id)}">Validar</button>
+                <button type="button" class="btn-danger-ghost btn-sm" data-network-delete="${escapeHtml(network.id)}">Desconectar</button>
+                <button type="button" class="btn-danger-ghost btn-sm network-remove" data-network-remove="${escapeHtml(network.id)}" title="Eliminar este afiliado de la lista">Eliminar</button>
+                ${network.docUrl ? `<a class="network-doc" href="${escapeHtml(network.docUrl)}" target="_blank" rel="noopener noreferrer">Documentación</a>` : ''}
               </div>
-              <p class="network-feedback" data-network-feedback="${network.id}">${network.statusDetail || ''}</p>
+              <p class="network-feedback" data-network-feedback="${escapeHtml(network.id)}">${escapeHtml(network.statusDetail || '')}</p>
             </form>
           </div>
         </details>
-      `).join('');
+      `).join('') + newNetworkPanelHtml();
+    }
+
+    /** Redibuja la lista activa y el aviso de redes predefinidas eliminadas. */
+    function applyNetworks(data) {
+      if (Array.isArray(data.networks)) renderNetworks(data.networks);
+      renderRemoved(Array.isArray(data.removed) ? data.removed : []);
+    }
+
+    function renderRemoved(removed) {
+      if (!removedNetworks) return;
+      if (!removed.length) {
+        removedNetworks.hidden = true;
+        removedNetworks.innerHTML = '';
+        return;
+      }
+      removedNetworks.hidden = false;
+      removedNetworks.innerHTML = `
+        <span>${removed.length} red${removed.length === 1 ? '' : 'es'} predefinida${removed.length === 1 ? '' : 's'} eliminada${removed.length === 1 ? '' : 's'}: ${removed.map((network) => escapeHtml(network.name)).join(', ')}.</span>
+        <button type="button" class="btn-secondary btn-sm" data-restore-networks>Restaurar</button>`;
     }
 
     async function loadNetworks() {
       try {
         const res = await fetch('/api/admin/data');
         const data = await res.json();
-        if (data.success && Array.isArray(data.networks)) renderNetworks(data.networks);
+        if (data.success && Array.isArray(data.networks)) applyNetworks(data);
       } catch {
         if (networkList) networkList.innerHTML = '<div class="empty-dashboard">No se pudieron cargar las redes.</div>';
       }
     }
 
     networkList?.addEventListener('submit', async (event) => {
+      const newForm = event.target.closest('.network-new-form');
+      if (newForm) {
+        event.preventDefault();
+        const feedback = newForm.querySelector('[data-new-feedback]');
+        const rows = [...newForm.querySelectorAll('.new-field-row')];
+        const fields = rows
+          .map((row) => ({
+            label: row.querySelector('.nf-label')?.value.trim() || '',
+            secret: Boolean(row.querySelector('.nf-secret')?.checked),
+            required: Boolean(row.querySelector('.nf-required')?.checked),
+          }))
+          .filter((field) => field.label);
+        if (!fields.length) {
+          if (feedback) feedback.textContent = 'Añade al menos un campo de credencial con etiqueta.';
+          return;
+        }
+        const values = Object.fromEntries(new FormData(newForm).entries());
+        const submitBtn = newForm.querySelector('button[type="submit"]');
+        if (submitBtn) submitBtn.disabled = true;
+        const data = await postNetworks({ action: 'create', ...values, fields });
+        if (submitBtn) submitBtn.disabled = false;
+        if (data.success) {
+          applyNetworks(data);
+          const created = networkList.querySelector(`details[data-network-id="${data.network.id}"]`);
+          if (created) created.open = true;
+        } else if (feedback) {
+          feedback.textContent = data.message || 'No se pudo crear el afiliado.';
+        }
+        return;
+      }
+
       const form = event.target.closest('.network-cred-form');
       if (!form) return;
       event.preventDefault();
@@ -1563,7 +1681,7 @@ const scoredCatalog = getScoredCatalog();
       const values = Object.fromEntries(new FormData(form).entries());
       const data = await postNetworks({ action: 'save', networkId, values });
       if (data.success) {
-        renderNetworks(data.networks);
+        applyNetworks(data);
         const item = networkList.querySelector(`details[data-network-id="${networkId}"]`);
         if (item) item.open = true;
         const feedback = networkList.querySelector(`[data-network-feedback="${networkId}"]`);
@@ -1572,8 +1690,25 @@ const scoredCatalog = getScoredCatalog();
     });
 
     networkList?.addEventListener('click', async (event) => {
+      const addFieldBtn = event.target.closest('[data-add-field]');
+      if (addFieldBtn) {
+        const rows = networkList.querySelector('.new-field-rows');
+        if (rows) rows.insertAdjacentHTML('beforeend', newFieldRowHtml('', true, true));
+        return;
+      }
+
+      const removeFieldBtn = event.target.closest('[data-remove-field]');
+      if (removeFieldBtn) {
+        const rows = networkList.querySelectorAll('.new-field-row');
+        const row = removeFieldBtn.closest('.new-field-row');
+        if (row && rows.length > 1) row.remove();
+        else if (row) row.querySelector('.nf-label')?.focus();
+        return;
+      }
+
       const validateBtn = event.target.closest('[data-network-validate]');
       const deleteBtn = event.target.closest('[data-network-delete]');
+      const removeBtn = event.target.closest('[data-network-remove]');
 
       if (validateBtn) {
         const networkId = validateBtn.dataset.networkValidate;
@@ -1582,7 +1717,7 @@ const scoredCatalog = getScoredCatalog();
         if (feedback) feedback.textContent = 'Validando conexión...';
         const data = await postNetworks({ action: 'validate', networkId });
         validateBtn.disabled = false;
-        if (data.networks) renderNetworks(data.networks);
+        applyNetworks(data);
         const item = networkList.querySelector(`details[data-network-id="${networkId}"]`);
         if (item) item.open = true;
         const newFeedback = networkList.querySelector(`[data-network-feedback="${networkId}"]`);
@@ -1601,8 +1736,24 @@ const scoredCatalog = getScoredCatalog();
         const networkId = deleteBtn.dataset.networkDelete;
         if (!window.confirm('¿Desconectar esta red? Se eliminarán sus credenciales almacenadas.')) return;
         const data = await postNetworks({ action: 'delete', networkId });
-        if (data.success) renderNetworks(data.networks);
+        if (data.success) applyNetworks(data);
       }
+
+      if (removeBtn) {
+        const networkId = removeBtn.dataset.networkRemove;
+        const network = (networksCache || []).find((n) => n.id === networkId);
+        const label = network ? ` "${network.name}"` : '';
+        if (!window.confirm(`¿Eliminar el afiliado${label}? Se borrarán también sus credenciales de la lista.`)) return;
+        const data = await postNetworks({ action: 'remove', networkId });
+        if (data.success) applyNetworks(data);
+        else showSearchStatus('error', 'No se pudo eliminar', data.message || 'Error desconocido.');
+      }
+    });
+
+    removedNetworks?.addEventListener('click', async (event) => {
+      if (!event.target.closest('[data-restore-networks]')) return;
+      const data = await postNetworks({ action: 'restore' });
+      if (data.success) applyNetworks(data);
     });
 
     function renderNetworkStatuses(byNetwork) {
@@ -2203,6 +2354,25 @@ const scoredCatalog = getScoredCatalog();
   .network-doc:hover { text-decoration: underline; }
   .network-feedback { margin: .5rem 0 0; color: var(--color-text-muted); font-size: .74rem; line-height: 1.4; }
   .integration-status.is-error { color: #fca5a5; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); }
+
+  /* Alta y eliminación de afiliados */
+  .network-new { border-style: dashed; }
+  .network-new summary .network-name { color: #93c5fd; }
+  .network-color-add { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border: 1px dashed var(--color-text-dim); border-radius: 4px; color: var(--color-text-dim); box-shadow: none; font-size: .8rem; font-weight: 800; line-height: 1; }
+  .new-fields { display: flex; flex-direction: column; gap: .55rem; }
+  .new-fields-title { color: var(--color-text-muted); font-size: .72rem; font-weight: 700; }
+  .new-field-rows { display: flex; flex-direction: column; gap: .5rem; }
+  .new-field-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  .new-field-row .nf-label { flex: 1; min-width: 150px; box-sizing: border-box; padding: .5rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .78rem; outline: none; }
+  .new-field-row .nf-label:focus { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, .12); }
+  .nf-check { display: inline-flex; align-items: center; gap: .3rem; color: var(--color-text-muted); font-size: .7rem; font-weight: 600; cursor: pointer; }
+  .nf-check input { accent-color: #38bdf8; }
+  .nf-remove { padding: .2rem .45rem; color: #fca5a5; background: transparent; border: 1px solid rgba(239, 68, 68, .35); border-radius: 4px; cursor: pointer; font-size: .72rem; line-height: 1.2; }
+  .nf-remove:hover { background: rgba(239, 68, 68, .12); }
+  .nf-color { width: 64px; height: 32px; padding: 2px; background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); cursor: pointer; }
+  .network-remove { color: #fca5a5; }
+  .removed-networks { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; margin-top: .75rem; padding: .6rem .8rem; color: var(--color-text-muted); background: rgba(239, 68, 68, .06); border: 1px dashed rgba(239, 68, 68, .35); border-radius: var(--border-radius-sm); font-size: .74rem; }
+  .removed-networks[hidden] { display: none; }
 
   .search-controls { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.25rem; }
   .search-input-group { display: flex; gap: .6rem; }
