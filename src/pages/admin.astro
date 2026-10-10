@@ -948,8 +948,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             showAlert(
               'success',
               'Metadatos extraídos con éxito',
-              'Título, imagen, comercio y precio fueron detectados. Revisa y pulsa "Guardar producto".'
+              'Título, imagen, comercio y precio detectados. La IA completa la ficha automáticamente...'
             );
+            // Auto-enriquecer con IA: descripción, veredicto, pros/cons e imagen.
+            if (typeof runAiEnrich === 'function') {
+              window.setTimeout(() => {
+                runAiEnrich({ auto: true }).catch(() => {});
+              }, 400);
+            }
           } else {
             showAlert(
               'warning',
@@ -1081,76 +1087,81 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     //     2) Imagen de producto generada con el prompt comercial (OpenAI / Flux)
     //     Rellena el formulario en modo vista previa: quien decide guarda.
     // =========================================================================
-    if (btnAiEnrich) {
-      btnAiEnrich.addEventListener('click', async () => {
-        const title = (prodTitle.value || '').trim();
-        if (!title) {
+    // Enriquecer con IA (usado por el botón y de forma automática tras analizar un enlace).
+    const runAiEnrich = async ({ auto = false }: { auto?: boolean } = {}) => {
+      const title = (prodTitle.value || '').trim();
+      if (!title) {
+        if (!auto) {
           showAlert('error', 'Falta el título', 'Escribe el título del producto antes de pedir el enriquecimiento con IA.');
           prodTitle.focus();
-          return;
         }
+        return;
+      }
 
-        btnAiEnrich.disabled = true;
-        btnAiEnrich.classList.add('loading');
-        showAlert('loading', 'Trabajando con IA...', 'Paso 1: ficha técnica, pros/contras y veredicto · Paso 2: imagen de producto.');
+      btnAiEnrich.disabled = true;
+      btnAiEnrich.classList.add('loading');
+      showAlert('loading', 'Trabajando con IA...', 'Paso 1: ficha técnica, pros/contras y veredicto · Paso 2: imagen de producto.');
 
-        try {
-          const response = await fetch('/api/admin/add-product', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: (prodId.value || '').trim() || undefined,
-              title,
-              description: (prodDescription.value || '').trim(),
-              category: (prodCategory.value || '').trim() || undefined,
-              price: parseFloat(prodPrice.value) || undefined,
-              originalPrice: prodOriginalPrice.value ? parseFloat(prodOriginalPrice.value) : undefined,
-              image: (prodImage.value || '').trim() || undefined,
-              affiliateUrl: (prodAffiliateUrl.value || '').trim() || undefined,
-              merchant: prodMerchant.value || undefined,
-              url: inputScrapeUrl && inputScrapeUrl.value ? inputScrapeUrl.value.trim() || undefined : undefined,
-              options: { text: true, image: true, save: false },
-            }),
-          });
+      try {
+        const response = await fetch('/api/admin/add-product', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: (prodId.value || '').trim() || undefined,
+            title,
+            description: (prodDescription.value || '').trim(),
+            category: (prodCategory.value || '').trim() || undefined,
+            price: parseFloat(prodPrice.value) || undefined,
+            originalPrice: prodOriginalPrice.value ? parseFloat(prodOriginalPrice.value) : undefined,
+            image: (prodImage.value || '').trim() || undefined,
+            affiliateUrl: (prodAffiliateUrl.value || '').trim() || undefined,
+            merchant: prodMerchant.value || undefined,
+            url: inputScrapeUrl && inputScrapeUrl.value ? inputScrapeUrl.value.trim() || undefined : undefined,
+            options: { text: true, image: true, save: false },
+          }),
+        });
 
-          const result = await response.json();
+        const result = await response.json();
 
-          if (result.success) {
-            const enriched = result.product || {};
-            const flags = result.enrichment || { text: 'skipped', image: 'skipped', warnings: [] };
+        if (result.success) {
+          const enriched = result.product || {};
+          const flags = result.enrichment || { text: 'skipped', image: 'skipped', warnings: [] };
 
-            if (flags.text === 'ok') {
-              if (enriched.description) prodDescription.value = enriched.description;
-              if (enriched.verdict) prodVerdict.value = enriched.verdict;
-              if (Array.isArray(enriched.pros) && enriched.pros.length) prodPros.value = enriched.pros.join('\n');
-              if (Array.isArray(enriched.cons) && enriched.cons.length) prodCons.value = enriched.cons.join('\n');
-              if (enriched.category && !(prodCategory.value || '').trim()) prodCategory.value = enriched.category;
-            }
-            if (flags.image === 'ok' && enriched.image) prodImage.value = enriched.image;
-
-            updatePreview();
-
-            const summary = `Texto: ${flags.text} · Imagen: ${flags.image}`;
-            const warnings =
-              Array.isArray(flags.warnings) && flags.warnings.length
-                ? ` Avisos: ${flags.warnings.join(' | ')}`
-                : '';
-            showAlert(
-              'success',
-              'Contenido generado con IA',
-              `${summary}. Revisa los campos y pulsa «Guardar producto» para publicarlo.${warnings}`
-            );
-          } else {
-            showAlert('error', 'La IA no pudo completar el proceso', result.message || 'Revisa las claves de API configuradas en .env');
+          if (flags.text === 'ok') {
+            if (enriched.description) prodDescription.value = enriched.description;
+            if (enriched.verdict) prodVerdict.value = enriched.verdict;
+            if (Array.isArray(enriched.pros) && enriched.pros.length) prodPros.value = enriched.pros.join('\n');
+            if (Array.isArray(enriched.cons) && enriched.cons.length) prodCons.value = enriched.cons.join('\n');
+            if (enriched.category && !(prodCategory.value || '').trim()) prodCategory.value = enriched.category;
           }
-        } catch (err) {
-          console.error(err);
-          showAlert('error', 'Error de red', 'No se pudo contactar con /api/admin/add-product.');
-        } finally {
-          btnAiEnrich.disabled = false;
-          btnAiEnrich.classList.remove('loading');
+          if (flags.image === 'ok' && enriched.image) prodImage.value = enriched.image;
+
+          updatePreview();
+
+          const summary = `Texto: ${flags.text} · Imagen: ${flags.image}`;
+          const warnings =
+            Array.isArray(flags.warnings) && flags.warnings.length
+              ? ` Avisos: ${flags.warnings.join(' | ')}`
+              : '';
+          showAlert(
+            'success',
+            'Contenido generado con IA',
+            `${summary}. Revisa los campos y pulsa «Guardar producto» para publicarlo.${warnings}`
+          );
+        } else {
+          showAlert('error', 'La IA no pudo completar el proceso', result.message || 'Revisa las claves de API configuradas en .env');
         }
-      });
+      } catch (err) {
+        console.error(err);
+        showAlert('error', 'Error de red', 'No se pudo contactar con /api/admin/add-product.');
+      } finally {
+        btnAiEnrich.disabled = false;
+        btnAiEnrich.classList.remove('loading');
+      }
+    };
+
+    if (btnAiEnrich) {
+      btnAiEnrich.addEventListener('click', () => runAiEnrich());
     }
 
     // =========================================================================

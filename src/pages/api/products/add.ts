@@ -51,7 +51,8 @@ function detectMerchantFromUrl(urlStr: string): string {
     const { hostname } = new URL(urlStr);
     const host = hostname.toLowerCase();
 
-    if (host.includes('amazon.')) return 'Amazon';
+    // Amazon y sus enlaces cortos de afiliado (amzn.to, a.co, amzn.eu...).
+    if (host.includes('amazon.') || host === 'amzn.to' || host === 'a.co' || host === 'amzn.eu' || host === 'amzn.asia') return 'Amazon';
     if (host.includes('pccomponentes.')) return 'PcComponentes';
     if (host.includes('elcorteingles.')) return 'El Corte Inglés';
     if (host.includes('mediamarkt.')) return 'MediaMarkt';
@@ -207,6 +208,34 @@ function extractMetadata(html: string, targetUrl: string) {
     }
   }
 
+  // Amazon no siempre publica JSON-LD: marca, valoración y reseñas se leen del HTML.
+  if (merchant === 'Amazon') {
+    // Marca: #bylineInfo ("Visita la tienda de X" / "Marca: X" / "X Official Store").
+    if (!brand) {
+      const bylineMatch = html.match(/id=["']bylineInfo["'][^>]*>([\s\S]*?)<\/a>/i);
+      if (bylineMatch?.[1]) {
+        const raw = cleanExtractedText(bylineMatch[1].replace(/<[^>]+>/g, ' '));
+        brand = raw
+          .replace(/^(visita la tienda de|marca\s*:?\s*|tienda oficial de|official store)\s*/i, '')
+          .replace(/\s*(en amazon\.es|on amazon)\s*$/i, '')
+          .trim();
+      }
+    }
+    // Valoración: texto de .a-icon-alt ("5,0 de 5 estrellas").
+    if (rating === null) {
+      const ratingMatch = html.match(/class=["'][^"']*a-icon-alt[^"']*["'][^>]*>\s*([\d.,]+)\s*de\s*5/i);
+      if (ratingMatch?.[1]) rating = parsePrice(ratingMatch[1]);
+    }
+    // Nº de reseñas: #acrCustomerReviewText ("(7)", "7 valoraciones", "1.234 opiniones").
+    if (reviewsCount === null) {
+      const reviewsMatch = html.match(/id=["']acrCustomerReviewText["'][^>]*>([\s\S]*?)<\//i);
+      if (reviewsMatch?.[1]) {
+        const digits = reviewsMatch[1].replace(/<[^>]+>/g, '').replace(/[^\d]/g, '');
+        if (digits) reviewsCount = Number.parseInt(digits, 10);
+      }
+    }
+  }
+
   // Fallbacks específicos para la plantilla dinámica de Amazon.
   if (!image) {
     const dynamicImageMatch = html.match(/id=["']landingImage["'][^>]+data-a-dynamic-image=["']([^"']+)["']/i);
@@ -251,11 +280,58 @@ function extractMetadata(html: string, targetUrl: string) {
     description = `Información y características principales de ${title}.`;
   }
 
-  // Amazon y muchas tiendas publican prestaciones como elementos de lista.
-  const bulletMatches = html.match(/<(?:li|span)[^>]+(?:a-list-item|feature-bullet|bullet)[^>]*>([\s\S]*?)<\/(?:li|span)>/gi) || [];
-  for (const match of bulletMatches) {
-    const bullet = cleanExtractedText(match.replace(/<[^>]+>/g, ' '));
-    if (bullet.length >= 12 && bullet.length <= 220 && !pros.includes(bullet)) pros.push(bullet);
+  // Amazon publica las prestaciones de dos formas: un <ul id="feature-bullets">
+  // (cuando se sirve completo) o la tabla "Lo esencial" (#productOverview_feature_div).
+  // El resto de elementos "a-list-item" suelen ser navegación o textos legales de
+  // relleno, así que NO se usan como respaldo para evitar pros basura.
+  const boilerplateRe = /^(dispositivos internos|los productos internacionales|es posible que la garant|se vende|sold by|country of origin|información del producto|acerca de este artículo|imagen no disponible|¿?quieres reciclar|obtén más información)/i;
+  const cleanBullet = (raw: string): string => {
+    const text = cleanExtractedText(raw.replace(/<[^>]+>/g, ' ')).trim();
+    if (text.length < 4 || text.length > 220) return '';
+    if (boilerplateRe.test(text)) return '';
+    return text;
+  };
+
+  // 1ª fuente: el bloque feature-bullets de Amazon. El <div> puede venir vacío
+  // (lo carga JavaScript), así que sólo se extrae si hay un <ul> real justo después.
+  const fbIdx = html.search(/id=["']feature-bullets["']/i);
+  if (fbIdx !== -1) {
+    const ulStart = html.indexOf('<ul', fbIdx);
+    const nextDiv = html.indexOf('<div', fbIdx + 10);
+    // El <ul> debe estar antes del siguiente <div> hermano y razonablemente cerca.
+    if (ulStart !== -1 && (nextDiv === -1 || ulStart < nextDiv) && ulStart - fbIdx < 3000) {
+      const ulEnd = html.indexOf('</ul>', ulStart);
+      if (ulEnd !== -1 && ulEnd - ulStart < 15000) {
+        const items = html.slice(ulStart, ulEnd).match(/<li[^>]*>([\s\S]*?)<\/li>/gi) || [];
+        for (const item of items) {
+          const bullet = cleanBullet(item);
+          if (bullet && !pros.includes(bullet)) pros.push(bullet);
+        }
+      }
+    }
+  }
+
+  // 2ª fuente: la tabla "Lo esencial" (#productOverview_feature_div). Cada <tr>
+  // es un par etiqueta/valor (<span class="a-text-bold"> / <span class="po-break-word">).
+  // Se acota por índices a la primera <table> tras el div para no capturar la navegación.
+  if (pros.length === 0) {
+    const overviewIdx = html.search(/id=["']productOverview_feature_div["']/i);
+    if (overviewIdx !== -1) {
+      const tableStart = html.indexOf('<table', overviewIdx);
+      const tableEnd = tableStart !== -1 ? html.indexOf('</table>', tableStart) : -1;
+      if (tableStart !== -1 && tableEnd > tableStart && tableEnd - tableStart < 20000) {
+        const tableHtml = html.slice(tableStart, tableEnd);
+        const rows = tableHtml.match(/<tr[\s\S]*?<\/tr>/gi) || [];
+        for (const row of rows) {
+          const labelMatch = row.match(/<span[^>]+a-text-bold[^>]*>([\s\S]*?)<\/span>/i);
+          const valueMatch = row.match(/<span[^>]+po-break-word[^>]*>([\s\S]*?)<\/span>/i);
+          const label = labelMatch ? cleanExtractedText(labelMatch[1].replace(/<[^>]+>/g, ' ')).trim() : '';
+          const value = valueMatch ? cleanExtractedText(valueMatch[1].replace(/<[^>]+>/g, ' ')).trim() : '';
+          const bullet = cleanBullet(value ? `${label}: ${value}` : label);
+          if (bullet && !pros.includes(bullet)) pros.push(bullet);
+        }
+      }
+    }
   }
 
   if (originalPrice === null) {
@@ -299,7 +375,8 @@ function extractMetadata(html: string, targetUrl: string) {
     originalPrice: originalPrice !== null && price !== null && originalPrice > price ? originalPrice : undefined,
     category: suggestedCategory,
     merchant,
-    badge: price !== null ? 'Oferta detectada' : '',
+    // Sólo es "oferta" si hay un precio tachado superior al actual (descuento real).
+    badge: price !== null && originalPrice !== null && originalPrice > price ? 'Oferta detectada' : '',
     verdict: title ? `Una opción interesante para quienes buscan ${title.toLowerCase()}.` : '',
     pros: pros.slice(0, 5),
     cons: cons.length > 0 ? cons.slice(0, 3) : ['Revisa disponibilidad, garantía y condiciones del vendedor.'],
@@ -511,6 +588,8 @@ export const POST: APIRoute = async ({ request }) => {
     let html = '';
     let fetchBlockedOrFailed = false;
     let failureReason = '';
+    // URL final tras seguir redirecciones (enlaces cortos como amzn.to).
+    let resolvedUrl = '';
 
     try {
       const response = await fetch(parsedUrl.href, {
@@ -540,6 +619,17 @@ export const POST: APIRoute = async ({ request }) => {
         failureReason = `El comercio respondió con código ${response.status} (${response.statusText})`;
       } else {
         html = await response.text();
+        // Tras seguir la redirección (p. ej. amzn.to → /dp/ASIN), la URL final
+        // es la del producto real: la usamos para detectar comercio, ASIN y
+        // como enlace de afiliado guardado (más fiable que el enlace corto).
+        const finalUrl = response.url?.trim();
+        if (finalUrl) {
+          try {
+            resolvedUrl = new URL(finalUrl).href;
+          } catch {
+            resolvedUrl = '';
+          }
+        }
       }
     } catch (fetchError: any) {
       fetchBlockedOrFailed = true;
@@ -579,8 +669,16 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
+    // URL efectiva del producto: la resuelta tras la redirección si existe
+    // (convierte enlaces cortos como amzn.to en la URL real /dp/ASIN), si no la original.
+    const effectiveUrl = resolvedUrl || parsedUrl.href;
+    // Merchant según la URL final (los enlaces cortos ya no engañan a la detección).
+    const effectiveMerchant = detectMerchantFromUrl(effectiveUrl);
+
     // Si obtuvimos el HTML, extraemos OpenGraph y Schemas
-    const extracted = extractMetadata(html, parsedUrl.href);
+    const extracted = extractMetadata(html, effectiveUrl);
+    // Comercio detectado con la URL final tiene prioridad sobre el del enlace original.
+    const finalMerchant = effectiveMerchant !== 'Comercio Externo' ? effectiveMerchant : (extracted.merchant || detectedMerchant);
 
     return new Response(
       JSON.stringify({
@@ -594,8 +692,8 @@ export const POST: APIRoute = async ({ request }) => {
           originalPrice: extracted.originalPrice ?? extracted.price ?? null,
           image: extracted.image,
           category: extracted.category,
-          merchant: extracted.merchant,
-          affiliateUrl: parsedUrl.href,
+          merchant: finalMerchant,
+          affiliateUrl: effectiveUrl,
           badge: extracted.badge,
           verdict: extracted.verdict,
           pros: extracted.pros,
