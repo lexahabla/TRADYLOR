@@ -2366,7 +2366,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   });
 </script>
 
-<style is:global>
+<style>
   .admin-dashboard-view { flex-direction: column; gap: 1.5rem; }
   .view-heading { padding-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
   .view-heading .admin-title { margin: .75rem 0 .5rem; }
@@ -2942,18 +2942,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     margin-top: 0.3rem;
   }
 
-  .gallery-item {
+  :global(.gallery-item) {
     position: relative;
     width: 72px;
     height: 72px;
   }
 
-  .gallery-item.is-main .gallery-thumb {
+  :global(.gallery-item.is-main .gallery-thumb) {
     border-color: var(--color-accent, #f59e0b);
     box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
   }
 
-  .gallery-thumb {
+  :global(.gallery-thumb) {
     width: 72px;
     height: 72px;
     padding: 0;
@@ -2965,12 +2965,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     transition: border-color 0.15s, transform 0.15s;
   }
 
-  .gallery-thumb:hover {
+  :global(.gallery-thumb:hover) {
     transform: translateY(-2px);
     border-color: var(--color-accent, #f59e0b);
   }
 
-  .gallery-thumb img {
+  :global(.gallery-thumb img) {
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -2978,7 +2978,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     display: block;
   }
 
-  .gallery-remove {
+  :global(.gallery-remove) {
     position: absolute;
     top: -6px;
     right: -6px;
@@ -2997,7 +2997,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   }
 
-  .gallery-remove:hover {
+  :global(.gallery-remove:hover) {
     background: #dc2626;
   }
 
