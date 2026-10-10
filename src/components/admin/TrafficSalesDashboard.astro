@@ -1,0 +1,170 @@
+---
+/**
+ * TRADYLOR — Cuerpo del dashboard "Tráfico y Ventas"
+ * Se muestra dentro de /admin (sección analytics) y también en la ruta propia
+ * /admin/trafico-ventas/. Datos de ejemplo (mockAnalytics) + tooltips del
+ * glosario src/data/metricasGlosario.ts.
+ */
+import MetricCard from './MetricCard.astro';
+import SimpleBarChart from './SimpleBarChart.astro';
+import ProductMetricsTable from './ProductMetricsTable.astro';
+import {
+  evolucionVisitas,
+  fuentesTrafico,
+  formatValor,
+  metricasGlobales,
+  productos,
+  recomendacionesIA,
+} from '../../data/mockAnalytics';
+import { getMetrica } from '../../data/metricasGlosario';
+
+const fmtNum = new Intl.NumberFormat('es-ES');
+
+const barrasFuentes = fuentesTrafico.map((fuente) => ({
+  etiqueta: fuente.etiqueta,
+  valor: fuente.porcentaje,
+  texto: `${fuente.porcentaje.toFixed(1).replace('.', ',')}% · ${fmtNum.format(fuente.sesiones)} ses.`,
+  color: fuente.color,
+}));
+
+const barrasTop = productos.slice(0, 5).map((producto, index) => ({
+  etiqueta: producto.titulo,
+  valor: producto.visitas,
+  texto: fmtNum.format(producto.visitas),
+  color: index < 3 ? '#38bdf8' : '#475569',
+}));
+
+const maxVisitas = Math.max(...evolucionVisitas.map((punto) => punto.visitas));
+const totalVisitas = evolucionVisitas.reduce((suma, punto) => suma + punto.visitas, 0);
+const maxDia = evolucionVisitas.reduce((mejor, punto) => (punto.visitas > mejor.visitas ? punto : mejor), evolucionVisitas[0]);
+
+const tiposRecomendacion: Record<string, { label: string; clase: string }> = {
+  oportunidad: { label: 'Oportunidad', clase: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300' },
+  alerta: { label: 'Alerta', clase: 'border-rose-500/30 bg-rose-500/15 text-rose-300' },
+  info: { label: 'Consejo', clase: 'border-sky-500/30 bg-sky-500/15 text-sky-300' },
+};
+---
+
+<div class="flex flex-col gap-9">
+  <!-- 1. Resumen global -->
+  <section class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-end justify-between gap-2">
+      <div>
+        <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Resumen global</h2>
+        <p class="mt-1 text-xs text-slate-400">Indicadores clave de los últimos 30 días frente al periodo anterior.</p>
+      </div>
+    </div>
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {metricasGlobales.map((metrica) => (
+        <MetricCard
+          etiqueta={metrica.etiqueta}
+          valor={formatValor(metrica.valor, metrica.formato)}
+          variacion={metrica.variacion}
+          favorable={metrica.favorable}
+          ayuda={getMetrica(metrica.glosarioId)?.definicionCorta}
+          periodo={metrica.periodo}
+        />
+      ))}
+    </div>
+  </section>
+
+  <!-- 2. Tendencia + fuentes de tráfico -->
+  <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div class="flex min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div class="min-w-0">
+          <h3 class="text-sm font-extrabold uppercase tracking-wider text-white">Evolución de visitas</h3>
+          <p class="mt-1 text-xs leading-relaxed text-slate-400">Últimos 14 días · {fmtNum.format(totalVisitas)} visitas en total</p>
+        </div>
+        <span class="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-extrabold text-emerald-300">
+          Mejor día: {maxDia.etiqueta} ({fmtNum.format(maxDia.visitas)})
+        </span>
+      </div>
+
+      <div class="mt-6 flex h-44 items-end gap-1.5">
+        {evolucionVisitas.map((punto, index) => {
+          const pct = Math.max(Math.round((punto.visitas / maxVisitas) * 100), 8);
+          return (
+            <div class="group/bar flex min-w-0 flex-1 flex-col items-center gap-1.5" title={`${punto.etiqueta}: ${fmtNum.format(punto.visitas)} visitas`}>
+              <span class="text-[10px] font-bold text-slate-400 opacity-0 transition group-hover/bar:opacity-100">
+                {fmtNum.format(punto.visitas)}
+              </span>
+              <div
+                class="[width:100%] rounded-t-md bg-gradient-to-t from-sky-600 to-sky-300 transition group-hover/bar:from-violet-500 group-hover/bar:to-violet-300"
+                style={`height:${pct}%`}
+              ></div>
+              <span class="text-[9px] text-slate-500">{index % 2 === 0 ? punto.etiqueta : ''}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+
+    <SimpleBarChart
+      titulo="Fuentes de tráfico"
+      subtitulo="Reparto de sesiones por origen durante el periodo."
+      items={barrasFuentes}
+      ayuda={getMetrica('fuentes-trafico')?.definicionCorta}
+    />
+  </section>
+
+  <!-- 3. Ranking de productos + IA -->
+  <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <SimpleBarChart
+      titulo="Productos más visitados"
+      subtitulo="Visualizaciones de ficha por producto (top 5)."
+      items={barrasTop}
+      ayuda={getMetrica('visualizaciones-producto')?.definicionCorta}
+    />
+
+    <div class="flex min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+      <div class="flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <h3 class="text-sm font-extrabold uppercase tracking-wider text-white">Recomendaciones de IA</h3>
+          <p class="mt-1 text-xs leading-relaxed text-slate-400">Acciones priorizadas a partir de las métricas del periodo.</p>
+        </div>
+        <span class="rounded-full border border-violet-500/30 bg-violet-500/15 px-2.5 py-1 text-[11px] font-extrabold text-violet-300">IA</span>
+      </div>
+
+      <ul class="mt-5 flex flex-col gap-3">
+        {recomendacionesIA.map((rec) => (
+          <li class="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] p-3.5 transition hover:border-sky-500/30">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class:list={['rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider', tiposRecomendacion[rec.tipo].clase]}>
+                {tiposRecomendacion[rec.tipo].label}
+              </span>
+              <h4 class="text-sm font-bold text-white">{rec.titulo}</h4>
+            </div>
+            <p class="text-xs leading-relaxed text-slate-400">{rec.detalle}</p>
+            <a
+              href={`/admin/trafico-ventas/guia#${rec.glosarioId}`}
+              class="mt-1 w-fit text-[11px] font-bold text-sky-400 transition hover:text-sky-300 hover:underline"
+            >
+              Ver métrica en la guía →
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+
+  <!-- 4. Tabla por producto -->
+  <section class="flex flex-col gap-4">
+    <div class="flex flex-wrap items-end justify-between gap-2">
+      <div>
+        <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Rendimiento por producto</h2>
+        <p class="mt-1 text-xs text-slate-400">
+          Visitas, conversiones y estado de fricción de cada ficha del catálogo.
+        </p>
+      </div>
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{productos.length} productos</span>
+    </div>
+    <ProductMetricsTable productos={productos} />
+  </section>
+
+  <p class="border-t border-white/10 pt-6 text-[11px] leading-relaxed text-slate-500">
+    Los datos de este panel son de ejemplo (mock) hasta conectar las fuentes reales
+    (Google Analytics 4, Google Search Console y el tracker propio).
+    Consulta la <a href="/admin/trafico-ventas/guia" class="font-bold text-sky-400 hover:underline">Guía y Glosario de Métricas</a> para entender cada indicador.
+  </p>
+</div>

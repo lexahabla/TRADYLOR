@@ -1,28 +1,15 @@
 ---
 /**
- * TRADYLOR — Dashboard "Tráfico y Ventas"
- * Panel principal del módulo: resumen global, gráficos simplificados (barras),
- * ranking de productos, tendencia y recomendaciones de IA.
- * Alimentado por src/data/mockAnalytics.ts (datos de ejemplo) y con tooltips
- * del glosario src/data/metricasGlosario.ts.
+ * TRADYLOR — Dashboard "Tráfico y Ventas" (ruta propia)
+ * El módulo también es una sección del panel (/admin?section=analytics);
+ * aquí se mantiene la URL directa con la misma cabecera del backend.
  */
 export const prerender = false;
 
 import Layout from '../../../layouts/Layout.astro';
 import AdminNav from '../../../components/AdminNav.astro';
-import MetricCard from '../../../components/admin/MetricCard.astro';
-import SimpleBarChart from '../../../components/admin/SimpleBarChart.astro';
-import ProductMetricsTable from '../../../components/admin/ProductMetricsTable.astro';
+import TrafficSalesDashboard from '../../../components/admin/TrafficSalesDashboard.astro';
 import { getSessionUser } from '../../../lib/adminAuth';
-import {
-  evolucionVisitas,
-  fuentesTrafico,
-  formatValor,
-  metricasGlobales,
-  productos,
-  recomendacionesIA,
-} from '../../../data/mockAnalytics';
-import { getMetrica } from '../../../data/metricasGlosario';
 
 const sessionUser = getSessionUser(Astro.request);
 if (!sessionUser) return Astro.redirect('/admin');
@@ -30,39 +17,13 @@ if (sessionUser.role !== 'admin') return Astro.redirect('/admin/perfil');
 
 // El panel nunca se cachea: un deploy nuevo tiene que verse a la primera.
 Astro.response.headers.set('Cache-Control', 'no-store');
-
-const fmtNum = new Intl.NumberFormat('es-ES');
-
-const barrasFuentes = fuentesTrafico.map((fuente) => ({
-  etiqueta: fuente.etiqueta,
-  valor: fuente.porcentaje,
-  texto: `${fuente.porcentaje.toFixed(1).replace('.', ',')}% · ${fmtNum.format(fuente.sesiones)} ses.`,
-  color: fuente.color,
-}));
-
-const barrasTop = productos.slice(0, 5).map((producto, index) => ({
-  etiqueta: producto.titulo,
-  valor: producto.visitas,
-  texto: fmtNum.format(producto.visitas),
-  color: index < 3 ? '#38bdf8' : '#475569',
-}));
-
-const maxVisitas = Math.max(...evolucionVisitas.map((punto) => punto.visitas));
-const totalVisitas = evolucionVisitas.reduce((suma, punto) => suma + punto.visitas, 0);
-const maxDia = evolucionVisitas.reduce((mejor, punto) => (punto.visitas > mejor.visitas ? punto : mejor), evolucionVisitas[0]);
-
-const tiposRecomendacion: Record<string, { label: string; clase: string }> = {
-  oportunidad: { label: 'Oportunidad', clase: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300' },
-  alerta: { label: 'Alerta', clase: 'border-rose-500/30 bg-rose-500/15 text-rose-300' },
-  info: { label: 'Consejo', clase: 'border-sky-500/30 bg-sky-500/15 text-sky-300' },
-};
 ---
 
 <Layout
   title="Tráfico y ventas | Admin Tradylor"
   description="Dashboard de tráfico y ventas de Tradylor: métricas globales, rendimiento por producto, gráficos y recomendaciones de IA."
 >
-  <div class="mx-auto flex max-w-6xl flex-col gap-9 px-4 pb-20 pt-10">
+  <div class="admin-module-wrapper">
     <!-- Cabecera del módulo (patrón admin-header del backend) -->
     <header class="admin-header">
       <div class="admin-header-main">
@@ -75,14 +36,9 @@ const tiposRecomendacion: Record<string, { label: string; clase: string }> = {
           Resumen global, ranking por producto y recomendaciones de IA. Pasa el cursor sobre el
           <strong>?</strong> de cada métrica para ver su definición.
         </p>
-        <div class="flex flex-wrap items-center gap-2 mt-4">
-          <span class="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-amber-300">
-            Datos de ejemplo
-          </span>
-          <a
-            href="/admin/trafico-ventas/guia"
-            class="inline-flex items-center gap-2 rounded-full bg-sky-500 px-4 py-2.5 text-xs font-extrabold text-slate-950 transition hover:bg-sky-400"
-          >
+        <div class="module-heading-actions">
+          <span class="data-example-pill">Datos de ejemplo</span>
+          <a class="guide-link" href="/admin/trafico-ventas/guia">
             Guía y Glosario
             <span aria-hidden="true">→</span>
           </a>
@@ -92,135 +48,20 @@ const tiposRecomendacion: Record<string, { label: string; clase: string }> = {
 
     <AdminNav context="catalogo" active="analytics" user={sessionUser} />
 
-    <!-- 1. Resumen global -->
-    <section class="flex flex-col gap-4">
-      <div class="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Resumen global</h2>
-          <p class="mt-1 text-xs text-slate-400">Indicadores clave de los últimos 30 días frente al periodo anterior.</p>
-        </div>
-      </div>
-      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {metricasGlobales.map((metrica) => (
-          <MetricCard
-            etiqueta={metrica.etiqueta}
-            valor={formatValor(metrica.valor, metrica.formato)}
-            variacion={metrica.variacion}
-            favorable={metrica.favorable}
-            ayuda={getMetrica(metrica.glosarioId)?.definicionCorta}
-            periodo={metrica.periodo}
-          />
-        ))}
-      </div>
-    </section>
-
-    <!-- 2. Tendencia + fuentes de tráfico -->
-    <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <div class="flex min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-        <div class="flex flex-wrap items-start justify-between gap-2">
-          <div class="min-w-0">
-            <h3 class="text-sm font-extrabold uppercase tracking-wider text-white">Evolución de visitas</h3>
-            <p class="mt-1 text-xs leading-relaxed text-slate-400">Últimos 14 días · {fmtNum.format(totalVisitas)} visitas en total</p>
-          </div>
-          <span class="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-extrabold text-emerald-300">
-            Mejor día: {maxDia.etiqueta} ({fmtNum.format(maxDia.visitas)})
-          </span>
-        </div>
-
-        <div class="mt-6 flex h-44 items-end gap-1.5">
-          {evolucionVisitas.map((punto, index) => {
-            const pct = Math.max(Math.round((punto.visitas / maxVisitas) * 100), 8);
-            return (
-              <div class="group/bar flex min-w-0 flex-1 flex-col items-center gap-1.5" title={`${punto.etiqueta}: ${fmtNum.format(punto.visitas)} visitas`}>
-                <span class="text-[10px] font-bold text-slate-400 opacity-0 transition group-hover/bar:opacity-100">
-                  {fmtNum.format(punto.visitas)}
-                </span>
-                <div
-                  class="[width:100%] rounded-t-md bg-gradient-to-t from-sky-600 to-sky-300 transition group-hover/bar:from-violet-500 group-hover/bar:to-violet-300"
-                  style={`height:${pct}%`}
-                ></div>
-                <span class="text-[9px] text-slate-500">{index % 2 === 0 ? punto.etiqueta : ''}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <SimpleBarChart
-        titulo="Fuentes de tráfico"
-        subtitulo="Reparto de sesiones por origen durante el periodo."
-        items={barrasFuentes}
-        ayuda={getMetrica('fuentes-trafico')?.definicionCorta}
-      />
-    </section>
-
-    <!-- 3. Ranking de productos + IA -->
-    <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-      <SimpleBarChart
-        titulo="Productos más visitados"
-        subtitulo="Visualizaciones de ficha por producto (top 5)."
-        items={barrasTop}
-        ayuda={getMetrica('visualizaciones-producto')?.definicionCorta}
-      />
-
-      <div class="flex min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-        <div class="flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <h3 class="text-sm font-extrabold uppercase tracking-wider text-white">Recomendaciones de IA</h3>
-            <p class="mt-1 text-xs leading-relaxed text-slate-400">Acciones priorizadas a partir de las métricas del periodo.</p>
-          </div>
-          <span class="rounded-full border border-violet-500/30 bg-violet-500/15 px-2.5 py-1 text-[11px] font-extrabold text-violet-300">IA</span>
-        </div>
-
-        <ul class="mt-5 flex flex-col gap-3">
-          {recomendacionesIA.map((rec) => (
-            <li class="flex flex-col gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] p-3.5 transition hover:border-sky-500/30">
-              <div class="flex flex-wrap items-center gap-2">
-                <span class:list={['rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider', tiposRecomendacion[rec.tipo].clase]}>
-                  {tiposRecomendacion[rec.tipo].label}
-                </span>
-                <h4 class="text-sm font-bold text-white">{rec.titulo}</h4>
-              </div>
-              <p class="text-xs leading-relaxed text-slate-400">{rec.detalle}</p>
-              <a
-                href={`/admin/trafico-ventas/guia#${rec.glosarioId}`}
-                class="mt-1 w-fit text-[11px] font-bold text-sky-400 transition hover:text-sky-300 hover:underline"
-              >
-                Ver métrica en la guía →
-              </a>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </section>
-
-    <!-- 4. Tabla por producto -->
-    <section class="flex flex-col gap-4">
-      <div class="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Rendimiento por producto</h2>
-          <p class="mt-1 text-xs text-slate-400">
-            Visitas, conversiones y estado de fricción de cada ficha del catálogo.
-          </p>
-        </div>
-        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{productos.length} productos</span>
-      </div>
-      <ProductMetricsTable productos={productos} />
-    </section>
-
-    <p class="border-t border-white/10 pt-6 text-[11px] leading-relaxed text-slate-500">
-      Los datos de este panel son de ejemplo (mock) hasta conectar las fuentes reales
-      (Google Analytics 4, Google Search Console y el tracker propio).
-      Consulta la <a href="/admin/trafico-ventas/guia" class="font-bold text-sky-400 hover:underline">Guía y Glosario de Métricas</a> para entender cada indicador.
-    </p>
+    <TrafficSalesDashboard />
   </div>
 </Layout>
 
 <style>
+  .admin-module-wrapper { display: flex; flex-direction: column; gap: 2rem; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
   .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
   .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.85rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 9999px; font-size: 0.75rem; font-weight: 600; color: #60a5fa; width: fit-content; }
   .status-indicator { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 10px #10b981; animation: pulseGlow 2s infinite ease-in-out; }
   @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
   .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
   .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
+  .module-heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin-top: 0.9rem; }
+  .data-example-pill { padding: 0.35rem 0.85rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+  .guide-link { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.55rem 1rem; color: #06121f; background: #38bdf8; border-radius: 9999px; font-size: 0.78rem; font-weight: 800; text-decoration: none; transition: background 0.2s ease; }
+  .guide-link:hover { background: #7dd3fc; }
 </style>

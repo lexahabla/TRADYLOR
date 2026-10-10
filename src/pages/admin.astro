@@ -3,6 +3,7 @@ export const prerender = false;
 
 import Layout from '../layouts/Layout.astro';
 import AdminNav from '../components/AdminNav.astro';
+import TrafficSalesDashboard from '../components/admin/TrafficSalesDashboard.astro';
 import fs from 'node:fs';
 import { dataFile } from '../lib/paths';
 import type { Product } from './api/products/add';
@@ -62,11 +63,10 @@ try {
 const pageTitle = "Panel de Administración | Tradylor";
 const pageDescription = "Gestión, scraping de metadatos y alta de productos con enlaces de afiliación en Tradylor.";
 
-// El módulo "Tráfico y ventas" vive ahora en su propia ruta (dashboard + guía)
+// El módulo "Tráfico y ventas" se muestra como una sección más del panel
 const requestedSection = Astro.url.searchParams.get('section') || 'products';
-if (requestedSection === 'analytics') return Astro.redirect('/admin/trafico-ventas/');
 
-const allowedSections = ['products', 'affiliates', 'categories', 'marketing'];
+const allowedSections = ['products', 'affiliates', 'categories', 'analytics', 'marketing'];
 const initialSection = allowedSections.includes(requestedSection) ? requestedSection : 'products';
 ---
 
@@ -687,6 +687,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     <section data-admin-view="marketing" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'marketing' }]}>
       <div class="view-heading"><span class="admin-tag-pill">Crecimiento y distribución</span><h2 class="admin-title">Marketing</h2><p class="admin-subtitle">Prepara conexiones con analítica, redes sociales, email y automatizaciones. Las credenciales se leen desde el entorno del servidor.</p></div>
+    </section>
+
+    <section data-admin-view="analytics" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'analytics' }]}>
+      <div class="view-heading">
+        <span class="admin-tag-pill">Actividad de la tienda</span>
+        <h2 class="admin-title">Tráfico y Ventas</h2>
+        <p class="admin-subtitle">Resumen global, ranking por producto y recomendaciones de IA. Pasa el cursor sobre el <strong>?</strong> de cada métrica para ver su definición.</p>
+        <div class="view-heading-actions">
+          <span class="data-example-pill">Datos de ejemplo</span>
+          <a class="guide-link" href="/admin/trafico-ventas/guia">Guía y Glosario <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+      <TrafficSalesDashboard />
     </section>
   </div>
   ) : (
@@ -2122,6 +2135,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .admin-dashboard-view { flex-direction: column; gap: 1.5rem; }
   .view-heading { padding-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
   .view-heading .admin-title { margin: .75rem 0 .5rem; }
+  .view-heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: .9rem; }
+  .data-example-pill { padding: .35rem .85rem; color: #fbbf24; background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .3); border-radius: 9999px; font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .guide-link { display: inline-flex; align-items: center; gap: .4rem; padding: .55rem 1rem; color: #06121f; background: #38bdf8; border-radius: 9999px; font-size: .78rem; font-weight: 800; text-decoration: none; transition: background .2s ease; }
+  .guide-link:hover { background: #7dd3fc; }
   .dashboard-toolbar { display: flex; gap: .75rem; flex-wrap: wrap; }
   .dashboard-toolbar input { flex: 1; min-width: 220px; }
   .dashboard-toolbar select { width: 190px; }
