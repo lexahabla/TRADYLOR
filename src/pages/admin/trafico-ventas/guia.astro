@@ -37,27 +37,27 @@ const total = glosarioMetricas.length;
   description="Glosario completo de métricas de tráfico, SEO, ventas, producto, herramientas e IA del panel de Tradylor."
 >
   <div class="mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-20 pt-10">
-    <!-- Cabecera -->
-    <header class="flex flex-col gap-4 border-b border-white/10 pb-7">
-      <span class="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-400">
-        <span class="h-1.5 w-1.5 rounded-full bg-blue-400"></span>
-        Centro de ayuda
-      </span>
-      <div class="flex flex-wrap items-end justify-between gap-4">
-        <div class="min-w-0">
-          <h1 class="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Guía y Glosario de Métricas</h1>
-          <p class="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">
-            Qué significa cada indicador del panel, cómo leerlo en el dashboard y un consejo práctico
-            de IA para actuar sobre él.
-          </p>
+    <!-- Cabecera (patrón admin-header del backend) -->
+    <header class="admin-header">
+      <div class="admin-header-main">
+        <div class="admin-tag-pill">
+          <span class="status-indicator"></span>
+          <span>Centro de ayuda</span>
         </div>
-        <a
-          href="/admin/trafico-ventas/"
-          class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2.5 text-xs font-extrabold text-slate-200 transition hover:border-sky-500/40 hover:text-white"
-        >
-          <span aria-hidden="true">←</span>
-          Volver al dashboard
-        </a>
+        <h1 class="admin-title">Guía y Glosario de Métricas</h1>
+        <p class="admin-subtitle">
+          Qué significa cada indicador del panel, cómo leerlo en el dashboard y un consejo práctico
+          de IA para actuar sobre él.
+        </p>
+        <div class="flex flex-wrap items-center gap-2 mt-4">
+          <a
+            href="/admin/trafico-ventas/"
+            class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2.5 text-xs font-extrabold text-slate-200 transition hover:border-sky-500/40 hover:text-white"
+          >
+            <span aria-hidden="true">←</span>
+            Volver al dashboard
+          </a>
+        </div>
       </div>
     </header>
 
@@ -164,3 +164,12 @@ const total = glosarioMetricas.length;
     aplicar('todas');
   }
 </script>
+
+<style>
+  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
+  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.85rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 9999px; font-size: 0.75rem; font-weight: 600; color: #60a5fa; width: fit-content; }
+  .status-indicator { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 10px #10b981; animation: pulseGlow 2s infinite ease-in-out; }
+  @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
+  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
+</style>

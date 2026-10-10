@@ -60,21 +60,19 @@ const tiposRecomendacion: Record<string, { label: string; clase: string }> = {
   description="Dashboard de tráfico y ventas de Tradylor: métricas globales, rendimiento por producto, gráficos y recomendaciones de IA."
 >
   <div class="mx-auto flex max-w-6xl flex-col gap-9 px-4 pb-20 pt-10">
-    <!-- Cabecera del módulo -->
-    <header class="flex flex-col gap-4 border-b border-white/10 pb-7">
-      <span class="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-400">
-        <span class="h-1.5 w-1.5 rounded-full bg-blue-400"></span>
-        Actividad de la tienda
-      </span>
-      <div class="flex flex-wrap items-end justify-between gap-4">
-        <div class="min-w-0">
-          <h1 class="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Tráfico y Ventas</h1>
-          <p class="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">
-            Resumen global, ranking por producto y recomendaciones de IA. Pasa el cursor sobre el
-            <strong class="font-bold text-slate-300">?</strong> de cada métrica para ver su definición.
-          </p>
+    <!-- Cabecera del módulo (patrón admin-header del backend) -->
+    <header class="admin-header">
+      <div class="admin-header-main">
+        <div class="admin-tag-pill">
+          <span class="status-indicator"></span>
+          <span>Actividad de la tienda</span>
         </div>
-        <div class="flex flex-wrap items-center gap-2">
+        <h1 class="admin-title">Tráfico y Ventas</h1>
+        <p class="admin-subtitle">
+          Resumen global, ranking por producto y recomendaciones de IA. Pasa el cursor sobre el
+          <strong>?</strong> de cada métrica para ver su definición.
+        </p>
+        <div class="flex flex-wrap items-center gap-2 mt-4">
           <span class="rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-amber-300">
             Datos de ejemplo
           </span>
@@ -214,3 +212,12 @@ const tiposRecomendacion: Record<string, { label: string; clase: string }> = {
     </p>
   </div>
 </Layout>
+
+<style>
+  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
+  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.85rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 9999px; font-size: 0.75rem; font-weight: 600; color: #60a5fa; width: fit-content; }
+  .status-indicator { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 10px #10b981; animation: pulseGlow 2s infinite ease-in-out; }
+  @keyframes pulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
+  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
+</style>
