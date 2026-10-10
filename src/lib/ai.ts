@@ -18,7 +18,7 @@ import { CLIENT_IMAGES_DIR, IMAGES_DIR } from './paths';
  *   FLUX_API_KEY / FLUX_ENDPOINT
  */
 
-export type TextProvider = 'openai' | 'anthropic';
+export type TextProvider = 'openai' | 'anthropic' | 'groq';
 export type ImageProvider = 'openai' | 'flux';
 
 export interface EnrichedText {
@@ -47,7 +47,10 @@ export function env(name: string): string {
 }
 
 export function textProvider(): TextProvider {
-  return env('TEXT_AI_PROVIDER').toLowerCase() === 'anthropic' ? 'anthropic' : 'openai';
+  const value = env('TEXT_AI_PROVIDER').toLowerCase();
+  if (value === 'anthropic') return 'anthropic';
+  if (value === 'groq') return 'groq';
+  return 'openai';
 }
 
 export function imageProvider(): ImageProvider {
@@ -55,7 +58,10 @@ export function imageProvider(): ImageProvider {
 }
 
 export function hasTextCredentials(): boolean {
-  return textProvider() === 'anthropic' ? Boolean(env('ANTHROPIC_API_KEY')) : Boolean(env('OPENAI_API_KEY'));
+  const provider = textProvider();
+  if (provider === 'anthropic') return Boolean(env('ANTHROPIC_API_KEY'));
+  if (provider === 'groq') return Boolean(env('GROQ_API_KEY'));
+  return Boolean(env('OPENAI_API_KEY'));
 }
 
 export function hasImageCredentials(): boolean {
@@ -159,6 +165,37 @@ export async function enrichProductText(input: {
     }
     const payload = await response.json();
     const text = (payload?.content ?? []).map((block: any) => block?.text ?? '').join('');
+    return normalizeEnrichedText(parseLooseJson(text));
+  }
+
+  if (provider === 'groq') {
+    // Groq es compatible con la API de OpenAI; modelo rápido y con nivel gratuito.
+    const model = env('GROQ_MODEL') || 'llama-3.3-70b-versatile';
+    const response = await fetchWithTimeout(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${env('GROQ_API_KEY')}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.4,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: TEXT_SYSTEM_PROMPT },
+            { role: 'user', content: userContext },
+          ],
+        }),
+      },
+      60_000
+    );
+    if (!response.ok) {
+      throw new Error(`Groq respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    }
+    const payload = await response.json();
+    const text = payload?.choices?.[0]?.message?.content ?? '';
     return normalizeEnrichedText(parseLooseJson(text));
   }
 

@@ -129,7 +129,7 @@ export const POST: APIRoute = async ({ request }) => {
     if (options.text) {
       if (!hasTextCredentials()) {
         warnings.push(
-          `Ficha generada localmente (sin IA). Para texto con IA añade ${textProvider() === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY'}.`
+          `Ficha generada localmente (sin IA). Para texto con IA añade ${textProvider() === 'anthropic' ? 'ANTHROPIC_API_KEY' : textProvider() === 'groq' ? 'GROQ_API_KEY' : 'OPENAI_API_KEY'}.`
         );
         enrichment = localEnrichment;
         textStatus = 'local';
