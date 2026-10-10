@@ -831,6 +831,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       field.dispatchEvent(new Event('input', { bubbles: true }));
     }
 
+    // Rellena un campo SOLO si está vacío: el scraper nunca pisa lo escrito a mano.
+    function fillIfEmpty(field, value) {
+      if (!field || value === undefined || value === null || value === '') return;
+      if (String(field.value || '').trim() !== '') return;
+      setProductField(field, value);
+    }
+
     // Renderiza la galería de imágenes como miniaturas seleccionables.
     // La imagen principal (prodImage) se marca con un borde destacado.
     function renderGallery() {
@@ -1061,19 +1068,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
           const data = result.data || {};
 
-          // Rellenar campos del formulario
-          setProductField(prodTitle, data.title || data.name || '');
-          setProductField(prodImage, data.image || '');
-          setProductField(prodDescription, data.description || '');
-          setProductField(prodPrice, data.price ?? '');
-          setProductField(prodOriginalPrice, data.originalPrice ?? '');
-          setProductField(prodCategory, data.category || 'Tecnología');
-          setProductField(prodMerchant, data.merchant || 'Amazon');
-          setProductField(prodBadge, data.badge || '');
-          setProductField(prodVerdict, data.verdict || '');
-          setProductField(prodPros, Array.isArray(data.pros) ? data.pros.join('\n') : '');
-          setProductField(prodCons, Array.isArray(data.cons) ? data.cons.join('\n') : '');
-          setProductField(prodAffiliateUrl, data.affiliateUrl || urlToScrape);
+          // Rellenar campos del formulario SOLO si están vacíos (nunca pisa lo manual).
+          fillIfEmpty(prodTitle, data.title || data.name || '');
+          fillIfEmpty(prodImage, data.image || '');
+          fillIfEmpty(prodDescription, data.description || '');
+          fillIfEmpty(prodPrice, data.price ?? '');
+          fillIfEmpty(prodOriginalPrice, data.originalPrice ?? '');
+          fillIfEmpty(prodCategory, data.category || 'Tecnología');
+          fillIfEmpty(prodMerchant, data.merchant || 'Amazon');
+          fillIfEmpty(prodBadge, data.badge || '');
+          fillIfEmpty(prodVerdict, data.verdict || '');
+          fillIfEmpty(prodPros, Array.isArray(data.pros) ? data.pros.join('\n') : '');
+          fillIfEmpty(prodCons, Array.isArray(data.cons) ? data.cons.join('\n') : '');
+          fillIfEmpty(prodAffiliateUrl, data.affiliateUrl || urlToScrape);
 
           // Guardar extras del scrape (specs, marca, valoración, reseñas) para
           // que el enriquecimiento local use datos reales.
@@ -1132,19 +1139,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           btnScrape.click();
         }
       });
-
-      // Permitir pegar el enlace directamente en el campo final del producto.
-      if (prodAffiliateUrl) {
-        const analyzeAffiliateUrl = () => {
-          const affiliateUrl = prodAffiliateUrl.value.trim();
-          if (!affiliateUrl || affiliateUrl === inputScrapeUrl.value.trim()) return;
-          inputScrapeUrl.value = affiliateUrl;
-          btnScrape.click();
-        };
-
-        prodAffiliateUrl.addEventListener('paste', () => window.setTimeout(analyzeAffiliateUrl, 0));
-        prodAffiliateUrl.addEventListener('change', analyzeAffiliateUrl);
-      }
     }
 
     // =========================================================================
