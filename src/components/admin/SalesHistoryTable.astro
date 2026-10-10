@@ -1,0 +1,107 @@
+---
+/**
+ * TRADYLOR — Tabla de historial de ventas (Bloque de Ventas)
+ * Listado de transacciones con badges de tipo (Afiliado / Directa / Comisión),
+ * importe bruto y comisión neta. Se filtra con el rango activo del
+ * DateRangeFilter mediante el evento "ventas:rango-cambiado".
+ */
+import type { RegistroVenta, TipoVenta } from '../../data/mockVentas';
+import { etiquetaTipoVenta } from '../../data/mockVentas';
+
+export interface Props {
+  registros: RegistroVenta[];
+}
+
+const { registros } = Astro.props;
+
+const fmt = new Intl.NumberFormat('es-ES');
+const eur = (n: number) => `${n.toFixed(2).replace('.', ',')} €`;
+
+const badges: Record<TipoVenta, string> = {
+  afiliado: 'border-sky-500/30 bg-sky-500/15 text-sky-300',
+  directa: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300',
+  comision: 'border-violet-500/30 bg-violet-500/15 text-violet-300',
+};
+
+const formatDate = (iso: string) => {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+};
+---
+
+<div class="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03]">
+  <table class="min-w-[760px] border-collapse text-left" style="width: 100%">
+    <thead>
+      <tr class="border-b border-white/10 bg-white/[0.02] text-[11px] uppercase tracking-wider text-slate-400">
+        <th class="px-5 py-3 font-bold">Fecha</th>
+        <th class="px-5 py-3 font-bold">Producto</th>
+        <th class="px-5 py-3 [text-align:right] font-bold">Monto bruto</th>
+        <th class="px-5 py-3 [text-align:right] font-bold">Comisión neta</th>
+        <th class="px-5 py-3 font-bold">Tipo</th>
+        <th class="px-5 py-3 font-bold">Proveedor</th>
+      </tr>
+    </thead>
+    <tbody data-sales-history>
+      {registros.map((venta) => (
+        <tr class="border-b border-white/5 transition last:border-b-0 hover:bg-sky-500/5" data-venta-fecha={venta.fecha}>
+          <td class="whitespace-nowrap px-5 py-3.5 text-sm font-semibold text-slate-300">{formatDate(venta.fecha)}</td>
+          <td class="px-5 py-3.5">
+            <p class="min-w-0 truncate text-sm font-semibold text-white">{venta.productoNombre}</p>
+            <p class="mt-0.5 text-[11px] text-slate-500">{venta.id}</p>
+          </td>
+          <td class="px-5 py-3.5 [text-align:right] text-sm font-bold text-white">{eur(venta.montoTotalBruto)}</td>
+          <td class="px-5 py-3.5 [text-align:right] text-sm font-extrabold text-emerald-300">{eur(venta.comisionNeta)}</td>
+          <td class="px-5 py-3.5">
+            <span class:list={['inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide', badges[venta.tipo]]}>
+              {etiquetaTipoVenta[venta.tipo]}
+            </span>
+          </td>
+          <td class="whitespace-nowrap px-5 py-3.5 text-sm text-slate-300">{venta.proveedorAfiliado || '—'}</td>
+        </tr>
+      ))}
+      {registros.length === 0 && (
+        <tr>
+          <td colspan="6" class="px-5 py-10 text-center text-sm text-slate-500">Sin ventas en el periodo seleccionado.</td>
+        </tr>
+      )}
+    </tbody>
+  </table>
+</div>
+
+<script type="module">
+  const tbody = document.querySelector('[data-sales-history]');
+  if (tbody) {
+    const registros = JSON.parse(document.getElementById('ventas-registros-json')?.textContent || '[]');
+    const eur = (n) => `${n.toFixed(2).replace('.', ',')} €`;
+    const formatDate = (iso) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+    const badges = { afiliado: 'border-sky-500/30 bg-sky-500/15 text-sky-300', directa: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300', comision: 'border-violet-500/30 bg-violet-500/15 text-violet-300' };
+    const etiqueta = { afiliado: 'Afiliado', directa: 'Directa', comision: 'Comisión' };
+
+    const render = (regs) => {
+      if (!regs.length) {
+        tbody.innerHTML = `<tr><td colspan="6" class="px-5 py-10 text-center text-sm text-slate-500">Sin ventas en el periodo seleccionado.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = regs.map((v) => `
+        <tr class="border-b border-white/5 transition last:border-b-0 hover:bg-sky-500/5">
+          <td class="whitespace-nowrap px-5 py-3.5 text-sm font-semibold text-slate-300">${formatDate(v.fecha)}</td>
+          <td class="px-5 py-3.5">
+            <p class="min-w-0 truncate text-sm font-semibold text-white">${v.productoNombre}</p>
+            <p class="mt-0.5 text-[11px] text-slate-500">${v.id}</p>
+          </td>
+          <td class="px-5 py-3.5 [text-align:right] text-sm font-bold text-white">${eur(v.montoTotalBruto)}</td>
+          <td class="px-5 py-3.5 [text-align:right] text-sm font-extrabold text-emerald-300">${eur(v.comisionNeta)}</td>
+          <td class="px-5 py-3.5">
+            <span class="inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide ${badges[v.tipo] || ''}">${etiqueta[v.tipo] || v.tipo}</span>
+          </td>
+          <td class="whitespace-nowrap px-5 py-3.5 text-sm text-slate-300">${v.proveedorAfiliado || '—'}</td>
+        </tr>
+      `).join('');
+    };
+
+    window.addEventListener('ventas:rango-cambiado', (e) => {
+      const { desde, hasta } = e.detail;
+      render(registros.filter((v) => v.fecha >= desde && v.fecha <= hasta));
+    });
+  }
+</script>

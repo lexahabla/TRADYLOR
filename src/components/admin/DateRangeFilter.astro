@@ -1,0 +1,116 @@
+---
+/**
+ * TRADYLOR — Barra de filtros por rango de fechas (Bloque de Ventas)
+ * Preajustes rápidos (Hoy, Últimos 7 días, Este Mes, Este Año) + rango
+ * personalizado con inputs date. Emite el rango activo vía window CustomEvent
+ * "ventas:rango-cambiado" (desde/hasta en YYYY-MM-DD) para que el resto de
+ * componentes del bloque se actualicen sin framework.
+ */
+export interface Props {
+  /** Rango activo inicial (YYYY-MM-DD). */
+  desde: string;
+  hasta: string;
+}
+
+const { desde, hasta } = Astro.props;
+
+const presets = [
+  { id: 'hoy', label: 'Hoy' },
+  { id: '7d', label: 'Últimos 7 días' },
+  { id: 'mes', label: 'Este Mes' },
+  { id: 'anio', label: 'Este Año' },
+];
+---
+
+<div class="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4" data-date-range-filter>
+  <div class="flex flex-wrap items-center gap-2">
+    <span class="mr-1 text-[11px] font-bold uppercase tracking-wider text-slate-400">Periodo</span>
+    {presets.map((preset) => (
+      <button
+        type="button"
+        data-preset={preset.id}
+        class="rounded-full border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-300 transition hover:border-sky-400/50 hover:bg-sky-500/15 hover:text-sky-300"
+      >
+        {preset.label}
+      </button>
+    ))}
+  </div>
+
+  <div class="flex flex-wrap items-end gap-3 border-t border-white/5 pt-3">
+    <label class="flex flex-col gap-1">
+      <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Desde</span>
+      <input
+        type="date"
+        data-desde
+        value={desde}
+        class="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white outline-none transition focus:border-sky-400/60"
+      />
+    </label>
+    <label class="flex flex-col gap-1">
+      <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Hasta</span>
+      <input
+        type="date"
+        data-hasta
+        value={hasta}
+        class="rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white outline-none transition focus:border-sky-400/60"
+      />
+    </label>
+    <button
+      type="button"
+      data-aplicar
+      class="rounded-full border border-sky-400/40 bg-sky-500/15 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-sky-300 transition hover:bg-sky-500/25"
+    >
+      Aplicar rango
+    </button>
+    <span class="ml-auto text-[11px] font-semibold text-slate-500" data-rango-activo></span>
+  </div>
+</div>
+
+<script>
+  const root = document.querySelector('[data-date-range-filter]');
+  if (root) {
+    const desde = root.querySelector('[data-desde]');
+    const hasta = root.querySelector('[data-hasta]');
+    const label = root.querySelector('[data-rango-activo]');
+    const presets = root.querySelectorAll('[data-preset]');
+
+    const toISO = (d) => d.toISOString().slice(0, 10);
+
+    const emitir = (d, h) => {
+      if (desde) desde.value = d;
+      if (hasta) hasta.value = h;
+      if (label) label.textContent = `Mostrando: ${d} → ${h}`;
+      window.dispatchEvent(new CustomEvent('ventas:rango-cambiado', { detail: { desde: d, hasta: h } }));
+    };
+
+    const hoy = new Date();
+    const aplicarPreset = (id) => {
+      const d = new Date(hoy);
+      if (id === 'hoy') {
+        emitir(toISO(d), toISO(d));
+      } else if (id === '7d') {
+        d.setDate(d.getDate() - 6);
+        emitir(toISO(d), toISO(hoy));
+      } else if (id === 'mes') {
+        const primero = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+        emitir(toISO(primero), toISO(hoy));
+      } else if (id === 'anio') {
+        const primero = new Date(hoy.getFullYear(), 0, 1);
+        emitir(toISO(primero), toISO(hoy));
+      }
+    };
+
+    presets.forEach((btn) => btn.addEventListener('click', () => aplicarPreset(btn.getAttribute('data-preset'))));
+
+    root.querySelector('[data-aplicar]')?.addEventListener('click', () => {
+      const d = desde?.value;
+      const h = hasta?.value;
+      if (d && h && d <= h) emitir(d, h);
+    });
+
+    // Estado inicial: rango precargado en los inputs.
+    if (desde?.value && hasta?.value) {
+      if (label) label.textContent = `Mostrando: ${desde.value} → ${hasta.value}`;
+    }
+  }
+</script>

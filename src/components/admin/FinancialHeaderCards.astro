@@ -1,0 +1,106 @@
+---
+/**
+ * TRADYLOR — Tarjetas KPI financieras (Bloque de Ventas)
+ * Facturación bruta (GMV), comisión neta real, reparto afiliados vs venta
+ * directa y % medio de comisión. Se actualizan al emitir el evento
+ * "ventas:rango-cambiado" (DateRangeFilter) recalculando desde los registros.
+ */
+import type { RegistroVenta } from '../../data/mockVentas';
+import { computeResumen, formatEUR } from '../../data/mockVentas';
+
+export interface Props {
+  registros: RegistroVenta[];
+}
+
+const { registros } = Astro.props;
+
+const fmtPct = (n: number) => `${n.toFixed(1).replace('.', ',')}%`;
+---
+
+<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4" data-financial-cards>
+  <div class="group/help relative flex min-w-0 flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-sky-500/40">
+    <div class="flex items-start justify-between gap-2">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Facturación Total Bruta (GMV)</span>
+      <span class="relative flex h-5 w-5 shrink-0 cursor-help items-center justify-center rounded-full border border-white/15 bg-white/5 text-[11px] font-bold text-slate-400 transition hover:border-sky-400 hover:text-sky-300" tabindex="0" aria-label="Ayuda: facturación bruta">
+        ?
+        <span class="pointer-events-none absolute right-0 top-full z-30 mt-2 w-60 rounded-lg border border-sky-500/30 bg-slate-950 px-3 py-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-300 opacity-0 shadow-xl transition group-hover/help:opacity-100 group-focus-within/help:opacity-100" role="tooltip">
+          Suma de todos los importes brutos vendidos (GMV), antes de descontar comisiones. Es el volumen de negocio, no lo que ingresas.
+        </span>
+      </span>
+    </div>
+    <strong class="truncate text-2xl font-extrabold text-white" data-kpi="facturacion">—</strong>
+    <span class="text-[11px] text-slate-500">Volumen de ventas del periodo</span>
+  </div>
+
+  <div class="group/help relative flex min-w-0 flex-col gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.06] p-5 transition hover:border-emerald-400/50">
+    <div class="flex items-start justify-between gap-2">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-emerald-300/90">Tu Comisión Neta Real</span>
+      <span class="relative flex h-5 w-5 shrink-0 cursor-help items-center justify-center rounded-full border border-white/15 bg-white/5 text-[11px] font-bold text-slate-400 transition hover:border-emerald-400 hover:text-emerald-300" tabindex="0" aria-label="Ayuda: comisión neta">
+        ?
+        <span class="pointer-events-none absolute right-0 top-full z-30 mt-2 w-60 rounded-lg border border-emerald-500/30 bg-slate-950 px-3 py-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-300 opacity-0 shadow-xl transition group-hover/help:opacity-100 group-focus-within/help:opacity-100" role="tooltip">
+          Lo que de verdad ingresas: comisiones netas ya descontadas tras las devoluciones y ajustes de las redes.
+        </span>
+      </span>
+    </div>
+    <strong class="truncate text-2xl font-extrabold text-emerald-300" data-kpi="comision">—</strong>
+    <span class="text-[11px] text-slate-500">Ingreso real percibido</span>
+  </div>
+
+  <div class="group/help relative flex min-w-0 flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-sky-500/40">
+    <div class="flex items-start justify-between gap-2">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Afiliados vs Venta Directa</span>
+      <span class="relative flex h-5 w-5 shrink-0 cursor-help items-center justify-center rounded-full border border-white/15 bg-white/5 text-[11px] font-bold text-slate-400 transition hover:border-sky-400 hover:text-sky-300" tabindex="0" aria-label="Ayuda: reparto de ingresos">
+        ?
+        <span class="pointer-events-none absolute right-0 top-full z-30 mt-2 w-60 rounded-lg border border-sky-500/30 bg-slate-950 px-3 py-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-300 opacity-0 shadow-xl transition group-hover/help:opacity-100 group-focus-within/help:opacity-100" role="tooltip">
+          Reparto de tu comisión neta entre programas de afiliados (Amazon, Awin…) y ventas directas (suscripción, programa propio).
+        </span>
+      </span>
+    </div>
+    <strong class="truncate text-2xl font-extrabold text-white" data-kpi="reparto">—</strong>
+    <span class="text-[11px] text-slate-500" data-kpi="reparto-detalle">—</span>
+  </div>
+
+  <div class="group/help relative flex min-w-0 flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-sky-500/40">
+    <div class="flex items-start justify-between gap-2">
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">% de Comisión Medio</span>
+      <span class="relative flex h-5 w-5 shrink-0 cursor-help items-center justify-center rounded-full border border-white/15 bg-white/5 text-[11px] font-bold text-slate-400 transition hover:border-sky-400 hover:text-sky-300" tabindex="0" aria-label="Ayuda: comisión media">
+        ?
+        <span class="pointer-events-none absolute right-0 top-full z-30 mt-2 w-60 rounded-lg border border-sky-500/30 bg-slate-950 px-3 py-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-300 opacity-0 shadow-xl transition group-hover/help:opacity-100 group-focus-within/help:opacity-100" role="tooltip">
+          Porcentaje medio de comisión que ganas sobre la facturación bruta. Subirlo (mejorando el mix de productos) aumenta el ingreso sin necesitar más tráfico.
+        </span>
+      </span>
+    </div>
+    <strong class="truncate text-2xl font-extrabold text-white" data-kpi="pct">—</strong>
+    <span class="text-[11px] text-slate-500">Margen sobre el GMV</span>
+  </div>
+</div>
+
+<script type="module">
+  import { computeResumen, formatEUR } from '../../../data/mockVentas';
+
+  const contenedor = document.querySelector('[data-financial-cards]');
+  if (contenedor) {
+    // Registros completos embebidos por el servidor para poder recalcular en cliente.
+    const registros = JSON.parse(document.getElementById('ventas-registros-json')?.textContent || '[]');
+
+    const render = (regs) => {
+      const r = computeResumen(regs);
+      const pctAfiliado = r.comisionNetaTotal > 0 ? (r.ingresosAfiliacion / r.comisionNetaTotal) * 100 : 0;
+      const pctDirecto = 100 - pctAfiliado;
+
+      const set = (k, v) => { const el = contenedor.querySelector(`[data-kpi="${k}"]`); if (el) el.textContent = v; };
+      set('facturacion', formatEUR(r.facturacionTotal));
+      set('comision', formatEUR(r.comisionNetaTotal));
+      set('reparto', `${pctAfiliado.toFixed(0)}% / ${pctDirecto.toFixed(0)}%`);
+      set('reparto-detalle', `Afiliados ${formatEUR(r.ingresosAfiliacion)} · Directa ${formatEUR(r.ingresosDirectos)}`);
+      set('pct', `${r.porcentajeComisionMedio.toFixed(1).replace('.', ',')}%`);
+    };
+
+    render(registros);
+
+    window.addEventListener('ventas:rango-cambiado', (e) => {
+      const { desde, hasta } = e.detail;
+      render(registros.filter((v) => v.fecha >= desde && v.fecha <= hasta));
+    });
+  }
+</script>

@@ -1,0 +1,94 @@
+---
+/**
+ * TRADYLOR — Gráfico de ingresos (Bloque de Ventas)
+ * Series apiladas en barras verticales: facturación bruta (barra completa) y
+ * comisión neta (barra superpuesta en verde). 100% Tailwind + CSS inline,
+ * sin librerías de gráficos. Se recalcula con el rango activo del filtro.
+ */
+import type { PuntoIngreso } from '../../data/mockVentas';
+
+export interface Props {
+  serie: PuntoIngreso[];
+}
+
+const { serie } = Astro.props;
+
+const maxBruta = serie.length ? Math.max(...serie.map((p) => p.facturacionBruta)) : 0;
+const fmt = new Intl.NumberFormat('es-ES');
+---
+
+<div class="flex min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <h3 class="text-sm font-extrabold uppercase tracking-wider text-white">Facturación Bruta vs Comisión Neta</h3>
+      <p class="mt-1 text-xs leading-relaxed text-slate-400">Evolución diaria del GMV y de tu ingreso real en el periodo seleccionado.</p>
+    </div>
+    <div class="flex shrink-0 flex-wrap items-center gap-3">
+      <span class="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+        <span class="h-2.5 w-2.5 rounded-sm bg-sky-500"></span> Bruta
+      </span>
+      <span class="inline-flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+        <span class="h-2.5 w-2.5 rounded-sm bg-emerald-400"></span> Neta
+      </span>
+    </div>
+  </div>
+
+  <div class="mt-6 flex h-48 items-end gap-1.5" data-revenue-chart>
+    {serie.map((punto) => {
+      const pctBruta = maxBruta > 0 ? Math.max(Math.round((punto.facturacionBruta / maxBruta) * 100), 6) : 0;
+      const pctNeta = punto.facturacionBruta > 0 ? Math.round((punto.comisionNeta / punto.facturacionBruta) * pctBruta) : 0;
+      return (
+        <div class="group/bar flex min-w-0 flex-1 flex-col items-center gap-1.5" title={`${punto.etiqueta}: Bruta ${fmt.format(Math.round(punto.facturacionBruta))} € · Neta ${fmt.format(Math.round(punto.comisionNeta))} €`}>
+          <span class="text-[10px] font-bold text-slate-400 opacity-0 transition group-hover/bar:opacity-100">
+            {fmt.format(Math.round(punto.comisionNeta))} €
+          </span>
+          <div class="relative [width:100%] overflow-hidden rounded-t-md bg-sky-600/70 transition group-hover/bar:bg-sky-500" style={`height:${pctBruta}%`}>
+            <div class="absolute bottom-0 left-0 w-full rounded-b-sm bg-emerald-400" style={`height:${pctNeta}%`}></div>
+          </div>
+          <span class="text-[9px] text-slate-500">{punto.etiqueta}</span>
+        </div>
+      );
+    })}
+  </div>
+
+  {serie.length === 0 && (
+    <p class="mt-10 flex h-44 items-center justify-center text-xs text-slate-500">Sin ventas en el periodo seleccionado.</p>
+  )}
+</div>
+
+<script type="module">
+  import type { PuntoIngreso } from '../../../data/mockVentas';
+
+  const contenedor = document.querySelector('[data-revenue-chart]');
+  if (contenedor) {
+    const serie = JSON.parse(document.getElementById('ventas-serie-json')?.textContent || '[]');
+    const fmt = new Intl.NumberFormat('es-ES');
+
+    const render = (data) => {
+      const maxBruta = data.length ? Math.max(...data.map((p) => p.facturacionBruta)) : 0;
+      contenedor.innerHTML = data.map((punto) => {
+        const pctBruta = maxBruta > 0 ? Math.max(Math.round((punto.facturacionBruta / maxBruta) * 100), 6) : 0;
+        const pctNeta = punto.facturacionBruta > 0 ? Math.round((punto.comisionNeta / punto.facturacionBruta) * pctBruta) : 0;
+        return `
+          <div class="group/bar flex min-w-0 flex-1 flex-col items-center gap-1.5" title="${punto.etiqueta}: Bruta ${fmt.format(Math.round(punto.facturacionBruta))} € · Neta ${fmt.format(Math.round(punto.comisionNeta))} €">
+            <span class="text-[10px] font-bold text-slate-400 opacity-0 transition group-hover/bar:opacity-100">${fmt.format(Math.round(punto.comisionNeta))} €</span>
+            <div class="relative [width:100%] overflow-hidden rounded-t-md bg-sky-600/70 transition group-hover/bar:bg-sky-500" style="height:${pctBruta}%">
+              <div class="absolute bottom-0 left-0 w-full rounded-b-sm bg-emerald-400" style="height:${pctNeta}%"></div>
+            </div>
+            <span class="text-[9px] text-slate-500">${punto.etiqueta}</span>
+          </div>`;
+      }).join('');
+    };
+
+    window.addEventListener('ventas:rango-cambiado', (e) => {
+      const { desde, hasta } = e.detail;
+      render(serie.filter((p) => {
+        // La serie mock usa etiquetas dd/MM; convertimos a ISO para filtrar.
+        const [dia, mes] = p.etiqueta.split('/');
+        const anio = new Date().getFullYear();
+        const iso = `${anio}-${mes}-${dia}`;
+        return iso >= desde && iso <= hasta;
+      }));
+    });
+  }
+</script>
