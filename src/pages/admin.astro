@@ -225,6 +225,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <span class="label-hint">Pulsa una miniatura para fijarla como imagen principal</span>
               </label>
               <div id="galleryThumbs" class="gallery-thumbs"></div>
+              <div class="gallery-add-row">
+                <input type="file" id="galleryFileInput" accept="image/jpeg,image/png,image/webp" multiple />
+                <div class="gallery-url-add">
+                  <input type="url" id="galleryUrlInput" placeholder="https://imagen-del-producto.jpg" />
+                  <button type="button" id="btnAddImageUrl" class="btn-secondary">Añadir URL</button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -770,6 +777,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // Galería de imágenes del último scrape (la primera es la principal).
     let scrapedGallery = [];
     const galleryThumbs = document.getElementById('galleryThumbs');
+    const galleryFileInput = document.getElementById('galleryFileInput');
+    const galleryUrlInput = document.getElementById('galleryUrlInput');
+    const btnAddImageUrl = document.getElementById('btnAddImageUrl');
 
     // Preview
     const previewImg = document.getElementById('previewImg');
@@ -832,9 +842,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         return;
       }
       scrapedGallery.forEach((url) => {
+        const wrap = document.createElement('div');
+        wrap.className = 'gallery-item' + (url === current ? ' is-main' : '');
+
         const thumb = document.createElement('button');
         thumb.type = 'button';
-        thumb.className = 'gallery-thumb' + (url === current ? ' is-main' : '');
+        thumb.className = 'gallery-thumb';
         thumb.title = 'Fijar como imagen principal';
         const img = document.createElement('img');
         img.src = url;
@@ -846,9 +859,84 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           renderGallery();
           updatePreview();
         });
-        galleryThumbs.appendChild(thumb);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'gallery-remove';
+        removeBtn.title = 'Quitar de la galería';
+        removeBtn.textContent = '×';
+        removeBtn.addEventListener('click', () => {
+          scrapedGallery = scrapedGallery.filter((u) => u !== url);
+          if ((prodImage.value || '').trim() === url) {
+            setProductField(prodImage, scrapedGallery[0] || '');
+          }
+          renderGallery();
+          updatePreview();
+        });
+
+        wrap.appendChild(thumb);
+        wrap.appendChild(removeBtn);
+        galleryThumbs.appendChild(wrap);
       });
     }
+
+    // Añade imágenes a la galería por URL (una o varias separadas por comas/espacios).
+    function addImagesByUrl() {
+      const raw = (galleryUrlInput?.value || '').trim();
+      if (!raw) return;
+      const parts = raw.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+      let added = 0;
+      for (const url of parts) {
+        if (!/^https?:\/\//i.test(url)) continue;
+        if (!scrapedGallery.includes(url)) {
+          scrapedGallery.push(url);
+          added++;
+        }
+      }
+      if (galleryUrlInput) galleryUrlInput.value = '';
+      if (!added && parts.length) {
+        showAlert('warning', 'URL no válida', 'Introduce una imagen que empiece por http:// o https://.');
+        return;
+      }
+      if (added && !(prodImage.value || '').trim()) setProductField(prodImage, scrapedGallery[0]);
+      renderGallery();
+      updatePreview();
+    }
+
+    // Sube archivos de imagen al servidor y los añade a la galería.
+    async function uploadGalleryFiles(fileList) {
+      const files = Array.from(fileList || []).filter((f) => f.type.startsWith('image/'));
+      if (!files.length) return;
+      if (btnAddImageUrl) btnAddImageUrl.disabled = true;
+      showAlert('loading', 'Subiendo imágenes...', `${files.length} archivo(s) al servidor.`);
+      try {
+        const fd = new FormData();
+        files.forEach((f) => fd.append('images', f));
+        const response = await fetch('/api/admin/upload-image', { method: 'POST', body: fd });
+        const result = await response.json();
+        if (result.success && Array.isArray(result.urls)) {
+          for (const url of result.urls) {
+            if (!scrapedGallery.includes(url)) scrapedGallery.push(url);
+          }
+          if (!(prodImage.value || '').trim()) setProductField(prodImage, result.urls[0]);
+          renderGallery();
+          updatePreview();
+          showAlert('success', 'Imágenes subidas', `${result.urls.length} imagen(es) añadida(s) a la galería.`);
+        } else {
+          showAlert('error', 'No se pudieron subir', result.message || 'Error al subir las imágenes.');
+        }
+      } catch (err) {
+        console.error(err);
+        showAlert('error', 'Error de red', 'No se pudo contactar con /api/admin/upload-image.');
+      } finally {
+        if (btnAddImageUrl) btnAddImageUrl.disabled = false;
+        if (galleryFileInput) galleryFileInput.value = '';
+      }
+    }
+
+    if (btnAddImageUrl) btnAddImageUrl.addEventListener('click', addImagesByUrl);
+    if (galleryUrlInput) galleryUrlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addImagesByUrl(); } });
+    if (galleryFileInput) galleryFileInput.addEventListener('change', (e) => uploadGalleryFiles(e.target.files));
 
     // Actualiza la vista previa interactiva en tiempo real
     function updatePreview() {
@@ -1281,6 +1369,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         prodPros.value = '';
         prodCons.value = '';
         if (inputScrapeUrl) inputScrapeUrl.value = '';
+        scrapedGallery = [];
+        scrapeExtras = { brand: '', rating: null, reviewsCount: null, specs: null };
+        renderGallery();
         hideAlert();
         updatePreview();
       });
@@ -2812,8 +2903,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .gallery-thumbs {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.5rem;
+    gap: 0.6rem;
     margin-top: 0.3rem;
+  }
+
+  .gallery-item {
+    position: relative;
+    width: 72px;
+    height: 72px;
+  }
+
+  .gallery-item.is-main .gallery-thumb {
+    border-color: var(--color-accent, #f59e0b);
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
   }
 
   .gallery-thumb {
@@ -2833,16 +2935,50 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     border-color: var(--color-accent, #f59e0b);
   }
 
-  .gallery-thumb.is-main {
-    border-color: var(--color-accent, #f59e0b);
-    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
-  }
-
   .gallery-thumb img {
     width: 100%;
     height: 100%;
     object-fit: cover;
     display: block;
+  }
+
+  .gallery-remove {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 50%;
+    background: #ef4444;
+    color: #fff;
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .gallery-remove:hover {
+    background: #dc2626;
+  }
+
+  .gallery-add-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-top: 0.6rem;
+  }
+
+  .gallery-url-add {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .gallery-url-add input {
+    flex: 1;
   }
 
   .gallery-empty {
