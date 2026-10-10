@@ -1100,7 +1100,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
       btnAiEnrich.disabled = true;
       btnAiEnrich.classList.add('loading');
-      showAlert('loading', 'Trabajando con IA...', 'Paso 1: ficha técnica, pros/contras y veredicto · Paso 2: imagen de producto.');
+      showAlert(
+        'loading',
+        'Trabajando con IA...',
+        auto
+          ? 'Generando ficha técnica, pros/contras y veredicto...'
+          : 'Paso 1: ficha técnica, pros/contras y veredicto · Paso 2: imagen de producto.'
+      );
 
       try {
         const response = await fetch('/api/admin/add-product', {
@@ -1117,11 +1123,29 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             affiliateUrl: (prodAffiliateUrl.value || '').trim() || undefined,
             merchant: prodMerchant.value || undefined,
             url: inputScrapeUrl && inputScrapeUrl.value ? inputScrapeUrl.value.trim() || undefined : undefined,
-            options: { text: true, image: true, save: false },
+            // En auto solo texto (rápido): la imagen real del scraping se conserva.
+            options: { text: true, image: !auto, save: false },
           }),
         });
 
-        const result = await response.json();
+        let result;
+        try {
+          result = await response.json();
+        } catch {
+          // Respuesta no-JSON (p. ej. 504 de proxy en HTML por timeout).
+          if (response.ok) {
+            showAlert('success', 'Contenido generado con IA', 'Revisa los campos y pulsa «Guardar producto» para publicarlo.');
+          } else {
+            showAlert(
+              'error',
+              `El servidor devolvió ${response.status}`,
+              response.status === 504 || response.status === 524
+                ? 'La llamada a la IA tardó demasiado y un proxy la cortó. Pulsa «Generar con IA» para reintentar solo el texto.'
+                : 'Respuesta inesperada del servidor. Revisa los logs o reintenta.'
+            );
+          }
+          return;
+        }
 
         if (result.success) {
           const enriched = result.product || {};
@@ -1138,7 +1162,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
           updatePreview();
 
-          const summary = `Texto: ${flags.text} · Imagen: ${flags.image}`;
+          const summary = auto
+            ? `Ficha enriquecida · Imagen: conservada (${flags.image === 'ok' ? 'IA' : 'scraping'})`
+            : `Texto: ${flags.text} · Imagen: ${flags.image}`;
           const warnings =
             Array.isArray(flags.warnings) && flags.warnings.length
               ? ` Avisos: ${flags.warnings.join(' | ')}`
@@ -1153,7 +1179,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         }
       } catch (err) {
         console.error(err);
-        showAlert('error', 'Error de red', 'No se pudo contactar con /api/admin/add-product.');
+        showAlert(
+          'error',
+          'No se pudo contactar con el servidor',
+          'Fallo al llamar a /api/admin/add-product. Revisa tu conexión o reintenta.'
+        );
       } finally {
         btnAiEnrich.disabled = false;
         btnAiEnrich.classList.remove('loading');
