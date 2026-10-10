@@ -315,6 +315,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 </svg>
                 <span>La imagen aparecerá al analizar el enlace</span>
               </div>
+              <button type="button" id="previewPrev" class="preview-nav preview-nav-prev" aria-label="Imagen anterior" hidden>‹</button>
+              <button type="button" id="previewNext" class="preview-nav preview-nav-next" aria-label="Imagen siguiente" hidden>›</button>
+              <span id="previewCounter" class="preview-counter" hidden></span>
               <div class="preview-badge-row">
                 <span id="previewCategory" class="cat-pill"></span>
                 <span id="previewBadge" class="badge-pill" hidden></span>
@@ -784,6 +787,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // Preview
     const previewImg = document.getElementById('previewImg');
     const previewEmptyImage = document.getElementById('previewEmptyImage');
+    const previewPrev = document.getElementById('previewPrev');
+    const previewNext = document.getElementById('previewNext');
+    const previewCounter = document.getElementById('previewCounter');
+    let previewGallery = [];
+    let previewIndex = 0;
     const previewCategory = document.getElementById('previewCategory');
     const previewBadge = document.getElementById('previewBadge');
     const previewMerchant = document.getElementById('previewMerchant');
@@ -863,6 +871,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         thumb.appendChild(img);
         thumb.addEventListener('click', () => {
           setProductField(prodImage, url);
+          previewIndex = scrapedGallery.indexOf(url);
+          if (previewIndex < 0) previewIndex = 0;
           renderGallery();
           updatePreview();
         });
@@ -946,6 +956,33 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     if (galleryFileInput) galleryFileInput.addEventListener('change', (e) => uploadGalleryFiles(e.target.files));
 
     // Actualiza la vista previa interactiva en tiempo real
+    // Dibuja la imagen actual del carrusel de la vista previa y controla flechas/contador.
+    function renderPreviewImage() {
+      if (!previewImg) return;
+      const total = previewGallery.length;
+      const hasImage = total > 0;
+      previewImg.hidden = !hasImage;
+      if (previewEmptyImage) previewEmptyImage.hidden = hasImage;
+
+      if (hasImage) {
+        if (previewIndex >= total) previewIndex = 0;
+        if (previewIndex < 0) previewIndex = total - 1;
+        previewImg.src = previewGallery[previewIndex];
+      }
+
+      const showNav = total > 1;
+      if (previewPrev) previewPrev.hidden = !showNav;
+      if (previewNext) previewNext.hidden = !showNav;
+      if (previewCounter) {
+        previewCounter.hidden = !showNav;
+        if (showNav) previewCounter.textContent = `${previewIndex + 1} / ${total}`;
+      }
+    }
+
+    // Flechas del carrusel: navegar por la galería de la vista previa.
+    if (previewPrev) previewPrev.addEventListener('click', () => { previewIndex--; renderPreviewImage(); });
+    if (previewNext) previewNext.addEventListener('click', () => { previewIndex++; renderPreviewImage(); });
+
     function updatePreview() {
       const title = prodTitle.value.trim();
       const price = parseFloat(prodPrice.value) || 0;
@@ -963,11 +1000,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (previewCategory) previewCategory.textContent = category;
       if (previewMerchant) previewMerchant.textContent = merchant;
       if (previewBtnMerchant) previewBtnMerchant.textContent = merchant;
-      if (previewImg && previewEmptyImage) {
-        previewImg.hidden = !image;
-        previewEmptyImage.hidden = Boolean(image);
-        if (image) previewImg.src = image;
-      }
+
+      // Carrusel de la vista previa: usa la galería (scrapedGallery) o la imagen principal.
+      previewGallery = Array.isArray(scrapedGallery) && scrapedGallery.length
+        ? scrapedGallery.slice()
+        : (image ? [image] : []);
+      if (!previewGallery.length && image) previewGallery = [image];
+      if (previewIndex >= previewGallery.length) previewIndex = 0;
+      renderPreviewImage();
+
       if (previewAffiliateBtn) {
         previewAffiliateBtn.href = url;
         previewAffiliateBtn.hidden = !prodAffiliateUrl.value.trim();
@@ -2325,7 +2366,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   });
 </script>
 
-<style>
+<style is:global>
   .admin-dashboard-view { flex-direction: column; gap: 1.5rem; }
   .view-heading { padding-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
   .view-heading .admin-title { margin: .75rem 0 .5rem; }
@@ -3043,6 +3084,49 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .preview-empty-image svg {
     color: #38bdf8;
     opacity: 0.85;
+  }
+
+  .preview-nav {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.55);
+    color: #fff;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+    transition: background 0.15s, opacity 0.15s;
+    z-index: 2;
+  }
+
+  .preview-nav:hover {
+    background: rgba(15, 23, 42, 0.8);
+  }
+
+  .preview-nav-prev { left: 8px; }
+  .preview-nav-next { right: 8px; }
+
+  .preview-counter {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(15, 23, 42, 0.6);
+    color: #fff;
+    font-size: 0.68rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    z-index: 2;
+    pointer-events: none;
   }
 
   .preview-badge-row {
