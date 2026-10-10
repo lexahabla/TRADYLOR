@@ -1,9 +1,9 @@
 ---
 /**
- * TRADYLOR — Herramienta de curación (alias de la sección Tráfico y ventas)
- * Redirige al apartado del panel donde vive el motor del Índice de Oportunidad.
+ * TRADYLOR — Herramienta de curación (alias del módulo Tráfico y ventas)
+ * Redirige al dashboard del módulo Tráfico y ventas.
  */
 export const prerender = false;
 
-return Astro.redirect('/admin?section=analytics', 302);
+return Astro.redirect('/admin/trafico-ventas/', 302);
 ---

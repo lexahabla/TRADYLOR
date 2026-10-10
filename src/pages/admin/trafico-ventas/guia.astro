@@ -1,0 +1,163 @@
+---
+/**
+ * TRADYLOR — Guía y Glosario de Métricas (Módulo Tráfico y Ventas)
+ * Glosario estructurado: definición breve/larga por métrica, categoría,
+ * consejo de IA y filtro por categoría (script cliente).
+ */
+export const prerender = false;
+
+import Layout from '../../../layouts/Layout.astro';
+import AdminNav from '../../../components/AdminNav.astro';
+import { getSessionUser } from '../../../lib/adminAuth';
+import {
+  categoriasGlosario,
+  glosarioMetricas,
+  metricasPorCategoria,
+  type CategoriaMetrica,
+} from '../../../data/metricasGlosario';
+
+const sessionUser = getSessionUser(Astro.request);
+if (!sessionUser) return Astro.redirect('/admin');
+if (sessionUser.role !== 'admin') return Astro.redirect('/admin/perfil');
+
+const catInfo: Record<CategoriaMetrica, { label: string; clase: string }> = {
+  trafico: { label: 'Tráfico', clase: 'border-sky-500/30 bg-sky-500/15 text-sky-300' },
+  seo: { label: 'SEO', clase: 'border-violet-500/30 bg-violet-500/15 text-violet-300' },
+  ventas: { label: 'Ventas & Monetización', clase: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300' },
+  producto: { label: 'Métricas de Producto', clase: 'border-amber-500/30 bg-amber-500/15 text-amber-300' },
+  herramientas: { label: 'Herramientas', clase: 'border-indigo-500/30 bg-indigo-500/15 text-indigo-300' },
+  ia: { label: 'IA', clase: 'border-rose-500/30 bg-rose-500/15 text-rose-300' },
+};
+
+const total = glosarioMetricas.length;
+---
+
+<Layout
+  title="Guía y Glosario de Métricas | Admin Tradylor"
+  description="Glosario completo de métricas de tráfico, SEO, ventas, producto, herramientas e IA del panel de Tradylor."
+>
+  <div class="mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-20 pt-10">
+    <!-- Cabecera -->
+    <header class="flex flex-col gap-4 border-b border-white/10 pb-7">
+      <span class="inline-flex w-fit items-center gap-2 rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-xs font-bold text-blue-400">
+        <span class="h-1.5 w-1.5 rounded-full bg-blue-400"></span>
+        Centro de ayuda
+      </span>
+      <div class="flex flex-wrap items-end justify-between gap-4">
+        <div class="min-w-0">
+          <h1 class="text-2xl font-extrabold tracking-tight text-white sm:text-3xl">Guía y Glosario de Métricas</h1>
+          <p class="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">
+            Qué significa cada indicador del panel, cómo leerlo en el dashboard y un consejo práctico
+            de IA para actuar sobre él.
+          </p>
+        </div>
+        <a
+          href="/admin/trafico-ventas/"
+          class="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2.5 text-xs font-extrabold text-slate-200 transition hover:border-sky-500/40 hover:text-white"
+        >
+          <span aria-hidden="true">←</span>
+          Volver al dashboard
+        </a>
+      </div>
+    </header>
+
+    <AdminNav context="catalogo" active="analytics" user={sessionUser} />
+
+    <!-- Filtros por categoría -->
+    <section class="flex flex-col gap-4">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Categorías del glosario">
+          <button
+            type="button"
+            role="tab"
+            aria-selected="true"
+            data-cat-tab="todas"
+            class="rounded-full border border-sky-400 bg-sky-500 px-4 py-2 text-xs font-extrabold text-slate-950 transition"
+          >
+            Todas ({total})
+          </button>
+            {categoriasGlosario.map((cat) => (
+              <button
+                type="button"
+                role="tab"
+                aria-selected="false"
+                data-cat-tab={cat.id}
+                class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-extrabold text-slate-300 transition hover:border-sky-500/40 hover:text-white"
+              >
+                {cat.label} ({metricasPorCategoria(cat.id).length})
+              </button>
+            ))}
+        </div>
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{total} términos</span>
+      </div>
+
+      <!-- Tarjetas del glosario -->
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        {glosarioMetricas.map((metrica) => (
+          <article
+            id={metrica.id}
+            data-cat-card={metrica.categoria}
+            class="flex min-w-0 scroll-mt-24 flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-sky-500/30"
+          >
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <h2 class="text-sm font-extrabold text-white">{metrica.nombre}</h2>
+              <span class:list={['shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider', catInfo[metrica.categoria].clase]}>
+                {catInfo[metrica.categoria].label}
+              </span>
+            </div>
+
+            <p class="text-xs leading-relaxed text-slate-400">{metrica.definicionLarga}</p>
+
+            <div class="mt-auto rounded-lg border border-violet-500/25 bg-violet-500/10 p-3.5">
+              <p class="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider text-violet-300">
+                <span aria-hidden="true">✦</span>
+                Consejo de IA
+              </p>
+              <p class="mt-1.5 text-xs leading-relaxed text-slate-300">{metrica.consejoIa}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+
+      <p id="glosarioVacio" hidden class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-8 text-center text-sm text-slate-400">
+        No hay métricas en esta categoría.
+      </p>
+    </section>
+  </div>
+</Layout>
+
+<script>
+  const BASE = 'rounded-full border px-4 py-2 text-xs font-extrabold transition';
+  const ON = 'border-sky-400 bg-sky-500 text-slate-950';
+  const OFF = 'border-white/10 bg-white/5 text-slate-300 hover:border-sky-500/40 hover:text-white';
+
+  const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-cat-tab]'));
+  const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-cat-card]'));
+  const vacio = document.getElementById('glosarioVacio');
+
+  function aplicar(cat: string) {
+    let visibles = 0;
+    cards.forEach((card) => {
+      const ok = cat === 'todas' || card.dataset.catCard === cat;
+      card.hidden = !ok;
+      if (ok) visibles += 1;
+    });
+    if (vacio) vacio.hidden = visibles > 0;
+    tabs.forEach((tab) => {
+      const activo = tab.dataset.catTab === cat;
+      tab.setAttribute('aria-selected', String(activo));
+      tab.className = `${BASE} ${activo ? ON : OFF}`;
+    });
+  }
+
+  tabs.forEach((tab) => tab.addEventListener('click', () => aplicar(tab.dataset.catTab ?? 'todas')));
+
+  // Si llegamos desde el dashboard con #metrica, filtramos a su categoría.
+  const hashId = window.location.hash.slice(1);
+  if (hashId) {
+    const card = document.getElementById(hashId);
+    if (card) aplicar(card.getAttribute('data-cat-card') ?? 'todas');
+  } else {
+    aplicar('todas');
+  }
+</script>

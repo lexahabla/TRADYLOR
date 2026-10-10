@@ -1,0 +1,50 @@
+---
+/**
+ * TRADYLOR — Tarjeta de métrica global (Módulo Tráfico y Ventas)
+ * Muestra valor, indicador de subida/bajada y tooltip `?` con la definición
+ * corta del glosario (src/data/metricasGlosario.ts).
+ */
+export interface Props {
+  etiqueta: string;
+  valor: string;
+  /** Variación respecto al periodo anterior, en % (con signo). */
+  variacion: number;
+  /** true si el movimiento es bueno para el negocio. */
+  favorable?: boolean;
+  /** definicionCorta del glosario para el tooltip `?`. */
+  ayuda?: string;
+  periodo?: string;
+}
+
+const { etiqueta, valor, variacion, favorable = true, ayuda, periodo } = Astro.props;
+
+const sube = variacion >= 0;
+const deltaTexto = `${sube ? '+' : ''}${variacion.toFixed(1).replace('.', ',')}%`;
+const deltaClase = favorable
+  ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+  : 'border-rose-500/30 bg-rose-500/15 text-rose-300';
+---
+
+<div class="group/help relative flex min-w-0 flex-col gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-sky-500/40">
+  <div class="flex items-start justify-between gap-2">
+    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">{etiqueta}</span>
+    {ayuda && (
+      <span class="relative flex h-5 w-5 shrink-0 cursor-help items-center justify-center rounded-full border border-white/15 bg-white/5 text-[11px] font-bold text-slate-400 transition hover:border-sky-400 hover:text-sky-300" tabindex="0" aria-label={`Ayuda: ${etiqueta}`}>
+        ?
+        <span class="pointer-events-none absolute right-0 top-full z-30 mt-2 w-60 rounded-lg border border-sky-500/30 bg-slate-950 px-3 py-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-300 opacity-0 shadow-xl transition group-hover/help:opacity-100 group-focus-within/help:opacity-100" role="tooltip">
+          {ayuda}
+        </span>
+      </span>
+    )}
+  </div>
+
+  <strong class="truncate text-2xl font-extrabold text-white">{valor}</strong>
+
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <span class:list={['inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-extrabold', deltaClase]}>
+      <span aria-hidden="true">{sube ? '▲' : '▼'}</span>
+      {deltaTexto}
+    </span>
+    {periodo && <span class="text-[11px] text-slate-500">{periodo}</span>}
+  </div>
+</div>

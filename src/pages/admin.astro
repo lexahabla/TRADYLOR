@@ -7,8 +7,6 @@ import fs from 'node:fs';
 import { dataFile } from '../lib/paths';
 import type { Product } from './api/products/add';
 import { authenticateUser, clearAdminSession, createAdminSession, getSessionUser } from '../lib/adminAuth';
-import { getAnalyticsSummary } from '../lib/adminDashboard';
-import { getScoredCatalog } from '../lib/opportunity';
 
 const sessionUser = getSessionUser(Astro.request);
 const isAuthenticated = sessionUser !== null;
@@ -60,13 +58,13 @@ try {
 
 const pageTitle = "Panel de Administración | Tradylor";
 const pageDescription = "Gestión, scraping de metadatos y alta de productos con enlaces de afiliación en Tradylor.";
-const allowedSections = ['products', 'affiliates', 'categories', 'analytics', 'marketing'];
-const requestedSection = Astro.url.searchParams.get('section') || 'products';
-const initialSection = allowedSections.includes(requestedSection) ? requestedSection : 'products';
 
-// Datos SSR para la sección Tráfico y ventas (métricas + motor de curación)
-const analyticsSummary = getAnalyticsSummary();
-const scoredCatalog = getScoredCatalog();
+// El módulo "Tráfico y ventas" vive ahora en su propia ruta (dashboard + guía)
+const requestedSection = Astro.url.searchParams.get('section') || 'products';
+if (requestedSection === 'analytics') return Astro.redirect('/admin/trafico-ventas/');
+
+const allowedSections = ['products', 'affiliates', 'categories', 'marketing'];
+const initialSection = allowedSections.includes(requestedSection) ? requestedSection : 'products';
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
@@ -681,138 +679,6 @@ const scoredCatalog = getScoredCatalog();
         <div id="categoryListView" class="category-list-view">
           <div class="loading-panel">Cargando categorías...</div>
         </div>
-      </div>
-    </section>
-
-    <section data-admin-view="analytics" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'analytics' }]}>
-      <div class="view-heading">
-        <span class="admin-tag-pill">Actividad de la tienda</span>
-        <h2 class="admin-title">Tráfico y ventas</h2>
-        <p class="admin-subtitle">Métricas propias de navegación e interés, y el motor de curación que cruza los catálogos importados para detectar los productos con mayor potencial de conversión.</p>
-      </div>
-
-      <!-- 1. Métricas de tráfico (SSR) -->
-      <div class="admin-card">
-        <div class="card-header">
-          <div class="header-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="12" y1="20" x2="12" y2="10"></line>
-              <line x1="18" y1="20" x2="18" y2="4"></line>
-              <line x1="6" y1="20" x2="6" y2="16"></line>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">1. Actividad registrada</h2>
-            <p class="card-desc">Eventos capturados por el tracker propio (page views, clics, carrito y salidas a tiendas).</p>
-          </div>
-        </div>
-        <div class="dashboard-metric-grid">
-          <div class="dashboard-metric"><span>Visitas</span><strong>{analyticsSummary.pageViews}</strong><small>eventos page_view</small></div>
-          <div class="dashboard-metric"><span>Clics en producto</span><strong>{analyticsSummary.productClicks}</strong><small>eventos product_click</small></div>
-          <div class="dashboard-metric"><span>Añadidos al carrito</span><strong>{analyticsSummary.cartAdds}</strong><small>eventos cart_add</small></div>
-          <div class="dashboard-metric"><span>Salidas a comercio</span><strong>{analyticsSummary.outboundClicks}</strong><small>eventos outbound_click</small></div>
-        </div>
-        <div class="funnel-row">
-          {(() => {
-            const clickRate = analyticsSummary.pageViews > 0 ? Math.round((analyticsSummary.productClicks / analyticsSummary.pageViews) * 100) : 0;
-            const cartRate = analyticsSummary.productClicks > 0 ? Math.round((analyticsSummary.cartAdds / analyticsSummary.productClicks) * 100) : 0;
-            const outRate = analyticsSummary.cartAdds > 0 ? Math.round((analyticsSummary.outboundClicks / analyticsSummary.cartAdds) * 100) : 0;
-            return (
-              <>
-                <div class="funnel-step"><span class="funnel-label">Visita → Clic en ficha</span><div class="funnel-bar"><div class="funnel-fill" style={`width:${Math.max(clickRate, 2)}%`}></div></div><span class="funnel-value">{clickRate}%</span></div>
-                <div class="funnel-step"><span class="funnel-label">Clic → Añadir al carrito</span><div class="funnel-bar"><div class="funnel-fill" style={`width:${Math.max(cartRate, 2)}%`}></div></div><span class="funnel-value">{cartRate}%</span></div>
-                <div class="funnel-step"><span class="funnel-label">Carrito → Salida a tienda</span><div class="funnel-bar"><div class="funnel-fill" style={`width:${Math.max(outRate, 2)}%`}></div></div><span class="funnel-value">{outRate}%</span></div>
-              </>
-            );
-          })()}
-        </div>
-      </div>
-
-      <!-- 2. Motor de curación: Índice de Oportunidad -->
-      <div class="admin-card">
-        <div class="card-header">
-          <div class="header-icon icon-cyan">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-            </svg>
-          </div>
-          <div>
-            <h2 class="card-title">2. Curación por Índice de Oportunidad</h2>
-            <p class="card-desc">Cruce automático del catálogo: comisión estimada (40%), margen de precio (25%), popularidad (25%) y calidad editorial (10%).</p>
-          </div>
-        </div>
-
-        <div class="curation-table-wrap">
-          <table class="curation-table">
-            <thead>
-              <tr>
-                <th>Índice</th>
-                <th>Producto</th>
-                <th>Red</th>
-                <th>Precio</th>
-                <th>Comisión est.</th>
-                <th>Dto.</th>
-                <th>Valoración</th>
-                <th>Desglose</th>
-                <th class="text-right">Acción</th>
-              </tr>
-            </thead>
-            <tbody>
-              {scoredCatalog.length === 0 ? (
-                <tr class="empty-row"><td colspan="9">No hay productos en el catálogo todavía. Añade o importa productos para activar la curación.</td></tr>
-              ) : (
-                scoredCatalog.map(({ product, score, tier, breakdown, signals }) => (
-                  <tr class="curation-row">
-                    <td>
-                      <div class="opp-score" title={`Índice de Oportunidad: ${score}/100`}>
-                        <svg viewBox="0 0 36 36" class="opp-ring" aria-hidden="true">
-                          <circle cx="18" cy="18" r="15.5" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="3.5"></circle>
-                          <circle cx="18" cy="18" r="15.5" fill="none" stroke={tier === 'top' ? '#10b981' : tier === 'alta' ? '#38bdf8' : tier === 'media' ? '#f59e0b' : '#6b7280'} stroke-width="3.5" stroke-dasharray={`${(score / 100) * 97.4} 97.4`} stroke-linecap="round" transform="rotate(-90 18 18)"></circle>
-                        </svg>
-                        <span class="opp-number">{score}</span>
-                      </div>
-                    </td>
-                    <td class="curation-product">
-                      <img src={product.image} alt="" class="curation-thumb" loading="lazy" />
-                      <div>
-                        <div class="curation-name">{product.title}</div>
-                        <span class={`opp-tier tier-${tier}`}>{tier === 'top' ? 'Top' : tier === 'alta' ? 'Alta' : tier === 'media' ? 'Media' : 'Baja'}</span>
-                      </div>
-                    </td>
-                    <td><span class="merchant-badge">{product.merchant}</span></td>
-                    <td class="curation-price">{product.price.toFixed(2)} €</td>
-                    <td class="curation-commission">{signals.commissionAmount.toFixed(2)} €<small>{signals.commissionRate}%</small></td>
-                    <td>{signals.discountPercent != null ? <span class="cell-discount">-{signals.discountPercent}%</span> : <span class="cell-empty">—</span>}</td>
-                    <td>{signals.rating != null ? <span class="curation-rating">★ {signals.rating.toFixed(1)}</span> : <span class="cell-empty">—</span>}</td>
-                    <td>
-                      <div class="opp-breakdown">
-                        <span title="Comisión estimada (máx 40)">C {breakdown.commission}</span>
-                        <span title="Margen de precio (máx 25)">M {breakdown.priceMargin}</span>
-                        <span title="Popularidad (máx 25)">P {breakdown.popularity}</span>
-                        <span title="Calidad editorial (máx 10)">E {breakdown.editorial}</span>
-                      </div>
-                    </td>
-                    <td class="text-right">
-                      <button
-                        type="button"
-                        class="btn-feature-row"
-                        data-id={product.id}
-                        data-title={product.title}
-                        title="Cargar en el editor para destacarla en la web"
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-                        </svg>
-                        Destacar
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-        <p class="curation-note">El enlace de compra siempre queda enmascarado mediante <code>/out/[id]</code>. «Destacar» carga la ficha en el editor de Añadir productos para asignarle badge o ajustarla antes de publicar.</p>
       </div>
     </section>
 
@@ -2246,66 +2112,6 @@ const scoredCatalog = getScoredCatalog();
     });
 
     loadCategories();
-
-    // =========================================================================
-    // 7. TRÁFICO Y VENTAS: botón "Destacar" del motor de curación
-    //    Carga la ficha en el editor de Añadir productos para asignar badge
-    //    y publicar el producto destacado con un solo clic.
-    // =========================================================================
-    document.querySelectorAll('.btn-feature-row').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        const id = btn.getAttribute('data-id');
-        if (!id) return;
-        try {
-          const res = await fetch('/api/products/add');
-          const data = await res.json();
-          const product = (data.products || []).find((p) => p.id === id);
-          if (product) {
-            prodId.value = product.id || '';
-            prodTitle.value = product.title || '';
-            prodPrice.value = product.price !== undefined ? product.price : '';
-            prodOriginalPrice.value = product.originalPrice !== undefined ? product.originalPrice : '';
-            prodCategory.value = product.category || '';
-            prodMerchant.value = product.merchant || '';
-            prodAffiliateUrl.value = product.affiliateUrl || '';
-            prodImage.value = product.image || '';
-            prodBadge.value = product.badge || 'Elección del Editor';
-            prodDescription.value = product.description || '';
-            prodVerdict.value = product.verdict || '';
-            prodPros.value = Array.isArray(product.pros) ? product.pros.join('\n') : '';
-            prodCons.value = Array.isArray(product.cons) ? product.cons.join('\n') : '';
-            window.location.href = '/admin?section=products';
-            sessionStorage.setItem('tradylor-curate-load', JSON.stringify(product));
-          }
-        } catch (err) {
-          console.error('Error al cargar producto para destacar:', err);
-        }
-      });
-    });
-
-    // Al entrar en Añadir productos, si venimos de "Destacar", precargar la ficha
-    const curatePayload = sessionStorage.getItem('tradylor-curate-load');
-    if (curatePayload && productForm && window.location.search.includes('section=products')) {
-      try {
-        const product = JSON.parse(curatePayload);
-        prodId.value = product.id || '';
-        prodTitle.value = product.title || '';
-        prodPrice.value = product.price !== undefined ? product.price : '';
-        prodOriginalPrice.value = product.originalPrice !== undefined ? product.originalPrice : '';
-        prodCategory.value = product.category || '';
-        prodMerchant.value = product.merchant || '';
-        prodAffiliateUrl.value = product.affiliateUrl || '';
-        prodImage.value = product.image || '';
-        prodBadge.value = product.badge || 'Elección del Editor';
-        prodDescription.value = product.description || '';
-        prodVerdict.value = product.verdict || '';
-        prodPros.value = Array.isArray(product.pros) ? product.pros.join('\n') : '';
-        prodCons.value = Array.isArray(product.cons) ? product.cons.join('\n') : '';
-        updatePreview();
-        showAlert('success', 'Ficha precargada para destacar', 'Revisa el badge y pulsa "Guardar producto" para publicar el destacado.');
-      } catch {}
-      sessionStorage.removeItem('tradylor-curate-load');
-    }
   });
 </script>
 
@@ -2330,15 +2136,11 @@ const scoredCatalog = getScoredCatalog();
   .category-manager-pill button { padding: 0; color: var(--color-text-dim); background: transparent; border: 0; cursor: pointer; font: inherit; font-size: .9rem; line-height: 1; }
   .category-manager-pill button:hover { color: #f87171; }
   .integration-action { width: 100%; padding: .65rem; color: var(--color-text-dim); background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); cursor: not-allowed; font: inherit; font-size: .78rem; font-weight: 700; }
-  .affiliate-import-card, .category-manager, .analytics-note { margin-top: .25rem; }
+  .affiliate-import-card, .category-manager { margin-top: .25rem; }
   .filter-chip-row, .category-list-view { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
   .filter-chip-row span { color: #93c5fd; border-color: rgba(96, 165, 250, .25); }
   .category-form { display: flex; gap: .75rem; }
   .category-form input { flex: 1; }
-  .dashboard-metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
-  .dashboard-metric { padding: 1.25rem; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
-  .dashboard-metric span, .dashboard-metric small { display: block; color: var(--color-text-muted); font-size: .78rem; }
-  .dashboard-metric strong { display: block; margin: .3rem 0; color: var(--color-text-main); font-family: var(--font-heading); font-size: 2rem; }
   .loading-panel, .empty-dashboard { padding: 2rem; color: var(--color-text-muted); background: rgba(255, 255, 255, .025); border: 1px dashed var(--color-border); border-radius: var(--border-radius-md); text-align: center; }
 
   /* ============ MÓDULO AFILIADOS Y MULTI-CATÁLOGO ============ */
@@ -2472,53 +2274,7 @@ const scoredCatalog = getScoredCatalog();
     .import-category-field select { width: 100%; min-width: 0; }
   }
 
-  /* ============ TRÁFICO Y VENTAS: EMBUDO + CURACIÓN ============ */
-  .funnel-row { display: flex; flex-direction: column; gap: .85rem; margin-top: 1.5rem; }
-  .funnel-step { display: grid; grid-template-columns: 200px 1fr 52px; align-items: center; gap: 1rem; }
-  .funnel-label { color: var(--color-text-muted); font-size: .78rem; font-weight: 600; }
-  .funnel-bar { height: 10px; background: rgba(255, 255, 255, .05); border-radius: 999px; overflow: hidden; }
-  .funnel-fill { height: 100%; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 999px; transition: width .6s ease; }
-  .funnel-value { color: var(--color-text-main); font-family: var(--font-heading); font-weight: 800; font-size: .9rem; text-align: right; }
-
-  .curation-table-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
-  .curation-table { width: 100%; border-collapse: collapse; min-width: 980px; }
-  .curation-table thead th { padding: .8rem .75rem; color: var(--color-text-dim); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; text-align: center; border-bottom: 1px solid var(--color-border); background: rgba(255, 255, 255, .02); white-space: nowrap; }
-  .curation-table thead th:nth-child(2) { text-align: left; }
-  .curation-table tbody td { padding: .75rem; border-bottom: 1px solid rgba(255, 255, 255, .04); font-size: .8rem; color: var(--color-text-muted); vertical-align: middle; text-align: center; }
-  .curation-table tbody td > span, .curation-table tbody td > div.opp-score, .curation-table tbody td > div.opp-breakdown { display: inline-flex; justify-content: center; margin-left: auto; margin-right: auto; }
-  .curation-table tbody td.curation-product { text-align: left; }
-  .curation-row:hover { background: rgba(59, 130, 246, .04); }
-
-  .opp-score { position: relative; width: 46px; height: 46px; }
-  .opp-ring { width: 46px; height: 46px; }
-  .opp-number { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--color-text-main); font-family: var(--font-heading); font-size: .8rem; font-weight: 800; }
-
-  .curation-product { display: flex; align-items: center; gap: .7rem; min-width: 240px; }
-  .curation-thumb { width: 44px; height: 44px; border-radius: 8px; background: #fff; padding: 3px; object-fit: contain; flex-shrink: 0; }
-  .curation-name { color: var(--color-text-main); font-size: .8rem; font-weight: 600; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-width: 300px; }
-  .opp-tier { display: inline-block; margin-top: .25rem; padding: .12rem .45rem; border-radius: 4px; font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
-  .tier-top { color: #6ee7b7; background: rgba(16, 185, 129, .12); border: 1px solid rgba(16, 185, 129, .3); }
-  .tier-alta { color: #7dd3fc; background: rgba(56, 189, 248, .12); border: 1px solid rgba(56, 189, 248, .3); }
-  .tier-media { color: #fcd34d; background: rgba(245, 158, 11, .12); border: 1px solid rgba(245, 158, 11, .3); }
-  .tier-baja { color: #9ca3af; background: rgba(107, 114, 128, .12); border: 1px solid rgba(107, 114, 128, .3); }
-
-  .curation-price { color: #fff; font-weight: 700; white-space: nowrap; }
-  .curation-commission { color: #6ee7b7; font-weight: 700; white-space: nowrap; }
-  .curation-commission small { display: block; color: var(--color-text-dim); font-weight: 500; }
-  .curation-rating { color: #fbbf24; font-weight: 700; white-space: nowrap; }
-
-  .opp-breakdown { display: flex; gap: .3rem; flex-wrap: wrap; }
-  .opp-breakdown span { padding: .14rem .4rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 4px; font-size: .64rem; color: var(--color-text-dim); cursor: help; }
-
-  .curation-note { margin-top: 1rem; color: var(--color-text-dim); font-size: .76rem; line-height: 1.5; }
-  .curation-note code { color: #7dd3fc; background: rgba(56, 189, 248, .1); padding: .1rem .35rem; border-radius: 4px; }
   .text-right { text-align: right; }
-
-  /* Botón Destacar de la tabla de curación: ghost compacto integrado en la fila */
-  .btn-feature-row { display: inline-flex; align-items: center; gap: .3rem; padding: .3rem .55rem; color: #93c5fd; background: transparent; border: 1px solid rgba(96, 165, 250, .25); border-radius: 6px; cursor: pointer; font: inherit; font-size: .66rem; font-weight: 700; letter-spacing: .02em; transition: all .2s ease; white-space: nowrap; }
-  .btn-feature-row svg { flex-shrink: 0; transition: transform .2s ease; }
-  .btn-feature-row:hover { color: #dbeafe; background: rgba(59, 130, 246, .12); border-color: rgba(96, 165, 250, .5); }
-  .btn-feature-row:hover svg { transform: scale(1.15); fill: currentColor; }
 
   /* Visibilidad de secciones: el display base lo marca .is-visible únicamente, así las secciones ocultas nunca aparecen (el scoping de Astro sube la especificidad de las clases base con atributos) */
   .admin-grid-section,
@@ -2530,7 +2286,6 @@ const scoredCatalog = getScoredCatalog();
 
   @media (max-width: 900px) {
     .category-form { flex-direction: column; }
-    .dashboard-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 
   .admin-login-page { min-height: calc(100vh - 9rem); max-width: var(--max-width); margin: 0 auto; padding: 4rem 1.25rem 5rem; display: grid; grid-template-columns: minmax(0, 500px) minmax(240px, 1fr); align-items: center; gap: clamp(3rem, 10vw, 9rem); }

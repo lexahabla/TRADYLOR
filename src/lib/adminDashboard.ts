@@ -73,18 +73,6 @@ export function recordAnalyticsEvent(event: AnalyticsEvent): void {
   writeJson(ANALYTICS_PATH, events.slice(-10000));
 }
 
-export function getAnalyticsSummary() {
-  const events = getAnalyticsEvents();
-  const count = (type: AnalyticsEvent['type']) => events.filter((event) => event.type === type).length;
-  return {
-    pageViews: count('page_view'),
-    productClicks: count('product_click'),
-    cartAdds: count('cart_add'),
-    outboundClicks: count('outbound_click'),
-    trackedEvents: events.length,
-  };
-}
-
 export function getMarketingTools() {
   return [
     { id: 'meta', name: 'Meta / Facebook', envKeys: ['META_ACCESS_TOKEN', 'META_PAGE_ID'], status: 'Preparado para conectar' },

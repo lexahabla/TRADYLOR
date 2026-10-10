@@ -1,6 +1,13 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./src/**/*.{astro,html,js,jsx,ts,tsx,md,mdx}'],
+  // El resto del sitio usa un sistema de diseño propio (CSS con variables + tema
+  // oscuro) con algunas clases Tailwind "dormidas" en el markup público.
+  // El escaneo se restringe al módulo Tráfico y ventas para generar SÓLO las
+  // utilidades que usa y no activar por accidente esas clases en otras páginas.
+  content: [
+    './src/pages/admin/trafico-ventas/**/*.astro',
+    './src/components/admin/**/*.astro',
+  ],
   theme: {
     extend: {
       colors: {
@@ -8,9 +15,8 @@ export default {
       },
     },
   },
-  // El sitio usa un sistema de diseño propio (CSS con variables + tema oscuro).
   // Se desactiva el reset global de Tailwind para no romper estilos existentes;
-  // sólo se consumen las utilidades (layout, object-fit, espaciado, etc.).
+  // sólo se consumen las utilidades (layout, espaciado, tipografía, colores...).
   corePlugins: {
     preflight: false,
   },

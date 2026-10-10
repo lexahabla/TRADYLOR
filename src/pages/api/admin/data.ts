@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { addCategory, getAffiliateProviders, getAnalyticsSummary, getCategories, getMarketingTools, removeCategory } from '../../../lib/adminDashboard';
+import { addCategory, getAffiliateProviders, getCategories, getMarketingTools, removeCategory } from '../../../lib/adminDashboard';
 import { requireAdminAuth } from '../../../lib/adminAuth';
 import { getNetworksOverview } from '../../../lib/networks';
 import { getRemovedNetworks } from '../../../lib/networks/registry';
@@ -16,7 +16,6 @@ export const GET: APIRoute = ({ request }) => {
     networks: getNetworksOverview(),
     removed: getRemovedNetworks(),
     categories: getCategories(),
-    analytics: getAnalyticsSummary(),
     marketing: getMarketingTools(),
   }), { status: 200, headers: { 'Content-Type': 'application/json' } });
 };
