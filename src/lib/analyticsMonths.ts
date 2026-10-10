@@ -315,18 +315,55 @@ const DAY_MS = 86_400_000;
 export function getPeriodoDashboard(dias = 30): PeriodoDashboard {
   const ahora = Date.now();
   const desde = ahora - dias * DAY_MS;
-  const desdeAnterior = ahora - 2 * dias * DAY_MS;
+  return getPeriodoRangoMs(desde, ahora, dias);
+}
+
+/**
+ * Métricas para un rango arbitrario [desdeISO..hastaISO] (ambos inclusivos,
+ * cortados a día). El periodo "anterior" tiene la misma longitud inmediatamente
+ * antes, para poder calcular variaciones.
+ */
+export function getPeriodoRango(desdeISO: string, hastaISO: string): PeriodoDashboard {
+  const desde = Date.parse(`${desdeISO}T00:00:00`);
+  const hasta = Date.parse(`${hastaISO}T00:00:00`) + DAY_MS; // inclusive del día
+  if (!Number.isFinite(desde) || !Number.isFinite(hasta) || hasta <= desde) {
+    return getPeriodoDashboard(30);
+  }
+  const dias = Math.max(1, Math.round((hasta - desde) / DAY_MS));
+  return getPeriodoRangoMs(desde, hasta, dias);
+}
+
+function getPeriodoRangoMs(desde: number, hasta: number, dias: number): PeriodoDashboard {
+  const longitud = hasta - desde;
+  const desdeAnterior = desde - longitud;
   const eventos = getAnalyticsEvents();
-  const actuales = eventosEnRango(eventos, desde, ahora);
+  const actuales = eventosEnRango(eventos, desde, hasta);
   const anteriores = eventosEnRango(eventos, desdeAnterior, desde);
   return {
     actual: computeMetricas(actuales),
     anterior: computeMetricas(anteriores),
     fuentes: computeFuentes(actuales),
-    evolucion: computeEvolucion(actuales, 14),
+    evolucion: computeEvolucion(actuales, Math.min(dias, 31)),
     topProductos: computeTopProductos(actuales),
     dias,
   };
+}
+
+/**
+ * Fechas con eventos registrados, para resaltarlas en el calendario del panel.
+ * Devuelve días (yyyy-mm-dd), meses (yyyy-mm) y años (yyyy) con al menos un evento.
+ */
+export function getFechasConDatos(): { dias: string[]; meses: string[]; anios: string[] } {
+  const eventos = getAnalyticsEvents();
+  const dias = new Set<string>();
+  for (const event of eventos) {
+    const fecha = event.createdAt.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(fecha)) dias.add(fecha);
+  }
+  const listaDias = [...dias].sort();
+  const meses = new Set(listaDias.map((d) => d.slice(0, 7)));
+  const anios = new Set(listaDias.map((d) => d.slice(0, 4)));
+  return { dias: listaDias, meses: [...meses].sort(), anios: [...anios].sort() };
 }
 
 /* ----------------------------------------------------- histórico por meses */

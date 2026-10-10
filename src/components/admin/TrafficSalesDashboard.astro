@@ -9,6 +9,7 @@
 import MetricCard from './MetricCard.astro';
 import SimpleBarChart from './SimpleBarChart.astro';
 import ProductMetricsTable from './ProductMetricsTable.astro';
+import PeriodPicker, { type SeleccionPeriodo } from './PeriodPicker.astro';
 import {
   formatValor,
   type FormatoValor,
@@ -16,13 +17,61 @@ import {
 } from '../../data/mockAnalytics';
 import { getMetrica } from '../../data/metricasGlosario';
 import { getIgnoredIps } from '../../lib/analytics';
-import { getMesesAnalitica, getPeriodoDashboard } from '../../lib/analyticsMonths';
+import {
+  getFechasConDatos,
+  getMesesAnalitica,
+  getPeriodoDashboard,
+  getPeriodoRango,
+} from '../../lib/analyticsMonths';
 
 const fmtNum = new Intl.NumberFormat('es-ES');
 
-const periodoQuery = Number(Astro.url.searchParams.get('dias'));
-const DIAS = [30, 90, 365].includes(periodoQuery) ? periodoQuery : 30;
-const periodo = getPeriodoDashboard(DIAS);
+const params = Astro.url.searchParams;
+const basePath = Astro.url.pathname + (Astro.url.searchParams.has('section') ? '?section=analytics' : '');
+
+const MESES_CORTOS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+/** Resuelve los query params del calendario a un periodo + etiqueta. */
+function resolverPeriodo(): { periodo: ReturnType<typeof getPeriodoDashboard>; seleccion: SeleccionPeriodo; etiquetaPeriodo: string } {
+  const dia = params.get('dia');
+  const mes = params.get('mes');
+  const anio = params.get('anio');
+  const diasRaw = params.get('dias');
+
+  if (dia && /^\d{4}-\d{2}-\d{2}$/.test(dia)) {
+    const [y, m, d] = dia.split('-');
+    return {
+      periodo: getPeriodoRango(dia, dia),
+      seleccion: { tipo: 'dia', valor: dia, etiqueta: `${Number(d)} ${MESES_CORTOS[Number(m) - 1]} ${y}` },
+      etiquetaPeriodo: `el día ${Number(d)} de ${MESES_CORTOS[Number(m) - 1]} de ${y}`,
+    };
+  }
+  if (mes && /^\d{4}-\d{2}$/.test(mes)) {
+    const [y, m] = mes.split('-');
+    const ultimo = new Date(Number(y), Number(m), 0).getDate();
+    return {
+      periodo: getPeriodoRango(`${mes}-01`, `${mes}-${ultimo}`),
+      seleccion: { tipo: 'mes', valor: mes, etiqueta: `${MESES_CORTOS[Number(m) - 1]} ${y}` },
+      etiquetaPeriodo: `de ${MESES_CORTOS[Number(m) - 1]} de ${y}`,
+    };
+  }
+  if (anio && /^\d{4}$/.test(anio)) {
+    return {
+      periodo: getPeriodoRango(`${anio}-01-01`, `${anio}-12-31`),
+      seleccion: { tipo: 'anio', valor: anio, etiqueta: `Año ${anio}` },
+      etiquetaPeriodo: `del año ${anio}`,
+    };
+  }
+  const n = [7, 30, 90, 365].includes(Number(diasRaw)) ? Number(diasRaw) : 30;
+  return {
+    periodo: getPeriodoDashboard(n),
+    seleccion: { tipo: 'dias', valor: String(n), etiqueta: n === 365 ? 'Último año' : `Últimos ${n} días` },
+    etiquetaPeriodo: `de los últimos ${n} días`,
+  };
+}
+
+const { periodo, seleccion, etiquetaPeriodo } = resolverPeriodo();
+const fechas = getFechasConDatos();
 const resumen = getMesesAnalitica();
 const ignoredIps = getIgnoredIps();
 
@@ -38,20 +87,22 @@ interface FichaMetrica {
   variacion: number;
   favorable: boolean;
   glosarioId: string;
+  /** Valor objetivo/óptimo estimado (ficticio de referencia). */
+  optimo: number;
 }
 
 const m = periodo.actual;
 const a = periodo.anterior;
 const fichas: FichaMetrica[] = [
-  { etiqueta: 'Sesiones', valor: m.sesiones, formato: 'numero', variacion: variacion(m.sesiones, a.sesiones), favorable: true, glosarioId: 'sesiones' },
-  { etiqueta: 'Usuarios únicos', valor: m.usuariosUnicos, formato: 'numero', variacion: variacion(m.usuariosUnicos, a.usuariosUnicos), favorable: true, glosarioId: 'usuarios-unicos' },
-  { etiqueta: 'Páginas / sesión', valor: m.paginasPorSesion, formato: 'decimal', variacion: variacion(m.paginasPorSesion, a.paginasPorSesion), favorable: true, glosarioId: 'paginas-por-sesion' },
-  { etiqueta: 'Permanencia media', valor: m.permanenciaMediaSeg, formato: 'duracion', variacion: variacion(m.permanenciaMediaSeg, a.permanenciaMediaSeg), favorable: true, glosarioId: 'permanencia' },
-  { etiqueta: 'Tasa de rebote', valor: m.rebotePct, formato: 'percent', variacion: variacion(m.rebotePct, a.rebotePct), favorable: m.rebotePct <= a.rebotePct, glosarioId: 'tasa-rebote' },
-  { etiqueta: 'Visitas', valor: m.visitas, formato: 'numero', variacion: variacion(m.visitas, a.visitas), favorable: true, glosarioId: 'visualizaciones-producto' },
-  { etiqueta: 'Salidas a tienda', valor: m.salidas, formato: 'numero', variacion: variacion(m.salidas, a.salidas), favorable: true, glosarioId: 'friccion-venta' },
-  { etiqueta: 'Tasa de conversión', valor: m.conversionPct, formato: 'percent', variacion: variacion(m.conversionPct, a.conversionPct), favorable: true, glosarioId: 'tasa-conversion' },
-  { etiqueta: 'Valor medio del pedido', valor: m.aov, formato: 'moneda', variacion: variacion(m.aov, a.aov), favorable: true, glosarioId: 'aov' },
+  { etiqueta: 'Sesiones', valor: m.sesiones, formato: 'numero', variacion: variacion(m.sesiones, a.sesiones), favorable: true, glosarioId: 'sesiones', optimo: 1200 },
+  { etiqueta: 'Usuarios únicos', valor: m.usuariosUnicos, formato: 'numero', variacion: variacion(m.usuariosUnicos, a.usuariosUnicos), favorable: true, glosarioId: 'usuarios-unicos', optimo: 900 },
+  { etiqueta: 'Páginas / sesión', valor: m.paginasPorSesion, formato: 'decimal', variacion: variacion(m.paginasPorSesion, a.paginasPorSesion), favorable: true, glosarioId: 'paginas-por-sesion', optimo: 3.5 },
+  { etiqueta: 'Permanencia media', valor: m.permanenciaMediaSeg, formato: 'duracion', variacion: variacion(m.permanenciaMediaSeg, a.permanenciaMediaSeg), favorable: true, glosarioId: 'permanencia', optimo: 120 },
+  { etiqueta: 'Tasa de rebote', valor: m.rebotePct, formato: 'percent', variacion: variacion(m.rebotePct, a.rebotePct), favorable: m.rebotePct <= a.rebotePct, glosarioId: 'tasa-rebote', optimo: 45 },
+  { etiqueta: 'Visitas', valor: m.visitas, formato: 'numero', variacion: variacion(m.visitas, a.visitas), favorable: true, glosarioId: 'visualizaciones-producto', optimo: 2400 },
+  { etiqueta: 'Salidas a tienda', valor: m.salidas, formato: 'numero', variacion: variacion(m.salidas, a.salidas), favorable: true, glosarioId: 'friccion-venta', optimo: 180 },
+  { etiqueta: 'Tasa de conversión', valor: m.conversionPct, formato: 'percent', variacion: variacion(m.conversionPct, a.conversionPct), favorable: true, glosarioId: 'tasa-conversion', optimo: 7.5 },
+  { etiqueta: 'Valor medio del pedido', valor: m.aov, formato: 'moneda', variacion: variacion(m.aov, a.aov), favorable: true, glosarioId: 'aov', optimo: 65 },
 ];
 
 const COLORES_FUENTE: Record<string, string> = {
@@ -104,29 +155,34 @@ const enCurso = resumen.meses[0]?.month ?? '';
 
 <div class="flex flex-col gap-9">
   <!-- 1. Resumen global -->
-  <section class="flex flex-col gap-4">
+  <section class="flex flex-col gap-4" data-resumen data-objetivo="off">
     <div class="flex flex-wrap items-end justify-between gap-3">
       <div>
         <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Resumen global</h2>
         <p class="mt-1 text-xs text-slate-400">
-          Indicadores reales de los últimos {DIAS} días frente al periodo anterior.
+          Indicadores reales {etiquetaPeriodo} frente al periodo anterior.
         </p>
       </div>
-      <nav class="flex items-center gap-1.5" aria-label="Periodo">
-        {[30, 90, 365].map((dias) => (
-          <a
-            href={`?dias=${dias}`}
-            class:list={[
-              'rounded-full border px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider transition',
-              dias === DIAS
-                ? 'border-sky-400/40 bg-sky-500/20 text-sky-300'
-                : 'border-white/10 bg-white/[0.03] text-slate-400 hover:border-sky-400/30 hover:text-sky-300',
-            ]}
-          >
-            {dias === 365 ? '1 año' : `${dias} días`}
-          </a>
-        ))}
-      </nav>
+      <div class="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          data-objetivo-toggle
+          class="flex items-center gap-1.5 rounded-full border border-violet-500/30 bg-violet-500/10 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-violet-300 transition hover:bg-violet-500/20"
+        >
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2v20M2 12h20"></path>
+            <circle cx="12" cy="12" r="9"></circle>
+          </svg>
+          <span data-objetivo-texto>Métrica estimada óptima</span>
+          <span class="relative flex h-4 w-4 items-center justify-center rounded-full border border-white/20 bg-white/5 text-[9px] font-bold" tabindex="0" aria-label="Ayuda: métrica estimada óptima">
+            ?
+            <span class="pointer-events-none absolute right-0 top-full z-30 mt-2 w-60 rounded-lg border border-violet-500/30 bg-slate-950 px-3 py-2 text-left text-xs font-normal normal-case leading-relaxed tracking-normal text-slate-300 opacity-0 shadow-xl transition group-hover/help:opacity-100 group-focus-within/help:opacity-100" role="tooltip">
+              Muestra valores objetivo ficticios de referencia (no son datos reales). Sirven para fijar metas y comparar el rendimiento real frente a un escenario óptimo.
+            </span>
+          </span>
+        </button>
+        <PeriodPicker seleccion={seleccion} fechas={fechas} basePath={basePath} />
+      </div>
     </div>
 
     {sinDatos && (
@@ -140,7 +196,7 @@ const enCurso = resumen.meses[0]?.month ?? '';
       </div>
     )}
 
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-fichas>
       {fichas.map((ficha) => (
         <MetricCard
           etiqueta={ficha.etiqueta}
@@ -148,7 +204,8 @@ const enCurso = resumen.meses[0]?.month ?? '';
           variacion={ficha.variacion}
           favorable={ficha.favorable}
           ayuda={getMetrica(ficha.glosarioId)?.definicionCorta}
-          periodo={`Últimos ${DIAS} días`}
+          periodo={seleccion.etiqueta}
+          valorObjetivo={formatValor(ficha.optimo, ficha.formato)}
         />
       ))}
     </div>
@@ -348,6 +405,27 @@ const enCurso = resumen.meses[0]?.month ?? '';
 </div>
 
 <script>
+  // Conmutador "Métrica estimada óptima": alterna valor real / objetivo en las tarjetas.
+  const resumen = document.querySelector<HTMLElement>('[data-resumen]');
+  const btnObjetivo = document.querySelector<HTMLButtonElement>('[data-objetivo-toggle]');
+  if (resumen && btnObjetivo) {
+    const textoBtn = btnObjetivo.querySelector<HTMLElement>('[data-objetivo-texto]');
+    const aplicar = (activo: boolean) => {
+      resumen.setAttribute('data-objetivo', activo ? 'on' : 'off');
+      resumen.querySelectorAll<HTMLElement>('[data-valor-real]').forEach((el) => el.classList.toggle('hidden', activo));
+      resumen.querySelectorAll<HTMLElement>('[data-valor-objetivo]').forEach((el) => el.classList.toggle('hidden', !activo));
+      resumen.querySelectorAll<HTMLElement>('[data-badge-real]').forEach((el) => el.classList.toggle('hidden', activo));
+      resumen.querySelectorAll<HTMLElement>('[data-badge-objetivo]').forEach((el) => {
+        el.classList.toggle('hidden', !activo);
+        el.classList.toggle('inline-flex', activo);
+      });
+      if (textoBtn) textoBtn.textContent = activo ? 'Ver datos reales' : 'Métrica estimada óptima';
+    };
+    btnObjetivo.addEventListener('click', () => {
+      aplicar(resumen.getAttribute('data-objetivo') !== 'on');
+    });
+  }
+
   // Exportación y reinicio del histórico mensual (sin framework, vanilla).
   const contenedor = document.querySelector('[data-historico]');
   if (contenedor) {

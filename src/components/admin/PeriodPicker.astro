@@ -1,0 +1,257 @@
+---
+/**
+ * TRADYLOR — Selector de periodo con calendario (Módulo Tráfico y Ventas)
+ * Desplegable con pestañas Rangos / Días / Meses / Años. Navega por query
+ * params (?dias=, ?dia=, ?mes=, ?anio=) y resalta los periodos que ya tienen
+ * eventos registrados. Sin framework: JS vanilla en el cliente.
+ */
+export interface FechasConDatos {
+  dias: string[];
+  meses: string[];
+  anios: string[];
+}
+
+export interface SeleccionPeriodo {
+  tipo: 'dias' | 'dia' | 'mes' | 'anio';
+  valor: string;
+  etiqueta: string;
+}
+
+export interface Props {
+  seleccion: SeleccionPeriodo;
+  fechas: FechasConDatos;
+  /** Ruta base para la navegación (p.ej. /admin?section=analytics). */
+  basePath: string;
+}
+
+const { seleccion, fechas, basePath } = Astro.props;
+---
+
+<div class="relative" data-periodo-picker>
+  <button
+    type="button"
+    data-periodo-trigger
+    aria-haspopup="dialog"
+    aria-expanded="false"
+    class="flex items-center gap-2 rounded-full border border-sky-400/40 bg-sky-500/15 px-4 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-sky-300 transition hover:bg-sky-500/25"
+  >
+    <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+      <line x1="16" y1="2" x2="16" y2="6"></line>
+      <line x1="8" y1="2" x2="8" y2="6"></line>
+      <line x1="3" y1="10" x2="21" y2="10"></line>
+    </svg>
+    <span data-periodo-label>{seleccion.etiqueta}</span>
+    <svg class="h-3 w-3 opacity-70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9"></polyline>
+    </svg>
+  </button>
+
+  <div
+    data-periodo-panel
+    class="absolute right-0 z-40 mt-2 hidden w-[320px] rounded-2xl border border-white/10 bg-slate-950 p-3 shadow-2xl shadow-black/50"
+    role="dialog"
+    aria-label="Seleccionar periodo"
+  >
+    <!-- Rangos rápidos -->
+    <div class="mb-3 flex flex-wrap gap-1.5" data-periodo-rangos>
+      {[
+        { etiqueta: 'Hoy', dias: '0' },
+        { etiqueta: '7 días', dias: '7' },
+        { etiqueta: '30 días', dias: '30' },
+        { etiqueta: '90 días', dias: '90' },
+        { etiqueta: '1 año', dias: '365' },
+      ].map((r) => (
+        <button
+          type="button"
+          data-rango={r.dias}
+          class:list={[
+            'rounded-full border px-2.5 py-1 text-[10px] font-bold transition',
+            seleccion.tipo === 'dias' && seleccion.valor === r.dias
+              ? 'border-sky-400/50 bg-sky-500/25 text-sky-200'
+              : 'border-white/10 bg-white/[0.04] text-slate-400 hover:border-sky-400/30 hover:text-sky-300',
+          ]}
+        >
+          {r.etiqueta}
+        </button>
+      ))}
+    </div>
+
+    <!-- Pestañas -->
+    <div class="mb-3 flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-1" data-periodo-tabs>
+      {(['dias', 'meses', 'anios'] as const).map((tab) => {
+        const activo =
+          (tab === 'dias' && (seleccion.tipo === 'dia' || seleccion.tipo === 'dias')) ||
+          (tab === 'meses' && seleccion.tipo === 'mes') ||
+          (tab === 'anios' && seleccion.tipo === 'anio');
+        return (
+          <button
+            type="button"
+            data-tab={tab}
+            class:list={[
+              'flex-1 rounded-md px-2 py-1.5 text-[10px] font-extrabold uppercase tracking-wider transition',
+              activo ? 'bg-sky-500/25 text-sky-200' : 'text-slate-400 hover:text-slate-200',
+            ]}
+          >
+            {tab === 'dias' ? 'Días' : tab === 'meses' ? 'Meses' : 'Años'}
+          </button>
+        );
+      })}
+    </div>
+
+    <!-- Días: calendario mensual -->
+    <div data-vista="dias" class="hidden">
+      <div class="mb-2 flex items-center justify-between">
+        <button type="button" data-mes-prev aria-label="Mes anterior" class="rounded-md p-1 text-slate-400 transition hover:bg-white/5 hover:text-sky-300">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <span data-mes-titulo class="text-xs font-extrabold uppercase tracking-wider text-white"></span>
+        <button type="button" data-mes-next aria-label="Mes siguiente" class="rounded-md p-1 text-slate-400 transition hover:bg-white/5 hover:text-sky-300">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+      <div class="mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-slate-500">
+        {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map((d) => <span>{d}</span>)}
+      </div>
+      <div data-dias-grid class="grid grid-cols-7 gap-1"></div>
+    </div>
+
+    <!-- Meses -->
+    <div data-vista="meses" class="hidden">
+      <div class="mb-2 flex items-center justify-between">
+        <button type="button" data-anio-prev aria-label="Año anterior" class="rounded-md p-1 text-slate-400 transition hover:bg-white/5 hover:text-sky-300">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </button>
+        <span data-anio-titulo class="text-xs font-extrabold uppercase tracking-wider text-white"></span>
+        <button type="button" data-anio-next aria-label="Año siguiente" class="rounded-md p-1 text-slate-400 transition hover:bg-white/5 hover:text-sky-300">
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+      <div data-meses-grid class="grid grid-cols-3 gap-1.5"></div>
+    </div>
+
+    <!-- Años -->
+    <div data-vista="anios" class="hidden">
+      <div data-anios-grid class="grid grid-cols-3 gap-1.5"></div>
+    </div>
+  </div>
+</div>
+
+<script define:vars={{ fechas, basePath, seleccion }}>
+  const root = document.querySelector('[data-periodo-picker]');
+  if (root) {
+    const trigger = root.querySelector('[data-periodo-trigger]');
+    const panel = root.querySelector('[data-periodo-panel]');
+    const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const conDia = new Set(fechas.dias);
+    const conMes = new Set(fechas.meses);
+    const conAnio = new Set(fechas.anios);
+
+    const hoy = new Date();
+    let calYear = hoy.getFullYear();
+    let calMonth = hoy.getMonth(); // 0-11
+    let anioSel = Number(seleccion.tipo === 'anio' ? seleccion.valor : calYear);
+
+    const navegar = (params) => {
+      const qs = new URLSearchParams(params);
+      window.location.href = `${basePath}?${qs.toString()}`;
+    };
+
+    // --- abrir/cerrar ---
+    const cerrar = () => { panel.classList.add('hidden'); trigger.setAttribute('aria-expanded', 'false'); };
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const abierto = !panel.classList.contains('hidden');
+      if (abierto) cerrar();
+      else { panel.classList.remove('hidden'); trigger.setAttribute('aria-expanded', 'true'); }
+    });
+    document.addEventListener('click', (e) => { if (!root.contains(e.target)) cerrar(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') cerrar(); });
+
+    // --- rangos rápidos ---
+    root.querySelectorAll('[data-rango]').forEach((btn) => {
+      btn.addEventListener('click', () => navegar({ dias: btn.getAttribute('data-rango') }));
+    });
+
+    // --- pestañas ---
+    const vistas = { dias: root.querySelector('[data-vista="dias"]'), meses: root.querySelector('[data-vista="meses"]'), anios: root.querySelector('[data-vista="anios"]') };
+    const mostrarVista = (nombre) => {
+      Object.entries(vistas).forEach(([k, el]) => el.classList.toggle('hidden', k !== nombre));
+      root.querySelectorAll('[data-tab]').forEach((t) => {
+        const activo = t.getAttribute('data-tab') === nombre;
+        t.classList.toggle('bg-sky-500/25', activo);
+        t.classList.toggle('text-sky-200', activo);
+        t.classList.toggle('text-slate-400', !activo);
+      });
+      if (nombre === 'dias') renderDias();
+      if (nombre === 'meses') renderMeses();
+      if (nombre === 'anios') renderAnios();
+    };
+    root.querySelectorAll('[data-tab]').forEach((t) => t.addEventListener('click', () => mostrarVista(t.getAttribute('data-tab'))));
+
+    // --- calendario de días ---
+    const diasGrid = root.querySelector('[data-dias-grid]');
+    const mesTitulo = root.querySelector('[data-mes-titulo]');
+    const renderDias = () => {
+      mesTitulo.textContent = `${MESES[calMonth]} ${calYear}`;
+      diasGrid.innerHTML = '';
+      const primero = new Date(calYear, calMonth, 1);
+      const offsetLunes = (primero.getDay() + 6) % 7; // lunes=0
+      const totalDias = new Date(calYear, calMonth + 1, 0).getDate();
+      for (let i = 0; i < offsetLunes; i++) diasGrid.insertAdjacentHTML('beforeend', '<span></span>');
+      for (let d = 1; d <= totalDias; d++) {
+        const iso = `${calYear}-${String(calMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        const tiene = conDia.has(iso);
+        const esHoy = iso === `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${String(hoy.getDate()).padStart(2, '0')}`;
+        const esSel = seleccion.tipo === 'dia' && seleccion.valor === iso;
+        diasGrid.insertAdjacentHTML('beforeend',
+          `<button type="button" data-iso="${iso}" class="flex h-8 items-center justify-center rounded-md text-[11px] font-bold transition
+            ${esSel ? 'bg-sky-500 text-white' : tiene ? 'bg-sky-500/20 text-sky-200 hover:bg-sky-500/35' : 'text-slate-500 hover:bg-white/5'}
+            ${esHoy && !esSel ? 'ring-1 ring-sky-400/60' : ''}">${d}</button>`);
+      }
+      diasGrid.querySelectorAll('[data-iso]').forEach((b) => b.addEventListener('click', () => navegar({ dia: b.getAttribute('data-iso') })));
+    };
+    root.querySelector('[data-mes-prev]').addEventListener('click', () => { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } renderDias(); });
+    root.querySelector('[data-mes-next]').addEventListener('click', () => { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } renderDias(); });
+
+    // --- rejilla de meses ---
+    const mesesGrid = root.querySelector('[data-meses-grid]');
+    const anioTitulo = root.querySelector('[data-anio-titulo]');
+    const renderMeses = () => {
+      anioTitulo.textContent = String(anioSel);
+      mesesGrid.innerHTML = '';
+      for (let m = 0; m < 12; m++) {
+        const iso = `${anioSel}-${String(m + 1).padStart(2, '0')}`;
+        const tiene = conMes.has(iso);
+        const esSel = seleccion.tipo === 'mes' && seleccion.valor === iso;
+        mesesGrid.insertAdjacentHTML('beforeend',
+          `<button type="button" data-mes="${iso}" class="rounded-md px-2 py-2 text-[11px] font-bold transition
+            ${esSel ? 'bg-sky-500 text-white' : tiene ? 'bg-sky-500/20 text-sky-200 hover:bg-sky-500/35' : 'text-slate-500 hover:bg-white/5'}">${MESES[m].slice(0, 3)}</button>`);
+      }
+      mesesGrid.querySelectorAll('[data-mes]').forEach((b) => b.addEventListener('click', () => navegar({ mes: b.getAttribute('data-mes') })));
+    };
+    root.querySelector('[data-anio-prev]').addEventListener('click', () => { anioSel--; renderMeses(); });
+    root.querySelector('[data-anio-next]').addEventListener('click', () => { anioSel++; renderMeses(); });
+
+    // --- rejilla de años ---
+    const aniosGrid = root.querySelector('[data-anios-grid]');
+    const renderAnios = () => {
+      aniosGrid.innerHTML = '';
+      const base = Number(seleccion.tipo === 'anio' ? seleccion.valor : hoy.getFullYear());
+      for (let a = base + 2; a >= base - 4; a--) {
+        const tiene = conAnio.has(String(a));
+        const esSel = seleccion.tipo === 'anio' && seleccion.valor === String(a);
+        aniosGrid.insertAdjacentHTML('beforeend',
+          `<button type="button" data-anio="${a}" class="rounded-md px-2 py-2 text-[11px] font-bold transition
+            ${esSel ? 'bg-sky-500 text-white' : tiene ? 'bg-sky-500/20 text-sky-200 hover:bg-sky-500/35' : 'text-slate-500 hover:bg-white/5'}">${a}</button>`);
+      }
+      aniosGrid.querySelectorAll('[data-anio]').forEach((b) => b.addEventListener('click', () => navegar({ anio: b.getAttribute('data-anio') })));
+    };
+
+    // vista inicial coherente con la selección
+    if (seleccion.tipo === 'dia') { const [y, m] = seleccion.valor.split('-').map(Number); calYear = y; calMonth = m - 1; mostrarVista('dias'); }
+    else if (seleccion.tipo === 'mes') { anioSel = Number(seleccion.valor.split('-')[0]); mostrarVista('meses'); }
+    else if (seleccion.tipo === 'anio') { anioSel = Number(seleccion.valor); mostrarVista('anios'); }
+    else mostrarVista('dias');
+  }
+</script>
