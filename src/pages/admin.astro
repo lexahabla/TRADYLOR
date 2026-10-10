@@ -755,6 +755,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const btnSaveProduct = document.getElementById('btnSaveProduct');
     const btnAiEnrich = document.getElementById('btnAiEnrich');
 
+    // Extras del último scrape (specs, marca, valoración, reseñas) para el enriquecimiento local.
+    let scrapeExtras = { brand: '', rating: null, reviewsCount: null, specs: null };
+
     // Preview
     const previewImg = document.getElementById('previewImg');
     const previewEmptyImage = document.getElementById('previewEmptyImage');
@@ -942,6 +945,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           setProductField(prodCons, Array.isArray(data.cons) ? data.cons.join('\n') : '');
           setProductField(prodAffiliateUrl, data.affiliateUrl || urlToScrape);
 
+          // Guardar extras del scrape (specs, marca, valoración, reseñas) para
+          // que el enriquecimiento local use datos reales.
+          scrapeExtras = {
+            brand: data.brand || '',
+            rating: data.rating ?? null,
+            reviewsCount: data.reviewsCount ?? null,
+            specs: data.specs && typeof data.specs === 'object' ? data.specs : null,
+          };
+
           updatePreview();
 
           if (result.scraped) {
@@ -1123,6 +1135,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             affiliateUrl: (prodAffiliateUrl.value || '').trim() || undefined,
             merchant: prodMerchant.value || undefined,
             url: inputScrapeUrl && inputScrapeUrl.value ? inputScrapeUrl.value.trim() || undefined : undefined,
+            brand: scrapeExtras.brand || undefined,
+            rating: scrapeExtras.rating ?? undefined,
+            reviewsCount: scrapeExtras.reviewsCount ?? undefined,
+            specs: scrapeExtras.specs || undefined,
+            pros: prodPros.value.split('\n').map((s) => s.trim()).filter(Boolean),
+            cons: prodCons.value.split('\n').map((s) => s.trim()).filter(Boolean),
             // En auto solo texto (rápido): la imagen real del scraping se conserva.
             options: { text: true, image: !auto, save: false },
           }),
@@ -1151,7 +1169,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           const enriched = result.product || {};
           const flags = result.enrichment || { text: 'skipped', image: 'skipped', warnings: [] };
 
-          if (flags.text === 'ok') {
+          if (flags.text === 'ok' || flags.text === 'local') {
             if (enriched.description) prodDescription.value = enriched.description;
             if (enriched.verdict) prodVerdict.value = enriched.verdict;
             if (Array.isArray(enriched.pros) && enriched.pros.length) prodPros.value = enriched.pros.join('\n');
@@ -1162,20 +1180,21 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
           updatePreview();
 
+          const via = flags.text === 'ok' ? 'IA' : 'local (sin IA)';
           const summary = auto
-            ? `Ficha enriquecida · Imagen: conservada (${flags.image === 'ok' ? 'IA' : 'scraping'})`
-            : `Texto: ${flags.text} · Imagen: ${flags.image}`;
+            ? `Ficha generada ${via} · Imagen: conservada (${flags.image === 'ok' ? 'IA' : 'scraping'})`
+            : `Texto: ${via} · Imagen: ${flags.image}`;
           const warnings =
             Array.isArray(flags.warnings) && flags.warnings.length
               ? ` Avisos: ${flags.warnings.join(' | ')}`
               : '';
           showAlert(
             'success',
-            'Contenido generado con IA',
+            'Ficha de producto generada',
             `${summary}. Revisa los campos y pulsa «Guardar producto» para publicarlo.${warnings}`
           );
         } else {
-          showAlert('error', 'La IA no pudo completar el proceso', result.message || 'Revisa las claves de API configuradas en .env');
+          showAlert('error', 'No se pudo generar la ficha', result.message || 'Revisa la configuración del servidor.');
         }
       } catch (err) {
         console.error(err);

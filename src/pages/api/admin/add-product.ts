@@ -10,6 +10,7 @@ import {
   textProvider,
   type EnrichedText,
 } from '../../../lib/ai';
+import { enrichProductLocally } from '../../../lib/localEnrich';
 import { readProductsFromFile, slugify, upsertProduct, type Product } from '../../../lib/productStore';
 
 export const prerender = false;
@@ -99,32 +100,60 @@ export const POST: APIRoute = async ({ request }) => {
     };
 
     const warnings: string[] = [];
-    let textStatus: 'ok' | 'skipped' | 'error' = 'skipped';
+    let textStatus: 'ok' | 'local' | 'skipped' | 'error' = 'skipped';
     let imageStatus: 'ok' | 'skipped' | 'error' = 'skipped';
     let enrichment: EnrichedText | null = null;
     let generatedImageUrl: string | null = null;
 
     // ------------------------------------------------------------------
-    // PASO 1 — Enriquecimiento de texto (IA)
+    // PASO 1 — Enriquecimiento de texto
+    //   Base SIEMPRE local (gratis, sin claves ni créditos).
+    //   Si hay claves de IA y funciona, se mejora por encima (overlay).
     // ------------------------------------------------------------------
+    const localEnrichment = enrichProductLocally({
+      title,
+      description: body?.description,
+      category: body?.category,
+      brand: body?.brand,
+      merchant: body?.merchant,
+      price: body?.price ? Number(body.price) : undefined,
+      originalPrice: body?.originalPrice ? Number(body.originalPrice) : undefined,
+      rating: body?.rating ? Number(body.rating) : undefined,
+      reviewsCount: body?.reviewsCount ? Number(body.reviewsCount) : undefined,
+      url: body?.url,
+      specs: body?.specs && typeof body.specs === 'object' ? body.specs : undefined,
+      pros: Array.isArray(body?.pros) ? body.pros : undefined,
+      cons: Array.isArray(body?.cons) ? body.cons : undefined,
+    });
+
     if (options.text) {
       if (!hasTextCredentials()) {
         warnings.push(
-          `Texto no generado: falta la clave de ${textProvider() === 'anthropic' ? 'Anthropic (ANTHROPIC_API_KEY)' : 'OpenAI (OPENAI_API_KEY)'}.`
+          `Ficha generada localmente (sin IA). Para texto con IA añade ${textProvider() === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY'}.`
         );
-        textStatus = 'skipped';
+        enrichment = localEnrichment;
+        textStatus = 'local';
       } else {
         try {
-          enrichment = await enrichProductText({
+          const aiEnrichment = await enrichProductText({
             title,
             description: body?.description,
             category: body?.category,
             url: body?.url,
           });
+          // Overlay: la IA mejora lo local, pero no borra datos que ya había.
+          enrichment = {
+            ...localEnrichment,
+            ...aiEnrichment,
+            specs: { ...(localEnrichment.specs ?? {}), ...(aiEnrichment.specs ?? {}) },
+            pros: aiEnrichment.pros?.length ? aiEnrichment.pros : localEnrichment.pros,
+            cons: aiEnrichment.cons?.length ? aiEnrichment.cons : localEnrichment.cons,
+          };
           textStatus = 'ok';
         } catch (error: any) {
-          textStatus = 'error';
-          warnings.push(`Fallo al enriquecer el texto: ${error?.message ?? error}`);
+          textStatus = 'local';
+          enrichment = localEnrichment;
+          warnings.push(`IA no disponible (${error?.message ?? error}). Ficha generada localmente.`);
         }
       }
     }

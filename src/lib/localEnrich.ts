@@ -1,0 +1,168 @@
+/**
+ * Enriquecimiento local de producto (sin IA, sin coste).
+ *
+ * Compone una ficha editorial a partir de los datos ya extraídos por el
+ * scraping (título, marca, precio, valoración, reseñas, categoría, pros…)
+ * usando plantillas por categoría. No inventa especificaciones ni cifras:
+ * sólo reordena y redacta lo que se conoce.
+ *
+ * Se usa como:
+ *   1) Fuente principal cuando no hay claves de IA configuradas.
+ *   2) Respaldo cuando la llamada a la IA falla (p. ej. sin créditos).
+ */
+
+import type { EnrichedText } from './ai';
+
+export interface LocalEnrichInput {
+  title: string;
+  description?: string;
+  category?: string;
+  brand?: string;
+  merchant?: string;
+  price?: number;
+  originalPrice?: number;
+  rating?: number;
+  reviewsCount?: number;
+  url?: string;
+  /** Specs ya extraídas por el scraping, si las hay. */
+  specs?: Record<string, string>;
+  /** Pros ya extraídos (feature-bullets), si los hay. */
+  pros?: string[];
+  cons?: string[];
+}
+
+const CATEGORY_TONE: Record<string, string> = {
+  'audio-sonido': 'de audio',
+  'audio & sonido': 'de audio',
+  'audio y sonido': 'de audio',
+  audio: 'de audio',
+  informática: 'de informática',
+  informatica: 'de informática',
+  'hogar-inteligente': 'para el hogar',
+  'hogar inteligente': 'para el hogar',
+  hogar: 'para el hogar',
+  herramientas: 'de herramientas',
+  tecnología: 'de tecnología',
+  tecnologia: 'de tecnología',
+};
+
+/** Normaliza el nombre de categoría para buscarlo en CATEGORY_TONE. */
+function toneFor(category?: string): string {
+  const key = (category || '').toLowerCase().trim();
+  if (CATEGORY_TONE[key]) return CATEGORY_TONE[key];
+  // Búsqueda por coincidencia parcial (p. ej. "Audio y Sonido (Bluetooth)").
+  for (const [needle, tone] of Object.entries(CATEGORY_TONE)) {
+    if (key.includes(needle)) return tone;
+  }
+  return 'destacado';
+}
+
+function titleCase(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/** Formatea precio en euros de forma compacta (46.51 → "46,51 €"). */
+function formatPrice(value?: number): string {
+  if (!value || !Number.isFinite(value)) return '';
+  return `${value.toFixed(2).replace('.', ',')} €`;
+}
+
+function discountPercent(price?: number, original?: number): number | null {
+  if (!price || !original || original <= price) return null;
+  return Math.round(((original - price) / original) * 100);
+}
+
+/** Limpia y normaliza un bullet para usarlo como pros/cons. */
+function cleanBullet(text: string): string {
+  let t = String(text || '').trim();
+  t = t.replace(/^[•·\-\*]\s*/, '').trim();
+  if (t && !/[.!?]$/.test(t)) t = `${t}.`;
+  return titleCase(t);
+}
+
+/**
+ * Genera la descripción editorial (2–3 frases) a partir de lo que sabemos.
+ * Nunca inventa specs ni números: sólo usa precio, marca, valoración y contexto.
+ */
+function buildDescription(input: LocalEnrichInput): string {
+  const parts: string[] = [];
+  const tone = toneFor(input.category);
+  const brand = input.brand ? `${input.brand} ` : '';
+  const name = `${brand}${input.title}`.trim();
+
+  const facts: string[] = [];
+  const price = formatPrice(input.price);
+  if (price) {
+    const off = discountPercent(input.price, input.originalPrice);
+    facts.push(off ? `lo encuentras por ${price} (${off}% de descuento respecto al precio original)` : `lo encuentras por ${price}`);
+  }
+  if (input.rating && input.reviewsCount) {
+    facts.push(`cuenta con una valoración de ${input.rating}/5 basada en ${input.reviewsCount} reseñas`);
+  } else if (input.rating) {
+    facts.push(`tiene una valoración de ${input.rating}/5`);
+  }
+
+  parts.push(`${titleCase(name)} es una opción ${tone}.`);
+  if (facts.length) {
+    parts.push(`En el momento de revisarlo, ${facts.join(' y ')}.`);
+  }
+  if (input.description) {
+    // Añadimos la descripción del comercio como contexto final, recortada.
+    const desc = String(input.description).trim().replace(/\s+/g, ' ');
+    const short = desc.length > 220 ? `${desc.slice(0, 217).trimEnd()}…` : desc;
+    if (short) parts.push(short);
+  }
+  return parts.join(' ').trim();
+}
+
+/** Veredicto neutro (1–2 frases) indicando para quién encaja. */
+function buildVerdict(input: LocalEnrichInput): string {
+  const tone = toneFor(input.category);
+  const brand = input.brand ? ` de ${input.brand}` : '';
+  const off = discountPercent(input.price, input.originalPrice);
+  const deal = off && off >= 10 ? ' Con el descuento que tiene, es un buen momento si lo estabas vigilando.' : '';
+  return `Si buscas algo ${tone}${brand} con buenas valoraciones de usuarios, ${input.title} encaja bien en ese perfil.${deal}`;
+}
+
+/** Pros por defecto (sólo si el scraping no aportó ninguno). */
+function buildPros(input: LocalEnrichInput): string[] {
+  const pros: string[] = [];
+  if (input.rating && input.rating >= 4) pros.push(`Valoración alta de los usuarios (${input.rating}/5).`);
+  if (input.reviewsCount && input.reviewsCount >= 50) pros.push(`Bastantes reseñas reales (${input.reviewsCount}) que avalan la compra.`);
+  const off = discountPercent(input.price, input.originalPrice);
+  if (off) pros.push(`Descuento activo del ${off}% sobre el precio original.`);
+  if (input.brand) pros.push(`Marca reconocida: ${input.brand}.`);
+  pros.push('Disponible en compra con envío por el comercio asociado.');
+  return pros.slice(0, 5);
+}
+
+/** Contras de contexto (honestas, sin relleno). */
+function buildCons(input: LocalEnrichInput): string[] {
+  const cons: string[] = [];
+  if (!input.reviewsCount || input.reviewsCount < 20) {
+    cons.push('Poco volumen de reseñas todavía; conviene revisar opiniones recientes.');
+  }
+  cons.push('El precio y la disponibilidad pueden variar según el comercio y el momento.');
+  if (!input.originalPrice) {
+    cons.push('Sin precio de referencia publicado, difícil saber si el descuento es real.');
+  }
+  return cons.slice(0, 4);
+}
+
+/**
+ * Enriquece un producto localmente con plantillas (gratis, instantáneo).
+ * Sólo rellena los campos vacíos; lo que el scraping ya aportó se respeta.
+ */
+export function enrichProductLocally(input: LocalEnrichInput): EnrichedText {
+  const scrapedPros = Array.isArray(input.pros) ? input.pros.map(cleanBullet).filter(Boolean) : [];
+  const scrapedCons = Array.isArray(input.cons) ? input.cons.map(cleanBullet).filter(Boolean) : [];
+
+  return {
+    description: buildDescription(input),
+    specs: input.specs && Object.keys(input.specs).length ? input.specs : {},
+    pros: scrapedPros.length ? scrapedPros : buildPros(input),
+    cons: scrapedCons.length ? scrapedCons : buildCons(input),
+    verdict: buildVerdict(input),
+    category: input.category,
+  };
+}
