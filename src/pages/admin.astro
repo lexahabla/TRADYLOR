@@ -2920,7 +2920,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     border-radius: 8px;
     overflow: hidden;
     cursor: pointer;
-    background: #fff;
+    background: linear-gradient(160deg, #f8fafc, #eef2f7);
     transition: border-color 0.15s, transform 0.15s;
   }
 
@@ -2932,7 +2932,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .gallery-thumb img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    padding: 5px;
     display: block;
   }
 
@@ -3008,15 +3009,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .preview-image-wrapper {
     position: relative;
     width: 100%;
-    height: 220px;
-    background: #080c14;
+    aspect-ratio: 1 / 1;
+    background: linear-gradient(160deg, #f8fafc, #eef2f7);
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .preview-image-wrapper img {
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    object-fit: contain;
+    padding: 1.25rem;
     transition: transform 0.3s ease;
   }
 
@@ -3028,8 +3033,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     align-items: center;
     justify-content: center;
     gap: 0.75rem;
-    color: var(--color-text-dim);
-    background: radial-gradient(circle at 50% 35%, rgba(56, 189, 248, 0.12), transparent 42%), #080c14;
+    color: #94a3b8;
+    background: linear-gradient(160deg, #f8fafc, #eef2f7);
     text-align: center;
     font-size: 0.75rem;
     letter-spacing: 0.02em;
