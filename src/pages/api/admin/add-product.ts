@@ -150,6 +150,7 @@ export const POST: APIRoute = async ({ request }) => {
           enrichment = {
             ...localEnrichment,
             ...aiEnrichment,
+            title: pick(aiEnrichment.title, localEnrichment.title),
             description: pick(aiEnrichment.description, localEnrichment.description),
             verdict: pick(aiEnrichment.verdict, localEnrichment.verdict),
             category: pick(aiEnrichment.category, localEnrichment.category),
@@ -168,7 +169,9 @@ export const POST: APIRoute = async ({ request }) => {
 
     // ------------------------------------------------------------------
     // PASO 2 — Generación/acondicionamiento de imagen (IA)
+    //   El prompt usa el título sintetizado (más limpio y descriptivo).
     // ------------------------------------------------------------------
+    const imagePromptTitle = enrichment?.title?.trim() || title;
     if (options.image) {
       if (!hasImageCredentials()) {
         imageStatus = 'skipped';
@@ -177,7 +180,7 @@ export const POST: APIRoute = async ({ request }) => {
         );
       } else {
         try {
-          const result = await generateProductImage(title);
+          const result = await generateProductImage(imagePromptTitle);
           generatedImageUrl = result.url;
           imageStatus = 'ok';
         } catch (error: any) {
@@ -190,9 +193,18 @@ export const POST: APIRoute = async ({ request }) => {
     // ------------------------------------------------------------------
     // Composición del producto (base + enriquecimiento)
     // ------------------------------------------------------------------
+    const finalTitle = enrichment?.title?.trim() || title;
+
+    const bodyGallery = Array.isArray(body?.gallery)
+      ? (body.gallery as unknown[])
+          .map((g) => String(g ?? '').trim())
+          .filter((g) => /^https?:\/\//i.test(g) || g.startsWith('/images/'))
+          .slice(0, 10)
+      : [];
+
     const base: Product = {
-      id: String(body?.id ?? '').trim() || slugify(title),
-      title,
+      id: String(body?.id ?? '').trim() || slugify(finalTitle),
+      title: finalTitle,
       description: String(body?.description ?? '').trim(),
       price: Number(body?.price) || 0,
       originalPrice: body?.originalPrice ? Number(body.originalPrice) : undefined,
@@ -200,6 +212,13 @@ export const POST: APIRoute = async ({ request }) => {
         generatedImageUrl ||
         String(body?.image ?? '').trim() ||
         DEFAULT_IMAGE,
+      gallery: (() => {
+        const gallery = bodyGallery.slice();
+        if (generatedImageUrl && !gallery.includes(generatedImageUrl)) gallery.unshift(generatedImageUrl);
+        const mainImage = generatedImageUrl || String(body?.image ?? '').trim();
+        if (mainImage && !gallery.includes(mainImage)) gallery.unshift(mainImage);
+        return gallery.length ? gallery : undefined;
+      })(),
       category: String(body?.category ?? '').trim(),
       merchant: detectMerchant(body?.affiliateUrl || body?.url, body?.merchant),
       affiliateUrl: String(body?.affiliateUrl ?? body?.url ?? '').trim(),

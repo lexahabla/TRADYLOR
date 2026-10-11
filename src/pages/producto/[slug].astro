@@ -40,6 +40,12 @@ const checkoutUrl = `/checkout/${productKey(product)}`;
 const specs = product.specs && Object.keys(product.specs).length > 0 ? product.specs : null;
 const fulfillmentProvider = product.fulfillmentProvider ?? product.merchant;
 
+// Galería completa del carrusel: imagen principal + vistas adicionales (sin duplicados).
+const galleryImages = [
+  ...new Set([product.image, ...(Array.isArray(product.gallery) ? product.gallery : [])]),
+].filter(Boolean);
+const hasGalleryCarousel = galleryImages.length > 1;
+
 // Comparativa: productos de la misma categoría (incluye el actual)
 const sameCategory = allProducts.filter((p) => p.category === product.category);
 const alternativesCount = sameCategory.filter((p) => p.id !== product.id).length;
@@ -161,24 +167,24 @@ const productSchema = {
             height="450"
             id="mainProductImg"
           />
-          {Array.isArray(product.gallery) && product.gallery.length > 1 && (
+          {hasGalleryCarousel && (
             <>
               <button type="button" id="galleryPrev" class="gallery-nav gallery-nav-prev" aria-label="Imagen anterior">‹</button>
               <button type="button" id="galleryNext" class="gallery-nav gallery-nav-next" aria-label="Imagen siguiente">›</button>
-              <span id="galleryCounter" class="gallery-counter">1 / {product.gallery.length}</span>
+              <span id="galleryCounter" class="gallery-counter">1 / {galleryImages.length}</span>
             </>
           )}
         </div>
 
         {/* Galería de imágenes: miniaturas que cambian la imagen principal */}
-        {Array.isArray(product.gallery) && product.gallery.length > 1 && (
+        {hasGalleryCarousel && (
           <div class="product-thumbs" id="productThumbs">
-            {product.gallery.map((img, i) => (
+            {galleryImages.map((img, i) => (
               <button
                 type="button"
                 class={`product-thumb${i === 0 ? ' is-active' : ''}`}
                 data-full={img}
-                aria-label={`Ver imagen ${i + 1} de ${product.gallery.length}`}
+                aria-label={`Ver imagen ${i + 1} de ${galleryImages.length}`}
               >
                 <img src={img} alt="" loading="lazy" />
               </button>

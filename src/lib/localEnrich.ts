@@ -11,7 +11,7 @@
  *   2) Respaldo cuando la llamada a la IA falla (p. ej. sin créditos).
  */
 
-import type { EnrichedText } from './ai';
+import { synthesizeTitleLocally, type EnrichedText } from './ai';
 
 export interface LocalEnrichInput {
   title: string;
@@ -158,6 +158,7 @@ export function enrichProductLocally(input: LocalEnrichInput): EnrichedText {
   const scrapedCons = Array.isArray(input.cons) ? input.cons.map(cleanBullet).filter(Boolean) : [];
 
   return {
+    title: synthesizeTitleLocally(input.title) || input.title,
     description: buildDescription(input),
     specs: input.specs && Object.keys(input.specs).length ? input.specs : {},
     pros: scrapedPros.length ? scrapedPros : buildPros(input),

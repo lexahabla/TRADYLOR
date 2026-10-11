@@ -99,6 +99,8 @@ const productSchema = z.object({
 
   // ─── Media & Visual ────────────────────────────────────────────────────────
   image: z.string().default('/images/placeholder-product.jpg'),
+  /** Galería completa del producto (vistas adicionales para el carrusel). */
+  gallery: z.array(z.string()).optional(),
   badge: z.string().optional(),
   verdict: z.string().optional(),
 

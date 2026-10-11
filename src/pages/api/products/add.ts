@@ -551,6 +551,29 @@ export const POST: APIRoute = async ({ request }) => {
 
       const currentProducts = readProductsFromFile();
       const productId = dataToSave.id || slugify(dataToSave.title);
+      const existingProduct = currentProducts.find((p) => p.id === productId);
+
+      // Galería: si el cliente no envía ninguna, se conserva la ya guardada
+      // (así editar un producto sin re-scrapear no borra sus imágenes).
+      let gallery = Array.isArray(dataToSave.gallery)
+        ? dataToSave.gallery
+            .map((g: unknown) => String(g ?? '').trim())
+            .filter((g: string) => /^https?:\/\//i.test(g) || g.startsWith('/images/'))
+            .slice(0, 10)
+        : Array.isArray(existingProduct?.gallery)
+          ? existingProduct.gallery.slice(0, 10)
+          : [];
+
+      const resolvedImage = String(
+        dataToSave.image ||
+          existingProduct?.image ||
+          'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=800&auto=format&fit=crop'
+      ).trim();
+
+      // La imagen principal debe formar parte de la galería (primera posición).
+      if (resolvedImage && !gallery.includes(resolvedImage)) {
+        gallery.unshift(resolvedImage);
+      }
 
       const newProduct: Product = {
         id: productId,
@@ -558,19 +581,14 @@ export const POST: APIRoute = async ({ request }) => {
         description: String(dataToSave.description || '').trim(),
         price: Number(dataToSave.price) || 0,
         originalPrice: dataToSave.originalPrice ? Number(dataToSave.originalPrice) : undefined,
-        image: String(dataToSave.image || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=800&auto=format&fit=crop').trim(),
-        gallery: Array.isArray(dataToSave.gallery)
-          ? dataToSave.gallery
-              .map((g: unknown) => String(g ?? '').trim())
-              .filter((g: string) => /^https?:\/\//i.test(g) || g.startsWith('/images/'))
-              .slice(0, 10)
-          : undefined,
+        image: resolvedImage,
+        gallery: gallery.slice(0, 10),
         category: resolveCategory(dataToSave.category, `${dataToSave.title} ${dataToSave.description || ''}`),
         merchant: String(dataToSave.merchant || detectMerchantFromUrl(dataToSave.affiliateUrl)).trim(),
         affiliateUrl: String(dataToSave.affiliateUrl).trim(),
         buyNowUrl: dataToSave.buyNowUrl
           ? String(dataToSave.buyNowUrl).trim()
-          : currentProducts.find((p) => p.id === productId)?.buyNowUrl,
+          : existingProduct?.buyNowUrl,
         pros: Array.isArray(dataToSave.pros)
           ? dataToSave.pros.filter(Boolean)
           : typeof dataToSave.pros === 'string'

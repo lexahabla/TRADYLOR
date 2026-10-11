@@ -31,6 +31,8 @@ export interface Product {
   price: number;
   originalPrice?: number;
   image: string;
+  /** Galería de imágenes del producto (la primera suele ser la principal). */
+  gallery?: string[];
   category: string;
   merchant: string;
   affiliateUrl: string;
@@ -150,6 +152,7 @@ export function toStructuredProduct(flat: Product): ProductSchema {
     },
     alternatives: flat.alternatives,
     image: flat.image,
+    gallery: flat.gallery,
     badge: flat.badge,
     verdict: flat.verdict,
   };

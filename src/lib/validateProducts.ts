@@ -114,6 +114,7 @@ function normalizeToProduct(schema: Product): FlatProduct {
     price: schema.pricing.currentPrice,
     originalPrice: schema.pricing.originalPrice,
     image: schema.image,
+    gallery: schema.gallery,
     category: schema.category,
     merchant: schema.affiliate.primaryStore,
     affiliateUrl: schema.affiliate.primaryUrl,

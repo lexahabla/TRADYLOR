@@ -22,6 +22,8 @@ export type TextProvider = 'openai' | 'anthropic' | 'groq';
 export type ImageProvider = 'openai' | 'flux';
 
 export interface EnrichedText {
+  /** Título sintetizado y corto (legible en las product-cards). */
+  title?: string;
   description: string;
   specs: Record<string, string>;
   pros: string[];
@@ -102,13 +104,14 @@ const TEXT_SYSTEM_PROMPT = [
   'Reglas estrictas:',
   '- Nunca inventes precios, números de ventas ni especificaciones que no puedas deducir del texto de entrada.',
   '- Tono divulgativo y directo, sin superlativos comerciales ("lo mejor del mercado", "imbatible") y sin llamadas a la acción de compra.',
+  '- title: título SINTETIZADO en español, máximo 70 caracteres, que diga solo qué es el producto (tipo + marca + modelo) y, si cabe, una única característica diferencial importante (ej. "Auriculares Sony WH-1000XM5 con cancelación de ruido"). Sin precios, sin descuentos, sin argumentos de venta, sin el nombre del comercio ni sufijos tipo "| Amazon.es" o "- PcComponentes". Debe leerse bien en una tarjeta de producto.',
   '- pros: 3 a 5 puntos concretos y verificables.',
   '- cons: 2 a 4 puntos reales o de contexto (disponibilidad, garantía, accesorios), no relleno.',
   '- verdict: 1 o 2 frases neutras indicando para quién encaja el producto.',
   '- specs: entre 4 y 8 pares clave/valor cortos (p. ej. "Autonomía": "Hasta 30 horas"). Omite las que no conozcas.',
   '- category: nombre corto de categoría (ej. "Audio & Sonido").',
   '- description: 2 o 3 frases en español, orientadas a decisión de compra.',
-  'Responde SOLO con JSON válido con claves: description, specs, pros, cons, verdict, category.',
+  'Responde SOLO con JSON válido con claves: title, description, specs, pros, cons, verdict, category.',
 ].join('\n');
 
 /**
@@ -255,6 +258,7 @@ function normalizeEnrichedText(raw: any): EnrichedText {
   }
 
   return {
+    title: String(raw?.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || undefined,
     description: String(raw?.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 600),
     specs,
     pros: toStringArray(raw?.pros, 5),
@@ -262,6 +266,178 @@ function normalizeEnrichedText(raw: any): EnrichedText {
     verdict: String(raw?.verdict ?? '').replace(/\s+/g, ' ').trim().slice(0, 400),
     category: String(raw?.category ?? '').replace(/\s+/g, ' ').trim().slice(0, 60) || undefined,
   };
+}
+
+// ─── Sintetización de títulos ────────────────────────────────────────────────
+
+/** Sufijos de marketplace que ensucian el título de una product-card. */
+const MARKETPLACE_SUFFIX_RE =
+  /\s*[\-|:•·]\s*(Amazon(?:\.(?:es|com|it|de|fr|co\.uk))?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple|eBay|Walmart|Best Buy)\b.*$/i;
+
+const MAX_TITLE_LENGTH = 70;
+
+/**
+ * Sintetiza un título corto y legible SIN IA (gratis, instantáneo):
+ * quita sufijos de tienda, se queda con la definición del producto y
+ * recorta a un máximo de 70 caracteres en límite de palabra.
+ */
+export function synthesizeTitleLocally(title: string): string {
+  let t = String(title || '').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+
+  t = t.replace(MARKETPLACE_SUFFIX_RE, '').trim();
+
+  // Si el título usa separadores ("Marca - modelo - features..."), conserva
+  // la parte principal (tipo + marca + modelo) y una característica corta.
+  const parts = t.split(/\s+[\-–—|]\s+/).map((p) => p.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    let candidate = parts[0];
+    for (const part of parts.slice(1)) {
+      if (candidate.length + part.length + 1 > MAX_TITLE_LENGTH) break;
+      candidate = `${candidate} ${part}`;
+      // Con una característica extra es suficiente: el resto es relleno.
+      break;
+    }
+    t = candidate;
+  }
+
+  if (t.length > MAX_TITLE_LENGTH) {
+    const cut = t.slice(0, MAX_TITLE_LENGTH);
+    const lastSpace = cut.lastIndexOf(' ');
+    t = (lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trim();
+  }
+  return t;
+}
+
+const TITLE_SYSTEM_PROMPT = [
+  'Eres el equipo editorial de Tradylor, un portal de análisis y recomendación de productos.',
+  'Sintetiza el título del producto para que quepa y se lea bien en una tarjeta de producto.',
+  'Reglas estrictas:',
+  `- Máximo ${MAX_TITLE_LENGTH} caracteres.`,
+  '- Di SOLO qué es el producto: tipo + marca + modelo y, como mucho, una única característica diferencial importante.',
+  '- Sin precios, sin descuentos, sin argumentos de venta ni superlativos.',
+  '- Sin el nombre del comercio ni sufijos de marketplace ("| Amazon.es", "- PcComponentes", "Envío gratis...").',
+  '- Conserva las mayúsculas naturales de marca y modelo.',
+  'Responde SOLO con JSON válido: { "title": "..." }',
+].join('\n');
+
+/**
+ * Sintetiza un título corto con IA (OpenAI / Anthropic / Groq).
+ * Lanza si no hay credenciales o el proveedor falla (el caller aplica fallback local).
+ */
+export async function synthesizeProductTitle(input: {
+  title: string;
+  description?: string;
+  category?: string;
+  brand?: string;
+}): Promise<string> {
+  const provider = textProvider();
+  if (!hasTextCredentials()) {
+    throw new Error(
+      provider === 'anthropic'
+        ? 'Falta ANTHROPIC_API_KEY para sintetizar el título'
+        : provider === 'groq'
+          ? 'Falta GROQ_API_KEY para sintetizar el título'
+          : 'Falta OPENAI_API_KEY para sintetizar el título'
+    );
+  }
+
+  const userContext = [
+    `Título original: ${input.title}`,
+    input.brand ? `Marca: ${input.brand}` : '',
+    input.category ? `Categoría: ${input.category}` : '',
+    input.description ? `Descripción disponible: ${input.description.slice(0, 400)}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  let text = '';
+
+  if (provider === 'anthropic') {
+    const model = env('ANTHROPIC_MODEL') || 'claude-3-5-sonnet-latest';
+    const response = await fetchWithTimeout(
+      'https://api.anthropic.com/v1/messages',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': env('ANTHROPIC_API_KEY'),
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 150,
+          temperature: 0.3,
+          system: TITLE_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: userContext }],
+        }),
+      },
+      45_000
+    );
+    if (!response.ok) {
+      throw new Error(`Anthropic respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    }
+    const payload = await response.json();
+    text = (payload?.content ?? []).map((block: any) => block?.text ?? '').join('');
+  } else if (provider === 'groq') {
+    const response = await fetchWithTimeout(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${env('GROQ_API_KEY')}`,
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-oss-120b',
+          temperature: 0.3,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: TITLE_SYSTEM_PROMPT },
+            { role: 'user', content: userContext },
+          ],
+        }),
+      },
+      45_000
+    );
+    if (!response.ok) {
+      throw new Error(`Groq respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    }
+    const payload = await response.json();
+    text = payload?.choices?.[0]?.message?.content ?? '';
+  } else {
+    const model = env('OPENAI_MODEL') || 'gpt-4o-mini';
+    const response = await fetchWithTimeout(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${env('OPENAI_API_KEY')}`,
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.3,
+          response_format: { type: 'json_object' },
+          messages: [
+            { role: 'system', content: TITLE_SYSTEM_PROMPT },
+            { role: 'user', content: userContext },
+          ],
+        }),
+      },
+      45_000
+    );
+    if (!response.ok) {
+      throw new Error(`OpenAI respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    }
+    const payload = await response.json();
+    text = payload?.choices?.[0]?.message?.content ?? '';
+  }
+
+  const parsed = parseLooseJson(text);
+  const short = String(parsed?.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (!short) throw new Error('La IA no devolvió un título sintetizado');
+  return short;
 }
 
 /**
