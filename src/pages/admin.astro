@@ -445,7 +445,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                     <img src={p.image} alt={p.title} class="thumb-img" loading="lazy" />
                   </td>
                   <td class="col-details">
-                    <div class="row-title">{p.title}</div>
+                    <a href={`/producto/${p.slug ?? p.id}`} class="row-title" target="_blank" rel="noopener" title="Ver ficha pública del producto">{p.title}</a>
                     <div class="row-meta">
                       <span class="pill-category">{p.category}</span>
                       {p.badge && <span class="pill-badge">{p.badge}</span>}
@@ -1801,7 +1801,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <img src="${p.image}" alt="${p.title}" class="thumb-img" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=800&auto=format&fit=crop'" />
             </td>
             <td class="col-details">
-              <div class="row-title">${p.title}</div>
+              <a href="/producto/${p.slug || p.id}" class="row-title" target="_blank" rel="noopener" title="Ver ficha pública del producto">${p.title}</a>
               <div class="row-meta">
                 <span class="pill-category">${p.category}</span>
                 ${p.badge ? `<span class="pill-badge">${p.badge}</span>` : ''}
@@ -3926,6 +3926,17 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     color: var(--color-text-main);
     line-height: 1.35;
     max-width: 320px;
+  }
+
+  :global(a.row-title) {
+    display: inline-block;
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+
+  :global(a.row-title:hover) {
+    color: #60a5fa;
+    text-decoration: underline;
   }
 
   :global(.row-meta) {
