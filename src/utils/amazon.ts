@@ -75,3 +75,39 @@ export function getAmazonAddToCartUrl(asin: string, tag?: string): string {
 
   return `https://www.amazon.es/gp/aws/cart/add.html?${params.toString()}`;
 }
+
+/**
+ * Enlace de producto de Amazon con tag de afiliado (/dp/ASIN?tag=…).
+ * Es la vía "clic → Comprar ahora → misma tramitación de pago Chewbacca"
+ * que SÍ acredita comisión (las URLs /checkout/p no la acreditan).
+ */
+export function getAmazonProductUrl(asin: string, tag?: string): string {
+  const clean = sanitizeAsin(asin);
+  if (!ASIN_RE.test(clean)) return '';
+
+  const associateTag =
+    typeof tag === 'string' && tag.trim() ? tag.trim() : getAmazonAssociateTag();
+
+  const params = new URLSearchParams({ tag: associateTag });
+  return `https://www.amazon.es/dp/${clean}?${params.toString()}`;
+}
+
+/**
+ * Añade el parámetro `tag` a una URL de Amazon que no lo lleve
+ * (best effort: en rutas de producto/cesta acredita comisión; en rutas
+ * /checkout/p Amazon lo ignora, pero no altera la navegación).
+ */
+export function appendAmazonTag(url: string, tag?: string): string {
+  try {
+    const parsed = new URL(url);
+    if (!/(^|\.)amazon\.[a-z]{2,3}(\.[a-z]{2})?$/i.test(parsed.hostname)) return url;
+    if (parsed.searchParams.has('tag')) return parsed.toString();
+    const associateTag =
+      typeof tag === 'string' && tag.trim() ? tag.trim() : getAmazonAssociateTag();
+    parsed.searchParams.set('tag', associateTag);
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+

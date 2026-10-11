@@ -1,4 +1,5 @@
 import type { Product } from '../data/products';
+import { appendAmazonTag } from '../utils/amazon';
 
 const FALLBACK_ASSOCIATE_TAG = 'tradylor-21';
 const AMAZON_HOST_RE = /(^|\.)amazon\.[a-z]{2,3}(\.[a-z]{2})?$/i;
@@ -42,7 +43,11 @@ function amazonCartUrl(affiliateUrl: string): string | null {
 
 export function buildPurchaseUrl(product: Pick<Product, 'affiliateUrl' | 'buyNowUrl'>): string {
   const override = product.buyNowUrl?.trim();
-  if (override && parseHttpUrl(override)) return override;
+  if (override && parseHttpUrl(override)) {
+    // Compra directa configurada en el admin: si es de Amazon y no trae el
+    // tag de afiliado, se añade automáticamente (best effort).
+    return appendAmazonTag(override);
+  }
 
   const affiliateUrl = (product.affiliateUrl ?? '').trim();
   if (!affiliateUrl) return '';

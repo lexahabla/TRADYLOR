@@ -18,7 +18,13 @@
  * ==============================================================================
  */
 
-import { getAmazonAddToCartUrl, isValidAsin, sanitizeAsin, getAmazonAssociateTag } from './amazon';
+import {
+  getAmazonAddToCartUrl,
+  isValidAsin,
+  sanitizeAsin,
+  getAmazonAssociateTag,
+  appendAmazonTag,
+} from './amazon';
 
 export type AffiliateNetwork = 'amazon' | 'aliexpress' | 'awin' | 'impact' | 'ebay';
 
@@ -79,8 +85,9 @@ function resolveAmazon(payload: string): string {
       const tag = url.searchParams.get('tag')?.trim() || getAmazonAssociateTag();
       return getAmazonAddToCartUrl(match[1], tag);
     }
-    // URL de Amazon sin ASIN reconocible (listas, search…): se respeta tal cual.
-    return url.toString();
+    // URL de compra directa (/checkout/p/…) u otras URL de Amazon sin ASIN:
+    // se respeta tal cual, añadiendo el tag si no lo trae (best effort).
+    return appendAmazonTag(url.toString());
   }
 
   return '';
