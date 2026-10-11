@@ -7,12 +7,14 @@
  * Ruta dinámica SSR: /producto/[slug]
  * (acepta también el id legado: /producto/sony-wh-1000xm5 sigue operativo)
  *
- * FLUJO DE COMPRA DELEGADA (Delegated Checkout):
- *  ProductCard → /producto/[slug] → /checkout/[id] → /api/redirect → 302 → Tienda
+ * FLUJO DE COMPRA:
+ *  ProductCard → /producto/[slug] → CTA "Comprar ya" → /api/redirect → 302 → Tienda
  *
- * El affiliateUrl real NUNCA aparece en esta página ni en la pantalla puente:
- * el CTA "Tramitar pedido" abre /checkout/[id] (resumen nativo) y sólo desde
- * allí se sale con /api/redirect (registro de clic + 302 con enlace de afiliado).
+ * El affiliateUrl real NUNCA aparece en esta página: el CTA "Comprar ya" sale
+ * directamente con /api/redirect (registro de clic + 302 al enlace de afiliado
+ * final / pasarela de pago del distribuidor). En la ficha ya se ha visto el
+ * análisis completo, así que no se pasa por la pantalla puente /checkout/[id]
+ * (reserva); esa vía queda para el flujo de Compra Delegada del catálogo.
  * ==============================================================================
  */
 export const prerender = false;
@@ -37,7 +39,10 @@ if (!product) {
   return Astro.redirect('/', 302);
 }
 
-const checkoutUrl = `/checkout/${productKey(product)}`;
+// Salida directa a la tienda/pasarela del distribuidor (enlace de afiliado final).
+// /api/redirect registra el clic (analítica + webhook n8n) y devuelve 302 al
+// affiliateUrl sin exponerlo en el HTML.
+const buyNowUrl = `/api/redirect?id=${encodeURIComponent(productKey(product))}&src=ficha`;
 const specs = product.specs && Object.keys(product.specs).length > 0 ? product.specs : null;
 const fulfillmentProvider = product.fulfillmentProvider ?? product.merchant;
 
@@ -288,8 +293,8 @@ const productSchema = {
           </p>
         </div>
 
-        <!-- CTA principal: Compra ya → pantalla puente nativa /checkout/[id] -->
-        <a href={checkoutUrl} class="cta-primary-btn" id={`order-cta-${product.id}`}>
+        <!-- CTA principal: Comprar ya → salida directa /api/redirect (302 → tienda/pasarela) -->
+        <a href={buyNowUrl} class="cta-primary-btn" id={`order-cta-${product.id}`}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
             <path d="M4 12h16" />
             <polyline points="13 5 20 12 13 19" />
@@ -305,7 +310,7 @@ const productSchema = {
             <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
             <path d="M7 11V7a5 5 0 0 1 10 0v4" />
           </svg>
-          Reserva tu opción sin compromiso: sólo se cobra en la pasarela oficial de {fulfillmentProvider}
+          Compra segura sin registro: el pago se gestiona directamente en la pasarela oficial de {fulfillmentProvider}
         </p>
 
         <!-- Acciones secundarias: carrito Amazon-style y consulta técnica -->
@@ -403,9 +408,9 @@ const productSchema = {
         <li class="delegated-step">
           <span class="step-index">1</span>
           <div class="step-body">
-            <h3 class="step-title">Reservas tu opción</h3>
+            <h3 class="step-title">Revisas el análisis completo</h3>
             <p class="step-text">
-              Compruebas la ficha técnica, el veredicto y pulsas «Tramitar pedido».
+              Compruebas la ficha técnica, el veredicto, los pros y los contras.
               Sin registro y sin coste.
             </p>
           </div>
@@ -413,10 +418,10 @@ const productSchema = {
         <li class="delegated-step">
           <span class="step-index">2</span>
           <div class="step-body">
-            <h3 class="step-title">Confirmas el resumen</h3>
+            <h3 class="step-title">Pulsas «Comprar ya»</h3>
             <p class="step-text">
-              Revisas artículo, precio, plazo estimado de entrega y quién figura
-              como distribuidor oficial antes de salir.
+              Sales directamente a la tienda oficial de {fulfillmentProvider} con
+              el enlace de compra verificado de este análisis.
             </p>
           </div>
         </li>
