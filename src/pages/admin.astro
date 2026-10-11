@@ -3115,6 +3115,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     flex-direction: column;
   }
 
+  /* Los toggles de la vista previa (imagen, placeholder, flechas, contador)
+     usan el atributo [hidden]; el display de los autoestilos debe respetarlo. */
+  [hidden] {
+    display: none !important;
+  }
+
   .preview-image-wrapper {
     position: relative;
     width: 100%;
@@ -3140,11 +3146,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     object-position: center;
     border-radius: 0.75rem;
     transition: transform 0.3s ease;
-  }
-
-  /* El atributo hidden del <img> debe ganar al display:block anterior. */
-  .preview-image-wrapper img[hidden] {
-    display: none !important;
   }
 
   .preview-empty-image {
