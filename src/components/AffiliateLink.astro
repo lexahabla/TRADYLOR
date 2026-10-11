@@ -1,0 +1,50 @@
+---
+/**
+ * TRADYLOR — ENLACE DE AFILIADO INLINE
+ * ------------------------------------------------------------------
+ * Inserta un enlace de afiliado dentro de párrafos o textos:
+ *
+ *   <AffiliateLink asin="B0CGXB4C91">ver en Amazon</AffiliateLink>
+ *   <AffiliateLink url="https://es.aliexpress.com/item/123.html" network="aliexpress" text="ver en AliExpress" />
+ *
+ * El <a> generado:
+ *   - clase `exit-cta` (tracking de salida delegado en Layout.astro).
+ *   - target="_blank" + rel="nofollow sponsored noopener noreferrer" (SEO).
+ *   - data-network / data-asin / data-title para la analítica de salida.
+ */
+import { getAffiliateUrl, type AffiliateNetwork } from '../utils/affiliate';
+
+export interface Props {
+  /** Enlace base de la red (para aliexpress/awin/impact/ebay, o Amazon sin ASIN). */
+  url?: string;
+  /** Código ASIN (alternativa a `url` para Amazon). */
+  asin?: string;
+  /** Red de afiliación (por defecto 'amazon'). */
+  network?: AffiliateNetwork;
+  /** Texto del enlace (alternativa al slot). */
+  text?: string;
+  /** Título opcional que registra la analítica (data-title). */
+  title?: string;
+}
+
+const { url, asin, network = 'amazon', text, title } = Astro.props;
+
+const source = (url || asin || '').trim();
+const href = getAffiliateUrl(network, source);
+const label = (text || '').trim();
+const trackTitle = (title || label || '').trim();
+---
+
+{href ? (
+  <a
+    class="exit-cta"
+    href={href}
+    target="_blank"
+    rel="nofollow sponsored noopener noreferrer"
+    data-network={network}
+    data-asin={asin || undefined}
+    data-title={trackTitle || undefined}
+  ><slot>{label}</slot></a>
+) : (
+  <slot>{label}</slot>
+)}

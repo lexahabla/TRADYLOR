@@ -1,11 +1,50 @@
 ---
 import type { Product } from '../data/products';
+import { getAffiliateUrl, NETWORK_LABELS, type AffiliateNetwork } from '../utils/affiliate';
 
+/**
+ * Dos modos de uso:
+ *  1. Catálogo interno: <ProductCard product={product} />
+ *     (flujo Tradylor: tarjeta → ficha → pantalla puente → /api/redirect).
+ *  2. Salida directa al afiliado: props planas (title, asin|customUrl, network…).
+ *     El CTA es un <a class="exit-cta"> target="_blank" rel="nofollow sponsored…"
+ *     que sale directo al enlace de la red (tracking delegado en Layout.astro).
+ */
 export interface Props {
-  product: Product;
+  /** Compat: objeto producto del catálogo interno. */
+  product?: Product;
+  /** Modo directo: título del producto. */
+  title?: string;
+  /** Modo directo: ASIN de Amazon (alternativa a customUrl). */
+  asin?: string;
+  /** Modo directo: enlace base de la red (para aliexpress/awin/impact/ebay). */
+  customUrl?: string;
+  /** Modo directo: red de afiliación (por defecto 'amazon'). */
+  network?: AffiliateNetwork;
+  /** Modo directo: precio ya formateado (p. ej. "29,99 €"). */
+  price?: string;
+  /** Modo directo: URL de la imagen. */
+  image?: string;
+  /** Modo directo: etiqueta destacada (p. ej. "Más vendido", "Oferta"). */
+  badge?: string;
 }
 
-const { product } = Astro.props;
+const {
+  product,
+  title,
+  asin,
+  customUrl,
+  network = 'amazon',
+  price,
+  image,
+  badge,
+} = Astro.props;
+
+// Modo salida directa: sin objeto product y con algo que enlazar.
+const directMode = !product && Boolean((customUrl || asin || '').trim());
+const exitHref = directMode ? getAffiliateUrl(network, (customUrl || asin || '').trim()) : '';
+const directTitle = (title || '').trim();
+const networkLabel = NETWORK_LABELS[network] ?? network;
 
 const compactText = (text: string, maxLength: number) => {
   const normalized = text.replace(/\s+/g, ' ').trim();
@@ -13,10 +52,10 @@ const compactText = (text: string, maxLength: number) => {
 };
 
 const cleanMarketplaceSuffix = (text: string) => text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
-const catalogDescription = compactText(cleanMarketplaceSuffix(product.description), 118);
+const catalogDescription = product ? compactText(cleanMarketplaceSuffix(product.description), 118) : '';
 
 // Top 3 features (compact bullet list)
-const topFeatures = product.pros.slice(0, 3).map((pro) => compactText(pro, 60));
+const topFeatures = product ? product.pros.slice(0, 3).map((pro) => compactText(pro, 60)) : [];
 
 // Build structured title: "{productType} {brand} {model}" or fallback to raw title
 const productTypeLabel: Record<string, string> = {
@@ -30,6 +69,7 @@ const productTypeLabel: Record<string, string> = {
   Otros: '',
 };
 const buildTitle = () => {
+  if (!product) return directTitle;
   if (product.productType && product.brand && product.model) {
     const typeLabel = productTypeLabel[product.productType] ?? product.productType;
     return `${typeLabel} ${product.brand} ${product.model}`;
@@ -38,15 +78,15 @@ const buildTitle = () => {
 };
 const catalogTitle = compactText(buildTitle(), 68);
 
-// Cálculo de porcentaje de descuento si existe precio original
-const discountPercent = product.originalPrice
+// Cálculo de porcentaje de descuento si existe precio original (modo catálogo)
+const discountPercent = product?.originalPrice
   ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
   : null;
 
 // Satisfaction score: use structured field or fallback to pros/cons ratio
-const satisfaction = product.conversionHooks?.satisfactionScore;
+const satisfaction = product?.conversionHooks?.satisfactionScore;
 const positivePercent = satisfaction?.positivePercentage
-  ?? (product.pros.length + product.cons.length > 0
+  ?? (product && (product.pros.length + product.cons.length > 0)
     ? Math.round((product.pros.length / (product.pros.length + product.cons.length)) * 100)
     : 85);
 const negativePercent = satisfaction?.negativePercentage
@@ -62,7 +102,42 @@ const formatCurrency = (amount: number) => {
 };
 ---
 
-<article class="product-card" id={`product-${product.id}`}>
+{directMode ? (
+  <!-- Modo salida directa: CTA .exit-cta hacia la red de afiliación -->
+  <article class="aff-product-card">
+    <div class="aff-image-wrapper">
+      <img
+        src={image}
+        alt={directTitle}
+        loading="lazy"
+        width="400"
+        height="400"
+      />
+      {badge && <span class="aff-badge">{badge}</span>}
+    </div>
+    <div class="aff-body">
+      <h3 class="aff-title">{catalogTitle}</h3>
+      {price && <div class="aff-price">{price}</div>}
+      <a
+        href={exitHref}
+        class="aff-cta-btn exit-cta"
+        target="_blank"
+        rel="nofollow sponsored noopener noreferrer"
+        data-network={network}
+        data-asin={asin || undefined}
+        data-title={directTitle}
+      >
+        Comprar en {networkLabel}
+        <svg class="external-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          <polyline points="15 3 21 3 21 9" />
+          <line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
+      </a>
+    </div>
+  </article>
+) : (
+<article class="product-card" id={`product-${product?.id}`}>
   <!-- Contenedor Visual del Producto
        Tailwind: contenedor cuadrado con fondo neutro (#F8F9FA) y la imagen
        contenida (object-contain) para que las fotos generadas con IA no se
@@ -185,6 +260,7 @@ const formatCurrency = (amount: number) => {
     </div>
   </div>
 </article>
+)}
 
 <style>
   /* ============ PRODUCT CARD - PREMIUM DESIGN ============ */
@@ -644,6 +720,147 @@ const formatCurrency = (amount: number) => {
       padding: 0.7rem 1rem;
       font-size: 0.85rem;
       gap: 0.45rem;
+    }
+  }
+
+  /* ============ MODO SALIDA DIRECTA (CTA .exit-cta) ============ */
+  .aff-product-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(17, 24, 39, 0.7) 0%, rgba(30, 41, 59, 0.5) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    overflow: hidden;
+    backdrop-filter: blur(10px);
+    transition: all 0.35s cubic-bezier(0.23, 1, 0.320, 1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .aff-product-card:hover {
+    transform: translateY(-8px);
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 24px 64px rgba(59, 130, 246, 0.25);
+  }
+
+  .aff-image-wrapper {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: #f8fafc;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5%;
+    border-radius: 16px;
+  }
+
+  .aff-image-wrapper img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 1rem;
+    background: rgba(248, 250, 252, 0.5);
+    border-radius: 0.75rem;
+    transition: transform 0.5s cubic-bezier(0.23, 1, 0.320, 1);
+  }
+
+  .aff-product-card:hover .aff-image-wrapper img {
+    transform: scale(1.03);
+  }
+
+  .aff-badge {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    color: #ffffff;
+    font-size: 0.8rem;
+    font-weight: 800;
+    padding: 0.4rem 0.7rem;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(239, 68, 68, 0.4);
+  }
+
+  .aff-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 0.7rem;
+    padding: 1.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(10, 14, 23, 0.3);
+  }
+
+  .aff-title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 1rem;
+    line-height: 1.35;
+    color: #ffffff;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+
+  .aff-price {
+    font-family: var(--font-heading);
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #ffffff;
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* CTA de salida directa: obligatoriamente .exit-cta (tracking en Layout). */
+  .aff-cta-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    width: 100%;
+    margin-top: auto;
+    padding: 0.8rem 1.25rem;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: #ffffff;
+    font-weight: 700;
+    font-size: 0.9rem;
+    font-family: inherit;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.320, 1);
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+  }
+
+  .aff-cta-btn:hover {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    box-shadow: 0 12px 32px rgba(59, 130, 246, 0.5);
+  }
+
+  .aff-cta-btn .external-icon {
+    transition: transform 0.3s ease;
+  }
+
+  .aff-cta-btn:hover .external-icon {
+    transform: translate(2px, -2px);
+  }
+
+  @media (max-width: 480px) {
+    .aff-product-card {
+      border-radius: 12px;
+    }
+    .aff-cta-btn {
+      padding: 0.7rem 1rem;
+      font-size: 0.85rem;
     }
   }
 </style>

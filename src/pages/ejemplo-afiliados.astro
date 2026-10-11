@@ -1,0 +1,145 @@
+---
+/**
+ * TRADYLOR — EJEMPLO DE INTEGRACIÓN DEL SISTEMA DE AFILIADOS
+ * ------------------------------------------------------------------
+ * Demo de los componentes de salida:
+ *   - ProductCard en modo directo (props planas + CTA .exit-cta).
+ *   - AffiliateLink inline dentro de un párrafo.
+ *
+ * Los clics en cualquier elemento .exit-cta se registran automáticamente
+ * en la analítica (delegación de eventos en Layout.astro → /api/analytics/event).
+ */
+import Layout from '../layouts/Layout.astro';
+import ProductCard from '../components/ProductCard.astro';
+import AffiliateLink from '../components/AffiliateLink.astro';
+---
+
+<Layout title="Ejemplo de enlaces de afiliados — Tradylor">
+  <main class="container demo-page">
+    <header class="demo-header">
+      <h1>Sistema de enlaces de afiliados</h1>
+      <p>
+        Ejemplo de <strong>ProductCard</strong> en modo salida directa (CTA
+        <code>.exit-cta</code> con <code>target="_blank"</code> y
+        <code>rel="nofollow sponsored noopener noreferrer"</code>) y de
+        <strong>AffiliateLink</strong> para texto inline.
+      </p>
+    </header>
+
+    <section class="demo-grid" aria-label="Ejemplos de producto">
+      {/* Amazon a partir de ASIN: la URL de cesta se genera con PUBLIC_AMAZON_ASSOCIATE_TAG */}
+      <ProductCard
+        title="VRURC Power Bank 30000 mAh 22,5W — Carga Rápida USB-C"
+        asin="B0CGXB4C91"
+        network="amazon"
+        price="29,99 €"
+        image="https://m.media-amazon.com/images/I/71HbOppohKL._AC_SL1500_.jpg"
+        badge="Más vendido"
+      />
+
+      {/* Otra red: se devuelven los parámetros utm de Tradylor */}
+      <ProductCard
+        title="Auriculares inalámbricos con cancelación de ruido"
+        customUrl="https://es.aliexpress.com/item/1005001234567890.html"
+        network="aliexpress"
+        price="19,99 €"
+        image="https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=800&auto=format&fit=crop"
+        badge="Oferta"
+      />
+
+      {/* eBay */}
+      <ProductCard
+        title="Portátil reacondicionado con garantía"
+        customUrl="https://www.ebay.es/itm/123456789012"
+        network="ebay"
+        price="449,00 €"
+        image="https://images.unsplash.com/photo-1496181133206-80ce9b88a853?q=80&w=800&auto=format&fit=crop"
+      />
+    </section>
+
+    <section class="demo-inline" aria-label="Enlace inline de ejemplo">
+      <h2>Enlace inline en texto</h2>
+      <p>
+        Si buscas una power bank compacta, te recomendamos
+        <AffiliateLink
+          asin="B0CGXB4C91"
+          network="amazon"
+          title="VRURC Power Bank 30000 mAh"
+        >ver la oferta actual en Amazon</AffiliateLink>
+        (abre en una pestaña nueva). También puedes usar la forma con
+        <code>url</code> directa:
+        <AffiliateLink
+          url="https://www.amazon.es/dp/B0CGXB4C91?tag=tradylor-21"
+          network="amazon"
+          text="enlace de producto de Amazon"
+        />.
+      </p>
+    </section>
+  </main>
+</Layout>
+
+<style>
+  .demo-page {
+    padding-top: 3rem;
+    padding-bottom: 5rem;
+  }
+  .demo-header {
+    max-width: 720px;
+    margin-bottom: 2.5rem;
+  }
+  .demo-header h1 {
+    font-family: var(--font-heading);
+    font-size: 1.8rem;
+    margin-bottom: 0.75rem;
+    color: #fff;
+  }
+  .demo-header p {
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.6;
+  }
+  .demo-header code {
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+  }
+  .demo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2rem;
+    margin-bottom: 3rem;
+  }
+  @media (max-width: 960px) {
+    .demo-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1.5rem;
+    }
+  }
+  @media (max-width: 640px) {
+    .demo-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .demo-inline {
+    max-width: 720px;
+  }
+  .demo-inline h2 {
+    font-family: var(--font-heading);
+    font-size: 1.3rem;
+    margin-bottom: 0.75rem;
+    color: #fff;
+  }
+  .demo-inline p {
+    color: rgba(255, 255, 255, 0.75);
+    line-height: 1.8;
+  }
+  .demo-inline :global(.exit-cta) {
+    color: #60a5fa;
+    font-weight: 600;
+    text-decoration: underline;
+  }
+  .demo-inline :global(.exit-cta:hover) {
+    color: #93c5fd;
+  }
+</style>

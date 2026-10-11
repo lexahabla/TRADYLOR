@@ -67,6 +67,7 @@ export const POST: APIRoute = async ({ request }) => {
         sessionId: texto(payload.sessionId, 64),
         visitorId: texto(payload.visitorId, 64),
         referrer: texto(payload.referrer, 300),
+        network: texto(payload.network, 40),
         durationMs,
         amount,
         source: 'api',

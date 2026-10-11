@@ -1177,8 +1177,27 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         document.addEventListener('visibilitychange', () => {
           if (document.visibilityState === 'hidden') enviarDuracion();
         });
-        // Las salidas a tienda NO se envían desde aquí: las registra /api/redirect
-        // (fuente única, sin doble conteo con el beacon de cliente).
+        // Las salidas a tienda del flujo interno NO se envían desde aquí: las
+        // registra /api/redirect (fuente única, sin doble conteo).
+        // En cambio, los CTA de salida directa (.exit-cta) SÍ se registran aquí
+        // porque navegan en target="_blank" sin pasar por el servidor.
+        document.addEventListener('click', (event) => {
+          const exitEl = event.target && event.target.closest
+            ? event.target.closest('a.exit-cta, button.exit-cta')
+            : null;
+          if (!exitEl || typeof exitEl.href !== 'string' || !exitEl.href) return;
+          const payload = {
+            type: 'outbound_click',
+            productId: exitEl.dataset.asin || exitEl.dataset.title || exitEl.getAttribute('href') || '',
+            network: exitEl.dataset.network || 'amazon',
+            path: window.location.pathname,
+          };
+          enviarEvento(payload);
+          // Puente opcional con GTM/ga4 si el contenedor de datos existe.
+          if (Array.isArray(window.dataLayer)) {
+            window.dataLayer.push({ event: 'exit_cta_click', href: exitEl.href, ...payload });
+          }
+        }, true);
 
         const backToTop = document.querySelector('.back-to-top');
         if (backToTop) {

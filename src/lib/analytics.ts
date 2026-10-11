@@ -47,6 +47,8 @@ export interface AnalyticsEvent {
   visitorId?: string;
   /** Referente que trajo la visita (document.referrer). */
   referrer?: string;
+  /** Red de afiliación en las salidas (.exit-cta): amazon, aliexpress, awin… */
+  network?: string;
   /** Milisegundos de permanencia en la página (evento page_duration). */
   durationMs?: number;
   /** Importe del pedido cuando el beacon de compra lo incluye. */
