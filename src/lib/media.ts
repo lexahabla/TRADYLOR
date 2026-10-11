@@ -29,3 +29,23 @@ export function videoEmbedUrl(url: string, autoplay = false): string | null {
 
   return null;
 }
+
+/**
+ * Miniatura (fotograma) de un vídeo para mostrarlo como imagen en galerías.
+ * - YouTube / Vimeo / Dailymotion → URL de la miniatura del proveedor.
+ * - Archivos directos (mp4/webm…) → null: usar <video preload="metadata">.
+ */
+export function videoThumbUrl(url: string): string | null {
+  const u = String(url || '').trim();
+
+  const yt = u.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{6,})/i);
+  if (yt) return `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg`;
+
+  const vimeo = u.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+  if (vimeo) return `https://vumbnail.com/${vimeo[1]}.jpg`;
+
+  const dailymotion = u.match(/dailymotion\.com\/(?:video|embed\/video)\/([\w]+)/i);
+  if (dailymotion) return `https://www.dailymotion.com/thumbnail/video/${dailymotion[1]}`;
+
+  return null;
+}

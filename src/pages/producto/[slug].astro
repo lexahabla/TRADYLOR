@@ -20,7 +20,7 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import ComparisonTable from '../../components/ComparisonTable.astro';
 import { getCatalogProducts, findCatalogProduct, productKey } from '../../lib/catalog';
-import { isVideoUrl } from '../../lib/media';
+import { isVideoUrl, videoThumbUrl } from '../../lib/media';
 
 const allProducts = getCatalogProducts();
 const cleanMarketplaceSuffix = (text: string) => text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
@@ -191,7 +191,11 @@ const productSchema = {
               >
                 {isVideoUrl(img) ? (
                   <>
-                    <video src={img} preload="metadata" muted playsinline></video>
+                    {videoThumbUrl(img) ? (
+                      <img src={videoThumbUrl(img)} alt="" loading="lazy" class="thumb-video-still" />
+                    ) : (
+                      <video src={img} preload="metadata" muted playsinline></video>
+                    )}
                     <span class="thumb-play-badge" aria-hidden="true">▶</span>
                   </>
                 ) : (
@@ -899,6 +903,12 @@ const productSchema = {
     height: 100%;
     object-fit: cover;
     display: block;
+    background: #0f1626;
+  }
+  /* Miniatura de vídeo de plataforma (YouTube/Vimeo/DM): 16:9, sin letterbox. */
+  .product-thumb img.thumb-video-still {
+    object-fit: cover;
+    padding: 0;
     background: #0f1626;
   }
   .product-thumb {

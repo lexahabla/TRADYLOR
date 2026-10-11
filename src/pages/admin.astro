@@ -878,6 +878,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       return null;
     }
 
+    // Miniatura (fotograma) del vídeo: YouTube/Vimeo/Dailymotion dan URL de
+    // imagen; los archivos directos (mp4/webm) se previsualizan con <video>.
+    function videoThumbUrl(url) {
+      const u = String(url || '').trim();
+      const yt = u.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{6,})/i);
+      if (yt) return `https://i.ytimg.com/vi/${yt[1]}/hqdefault.jpg`;
+      const vimeo = u.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+      if (vimeo) return `https://vumbnail.com/${vimeo[1]}.jpg`;
+      const dailymotion = u.match(/dailymotion\.com\/(?:video|embed\/video)\/([\w]+)/i);
+      if (dailymotion) return `https://www.dailymotion.com/thumbnail/video/${dailymotion[1]}`;
+      return null;
+    }
+
     const videoModal = document.getElementById('videoModal');
     const videoModalBody = document.getElementById('videoModalBody');
 
@@ -940,12 +953,24 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
         if (isVideo) {
           thumb.title = 'Reproducir vídeo';
-          const vid = document.createElement('video');
-          vid.src = url;
-          vid.muted = true;
-          vid.preload = 'metadata';
-          vid.playsInline = true;
-          thumb.appendChild(vid);
+          const still = videoThumbUrl(url);
+          if (still) {
+            // Plataforma (YouTube/Vimeo/DM): se muestra su miniatura oficial.
+            const img = document.createElement('img');
+            img.src = still;
+            img.className = 'video-still';
+            img.alt = 'Miniatura del vídeo';
+            img.loading = 'lazy';
+            thumb.appendChild(img);
+          } else {
+            // Archivo directo (mp4/webm): primer fotograma del propio vídeo.
+            const vid = document.createElement('video');
+            vid.src = url;
+            vid.muted = true;
+            vid.preload = 'metadata';
+            vid.playsInline = true;
+            thumb.appendChild(vid);
+          }
           const badge = document.createElement('span');
           badge.className = 'gallery-play-badge';
           badge.textContent = '▶';
@@ -1073,11 +1098,22 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     // Actualiza la vista previa interactiva en tiempo real
     // Dibuja la imagen/vídeo actual del carrusel y controla flechas/contador.
+    // Los vídeos se muestran con su miniatura (fotograma) y botón play encima.
     const previewVideoOverlay = document.getElementById('previewVideoOverlay');
+    let previewVideoThumb = null;
+
+    function clearPreviewVideoThumb() {
+      if (previewVideoThumb && previewVideoThumb.parentNode) {
+        previewVideoThumb.parentNode.removeChild(previewVideoThumb);
+      }
+      previewVideoThumb = null;
+    }
+
     function renderPreviewImage() {
       if (!previewImg) return;
       const total = previewGallery.length;
       const hasMedia = total > 0;
+      clearPreviewVideoThumb();
       previewImg.hidden = !hasMedia;
       if (previewEmptyImage) previewEmptyImage.hidden = hasMedia;
 
@@ -1086,8 +1122,25 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         if (previewIndex < 0) previewIndex = total - 1;
         const current = previewGallery[previewIndex];
         if (isVideoUrl(current)) {
-          // Vídeo: se oculta la imagen y se muestra el overlay con el botón play.
-          previewImg.hidden = true;
+          const still = videoThumbUrl(current);
+          if (still) {
+            // Plataforma: se ve la miniatura oficial + overlay play.
+            previewImg.hidden = false;
+            previewImg.src = still;
+          } else {
+            // Archivo directo: <video> con el primer fotograma + overlay play.
+            previewImg.hidden = true;
+            const vid = document.createElement('video');
+            vid.className = 'preview-video-thumb';
+            vid.src = current;
+            vid.muted = true;
+            vid.preload = 'metadata';
+            vid.playsInline = true;
+            vid.setAttribute('aria-hidden', 'true');
+            const wrapper = previewImg.parentElement;
+            if (wrapper) wrapper.insertBefore(vid, previewImg);
+            previewVideoThumb = vid;
+          }
           if (previewVideoOverlay) previewVideoOverlay.hidden = false;
         } else {
           if (previewVideoOverlay) previewVideoOverlay.hidden = true;
@@ -3194,6 +3247,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     display: block;
   }
 
+  /* Miniatura de vídeo de plataforma (16:9): llenar el cuadrado sin letterbox. */
+  :global(.gallery-thumb img.video-still) {
+    object-fit: cover;
+    padding: 0;
+    background: #0f1626;
+  }
+
   :global(.gallery-thumb video) {
     width: 100%;
     height: 100%;
@@ -3350,7 +3410,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     opacity: 0.85;
   }
 
-  /* Overlay de vídeo en la vista previa: al pulsarlo se abre el modal. */
+  /* Overlay de vídeo en la vista previa: al pulsarlo se abre el modal.
+     Fondo suave para no tapar la miniatura del vídeo que hay detrás. */
   .preview-video-overlay {
     position: absolute;
     inset: 0;
@@ -3362,16 +3423,33 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     gap: 0.6rem;
     border: none;
     cursor: pointer;
-    background: rgba(15, 23, 42, 0.72);
+    background: rgba(15, 23, 42, 0.35);
     color: #fff;
     font-size: 0.85rem;
     font-weight: 600;
     letter-spacing: 0.02em;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
     transition: background 0.15s;
   }
 
   .preview-video-overlay:hover {
-    background: rgba(15, 23, 42, 0.85);
+    background: rgba(15, 23, 42, 0.55);
+  }
+
+  /* Fotograma/mp4 mostrado como miniatura en la vista previa del carrusel. */
+  .preview-video-thumb {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+    padding: 6%;
+    display: block;
+    object-fit: contain;
+    object-position: center;
+    border-radius: 0.75rem;
+    background: #0f1626;
   }
 
   .preview-play-icon {
