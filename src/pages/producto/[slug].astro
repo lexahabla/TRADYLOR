@@ -151,7 +151,7 @@ const productSchema = {
 
       <!-- Columna izquierda: Imagen -->
       <div class="product-gallery">
-        <div class="gallery-wrapper aspect-square w-full rounded-xl">
+        <div class="gallery-wrapper">
           {discountPercent && discountPercent > 0 && (
             <div class="discount-badge-lg" aria-label={`Descuento del ${discountPercent}%`}>
               -{discountPercent}%
@@ -163,7 +163,7 @@ const productSchema = {
           <img
             src={product.image}
             alt={`Análisis técnico de ${product.title}`}
-            class="main-product-image object-contain p-4 bg-slate-50/50 rounded-xl"
+            class="main-product-image"
             width="600"
             height="450"
             id="mainProductImg"
@@ -824,11 +824,15 @@ const productSchema = {
      ===================================================== */
   .product-main {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 3.5rem;
     align-items: start;
     padding-top: 1rem;
     padding-bottom: 3rem;
+  }
+  .product-gallery,
+  .product-info-panel {
+    min-width: 0;
   }
 
   /* ---- Galería / Imagen ----
@@ -1807,6 +1811,17 @@ const productSchema = {
     }
   }
   @media (max-width: 600px) {
+    /* Móvil: menos padding para que la imagen del producto sea más grande */
+    .gallery-wrapper {
+      padding: 3%;
+    }
+    .main-product-image {
+      padding: 0.75rem;
+    }
+    .product-thumb {
+      width: 56px;
+      height: 56px;
+    }
     .trust-row {
       flex-direction: column;
       gap: 0.65rem;

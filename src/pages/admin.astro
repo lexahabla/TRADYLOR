@@ -206,10 +206,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <div class="form-row two-cols">
             <div class="form-group">
               <label for="prodImage" class="field-label">
-                <span>Imagen del Producto <span class="required">*</span></span>
-                <span class="label-hint">URL o ruta local (la IA puede generarla)</span>
+                <span>Imagen del Producto</span>
+                <span class="label-hint">URL o ruta local (opcional si la galería ya tiene imagen; la IA puede generarla)</span>
               </label>
-              <input type="text" id="prodImage" placeholder="https://... o /images/products/..." required />
+              <input type="text" id="prodImage" placeholder="https://... o /images/products/..." />
             </div>
 
             <div class="form-group">
@@ -228,7 +228,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <div class="gallery-add-row">
                 <input type="file" id="galleryFileInput" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple />
                 <div class="gallery-url-add">
-                  <input type="url" id="galleryUrlInput" placeholder="https://imagen.jpg o https://youtube.com/watch?v=... / video.mp4" />
+                  <input type="text" id="galleryUrlInput" placeholder="Añade una imagen O un vídeo por URL (YouTube, Vimeo, mp4...)" />
                   <button type="button" id="btnAddImageUrl" class="btn-secondary">Añadir URL</button>
                 </div>
               </div>
@@ -989,29 +989,46 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
 
     // Añade imágenes/vídeos a la galería por URL (separadas por comas/espacios).
+    // Acepta URLs de vídeo (YouTube, Vimeo, Dailymotion, mp4/webm) e imágenes.
     function addImagesByUrl() {
       const raw = (galleryUrlInput?.value || '').trim();
       if (!raw) return;
       const parts = raw.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
-      let added = 0;
-      for (const url of parts) {
-        if (!/^https?:\/\//i.test(url)) continue;
-        if (!scrapedGallery.includes(url)) {
-          scrapedGallery.push(url);
-          added++;
+      let addedImages = 0;
+      let addedVideos = 0;
+      for (let part of parts) {
+        // Ruta local válida para la galería (p. ej. /images/products/x.jpg).
+        if (part.startsWith('/') && !part.startsWith('//')) {
+          if (!scrapedGallery.includes(part)) {
+            scrapedGallery.push(part);
+            addedImages++;
+          }
+          continue;
+        }
+        // Normaliza: acepta también URLs pegadas sin protocolo (youtu.be/..., youtube.com/...).
+        if (part.startsWith('//')) part = `https:${part}`;
+        else if (!/^https?:\/\//i.test(part)) part = `https://${part}`;
+        if (!scrapedGallery.includes(part)) {
+          scrapedGallery.push(part);
+          if (isVideoUrl(part)) addedVideos++;
+          else addedImages++;
         }
       }
       if (galleryUrlInput) galleryUrlInput.value = '';
-      if (!added && parts.length) {
-        showAlert('warning', 'URL no válida', 'Introduce una imagen o vídeo que empiece por http:// o https://.');
+      if (!addedImages && !addedVideos && parts.length) {
+        showAlert('warning', 'URL no válida', 'Introduce una imagen o vídeo (p. ej. https://youtube.com/watch?v=...).');
         return;
       }
-      if (added && !(prodImage.value || '').trim()) {
+      if (addedImages && !(prodImage.value || '').trim()) {
         const firstImage = scrapedGallery.find((u) => !isVideoUrl(u));
         if (firstImage) setProductField(prodImage, firstImage);
       }
       renderGallery();
       updatePreview();
+      const bits = [];
+      if (addedImages) bits.push(`${addedImages} imagen(es)`);
+      if (addedVideos) bits.push(`${addedVideos} vídeo(s)`);
+      if (bits.length) showAlert('success', 'Añadido a la galería', bits.join(' y '));
     }
 
     // Sube archivos de imagen/vídeo al servidor y los añade a la galería.
@@ -1307,7 +1324,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         e.preventDefault();
 
         // La imagen principal debe viajar siempre dentro de la galería.
-        const mainImage = prodImage.value.trim();
+        // Si no hay imagen principal, se toma la primera imagen de la galería
+        // (nunca un vídeo); así se puede crear un producto sólo con vídeo.
+        let mainImage = prodImage.value.trim();
+        if (!mainImage) {
+          const firstGalleryImage = scrapedGallery.find((u) => !isVideoUrl(u));
+          if (firstGalleryImage) {
+            mainImage = firstGalleryImage;
+            setProductField(prodImage, firstGalleryImage);
+          }
+        }
         const galleryToSend = scrapedGallery.slice();
         if (mainImage && !galleryToSend.includes(mainImage)) galleryToSend.unshift(mainImage);
 

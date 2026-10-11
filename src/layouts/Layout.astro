@@ -102,6 +102,12 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         padding: 0;
       }
 
+      /* Tailwind preflight está desactivado: sin esta regla, cualquier <img>
+         sin CSS propio puede desbordar su contenedor en móvil. */
+      img {
+        max-width: 100%;
+      }
+
       html {
         font-family: var(--font-body);
         background-color: var(--color-bg-body);
@@ -718,7 +724,10 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         }
       }
       @media (max-width: 640px) {
-        .container {
+        /* Sólo la cabecera necesita más aire lateral en móvil;
+           el .container global se queda en su padding normal (1.5rem)
+           para que las imágenes de producto no queden estranguladas. */
+        .site-header .container {
           padding-left: 3rem;
           padding-right: 3rem;
         }
@@ -753,7 +762,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         }
       }
       @media (max-width: 480px) {
-        .container {
+        .site-header .container {
           padding-left: 2rem;
           padding-right: 2rem;
         }

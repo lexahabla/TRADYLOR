@@ -67,15 +67,22 @@ const formatCurrency = (amount: number) => {
        Tailwind: contenedor cuadrado con fondo neutro (#F8F9FA) y la imagen
        contenida (object-contain) para que las fotos generadas con IA no se
        deformen ni se recorten en los bordes. -->
-  <div class="image-wrapper aspect-square w-full rounded-xl">
-    <img
-      src={product.image}
-      alt={`Fotografía y análisis técnico de ${product.title}`}
-      loading="lazy"
-      class="product-image aspect-square w-full object-contain p-4 bg-slate-50/50 rounded-xl"
-      width="400"
-      height="400"
-    />
+  <div class="image-wrapper">
+    <a
+      href={`/producto/${product.slug ?? product.id}`}
+      class="image-link"
+      aria-label={`Ver ficha de ${product.title}`}
+      title={`Ver ficha de ${product.title}`}
+    >
+      <img
+        src={product.image}
+        alt={`Fotografía y análisis técnico de ${product.title}`}
+        loading="lazy"
+        class="product-image"
+        width="400"
+        height="400"
+      />
+    </a>
     {discountPercent !== null && discountPercent > 0 && (
       <span class="discount-pill" aria-label={`Descuento del ${discountPercent}%`}>
         -{discountPercent}%
@@ -214,9 +221,19 @@ const formatCurrency = (amount: number) => {
     align-items: center;
     justify-content: center;
     padding: 5%;
+    border-radius: 16px;
+  }
+
+  .image-link {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    cursor: pointer;
   }
 
   .product-image {
+    display: block;
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -227,7 +244,7 @@ const formatCurrency = (amount: number) => {
     transition: transform 0.5s cubic-bezier(0.23, 1, 0.320, 1);
   }
 
-  .product-card:hover .product-image {
+  .image-link:hover .product-image {
     transform: scale(1.03);
   }
 
@@ -572,6 +589,16 @@ const formatCurrency = (amount: number) => {
       border-radius: 16px;
     }
 
+    /* Móvil: menos padding para que la imagen ocupe más espacio real */
+    .image-wrapper {
+      padding: 4%;
+      border-radius: 14px;
+    }
+
+    .product-image {
+      padding: 0.75rem;
+    }
+
     .product-title {
       font-size: 0.95rem;
     }
@@ -589,6 +616,22 @@ const formatCurrency = (amount: number) => {
   @media (max-width: 480px) {
     .product-card {
       border-radius: 12px;
+    }
+
+    .image-wrapper {
+      padding: 3%;
+      border-radius: 12px;
+    }
+
+    .product-image {
+      padding: 0.5rem;
+    }
+
+    .discount-pill {
+      top: 0.6rem;
+      right: 0.6rem;
+      font-size: 0.78rem;
+      padding: 0.35rem 0.6rem;
     }
 
     .price-numbers {
