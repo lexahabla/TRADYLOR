@@ -168,8 +168,6 @@ const productSchema = {
             height="450"
             id="mainProductImg"
           />
-          {/* Contenedor del vídeo (se activa al seleccionar un vídeo de la galería) */}
-          <div id="galleryVideoWrap" class="gallery-video-wrap" hidden></div>
           {hasGalleryCarousel && (
             <>
               <button type="button" id="galleryPrev" class="gallery-nav gallery-nav-prev" aria-label="Imagen anterior">‹</button>
@@ -707,67 +705,91 @@ const productSchema = {
     </section>
 
   </div>
+
+  {/* Modal de vídeo (lightbox): mismo estilo que el video-modal-dialog del admin */}
+  <div id="videoModal" class="video-modal" hidden>
+    <div class="video-modal-backdrop" data-video-modal-close></div>
+    <div class="video-modal-dialog" role="dialog" aria-modal="true" aria-label="Reproductor de vídeo">
+      <button type="button" class="video-modal-close" data-video-modal-close aria-label="Cerrar reproductor">×</button>
+      <div id="videoModalBody" class="video-modal-body"></div>
+    </div>
+  </div>
 </Layout>
 
 <script>
   // Galería de imágenes/vídeos: miniaturas + flechas laterales (carrusel).
+  // Los vídeos se reproducen en un modal centrado (lightbox), como en el admin.
   import { isVideoUrl, videoEmbedUrl } from '../../lib/media';
 
   document.addEventListener('DOMContentLoaded', () => {
     const mainImg = document.getElementById('mainProductImg');
-    const videoWrap = document.getElementById('galleryVideoWrap');
     const thumbs = document.getElementById('productThumbs');
     const prevBtn = document.getElementById('galleryPrev');
     const nextBtn = document.getElementById('galleryNext');
     const counter = document.getElementById('galleryCounter');
+    const videoModal = document.getElementById('videoModal');
+    const videoModalBody = document.getElementById('videoModalBody');
     if (!mainImg) return;
 
     const thumbBtns = thumbs ? Array.from(thumbs.querySelectorAll('.product-thumb')) : [];
     const gallery = thumbBtns.map((b) => b.getAttribute('data-full')).filter(Boolean);
     let index = 0;
+    let lastImageIndex = 0;
 
-    function clearVideo() {
-      if (!videoWrap) return;
-      videoWrap.innerHTML = '';
-      videoWrap.hidden = true;
-    }
-
-    function renderVideo(url) {
-      if (!videoWrap) return;
-      videoWrap.innerHTML = '';
-      // Marco 16:9 proporcional: el vídeo mantiene su relación de aspecto
-      // y se adapta al contenedor (responsive), igual que las fotos con contain.
-      const frame = document.createElement('div');
-      frame.className = 'gallery-video-frame';
-      const embed = videoEmbedUrl(url, false);
+    // ── Modal de vídeo (mismo comportamiento que el admin) ──
+    function openVideoModal(url) {
+      if (!videoModal || !videoModalBody || !url) return;
+      videoModalBody.innerHTML = '';
+      const embed = videoEmbedUrl(url, true);
       if (embed) {
         const iframe = document.createElement('iframe');
         iframe.src = embed;
         iframe.title = 'Vídeo del producto';
         iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
         iframe.allowFullscreen = true;
-        frame.appendChild(iframe);
+        videoModalBody.appendChild(iframe);
       } else {
         const video = document.createElement('video');
         video.src = url;
         video.controls = true;
+        video.autoplay = true;
         video.playsInline = true;
-        frame.appendChild(video);
+        videoModalBody.appendChild(video);
       }
-      videoWrap.appendChild(frame);
-      videoWrap.hidden = false;
+      videoModal.hidden = false;
+      document.body.style.overflow = 'hidden';
     }
 
-    function show(i) {
+    function closeVideoModal() {
+      if (!videoModal) return;
+      videoModal.hidden = true;
+      if (videoModalBody) videoModalBody.innerHTML = '';
+      document.body.style.overflow = '';
+      // Al cerrar, si el carrusel quedó sobre un vídeo, restaura la última imagen.
+      if (gallery[index] && isVideoUrl(gallery[index]) && lastImageIndex !== index) {
+        show(lastImageIndex, { openVideos: false });
+      }
+    }
+
+    if (videoModal) {
+      videoModal.addEventListener('click', (e) => {
+        if (e.target && e.target.closest && e.target.closest('[data-video-modal-close]')) closeVideoModal();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !videoModal.hidden) closeVideoModal();
+      });
+    }
+
+    function show(i, opts) {
       if (!gallery.length) return;
+      const openVideos = !opts || opts.openVideos !== false;
       index = (i + gallery.length) % gallery.length;
       const item = gallery[index];
       if (isVideoUrl(item)) {
-        mainImg.style.visibility = 'hidden';
-        renderVideo(item);
+        // Vídeo: se abre en el modal; la imagen principal no cambia.
+        if (openVideos) openVideoModal(item);
       } else {
-        clearVideo();
-        mainImg.style.visibility = '';
+        lastImageIndex = index;
         mainImg.src = item;
       }
       thumbBtns.forEach((t, ti) => t.classList.toggle('is-active', ti === index));
@@ -939,45 +961,78 @@ const productSchema = {
     background: rgba(15, 23, 42, 0.65);
     border: 1.5px solid rgba(255, 255, 255, 0.85);
   }
-  /* Vídeo del carrusel: sustituye a la imagen principal en su contenedor.
-     El wrap llena el hueco de la imagen (mismo padding 5%) y el marco
-     mantiene la proporción 16:9 del vídeo, centrado y responsive.
-     :global porque el marco y el <video>/<iframe> los crea el JS (sin data-astro-cid). */
-  :global(.gallery-video-wrap) {
-    position: absolute;
+  /* ── Modal de vídeo (lightbox) — mismo estilo que el admin ── */
+  .video-modal {
+    position: fixed;
     inset: 0;
-    z-index: 1;
-    background: #f8fafc;
+    z-index: 2000;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 5%;
+    padding: 1rem;
   }
-  :global(.gallery-video-frame) {
+  .video-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 6, 16, 0.82);
+    backdrop-filter: blur(4px);
+    cursor: pointer;
+  }
+  .video-modal-dialog {
+    position: relative;
+    /* 16:9 responsive: se ajusta al ancho disponible y nunca desborda. */
+    width: min(920px, 100%);
+    max-width: calc((100vh - 2rem) * 16 / 9);
+    max-height: 90vh;
+    z-index: 1;
+  }
+  .video-modal-body {
     position: relative;
     width: 100%;
-    max-width: 100%;
-    max-height: 100%;
     aspect-ratio: 16 / 9;
     background: #000;
-    border-radius: 0.75rem;
+    border-radius: 12px;
     overflow: hidden;
-    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.25);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
   }
-  :global(.gallery-video-frame video) {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    background: #000;
-  }
-  :global(.gallery-video-frame iframe) {
+  /* Los hijos del modal los crea el JS (sin data-astro-cid): :global obliga. */
+  :global(.video-modal-body video),
+  :global(.video-modal-body iframe) {
     position: absolute;
     inset: 0;
     width: 100%;
     height: 100%;
     border: none;
+    object-fit: contain;
     background: #000;
+  }
+  .video-modal-close {
+    position: absolute;
+    top: -44px;
+    right: 0;
+    width: 36px;
+    height: 36px;
+    border: 1.5px solid rgba(255, 255, 255, 0.5);
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.6);
+    color: #fff;
+    font-size: 1.4rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .video-modal-close:hover {
+    background: rgba(15, 23, 42, 0.9);
+    border-color: #fff;
+  }
+  @media (max-width: 600px) {
+    /* En móvil el botón se colocó dentro del diálogo para no quedar fuera. */
+    .video-modal-close {
+      top: 8px;
+      right: 8px;
+      z-index: 2;
+      background: rgba(15, 23, 42, 0.85);
+    }
   }
   .gallery-nav {
     position: absolute;
