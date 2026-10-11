@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import { dataFile } from '../lib/paths';
 import type { Product } from './api/products/add';
 import { authenticateUser, clearAdminSession, createAdminSession, getSessionUser } from '../lib/adminAuth';
+import { getAmazonAssociateTag } from '../utils/amazon';
 
 const sessionUser = getSessionUser(Astro.request);
 const isAuthenticated = sessionUser !== null;
@@ -773,6 +774,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 </Layout>
 
 <!-- Client-side Script para interacción dinámica del panel -->
+<script is:inline define:vars={{ associateTag: getAmazonAssociateTag() }}>
+  window.TRADYLOR_ASSOCIATE_TAG = associateTag;
+</script>
 <script is:inline>
   // Inicialización de estado y elementos DOM
   document.addEventListener('DOMContentLoaded', () => {
@@ -815,9 +819,22 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const match = AMAZON_ASIN_IN_PATH_RE.exec(pathAndQuery) || ASIN_QUERY_RE.exec(pathAndQuery);
       return match ? match[1].toUpperCase() : '';
     }
+    function buildAmazonCartUrl(asin) {
+      const clean = String(asin || '').trim().toUpperCase();
+      if (!/^[A-Z0-9]{10}$/.test(clean)) return '';
+      const tag = window.TRADYLOR_ASSOCIATE_TAG || 'tradylor-21';
+      const params = new URLSearchParams({ 'ASIN.1': clean, 'Quantity.1': '1', AssociateTag: tag });
+      return `https://www.amazon.es/gp/aws/cart/add.html?${params.toString()}`;
+    }
     function autoFillAsin(url) {
       const asin = extractAsinFromUrl(url);
-      if (asin && prodAsin) prodAsin.value = asin;
+      if (!asin || !prodAsin) return;
+      prodAsin.value = asin;
+      // Si no hay URL de compra manual, se genera la de compra directa
+      // (cesta de Amazon con el tag) hacia la tramitación del pedido.
+      if (prodBuyNowUrl && !prodBuyNowUrl.value.trim()) {
+        prodBuyNowUrl.value = buildAmazonCartUrl(asin);
+      }
     }
     if (prodAffiliateUrl) {
       prodAffiliateUrl.addEventListener('input', () => autoFillAsin(prodAffiliateUrl.value));

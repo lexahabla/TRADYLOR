@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Product } from '../data/products';
 import { dataFile } from './paths';
+import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../utils/amazon';
 
 const DATA_FILE_PATH = dataFile('products.json');
 
@@ -121,7 +122,15 @@ export function upsertCatalogProduct(raw: N8nContractPayload): CatalogSaveResult
     category: String(data.category ?? 'Tecnología').trim(),
     merchant: String(data.merchant ?? 'Comercio Externo').trim(),
     affiliateUrl: String(data.affiliateUrl).trim(),
-    buyNowUrl: data.buyNowUrl ? String(data.buyNowUrl).trim() : existing?.buyNowUrl,
+    buyNowUrl: (() => {
+      if (data.buyNowUrl) return String(data.buyNowUrl).trim();
+      // Sin URL manual y con ASIN: se genera la cesta de Amazon con tag
+      // (enlace de compra directa hacia la tramitación del pedido).
+      const asin = data.asin
+        ? String(data.asin).trim().toUpperCase()
+        : extractAsinFromUrl(String(data.affiliateUrl).trim());
+      return asin && /^[A-Z0-9]{10}$/.test(asin) ? getAmazonAddToCartUrl(asin) : existing?.buyNowUrl;
+    })(),
     asin: data.asin ? String(data.asin).trim().toUpperCase() : existing?.asin,
     pros: Array.isArray(data.pros) ? data.pros.filter(Boolean) : [],
     cons: Array.isArray(data.cons) ? data.cons.filter(Boolean) : [],

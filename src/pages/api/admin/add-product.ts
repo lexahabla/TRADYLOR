@@ -13,7 +13,7 @@ import {
 } from '../../../lib/ai';
 import { enrichProductLocally } from '../../../lib/localEnrich';
 import { readProductsFromFile, slugify, upsertProduct, type Product } from '../../../lib/productStore';
-import { extractAsinFromUrl } from '../../../utils/amazon';
+import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../../../utils/amazon';
 
 export const prerender = false;
 
@@ -207,6 +207,13 @@ export const POST: APIRoute = async ({ request }) => {
           .slice(0, 10)
       : [];
 
+    // ASIN: del body o autodetectado desde el enlace de afiliado/URL del producto.
+    const resolvedAsin = (() => {
+      const fromBody = String(body?.asin ?? '').trim().toUpperCase();
+      if (/^[A-Z0-9]{10}$/.test(fromBody)) return fromBody;
+      return extractAsinFromUrl(String(body?.affiliateUrl ?? body?.url ?? '')) || undefined;
+    })();
+
     const base: Product = {
       id: String(body?.id ?? '').trim() || slugify(finalTitle),
       title: finalTitle,
@@ -227,12 +234,14 @@ export const POST: APIRoute = async ({ request }) => {
       category: String(body?.category ?? '').trim(),
       merchant: detectMerchant(body?.affiliateUrl || body?.url, body?.merchant),
       affiliateUrl: String(body?.affiliateUrl ?? body?.url ?? '').trim(),
-      buyNowUrl: body?.buyNowUrl ? String(body.buyNowUrl).trim() : undefined,
-      asin: (() => {
-        const fromBody = String(body?.asin ?? '').trim().toUpperCase();
-        if (/^[A-Z0-9]{10}$/.test(fromBody)) return fromBody;
-        return extractAsinFromUrl(String(body?.affiliateUrl ?? body?.url ?? '')) || undefined;
-      })(),
+      // Compra directa: si no se envía una URL manual y hay ASIN, se genera la
+      // cesta de Amazon con el tag de afiliado (flujo de tramitación del pedido).
+      buyNowUrl: body?.buyNowUrl
+        ? String(body.buyNowUrl).trim()
+        : resolvedAsin
+          ? getAmazonAddToCartUrl(resolvedAsin)
+          : undefined,
+      asin: resolvedAsin,
       pros: [],
       cons: [],
       badge: body?.badge ? String(body.badge).trim() : undefined,

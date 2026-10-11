@@ -84,6 +84,12 @@ const discountPercent = product?.originalPrice
   ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
   : null;
 
+// Salida directa del catálogo (.exit-cta): prioriza el enlace de compra directa
+// generado en el admin (cesta de Amazon con tag); si no, se construye desde el ASIN.
+const catalogDirectExitHref = product
+  ? (product.buyNowUrl?.trim() || getAmazonAddToCartUrl(product.asin || ''))
+  : '';
+
 // Satisfaction score: use structured field or fallback to pros/cons ratio
 const satisfaction = product?.conversionHooks?.satisfactionScore;
 const positivePercent = satisfaction?.positivePercentage
@@ -251,15 +257,15 @@ const formatCurrency = (amount: number) => {
       </a>
     </div>
 
-    <!-- Salida directa por ASIN: cesta de Amazon con tag de afiliado (tramitación de pago). -->
-    {product.asin && (
+    <!-- Salida directa: enlace de compra directa (cesta de Amazon con tag → tramitación). -->
+    {catalogDirectExitHref && (product.asin || product.buyNowUrl) && (
       <a
-        href={getAmazonAddToCartUrl(product.asin)}
+        href={catalogDirectExitHref}
         class="quick-buy-cta exit-cta"
         target="_blank"
         rel="nofollow sponsored noopener noreferrer"
         data-network="amazon"
-        data-asin={product.asin}
+        data-asin={product.asin || undefined}
         data-title={product.title}
         aria-label={`Comprar ahora en ${product.merchant} (salida directa)`}
       >
