@@ -86,8 +86,9 @@ const productSchema = z.object({
     primaryStore: z.string().default('Amazon'),
     primaryUrl: z.string().url(),
     buyNowUrl: z.string().url().optional(),
+    asin: z.string().optional(),
     alternativeStore: z.string().optional(),
-    alternativeUrl: z.string().url().optional(),
+    alternativeUrl: z.string().optional(),
   }),
 
   // ─── Alternative Products Cross-Referencing ────────────────────────────────

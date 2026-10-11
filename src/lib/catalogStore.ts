@@ -122,6 +122,7 @@ export function upsertCatalogProduct(raw: N8nContractPayload): CatalogSaveResult
     merchant: String(data.merchant ?? 'Comercio Externo').trim(),
     affiliateUrl: String(data.affiliateUrl).trim(),
     buyNowUrl: data.buyNowUrl ? String(data.buyNowUrl).trim() : existing?.buyNowUrl,
+    asin: data.asin ? String(data.asin).trim().toUpperCase() : existing?.asin,
     pros: Array.isArray(data.pros) ? data.pros.filter(Boolean) : [],
     cons: Array.isArray(data.cons) ? data.cons.filter(Boolean) : [],
     badge: data.badge ? String(data.badge).trim() : undefined,

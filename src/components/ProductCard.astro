@@ -1,6 +1,7 @@
 ---
 import type { Product } from '../data/products';
 import { getAffiliateUrl, NETWORK_LABELS, type AffiliateNetwork } from '../utils/affiliate';
+import { getAmazonAddToCartUrl } from '../utils/amazon';
 
 /**
  * Dos modos de uso:
@@ -249,6 +250,27 @@ const formatCurrency = (amount: number) => {
         </svg>
       </a>
     </div>
+
+    <!-- Salida directa por ASIN: cesta de Amazon con tag de afiliado (tramitación de pago). -->
+    {product.asin && (
+      <a
+        href={getAmazonAddToCartUrl(product.asin)}
+        class="quick-buy-cta exit-cta"
+        target="_blank"
+        rel="nofollow sponsored noopener noreferrer"
+        data-network="amazon"
+        data-asin={product.asin}
+        data-title={product.title}
+        aria-label={`Comprar ahora en ${product.merchant} (salida directa)`}
+      >
+        Comprar ahora en {product.merchant}
+        <svg class="external-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          <polyline points="15 3 21 3 21 9" />
+          <line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
+      </a>
+    )}
 
     <!-- Microcopia de confianza -->
     <div class="trust-guarantee">
@@ -643,6 +665,40 @@ const formatCurrency = (amount: number) => {
 
   .trust-guarantee svg {
     color: rgba(16, 185, 129, 0.6);
+  }
+
+  /* ============ SALIDA DIRECTA POR ASIN (exit-cta) ============ */
+  .quick-buy-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    width: 100%;
+    padding: 0.65rem 1rem;
+    background: rgba(251, 191, 36, 0.08);
+    color: #fbbf24;
+    font-weight: 700;
+    font-size: 0.8rem;
+    font-family: inherit;
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    border-radius: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
+  .quick-buy-cta:hover {
+    background: rgba(251, 191, 36, 0.16);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(251, 191, 36, 0.2);
+  }
+
+  .quick-buy-cta .external-icon {
+    transition: transform 0.3s ease;
+  }
+
+  .quick-buy-cta:hover .external-icon {
+    transform: translate(2px, -2px);
   }
 
   /* ============ RESPONSIVE ============ */

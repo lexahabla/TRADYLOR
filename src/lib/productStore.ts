@@ -16,6 +16,8 @@ export interface Product {
   merchant: string;
   affiliateUrl: string;
   buyNowUrl?: string;
+  /** Código ASIN de Amazon (autodetectado desde el enlace de afiliado). */
+  asin?: string;
   pros: string[];
   cons: string[];
   badge?: string;

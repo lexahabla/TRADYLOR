@@ -13,6 +13,7 @@ import {
 } from '../../../lib/ai';
 import { enrichProductLocally } from '../../../lib/localEnrich';
 import { readProductsFromFile, slugify, upsertProduct, type Product } from '../../../lib/productStore';
+import { extractAsinFromUrl } from '../../../utils/amazon';
 
 export const prerender = false;
 
@@ -227,6 +228,11 @@ export const POST: APIRoute = async ({ request }) => {
       merchant: detectMerchant(body?.affiliateUrl || body?.url, body?.merchant),
       affiliateUrl: String(body?.affiliateUrl ?? body?.url ?? '').trim(),
       buyNowUrl: body?.buyNowUrl ? String(body.buyNowUrl).trim() : undefined,
+      asin: (() => {
+        const fromBody = String(body?.asin ?? '').trim().toUpperCase();
+        if (/^[A-Z0-9]{10}$/.test(fromBody)) return fromBody;
+        return extractAsinFromUrl(String(body?.affiliateUrl ?? body?.url ?? '')) || undefined;
+      })(),
       pros: [],
       cons: [],
       badge: body?.badge ? String(body.badge).trim() : undefined,

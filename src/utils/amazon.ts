@@ -111,3 +111,24 @@ export function appendAmazonTag(url: string, tag?: string): string {
   }
 }
 
+const AMAZON_ASIN_IN_PATH_RE = /\/(?:dp|gp\/product|gp\/aw\/d|product)\/([A-Z0-9]{10})(?:[/?#]|$)/i;
+const ASIN_QUERY_RE = /[?&]asin=([A-Z0-9]{10})(?:[&#]|$)/i;
+
+/**
+ * Extrae el ASIN de una URL de Amazon (…/dp/B0…, …/gp/product/B0…, ?asin=B0…)
+ * o de cualquier otra URL que lo contenga en el path. Devuelve '' si no hay ASIN.
+ */
+export function extractAsinFromUrl(url: string): string {
+  const raw = String(url ?? '').trim();
+  if (!raw) return '';
+  const path = (() => {
+    try {
+      return new URL(raw).pathname + new URL(raw).search;
+    } catch {
+      return raw;
+    }
+  })();
+  const match = AMAZON_ASIN_IN_PATH_RE.exec(path) || ASIN_QUERY_RE.exec(path);
+  return match ? match[1].toUpperCase() : '';
+}
+

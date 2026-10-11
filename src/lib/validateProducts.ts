@@ -119,6 +119,7 @@ function normalizeToProduct(schema: Product): FlatProduct {
     merchant: schema.affiliate.primaryStore,
     affiliateUrl: schema.affiliate.primaryUrl,
     buyNowUrl: schema.affiliate.buyNowUrl,
+    asin: schema.affiliate.asin,
     pros: schema.investigation.pros,
     cons: schema.investigation.cons,
     badge: schema.badge ?? schema.awardBadge,

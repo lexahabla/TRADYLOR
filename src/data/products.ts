@@ -37,6 +37,8 @@ export interface Product {
   merchant: string;
   affiliateUrl: string;
   buyNowUrl?: string;
+  /** Código ASIN de Amazon (se autodetecta al pegar el enlace de afiliado). */
+  asin?: string;
   pros: string[];
   cons: string[];
   badge?: string;
@@ -147,6 +149,7 @@ export function toStructuredProduct(flat: Product): ProductSchema {
       primaryStore: flat.merchant ?? 'Amazon',
       primaryUrl: flat.affiliateUrl,
       buyNowUrl: flat.buyNowUrl,
+      asin: flat.asin,
       alternativeStore: undefined,
       alternativeUrl: undefined,
     },
