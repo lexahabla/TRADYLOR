@@ -197,17 +197,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </div>
           </div>
 
-          <div class="form-row two-cols">
-            <div class="form-group">
+          <div class="form-row">
+            <div class="form-group full-width">
               <label for="prodAffiliateUrl" class="field-label">Enlace de Afiliado Final <span class="required">*</span></label>
               <input type="url" id="prodAffiliateUrl" required />
-            </div>
-            <div class="form-group">
-              <label for="prodAsin" class="field-label">
-                <span>ASIN (Amazon)</span>
-                <span class="label-hint">Se rellena solo al pegar el enlace</span>
-              </label>
-              <input type="text" id="prodAsin" placeholder="B0CGXB4C91" maxlength="10" />
             </div>
           </div>
 
@@ -800,9 +793,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const prodMerchant = document.getElementById('prodMerchant');
     const prodAffiliateUrl = document.getElementById('prodAffiliateUrl');
     const prodBuyNowUrl = document.getElementById('prodBuyNowUrl');
-    const prodAsin = document.getElementById('prodAsin');
 
-    // Autodetección de ASIN al pegar el enlace de afiliado o la URL del producto.
+    // Autodetección de ASIN: al pegar el enlace de afiliado o la URL del producto
+    // se genera el enlace de Compra Directa (Buy Now) si el campo está vacío.
     const AMAZON_ASIN_IN_PATH_RE = /\/(?:dp|gp\/product|gp\/aw\/d|product)\/([A-Za-z0-9]{10})(?:[/?#]|$)/;
     const ASIN_QUERY_RE = /[?&]asin=([A-Za-z0-9]{10})(?:[&#]|$)/;
     function extractAsinFromUrl(url) {
@@ -826,21 +819,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const params = new URLSearchParams({ 'ASIN.1': clean, 'Quantity.1': '1', AssociateTag: tag });
       return `https://www.amazon.es/gp/aws/cart/add.html?${params.toString()}`;
     }
-    function autoFillAsin(url) {
+    function autoFillBuyNow(url) {
       const asin = extractAsinFromUrl(url);
-      if (!asin || !prodAsin) return;
-      prodAsin.value = asin;
-      // Si no hay URL de compra manual, se genera la de compra directa
-      // (cesta de Amazon con el tag) hacia la tramitación del pedido.
-      if (prodBuyNowUrl && !prodBuyNowUrl.value.trim()) {
+      if (!asin || !prodBuyNowUrl) return;
+      // Compra directa generada: cesta de Amazon con el tag → tramitación del pedido.
+      if (!prodBuyNowUrl.value.trim()) {
         prodBuyNowUrl.value = buildAmazonCartUrl(asin);
       }
     }
     if (prodAffiliateUrl) {
-      prodAffiliateUrl.addEventListener('input', () => autoFillAsin(prodAffiliateUrl.value));
+      prodAffiliateUrl.addEventListener('input', () => autoFillBuyNow(prodAffiliateUrl.value));
     }
     if (inputScrapeUrl) {
-      inputScrapeUrl.addEventListener('input', () => autoFillAsin(inputScrapeUrl.value));
+      inputScrapeUrl.addEventListener('input', () => autoFillBuyNow(inputScrapeUrl.value));
     }
     const prodImage = document.getElementById('prodImage');
     const prodBadge = document.getElementById('prodBadge');
@@ -1463,7 +1454,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           merchant: prodMerchant.value || 'Amazon',
           affiliateUrl: prodAffiliateUrl.value.trim(),
           buyNowUrl: prodBuyNowUrl.value.trim() || undefined,
-          asin: (prodAsin && prodAsin.value ? prodAsin.value.trim().toUpperCase() : '') || undefined,
           image: mainImage,
           gallery: galleryToSend.length ? galleryToSend : undefined,
           badge: prodBadge.value.trim() || undefined,
@@ -1509,7 +1499,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             prodMerchant.value = '';
             prodAffiliateUrl.value = '';
             prodBuyNowUrl.value = '';
-            if (prodAsin) prodAsin.value = '';
             prodImage.value = '';
             prodBadge.value = '';
             prodDescription.value = '';
@@ -1729,7 +1718,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         prodMerchant.value = '';
         prodAffiliateUrl.value = '';
         prodBuyNowUrl.value = '';
-        if (prodAsin) prodAsin.value = '';
         prodImage.value = '';
         prodBadge.value = '';
         prodDescription.value = '';
@@ -1877,7 +1865,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               prodMerchant.value = product.merchant || 'Amazon';
               prodAffiliateUrl.value = product.affiliateUrl || '';
               prodBuyNowUrl.value = product.buyNowUrl || '';
-              prodAsin.value = product.asin || extractAsinFromUrl(product.affiliateUrl || '') || '';
               prodImage.value = product.image || '';
               prodBadge.value = product.badge || '';
               prodDescription.value = product.description || '';
