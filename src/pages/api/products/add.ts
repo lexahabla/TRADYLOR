@@ -603,6 +603,15 @@ export const POST: APIRoute = async ({ request }) => {
         rating: dataToSave.rating ? Number(dataToSave.rating) : 4.8,
         reviewsCount: dataToSave.reviewsCount ? Number(dataToSave.reviewsCount) : 100,
         verdict: dataToSave.verdict ? String(dataToSave.verdict).trim() : undefined,
+        // Ficha técnica (texto libre): se conserva la ya guardada si el cliente no la envía.
+        techSheet: dataToSave.techSheet
+          ? String(dataToSave.techSheet).trim()
+          : existingProduct?.techSheet,
+        // Specs clave/valor del contrato: mismo criterio de conservación.
+        specs:
+          dataToSave.specs && typeof dataToSave.specs === 'object' && !Array.isArray(dataToSave.specs)
+            ? (dataToSave.specs as Record<string, string>)
+            : existingProduct?.specs,
       };
 
       // Si ya existe un producto con el mismo ID, se actualiza; si no, se añade al principio
