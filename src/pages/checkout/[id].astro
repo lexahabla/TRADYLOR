@@ -339,7 +339,11 @@ const isSoldOut = stockStatus === 'Agotado';
       }).catch(() => {});
 
       window.setTimeout(() => {
-        window.location.href = url;
+        // Salida en pestaña nueva (Return Flow: la pestaña original reacciona
+        // al volver el usuario vía visibilitychange → ReturnBanner).
+        window.open(url, '_blank', 'noopener,noreferrer');
+        overlay.hidden = true;
+        document.body.style.overflow = '';
       }, 950);
     };
 

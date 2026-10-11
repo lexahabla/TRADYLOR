@@ -1,0 +1,209 @@
+---
+/**
+ * ==============================================================================
+ * TRADYLOR — RETURN BANNER (Return Flow Strategy)
+ * ==============================================================================
+ * Toast inferior que se muestra cuando el usuario regresa a la pestaña tras
+ * hacer clic en un enlace de afiliado (.exit-cta, target="_blank").
+ *
+ * - La marca de salida se guarda en sessionStorage al clicar cualquier .exit-cta.
+ * - El script (bundled) escucha `visibilitychange`: al volver con la marca
+ *   activa, espera 500 ms y despliega el banner (una sola vez por salida).
+ * - Se incluye una única vez en Layout.astro (todas las páginas públicas).
+ * ==============================================================================
+ */
+---
+
+<aside
+  id="returnBanner"
+  class="return-banner"
+  role="status"
+  aria-live="polite"
+  aria-label="Aviso de retorno"
+  hidden
+>
+  <span class="return-banner-icon" aria-hidden="true">🛍️</span>
+  <div class="return-banner-content">
+    <p class="return-banner-text">
+      ¡Gracias por explorar nuestras recomendaciones en Tradylor!
+      ¿Deseas buscar más productos o utilizar nuestro comparador de IA?
+    </p>
+    <div class="return-banner-actions">
+      <a href="/" class="return-banner-action">Seguir explorando</a>
+      <button type="button" class="return-banner-close" aria-label="Cerrar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+    </div>
+  </div>
+</aside>
+
+<style>
+  .return-banner {
+    position: fixed;
+    right: 1.25rem;
+    bottom: 1.25rem;
+    z-index: 9000;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    width: min(380px, calc(100vw - 2.5rem));
+    padding: 1rem 1.1rem;
+    background: linear-gradient(135deg, rgba(17, 24, 39, 0.92) 0%, rgba(30, 41, 59, 0.92) 100%);
+    color: #ffffff;
+    border: 1px solid rgba(96, 165, 250, 0.35);
+    border-radius: 16px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+    backdrop-filter: blur(14px);
+    opacity: 0;
+    transform: translateY(16px);
+    transition: opacity 0.35s ease, transform 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+    pointer-events: none;
+  }
+
+  .return-banner.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .return-banner-icon {
+    font-size: 1.5rem;
+    line-height: 1;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+  }
+
+  .return-banner-content {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    min-width: 0;
+  }
+
+  .return-banner-text {
+    margin: 0;
+    font-size: 0.85rem;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .return-banner-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+  }
+
+  .return-banner-action {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.45rem 0.9rem;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: #ffffff;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-decoration: none;
+    border-radius: 9px;
+    transition: background 0.25s ease, transform 0.25s ease;
+  }
+
+  .return-banner-action:hover {
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    transform: translateY(-1px);
+  }
+
+  .return-banner-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .return-banner-close:hover {
+    background: rgba(255, 255, 255, 0.16);
+    color: #ffffff;
+  }
+
+  @media (max-width: 640px) {
+    .return-banner {
+      right: 0.75rem;
+      left: 0.75rem;
+      bottom: 0.75rem;
+      width: auto;
+    }
+  }
+</style>
+
+<script>
+  const STORAGE_KEY = 'tradylor_exit_pending';
+  const SHOW_DELAY_MS = 500;
+  const AUTO_HIDE_MS = 12000;
+
+  const banner = document.getElementById('returnBanner');
+
+  if (banner) {
+    let hideTimer = 0;
+
+    const show = () => {
+      banner.hidden = false;
+      requestAnimationFrame(() => banner.classList.add('is-visible'));
+      window.clearTimeout(hideTimer);
+      hideTimer = window.setTimeout(hide, AUTO_HIDE_MS);
+    };
+
+    const hide = () => {
+      banner.classList.remove('is-visible');
+      window.clearTimeout(hideTimer);
+      window.setTimeout(() => {
+        banner.hidden = true;
+      }, 350);
+    };
+
+    // 1) Marca de salida: cualquier clic en .exit-cta (enlace o botón).
+    document.addEventListener(
+      'click',
+      (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        if (target.closest('a.exit-cta, button.exit-cta')) {
+          try {
+            sessionStorage.setItem(STORAGE_KEY, '1');
+          } catch {
+            /* almacenamiento no disponible */
+          }
+        }
+      },
+      { capture: true },
+    );
+
+    // 2) Retorno a la pestaña: si hay marca activa, se muestra el banner.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) return;
+      let pending = false;
+      try {
+        pending = sessionStorage.getItem(STORAGE_KEY) === '1';
+      } catch {
+        return;
+      }
+      if (!pending) return;
+      try {
+        sessionStorage.removeItem(STORAGE_KEY);
+      } catch {
+        /* almacenamiento no disponible */
+      }
+      window.setTimeout(show, SHOW_DELAY_MS);
+    });
+
+    banner.querySelector('.return-banner-close')?.addEventListener('click', hide);
+  }
+</script>

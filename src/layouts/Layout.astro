@@ -8,6 +8,8 @@ export interface Props {
   noindex?: boolean;
 }
 
+import ReturnBanner from '../components/ReturnBanner.astro';
+
 const {
   title = "Tradylor | Portal de Curación, Recomendaciones y Comparativas de Productos",
   description = "Filtramos el ruido del mercado. Descubre análisis rigurosos, comparativas honestas y las mejores ofertas verificadas para tomar decisiones de compra inteligentes.",
@@ -1208,5 +1210,6 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         }
       })();
     </script>
+    {!isBackend && <ReturnBanner />}
   </body>
 </html>
