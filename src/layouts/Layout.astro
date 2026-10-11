@@ -108,6 +108,13 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         max-width: 100%;
       }
 
+      /* Las reglas de autor (display:flex/absolute) pisan la regla UA
+         [hidden]{display:none} y dejaban elementos "ocultos" visibles
+         (p. ej. el contenedor de vídeo tapaba la imagen del producto). */
+      [hidden] {
+        display: none !important;
+      }
+
       html {
         font-family: var(--font-body);
         background-color: var(--color-bg-body);
