@@ -239,7 +239,9 @@ export const POST: APIRoute = async ({ request }) => {
     };
 
     if (enrichment) {
-      if (!base.description) base.description = enrichment.description;
+      // La descripción SIEMPRE se mejora con la del enriquecimiento (IA o
+      // local): el botón "Enriquecer con IA" reescribe la redacción técnica.
+      if (enrichment.description?.trim()) base.description = enrichment.description;
       if (enrichment.pros.length) base.pros = enrichment.pros;
       if (enrichment.cons.length) base.cons = enrichment.cons;
       if (enrichment.verdict) base.verdict = enrichment.verdict;

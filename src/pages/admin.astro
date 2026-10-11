@@ -221,14 +221,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <div class="form-row">
             <div class="form-group full-width">
               <label class="field-label">
-                <span>Galería de Imágenes</span>
-                <span class="label-hint">Pulsa una miniatura para fijarla como imagen principal</span>
+                <span>Galería de Imágenes y Vídeos</span>
+                <span class="label-hint">Pulsa una miniatura para fijarla como principal · Los vídeos se reproducen en la ficha</span>
               </label>
               <div id="galleryThumbs" class="gallery-thumbs"></div>
               <div class="gallery-add-row">
-                <input type="file" id="galleryFileInput" accept="image/jpeg,image/png,image/webp" multiple />
+                <input type="file" id="galleryFileInput" accept="image/jpeg,image/png,image/webp,video/mp4,video/webm" multiple />
                 <div class="gallery-url-add">
-                  <input type="url" id="galleryUrlInput" placeholder="https://imagen-del-producto.jpg" />
+                  <input type="url" id="galleryUrlInput" placeholder="https://imagen.jpg o https://youtube.com/watch?v=... / video.mp4" />
                   <button type="button" id="btnAddImageUrl" class="btn-secondary">Añadir URL</button>
                 </div>
               </div>
@@ -315,6 +315,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 </svg>
                 <span>La imagen aparecerá al analizar el enlace</span>
               </div>
+              <button type="button" id="previewVideoOverlay" class="preview-video-overlay" hidden>
+                <span class="preview-play-icon" aria-hidden="true">▶</span>
+                <span>Vídeo del producto</span>
+              </button>
               <button type="button" id="previewPrev" class="preview-nav preview-nav-prev" aria-label="Imagen anterior" hidden>‹</button>
               <button type="button" id="previewNext" class="preview-nav preview-nav-next" aria-label="Imagen siguiente" hidden>›</button>
               <span id="previewCounter" class="preview-counter" hidden></span>
@@ -722,6 +726,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <TrafficSalesDashboard />
     </section>
   </div>
+
+  <!-- Modal de vídeo: se abre centrado desde la galería o la vista previa -->
+  <div id="videoModal" class="video-modal" hidden>
+    <div class="video-modal-backdrop" data-video-modal-close></div>
+    <div class="video-modal-dialog" role="dialog" aria-modal="true" aria-label="Reproductor de vídeo">
+      <button type="button" class="video-modal-close" data-video-modal-close aria-label="Cerrar vídeo">×</button>
+      <div id="videoModalBody" class="video-modal-body"></div>
+    </div>
+  </div>
   ) : (
     <main class="admin-login-page">
       <section class="admin-login-panel" aria-labelledby="admin-login-title">
@@ -846,36 +859,113 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       setProductField(field, value);
     }
 
-    // Renderiza la galería de imágenes como miniaturas seleccionables.
-    // La imagen principal (prodImage) se marca con un borde destacado.
+    // ── Vídeos en la galería (helper + modal centrado) ──────────────────────
+    function isVideoUrl(url) {
+      const u = String(url || '').trim().toLowerCase();
+      if (!u) return false;
+      if (/\.(mp4|webm|mov|m4v|ogv)(\?|#|$)/.test(u)) return true;
+      return /(youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com)/.test(u);
+    }
+
+    function videoEmbedUrl(url, autoplay) {
+      const u = String(url || '').trim();
+      const yt = u.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{6,})/i);
+      if (yt) return `https://www.youtube.com/embed/${yt[1]}${autoplay ? '?autoplay=1&mute=1' : ''}`;
+      const vimeo = u.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+      if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}${autoplay ? '?autoplay=1&mute=1' : ''}`;
+      const dailymotion = u.match(/dailymotion\.com\/(?:video|embed\/video)\/([\w]+)/i);
+      if (dailymotion) return `https://www.dailymotion.com/embed/video/${dailymotion[1]}${autoplay ? '?autoplay=1' : ''}`;
+      return null;
+    }
+
+    const videoModal = document.getElementById('videoModal');
+    const videoModalBody = document.getElementById('videoModalBody');
+
+    function openVideoModal(url) {
+      if (!videoModal || !videoModalBody || !url) return;
+      const embed = videoEmbedUrl(url, true);
+      if (embed) {
+        const iframe = document.createElement('iframe');
+        iframe.src = embed;
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+        iframe.allowFullscreen = true;
+        videoModalBody.appendChild(iframe);
+      } else {
+        const video = document.createElement('video');
+        video.src = url;
+        video.controls = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        videoModalBody.appendChild(video);
+      }
+      videoModal.hidden = false;
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeVideoModal() {
+      if (!videoModal) return;
+      videoModal.hidden = true;
+      if (videoModalBody) videoModalBody.innerHTML = '';
+      document.body.style.overflow = '';
+    }
+
+    if (videoModal) {
+      videoModal.addEventListener('click', (e) => {
+        if (e.target && e.target.closest && e.target.closest('[data-video-modal-close]')) closeVideoModal();
+      });
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && !videoModal.hidden) closeVideoModal();
+      });
+    }
+
+    // Renderiza la galería de imágenes/vídeos como miniaturas seleccionables.
+    // La imagen principal (prodImage) se marca con un borde destacado;
+    // los vídeos se reproducen en el modal centrado.
     function renderGallery() {
       if (!galleryThumbs) return;
       galleryThumbs.innerHTML = '';
       const current = (prodImage.value || '').trim();
       if (!scrapedGallery.length) {
-        galleryThumbs.innerHTML = '<span class="gallery-empty">Sin galería. Analiza un enlace para cargar las imágenes.</span>';
+        galleryThumbs.innerHTML = '<span class="gallery-empty">Sin galería. Analiza un enlace o añade imágenes/vídeos.</span>';
         return;
       }
       scrapedGallery.forEach((url) => {
+        const isVideo = isVideoUrl(url);
         const wrap = document.createElement('div');
-        wrap.className = 'gallery-item' + (url === current ? ' is-main' : '');
+        wrap.className = 'gallery-item' + (!isVideo && url === current ? ' is-main' : '');
 
         const thumb = document.createElement('button');
         thumb.type = 'button';
         thumb.className = 'gallery-thumb';
-        thumb.title = 'Fijar como imagen principal';
-        const img = document.createElement('img');
-        img.src = url;
-        img.alt = 'Imagen del producto';
-        img.loading = 'lazy';
-        thumb.appendChild(img);
-        thumb.addEventListener('click', () => {
-          setProductField(prodImage, url);
-          previewIndex = scrapedGallery.indexOf(url);
-          if (previewIndex < 0) previewIndex = 0;
-          renderGallery();
-          updatePreview();
-        });
+
+        if (isVideo) {
+          thumb.title = 'Reproducir vídeo';
+          const vid = document.createElement('video');
+          vid.src = url;
+          vid.muted = true;
+          vid.preload = 'metadata';
+          vid.playsInline = true;
+          thumb.appendChild(vid);
+          const badge = document.createElement('span');
+          badge.className = 'gallery-play-badge';
+          badge.textContent = '▶';
+          wrap.appendChild(badge);
+          thumb.addEventListener('click', () => openVideoModal(url));
+        } else {
+          thumb.title = 'Fijar como imagen principal';
+          const img = document.createElement('img');
+          img.src = url;
+          img.alt = 'Imagen del producto';
+          img.loading = 'lazy';
+          thumb.appendChild(img);
+          thumb.addEventListener('click', () => {
+            setProductField(prodImage, url);
+            previewIndex = scrapedGallery.indexOf(url);
+            if (previewIndex < 0) previewIndex = 0;
+            renderGallery();
+            updatePreview();
+          });
+        }
 
         const removeBtn = document.createElement('button');
         removeBtn.type = 'button';
@@ -885,7 +975,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         removeBtn.addEventListener('click', () => {
           scrapedGallery = scrapedGallery.filter((u) => u !== url);
           if ((prodImage.value || '').trim() === url) {
-            setProductField(prodImage, scrapedGallery[0] || '');
+            const firstImage = scrapedGallery.find((u) => !isVideoUrl(u)) || '';
+            setProductField(prodImage, firstImage);
           }
           renderGallery();
           updatePreview();
@@ -897,7 +988,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       });
     }
 
-    // Añade imágenes a la galería por URL (una o varias separadas por comas/espacios).
+    // Añade imágenes/vídeos a la galería por URL (separadas por comas/espacios).
     function addImagesByUrl() {
       const raw = (galleryUrlInput?.value || '').trim();
       if (!raw) return;
@@ -912,20 +1003,25 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
       if (galleryUrlInput) galleryUrlInput.value = '';
       if (!added && parts.length) {
-        showAlert('warning', 'URL no válida', 'Introduce una imagen que empiece por http:// o https://.');
+        showAlert('warning', 'URL no válida', 'Introduce una imagen o vídeo que empiece por http:// o https://.');
         return;
       }
-      if (added && !(prodImage.value || '').trim()) setProductField(prodImage, scrapedGallery[0]);
+      if (added && !(prodImage.value || '').trim()) {
+        const firstImage = scrapedGallery.find((u) => !isVideoUrl(u));
+        if (firstImage) setProductField(prodImage, firstImage);
+      }
       renderGallery();
       updatePreview();
     }
 
-    // Sube archivos de imagen al servidor y los añade a la galería.
+    // Sube archivos de imagen/vídeo al servidor y los añade a la galería.
     async function uploadGalleryFiles(fileList) {
-      const files = Array.from(fileList || []).filter((f) => f.type.startsWith('image/'));
+      const files = Array.from(fileList || []).filter(
+        (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
+      );
       if (!files.length) return;
       if (btnAddImageUrl) btnAddImageUrl.disabled = true;
-      showAlert('loading', 'Subiendo imágenes...', `${files.length} archivo(s) al servidor.`);
+      showAlert('loading', 'Subiendo archivos...', `${files.length} imagen(es)/vídeo(s) al servidor.`);
       try {
         const fd = new FormData();
         files.forEach((f) => fd.append('images', f));
@@ -935,12 +1031,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           for (const url of result.urls) {
             if (!scrapedGallery.includes(url)) scrapedGallery.push(url);
           }
-          if (!(prodImage.value || '').trim()) setProductField(prodImage, result.urls[0]);
+          if (!(prodImage.value || '').trim()) {
+            const firstImage = result.urls.find((u) => !isVideoUrl(u));
+            if (firstImage) setProductField(prodImage, firstImage);
+          }
           renderGallery();
           updatePreview();
-          showAlert('success', 'Imágenes subidas', `${result.urls.length} imagen(es) añadida(s) a la galería.`);
+          showAlert('success', 'Archivos subidos', `${result.urls.length} archivo(s) añadido(s) a la galería.`);
         } else {
-          showAlert('error', 'No se pudieron subir', result.message || 'Error al subir las imágenes.');
+          showAlert('error', 'No se pudieron subir', result.message || 'Error al subir los archivos.');
         }
       } catch (err) {
         console.error(err);
@@ -956,18 +1055,29 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     if (galleryFileInput) galleryFileInput.addEventListener('change', (e) => uploadGalleryFiles(e.target.files));
 
     // Actualiza la vista previa interactiva en tiempo real
-    // Dibuja la imagen actual del carrusel de la vista previa y controla flechas/contador.
+    // Dibuja la imagen/vídeo actual del carrusel y controla flechas/contador.
+    const previewVideoOverlay = document.getElementById('previewVideoOverlay');
     function renderPreviewImage() {
       if (!previewImg) return;
       const total = previewGallery.length;
-      const hasImage = total > 0;
-      previewImg.hidden = !hasImage;
-      if (previewEmptyImage) previewEmptyImage.hidden = hasImage;
+      const hasMedia = total > 0;
+      previewImg.hidden = !hasMedia;
+      if (previewEmptyImage) previewEmptyImage.hidden = hasMedia;
 
-      if (hasImage) {
+      if (hasMedia) {
         if (previewIndex >= total) previewIndex = 0;
         if (previewIndex < 0) previewIndex = total - 1;
-        previewImg.src = previewGallery[previewIndex];
+        const current = previewGallery[previewIndex];
+        if (isVideoUrl(current)) {
+          // Vídeo: se oculta la imagen y se muestra el overlay con el botón play.
+          previewImg.hidden = true;
+          if (previewVideoOverlay) previewVideoOverlay.hidden = false;
+        } else {
+          if (previewVideoOverlay) previewVideoOverlay.hidden = true;
+          previewImg.src = current;
+        }
+      } else if (previewVideoOverlay) {
+        previewVideoOverlay.hidden = true;
       }
 
       const showNav = total > 1;
@@ -982,6 +1092,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // Flechas del carrusel: navegar por la galería de la vista previa.
     if (previewPrev) previewPrev.addEventListener('click', () => { previewIndex--; renderPreviewImage(); });
     if (previewNext) previewNext.addEventListener('click', () => { previewIndex++; renderPreviewImage(); });
+    // Overlay de vídeo de la vista previa: abre el modal centrado.
+    if (previewVideoOverlay) {
+      previewVideoOverlay.addEventListener('click', () => {
+        const current = previewGallery[previewIndex];
+        if (current && isVideoUrl(current)) openVideoModal(current);
+      });
+    }
 
     function updatePreview() {
       const title = prodTitle.value.trim();
@@ -3051,6 +3168,40 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     display: block;
   }
 
+  :global(.gallery-thumb video) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    background: #0f1626;
+  }
+
+  :global(.gallery-play-badge) {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    color: #fff;
+    font-size: 1.35rem;
+    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.7);
+  }
+
+  :global(.gallery-play-badge::before) {
+    content: '';
+    position: absolute;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.65);
+    border: 1.5px solid rgba(255, 255, 255, 0.85);
+  }
+
+  :global(.gallery-play-badge) {
+    z-index: 1;
+  }
+
   :global(.gallery-remove) {
     position: absolute;
     top: -6px;
@@ -3171,6 +3322,115 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .preview-empty-image svg {
     color: #38bdf8;
     opacity: 0.85;
+  }
+
+  /* Overlay de vídeo en la vista previa: al pulsarlo se abre el modal. */
+  .preview-video-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    border: none;
+    cursor: pointer;
+    background: rgba(15, 23, 42, 0.72);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    transition: background 0.15s;
+  }
+
+  .preview-video-overlay:hover {
+    background: rgba(15, 23, 42, 0.85);
+  }
+
+  .preview-play-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    font-size: 1.5rem;
+    padding-left: 4px;
+    box-sizing: border-box;
+  }
+
+  /* ── Modal de vídeo (centrado en pantalla, cerrable) ── */
+  .video-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+  }
+
+  .video-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 6, 16, 0.82);
+    backdrop-filter: blur(4px);
+    cursor: pointer;
+  }
+
+  .video-modal-dialog {
+    position: relative;
+    width: min(920px, 100%);
+    max-height: 90vh;
+    z-index: 1;
+  }
+
+  .video-modal-body {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  }
+
+  .video-modal-body video,
+  .video-modal-body iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    object-fit: contain;
+    background: #000;
+  }
+
+  .video-modal-close {
+    position: absolute;
+    top: -44px;
+    right: 0;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+    z-index: 2;
+  }
+
+  .video-modal-close:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
 
   .preview-nav {

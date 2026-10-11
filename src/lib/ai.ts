@@ -121,7 +121,7 @@ const TEXT_SYSTEM_PROMPT = [
   '- verdict: 1 o 2 frases neutras indicando para quién encaja el producto.',
   '- specs: entre 4 y 8 pares clave/valor cortos (p. ej. "Autonomía": "Hasta 30 horas"). Omite las que no conozcas.',
   '- category: nombre corto de categoría (ej. "Audio & Sonido").',
-  '- description: 2 o 3 frases en español, orientadas a decisión de compra.',
+  '- description: 2 o 3 frases en español de REDACCIÓN TÉCNICA CONCISA, orientadas a decisión de compra. Si se aporta una descripción previa, reescríbela mejorando claridad, precisión y fluidez (sin inventar datos ni superlativos).',
   '- pricing: objeto { currentPrice, originalPrice } en euros. Si en la entrada ya hay un precio de oferta, consérvalo EXACTAMENTE como currentPrice y genera un originalPrice superior con un descuento realista (entre 15% y 35%, nunca más del 40%). Si no hay ningún precio, propón un par realista para la categoría del producto. Formato: dos decimales terminando en ,99 o ,95. originalPrice SIEMPRE mayor que currentPrice. Descuentos absurdos (>50%) o mínimos (<10%) quedan prohibidos.',
   'Responde SOLO con JSON válido con claves: title, description, specs, pros, cons, verdict, category, pricing.',
 ].join('\n');

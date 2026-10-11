@@ -9,22 +9,27 @@ export const prerender = false;
 /**
  * POST /api/admin/upload-image
  *
- * Sube imágenes de producto desde el panel (multipart/form-data) y las guarda
- * en el directorio durable de imágenes. Devuelve las URLs públicas (/images/products/...).
- * Acepta varios archivos a la vez (campo "images").
+ * Sube imágenes y vídeos de producto desde el panel (multipart/form-data) y
+ * los guarda en el directorio durable de medios. Devuelve las URLs públicas
+ * (/images/products/...). Acepta varios archivos a la vez (campo "images").
  */
 
-const MAX_BYTES = 5 * 1024 * 1024; // 5MB por imagen
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB por imagen
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024; // 50MB por vídeo
 const MIME_BY_EXT: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
   png: 'image/png',
   webp: 'image/webp',
+  mp4: 'video/mp4',
+  webm: 'video/webm',
 };
 const EXT_BY_MIME: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
 };
 
 const json = (body: unknown, status: number) =>
@@ -77,10 +82,10 @@ export const POST: APIRoute = async ({ request }) => {
     const formData = await request.formData();
     const entries = formData.getAll('images').filter((v): v is File => v instanceof File);
     if (!entries.length) {
-      return json({ success: false, message: 'No se recibió ninguna imagen (campo images).' }, 400);
+      return json({ success: false, message: 'No se recibió ningún archivo (campo images).' }, 400);
     }
     if (entries.length > 10) {
-      return json({ success: false, message: 'Máximo 10 imágenes por subida.' }, 400);
+      return json({ success: false, message: 'Máximo 10 archivos por subida.' }, 400);
     }
 
     const urls: string[] = [];
@@ -90,11 +95,15 @@ export const POST: APIRoute = async ({ request }) => {
       const extFromName = (file.name.split('.').pop() ?? '').toLowerCase();
       const ext = EXT_BY_MIME[file.type] ?? (MIME_BY_EXT[extFromName] ? extFromName : '');
       if (!ext) {
-        errors.push(`"${file.name}": formato no admitido (usa JPG, PNG o WebP).`);
+        errors.push(`"${file.name}": formato no admitido (usa JPG, PNG, WebP, MP4 o WebM).`);
         continue;
       }
-      if (file.size > MAX_BYTES) {
-        errors.push(`"${file.name}": supera el máximo de 5MB.`);
+      const isVideo = file.type.startsWith('video/') || ext === 'mp4' || ext === 'webm';
+      const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+      if (file.size > maxBytes) {
+        errors.push(
+          `"${file.name}": supera el máximo de ${isVideo ? '50MB (vídeo)' : '5MB (imagen)'}.`
+        );
         continue;
       }
       const buffer = Buffer.from(await file.arrayBuffer());
@@ -102,7 +111,7 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     if (!urls.length) {
-      return json({ success: false, message: errors.join(' ') || 'Ninguna imagen válida.' }, 415);
+      return json({ success: false, message: errors.join(' ') || 'Ningún archivo válido.' }, 415);
     }
 
     return json({ success: true, urls, errors: errors.length ? errors : undefined }, 200);
