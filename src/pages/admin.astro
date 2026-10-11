@@ -225,7 +225,29 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
             <div class="form-group">
               <label for="prodBadge" class="field-label">Etiqueta Destacada (Badge)</label>
-              <input type="text" id="prodBadge" />
+              <select id="prodBadge">
+                <option value="">(ninguna)</option>
+                <optgroup label="Atractivo de precio / Oferta">
+                  <option value="Oferta -20%">Oferta -20%</option>
+                  <option value="Chollo">Chollo</option>
+                  <option value="Mínimo Histórico">Mínimo Histórico</option>
+                </optgroup>
+                <optgroup label="Prueba social / Popularidad">
+                  <option value="Más Vendido">Más Vendido</option>
+                  <option value="Recomendado">Recomendado</option>
+                  <option value="Top Elección">Top Elección</option>
+                </optgroup>
+                <optgroup label="Novedad o Disponibilidad">
+                  <option value="Nuevo">Nuevo</option>
+                  <option value="Edición Limitada">Edición Limitada</option>
+                  <option value="Últimas Unidades">Últimas Unidades</option>
+                </optgroup>
+                <optgroup label="Criterios técnicos o de valor">
+                  <option value="Mejor Calidad/Precio">Mejor Calidad/Precio</option>
+                  <option value="Calidad Premium">Calidad Premium</option>
+                  <option value="Sostenible">Sostenible</option>
+                </optgroup>
+              </select>
             </div>
           </div>
 
@@ -827,11 +849,22 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         prodBuyNowUrl.value = buildAmazonCartUrl(asin);
       }
     }
+    // Sincronización bidireccional entre "URL del Producto" y "Enlace de Afiliado Final".
+    function syncUrlFields(source, target) {
+      const value = String(source.value || '').trim();
+      if (value && target && !String(target.value || '').trim()) target.value = value;
+    }
     if (prodAffiliateUrl) {
-      prodAffiliateUrl.addEventListener('input', () => autoFillBuyNow(prodAffiliateUrl.value));
+      prodAffiliateUrl.addEventListener('input', () => {
+        syncUrlFields(prodAffiliateUrl, inputScrapeUrl);
+        autoFillBuyNow(prodAffiliateUrl.value);
+      });
     }
     if (inputScrapeUrl) {
-      inputScrapeUrl.addEventListener('input', () => autoFillBuyNow(inputScrapeUrl.value));
+      inputScrapeUrl.addEventListener('input', () => {
+        syncUrlFields(inputScrapeUrl, prodAffiliateUrl);
+        autoFillBuyNow(prodAffiliateUrl.value);
+      });
     }
     const prodImage = document.getElementById('prodImage');
     const prodBadge = document.getElementById('prodBadge');
@@ -1866,7 +1899,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               prodAffiliateUrl.value = product.affiliateUrl || '';
               prodBuyNowUrl.value = product.buyNowUrl || '';
               prodImage.value = product.image || '';
-              prodBadge.value = product.badge || '';
+              const badgeValue = product.badge || '';
+              if (badgeValue && prodBadge && !Array.from(prodBadge.options).some((o) => o.value === badgeValue)) {
+                const customOpt = document.createElement('option');
+                customOpt.value = badgeValue;
+                customOpt.textContent = badgeValue;
+                prodBadge.appendChild(customOpt);
+              }
+              prodBadge.value = badgeValue;
               prodDescription.value = product.description || '';
               prodVerdict.value = product.verdict || '';
               prodPros.value = Array.isArray(product.pros) ? product.pros.join('\n') : '';
