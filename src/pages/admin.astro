@@ -3474,7 +3474,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 1.5rem;
+    padding: 1rem;
   }
 
   .video-modal-backdrop {
@@ -3487,7 +3487,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
   .video-modal-dialog {
     position: relative;
+    /* 16:9 responsive: se ajusta al ancho disponible y nunca desborda
+       verticalmente (pantallas apaisadas / móviles). */
     width: min(920px, 100%);
+    max-width: calc((100vh - 2rem) * 16 / 9);
     max-height: 90vh;
     z-index: 1;
   }

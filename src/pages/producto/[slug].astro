@@ -735,6 +735,10 @@ const productSchema = {
     function renderVideo(url) {
       if (!videoWrap) return;
       videoWrap.innerHTML = '';
+      // Marco 16:9 proporcional: el vídeo mantiene su relación de aspecto
+      // y se adapta al contenedor (responsive), igual que las fotos con contain.
+      const frame = document.createElement('div');
+      frame.className = 'gallery-video-frame';
       const embed = videoEmbedUrl(url, false);
       if (embed) {
         const iframe = document.createElement('iframe');
@@ -742,14 +746,15 @@ const productSchema = {
         iframe.title = 'Vídeo del producto';
         iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
         iframe.allowFullscreen = true;
-        videoWrap.appendChild(iframe);
+        frame.appendChild(iframe);
       } else {
         const video = document.createElement('video');
         video.src = url;
         video.controls = true;
         video.playsInline = true;
-        videoWrap.appendChild(video);
+        frame.appendChild(video);
       }
+      videoWrap.appendChild(frame);
       videoWrap.hidden = false;
     }
 
@@ -934,23 +939,38 @@ const productSchema = {
     background: rgba(15, 23, 42, 0.65);
     border: 1.5px solid rgba(255, 255, 255, 0.85);
   }
-  /* Vídeo del carrusel: sustituye a la imagen principal en su contenedor. */
+  /* Vídeo del carrusel: sustituye a la imagen principal en su contenedor.
+     El wrap llena el hueco de la imagen (mismo padding 5%) y el marco
+     mantiene la proporción 16:9 del vídeo, centrado y responsive. */
   .gallery-video-wrap {
     position: absolute;
     inset: 0;
     z-index: 1;
-    background: #0f1626;
+    background: #f8fafc;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 5%;
   }
-  .gallery-video-wrap video {
+  .gallery-video-frame {
+    position: relative;
+    width: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    aspect-ratio: 16 / 9;
+    background: #000;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 8px 28px rgba(15, 23, 42, 0.25);
+  }
+  .gallery-video-frame video {
+    display: block;
     width: 100%;
     height: 100%;
     object-fit: contain;
     background: #000;
   }
-  .gallery-video-wrap iframe {
+  .gallery-video-frame iframe {
     position: absolute;
     inset: 0;
     width: 100%;
