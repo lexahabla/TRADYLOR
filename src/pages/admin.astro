@@ -1296,8 +1296,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         'loading',
         'Trabajando con IA...',
         auto
-          ? 'Sintetizando título y generando ficha técnica, pros/contras y veredicto...'
-          : 'Paso 1: título sintetizado + ficha técnica · Paso 2: imagen de producto mejorada.'
+          ? 'Sintetizando título, precios y ficha técnica, pros/contras y veredicto...'
+          : 'Paso 1: título, ficha y precios con descuento realista · Paso 2: imagen de producto mejorada.'
       );
 
       try {
@@ -1357,6 +1357,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             if (Array.isArray(enriched.pros) && enriched.pros.length) prodPros.value = enriched.pros.join('\n');
             if (Array.isArray(enriched.cons) && enriched.cons.length) prodCons.value = enriched.cons.join('\n');
             if (enriched.category && !(prodCategory.value || '').trim()) prodCategory.value = enriched.category;
+            // Precios: oferta + original tachado con descuento realista (15–35 %).
+            if (Number(enriched.price) > 0) prodPrice.value = String(enriched.price);
+            if (Number(enriched.originalPrice) > Number(enriched.price)) {
+              prodOriginalPrice.value = String(enriched.originalPrice);
+            }
           }
           if (flags.image === 'ok' && enriched.image) {
             // La imagen generada con IA lleva fondo de estudio opaco (#F8F9FA),
@@ -1374,8 +1379,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
           const via = flags.text === 'ok' ? 'IA' : 'local (sin IA)';
           const summary = auto
-            ? `Título + ficha generados ${via} · Imagen: conservada (${flags.image === 'ok' ? 'IA añadida a la galería' : 'scraping'})`
-            : `Título + texto: ${via} · Imagen: ${flags.image === 'ok' ? 'generada con fondo de estudio (IA)' : flags.image}`;
+            ? `Título + ficha + precios generados ${via} · Imagen: conservada (${flags.image === 'ok' ? 'IA añadida a la galería' : 'scraping'})`
+            : `Título + ficha + precios: ${via} · Imagen: ${flags.image === 'ok' ? 'generada con fondo de estudio (IA)' : flags.image}`;
           const warnings =
             Array.isArray(flags.warnings) && flags.warnings.length
               ? ` Avisos: ${flags.warnings.join(' | ')}`

@@ -21,6 +21,15 @@ import { CLIENT_IMAGES_DIR, IMAGES_DIR } from './paths';
 export type TextProvider = 'openai' | 'anthropic' | 'groq';
 export type ImageProvider = 'openai' | 'flux';
 
+export interface EnrichedPricing {
+  /** Precio de oferta (el que ve el usuario como precio actual). */
+  price: number;
+  /** Precio original tachado; SIEMPRE mayor que `price`. */
+  originalPrice: number;
+  /** Descuento resultante redondeado a entero (15–40). */
+  discountPercentage: number;
+}
+
 export interface EnrichedText {
   /** Título sintetizado y corto (legible en las product-cards). */
   title?: string;
@@ -30,6 +39,8 @@ export interface EnrichedText {
   cons: string[];
   verdict: string;
   category?: string;
+  /** Par oferta/original con descuento realista (EUR). */
+  pricing?: EnrichedPricing;
 }
 
 export interface ImageGenerationResult {
@@ -102,7 +113,7 @@ const TEXT_SYSTEM_PROMPT = [
   'Eres el equipo editorial de Tradylor, un portal de análisis y recomendación de productos de alta conversión.',
   'Tu trabajo es preparar una ficha técnica honesta y neutral (estilo redacción técnica, no publicitaria).',
   'Reglas estrictas:',
-  '- Nunca inventes precios, números de ventas ni especificaciones que no puedas deducir del texto de entrada.',
+  '- Nunca inventes especificaciones ni números de ventas que no puedas deducir del texto de entrada.',
   '- Tono divulgativo y directo, sin superlativos comerciales ("lo mejor del mercado", "imbatible") y sin llamadas a la acción de compra.',
   '- title: título SINTETIZADO en español, máximo 70 caracteres, que diga solo qué es el producto (tipo + marca + modelo) y, si cabe, una única característica diferencial importante (ej. "Auriculares Sony WH-1000XM5 con cancelación de ruido"). Sin precios, sin descuentos, sin argumentos de venta, sin el nombre del comercio ni sufijos tipo "| Amazon.es" o "- PcComponentes". Debe leerse bien en una tarjeta de producto.',
   '- pros: 3 a 5 puntos concretos y verificables.',
@@ -111,18 +122,23 @@ const TEXT_SYSTEM_PROMPT = [
   '- specs: entre 4 y 8 pares clave/valor cortos (p. ej. "Autonomía": "Hasta 30 horas"). Omite las que no conozcas.',
   '- category: nombre corto de categoría (ej. "Audio & Sonido").',
   '- description: 2 o 3 frases en español, orientadas a decisión de compra.',
-  'Responde SOLO con JSON válido con claves: title, description, specs, pros, cons, verdict, category.',
+  '- pricing: objeto { currentPrice, originalPrice } en euros. Si en la entrada ya hay un precio de oferta, consérvalo EXACTAMENTE como currentPrice y genera un originalPrice superior con un descuento realista (entre 15% y 35%, nunca más del 40%). Si no hay ningún precio, propón un par realista para la categoría del producto. Formato: dos decimales terminando en ,99 o ,95. originalPrice SIEMPRE mayor que currentPrice. Descuentos absurdos (>50%) o mínimos (<10%) quedan prohibidos.',
+  'Responde SOLO con JSON válido con claves: title, description, specs, pros, cons, verdict, category, pricing.',
 ].join('\n');
 
 /**
  * Paso 1 — Enriquecimiento de texto con IA.
- * Genera descripción, ficha técnica estructurada, pros, contras y veredicto neutral.
+ * Genera descripción, ficha técnica estructurada, pros/contras, veredicto
+ * y par de precios (oferta + original) con descuento realista.
  */
 export async function enrichProductText(input: {
   title: string;
   description?: string;
   category?: string;
   url?: string;
+  /** Precio de oferta de referencia (si el scraping/usuario ya lo conoce). */
+  price?: number;
+  originalPrice?: number;
 }): Promise<EnrichedText> {
   const provider = textProvider();
   if (!hasTextCredentials()) {
@@ -137,6 +153,8 @@ export async function enrichProductText(input: {
     `Producto: ${input.title}`,
     input.category ? `Categoría sugerida: ${input.category}` : '',
     input.description ? `Descripción disponible: ${input.description}` : '',
+    input.price ? `Precio de oferta de referencia: ${input.price.toFixed(2)} EUR` : '',
+    input.originalPrice ? `Precio original de referencia: ${input.originalPrice.toFixed(2)} EUR` : '',
     input.url ? `Página de origen: ${input.url}` : '',
   ]
     .filter(Boolean)
@@ -265,7 +283,61 @@ function normalizeEnrichedText(raw: any): EnrichedText {
     cons: toStringArray(raw?.cons, 4),
     verdict: String(raw?.verdict ?? '').replace(/\s+/g, ' ').trim().slice(0, 400),
     category: String(raw?.category ?? '').replace(/\s+/g, ' ').trim().slice(0, 60) || undefined,
+    pricing: normalizePricing(raw?.pricing),
   };
+}
+
+// ─── Precios con descuento realista ─────────────────────────────────────────
+
+/** Redondea a un precio "de tienda" creíble terminado en ,99 (o ,95 si ya acaba en 95). */
+function roundNicePrice(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  const rounded = Math.round(value);
+  return Math.max(0.99, rounded - 0.01);
+}
+
+/** Descuentos habituales en e-commerce: creíbles e incentivadores (15–35 %). */
+const DISCOUNT_POOL = [15, 17, 20, 22, 25, 28, 30, 33, 35];
+
+/** Precios de referencia por categoría cuando no hay dato alguno (EUR). */
+const REFERENCE_PRICES = [29.99, 39.99, 49.99, 59.99, 79.99, 99.99, 129.99, 149.99, 199.99];
+
+/**
+ * Construye un par oferta/original creíble:
+ *   - Si hay precio de oferta de referencia (scraping o escrito a mano),
+ *     se respeta y se genera el original por encima con descuento 15–35 %.
+ *   - Si no hay precio, se propone un par de mercado para la categoría.
+ */
+export function buildRealisticPricing(knownOfferPrice?: number): EnrichedPricing {
+  const discount = DISCOUNT_POOL[Math.floor(Math.random() * DISCOUNT_POOL.length)];
+  const offer =
+    knownOfferPrice && knownOfferPrice > 0
+      ? roundNicePrice(knownOfferPrice)
+      : REFERENCE_PRICES[Math.floor(Math.random() * REFERENCE_PRICES.length)];
+  const original = roundNicePrice(offer / (1 - discount / 100));
+  const realDiscount = Math.max(10, Math.min(40, Math.round((1 - offer / original) * 100)));
+  return { price: offer, originalPrice: original, discountPercentage: realDiscount };
+}
+
+/** Sanea el par de precios devuelto por el modelo (limita el descuento a 10–40 %). */
+function normalizePricing(raw: any): EnrichedPricing | undefined {
+  const price = Number(raw?.currentPrice ?? raw?.price);
+  if (!Number.isFinite(price) || price <= 0) return undefined;
+
+  const offer = roundNicePrice(price);
+  let original = Number(raw?.originalPrice);
+
+  // Sin original válido: se genera uno creíble sobre la oferta.
+  if (!Number.isFinite(original) || original <= offer) {
+    return buildRealisticPricing(offer);
+  }
+
+  // Descuento máximo creíble: 40 % (recorta originales inflados).
+  const maxOriginal = roundNicePrice(offer / 0.6);
+  if (original > maxOriginal) original = maxOriginal;
+
+  const discountPercentage = Math.round((1 - offer / original) * 100);
+  return { price: offer, originalPrice: original, discountPercentage };
 }
 
 // ─── Sintetización de títulos ────────────────────────────────────────────────

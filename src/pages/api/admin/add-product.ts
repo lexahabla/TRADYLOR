@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../lib/adminAuth';
 import { suggestCategory } from '../../../lib/categories';
 import {
+  buildRealisticPricing,
   enrichProductText,
   generateProductImage,
   hasImageCredentials,
@@ -140,6 +141,8 @@ export const POST: APIRoute = async ({ request }) => {
             description: body?.description,
             category: body?.category,
             url: body?.url,
+            price: body?.price ? Number(body.price) : undefined,
+            originalPrice: body?.originalPrice ? Number(body.originalPrice) : undefined,
           });
           // Overlay: la IA mejora lo local, pero NO borra datos con campos vacíos.
           const pick = (aiValue: any, localValue: any) => {
@@ -157,6 +160,7 @@ export const POST: APIRoute = async ({ request }) => {
             specs: { ...(localEnrichment.specs ?? {}), ...(aiEnrichment.specs ?? {}) },
             pros: pick(aiEnrichment.pros, localEnrichment.pros),
             cons: pick(aiEnrichment.cons, localEnrichment.cons),
+            pricing: aiEnrichment.pricing ?? localEnrichment.pricing,
           };
           textStatus = 'ok';
         } catch (error: any) {
@@ -243,6 +247,25 @@ export const POST: APIRoute = async ({ request }) => {
         base.specs = { ...(base.specs ?? {}), ...enrichment.specs };
       }
       if (!base.category && enrichment.category) base.category = enrichment.category;
+    }
+
+    // ------------------------------------------------------------------
+    // Precios: par oferta + original tachado con descuento realista (15–35 %)
+    //   - Sin oferta conocida → se usa el par generado (IA o local).
+    //   - Con oferta (manual o scrape) → se respeta y sólo se completa el
+    //     original tachado si falta o no es mayor que la oferta.
+    // ------------------------------------------------------------------
+    if (enrichment?.pricing) {
+      const { price: enrichedOffer, originalPrice: enrichedOriginal } = enrichment.pricing;
+      if (!base.price || base.price <= 0) {
+        base.price = enrichedOffer;
+        base.originalPrice = enrichedOriginal;
+      } else if (!base.originalPrice || base.originalPrice <= base.price) {
+        base.originalPrice =
+          enrichedOriginal > base.price
+            ? enrichedOriginal
+            : buildRealisticPricing(base.price).originalPrice;
+      }
     }
 
     if (!base.category) {

@@ -11,7 +11,7 @@
  *   2) Respaldo cuando la llamada a la IA falla (p. ej. sin créditos).
  */
 
-import { synthesizeTitleLocally, type EnrichedText } from './ai';
+import { buildRealisticPricing, synthesizeTitleLocally, type EnrichedText } from './ai';
 
 export interface LocalEnrichInput {
   title: string;
@@ -165,5 +165,15 @@ export function enrichProductLocally(input: LocalEnrichInput): EnrichedText {
     cons: scrapedCons.length ? scrapedCons : buildCons(input),
     verdict: buildVerdict(input),
     category: input.category,
+    // Par oferta/original creíble: respeta el precio de oferta conocido
+    // (scrape o escrito a mano) y genera el original con descuento 15–35 %.
+    pricing:
+      input.originalPrice && input.price && input.originalPrice > input.price
+        ? {
+            price: input.price,
+            originalPrice: input.originalPrice,
+            discountPercentage: Math.round((1 - input.price / input.originalPrice) * 100),
+          }
+        : buildRealisticPricing(input.price),
   };
 }
