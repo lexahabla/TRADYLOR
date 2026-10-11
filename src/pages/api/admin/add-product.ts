@@ -244,6 +244,7 @@ export const POST: APIRoute = async ({ request }) => {
       asin: resolvedAsin,
       pros: [],
       cons: [],
+      techSheet: body?.techSheet ? String(body.techSheet).trim() : undefined,
       badge: body?.badge ? String(body.badge).trim() : undefined,
       rating: body?.rating ? Number(body.rating) : 4.8,
       reviewsCount: body?.reviewsCount ? Number(body.reviewsCount) : 100,
@@ -260,6 +261,7 @@ export const POST: APIRoute = async ({ request }) => {
       if (enrichment.pros.length) base.pros = enrichment.pros;
       if (enrichment.cons.length) base.cons = enrichment.cons;
       if (enrichment.verdict) base.verdict = enrichment.verdict;
+      if (enrichment.techSheet?.trim() && !base.techSheet) base.techSheet = enrichment.techSheet;
       if (enrichment.specs && Object.keys(enrichment.specs).length) {
         base.specs = { ...(base.specs ?? {}), ...enrichment.specs };
       }

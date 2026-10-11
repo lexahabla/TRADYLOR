@@ -35,6 +35,8 @@ export interface EnrichedText {
   title?: string;
   description: string;
   specs: Record<string, string>;
+  /** Texto libre de ficha técnica (consulta en la página del producto). */
+  techSheet?: string;
   pros: string[];
   cons: string[];
   verdict: string;
@@ -120,10 +122,11 @@ const TEXT_SYSTEM_PROMPT = [
   '- cons: 2 a 4 puntos reales o de contexto (disponibilidad, garantía, accesorios), no relleno.',
   '- verdict: 1 o 2 frases neutras indicando para quién encaja el producto.',
   '- specs: entre 4 y 8 pares clave/valor cortos (p. ej. "Autonomía": "Hasta 30 horas"). Omite las que no conozcas.',
+  '- techSheet: párrafo de 3 a 6 líneas en español con datos objetivos de la ficha técnica (materiales, medidas, peso, conectividad, compatibilidades, garantía, contenido de la caja). Usa " · " para separar datos. No inventes cifras que no conozcas.',
   '- category: nombre corto de categoría (ej. "Audio & Sonido").',
   '- description: 2 o 3 frases en español de REDACCIÓN TÉCNICA CONCISA, orientadas a decisión de compra. Si se aporta una descripción previa, reescríbela mejorando claridad, precisión y fluidez (sin inventar datos ni superlativos).',
   '- pricing: objeto { currentPrice, originalPrice } en euros. Si en la entrada ya hay un precio de oferta, consérvalo EXACTAMENTE como currentPrice y genera un originalPrice superior con un descuento realista (entre 15% y 35%, nunca más del 40%). Si no hay ningún precio, propón un par realista para la categoría del producto. Formato: dos decimales terminando en ,99 o ,95. originalPrice SIEMPRE mayor que currentPrice. Descuentos absurdos (>50%) o mínimos (<10%) quedan prohibidos.',
-  'Responde SOLO con JSON válido con claves: title, description, specs, pros, cons, verdict, category, pricing.',
+  'Responde SOLO con JSON válido con claves: title, description, specs, techSheet, pros, cons, verdict, category, pricing.',
 ].join('\n');
 
 /**
@@ -279,6 +282,7 @@ function normalizeEnrichedText(raw: any): EnrichedText {
     title: String(raw?.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || undefined,
     description: String(raw?.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 600),
     specs,
+    techSheet: String(raw?.techSheet ?? '').replace(/\s+/g, ' ').trim().slice(0, 800) || undefined,
     pros: toStringArray(raw?.pros, 5),
     cons: toStringArray(raw?.cons, 4),
     verdict: String(raw?.verdict ?? '').replace(/\s+/g, ' ').trim().slice(0, 400),

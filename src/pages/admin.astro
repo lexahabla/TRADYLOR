@@ -282,6 +282,20 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </div>
           </div>
 
+          <div class="form-row">
+            <div class="form-group full-width">
+              <label for="prodTechSheet" class="field-label">
+                <span>Ficha Técnica</span>
+                <span class="label-hint">Se muestra en la página del producto (botón «Ver ficha técnica») · La IA puede generarlo</span>
+              </label>
+              <textarea
+                id="prodTechSheet"
+                rows="5"
+                placeholder="Datos técnicos objetivos: materiales, medidas, peso, conectividad, compatibilidades, garantía, contenido de la caja..."
+              ></textarea>
+            </div>
+          </div>
+
           <div class="form-row two-cols">
             <div class="form-group">
               <label for="prodPros" class="field-label">Puntos Fuertes (Pros) <span class="label-hint">(Uno por línea)</span></label>
@@ -870,6 +884,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const prodBadge = document.getElementById('prodBadge');
     const prodDescription = document.getElementById('prodDescription');
     const prodVerdict = document.getElementById('prodVerdict');
+    const prodTechSheet = document.getElementById('prodTechSheet');
     const prodPros = document.getElementById('prodPros');
     const prodCons = document.getElementById('prodCons');
     const btnResetForm = document.getElementById('btnResetForm');
@@ -1492,6 +1507,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           badge: prodBadge.value.trim() || undefined,
           description: prodDescription.value.trim(),
           verdict: prodVerdict.value.trim() || undefined,
+          techSheet: prodTechSheet.value.trim() || undefined,
           pros: prodPros.value
             .split('\n')
             .map((s) => s.trim())
@@ -1536,6 +1552,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             prodBadge.value = '';
             prodDescription.value = '';
             prodVerdict.value = '';
+            prodTechSheet.value = '';
             prodPros.value = '';
             prodCons.value = '';
             if (inputScrapeUrl) inputScrapeUrl.value = '';
@@ -1607,6 +1624,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             specs: scrapeExtras.specs || undefined,
             pros: prodPros.value.split('\n').map((s) => s.trim()).filter(Boolean),
             cons: prodCons.value.split('\n').map((s) => s.trim()).filter(Boolean),
+            techSheet: (prodTechSheet.value || '').trim() || undefined,
             // En auto solo texto (rápido): la imagen real del scraping se conserva.
             options: { text: true, image: !auto, save: false },
           }),
@@ -1640,6 +1658,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             if (enriched.title) prodTitle.value = enriched.title;
             if (enriched.description) prodDescription.value = enriched.description;
             if (enriched.verdict) prodVerdict.value = enriched.verdict;
+            if (enriched.techSheet) prodTechSheet.value = enriched.techSheet;
             if (Array.isArray(enriched.pros) && enriched.pros.length) prodPros.value = enriched.pros.join('\n');
             if (Array.isArray(enriched.cons) && enriched.cons.length) prodCons.value = enriched.cons.join('\n');
             if (enriched.category && !(prodCategory.value || '').trim()) prodCategory.value = enriched.category;
@@ -1755,6 +1774,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         prodBadge.value = '';
         prodDescription.value = '';
         prodVerdict.value = '';
+        prodTechSheet.value = '';
         prodPros.value = '';
         prodCons.value = '';
         if (inputScrapeUrl) inputScrapeUrl.value = '';
@@ -1909,6 +1929,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               prodBadge.value = badgeValue;
               prodDescription.value = product.description || '';
               prodVerdict.value = product.verdict || '';
+              prodTechSheet.value = product.techSheet || '';
               prodPros.value = Array.isArray(product.pros) ? product.pros.join('\n') : '';
               prodCons.value = Array.isArray(product.cons) ? product.cons.join('\n') : '';
 

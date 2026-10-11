@@ -138,6 +138,7 @@ export function upsertCatalogProduct(raw: N8nContractPayload): CatalogSaveResult
     rating: data.rating != null ? Number(data.rating) : undefined,
     reviewsCount: data.reviewsCount != null ? Number(data.reviewsCount) : undefined,
     verdict: data.verdict ? String(data.verdict).trim() : undefined,
+    techSheet: data.techSheet ? String(data.techSheet).trim() : existing?.techSheet,
     specs: data.specs ?? existing?.specs,
     fulfillmentProvider: data.fulfillmentProvider ?? existing?.fulfillmentProvider,
   };

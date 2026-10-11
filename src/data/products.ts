@@ -46,6 +46,8 @@ export interface Product {
   reviewsCount?: number;
   verdict?: string;
   specs?: Record<string, string>;
+  /** Texto de ficha técnica (consulta en la página del producto). */
+  techSheet?: string;
   fulfillmentProvider?: string;
 
   // ─── New structured fields (optional for backward compat) ──────────────────
@@ -158,6 +160,7 @@ export function toStructuredProduct(flat: Product): ProductSchema {
     gallery: flat.gallery,
     badge: flat.badge,
     verdict: flat.verdict,
+    techSheet: flat.techSheet,
   };
 }
 

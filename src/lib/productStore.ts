@@ -25,6 +25,8 @@ export interface Product {
   reviewsCount?: number;
   verdict?: string;
   specs?: Record<string, string>;
+  /** Texto de ficha técnica (consulta en la página del producto). */
+  techSheet?: string;
   fulfillmentProvider?: string;
 }
 

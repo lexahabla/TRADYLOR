@@ -161,6 +161,13 @@ export function enrichProductLocally(input: LocalEnrichInput): EnrichedText {
     title: synthesizeTitleLocally(input.title) || input.title,
     description: buildDescription(input),
     specs: input.specs && Object.keys(input.specs).length ? input.specs : {},
+    techSheet:
+      input.specs && Object.keys(input.specs).length
+        ? Object.entries(input.specs)
+            .slice(0, 8)
+            .map(([label, value]) => `${label}: ${value}`)
+            .join(' · ')
+        : undefined,
     pros: scrapedPros.length ? scrapedPros : buildPros(input),
     cons: scrapedCons.length ? scrapedCons : buildCons(input),
     verdict: buildVerdict(input),

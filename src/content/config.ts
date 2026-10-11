@@ -103,6 +103,8 @@ const productSchema = z.object({
   /** Galería completa del producto (vistas adicionales para el carrusel). */
   gallery: z.array(z.string()).optional(),
   badge: z.string().optional(),
+  /** Texto de ficha técnica (consulta en la página del producto). */
+  techSheet: z.string().optional(),
   verdict: z.string().optional(),
 
   // ─── Compra delegada (Delegated Checkout) ──────────────────────────────────
