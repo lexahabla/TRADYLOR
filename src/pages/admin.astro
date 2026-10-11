@@ -3121,24 +3121,27 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     display: flex;
     align-items: center;
     justify-content: center;
-    /* Mismo encuadre que la ProductCard real (.image-wrapper) */
-    padding: 5%;
+    padding: 6%;
   }
 
+  /* La imagen se escala a su tamaño intrínseco dentro del contenedor:
+     nunca se recorta ni se deforma y se ve COMPLETA en cualquier proporción. */
   .preview-image-wrapper img {
-    width: 100%;
-    height: 100%;
+    width: auto;
+    height: auto;
     max-width: 100%;
     max-height: 100%;
     display: block;
     margin: auto;
     object-fit: contain;
     object-position: center;
-    /* Mismo padding que .product-image de la tarjeta */
-    padding: 1rem;
     border-radius: 0.75rem;
-    background: rgba(248, 250, 252, 0.5);
     transition: transform 0.3s ease;
+  }
+
+  /* El atributo hidden del <img> debe ganar al display:block anterior. */
+  .preview-image-wrapper img[hidden] {
+    display: none !important;
   }
 
   .preview-empty-image {
