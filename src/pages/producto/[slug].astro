@@ -941,8 +941,9 @@ const productSchema = {
   }
   /* Vídeo del carrusel: sustituye a la imagen principal en su contenedor.
      El wrap llena el hueco de la imagen (mismo padding 5%) y el marco
-     mantiene la proporción 16:9 del vídeo, centrado y responsive. */
-  .gallery-video-wrap {
+     mantiene la proporción 16:9 del vídeo, centrado y responsive.
+     :global porque el marco y el <video>/<iframe> los crea el JS (sin data-astro-cid). */
+  :global(.gallery-video-wrap) {
     position: absolute;
     inset: 0;
     z-index: 1;
@@ -952,7 +953,7 @@ const productSchema = {
     justify-content: center;
     padding: 5%;
   }
-  .gallery-video-frame {
+  :global(.gallery-video-frame) {
     position: relative;
     width: 100%;
     max-width: 100%;
@@ -963,14 +964,14 @@ const productSchema = {
     overflow: hidden;
     box-shadow: 0 8px 28px rgba(15, 23, 42, 0.25);
   }
-  .gallery-video-frame video {
+  :global(.gallery-video-frame video) {
     display: block;
     width: 100%;
     height: 100%;
     object-fit: contain;
     background: #000;
   }
-  .gallery-video-frame iframe {
+  :global(.gallery-video-frame iframe) {
     position: absolute;
     inset: 0;
     width: 100%;

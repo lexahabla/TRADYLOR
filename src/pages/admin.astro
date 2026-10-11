@@ -3436,8 +3436,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     background: rgba(15, 23, 42, 0.55);
   }
 
-  /* Fotograma/mp4 mostrado como miniatura en la vista previa del carrusel. */
-  .preview-video-thumb {
+  /* Fotograma/mp4 mostrado como miniatura en la vista previa del carrusel.
+     :global porque el <video> lo crea el JS dinámicamente (sin data-astro-cid). */
+  :global(.preview-video-thumb) {
     position: absolute;
     inset: 0;
     z-index: 0;
@@ -3505,8 +3506,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
   }
 
-  .video-modal-body video,
-  .video-modal-body iframe {
+  /* Los hijos del modal los crea el JS (sin data-astro-cid): :global obliga.
+     Sin esto el <video>/<iframe> salía a su tamaño nativo, más grande que la ventana. */
+  :global(.video-modal-body video),
+  :global(.video-modal-body iframe) {
     position: absolute;
     inset: 0;
     width: 100%;
