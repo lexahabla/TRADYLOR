@@ -168,6 +168,13 @@ const productSchema = {
             height="450"
             id="mainProductImg"
           />
+          {/* Fotograma/mp4 cuando el elemento activo del carrusel es un vídeo */}
+          <div id="mainVideoWrap" class="main-video-wrap" hidden></div>
+          {/* Overlay play: al clicar se abre el vídeo en el modal */}
+          <button type="button" id="mainVideoPlay" class="main-video-play" hidden aria-label="Reproducir vídeo del producto">
+            <span class="main-play-icon" aria-hidden="true">▶</span>
+            <span class="main-play-label">Ver vídeo</span>
+          </button>
           {hasGalleryCarousel && (
             <>
               <button type="button" id="galleryPrev" class="gallery-nav gallery-nav-prev" aria-label="Imagen anterior">‹</button>
@@ -718,11 +725,14 @@ const productSchema = {
 
 <script>
   // Galería de imágenes/vídeos: miniaturas + flechas laterales (carrusel).
-  // Los vídeos se reproducen en un modal centrado (lightbox), como en el admin.
-  import { isVideoUrl, videoEmbedUrl } from '../../lib/media';
+  // Un vídeo muestra su miniatura con botón play en la imagen principal;
+  // al clicar se abre en el modal lightbox (videoModalBody).
+  import { isVideoUrl, videoEmbedUrl, videoThumbUrl } from '../../lib/media';
 
   document.addEventListener('DOMContentLoaded', () => {
     const mainImg = document.getElementById('mainProductImg');
+    const mainVideoWrap = document.getElementById('mainVideoWrap');
+    const mainVideoPlay = document.getElementById('mainVideoPlay');
     const thumbs = document.getElementById('productThumbs');
     const prevBtn = document.getElementById('galleryPrev');
     const nextBtn = document.getElementById('galleryNext');
@@ -736,7 +746,7 @@ const productSchema = {
     let index = 0;
     let lastImageIndex = 0;
 
-    // ── Modal de vídeo (mismo comportamiento que el admin) ──
+    // ── Modal de vídeo (lightbox) ──
     function openVideoModal(url) {
       if (!videoModal || !videoModalBody || !url) return;
       videoModalBody.innerHTML = '';
@@ -766,9 +776,7 @@ const productSchema = {
       if (videoModalBody) videoModalBody.innerHTML = '';
       document.body.style.overflow = '';
       // Al cerrar, si el carrusel quedó sobre un vídeo, restaura la última imagen.
-      if (gallery[index] && isVideoUrl(gallery[index]) && lastImageIndex !== index) {
-        show(lastImageIndex, { openVideos: false });
-      }
+      if (gallery[index] && isVideoUrl(gallery[index])) show(lastImageIndex);
     }
 
     if (videoModal) {
@@ -780,20 +788,66 @@ const productSchema = {
       });
     }
 
-    function show(i, opts) {
+    // ── Zona principal: miniatura del vídeo + overlay play ──
+    function clearMainVideo() {
+      if (mainVideoWrap) {
+        mainVideoWrap.innerHTML = '';
+        mainVideoWrap.hidden = true;
+      }
+      if (mainVideoPlay) mainVideoPlay.hidden = true;
+    }
+
+    function showMainVideo(item) {
+      const still = videoThumbUrl(item);
+      if (still) {
+        // Plataforma (YouTube/Vimeo/DM): miniatura oficial en la imagen principal.
+        if (mainVideoWrap) {
+          mainVideoWrap.innerHTML = '';
+          mainVideoWrap.hidden = true;
+        }
+        mainImg.hidden = false;
+        mainImg.src = still;
+      } else {
+        // Archivo directo (mp4/webm): primer fotograma del propio vídeo.
+        mainImg.hidden = true;
+        if (mainVideoWrap) {
+          mainVideoWrap.innerHTML = '';
+          const v = document.createElement('video');
+          v.src = item;
+          v.muted = true;
+          v.preload = 'metadata';
+          v.playsInline = true;
+          v.setAttribute('aria-hidden', 'true');
+          mainVideoWrap.appendChild(v);
+          mainVideoWrap.hidden = false;
+        }
+      }
+      if (mainVideoPlay) mainVideoPlay.hidden = false;
+    }
+
+    function show(i) {
       if (!gallery.length) return;
-      const openVideos = !opts || opts.openVideos !== false;
       index = (i + gallery.length) % gallery.length;
       const item = gallery[index];
       if (isVideoUrl(item)) {
-        // Vídeo: se abre en el modal; la imagen principal no cambia.
-        if (openVideos) openVideoModal(item);
+        // Vídeo: se muestra su miniatura con el botón play (el modal se abre al clicar).
+        showMainVideo(item);
       } else {
+        clearMainVideo();
+        mainImg.hidden = false;
         lastImageIndex = index;
         mainImg.src = item;
       }
       thumbBtns.forEach((t, ti) => t.classList.toggle('is-active', ti === index));
       if (counter) counter.textContent = `${index + 1} / ${gallery.length}`;
+    }
+
+    // Clic en la zona principal (imagen del vídeo) → abrir modal.
+    if (mainVideoPlay) {
+      mainVideoPlay.addEventListener('click', () => {
+        const item = gallery[index];
+        if (item && isVideoUrl(item)) openVideoModal(item);
+      });
     }
 
     if (thumbs) {
@@ -892,6 +946,74 @@ const productSchema = {
   }
   .gallery-wrapper:hover .main-product-image {
     transform: scale(1.02);
+  }
+  /* Fotograma/mp4 del vídeo activo en la zona principal (sin letterboxing). */
+  .main-video-wrap {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0f1626;
+  }
+  :global(.main-video-wrap video) {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+  }
+  /* Overlay play sobre la miniatura del vídeo: clic → modal lightbox. */
+  .main-video-play {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    border: none;
+    cursor: pointer;
+    background: rgba(15, 23, 42, 0.3);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8);
+    transition: background 0.15s;
+  }
+  .main-video-play:hover {
+    background: rgba(15, 23, 42, 0.5);
+  }
+  .main-play-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: rgba(15, 23, 42, 0.65);
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    font-size: 1.6rem;
+    line-height: 1;
+    padding-left: 4px;
+    box-sizing: border-box;
+    transition: transform 0.15s, background 0.15s;
+  }
+  .main-video-play:hover .main-play-icon {
+    transform: scale(1.08);
+    background: rgba(15, 23, 42, 0.85);
+  }
+  @media (max-width: 600px) {
+    .main-play-icon {
+      width: 56px;
+      height: 56px;
+      font-size: 1.3rem;
+    }
+    .main-video-play {
+      font-size: 0.82rem;
+    }
   }
   .product-thumbs {
     display: flex;
