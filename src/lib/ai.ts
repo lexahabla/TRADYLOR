@@ -441,12 +441,13 @@ export async function synthesizeProductTitle(input: {
 }
 
 /**
- * Prompt de fotografía comercial (fondo #F8F9FA, encuadre con margen de seguridad
- * del 15% y sin recorte de bordes) para que la imagen encaje en los contenedores
- * aspect-square con object-contain de la interfaz.
+ * Prompt de fotografía comercial: fondo de estudio opaco #F8F9FA a sangre
+ * (sin transparencia) y margen de seguridad del 15% para que la imagen encaje
+ * y se vea completa en los contenedores aspect-square con object-contain
+ * (vista previa del admin, product-cards y carrusel de la ficha).
  */
 export function buildProductImagePrompt(title: string): string {
-  return `High-end commercial product photography of ${title}. Centered studio shot with professional lighting, crisp details, and soft realistic shadows underneath. Studio light gray or off-white clean minimalist background (#F8F9FA). Perfect composition: centered product with 15% safety margin padding on all sides (no edge cropping). Ultra-sharp focus, 8k resolution, photorealistic, professional e-commerce product asset.`;
+  return `High-end commercial product photography of ${title}. Centered studio shot with professional lighting, crisp details, and soft realistic shadows underneath. Seamless solid light gray (#F8F9FA) background filling the ENTIRE frame edge-to-edge: fully opaque, no transparency, no checkerboard, no vignette, no colored backdrop, no props. Perfect composition: centered product with 15% safety margin padding on all sides (no edge cropping). Ultra-sharp focus, 8k resolution, photorealistic, professional e-commerce product asset.`;
 }
 
 function slugifyFilename(text: string): string {

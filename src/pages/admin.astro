@@ -1359,10 +1359,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             if (enriched.category && !(prodCategory.value || '').trim()) prodCategory.value = enriched.category;
           }
           if (flags.image === 'ok' && enriched.image) {
-            // La imagen generada se AÑADE a la galería; solo se hace principal
-            // si antes no había ninguna (así no se pierde la foto real del scrape).
+            // La imagen generada con IA lleva fondo de estudio opaco (#F8F9FA),
+            // igual que la ficha y las cards: siempre encaja en el carrusel.
             if (!scrapedGallery.includes(enriched.image)) scrapedGallery.unshift(enriched.image);
-            if (!(prodImage.value || '').trim()) setProductField(prodImage, enriched.image);
+            const currentMain = (prodImage.value || '').trim();
+            const mainIsLocal = /^\/images\//.test(currentMain);
+            // Se hace principal si no había imagen o si la actual es externa
+            // (fondo desconocido); la original se conserva en la galería.
+            if (!currentMain || !mainIsLocal) setProductField(prodImage, enriched.image);
             renderGallery();
           }
 
@@ -1371,7 +1375,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           const via = flags.text === 'ok' ? 'IA' : 'local (sin IA)';
           const summary = auto
             ? `Título + ficha generados ${via} · Imagen: conservada (${flags.image === 'ok' ? 'IA añadida a la galería' : 'scraping'})`
-            : `Título + texto: ${via} · Imagen: ${flags.image === 'ok' ? 'generada y añadida a la galería' : flags.image}`;
+            : `Título + texto: ${via} · Imagen: ${flags.image === 'ok' ? 'generada con fondo de estudio (IA)' : flags.image}`;
           const warnings =
             Array.isArray(flags.warnings) && flags.warnings.length
               ? ` Avisos: ${flags.warnings.join(' | ')}`
@@ -3116,7 +3120,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     width: 100%;
     aspect-ratio: 1 / 1;
     box-sizing: border-box;
-    background: linear-gradient(160deg, #f8fafc, #eef2f7);
+    /* Mismo fondo que la imagen de la ficha real y la ProductCard (#f8fafc) */
+    background: #f8fafc;
     overflow: hidden;
     display: flex;
     align-items: center;
@@ -3136,6 +3141,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     object-fit: contain;
     object-position: center;
     border-radius: 0.75rem;
+    background: rgba(248, 250, 252, 0.5);
     transition: transform 0.3s ease;
   }
 
@@ -3153,7 +3159,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     justify-content: center;
     gap: 0.75rem;
     color: #94a3b8;
-    background: linear-gradient(160deg, #f8fafc, #eef2f7);
+    background: #f8fafc;
     text-align: center;
     font-size: 0.75rem;
     letter-spacing: 0.02em;
