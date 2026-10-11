@@ -203,6 +203,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </div>
           </div>
 
+          <div class="form-row">
+            <div class="form-group full-width">
+              <label for="prodBuyNowUrl" class="field-label">
+                <span>Enlace de Compra Directa (Buy Now)</span>
+                <span class="label-hint">Opcional: URL de pago inmediato (p. ej. checkout de Amazon). Tiene prioridad sobre el enlace de afiliado en «Comprar ya».</span>
+              </label>
+              <input type="url" id="prodBuyNowUrl" placeholder="https://www.amazon.es/checkout/... o https://www.amazon.es/dp/ASIN" />
+            </div>
+          </div>
+
           <div class="form-row two-cols">
             <div class="form-group">
               <label for="prodImage" class="field-label">
@@ -778,6 +788,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const prodCategory = document.getElementById('prodCategory');
     const prodMerchant = document.getElementById('prodMerchant');
     const prodAffiliateUrl = document.getElementById('prodAffiliateUrl');
+    const prodBuyNowUrl = document.getElementById('prodBuyNowUrl');
     const prodImage = document.getElementById('prodImage');
     const prodBadge = document.getElementById('prodBadge');
     const prodDescription = document.getElementById('prodDescription');
@@ -1398,6 +1409,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           category: prodCategory.value.trim() || 'Tecnología',
           merchant: prodMerchant.value || 'Amazon',
           affiliateUrl: prodAffiliateUrl.value.trim(),
+          buyNowUrl: prodBuyNowUrl.value.trim() || undefined,
           image: mainImage,
           gallery: galleryToSend.length ? galleryToSend : undefined,
           badge: prodBadge.value.trim() || undefined,
@@ -1442,6 +1454,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             prodCategory.value = '';
             prodMerchant.value = '';
             prodAffiliateUrl.value = '';
+            prodBuyNowUrl.value = '';
             prodImage.value = '';
             prodBadge.value = '';
             prodDescription.value = '';
@@ -1660,6 +1673,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         prodCategory.value = '';
         prodMerchant.value = '';
         prodAffiliateUrl.value = '';
+        prodBuyNowUrl.value = '';
         prodImage.value = '';
         prodBadge.value = '';
         prodDescription.value = '';
@@ -1806,6 +1820,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               prodCategory.value = product.category || '';
               prodMerchant.value = product.merchant || 'Amazon';
               prodAffiliateUrl.value = product.affiliateUrl || '';
+              prodBuyNowUrl.value = product.buyNowUrl || '';
               prodImage.value = product.image || '';
               prodBadge.value = product.badge || '';
               prodDescription.value = product.description || '';
