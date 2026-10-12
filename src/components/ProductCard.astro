@@ -45,8 +45,6 @@ export interface Props {
   badge?: string;
   /** Puntuación opcional del modo plano (p. ej. 4.8). */
   rating?: number | string;
-  /** Id de producto para el botón "Guardar en Mi Radar" (API / LocalStorage). */
-  productId?: string;
 }
 
 const {
@@ -60,7 +58,6 @@ const {
   badge,
   amazonInput,
   rating,
-  productId,
 } = Astro.props;
 
 // Modo híbrido: amazonInput (URL de Amazon o ASIN) habilita la salida directa.
@@ -90,8 +87,12 @@ const flatRating =
     ? String(rating)
     : '';
 
-// Id para "Guardar en Mi Radar": catálogo → product.id; modo plano → productId.
-const radarProductId = product?.id ?? productId;
+// Galería del catálogo: miniaturas bajo la imagen principal en móvil
+// (se excluye la propia principal y se limitan a 3). Sin galería no se pinta.
+const galleryThumbs = (product?.gallery ?? [])
+  .map((src) => String(src ?? '').trim())
+  .filter((src) => src && src !== (product?.image ?? '').trim())
+  .slice(0, 3);
 
 const compactText = (text: string, maxLength: number) => {
   const normalized = text.replace(/\s+/g, ' ').trim();
@@ -177,33 +178,22 @@ const formatCurrency = (amount: number) => {
         </div>
       )}
       {price && <div class="aff-price">{price}</div>}
-      <div class="aff-actions">
-        <a
-          href={exitHref}
-          class="aff-cta-btn exit-cta"
-          target="_blank"
-          rel="nofollow sponsored noopener noreferrer"
-          data-network={network}
-          data-asin={extractedAsin || asin || undefined}
-          data-title={directTitle}
-        >
-          {ctaLabel}
-          <svg class="external-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-            <polyline points="15 3 21 3 21 9" />
-            <line x1="10" y1="14" x2="21" y2="3" />
-          </svg>
-        </a>
-        <button
-          type="button"
-          class="save-to-radar-btn"
-          data-product-id={radarProductId}
-          title="Guardar en Mi Radar"
-          aria-label="Guardar en Mi Radar"
-        >
-          🔖
-        </button>
-      </div>
+      <a
+        href={exitHref}
+        class="aff-cta-btn exit-cta"
+        target="_blank"
+        rel="nofollow sponsored noopener noreferrer"
+        data-network={network}
+        data-asin={extractedAsin || asin || undefined}
+        data-title={directTitle}
+      >
+        {ctaLabel}
+        <svg class="external-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          <polyline points="15 3 21 3 21 9" />
+          <line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
+      </a>
     </div>
   </article>
 ) : (
@@ -212,6 +202,8 @@ const formatCurrency = (amount: number) => {
        Tailwind: contenedor cuadrado con fondo neutro (#F8F9FA) y la imagen
        contenida (object-contain) para que las fotos generadas con IA no se
        deformen ni se recorten en los bordes. -->
+  <!-- Columna de imagen: principal + miniaturas de galería (móvil). -->
+  <div class="image-col">
   <div class="image-wrapper">
     <a
       href={`/producto/${product.slug ?? product.id}`}
@@ -233,6 +225,14 @@ const formatCurrency = (amount: number) => {
         -{discountPercent}%
       </span>
     )}
+  </div>
+  {galleryThumbs.length > 0 && (
+    <div class="image-thumbs">
+      {galleryThumbs.map((src) => (
+        <img class="image-thumb" src={src} alt="" loading="lazy" width="80" height="80" aria-hidden="true" />
+      ))}
+    </div>
+  )}
   </div>
 
   <!-- Columna de información: a la derecha en móvil (fila horizontal) y
@@ -323,38 +323,26 @@ const formatCurrency = (amount: number) => {
       </a>
     </div>
 
-    <!-- Salida directa (cesta de Amazon con tag) + guardar en Mi Radar -->
-    <div class="exit-row">
-      {catalogDirectExitHref && (product.asin || product.buyNowUrl) && (
-        <a
-          href={catalogDirectExitHref}
-          class="quick-buy-cta exit-cta"
-          target="_blank"
-          rel="nofollow sponsored noopener noreferrer"
-          data-network="amazon"
-          data-asin={product.asin || undefined}
-          data-title={product.title}
-          aria-label={`Comprar ahora en ${product.merchant} (salida directa)`}
-        >
-          Comprar ahora en {product.merchant}
-          <svg class="external-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-            <polyline points="15 3 21 3 21 9" />
-            <line x1="10" y1="14" x2="21" y2="3" />
-          </svg>
-        </a>
-      )}
-
-      <button
-        type="button"
-        class="save-to-radar-btn"
-        data-product-id={radarProductId}
-        title="Guardar en Mi Radar"
-        aria-label="Guardar en Mi Radar"
+    <!-- Salida directa: enlace de compra directa (cesta de Amazon con tag → tramitación). -->
+    {catalogDirectExitHref && (product.asin || product.buyNowUrl) && (
+      <a
+        href={catalogDirectExitHref}
+        class="quick-buy-cta exit-cta"
+        target="_blank"
+        rel="nofollow sponsored noopener noreferrer"
+        data-network="amazon"
+        data-asin={product.asin || undefined}
+        data-title={product.title}
+        aria-label={`Comprar ahora en ${product.merchant} (salida directa)`}
       >
-        🔖
-      </button>
-    </div>
+        Comprar ahora en {product.merchant}
+        <svg class="external-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+          <polyline points="15 3 21 3 21 9" />
+          <line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
+      </a>
+    )}
 
     <!-- Microcopia de confianza -->
     <div class="trust-guarantee">
@@ -396,13 +384,23 @@ const formatCurrency = (amount: number) => {
   }
 
   /* ============ IMAGE SECTION ============
-     Móvil: cuadrado fijo 110×110 a la izquierda de la fila.
-     Escritorio (≥768px): ancho completo con aspect-ratio 1/1. */
+     Móvil: columna izquierda fija (110px) con la imagen principal y, debajo,
+     miniaturas de la galería más pequeñas que ocupan todo el ancho de la
+     columna. Escritorio (≥768px): imagen a ancho completo, sin miniaturas. */
+  .image-col {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 110px;
+    flex: 0 0 110px;
+    min-width: 0;
+  }
+
   .image-wrapper {
     position: relative;
-    width: 110px;
+    width: 100%;
     height: 110px;
-    flex: 0 0 110px;
+    flex: 0 0 auto;
     overflow: hidden;
     background: #f8fafc;
     display: flex;
@@ -453,6 +451,26 @@ const formatCurrency = (amount: number) => {
   @keyframes slideDown {
     from { opacity: 0; transform: translateY(-8px); }
     to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Miniaturas de galería (sólo móvil): fila que ocupa todo el ancho de la
+     columna de imagen, con thumbs claramente más pequeños que la principal. */
+  .image-thumbs {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: 3px;
+    width: 100%;
+  }
+
+  .image-thumb {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    object-fit: contain;
+    padding: 2px;
+    background: #f8fafc;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
   }
 
   /* ============ CONTENT SECTION ============ */
@@ -813,52 +831,6 @@ const formatCurrency = (amount: number) => {
     transform: translate(2px, -2px);
   }
 
-  /* Fila del pie: CTA de salida + botón "Guardar en Mi Radar". */
-  .exit-row {
-    display: flex;
-    align-items: stretch;
-    gap: 0.5rem;
-  }
-
-  .exit-row .quick-buy-cta {
-    flex: 1 1 auto;
-    width: auto;
-    min-width: 0;
-  }
-
-  /* ============ GUARDAR EN MI RADAR ============
-     Marcador secundario junto al CTA principal; data-product-id conecta
-     con la API / LocalStorage de listas de usuario (pendiente de backend). */
-  .save-to-radar-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    min-width: 44px;
-    min-height: 44px;
-    padding: 0.5rem;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 12px;
-    color: rgba(255, 255, 255, 0.75);
-    font-size: 1.05rem;
-    line-height: 1;
-    font-family: inherit;
-    cursor: pointer;
-    transition: all 0.25s ease;
-  }
-
-  .save-to-radar-btn:hover {
-    background: rgba(251, 191, 36, 0.12);
-    border-color: rgba(251, 191, 36, 0.45);
-    color: #fbbf24;
-    transform: translateY(-1px);
-  }
-
-  .save-to-radar-btn:active {
-    transform: translateY(0);
-  }
-
   /* ============ RESPONSIVE (tarjeta de catálogo) ============
      Escritorio/tablet (≥768px): disposición vertical clásica + rejilla. */
   @media (min-width: 768px) {
@@ -866,6 +838,15 @@ const formatCurrency = (amount: number) => {
       flex-direction: column;
       align-items: stretch;
       gap: 0;
+    }
+
+    .image-col {
+      width: 100%;
+      flex: 0 0 auto;
+    }
+
+    .image-thumbs {
+      display: none;
     }
 
     .image-wrapper {
@@ -966,10 +947,13 @@ const formatCurrency = (amount: number) => {
       gap: 0.6rem;
     }
 
-    .image-wrapper {
+    .image-col {
       width: 96px;
-      height: 96px;
       flex: 0 0 96px;
+    }
+
+    .image-wrapper {
+      height: 96px;
       border-radius: 10px;
     }
 
@@ -1116,26 +1100,17 @@ const formatCurrency = (amount: number) => {
     background-clip: text;
   }
 
-  /* Fila de acciones: CTA principal (flex) + "Guardar en Mi Radar". */
-  .aff-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-top: auto;
-    padding-top: 0.35rem;
-  }
-
   /* CTA de salida directa: obligatoriamente .exit-cta (tracking en Layout).
      Botón principal: ámbar destacado y altura táctil ≥44px (46px). */
   .aff-cta-btn {
     display: flex;
-    flex: 1 1 auto;
     align-items: center;
     justify-content: center;
     gap: 0.55rem;
     width: 100%;
     min-width: 0;
     min-height: 46px;
+    margin-top: auto;
     padding: 0.7rem 1rem;
     background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     color: #ffffff;
@@ -1207,10 +1182,6 @@ const formatCurrency = (amount: number) => {
 
     .aff-price {
       font-size: 1.3rem;
-    }
-
-    .aff-actions {
-      padding-top: 0;
     }
 
     .aff-cta-btn {
