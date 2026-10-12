@@ -576,7 +576,9 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     }
   }
 
-  @media (max-width: 640px) {
+  /* <768px la ProductCard pasa a fila horizontal (estilo lista Amazon):
+     una columna para que la tarjeta disponga de ancho suficiente. */
+  @media (max-width: 767px) {
     .products-grid {
       grid-template-columns: 1fr;
       gap: 1.5rem;
