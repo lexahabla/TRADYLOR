@@ -335,16 +335,17 @@ const formatCurrency = (amount: number) => {
         </svg>
       </a>
     )}
-
-    <!-- Microcopia de confianza -->
-    <div class="trust-guarantee">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-      </svg>
-      <span>Pago y envío gestionados por el distribuidor oficial</span>
-    </div>
   </div>
+  </div>
+
+  <!-- Microcopia de confianza: a ancho completo de la tarjeta (fuera de la
+       columna de imagen, en la fila inferior en móvil). -->
+  <div class="trust-guarantee">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+    </svg>
+    <span>Pago y envío gestionados por el distribuidor oficial</span>
   </div>
 </article>
 )}
@@ -357,6 +358,7 @@ const formatCurrency = (amount: number) => {
     position: relative;
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: flex-start;
     gap: 0.75rem;
     height: 100%;
@@ -376,22 +378,22 @@ const formatCurrency = (amount: number) => {
   }
 
   /* ============ IMAGE SECTION ============
-     Móvil: columna izquierda fija (110px) con la imagen principal y, debajo,
-     miniaturas de la galería más pequeñas que ocupan todo el ancho de la
+     Móvil: columna izquierda fija (120px) con la imagen principal y, debajo,
+     miniaturas de la galería apiladas (una por fila) a todo el ancho de la
      columna. Escritorio (≥768px): imagen a ancho completo, sin miniaturas. */
   .image-col {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    width: 110px;
-    flex: 0 0 110px;
+    width: 120px;
+    flex: 0 0 120px;
     min-width: 0;
   }
 
   .image-wrapper {
     position: relative;
     width: 100%;
-    height: 110px;
+    height: 120px;
     flex: 0 0 auto;
     overflow: hidden;
     background: #f8fafc;
@@ -445,11 +447,12 @@ const formatCurrency = (amount: number) => {
     to { opacity: 1; transform: translateY(0); }
   }
 
-  /* Miniaturas de galería (sólo móvil): fila que ocupa todo el ancho de la
-     columna de imagen, con thumbs claramente más pequeños que la principal. */
+  /* Miniaturas de galería (sólo móvil): apiladas en vertical, una por fila,
+     a todo el ancho de la columna y más bajas que la imagen principal.
+     Sólo la imagen principal enlaza a la ficha; las miniaturas son décor. */
   .image-thumbs {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    display: flex;
+    flex-direction: column;
     gap: 3px;
     width: 100%;
   }
@@ -457,7 +460,7 @@ const formatCurrency = (amount: number) => {
   .image-thumb {
     display: block;
     width: 100%;
-    aspect-ratio: 1 / 1;
+    height: 48px;
     object-fit: contain;
     padding: 2px;
     background: #f8fafc;
@@ -743,16 +746,25 @@ const formatCurrency = (amount: number) => {
     min-width: 0;
   }
 
-  /* ============ TRUST GUARANTEE ============ */
+  /* ============ TRUST GUARANTEE ============
+     Ocupa todo el ancho de la tarjeta: en móvil se coloca en una segunda
+     fila (flex-wrap + flex-basis 100%) bajo la imagen y la columna de datos. */
   .trust-guarantee {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.5rem;
+    width: 100%;
     font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.5);
     padding-top: 0.5rem;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  @media (max-width: 767px) {
+    .trust-guarantee {
+      flex: 0 0 100%;
+    }
   }
 
   .trust-guarantee svg {
@@ -911,13 +923,17 @@ const formatCurrency = (amount: number) => {
     }
 
     .image-col {
-      width: 96px;
-      flex: 0 0 96px;
+      width: 104px;
+      flex: 0 0 104px;
     }
 
     .image-wrapper {
-      height: 96px;
+      height: 104px;
       border-radius: 10px;
+    }
+
+    .image-thumb {
+      height: 44px;
     }
 
     .product-image {
@@ -931,9 +947,9 @@ const formatCurrency = (amount: number) => {
       padding: 0.15rem 0.4rem;
     }
 
+    /* Precio de oferta y precio original: siempre en la misma fila. */
     .price-numbers {
-      flex-direction: column;
-      gap: 0.25rem;
+      gap: 0.5rem;
     }
 
     .buy-actions .affiliate-cta-btn {
