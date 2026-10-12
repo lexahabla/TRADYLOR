@@ -61,7 +61,7 @@ export const prerender = false;
       </div>
       <div class="radar-profile-actions">
         <span class="radar-sync-badge" data-radar-sync>Sincronizado ✓</span>
-        <button type="button" class="radar-btn radar-btn-ghost" data-radar-logout>Cerrar sesión</button>
+        <button type="button" class="radar-btn radar-btn-ghost" data-radar-exit>Salir</button>
       </div>
     </section>
 
@@ -753,7 +753,7 @@ export const prerender = false;
 </style>
 
 <script>
-  import { getSession, logout, onAuthChange } from '../utils/auth';
+  import { getSession, onAuthChange } from '../utils/auth';
   import {
     createProject,
     deleteProject,
@@ -778,7 +778,7 @@ export const prerender = false;
     avatar: $('[data-radar-avatar]'),
     name: $('[data-radar-name]'),
     email: $('[data-radar-email]'),
-    logout: $('[data-radar-logout]'),
+    exitBtn: $('[data-radar-exit]'),
     returnSection: $('[data-radar-return]'),
     exitCards: $('[data-radar-exit-cards]'),
     tabs: $('[data-radar-tabs]'),
@@ -972,10 +972,8 @@ export const prerender = false;
     renderExits();
   });
 
-  els.logout?.addEventListener('click', async () => {
-    await logout();
-    renderAll();
-    updateStatus(null);
+  els.exitBtn?.addEventListener('click', () => {
+    window.location.href = 'https://tradylor.com';
   });
 
   /* ------------------------------------------------------------- sesión */
