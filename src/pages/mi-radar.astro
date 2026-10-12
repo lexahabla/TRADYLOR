@@ -3,9 +3,8 @@
  * ==============================================================================
  * TRADYLOR — MI RADAR (panel personal del usuario)
  * ==============================================================================
- * Página pública: funciona en modo anónimo (LocalStorage) y con sesión
- * (nube). Secciones:
- *   1. Barra superior: perfil + estado de sincronización (o banner anónimo).
+ * Página privada: requiere sesión (si no, redirige a tradylor.com). Secciones:
+ *   1. Barra superior: perfil + estado de sincronización.
  *   2. Return Flow: tarjeta "¿Llegaste a comprar…?" si hay salida pendiente
  *      de más de 24h.
  *   3. Gestor de carpetas/listas con pestañas + sumatorio estimado (€).
@@ -15,13 +14,21 @@
  */
 
 import Layout from '../layouts/Layout.astro';
+import { getRadarSessionUser } from '../lib/radarAuth';
 
 export const prerender = false;
+
+// Página privada: sin sesión válida, redirección inmediata al inicio
+// (tradylor.com en producción) en el propio servidor, sin pintar la página.
+const sessionUser = getRadarSessionUser(Astro.request);
+if (!sessionUser) {
+  return Astro.redirect(new URL('/', Astro.request.url).href);
+}
 ---
 
 <Layout
   title="Mi Radar | Tradylor"
-  description="Tu panel privado: productos guardados, proyectos de compra y recordatorios de salida. Funciona sin cuenta y se sincroniza al iniciar sesión."
+  description="Tu panel privado: productos guardados, proyectos de compra y recordatorios de salida, sincronizados con tu cuenta."
   noindex
 >
   <div class="radar-page container">
@@ -32,23 +39,7 @@ export const prerender = false;
         <h1 class="radar-title">Mi Radar</h1>
         <p class="radar-subtitle">Guarda productos, organiza proyectos de compra y retoma lo pendiente desde cualquier dispositivo.</p>
       </div>
-      <div class="radar-header-status" data-radar-status>
-        <span class="radar-status-dot" aria-hidden="true"></span>
-        <span data-radar-status-text>Cargando…</span>
-      </div>
     </header>
-
-    <!-- Banner anónimo -->
-    <section class="radar-anon-banner" data-radar-anon hidden>
-      <div class="radar-anon-copy">
-        <strong>Guardando en este dispositivo</strong>
-        <p>Inicia sesión o regístrate con tu email para guardar tus listas en la nube y acceder desde cualquier dispositivo.</p>
-      </div>
-      <div class="radar-anon-actions">
-        <button type="button" class="radar-btn radar-btn-primary" data-open-auth="login">Iniciar sesión</button>
-        <button type="button" class="radar-btn radar-btn-ghost" data-open-auth="register">Crear cuenta</button>
-      </div>
-    </section>
 
     <!-- Perfil (solo sesión) -->
     <section class="radar-profile" data-radar-profile hidden>
@@ -156,68 +147,6 @@ export const prerender = false;
     font-size: 0.9rem;
     line-height: 1.6;
     color: var(--color-text-muted);
-  }
-
-  .radar-header-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-shrink: 0;
-    padding: 0.5rem 0.9rem;
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: var(--color-text-muted);
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 999px;
-  }
-
-  .radar-status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #f59e0b;
-  }
-
-  .radar-header-status.is-synced .radar-status-dot {
-    background: #10b981;
-  }
-
-  /* Banner anónimo */
-  .radar-anon-banner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1.25rem;
-    margin-bottom: 1.75rem;
-    padding: 1.1rem 1.25rem;
-    background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(16, 185, 129, 0.08) 100%);
-    border: 1px solid rgba(96, 165, 250, 0.3);
-    border-radius: var(--border-radius-md);
-  }
-
-  .radar-anon-banner[hidden] {
-    display: none;
-  }
-
-  .radar-anon-copy strong {
-    display: block;
-    margin-bottom: 0.25rem;
-    font-size: 0.92rem;
-    color: var(--color-text-main);
-  }
-
-  .radar-anon-copy p {
-    margin: 0;
-    font-size: 0.82rem;
-    line-height: 1.5;
-    color: var(--color-text-muted);
-  }
-
-  .radar-anon-actions {
-    display: flex;
-    gap: 0.6rem;
-    flex-shrink: 0;
   }
 
   /* Perfil */
@@ -717,19 +646,6 @@ export const prerender = false;
       align-items: flex-start;
     }
 
-    .radar-anon-banner {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .radar-anon-actions {
-      width: 100%;
-    }
-
-    .radar-anon-actions .radar-btn {
-      flex: 1;
-    }
-
     .radar-profile {
       flex-direction: column;
       align-items: flex-start;
@@ -771,9 +687,6 @@ export const prerender = false;
     document.querySelector<T>(selector);
 
   const els = {
-    status: $('[data-radar-status]'),
-    statusText: $('[data-radar-status-text]'),
-    anon: $('[data-radar-anon]'),
     profile: $('[data-radar-profile]'),
     avatar: $('[data-radar-avatar]'),
     name: $('[data-radar-name]'),
@@ -979,13 +892,13 @@ export const prerender = false;
   /* ------------------------------------------------------------- sesión */
 
   function updateStatus(user: { email: string; name?: string } | null): void {
-    if (els.anon) els.anon.hidden = Boolean(user);
-    if (els.profile) els.profile.hidden = !user;
-    if (els.status && els.statusText) {
-      els.status.classList.toggle('is-synced', Boolean(user));
-      els.statusText.textContent = user ? 'Sincronizado con tu cuenta' : 'Modo dispositivo';
+    // Página privada: sin sesión siempre se vuelve a tradylor.com.
+    if (!user) {
+      window.location.replace('https://tradylor.com');
+      return;
     }
-    if (user && els.name && els.email && els.avatar) {
+    if (els.profile) els.profile.hidden = false;
+    if (els.name && els.email && els.avatar) {
       els.name.textContent = user.name || user.email.split('@')[0];
       els.email.textContent = user.email;
       els.avatar.textContent = (user.name || user.email).charAt(0).toUpperCase();
