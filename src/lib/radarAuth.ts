@@ -26,6 +26,7 @@ const USERS_FILE = dataFile('radar-users.json');
 const SESSION_COOKIE_NAME = 'tradylor_radar_session';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 días
 const RESET_TTL_MS = 60 * 60 * 1000; // 1 hora
+const ACTIVATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export interface RadarUser {
@@ -37,6 +38,11 @@ export interface RadarUser {
   passwordHash: string;
   createdAt: string;
   updatedAt: string;
+  /** true si la cuenta está activada (email verificado o cuenta Google). */
+  verified: boolean;
+  /** Token de activación pendiente (borrado al activar o caducar). */
+  activationToken?: string;
+  activationTokenExpires?: number;
   /** Token de reset pendiente (borrado al usarse o caducar). */
   resetToken?: string;
   resetTokenExpires?: number;
@@ -48,9 +54,12 @@ export type PublicRadarUser = Omit<RadarUser, 'passwordSalt' | 'passwordHash' | 
 
 export class RadarAuthError extends Error {
   status: number;
-  constructor(message: string, status = 400) {
+  /** Código de error para el cliente (p. ej. 'verify_required'). */
+  code?: string;
+  constructor(message: string, status = 400, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -87,6 +96,11 @@ function assertPasswordStrength(password: string): void {
   if (typeof password !== 'string' || password.length < 8) {
     throw new RadarAuthError('La contraseña debe tener al menos 8 caracteres.');
   }
+}
+
+/** Gmail se considera verificado por Google; el resto requiere activación por email. */
+export function isGmailEmail(email: string): boolean {
+  return email.trim().toLowerCase().endsWith('@gmail.com');
 }
 
 function sessionToken(user: RadarUser): string {
@@ -179,7 +193,7 @@ export function findRadarUserById(id: string): RadarUser | null {
   return readUsers().find((u) => u.id === id) ?? null;
 }
 
-export function registerRadarUser(input: { email: string; password: string; name?: string }): PublicRadarUser {
+export function registerRadarUser(input: { email: string; password: string; name?: string; verified?: boolean }): PublicRadarUser {
   const email = String(input.email ?? '').trim().toLowerCase();
   if (!EMAIL_RE.test(email)) throw new RadarAuthError('El email no es válido.');
   assertPasswordStrength(String(input.password ?? ''));
@@ -191,6 +205,7 @@ export function registerRadarUser(input: { email: string; password: string; name
 
   const { salt, hash } = createPasswordHash(String(input.password));
   const now = new Date().toISOString();
+  const skipVerification = Boolean(input.verified) || isGmailEmail(email);
   const created: RadarUser = {
     id: uuid(),
     email,
@@ -200,6 +215,9 @@ export function registerRadarUser(input: { email: string; password: string; name
     passwordHash: hash,
     createdAt: now,
     updatedAt: now,
+    verified: skipVerification,
+    activationToken: skipVerification ? undefined : randomBytes(24).toString('hex'),
+    activationTokenExpires: skipVerification ? undefined : Date.now() + ACTIVATION_TTL_MS,
   };
   users.push(created);
   writeUsers(users);
@@ -210,6 +228,13 @@ export function loginRadarUser(email: string, password: string): RadarUser {
   const user = findRadarUserByEmail(email);
   if (!user || user.provider !== 'email' || !password || !verifySecret(user, password)) {
     throw new RadarAuthError('El email o la contraseña no son correctos.', 401);
+  }
+  if (!user.verified) {
+    throw new RadarAuthError(
+      'Tu cuenta aún no está activada. Revisa el correo de bienvenida (también la carpeta de correo no deseado) y pulsa el botón de activación.',
+      403,
+      'verify_required',
+    );
   }
   return user;
 }
@@ -225,6 +250,7 @@ export function upsertGoogleUser(input: { email: string; name?: string }): Radar
     if (user.provider !== 'google') {
       throw new RadarAuthError('Ese email ya tiene una cuenta con contraseña. Inicia sesión con email.', 409);
     }
+    user.verified = true;
     if (input.name) {
       user.name = input.name;
       user.updatedAt = new Date().toISOString();
@@ -244,6 +270,7 @@ export function upsertGoogleUser(input: { email: string; name?: string }): Radar
     passwordHash: hash,
     createdAt: now,
     updatedAt: now,
+    verified: true,
   };
   users.push(user);
   writeUsers(users);
@@ -274,6 +301,66 @@ export function getRadarSessionUser(request: Request): PublicRadarUser | null {
   const a = Buffer.from(token);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b) ? toPublicRadarUser(user) : null;
+}
+
+/* ---------------------------------------------------- activación por email */
+
+export interface VerificationEmailResult {
+  /** true si se notificó al webhook de email (producción). */
+  notified: boolean;
+  /** Link de activación (sólo se devuelve fuera de producción, para pruebas). */
+  devVerifyUrl?: string;
+}
+
+/**
+ * Activa la cuenta con el token del email de bienvenida. Un solo uso y
+ * caducidad de 24h.
+ */
+export function verifyRadarUser(token: string): PublicRadarUser {
+  const users = readUsers();
+  const user = users.find((u) => u.activationToken && u.activationToken === token.trim());
+  if (!user || !user.activationTokenExpires || user.activationTokenExpires < Date.now()) {
+    throw new RadarAuthError('El enlace de activación no es válido o ha caducado.', 400);
+  }
+  user.verified = true;
+  delete user.activationToken;
+  delete user.activationTokenExpires;
+  user.updatedAt = new Date().toISOString();
+  writeUsers(users);
+  return toPublicRadarUser(user);
+}
+
+/**
+ * Envía el email de bienvenida con el botón de activación y la explicación
+ * de Mi Radar. Sin SMTP se entrega vía N8N_VERIFY_WEBHOOK_URL (n8n envía el
+ * email); en local se devuelve el link en claro para poder probar el flujo.
+ */
+export function sendVerificationEmail(user: RadarUser, origin: string): VerificationEmailResult {
+  const verifyUrl = `${origin.replace(/\/$/, '')}/?verify=${user.activationToken}`;
+  const webhook = (process.env.N8N_VERIFY_WEBHOOK_URL ?? import.meta.env.N8N_VERIFY_WEBHOOK_URL ?? '').trim();
+  let notified = false;
+  if (webhook) {
+    fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: user.email, name: user.name, verifyUrl, product: 'tradylor-mi-radar' }),
+    }).then(() => { notified = true; }).catch((error) => console.error('[RadarAuth] Webhook de activación falló:', error));
+    notified = true;
+  }
+  const isProd = (process.env.NODE_ENV ?? '') === 'production';
+  return { notified, devVerifyUrl: isProd ? undefined : verifyUrl };
+}
+
+/** Regenera el token y reenvía el email de activación (mismo patrón que forgot). */
+export function resendVerificationEmail(email: string, origin: string): VerificationEmailResult {
+  const users = readUsers();
+  const user = users.find((u) => u.email === email.trim().toLowerCase());
+  if (!user || user.verified || user.provider !== 'email') return { notified: false };
+  user.activationToken = randomBytes(24).toString('hex');
+  user.activationTokenExpires = Date.now() + ACTIVATION_TTL_MS;
+  user.updatedAt = new Date().toISOString();
+  writeUsers(users);
+  return sendVerificationEmail(user, origin);
 }
 
 /* ------------------------------------------------ recuperación de contraseña */

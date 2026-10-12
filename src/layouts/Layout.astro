@@ -267,8 +267,36 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         gap: 0.6rem;
       }
       .header-auth-actions[hidden],
-      .header-user-area[hidden] {
+      .header-user-area[hidden],
+      .header-radar-btn[hidden] {
         display: none;
+      }
+      /* Acceso a Mi Radar: icono radar animado (solo logueados) */
+      .header-radar-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.35);
+        border-radius: 12px;
+        transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+      }
+      .header-radar-btn:hover {
+        color: #ffffff;
+        background: rgba(59, 130, 246, 0.28);
+        box-shadow: var(--shadow-glow);
+      }
+      .radar-sweep {
+        transform-origin: 12px 12px;
+        animation: radar-sweep-spin 2.4s linear infinite;
+      }
+      @keyframes radar-sweep-spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
       /* Usuario: botón circular coloreado + menú desplegable */
       .header-user-area {
@@ -761,6 +789,16 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                 <button type="button" class="header-cta-btn" data-open-auth="login">Iniciar sesión</button>
               </div>
 
+              <!-- Autenticado: acceso a Mi Radar (icono radar animado) -->
+              <a href="/mi-radar" class="header-radar-btn" data-header-radar-link hidden aria-label="Ir a Mi Radar">
+                <svg class="radar-anim" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" opacity="0.45"></circle>
+                  <circle cx="12" cy="12" r="5" opacity="0.7"></circle>
+                  <line class="radar-sweep" x1="12" y1="12" x2="12" y2="4"></line>
+                  <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"></circle>
+                </svg>
+              </a>
+
               <!-- Autenticado: menú de usuario (avatar) -->
               <div class="header-user-area" data-header-user hidden>
                 <div class="header-user" data-header-user-menu-wrap>
@@ -1031,6 +1069,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         // ------------------------------------------------- cabecera: auth vs user
         const headerAnon = $('[data-header-anon]');
         const headerUserArea = $('[data-header-user]');
+        const headerRadarLink = $('[data-header-radar-link]');
         const headerUsername = $('[data-header-username]');
         const headerEmail = $('[data-header-email]');
         const headerAvatarWrap = $('[data-header-avatar]');
@@ -1040,6 +1079,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           if (user) {
             headerAnon.hidden = true;
             headerUserArea.hidden = false;
+            if (headerRadarLink) headerRadarLink.hidden = false;
             const displayName = user.name || user.email.split('@')[0];
             if (headerUsername) headerUsername.textContent = displayName;
             if (headerEmail) headerEmail.textContent = user.email;
@@ -1054,6 +1094,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           } else {
             headerAnon.hidden = false;
             headerUserArea.hidden = true;
+            if (headerRadarLink) headerRadarLink.hidden = true;
           }
         }
 

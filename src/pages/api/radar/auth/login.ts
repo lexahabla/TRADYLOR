@@ -25,7 +25,9 @@ export const POST: APIRoute = async ({ request }) => {
       { 'Set-Cookie': createRadarSession(user) },
     );
   } catch (error) {
-    if (error instanceof RadarAuthError) return json({ success: false, message: error.message }, error.status);
+    if (error instanceof RadarAuthError) {
+      return json({ success: false, message: error.message, code: error.code }, error.status);
+    }
     return json({ success: false, message: 'Petición inválida.' }, 400);
   }
 };

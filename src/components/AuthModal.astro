@@ -86,6 +86,56 @@
       <button type="submit" class="auth-submit">Guardar contraseña</button>
     </form>
 
+    <!-- Verificación pendiente (tras registrarse con email no gmail) -->
+    <div class="auth-form" data-auth-form="verify" novalidate hidden>
+      <div class="auth-info-box">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <rect x="2" y="4" width="20" height="16" rx="3"></rect>
+          <path d="m2 7 10 7L22 7"></path>
+        </svg>
+        <h3>Revisa tu correo para activar tu cuenta</h3>
+        <p>
+          Te hemos enviado un email de bienvenida con un <strong>botón de activación</strong>.
+          También explica en qué consiste Mi Radar: guardar productos, organizar listas de
+          compra y retomar salidas desde cualquier dispositivo.
+        </p>
+        <p>Si no lo ves, revisa también la carpeta de <strong>correo no deseado</strong>.</p>
+      </div>
+      <button type="button" class="auth-submit" data-auth-view="login">Ir a iniciar sesión</button>
+      <button type="button" class="auth-link-btn" data-auth-resend>Reenviar email de activación</button>
+    </div>
+
+    <!-- Cuenta aún no activada (login bloqueado) -->
+    <div class="auth-form" data-auth-form="locked" novalidate hidden>
+      <div class="auth-info-box">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <path d="M12 3 2.5 20h19L12 3z" stroke-linejoin="round"></path>
+          <line x1="12" y1="10" x2="12" y2="14"></line>
+          <circle cx="12" cy="17" r="0.6" fill="currentColor"></circle>
+        </svg>
+        <h3>Tu cuenta aún no está activada</h3>
+        <p>
+          Revisa bien el correo de bienvenida, <strong>incluso la bandeja de correo
+          no deseados</strong>, y pulsa el botón de activación para poder entrar.
+        </p>
+      </div>
+      <button type="button" class="auth-submit" data-auth-view="login">Volver a iniciar sesión</button>
+      <button type="button" class="auth-link-btn" data-auth-resend>Reenviar email de activación</button>
+    </div>
+
+    <!-- Cuenta activada (tras el enlace del email) -->
+    <div class="auth-form" data-auth-form="activated" novalidate hidden>
+      <div class="auth-info-box">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="m8 12.5 2.5 2.5L16 9.5" stroke-linecap="round" stroke-linejoin="round"></path>
+        </svg>
+        <h3>¡Cuenta activada!</h3>
+        <p>Tu email ya está verificado. Ahora puedes iniciar sesión y acceder a Mi Radar.</p>
+      </div>
+      <button type="button" class="auth-submit" data-auth-view="login">Iniciar sesión</button>
+    </div>
+
     <div class="auth-separator" data-auth-google-wrap><span>o</span></div>
 
     <button type="button" class="auth-google-btn" data-auth-google>
@@ -231,6 +281,33 @@
     color: var(--color-text-muted);
   }
 
+  .auth-info-box {
+    display: grid;
+    gap: 0.55rem;
+    justify-items: center;
+    padding: 1rem 0.4rem 0.2rem;
+    text-align: center;
+    color: #fbbf24;
+  }
+
+  .auth-info-box h3 {
+    font-family: var(--font-heading);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .auth-info-box p {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.55;
+    color: var(--color-text-muted);
+  }
+
+  .auth-info-box strong {
+    color: #e5e7eb;
+  }
+
   .auth-field {
     display: grid;
     gap: 0.4rem;
@@ -366,7 +443,7 @@
 </style>
 
 <script>
-  import { getSession, login, register, requestPasswordReset, resetPassword, loginWithGoogle } from '../utils/auth';
+  import { getSession, login, register, requestPasswordReset, resetPassword, loginWithGoogle, verifyAccount, resendVerification } from '../utils/auth';
 
   const modal = document.getElementById('authModal');
   if (modal) {
@@ -376,6 +453,9 @@
       register: modal.querySelector<HTMLFormElement>('[data-auth-form="register"]'),
       forgot: modal.querySelector<HTMLFormElement>('[data-auth-form="forgot"]'),
       reset: modal.querySelector<HTMLFormElement>('[data-auth-form="reset"]'),
+      verify: modal.querySelector<HTMLElement>('[data-auth-form="verify"]'),
+      locked: modal.querySelector<HTMLElement>('[data-auth-form="locked"]'),
+      activated: modal.querySelector<HTMLElement>('[data-auth-form="activated"]'),
     } as const;
     type View = keyof typeof forms;
 
@@ -385,6 +465,8 @@
     const googleHint = modal.querySelector<HTMLElement>('[data-auth-google-hint]');
 
     let lastFocus: HTMLElement | null = null;
+    let currentView: View = 'login';
+    let pendingEmail = '';
 
     const showError = (message: string) => {
       if (!errorEl) return;
@@ -393,6 +475,7 @@
     };
 
     const showView = (view: View) => {
+      currentView = view;
       for (const [key, form] of Object.entries(forms)) {
         if (form) form.hidden = key !== view;
       }
@@ -451,6 +534,20 @@
     const resetToken = new URLSearchParams(window.location.search).get('reset');
     if (resetToken) open('reset');
 
+    // Enlace del email de bienvenida: ?verify=<token> → activa la cuenta y
+    // muestra el modal de "cuenta activada" con el botón de iniciar sesión.
+    const verifyToken = new URLSearchParams(window.location.search).get('verify');
+    if (verifyToken) {
+      void verifyAccount(verifyToken).then((result) => {
+        if (result.success) {
+          window.history.replaceState(null, '', window.location.pathname);
+          open('activated');
+        } else {
+          open('locked');
+        }
+      });
+    }
+
     const setBusy = (busy: boolean) => {
       modal.querySelectorAll<HTMLButtonElement>('.auth-submit').forEach((btn) => {
         btn.disabled = busy;
@@ -466,6 +563,9 @@
       if (result.success) {
         close();
         window.location.href = '/';
+      } else if (result.code === 'verify_required') {
+        pendingEmail = String(data.get('email') ?? '');
+        showView('locked');
       } else {
         showError(result.message ?? 'Error al iniciar sesión.');
       }
@@ -482,11 +582,35 @@
       );
       setBusy(false);
       if (result.success) {
-        close();
-        window.location.href = '/';
+        if (result.verificationPending) {
+          pendingEmail = String(data.get('email') ?? '');
+          showView('verify');
+        } else {
+          close();
+          window.location.href = '/';
+        }
       } else {
         showError(result.message ?? 'No se pudo crear la cuenta.');
       }
+    });
+
+    // Reenvío del email de activación (vistas "verify" y "locked").
+    modal.querySelectorAll<HTMLButtonElement>('[data-auth-resend]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!pendingEmail) return;
+        btn.disabled = true;
+        const result = await resendVerification(pendingEmail);
+        btn.disabled = false;
+        const box = forms[currentView]?.querySelector('.auth-info-box');
+        if (box) {
+          const note = document.createElement('p');
+          note.style.color = '#6ee7b7';
+          note.textContent = result.devVerifyUrl
+            ? `Email reenviado (dev: ${result.devVerifyUrl})`
+            : (result.message ?? 'Email reenviado. Revisa tu carpeta de entrada.');
+          box.appendChild(note);
+        }
+      });
     });
 
     forms.forgot?.addEventListener('submit', async (event) => {

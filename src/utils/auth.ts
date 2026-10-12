@@ -66,6 +66,12 @@ export interface AuthResult {
   user?: UserProfile;
   /** Link de reset en dev (sólo local, flujo de recuperación). */
   devResetUrl?: string;
+  /** true si el registro quedó pendiente de activación por email. */
+  verificationPending?: boolean;
+  /** Link de activación en dev (sólo local, flujo de verificación). */
+  devVerifyUrl?: string;
+  /** Código de error del servidor (p. ej. 'verify_required'). */
+  code?: string;
 }
 
 async function afterAuthSuccess(): Promise<void> {
@@ -85,10 +91,23 @@ export async function register(email: string, password: string, name?: string): 
   });
   const data = await parseJson(res);
   if (res.ok && data.success) {
+    // Cuenta pendiente de activar: no hay sesión todavía, el usuario debe
+    // pulsar el botón de activación del email de bienvenida.
+    if (data.verificationPending) {
+      return {
+        success: true,
+        verificationPending: true,
+        devVerifyUrl: data.devVerifyUrl ? String(data.devVerifyUrl) : undefined,
+      };
+    }
     await afterAuthSuccess();
     return { success: true, user: data.user as UserProfile };
   }
-  return { success: false, message: String(data.message ?? 'No se pudo crear la cuenta.') };
+  return {
+    success: false,
+    message: String(data.message ?? 'No se pudo crear la cuenta.'),
+    code: data.code ? String(data.code) : undefined,
+  };
 }
 
 export async function login(email: string, password: string): Promise<AuthResult> {
@@ -102,7 +121,11 @@ export async function login(email: string, password: string): Promise<AuthResult
     await afterAuthSuccess();
     return { success: true, user: data.user as UserProfile };
   }
-  return { success: false, message: String(data.message ?? 'No se pudo iniciar sesión.') };
+  return {
+    success: false,
+    message: String(data.message ?? 'No se pudo iniciar sesión.'),
+    code: data.code ? String(data.code) : undefined,
+  };
 }
 
 export async function logout(): Promise<void> {
@@ -136,6 +159,33 @@ export async function resetPassword(token: string, password: string): Promise<Au
     success: res.ok && Boolean(data.success),
     message: String(data.message ?? ''),
     user: data.user as UserProfile | undefined,
+  };
+}
+
+/** Activa la cuenta desde el enlace del email de bienvenida. */
+export async function verifyAccount(token: string): Promise<AuthResult> {
+  const res = await fetch(`/api/radar/auth/verify?verify=${encodeURIComponent(token)}`, {
+    headers: { Accept: 'application/json' },
+  });
+  const data = await parseJson(res);
+  return {
+    success: res.ok && Boolean(data.success),
+    message: String(data.message ?? ''),
+  };
+}
+
+/** Reenvía el email de activación (cuentas pendientes de verificar). */
+export async function resendVerification(email: string): Promise<AuthResult> {
+  const res = await fetch('/api/radar/auth/resend', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const data = await parseJson(res);
+  return {
+    success: res.ok && Boolean(data.success),
+    message: String(data.message ?? ''),
+    devVerifyUrl: data.devVerifyUrl ? String(data.devVerifyUrl) : undefined,
   };
 }
 
