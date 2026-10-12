@@ -983,8 +983,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         <AuthModal />
       </>
     )}
-    {!isBackend && (
-      <script>
+    <script>
         // =====================================================================
         // TRADYLOR — RADAR BOOTSTRAP (global, páginas públicas)
         // =====================================================================
@@ -1141,7 +1140,6 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         syncButtons();
         // Re-sincroniza tras pintar tarjetas dinámicas (fetch del home, etc.).
         window.addEventListener('load', syncButtons);
-      </script>
-    )}
+    </script>
   </body>
 </html>
