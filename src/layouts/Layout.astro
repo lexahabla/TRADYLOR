@@ -267,12 +267,12 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         gap: 0.6rem;
       }
       .header-auth-actions[hidden],
-      .header-user-area[hidden],
-      .header-radar-btn[hidden] {
+      .header-user-area[hidden] {
         display: none;
       }
-      /* Acceso a Mi Radar: icono radar animado (solo logueados) */
+      /* Acceso al Carrito / Radar: icono radar animado + badge */
       .header-radar-btn {
+        position: relative;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -282,12 +282,38 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         background: rgba(59, 130, 246, 0.1);
         border: 1px solid rgba(59, 130, 246, 0.35);
         border-radius: 12px;
-        transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease;
+        cursor: pointer;
+        padding: 0;
+        transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.15s ease;
       }
       .header-radar-btn:hover {
         color: #ffffff;
         background: rgba(59, 130, 246, 0.28);
         box-shadow: var(--shadow-glow);
+        transform: translateY(-1px);
+      }
+      .header-radar-btn:active {
+        transform: scale(0.96);
+      }
+      .header-radar-count {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 4px;
+        border-radius: 999px;
+        background: #ef4444;
+        color: #ffffff;
+        font-size: 0.68rem;
+        font-weight: 700;
+        line-height: 18px;
+        text-align: center;
+        box-shadow: 0 2px 6px rgba(239, 68, 68, 0.55);
+        border: 2px solid #0a0e17;
+      }
+      .header-radar-count[hidden] {
+        display: none;
       }
       .radar-sweep {
         transform-origin: 12px 12px;
@@ -418,6 +444,336 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
       }
       .header-user-menu-logout:hover {
         background: rgba(248, 113, 113, 0.1);
+      }
+
+      /* =========================================================================
+         DRAWER CARRITO / MI RADAR (Lateral deslizante)
+         ========================================================================= */
+      .radar-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: min(420px, 94vw);
+        height: 100vh;
+        height: 100dvh;
+        background: #0b121e;
+        border-left: 1px solid rgba(59, 130, 246, 0.25);
+        box-shadow: -20px 0 60px rgba(0, 0, 0, 0.65);
+        transform: translateX(105%);
+        transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+        z-index: 300;
+        display: flex;
+        flex-direction: column;
+      }
+      .radar-drawer.is-open {
+        transform: translateX(0);
+      }
+      .radar-drawer-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(4, 8, 15, 0.7);
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.28s ease;
+        z-index: 250;
+      }
+      body.radar-drawer-is-open .radar-drawer-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      body.radar-drawer-is-open {
+        overflow: hidden;
+      }
+      .radar-drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.25rem 1.4rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.6);
+      }
+      .radar-drawer-kicker {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #93c5fd;
+        font-weight: 600;
+      }
+      .radar-drawer-title {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-family: var(--font-heading);
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin: 0.15rem 0 0;
+      }
+      .radar-drawer-header-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.15rem 0.55rem;
+        background: rgba(59, 130, 246, 0.2);
+        border: 1px solid rgba(59, 130, 246, 0.35);
+        color: #93c5fd;
+        font-size: 0.75rem;
+        border-radius: 999px;
+        font-weight: 700;
+      }
+      .radar-drawer-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #9ca3af;
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .radar-drawer-close:hover {
+        color: #ffffff;
+        background: rgba(239, 68, 68, 0.2);
+        border-color: rgba(239, 68, 68, 0.4);
+      }
+      .radar-drawer-items {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.9rem;
+      }
+      .radar-drawer-item {
+        display: flex;
+        gap: 0.85rem;
+        background: rgba(17, 24, 39, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 0.85rem;
+        transition: border-color 0.2s ease, background 0.2s ease;
+      }
+      .radar-drawer-item:hover {
+        border-color: rgba(59, 130, 246, 0.3);
+        background: rgba(17, 24, 39, 0.95);
+      }
+      .radar-drawer-thumb {
+        width: 60px;
+        height: 60px;
+        flex-shrink: 0;
+        border-radius: 8px;
+        background: #ffffff;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+      .radar-drawer-thumb img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+      }
+      .radar-drawer-no-img {
+        color: #6b7280;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .radar-drawer-item-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        min-width: 0;
+        flex: 1;
+      }
+      .radar-drawer-item-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+      }
+      .radar-drawer-store-tag {
+        font-size: 0.68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 0.15rem 0.45rem;
+        border-radius: 6px;
+        background: rgba(59, 130, 246, 0.15);
+        color: #93c5fd;
+      }
+      .radar-drawer-item-remove {
+        background: none;
+        border: none;
+        color: #9ca3af;
+        cursor: pointer;
+        padding: 2px;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: color 0.15s ease, background 0.15s ease;
+      }
+      .radar-drawer-item-remove:hover {
+        color: #ef4444;
+        background: rgba(239, 68, 68, 0.1);
+      }
+      .radar-drawer-item-title {
+        color: #f3f4f6;
+        font-size: 0.84rem;
+        font-weight: 600;
+        line-height: 1.35;
+        text-decoration: none;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        transition: color 0.15s ease;
+      }
+      .radar-drawer-item-title:hover {
+        color: #60a5fa;
+      }
+      .radar-drawer-item-bottom {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-top: 0.15rem;
+      }
+      .radar-drawer-item-price {
+        font-size: 0.92rem;
+        font-weight: 700;
+        color: #38bdf8;
+      }
+      .radar-drawer-item-buy {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.75rem;
+        background: rgba(59, 130, 246, 0.15);
+        border: 1px solid rgba(59, 130, 246, 0.35);
+        color: #93c5fd;
+        font-size: 0.76rem;
+        font-weight: 600;
+        border-radius: 8px;
+        text-decoration: none;
+        transition: all 0.2s ease;
+      }
+      .radar-drawer-item-buy:hover {
+        background: #2563eb;
+        color: #ffffff;
+        border-color: #2563eb;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+      }
+      .radar-drawer-empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.75rem;
+        color: #9ca3af;
+        text-align: center;
+        padding: 2.5rem 1.5rem;
+      }
+      .radar-drawer-empty[hidden] {
+        display: none;
+      }
+      .radar-drawer-empty-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 64px;
+        height: 64px;
+        border-radius: 50%;
+        background: rgba(59, 130, 246, 0.1);
+        border: 1px solid rgba(59, 130, 246, 0.25);
+        color: #60a5fa;
+        margin-bottom: 0.25rem;
+      }
+      .radar-drawer-empty-title {
+        color: #ffffff;
+        font-weight: 700;
+        font-size: 1.05rem;
+        margin: 0;
+      }
+      .radar-drawer-empty-desc {
+        font-size: 0.82rem;
+        line-height: 1.55;
+        color: #9ca3af;
+        max-width: 260px;
+      }
+      .radar-drawer-footer {
+        padding: 1.25rem 1.4rem;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(15, 23, 42, 0.7);
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .radar-drawer-footer[hidden] {
+        display: none;
+      }
+      .radar-drawer-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .radar-drawer-summary-label {
+        font-size: 0.84rem;
+        color: #9ca3af;
+      }
+      .radar-drawer-summary-total {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #ffffff;
+      }
+      .radar-drawer-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+      }
+      .radar-drawer-panel-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        width: 100%;
+        padding: 0.75rem 1rem;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 60%, #1e40af 100%);
+        color: #ffffff;
+        font-family: var(--font-heading);
+        font-size: 0.9rem;
+        font-weight: 700;
+        text-align: center;
+        text-decoration: none;
+        border-radius: 10px;
+        box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+        transition: transform 0.15s ease, box-shadow 0.2s ease;
+      }
+      .radar-drawer-panel-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 22px rgba(37, 99, 235, 0.55);
+      }
+      .radar-drawer-clear-btn {
+        background: none;
+        border: none;
+        color: #9ca3af;
+        font-size: 0.78rem;
+        cursor: pointer;
+        padding: 0.3rem;
+        text-align: center;
+        transition: color 0.15s ease;
+      }
+      .radar-drawer-clear-btn:hover {
+        color: #ef4444;
+        text-decoration: underline;
       }
 
       /* Botón hamburguesa (móvil) */
@@ -784,20 +1140,29 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                 </svg>
               </button>
 
-              <!-- No autenticado: Iniciar sesión -->
-              <div class="header-auth-actions" data-header-anon>
-                <button type="button" class="header-cta-btn" data-open-auth="login">Iniciar sesión</button>
-              </div>
-
-              <!-- Autenticado: acceso a Mi Radar (icono radar animado) -->
-              <a href="/mi-radar" class="header-radar-btn" data-header-radar-link hidden aria-label="Ir a Mi Radar">
+              <!-- Carrito / Mi Radar (icono radar animado + badge contador) -->
+              <button
+                type="button"
+                class="header-radar-btn"
+                data-header-radar-btn
+                data-radar-drawer-toggle
+                aria-label="Abrir carrito de productos guardados"
+                aria-expanded="false"
+                aria-controls="radarDrawer"
+              >
                 <svg class="radar-anim" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" opacity="0.45"></circle>
                   <circle cx="12" cy="12" r="5" opacity="0.7"></circle>
                   <line class="radar-sweep" x1="12" y1="12" x2="12" y2="4"></line>
                   <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"></circle>
                 </svg>
-              </a>
+                <span class="header-radar-count" id="radarHeaderCount" hidden>0</span>
+              </button>
+
+              <!-- No autenticado: Iniciar sesión -->
+              <div class="header-auth-actions" data-header-anon>
+                <button type="button" class="header-cta-btn" data-open-auth="login">Iniciar sesión</button>
+              </div>
 
               <!-- Autenticado: menú de usuario (avatar) -->
               <div class="header-user-area" data-header-user hidden>
@@ -825,6 +1190,67 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         )}
       </div>
     </header>
+
+    <!-- Drawer lateral del Carrito / Mi Radar (solo páginas públicas) -->
+    {!isBackend && (
+      <aside id="radarDrawer" class="radar-drawer" aria-hidden="true" aria-labelledby="radarDrawerTitle">
+        <div class="radar-drawer-header">
+          <div class="radar-drawer-title-group">
+            <span class="radar-drawer-kicker">Tu selección</span>
+            <h2 id="radarDrawerTitle" class="radar-drawer-title">
+              Mi Carrito Radar
+              <span class="radar-drawer-header-count" data-radar-drawer-header-count>0</span>
+            </h2>
+          </div>
+          <button type="button" class="radar-drawer-close" data-radar-drawer-close aria-label="Cerrar carrito">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <!-- Lista de productos -->
+        <div class="radar-drawer-items" data-radar-drawer-items></div>
+
+        <!-- Estado vacío si no hay productos -->
+        <div class="radar-drawer-empty" data-radar-drawer-empty>
+          <div class="radar-drawer-empty-icon">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" opacity="0.4"></circle>
+              <circle cx="12" cy="12" r="5" opacity="0.65"></circle>
+              <line class="radar-sweep" x1="12" y1="12" x2="12" y2="4"></line>
+              <circle cx="12" cy="12" r="1.3" fill="currentColor"></circle>
+            </svg>
+          </div>
+          <p class="radar-drawer-empty-title">Tu carrito está vacío</p>
+          <span class="radar-drawer-empty-desc">
+            Haz clic en el icono del radar de cualquier ficha de producto para guardarlo aquí y seguirlo de cerca.
+          </span>
+        </div>
+
+        <!-- Pie del drawer (total aproximado + acciones) -->
+        <div class="radar-drawer-footer" data-radar-drawer-footer hidden>
+          <div class="radar-drawer-summary">
+            <span class="radar-drawer-summary-label">Total estimado:</span>
+            <span class="radar-drawer-summary-total" data-radar-drawer-total>—</span>
+          </div>
+          <div class="radar-drawer-actions">
+            <a href="/mi-radar" class="radar-drawer-panel-btn" data-radar-drawer-full-link>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
+              <span data-radar-drawer-link-text>Ver panel completo</span>
+            </a>
+            <button type="button" class="radar-drawer-clear-btn" data-radar-drawer-clear>
+              Vaciar carrito
+            </button>
+          </div>
+        </div>
+      </aside>
+      <div class="radar-drawer-backdrop" data-radar-drawer-close></div>
+    )}
 
     <!-- 3. Contenido Principal -->
     <main id="main-content">
@@ -1055,6 +1481,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         // =====================================================================
         import { getSession, getCachedSession, initAuth, logout, onAuthChange } from '../utils/auth';
         import {
+          getRadarProducts,
           isSaved,
           onRadarChange,
           removeProduct,
@@ -1069,7 +1496,6 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         // ------------------------------------------------- cabecera: auth vs user
         const headerAnon = $('[data-header-anon]');
         const headerUserArea = $('[data-header-user]');
-        const headerRadarLink = $('[data-header-radar-link]');
         const headerUsername = $('[data-header-username]');
         const headerEmail = $('[data-header-email]');
         const headerAvatarWrap = $('[data-header-avatar]');
@@ -1079,7 +1505,6 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           if (user) {
             headerAnon.hidden = true;
             headerUserArea.hidden = false;
-            if (headerRadarLink) headerRadarLink.hidden = false;
             const displayName = user.name || user.email.split('@')[0];
             if (headerUsername) headerUsername.textContent = displayName;
             if (headerEmail) headerEmail.textContent = user.email;
@@ -1094,9 +1519,191 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           } else {
             headerAnon.hidden = false;
             headerUserArea.hidden = true;
-            if (headerRadarLink) headerRadarLink.hidden = true;
+          }
+          if (radarDrawerLinkText) {
+            radarDrawerLinkText.textContent = user
+              ? 'Ver panel completo'
+              : 'Guardar en la nube (Iniciar sesión)';
           }
         }
+
+        // ------------------------------------------------------ drawer Carrito / Radar
+        const radarDrawer = document.getElementById('radarDrawer');
+        const radarDrawerItems = $('[data-radar-drawer-items]');
+        const radarDrawerEmpty = $('[data-radar-drawer-empty]');
+        const radarDrawerFooter = $('[data-radar-drawer-footer]');
+        const radarDrawerTotal = $('[data-radar-drawer-total]');
+        const radarDrawerHeaderCount = $('[data-radar-drawer-header-count]');
+        const radarDrawerLinkText = $('[data-radar-drawer-link-text]');
+        const radarDrawerToggle = $('[data-radar-drawer-toggle]');
+        const radarDrawerClear = $('[data-radar-drawer-clear]');
+        const radarDrawerFullLink = $('[data-radar-drawer-full-link]');
+
+        function openRadarDrawer() {
+          if (!radarDrawer) return;
+          renderRadarDrawer();
+          radarDrawer.classList.add('is-open');
+          radarDrawer.setAttribute('aria-hidden', 'false');
+          radarDrawerToggle?.setAttribute('aria-expanded', 'true');
+          document.body.classList.add('radar-drawer-is-open');
+        }
+
+        function closeRadarDrawer() {
+          if (!radarDrawer) return;
+          radarDrawer.classList.remove('is-open');
+          radarDrawer.setAttribute('aria-hidden', 'true');
+          radarDrawerToggle?.setAttribute('aria-expanded', 'false');
+          document.body.classList.remove('radar-drawer-is-open');
+        }
+
+        function formatPrice(p: SavedProduct): string {
+          if (p.price) return p.price;
+          if (typeof p.priceValue === 'number' && !isNaN(p.priceValue)) return `${p.priceValue.toFixed(2)} €`;
+          return 'Consultar';
+        }
+
+        function renderRadarDrawer() {
+          if (!radarDrawerItems || !radarDrawerEmpty) return;
+          const products = getRadarProducts();
+          const hasProducts = products.length > 0;
+          radarDrawerEmpty.hidden = hasProducts;
+          if (radarDrawerFooter) radarDrawerFooter.hidden = !hasProducts;
+          if (radarDrawerHeaderCount) radarDrawerHeaderCount.textContent = String(products.length);
+
+          const session = getCachedSession();
+          if (radarDrawerLinkText) {
+            radarDrawerLinkText.textContent = session?.user
+              ? 'Ver panel completo'
+              : 'Guardar en la nube (Iniciar sesión)';
+          }
+
+          if (!hasProducts) {
+            radarDrawerItems.innerHTML = '';
+            return;
+          }
+
+          let totalNumeric = 0;
+          let hasValidPrice = false;
+          products.forEach((p) => {
+            if (typeof p.priceValue === 'number' && !isNaN(p.priceValue)) {
+              totalNumeric += p.priceValue;
+              hasValidPrice = true;
+            } else if (p.price) {
+              const cleaned = p.price.replace(',', '.').replace(/[^\d.]/g, '');
+              const val = parseFloat(cleaned);
+              if (!isNaN(val)) {
+                totalNumeric += val;
+                hasValidPrice = true;
+              }
+            }
+          });
+
+          if (radarDrawerTotal) {
+            radarDrawerTotal.textContent = hasValidPrice ? `${totalNumeric.toFixed(2)} €` : '—';
+          }
+
+          radarDrawerItems.innerHTML = products.map((p) => {
+            const storeName = p.store ? (p.store === 'aliexpress' ? 'AliExpress' : p.store.charAt(0).toUpperCase() + p.store.slice(1)) : 'Tienda';
+            const safeTitle = (p.title || 'Producto').replace(/"/g, '&quot;');
+            const priceDisplay = formatPrice(p);
+            const checkoutUrl = `/checkout/${encodeURIComponent(p.id)}`;
+            const productUrl = `/producto/${encodeURIComponent(p.id)}`;
+
+            return `
+              <article class="radar-drawer-item">
+                <a href="${productUrl}" class="radar-drawer-thumb" title="${safeTitle}">
+                  ${p.image ? `<img src="${p.image}" alt="${safeTitle}" loading="lazy" />` : `
+                    <div class="radar-drawer-no-img">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                    </div>
+                  `}
+                </a>
+                <div class="radar-drawer-item-info">
+                  <div class="radar-drawer-item-top">
+                    <span class="radar-drawer-store-tag">${storeName}</span>
+                    <button type="button" class="radar-drawer-item-remove" data-drawer-remove="${p.id}" aria-label="Eliminar producto" title="Quitar de mi carrito">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <a href="${productUrl}" class="radar-drawer-item-title" title="${safeTitle}">${safeTitle}</a>
+                  <div class="radar-drawer-item-bottom">
+                    <span class="radar-drawer-item-price">${priceDisplay}</span>
+                    <a href="${checkoutUrl}" class="radar-drawer-item-buy exit-cta" data-asin="${p.id}" data-title="${safeTitle}">
+                      <span>Comprar</span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                    </a>
+                  </div>
+                </div>
+              </article>
+            `;
+          }).join('');
+        }
+
+        // Toggle drawer
+        radarDrawerToggle?.addEventListener('click', (e) => {
+          e.preventDefault();
+          if (radarDrawer?.classList.contains('is-open')) {
+            closeRadarDrawer();
+          } else {
+            openRadarDrawer();
+          }
+        });
+
+        // Cerrar al pulsar backdrop o botón de cerrar
+        document.addEventListener('click', (event) => {
+          const t = event.target;
+          if (!(t instanceof Element)) return;
+          if (t.closest('[data-radar-drawer-close]')) {
+            closeRadarDrawer();
+          }
+          const rm = t.closest<HTMLElement>('[data-drawer-remove]');
+          if (rm?.dataset.drawerRemove) {
+            removeProduct(rm.dataset.drawerRemove);
+            syncButtons();
+            renderRadarDrawer();
+          }
+        });
+
+        // Cerrar con Escape
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && radarDrawer?.classList.contains('is-open')) {
+            closeRadarDrawer();
+          }
+        });
+
+        // Vaciar carrito
+        radarDrawerClear?.addEventListener('click', () => {
+          const products = getRadarProducts();
+          if (products.length === 0) return;
+          if (confirm('¿Vaciar todos los productos del carrito?')) {
+            products.forEach((p) => removeProduct(p.id));
+            syncButtons();
+            renderRadarDrawer();
+          }
+        });
+
+        // Enlace del pie del drawer: si no hay sesión, abre modal de login
+        radarDrawerFullLink?.addEventListener('click', (e) => {
+          const session = getCachedSession();
+          if (!session?.user) {
+            e.preventDefault();
+            closeRadarDrawer();
+            const w = window as unknown as Record<string, { open?: (mode?: string) => void } | undefined>;
+            w.TradylorAuth?.open?.('login');
+          }
+        });
+
+        // Contador del header
+        const syncHeaderCount = () => {
+          const el = document.getElementById('radarHeaderCount');
+          if (!el) return;
+          const count = getRadarProducts().length;
+          el.textContent = String(count);
+          el.hidden = count === 0;
+        };
 
         // ---------------------------------------------------- menú de usuario
         const userMenuToggle = $('[data-user-menu-toggle]');
@@ -1142,6 +1749,10 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
             btn.setAttribute('aria-pressed', String(saved));
             btn.title = saved ? 'Quitar de Mi Radar' : 'Guardar en Mi Radar';
           });
+          syncHeaderCount();
+          if (radarDrawer?.classList.contains('is-open')) {
+            renderRadarDrawer();
+          }
         };
 
         // Delegación de clics en cualquier botón "Guardar" (tarjetas, etc.).
