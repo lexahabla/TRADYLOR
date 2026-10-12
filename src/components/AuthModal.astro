@@ -423,6 +423,18 @@
     // API pública para abrir el modal desde cualquier página/botón.
     (window as unknown as Record<string, unknown>).TradylorAuth = { open, close };
 
+    // Delegación global: cualquier [data-open-auth] (cabecera, banner, etc.)
+    // abre el modal en la vista indicada (login | register | forgot | reset).
+    document.addEventListener('click', (event) => {
+      const t = event.target;
+      if (!(t instanceof Element)) return;
+      const trigger = t.closest<HTMLElement>('[data-open-auth]');
+      if (!trigger) return;
+      event.preventDefault();
+      const view = (trigger.dataset.openAuth ?? 'login') as View;
+      open(view in forms ? view : 'login');
+    });
+
     modal.querySelectorAll('[data-auth-close]').forEach((el) => el.addEventListener('click', close));
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !modal.hidden) close();

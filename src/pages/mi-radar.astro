@@ -978,13 +978,6 @@ export const prerender = false;
     updateStatus(null);
   });
 
-  document.querySelectorAll<HTMLElement>('[data-open-auth]').forEach((el) => {
-    el.addEventListener('click', () => {
-      const view = el.dataset.openAuth as 'login' | 'register';
-      (window as unknown as { TradylorAuth?: { open: (v: string) => void } }).TradylorAuth?.open(view);
-    });
-  });
-
   /* ------------------------------------------------------------- sesión */
 
   function updateStatus(user: { email: string; name?: string } | null): void {
