@@ -48,6 +48,21 @@ export const GET: APIRoute = () => {
     dataDirExists = false;
   }
 
+  const env = {
+    smtp: Boolean((process.env.SMTP_HOST ?? '').trim() && (process.env.SMTP_USER ?? '').trim() && (process.env.SMTP_PASS ?? '').trim()),
+    googleAuth: Boolean((process.env.GOOGLE_CLIENT_ID ?? '').trim() && (process.env.GOOGLE_CLIENT_SECRET ?? '').trim()),
+    apiToken: Boolean((process.env.TRADYLOR_API_TOKEN ?? '').trim()),
+    n8nVerifyWebhook: Boolean((process.env.N8N_VERIFY_WEBHOOK_URL ?? '').trim()),
+    n8nResetWebhook: Boolean((process.env.N8N_RESET_WEBHOOK_URL ?? '').trim()),
+    n8nClickWebhook: Boolean((process.env.N8N_CLICK_WEBHOOK_URL ?? '').trim()),
+    openai: Boolean((process.env.OPENAI_API_KEY ?? '').trim()),
+    anthropic: Boolean((process.env.ANTHROPIC_API_KEY ?? '').trim()),
+    groq: Boolean((process.env.GROQ_API_KEY ?? '').trim()),
+    flux: Boolean((process.env.FLUX_API_KEY ?? '').trim()),
+    textAiProvider: (process.env.TEXT_AI_PROVIDER ?? 'openai').trim(),
+    imageAiProvider: (process.env.IMAGE_AI_PROVIDER ?? 'openai').trim(),
+  };
+
   return new Response(
     JSON.stringify({
       status: 'ok',
@@ -57,6 +72,7 @@ export const GET: APIRoute = () => {
       uptimeSeconds: Math.round(process.uptime()),
       timestamp: new Date().toISOString(),
       dataDirExists,
+      env,
     }),
     { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } },
   );
