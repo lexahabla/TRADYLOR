@@ -16,7 +16,7 @@ export const POST: APIRoute = async ({ request }) => {
     const email = String(body.email ?? '').trim();
     if (!email) return json({ success: false, message: 'Indica tu email.' }, 400);
     const origin = new URL(request.url).origin;
-    const result = resendVerificationEmail(email, origin);
+    const result = await resendVerificationEmail(email, origin);
     return json({
       success: true,
       message: 'Si existe una cuenta pendiente de activar, recibirás un nuevo correo de activación.',

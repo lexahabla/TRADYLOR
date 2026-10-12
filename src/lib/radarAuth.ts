@@ -2,6 +2,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 import fs from 'node:fs';
 import path from 'node:path';
 import { dataFile, RADAR_AVATARS_DIR } from './paths';
+import { sendVerificationEmailSmtp } from './mailer';
 
 /**
  * ==============================================================================
@@ -335,24 +336,31 @@ export function verifyRadarUser(token: string): PublicRadarUser {
  * de Mi Radar. Sin SMTP se entrega vía N8N_VERIFY_WEBHOOK_URL (n8n envía el
  * email); en local se devuelve el link en claro para poder probar el flujo.
  */
-export function sendVerificationEmail(user: RadarUser, origin: string): VerificationEmailResult {
+export async function sendVerificationEmail(user: RadarUser, origin: string): Promise<VerificationEmailResult> {
   const verifyUrl = `${origin.replace(/\/$/, '')}/?verify=${user.activationToken}`;
+  const isProd = (process.env.NODE_ENV ?? '') === 'production';
+
+  // 1) SMTP directo (si está configurado): envío real sin depender de n8n.
+  const smtpSent = await sendVerificationEmailSmtp({ to: user.email, name: user.name, verifyUrl });
+  if (smtpSent) return { notified: true, devVerifyUrl: isProd ? undefined : verifyUrl };
+
+  // 2) Fallback: webhook de n8n (mismo patrón que el reset de contraseña).
   const webhook = (process.env.N8N_VERIFY_WEBHOOK_URL ?? import.meta.env.N8N_VERIFY_WEBHOOK_URL ?? '').trim();
-  let notified = false;
   if (webhook) {
     fetch(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ to: user.email, name: user.name, verifyUrl, product: 'tradylor-mi-radar' }),
-    }).then(() => { notified = true; }).catch((error) => console.error('[RadarAuth] Webhook de activación falló:', error));
-    notified = true;
+    }).catch((error) => console.error('[RadarAuth] Webhook de activación falló:', error));
+    return { notified: true, devVerifyUrl: isProd ? undefined : verifyUrl };
   }
-  const isProd = (process.env.NODE_ENV ?? '') === 'production';
-  return { notified, devVerifyUrl: isProd ? undefined : verifyUrl };
+
+  // 3) Sin SMTP ni webhook: en local se devuelve el link para probar; en prod no se envía.
+  return { notified: false, devVerifyUrl: isProd ? undefined : verifyUrl };
 }
 
 /** Regenera el token y reenvía el email de activación (mismo patrón que forgot). */
-export function resendVerificationEmail(email: string, origin: string): VerificationEmailResult {
+export async function resendVerificationEmail(email: string, origin: string): Promise<VerificationEmailResult> {
   const users = readUsers();
   const user = users.find((u) => u.email === email.trim().toLowerCase());
   if (!user || user.verified || user.provider !== 'email') return { notified: false };

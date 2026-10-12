@@ -35,7 +35,7 @@ export const POST: APIRoute = async ({ request }) => {
     // el email de bienvenida con el botón de activación.
     if (!user.verified) {
       const origin = new URL(request.url).origin;
-      const result = sendVerificationEmail(full, origin);
+      const result = await sendVerificationEmail(full, origin);
       return json(
         { success: true, verificationPending: true, devVerifyUrl: result.devVerifyUrl },
         201,
