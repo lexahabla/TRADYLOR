@@ -274,7 +274,7 @@ const formatCurrency = (amount: number) => {
     </div>
   </div>
 
-  <!-- Pie de la Tarjeta: Precio, CTA y Transparencia -->
+  <!-- Pie de la Tarjeta: Precio -->
   <div class="card-footer">
     <div class="price-container">
       <span class="price-label">Precio verificado:</span>
@@ -285,44 +285,46 @@ const formatCurrency = (amount: number) => {
         )}
       </div>
     </div>
-
-    <div class="buy-actions">
-      <a
-        href={`/checkout/${product.slug ?? product.id}`}
-        class="affiliate-cta-btn buy-now-btn"
-        id={`cta-btn-${product.id}`}
-        aria-label={`Comprar ya ${product.title}`}
-      >
-        <span>Comprar ya</span>
-        <svg class="external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-          <polyline points="12 5 19 12 12 19"></polyline>
-        </svg>
-      </a>
-    </div>
-
-    <!-- Salida directa: enlace de compra directa (cesta de Amazon con tag → tramitación). -->
-    {catalogDirectExitHref && (product.asin || product.buyNowUrl) && (
-      <a
-        href={catalogDirectExitHref}
-        class="quick-buy-cta exit-cta"
-        target="_blank"
-        rel="nofollow sponsored noopener noreferrer"
-        data-network="amazon"
-        data-asin={product.asin || undefined}
-        data-title={product.title}
-        aria-label={`Comprar ahora en ${product.merchant} (salida directa)`}
-      >
-        Comprar ahora en {product.merchant}
-        <svg class="external-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-          <polyline points="15 3 21 3 21 9" />
-          <line x1="10" y1="14" x2="21" y2="3" />
-        </svg>
-      </a>
-    )}
   </div>
   </div>
+
+  <!-- Acciones de compra a ancho completo de la tarjeta (fila propia en móvil). -->
+  <div class="buy-actions">
+    <a
+      href={`/checkout/${product.slug ?? product.id}`}
+      class="affiliate-cta-btn buy-now-btn"
+      id={`cta-btn-${product.id}`}
+      aria-label={`Comprar ya ${product.title}`}
+    >
+      <span>Comprar ya</span>
+      <svg class="external-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+        <polyline points="12 5 19 12 12 19"></polyline>
+      </svg>
+    </a>
+  </div>
+
+  <!-- Salida directa: enlace de compra directa (cesta de Amazon con tag → tramitación).
+       A ancho completo de la tarjeta, bajo "Comprar ya". -->
+  {catalogDirectExitHref && (product.asin || product.buyNowUrl) && (
+    <a
+      href={catalogDirectExitHref}
+      class="quick-buy-cta exit-cta"
+      target="_blank"
+      rel="nofollow sponsored noopener noreferrer"
+      data-network="amazon"
+      data-asin={product.asin || undefined}
+      data-title={product.title}
+      aria-label={`Comprar ahora en ${product.merchant} (salida directa)`}
+    >
+      Comprar ahora en {product.merchant}
+      <svg class="external-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+        <polyline points="15 3 21 3 21 9" />
+        <line x1="10" y1="14" x2="21" y2="3" />
+      </svg>
+    </a>
+  )}
 
   <!-- Microcopia de confianza: a ancho completo de la tarjeta (fuera de la
        columna de imagen, en la fila inferior en móvil). -->
@@ -595,12 +597,14 @@ const formatCurrency = (amount: number) => {
     }
   }
 
-  /* ============ FOOTER SECTION ============ */
+  /* ============ FOOTER SECTION (precio) ============
+     Los botones de compra viven fuera, como hijos directos de la tarjeta,
+     para ocupar todo el ancho. */
   .card-footer {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
-    padding: 0.6rem 0.9rem 0.9rem;
+    padding: 0.6rem 0.9rem 0;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
     background: rgba(10, 14, 23, 0.3);
   }
@@ -697,11 +701,16 @@ const formatCurrency = (amount: number) => {
     transform: translate(3px, -3px);
   }
 
-  /* ============ CTA DE COMPRA (Compra Delegada) ============ */
+  /* ============ CTA DE COMPRA (Compra Delegada) ============
+     Hijo directo de la tarjeta: a ancho completo (fila propia en móvil),
+     con el mismo padding lateral que el contenido para alinearse. */
   .buy-actions {
     display: flex;
     flex-direction: column;
     gap: 0.6rem;
+    width: 100%;
+    padding: 0 0.9rem;
+    box-sizing: border-box;
   }
 
   .buy-actions > * {
@@ -726,6 +735,7 @@ const formatCurrency = (amount: number) => {
   }
 
   @media (max-width: 767px) {
+    .buy-actions,
     .trust-guarantee {
       flex: 0 0 100%;
     }
@@ -735,13 +745,16 @@ const formatCurrency = (amount: number) => {
     color: rgba(16, 185, 129, 0.6);
   }
 
-  /* ============ SALIDA DIRECTA POR ASIN (exit-cta) ============ */
+  /* ============ SALIDA DIRECTA POR ASIN (exit-cta) ============
+     A ancho completo de la tarjeta; márgenes laterales para alinearse
+     con el contenido (mismo criterio que .buy-actions). */
   .quick-buy-cta {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.45rem;
-    width: 100%;
+    width: calc(100% - 1.8rem);
+    margin: 0 0.9rem;
     min-height: 44px;
     padding: 0.65rem 1rem;
     background: rgba(251, 191, 36, 0.08);
@@ -812,8 +825,22 @@ const formatCurrency = (amount: number) => {
     }
 
     .card-footer {
-      padding: 1rem 1.25rem 1.25rem;
+      padding: 1rem 1.25rem 0;
       gap: 0.85rem;
+    }
+
+    .buy-actions {
+      margin-top: 0.75rem;
+      padding: 0 1.25rem;
+    }
+
+    .quick-buy-cta {
+      margin: 0.6rem 1.25rem 0;
+      width: calc(100% - 2.5rem);
+    }
+
+    .trust-guarantee {
+      margin-top: 0.75rem;
     }
 
     .product-title {
@@ -839,7 +866,16 @@ const formatCurrency = (amount: number) => {
     }
 
     .card-footer {
-      padding: 0.9rem 1.1rem 1.1rem;
+      padding: 0.9rem 1.1rem 0;
+    }
+
+    .buy-actions {
+      padding: 0 1.1rem;
+    }
+
+    .quick-buy-cta {
+      margin: 0.6rem 1.1rem 0;
+      width: calc(100% - 2.2rem);
     }
 
     .product-title {
@@ -866,9 +902,21 @@ const formatCurrency = (amount: number) => {
       font-size: 0.9rem;
     }
 
-    .card-content,
-    .card-footer {
+    .card-content {
       padding: 0.75rem;
+    }
+
+    .card-footer {
+      padding: 0.75rem 0.75rem 0;
+    }
+
+    .buy-actions {
+      padding: 0 0.75rem;
+    }
+
+    .quick-buy-cta {
+      margin: 0.6rem 0.75rem 0;
+      width: calc(100% - 1.5rem);
     }
 
     .main-price {
