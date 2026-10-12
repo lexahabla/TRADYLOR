@@ -863,18 +863,31 @@ const radarPayload = {
   }
 
   /* ============ TRUST GUARANTEE ============
-     Ocupa todo el ancho de la tarjeta: en móvil se coloca en una segunda
-     fila (flex-wrap + flex-basis 100%) bajo la imagen y la columna de datos. */
+     Ocupa todo el ancho de la tarjeta: alineado al centro tanto el contenedor
+     como sus elementos internos (icono y texto centrado). */
   .trust-guarantee {
     display: flex;
     align-items: center;
     justify-content: center;
+    text-align: center;
     gap: 0.5rem;
     width: 100%;
+    margin: 0.5rem auto 0;
     font-size: 0.75rem;
     color: rgba(255, 255, 255, 0.5);
-    padding: 0.5rem 0;
+    padding: 0.6rem 0.75rem;
     border-top: 1px solid rgba(255, 255, 255, 0.08);
+    box-sizing: border-box;
+  }
+
+  .trust-guarantee span {
+    text-align: center;
+    line-height: 1.35;
+  }
+
+  .trust-guarantee svg {
+    flex-shrink: 0;
+    color: rgba(16, 185, 129, 0.6);
   }
 
   @media (max-width: 767px) {
@@ -882,10 +895,6 @@ const radarPayload = {
     .trust-guarantee {
       flex: 0 0 100%;
     }
-  }
-
-  .trust-guarantee svg {
-    color: rgba(16, 185, 129, 0.6);
   }
 
   /* ============ SALIDA DIRECTA POR ASIN (exit-cta) ============
@@ -983,7 +992,7 @@ const radarPayload = {
     }
 
     .trust-guarantee {
-      margin-top: 0.75rem;
+      margin-top: auto;
     }
 
     .product-title {
