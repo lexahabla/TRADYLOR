@@ -21,7 +21,7 @@ import {
  *
  * Diseño híbrido adaptativo (todas las tarjetas):
  *   <768px  → disposición horizontal estilo lista de Amazon móvil: imagen fija
- *             (110×110) a la izquierda; título, precio, badges y botones a la derecha.
+ *             (132×132) a la izquierda; título, precio, badges y botones a la derecha.
  *   ≥768px  → disposición vertical clásica para los grids de varias columnas.
  */
 export interface Props {
@@ -86,13 +86,6 @@ const flatRating =
   rating !== undefined && rating !== null && String(rating).trim() !== ''
     ? String(rating)
     : '';
-
-// Galería del catálogo: miniaturas bajo la imagen principal en móvil
-// (se excluye la propia principal y se limitan a 3). Sin galería no se pinta.
-const galleryThumbs = (product?.gallery ?? [])
-  .map((src) => String(src ?? '').trim())
-  .filter((src) => src && src !== (product?.image ?? '').trim())
-  .slice(0, 3);
 
 const compactText = (text: string, maxLength: number) => {
   const normalized = text.replace(/\s+/g, ' ').trim();
@@ -202,7 +195,7 @@ const formatCurrency = (amount: number) => {
        Tailwind: contenedor cuadrado con fondo neutro (#F8F9FA) y la imagen
        contenida (object-contain) para que las fotos generadas con IA no se
        deformen ni se recorten en los bordes. -->
-  <!-- Columna de imagen: principal + miniaturas de galería (móvil). -->
+  <!-- Columna de imagen: sólo la imagen principal (única con enlace a ficha). -->
   <div class="image-col">
   <div class="image-wrapper">
     <a
@@ -226,13 +219,6 @@ const formatCurrency = (amount: number) => {
       </span>
     )}
   </div>
-  {galleryThumbs.length > 0 && (
-    <div class="image-thumbs">
-      {galleryThumbs.map((src) => (
-        <img class="image-thumb" src={src} alt="" loading="lazy" width="80" height="80" aria-hidden="true" />
-      ))}
-    </div>
-  )}
   </div>
 
   <!-- Columna de información: a la derecha en móvil (fila horizontal) y
@@ -378,22 +364,21 @@ const formatCurrency = (amount: number) => {
   }
 
   /* ============ IMAGE SECTION ============
-     Móvil: columna izquierda fija (120px) con la imagen principal y, debajo,
-     miniaturas de la galería apiladas (una por fila) a todo el ancho de la
-     columna. Escritorio (≥768px): imagen a ancho completo, sin miniaturas. */
+     Móvil: columna izquierda fija (132px) con la única imagen del producto.
+     Escritorio (≥768px): imagen a ancho completo. */
   .image-col {
     display: flex;
     flex-direction: column;
     gap: 4px;
-    width: 120px;
-    flex: 0 0 120px;
+    width: 132px;
+    flex: 0 0 132px;
     min-width: 0;
   }
 
   .image-wrapper {
     position: relative;
     width: 100%;
-    height: 120px;
+    height: 132px;
     flex: 0 0 auto;
     overflow: hidden;
     background: #f8fafc;
@@ -445,27 +430,6 @@ const formatCurrency = (amount: number) => {
   @keyframes slideDown {
     from { opacity: 0; transform: translateY(-8px); }
     to { opacity: 1; transform: translateY(0); }
-  }
-
-  /* Miniaturas de galería (sólo móvil): apiladas en vertical, una por fila,
-     a todo el ancho de la columna y más bajas que la imagen principal.
-     Sólo la imagen principal enlaza a la ficha; las miniaturas son décor. */
-  .image-thumbs {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    width: 100%;
-  }
-
-  .image-thumb {
-    display: block;
-    width: 100%;
-    height: 48px;
-    object-fit: contain;
-    padding: 2px;
-    background: #f8fafc;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 6px;
   }
 
   /* ============ CONTENT SECTION ============ */
@@ -820,10 +784,6 @@ const formatCurrency = (amount: number) => {
       flex: 0 0 auto;
     }
 
-    .image-thumbs {
-      display: none;
-    }
-
     .image-wrapper {
       width: 100%;
       height: auto;
@@ -923,17 +883,13 @@ const formatCurrency = (amount: number) => {
     }
 
     .image-col {
-      width: 104px;
-      flex: 0 0 104px;
+      width: 114px;
+      flex: 0 0 114px;
     }
 
     .image-wrapper {
-      height: 104px;
+      height: 114px;
       border-radius: 10px;
-    }
-
-    .image-thumb {
-      height: 44px;
     }
 
     .product-image {
