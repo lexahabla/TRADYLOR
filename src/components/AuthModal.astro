@@ -38,11 +38,11 @@
     <form class="auth-form" data-auth-form="login" novalidate>
       <label class="auth-field">
         <span>Email</span>
-        <input type="email" name="email" autocomplete="email" required placeholder="tu@email.com" />
+        <input type="email" name="email" autocomplete="email" required />
       </label>
       <label class="auth-field">
         <span>Contraseña</span>
-        <input type="password" name="password" autocomplete="current-password" required minlength="8" placeholder="••••••••" />
+        <input type="password" name="password" autocomplete="current-password" required minlength="8" />
       </label>
       <button type="submit" class="auth-submit">Entrar</button>
       <button type="button" class="auth-link-btn" data-auth-view="forgot">¿Olvidaste tu contraseña?</button>
@@ -52,15 +52,15 @@
     <form class="auth-form" data-auth-form="register" novalidate hidden>
       <label class="auth-field">
         <span>Nombre (opcional)</span>
-        <input type="text" name="name" autocomplete="name" placeholder="Cómo quieres que te llamemos" />
+        <input type="text" name="name" autocomplete="name" />
       </label>
       <label class="auth-field">
         <span>Email</span>
-        <input type="email" name="email" autocomplete="email" required placeholder="tu@email.com" />
+        <input type="email" name="email" autocomplete="email" required />
       </label>
       <label class="auth-field">
         <span>Contraseña (mín. 8 caracteres)</span>
-        <input type="password" name="password" autocomplete="new-password" required minlength="8" placeholder="••••••••" />
+        <input type="password" name="password" autocomplete="new-password" required minlength="8" />
       </label>
       <button type="submit" class="auth-submit">Crear cuenta gratis</button>
     </form>
@@ -70,7 +70,7 @@
       <p class="auth-form-hint">Escribe tu email y te enviaremos un enlace para elegir una contraseña nueva.</p>
       <label class="auth-field">
         <span>Email</span>
-        <input type="email" name="email" autocomplete="email" required placeholder="tu@email.com" />
+        <input type="email" name="email" autocomplete="email" required />
       </label>
       <button type="submit" class="auth-submit">Enviar enlace</button>
       <button type="button" class="auth-link-btn" data-auth-view="login">Volver a iniciar sesión</button>
@@ -81,7 +81,7 @@
       <p class="auth-form-hint">Elige una contraseña nueva para tu cuenta.</p>
       <label class="auth-field">
         <span>Nueva contraseña (mín. 8 caracteres)</span>
-        <input type="password" name="password" autocomplete="new-password" required minlength="8" placeholder="••••••••" />
+        <input type="password" name="password" autocomplete="new-password" required minlength="8" />
       </label>
       <button type="submit" class="auth-submit">Guardar contraseña</button>
     </form>
@@ -477,7 +477,10 @@
     const showView = (view: View) => {
       currentView = view;
       for (const [key, form] of Object.entries(forms)) {
-        if (form) form.hidden = key !== view;
+        if (form) {
+          form.hidden = key !== view;
+          form.reset();
+        }
       }
       tabs.forEach((tab) => {
         const active = (view === 'login' && tab.dataset.authTab === 'login')
@@ -492,6 +495,9 @@
       lastFocus = document.activeElement as HTMLElement | null;
       modal.hidden = false;
       document.body.classList.add('auth-modal-is-open');
+      for (const form of Object.values(forms)) {
+        form?.reset();
+      }
       showView(view);
       const firstInput = forms[view]?.querySelector<HTMLInputElement>('input');
       firstInput?.focus();
