@@ -297,115 +297,103 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
       .header-user-area[hidden] {
         display: none;
       }
-      .header-google-btn {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 38px;
-        height: 38px;
-        padding: 0;
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        border-radius: 999px;
-        cursor: pointer;
-        transition: border-color 0.2s ease, background 0.2s ease;
-      }
-      .header-google-btn:hover {
-        background: rgba(255, 255, 255, 0.12);
-        border-color: rgba(255, 255, 255, 0.3);
-      }
-
-      /* Usuario: botón con avatar + nombre + menú desplegable */
+      /* Usuario: avatar como botón + menú desplegable */
       .header-user {
         position: relative;
       }
-      .header-user-btn {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.45rem;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        color: var(--color-text-main);
-        font-size: 0.82rem;
-        font-weight: 600;
-        font-family: var(--font-body);
-        padding: 0.35rem 0.65rem;
-        border-radius: 999px;
+      .header-radar-avatar {
+        width: 34px;
+        height: 34px;
+        font-size: 0.85rem;
         cursor: pointer;
-        transition: border-color 0.2s ease, background 0.2s ease;
+        border: 2px solid transparent;
+        transition: border-color 0.2s ease, transform 0.15s ease;
+        user-select: none;
       }
-      .header-user-btn:hover,
-      .header-user-btn[aria-expanded="true"] {
-        background: rgba(255, 255, 255, 0.1);
-        border-color: rgba(255, 255, 255, 0.25);
+      .header-radar-avatar:hover,
+      .header-radar-avatar[aria-expanded="true"] {
+        border-color: rgba(255, 255, 255, 0.35);
       }
-      .header-avatar {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 26px;
-        height: 26px;
-        border-radius: 50%;
-        object-fit: cover;
-        background: linear-gradient(135deg, #3b82f6, #60a5fa);
-        color: #fff;
-        font-size: 0.72rem;
-        font-weight: 800;
-        flex-shrink: 0;
-        overflow: hidden;
+      .header-radar-avatar:active {
+        transform: scale(0.95);
       }
-      .header-avatar img {
+      .header-radar-avatar img {
         width: 100%;
         height: 100%;
         object-fit: cover;
-      }
-      .header-username {
-        max-width: 110px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        border-radius: 50%;
       }
       .header-user-menu {
         position: absolute;
-        top: calc(100% + 8px);
+        top: calc(100% + 10px);
         right: 0;
-        min-width: 210px;
+        min-width: 230px;
         background: #101827;
         border: 1px solid var(--color-border);
-        border-radius: 12px;
-        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
-        padding: 0.4rem;
+        border-radius: 14px;
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+        padding: 0.75rem;
         z-index: 400;
         display: flex;
         flex-direction: column;
-        gap: 2px;
+        gap: 0.15rem;
       }
       .header-user-menu[hidden] {
         display: none;
       }
-      .header-user-menu-link {
+      .header-user-menu-profile {
+        padding: 0 0.15rem;
+        min-width: 0;
+      }
+      .header-user-menu-profile .radar-profile-name {
+        margin: 0;
+        font-weight: 700;
+        font-size: 0.92rem;
+        color: var(--color-text-main);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .header-user-menu-profile .radar-profile-email {
+        margin: 0.15rem 0 0;
+        font-size: 0.75rem;
+        color: var(--color-text-dim);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .header-user-menu-divider {
+        height: 1px;
+        background: var(--color-border);
+        margin: 0.35rem 0;
+        opacity: 0.6;
+      }
+      .header-user-menu .radar-sync-badge {
+        padding: 0 0.15rem;
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #6ee7b7;
+      }
+      .header-user-menu-btn {
         display: flex;
         align-items: center;
-        gap: 0.55rem;
+        gap: 0.5rem;
         width: 100%;
-        padding: 0.55rem 0.7rem;
-        background: none;
-        border: none;
-        color: var(--color-text-main);
-        font-size: 0.84rem;
-        font-weight: 500;
-        font-family: var(--font-body);
+        padding: 0.5rem 0.6rem;
+        font-size: 0.82rem;
+        text-align: left;
         text-decoration: none;
         border-radius: 8px;
-        cursor: pointer;
-        text-align: left;
         transition: background 0.15s ease;
       }
-      .header-user-menu-link:hover {
+      .header-user-menu-btn:hover {
         background: rgba(255, 255, 255, 0.07);
       }
       .header-user-menu-logout {
         color: #f87171;
+      }
+      .header-user-menu-logout:hover {
+        background: rgba(248, 113, 113, 0.1);
       }
 
       /* Drawer lateral de Mi Radar (patrón del antiguo carrito) */
@@ -846,12 +834,6 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         .radar-header-btn > span:not(.radar-header-count) {
           display: none;
         }
-        .header-username {
-          display: none;
-        }
-        .header-user-btn > svg {
-          display: none;
-        }
       }
       @media (max-width: 600px) {
         .footer-grid {
@@ -961,20 +943,12 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                 </svg>
               </button>
 
-              <!-- No autenticado: Iniciar sesión + Google rápido -->
+              <!-- No autenticado: Iniciar sesión -->
               <div class="header-auth-actions" data-header-anon>
                 <button type="button" class="header-cta-btn" data-open-auth="login">Iniciar sesión</button>
-                <button type="button" class="header-google-btn" data-header-google aria-label="Continuar con Google">
-                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/>
-                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/>
-                    <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/>
-                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1a11 11 0 0 0-9.82 6.06l3.66 2.84C6.71 7.29 9.14 5.38 12 5.38z"/>
-                  </svg>
-                </button>
               </div>
 
-              <!-- Autenticado: Mi Radar (drawer) + usuario -->
+              <!-- Autenticado: Mi Radar (drawer) + menú de usuario (avatar) -->
               <div class="header-user-area" data-header-user hidden>
                 <button type="button" class="header-cta-btn radar-header-btn" data-radar-drawer-toggle aria-label="Mi Radar — productos guardados" aria-expanded="false" aria-controls="radarDrawer">
                   <svg class="radar-anim-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
@@ -989,23 +963,26 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                 </button>
 
                 <div class="header-user" data-header-user-menu-wrap>
-                  <button type="button" class="header-user-btn" data-user-menu-toggle aria-haspopup="true" aria-expanded="false">
-                    <span class="header-avatar" data-header-avatar aria-hidden="true">U</span>
-                    <span class="header-username" data-header-username>Usuario</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
-                  </button>
+                  <span class="radar-avatar header-radar-avatar" data-header-avatar data-user-menu-toggle role="button" tabindex="0" aria-haspopup="true" aria-expanded="false" aria-label="Menú de usuario">U</span>
                   <div class="header-user-menu" data-user-menu hidden>
-                    <a href="/mi-radar" class="header-user-menu-link">
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    <div class="header-user-menu-profile">
+                      <p class="radar-profile-name" data-header-username>Usuario</p>
+                      <p class="radar-profile-email" data-header-email>—</p>
+                    </div>
+                    <div class="header-user-menu-divider"></div>
+                    <span class="radar-sync-badge" data-header-sync>Sincronizado ✓</span>
+                    <div class="header-user-menu-divider"></div>
+                    <a href="/mi-radar" class="radar-btn radar-btn-ghost header-user-menu-btn">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                       Panel Mi Radar
                     </a>
-                    <button type="button" class="header-user-menu-link" data-user-avatar-btn>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    <button type="button" class="radar-btn radar-btn-ghost header-user-menu-btn" data-user-avatar-btn>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                       Cambiar foto
                     </button>
                     <input type="file" accept="image/jpeg,image/png,image/webp" data-user-avatar-input hidden />
-                    <button type="button" class="header-user-menu-link header-user-menu-logout" data-user-logout>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    <button type="button" class="radar-btn radar-btn-ghost header-user-menu-btn header-user-menu-logout" data-user-logout>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                       Cerrar sesión
                     </button>
                   </div>
@@ -1273,7 +1250,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         // 4) Registra salidas .exit-cta en el Return Flow.
         // 5) Cabecera: auth vs usuario logueado, drawer Mi Radar, menú, avatar.
         // =====================================================================
-        import { getSession, getCachedSession, initAuth, loginWithGoogle, logout, onAuthChange } from '../utils/auth';
+        import { getSession, getCachedSession, initAuth, logout, onAuthChange } from '../utils/auth';
         import {
           getRadarProducts,
           isSaved,
@@ -1291,6 +1268,8 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         const headerAnon = $('[data-header-anon]');
         const headerUserArea = $('[data-header-user]');
         const headerUsername = $('[data-header-username]');
+        const headerEmail = $('[data-header-email]');
+        const headerSync = $('[data-header-sync]');
         const headerAvatarWrap = $('[data-header-avatar]');
 
         function renderHeaderAuth(user: UserProfile | null) {
@@ -1298,13 +1277,16 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           if (user) {
             headerAnon.hidden = true;
             headerUserArea.hidden = false;
-            if (headerUsername) headerUsername.textContent = user.name || user.email.split('@')[0];
+            const displayName = user.name || user.email.split('@')[0];
+            if (headerUsername) headerUsername.textContent = displayName;
+            if (headerEmail) headerEmail.textContent = user.email;
+            if (headerSync) headerSync.textContent = 'Sincronizado ✓';
             if (headerAvatarWrap) {
               const v = user.updatedAt ? `?v=${encodeURIComponent(user.updatedAt)}` : '';
               if (user.avatar) {
                 headerAvatarWrap.innerHTML = `<img src="/api/radar/auth/avatar${v}" alt="" />`;
               } else {
-                headerAvatarWrap.textContent = (user.name || user.email).charAt(0).toUpperCase();
+                headerAvatarWrap.textContent = displayName.charAt(0).toUpperCase();
               }
             }
           } else {
@@ -1369,12 +1351,21 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         const userMenuToggle = $('[data-user-menu-toggle]');
         const userMenu = $('[data-user-menu]');
 
-        userMenuToggle?.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (!userMenu) return;
+        function toggleUserMenu() {
+          if (!userMenu || !userMenuToggle) return;
           const open = userMenu.hidden;
           userMenu.hidden = !open;
           userMenuToggle.setAttribute('aria-expanded', String(open));
+        }
+        userMenuToggle?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleUserMenu();
+        });
+        userMenuToggle?.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            toggleUserMenu();
+          }
         });
         document.addEventListener('click', (event) => {
           const t = event.target;
@@ -1411,17 +1402,6 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
             }
           } catch { /* silencio */ }
           avatarInput.value = '';
-        });
-
-        // ------------------------------------------------- Google rápido (cabecera)
-        $('[data-header-google]')?.addEventListener('click', async () => {
-          try {
-            await loginWithGoogle();
-          } catch {
-            // Sin OAuth configurado: abre el modal (muestra el hint).
-            const w = window as unknown as Record<string, { open?: () => void } | undefined>;
-            w.TradylorAuth?.open?.();
-          }
         });
 
         // ------------------------------------------------------- contador + botones
