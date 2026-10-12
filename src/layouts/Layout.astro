@@ -1246,7 +1246,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
               <span data-radar-drawer-link-text>Ver panel completo</span>
             </a>
             <button type="button" class="radar-drawer-clear-btn" data-radar-drawer-clear>
-              Vaciar carrito
+              Vaciar radar
             </button>
           </div>
         </div>
@@ -1680,11 +1680,11 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           }
         });
 
-        // Vaciar carrito
+        // Vaciar radar
         radarDrawerClear?.addEventListener('click', () => {
           const products = getRadarProducts();
           if (products.length === 0) return;
-          if (confirm('¿Vaciar todos los productos del carrito?')) {
+          if (confirm('¿Vaciar todos los productos del radar?')) {
             products.forEach((p) => removeProduct(p.id));
             syncButtons();
             renderRadarDrawer();
