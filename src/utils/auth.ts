@@ -139,16 +139,16 @@ export async function resetPassword(token: string, password: string): Promise<Au
   };
 }
 
-/** Navega al arranque del OAuth de Google (o responde 501 si no está activo). */
+/** Navega al arranque del OAuth de Google (o muestra error si no está activo). */
 export async function loginWithGoogle(): Promise<void> {
-  const res = await fetch('/api/radar/auth/google', { redirect: 'follow' });
-  if (res.redirected) {
-    window.location.href = res.url;
-    return;
+  // Comprobación previa: si no hay config, el endpoint devuelve 501 JSON.
+  const probe = await fetch('/api/radar/auth/google', { redirect: 'manual', headers: { Accept: 'application/json' } });
+  if (probe.status === 501) {
+    const data = await parseJson(probe);
+    throw new Error(String(data.message ?? 'Google OAuth no disponible.'));
   }
-  // 501 sin configurar u otro error: recarga para que el modal lo muestre.
-  const data = await parseJson(res);
-  throw new Error(String(data.message ?? 'Google OAuth no disponible.'));
+  // 302 a Google: navegación directa (fetch follow fallaría por CORS).
+  window.location.href = '/api/radar/auth/google';
 }
 
 /**
