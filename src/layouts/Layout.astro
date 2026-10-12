@@ -259,7 +259,20 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         border-color: transparent;
         box-shadow: var(--shadow-glow);
       }
-      .cart-count {
+
+      /* Icono radar animado (barrido circular) */
+      .radar-anim-icon .radar-sweep {
+        transform-origin: 12px 12px;
+        animation: radar-spin 2.4s linear infinite;
+      }
+      @keyframes radar-spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .radar-anim-icon .radar-sweep { animation: none; }
+      }
+      .radar-header-count {
         background: var(--color-accent);
         color: #06281d;
         font-size: 0.7rem;
@@ -297,236 +310,6 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
       /* Contenido Principal */
       #main-content {
         flex: 1;
-      }
-
-      /* Carrito Lateral (Drawer) */
-      .cart-drawer {
-        position: fixed;
-        top: 0;
-        right: 0;
-        width: min(400px, 92vw);
-        height: 100vh;
-        height: 100dvh;
-        background: #0f1623;
-        border-left: 1px solid var(--color-border);
-        box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
-        transform: translateX(105%);
-        transition: transform 0.35s cubic-bezier(0.23, 1, 0.32, 1);
-        z-index: 300;
-        display: flex;
-        flex-direction: column;
-      }
-      .cart-drawer.is-open {
-        transform: translateX(0);
-      }
-      .cart-backdrop {
-        position: fixed;
-        inset: 0;
-        background: rgba(4, 8, 15, 0.65);
-        backdrop-filter: blur(2px);
-        opacity: 0;
-        pointer-events: none;
-        transition: opacity 0.3s ease;
-        z-index: 250;
-      }
-      body.cart-is-open .cart-backdrop {
-        opacity: 1;
-        pointer-events: auto;
-      }
-      body.cart-is-open {
-        overflow: hidden;
-      }
-      .cart-drawer-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 1.5rem;
-        border-bottom: 1px solid var(--color-border);
-      }
-      .cart-kicker {
-        font-size: 0.72rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: var(--color-text-dim);
-      }
-      .cart-drawer-header h2 {
-        font-family: var(--font-heading);
-        font-size: 1.35rem;
-        margin: 0.15rem 0 0;
-      }
-      .cart-close-btn {
-        background: rgba(255, 255, 255, 0.06);
-        border: 1px solid var(--color-border);
-        color: var(--color-text-muted);
-        width: 36px;
-        height: 36px;
-        border-radius: 10px;
-        font-size: 1.25rem;
-        line-height: 1;
-        cursor: pointer;
-        transition: all 0.2s ease;
-      }
-      .cart-close-btn:hover {
-        color: #ffffff;
-        border-color: var(--color-border-hover);
-      }
-      .cart-items {
-        flex: 1;
-        overflow-y: auto;
-        padding: 1.25rem 1.5rem;
-        display: flex;
-        flex-direction: column;
-        gap: 1rem;
-      }
-      .cart-item {
-        display: flex;
-        gap: 0.85rem;
-        background: var(--color-bg-card);
-        border: 1px solid var(--color-border);
-        border-radius: var(--border-radius-sm);
-        padding: 0.75rem;
-      }
-      .cart-item img {
-        width: 56px;
-        height: 56px;
-        object-fit: contain;
-        border-radius: 6px;
-        background: #ffffff;
-        padding: 4px;
-        flex-shrink: 0;
-      }
-      .cart-item-info {
-        display: flex;
-        flex-direction: column;
-        gap: 0.25rem;
-        min-width: 0;
-      }
-      .cart-item-info a {
-        color: var(--color-text-main);
-        font-size: 0.85rem;
-        font-weight: 600;
-        text-decoration: none;
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-      }
-      .cart-item-info a:hover {
-        color: #60a5fa;
-      }
-      .cart-item-info span {
-        font-size: 0.78rem;
-        color: var(--color-text-muted);
-      }
-      .cart-remove-btn {
-        align-self: flex-start;
-        background: none;
-        border: none;
-        color: #f87171;
-        font-size: 0.75rem;
-        cursor: pointer;
-        padding: 0;
-      }
-      .cart-remove-btn:hover {
-        text-decoration: underline;
-      }
-      .cart-empty {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        color: var(--color-text-dim);
-        text-align: center;
-        padding: 2rem;
-      }
-      .cart-empty[hidden] {
-        display: none;
-      }
-      .cart-empty p {
-        color: var(--color-text-muted);
-        font-weight: 600;
-        margin: 0;
-      }
-      .cart-empty span {
-        font-size: 0.82rem;
-      }
-      .cart-drawer-footer {
-        padding: 1.25rem 1.5rem;
-        border-top: 1px solid var(--color-border);
-        display: flex;
-        flex-direction: column;
-        gap: 0.85rem;
-      }
-      .cart-total-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        font-size: 0.9rem;
-        color: var(--color-text-muted);
-      }
-      .cart-total-row strong {
-        font-family: var(--font-heading);
-        font-size: 1.2rem;
-        color: #ffffff;
-      }
-      .cart-clear-btn {
-        width: 100%;
-        padding: 0.7rem;
-        background: rgba(239, 68, 68, 0.1);
-        border: 1px solid rgba(239, 68, 68, 0.3);
-        color: #f87171;
-        font-size: 0.85rem;
-        font-weight: 600;
-        font-family: var(--font-body);
-        border-radius: var(--border-radius-sm);
-        cursor: pointer;
-        transition: all 0.2s ease;
-      }
-      .cart-clear-btn:hover {
-        background: rgba(239, 68, 68, 0.2);
-      }
-
-      /* CTA de Compra Delegada dentro del carrito (un solo artículo) */
-      .cart-checkout-btn {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 100%;
-        padding: 0.85rem 1rem;
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 60%, #1e40af 100%);
-        color: #ffffff;
-        font-family: var(--font-heading);
-        font-size: 0.95rem;
-        font-weight: 700;
-        text-align: center;
-        text-decoration: none;
-        border: none;
-        border-radius: var(--border-radius-sm);
-        cursor: pointer;
-        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.4);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-      }
-      .cart-checkout-btn:hover {
-        transform: translateY(-1px);
-        box-shadow: 0 10px 26px rgba(37, 99, 235, 0.55);
-      }
-      .cart-checkout-btn[hidden] {
-        display: none;
-      }
-      .cart-checkout-note {
-        font-size: 0.76rem;
-        color: var(--color-text-dim);
-        line-height: 1.5;
-        text-align: center;
-        background: rgba(59, 130, 246, 0.07);
-        border: 1px solid rgba(59, 130, 246, 0.2);
-        border-radius: var(--border-radius-sm);
-        padding: 0.6rem 0.75rem;
-      }
-      .cart-checkout-note[hidden] {
-        display: none;
       }
 
       /* Footer */
@@ -758,7 +541,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           top: 50%;
           transform: translate(-50%, -50%);
         }
-        .header-cta-btn > span:not(.cart-count) {
+        .header-cta-btn > span:not(.radar-header-count) {
           display: none;
         }
       }
@@ -870,15 +653,16 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                   <line x1="4" y1="17" x2="20" y2="17"></line>
                 </svg>
               </button>
-              <button type="button" class="header-cta-btn cart-toggle-btn" aria-controls="cartDrawer" aria-expanded="false">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                  <line x1="3" y1="6" x2="21" y2="6"></line>
-                  <path d="M16 10a4 4 0 0 1-8 0"></path>
+              <a href="/mi-radar" class="header-cta-btn radar-header-btn" aria-label="Mi Radar - Productos guardados">
+                <svg class="radar-anim-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <circle cx="12" cy="12" r="5" />
+                  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
+                  <line class="radar-sweep" x1="12" y1="12" x2="12" y2="3.5" stroke-width="2.5" stroke-linecap="round" />
                 </svg>
-                <span>Carrito</span>
-                <span class="cart-count" id="cartCount" hidden>0</span>
-              </button>
+                <span>Mi Radar</span>
+                <span class="radar-header-count" id="radarHeaderCount" hidden>0</span>
+              </a>
             </div>
           </>
         )}
@@ -889,36 +673,6 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
     <main id="main-content">
       <slot />
     </main>
-
-    <aside id="cartDrawer" class="cart-drawer" aria-hidden="true" aria-labelledby="cartTitle">
-      <div class="cart-drawer-header">
-        <div>
-          <span class="cart-kicker">Tu selección</span>
-          <h2 id="cartTitle">Carrito</h2>
-        </div>
-        <button type="button" class="cart-close-btn" data-cart-close aria-label="Cerrar carrito">×</button>
-      </div>
-      <div id="cartItems" class="cart-items"></div>
-      <div id="cartEmpty" class="cart-empty">
-        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-          <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
-          <path d="M3 6h18"></path>
-          <path d="M16 10a4 4 0 0 1-8 0"></path>
-        </svg>
-        <p>Tu carrito está vacío</p>
-        <span>Añade productos para verlos aquí.</span>
-      </div>
-      <div class="cart-drawer-footer">
-        <div class="cart-total-row"><span>Total orientativo</span><strong id="cartTotal">0,00 €</strong></div>
-        <a href="#" id="cartCheckoutBtn" class="cart-checkout-btn" hidden>Tramitar pedido</a>
-        <p id="cartCheckoutNote" class="cart-checkout-note" hidden>
-          La tramitación se realiza producto a producto: abre la ficha del artículo
-          que quieras y pulsa «Tramitar pedido».
-        </p>
-        <button type="button" class="cart-clear-btn" data-cart-clear>Vaciar carrito</button>
-      </div>
-    </aside>
-    <div class="cart-backdrop" data-cart-close></div>
 
     <!-- 4. Footer Detallado con Aviso Legal de Afiliación Completo -->
     <footer class="site-footer">
@@ -1024,92 +778,6 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
 
     <script is:inline>
       (() => {
-        const storageKey = 'tradylor-cart';
-        const cartDrawer = document.getElementById('cartDrawer');
-        const cartItems = document.getElementById('cartItems');
-        const cartEmpty = document.getElementById('cartEmpty');
-        const cartCount = document.getElementById('cartCount');
-        const cartTotal = document.getElementById('cartTotal');
-        const cartCheckoutBtn = document.getElementById('cartCheckoutBtn');
-        const cartCheckoutNote = document.getElementById('cartCheckoutNote');
-        const cartToggle = document.querySelector('.cart-toggle-btn');
-        let cart = JSON.parse(localStorage.getItem(storageKey) || '[]');
-
-        const formatPrice = (value) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
-        const saveCart = () => localStorage.setItem(storageKey, JSON.stringify(cart));
-
-        function renderCart() {
-          const itemCount = cart.reduce((total, item) => total + item.quantity, 0);
-          const total = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-          if (cartCount) {
-            cartCount.textContent = itemCount;
-            cartCount.hidden = itemCount === 0;
-          }
-          cartTotal.textContent = formatPrice(total);
-          cartEmpty.hidden = cart.length > 0;
-
-          // Compra delegada: el checkout puente sólo admite un artículo por salida
-          if (cartCheckoutBtn) {
-            const single = cart.length === 1;
-            cartCheckoutBtn.hidden = !single;
-            cartCheckoutBtn.setAttribute('href', single ? `/checkout/${cart[0].id}` : '#');
-          }
-          if (cartCheckoutNote) cartCheckoutNote.hidden = cart.length <= 1;
-          cartItems.innerHTML = cart.map((item) => `
-            <article class="cart-item">
-              <img src="${item.image}" alt="" loading="lazy" />
-              <div class="cart-item-info">
-                <a href="/producto/${item.id}">${item.title}</a>
-                <span>${formatPrice(item.price)} · Cantidad ${item.quantity}</span>
-                <button type="button" class="cart-remove-btn" data-cart-remove="${item.id}">Eliminar</button>
-              </div>
-            </article>
-          `).join('');
-        }
-
-        function openCart() {
-          cartDrawer.classList.add('is-open');
-          cartDrawer.setAttribute('aria-hidden', 'false');
-          cartToggle?.setAttribute('aria-expanded', 'true');
-          document.body.classList.add('cart-is-open');
-        }
-
-        function closeCart() {
-          cartDrawer.classList.remove('is-open');
-          cartDrawer.setAttribute('aria-hidden', 'true');
-          cartToggle?.setAttribute('aria-expanded', 'false');
-          document.body.classList.remove('cart-is-open');
-        }
-
-        document.addEventListener('click', (event) => {
-          const addButton = event.target.closest('.add-to-cart-btn');
-          const removeButton = event.target.closest('[data-cart-remove]');
-          if (addButton) {
-            const product = JSON.parse(addButton.dataset.product);
-            const existing = cart.find((item) => item.id === product.id);
-            if (existing) existing.quantity += 1;
-            else cart.push({ ...product, quantity: 1 });
-            saveCart();
-            renderCart();
-            openCart();
-            fetch('/api/analytics/event', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'cart_add', productId: product.id, path: window.location.pathname }) }).catch(() => {});
-          }
-          if (removeButton) {
-            cart = cart.filter((item) => item.id !== removeButton.dataset.cartRemove);
-            saveCart();
-            renderCart();
-          }
-          if (event.target.closest('.cart-toggle-btn')) openCart();
-          if (event.target.closest('[data-cart-close]')) closeCart();
-          if (event.target.closest('[data-cart-clear]')) {
-            cart = [];
-            saveCart();
-            renderCart();
-          }
-        });
-
-        renderCart();
-
         const navToggleBtn = document.querySelector('.nav-toggle-btn');
         const mainNav = document.getElementById('mainNav');
         if (navToggleBtn && mainNav) {
@@ -1230,6 +898,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         // =====================================================================
         import { initAuth, onAuthChange } from '../utils/auth';
         import {
+          getRadarProducts,
           isSaved,
           onRadarChange,
           removeProduct,
@@ -1237,6 +906,14 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           trackExitClick,
         } from '../utils/radarStore';
         import type { SavedProduct } from '../types/radar';
+
+        const syncHeaderCount = () => {
+          const el = document.getElementById('radarHeaderCount');
+          if (!el) return;
+          const n = getRadarProducts().length;
+          el.textContent = String(n);
+          el.hidden = n === 0;
+        };
 
         const syncButtons = () => {
           document.querySelectorAll<HTMLElement>('[data-radar-toggle]').forEach((btn) => {
@@ -1246,6 +923,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
             btn.setAttribute('aria-pressed', String(saved));
             btn.title = saved ? 'Quitar de Mi Radar' : 'Guardar en Mi Radar';
           });
+          syncHeaderCount();
         };
 
         // Delegación de clics en cualquier botón "Guardar" (tarjetas, etc.).

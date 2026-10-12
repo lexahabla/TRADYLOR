@@ -312,21 +312,8 @@ const productSchema = {
           Reserva tu opción sin compromiso: sólo se cobra en la pasarela oficial de {fulfillmentProvider}
         </p>
 
-        <!-- Acciones secundarias: carrito Amazon-style y consulta técnica -->
+        <!-- Acciones secundarias: ficha técnica -->
         <div class="cta-support-row">
-          <button
-            type="button"
-            class="detail-cart-btn add-to-cart-btn"
-            aria-label={`Añadir ${product.title} al carrito`}
-            data-product={JSON.stringify({ id: product.id, title: product.title, price: product.price, image: product.image })}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"></path>
-              <path d="M3 6h18"></path>
-              <path d="M16 10a4 4 0 0 1-8 0"></path>
-            </svg>
-            Añadir al carrito
-          </button>
           <a href="#ficha-tecnica" class="detail-cart-btn cta-ghost-link" id={`specs-cta-${product.id}`}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <line x1="8" y1="6" x2="21" y2="6" />
@@ -1437,21 +1424,6 @@ const productSchema = {
   .detail-cart-btn:hover {
     background: rgba(59, 130, 246, 0.2);
     border-color: #60a5fa;
-    transform: translateY(-1px);
-  }
-
-  .detail-cart-btn.add-to-cart-btn {
-    color: #ffffff;
-    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
-    border: 1px solid rgba(96, 165, 250, 0.5);
-    box-shadow: 0 6px 18px rgba(96, 165, 250, 0.28);
-    transition: background 180ms ease, border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
-  }
-  .detail-cart-btn.add-to-cart-btn:hover {
-    color: #ffffff;
-    background: linear-gradient(135deg, #93c5fd 0%, #60a5fa 100%);
-    border-color: #93c5fd;
-    box-shadow: 0 10px 26px rgba(96, 165, 250, 0.42);
     transform: translateY(-1px);
   }
 
