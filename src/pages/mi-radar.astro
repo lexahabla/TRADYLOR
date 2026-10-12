@@ -425,15 +425,16 @@ if (!sessionUser) {
 
   .radar-card-image {
     position: relative;
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 1 / 1;
     background: #f8fafc;
+    overflow: hidden;
   }
 
   .radar-card-image img {
     width: 100%;
     height: 100%;
-    object-fit: contain;
-    padding: 0.6rem;
+    object-fit: cover;
+    display: block;
   }
 
   .radar-card-store {

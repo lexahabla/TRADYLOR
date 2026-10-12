@@ -1616,7 +1616,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
             const productUrl = `/producto/${encodeURIComponent(p.id)}`;
 
             return `
-              <article class="radar-drawer-item">
+              <article class="aff-product-card">
                 <a href="${productUrl}" class="radar-drawer-thumb" title="${safeTitle}">
                   ${p.image ? `<img src="${p.image}" alt="${safeTitle}" loading="lazy" />` : `
                     <div class="radar-drawer-no-img">
