@@ -267,7 +267,8 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         gap: 0.6rem;
       }
       .header-auth-actions[hidden],
-      .header-user-area[hidden] {
+      .header-user-area[hidden],
+      .header-radar-btn[hidden] {
         display: none;
       }
       /* Acceso al Carrito / Radar: icono radar animado + badge */
@@ -1149,6 +1150,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                 aria-label="Abrir carrito de productos guardados"
                 aria-expanded="false"
                 aria-controls="radarDrawer"
+                hidden
               >
                 <svg class="radar-anim" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" opacity="0.45"></circle>
@@ -1496,6 +1498,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         // ------------------------------------------------- cabecera: auth vs user
         const headerAnon = $('[data-header-anon]');
         const headerUserArea = $('[data-header-user]');
+        const headerRadarBtn = $('[data-header-radar-btn]');
         const headerUsername = $('[data-header-username]');
         const headerEmail = $('[data-header-email]');
         const headerAvatarWrap = $('[data-header-avatar]');
@@ -1505,6 +1508,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           if (user) {
             headerAnon.hidden = true;
             headerUserArea.hidden = false;
+            if (headerRadarBtn) headerRadarBtn.hidden = false;
             const displayName = user.name || user.email.split('@')[0];
             if (headerUsername) headerUsername.textContent = displayName;
             if (headerEmail) headerEmail.textContent = user.email;
@@ -1519,6 +1523,8 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           } else {
             headerAnon.hidden = false;
             headerUserArea.hidden = true;
+            if (headerRadarBtn) headerRadarBtn.hidden = true;
+            closeRadarDrawer();
           }
           if (radarDrawerLinkText) {
             radarDrawerLinkText.textContent = user
