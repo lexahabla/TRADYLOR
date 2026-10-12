@@ -30,6 +30,9 @@ export const CLIENT_IMAGES_DIR = path.join(cwd, 'dist', 'client', 'images', 'pro
 /** Directorio de avatares de los usuarios del backend (perfil). */
 export const AVATARS_DIR = path.join(DATA_DIR, 'avatars');
 
+/** Directorio de avatares de los usuarios finales de Mi Radar. */
+export const RADAR_AVATARS_DIR = path.join(DATA_DIR, 'radar-avatars');
+
 /** Ruta absoluta de un JSON dentro del directorio de datos. */
 export function dataFile(name: string): string {
   return path.join(DATA_DIR, name);

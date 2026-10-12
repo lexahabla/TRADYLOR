@@ -30,6 +30,7 @@ src/data/avatars/
 # usuarios finales y datos de Mi Radar (se generan en el volumen, nunca en el repo)
 src/data/radar-users.json
 src/data/radar-data.json
+src/data/radar-avatars/
 
 # afiliados creados/eliminados desde el panel (se generan en local/volumen)
 src/data/networks.json

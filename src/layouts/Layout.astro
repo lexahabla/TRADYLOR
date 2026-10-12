@@ -286,6 +286,308 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         padding: 0 5px;
       }
 
+      /* Acciones de cabecera: auth anónimo vs usuario logueado */
+      .header-auth-actions,
+      .header-user-area {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+      }
+      .header-auth-actions[hidden],
+      .header-user-area[hidden] {
+        display: none;
+      }
+      .header-google-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        padding: 0;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 999px;
+        cursor: pointer;
+        transition: border-color 0.2s ease, background 0.2s ease;
+      }
+      .header-google-btn:hover {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.3);
+      }
+
+      /* Usuario: botón con avatar + nombre + menú desplegable */
+      .header-user {
+        position: relative;
+      }
+      .header-user-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: var(--color-text-main);
+        font-size: 0.82rem;
+        font-weight: 600;
+        font-family: var(--font-body);
+        padding: 0.35rem 0.65rem;
+        border-radius: 999px;
+        cursor: pointer;
+        transition: border-color 0.2s ease, background 0.2s ease;
+      }
+      .header-user-btn:hover,
+      .header-user-btn[aria-expanded="true"] {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(255, 255, 255, 0.25);
+      }
+      .header-avatar {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        object-fit: cover;
+        background: linear-gradient(135deg, #3b82f6, #60a5fa);
+        color: #fff;
+        font-size: 0.72rem;
+        font-weight: 800;
+        flex-shrink: 0;
+        overflow: hidden;
+      }
+      .header-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .header-username {
+        max-width: 110px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .header-user-menu {
+        position: absolute;
+        top: calc(100% + 8px);
+        right: 0;
+        min-width: 210px;
+        background: #101827;
+        border: 1px solid var(--color-border);
+        border-radius: 12px;
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+        padding: 0.4rem;
+        z-index: 400;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .header-user-menu[hidden] {
+        display: none;
+      }
+      .header-user-menu-link {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        width: 100%;
+        padding: 0.55rem 0.7rem;
+        background: none;
+        border: none;
+        color: var(--color-text-main);
+        font-size: 0.84rem;
+        font-weight: 500;
+        font-family: var(--font-body);
+        text-decoration: none;
+        border-radius: 8px;
+        cursor: pointer;
+        text-align: left;
+        transition: background 0.15s ease;
+      }
+      .header-user-menu-link:hover {
+        background: rgba(255, 255, 255, 0.07);
+      }
+      .header-user-menu-logout {
+        color: #f87171;
+      }
+
+      /* Drawer lateral de Mi Radar (patrón del antiguo carrito) */
+      .radar-drawer {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: min(400px, 92vw);
+        height: 100vh;
+        height: 100dvh;
+        background: #0f1623;
+        border-left: 1px solid var(--color-border);
+        box-shadow: -20px 0 60px rgba(0, 0, 0, 0.5);
+        transform: translateX(105%);
+        transition: transform 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+        z-index: 300;
+        display: flex;
+        flex-direction: column;
+      }
+      .radar-drawer.is-open {
+        transform: translateX(0);
+      }
+      .radar-drawer-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(4, 8, 15, 0.65);
+        backdrop-filter: blur(2px);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+        z-index: 250;
+      }
+      body.radar-drawer-is-open .radar-drawer-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+      }
+      body.radar-drawer-is-open {
+        overflow: hidden;
+      }
+      .radar-drawer-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1.5rem;
+        border-bottom: 1px solid var(--color-border);
+      }
+      .radar-drawer-kicker {
+        font-size: 0.72rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--color-text-dim);
+      }
+      .radar-drawer-header h2 {
+        font-family: var(--font-heading);
+        font-size: 1.35rem;
+        margin: 0.15rem 0 0;
+      }
+      .radar-drawer-close {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--color-border);
+        color: var(--color-text-muted);
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        font-size: 1.25rem;
+        line-height: 1;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .radar-drawer-close:hover {
+        color: #ffffff;
+        border-color: var(--color-border-hover);
+      }
+      .radar-drawer-items {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.25rem 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+      }
+      .radar-drawer-item {
+        display: flex;
+        gap: 0.85rem;
+        background: var(--color-bg-card);
+        border: 1px solid var(--color-border);
+        border-radius: var(--border-radius-sm);
+        padding: 0.75rem;
+      }
+      .radar-drawer-item img {
+        width: 56px;
+        height: 56px;
+        object-fit: contain;
+        border-radius: 6px;
+        background: #ffffff;
+        padding: 4px;
+        flex-shrink: 0;
+      }
+      .radar-drawer-item-info {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        min-width: 0;
+        flex: 1;
+      }
+      .radar-drawer-item-info a {
+        color: var(--color-text-main);
+        font-size: 0.85rem;
+        font-weight: 600;
+        text-decoration: none;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .radar-drawer-item-info a:hover {
+        color: #60a5fa;
+      }
+      .radar-drawer-item-info span {
+        font-size: 0.78rem;
+        color: var(--color-text-muted);
+      }
+      .radar-drawer-item-remove {
+        align-self: flex-start;
+        background: none;
+        border: none;
+        color: #f87171;
+        font-size: 0.75rem;
+        cursor: pointer;
+        padding: 0;
+      }
+      .radar-drawer-item-remove:hover {
+        text-decoration: underline;
+      }
+      .radar-drawer-empty {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        color: var(--color-text-dim);
+        text-align: center;
+        padding: 2rem;
+      }
+      .radar-drawer-empty[hidden] {
+        display: none;
+      }
+      .radar-drawer-empty p {
+        color: var(--color-text-muted);
+        font-weight: 600;
+        margin: 0;
+      }
+      .radar-drawer-empty span {
+        font-size: 0.82rem;
+      }
+      .radar-drawer-footer {
+        padding: 1.25rem 1.5rem;
+        border-top: 1px solid var(--color-border);
+      }
+      .radar-drawer-panel-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 0.85rem 1rem;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 60%, #1e40af 100%);
+        color: #ffffff;
+        font-family: var(--font-heading);
+        font-size: 0.95rem;
+        font-weight: 700;
+        text-align: center;
+        text-decoration: none;
+        border-radius: var(--border-radius-sm);
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.4);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+      .radar-drawer-panel-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 26px rgba(37, 99, 235, 0.55);
+      }
+
       /* Botón hamburguesa (móvil) */
       .nav-toggle-btn {
         display: none;
@@ -541,7 +843,13 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           top: 50%;
           transform: translate(-50%, -50%);
         }
-        .header-cta-btn > span:not(.radar-header-count) {
+        .radar-header-btn > span:not(.radar-header-count) {
+          display: none;
+        }
+        .header-username {
+          display: none;
+        }
+        .header-user-btn > svg {
           display: none;
         }
       }
@@ -640,7 +948,6 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                 <li><a href="/#destacados" class="nav-link">Top Selecciones</a></li>
                 <li><a href="/#metodologia" class="nav-link">Metodología</a></li>
                 <li><a href="/#comparativas" class="nav-link">Comparativas</a></li>
-                <li><a href="/mi-radar" class="nav-link nav-link-radar">🔖 Mi Radar</a></li>
                 <li><a href="#aviso-legal" class="nav-link">Aviso de Afiliación</a></li>
               </ul>
             </nav>
@@ -653,21 +960,90 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                   <line x1="4" y1="17" x2="20" y2="17"></line>
                 </svg>
               </button>
-              <a href="/mi-radar" class="header-cta-btn radar-header-btn" aria-label="Mi Radar - Productos guardados">
-                <svg class="radar-anim-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                  <circle cx="12" cy="12" r="9" />
-                  <circle cx="12" cy="12" r="5" />
-                  <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none" />
-                  <line class="radar-sweep" x1="12" y1="12" x2="12" y2="3.5" stroke-width="2.5" stroke-linecap="round" />
-                </svg>
-                <span>Mi Radar</span>
-                <span class="radar-header-count" id="radarHeaderCount" hidden>0</span>
-              </a>
+
+              <!-- No autenticado: Iniciar sesión + Google rápido -->
+              <div class="header-auth-actions" data-header-anon>
+                <button type="button" class="header-cta-btn" data-open-auth="login">Iniciar sesión</button>
+                <button type="button" class="header-google-btn" data-header-google aria-label="Continuar con Google">
+                  <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/>
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/>
+                    <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/>
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1a11 11 0 0 0-9.82 6.06l3.66 2.84C6.71 7.29 9.14 5.38 12 5.38z"/>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- Autenticado: Mi Radar (drawer) + usuario -->
+              <div class="header-user-area" data-header-user hidden>
+                <button type="button" class="header-cta-btn radar-header-btn" data-radar-drawer-toggle aria-label="Mi Radar — productos guardados" aria-expanded="false" aria-controls="radarDrawer">
+                  <svg class="radar-anim-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9.5" stroke-opacity=".35"/>
+                    <circle cx="12" cy="12" r="6" stroke-opacity=".25"/>
+                    <circle cx="12" cy="12" r="2.5" stroke-opacity=".2"/>
+                    <line class="radar-sweep" x1="12" y1="12" x2="12" y2="2.5" stroke-width="2.2" stroke-linecap="round"/>
+                    <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+                  </svg>
+                  <span>Mi Radar</span>
+                  <span class="radar-header-count" id="radarHeaderCount" hidden>0</span>
+                </button>
+
+                <div class="header-user" data-header-user-menu-wrap>
+                  <button type="button" class="header-user-btn" data-user-menu-toggle aria-haspopup="true" aria-expanded="false">
+                    <span class="header-avatar" data-header-avatar aria-hidden="true">U</span>
+                    <span class="header-username" data-header-username>Usuario</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                  <div class="header-user-menu" data-user-menu hidden>
+                    <a href="/mi-radar" class="header-user-menu-link">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                      Panel Mi Radar
+                    </a>
+                    <button type="button" class="header-user-menu-link" data-user-avatar-btn>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                      Cambiar foto
+                    </button>
+                    <input type="file" accept="image/jpeg,image/png,image/webp" data-user-avatar-input hidden />
+                    <button type="button" class="header-user-menu-link header-user-menu-logout" data-user-logout>
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                      Cerrar sesión
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </>
         )}
       </div>
     </header>
+
+    <!-- Drawer lateral de Mi Radar (solo público) -->
+    {!isBackend && (
+      <aside id="radarDrawer" class="radar-drawer" aria-hidden="true" aria-labelledby="radarDrawerTitle">
+        <div class="radar-drawer-header">
+          <div>
+            <span class="radar-drawer-kicker">Tu selección</span>
+            <h2 id="radarDrawerTitle">Mi Radar</h2>
+          </div>
+          <button type="button" class="radar-drawer-close" data-radar-drawer-close aria-label="Cerrar Mi Radar">×</button>
+        </div>
+        <div class="radar-drawer-items" data-radar-drawer-items></div>
+        <div class="radar-drawer-empty" data-radar-drawer-empty>
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <circle cx="12" cy="12" r="9.5" stroke-opacity=".35"/>
+            <circle cx="12" cy="12" r="6" stroke-opacity=".25"/>
+            <line x1="12" y1="12" x2="12" y2="2.5" stroke-linecap="round" stroke-opacity=".5"/>
+            <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+          </svg>
+          <p>Tu radar está vacío</p>
+          <span>Guarda productos con el botón de las tarjetas.</span>
+        </div>
+        <div class="radar-drawer-footer">
+          <a href="/mi-radar" class="radar-drawer-panel-btn">Ver panel completo</a>
+        </div>
+      </aside>
+      <div class="radar-drawer-backdrop" data-radar-drawer-close></div>
+    )}
 
     <!-- 3. Contenido Principal -->
     <main id="main-content">
@@ -895,8 +1271,9 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         // 2) Delegación de clics: [data-radar-toggle] alterna guardado.
         // 3) Marca visual (.is-saved) según LocalStorage.
         // 4) Registra salidas .exit-cta en el Return Flow.
+        // 5) Cabecera: auth vs usuario logueado, drawer Mi Radar, menú, avatar.
         // =====================================================================
-        import { initAuth, onAuthChange } from '../utils/auth';
+        import { getSession, getCachedSession, initAuth, loginWithGoogle, logout, onAuthChange } from '../utils/auth';
         import {
           getRadarProducts,
           isSaved,
@@ -905,8 +1282,149 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           saveToRadar,
           trackExitClick,
         } from '../utils/radarStore';
-        import type { SavedProduct } from '../types/radar';
+        import type { SavedProduct, UserProfile } from '../types/radar';
 
+        // ---------------------------------------------------------- helpers UI
+        const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelector<T>(sel);
+
+        // ------------------------------------------------- cabecera: auth vs user
+        const headerAnon = $('[data-header-anon]');
+        const headerUserArea = $('[data-header-user]');
+        const headerUsername = $('[data-header-username]');
+        const headerAvatarWrap = $('[data-header-avatar]');
+
+        function renderHeaderAuth(user: UserProfile | null) {
+          if (!headerAnon || !headerUserArea) return;
+          if (user) {
+            headerAnon.hidden = true;
+            headerUserArea.hidden = false;
+            if (headerUsername) headerUsername.textContent = user.name || user.email.split('@')[0];
+            if (headerAvatarWrap) {
+              const v = user.updatedAt ? `?v=${encodeURIComponent(user.updatedAt)}` : '';
+              if (user.avatar) {
+                headerAvatarWrap.innerHTML = `<img src="/api/radar/auth/avatar${v}" alt="" />`;
+              } else {
+                headerAvatarWrap.textContent = (user.name || user.email).charAt(0).toUpperCase();
+              }
+            }
+          } else {
+            headerAnon.hidden = false;
+            headerUserArea.hidden = true;
+          }
+        }
+
+        // ------------------------------------------------------ drawer Mi Radar
+        const radarDrawer = document.getElementById('radarDrawer');
+        const radarDrawerItems = $('[data-radar-drawer-items]');
+        const radarDrawerEmpty = $('[data-radar-drawer-empty]');
+        const radarDrawerToggle = $('[data-radar-drawer-toggle]');
+
+        function openRadarDrawer() {
+          if (!radarDrawer) return;
+          radarDrawer.classList.add('is-open');
+          radarDrawer.setAttribute('aria-hidden', 'false');
+          radarDrawerToggle?.setAttribute('aria-expanded', 'true');
+          document.body.classList.add('radar-drawer-is-open');
+        }
+        function closeRadarDrawer() {
+          if (!radarDrawer) return;
+          radarDrawer.classList.remove('is-open');
+          radarDrawer.setAttribute('aria-hidden', 'true');
+          radarDrawerToggle?.setAttribute('aria-expanded', 'false');
+          document.body.classList.remove('radar-drawer-is-open');
+        }
+
+        function renderRadarDrawer() {
+          if (!radarDrawerItems || !radarDrawerEmpty) return;
+          const products = getRadarProducts();
+          radarDrawerEmpty.hidden = products.length > 0;
+          radarDrawerItems.innerHTML = products.map((p) => `
+            <article class="radar-drawer-item">
+              ${p.image ? `<img src="${p.image}" alt="" loading="lazy" />` : ''}
+              <div class="radar-drawer-item-info">
+                <a href="/producto/${p.id}">${p.title}</a>
+                <span>${p.price}</span>
+                <button type="button" class="radar-drawer-item-remove" data-drawer-remove="${p.id}">Eliminar</button>
+              </div>
+            </article>
+          `).join('');
+        }
+
+        radarDrawerToggle?.addEventListener('click', () => {
+          if (radarDrawer?.classList.contains('is-open')) closeRadarDrawer();
+          else { renderRadarDrawer(); openRadarDrawer(); }
+        });
+        document.addEventListener('click', (event) => {
+          const t = event.target;
+          if (!(t instanceof Element)) return;
+          if (t.closest('[data-radar-drawer-close]')) closeRadarDrawer();
+          const rm = t.closest<HTMLElement>('[data-drawer-remove]');
+          if (rm?.dataset.drawerRemove) {
+            removeProduct(rm.dataset.drawerRemove);
+            renderRadarDrawer();
+          }
+        });
+
+        // ---------------------------------------------------- menú de usuario
+        const userMenuToggle = $('[data-user-menu-toggle]');
+        const userMenu = $('[data-user-menu]');
+
+        userMenuToggle?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (!userMenu) return;
+          const open = userMenu.hidden;
+          userMenu.hidden = !open;
+          userMenuToggle.setAttribute('aria-expanded', String(open));
+        });
+        document.addEventListener('click', (event) => {
+          const t = event.target;
+          if (!(t instanceof Element)) return;
+          if (userMenu && !userMenu.hidden && !t.closest('[data-header-user-menu-wrap]')) {
+            userMenu.hidden = true;
+            userMenuToggle?.setAttribute('aria-expanded', 'false');
+          }
+        });
+
+        // --------------------------------------------------------- logout
+        $('[data-user-logout]')?.addEventListener('click', async () => {
+          await logout();
+          renderHeaderAuth(null);
+          closeRadarDrawer();
+        });
+
+        // --------------------------------------------------- avatar (subir/borrar)
+        const avatarInput = $('[data-user-avatar-input]') as HTMLInputElement | null;
+        $('[data-user-avatar-btn]')?.addEventListener('click', () => avatarInput?.click());
+        avatarInput?.addEventListener('change', async () => {
+          const file = avatarInput.files?.[0];
+          if (!file) return;
+          const fd = new FormData();
+          fd.append('avatar', file);
+          try {
+            const res = await fetch('/api/radar/auth/avatar', { method: 'POST', body: fd });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+              const session = await getSession(true);
+              renderHeaderAuth(session.user ?? null);
+            } else if (data.message) {
+              alert(data.message);
+            }
+          } catch { /* silencio */ }
+          avatarInput.value = '';
+        });
+
+        // ------------------------------------------------- Google rápido (cabecera)
+        $('[data-header-google]')?.addEventListener('click', async () => {
+          try {
+            await loginWithGoogle();
+          } catch {
+            // Sin OAuth configurado: abre el modal (muestra el hint).
+            const w = window as unknown as Record<string, { open?: () => void } | undefined>;
+            w.TradylorAuth?.open?.();
+          }
+        });
+
+        // ------------------------------------------------------- contador + botones
         const syncHeaderCount = () => {
           const el = document.getElementById('radarHeaderCount');
           if (!el) return;
@@ -924,6 +1442,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
             btn.title = saved ? 'Quitar de Mi Radar' : 'Guardar en Mi Radar';
           });
           syncHeaderCount();
+          if (radarDrawer?.classList.contains('is-open')) renderRadarDrawer();
         };
 
         // Delegación de clics en cualquier botón "Guardar" (tarjetas, etc.).
@@ -972,8 +1491,16 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         );
 
         onRadarChange(syncButtons);
-        onAuthChange(syncButtons);
-        void initAuth().then(syncButtons);
+        onAuthChange((user) => {
+          renderHeaderAuth(user);
+          syncButtons();
+        });
+        void initAuth().then((session) => {
+          renderHeaderAuth(session.user ?? null);
+          syncButtons();
+        });
+        // Si no hay sesión aún, muestra el bloque anónimo ya (evita flash).
+        renderHeaderAuth(getCachedSession()?.user ?? null);
         syncButtons();
         // Re-sincroniza tras pintar tarjetas dinámicas (fetch del home, etc.).
         window.addEventListener('load', syncButtons);

@@ -1,7 +1,7 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { dataFile } from './paths';
+import { dataFile, RADAR_AVATARS_DIR } from './paths';
 
 /**
  * ==============================================================================
@@ -40,6 +40,8 @@ export interface RadarUser {
   /** Token de reset pendiente (borrado al usarse o caducar). */
   resetToken?: string;
   resetTokenExpires?: number;
+  /** Nombre del fichero de avatar dentro de RADAR_AVATARS_DIR (opcional). */
+  avatar?: string | null;
 }
 
 export type PublicRadarUser = Omit<RadarUser, 'passwordSalt' | 'passwordHash' | 'resetToken' | 'resetTokenExpires'>;
@@ -124,6 +126,46 @@ function writeUsers(users: RadarUser[]): void {
 export function toPublicRadarUser(user: RadarUser): PublicRadarUser {
   const { passwordSalt: _s, passwordHash: _h, resetToken: _r, resetTokenExpires: _e, ...rest } = user;
   return { ...rest };
+}
+
+/* --------------------------------------------------------------- avatares */
+
+/** Ruta absoluta de un fichero de avatar de usuario final. */
+export function radarAvatarPath(filename: string): string {
+  return path.join(RADAR_AVATARS_DIR, path.basename(filename));
+}
+
+function removeRadarAvatarFile(filename: string): void {
+  try {
+    const target = radarAvatarPath(filename);
+    if (fs.existsSync(target)) fs.unlinkSync(target);
+  } catch (error) {
+    console.error('[RadarAuth] Error eliminando avatar:', error);
+  }
+}
+
+/** Guarda el nombre de avatar en el usuario (borra el anterior si cambia). */
+export function setRadarAvatar(userId: string, filename: string): PublicRadarUser | null {
+  const users = readUsers();
+  const user = users.find((u) => u.id === userId);
+  if (!user) return null;
+  if (user.avatar && user.avatar !== filename) removeRadarAvatarFile(user.avatar);
+  user.avatar = filename;
+  user.updatedAt = new Date().toISOString();
+  writeUsers(users);
+  return toPublicRadarUser(user);
+}
+
+/** Elimina el avatar del usuario y su fichero. */
+export function clearRadarAvatar(userId: string): PublicRadarUser | null {
+  const users = readUsers();
+  const user = users.find((u) => u.id === userId);
+  if (!user) return null;
+  if (user.avatar) removeRadarAvatarFile(user.avatar);
+  user.avatar = null;
+  user.updatedAt = new Date().toISOString();
+  writeUsers(users);
+  return toPublicRadarUser(user);
 }
 
 /* ------------------------------------------------------------- operaciones */

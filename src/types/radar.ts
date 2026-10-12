@@ -15,6 +15,10 @@ export interface UserProfile {
   name?: string;
   provider: 'email' | 'google';
   createdAt: string;
+  /** Nombre del fichero de avatar en el servidor (opcional). */
+  avatar?: string | null;
+  /** Timestamp para cache-busting del avatar. */
+  updatedAt?: string;
 }
 
 /** Producto guardado en Mi Radar. */

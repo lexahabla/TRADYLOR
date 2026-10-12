@@ -102,6 +102,10 @@
 </div>
 
 <style>
+  :global(body.auth-modal-is-open) {
+    overflow: hidden;
+  }
+
   .auth-modal {
     position: fixed;
     inset: 0;
@@ -404,7 +408,7 @@
     const open = (view: View = 'login') => {
       lastFocus = document.activeElement as HTMLElement | null;
       modal.hidden = false;
-      document.body.classList.add('cart-is-open');
+      document.body.classList.add('auth-modal-is-open');
       showView(view);
       const firstInput = forms[view]?.querySelector<HTMLInputElement>('input');
       firstInput?.focus();
@@ -412,7 +416,7 @@
 
     const close = () => {
       modal.hidden = true;
-      document.body.classList.remove('cart-is-open');
+      document.body.classList.remove('auth-modal-is-open');
       lastFocus?.focus?.();
     };
 
