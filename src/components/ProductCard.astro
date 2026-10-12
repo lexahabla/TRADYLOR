@@ -147,6 +147,30 @@ const formatCurrency = (amount: number) => {
     minimumFractionDigits: 2,
   }).format(amount);
 };
+
+// --- Mi Radar: payload del botón "Guardar" (ambos modos) -------------------
+const radarStore: 'amazon' | 'aliexpress' = product
+  ? (/ali/i.test(product.merchant ?? '') ? 'aliexpress' : 'amazon')
+  : (network === 'aliexpress' ? 'aliexpress' : 'amazon');
+const radarId = product
+  ? String(product.slug ?? product.id)
+  : String(extractedAsin || asin || directTitle).trim();
+// Precio numérico del modo plano ("29,99 €" → 29.99) para el sumatorio.
+const parseEuro = (text: string): number | undefined => {
+  const match = text.replace(/\s/g, '').match(/(\d+[.,]\d{2}|\d+)/);
+  return match ? Number(match[1].replace(',', '.')) : undefined;
+};
+const radarPayload = {
+  id: radarId,
+  title: product ? product.title : directTitle,
+  price: product ? formatCurrency(product.price) : (price ?? ''),
+  priceValue: product ? product.price : (price ? parseEuro(price) : undefined),
+  image: product ? product.image : (image ?? ''),
+  buyUrl: product
+    ? (catalogDirectExitHref || `/checkout/${product.slug ?? product.id}`)
+    : exitHref,
+  store: radarStore,
+};
 ---
 
 {directMode ? (
@@ -171,6 +195,7 @@ const formatCurrency = (amount: number) => {
         </div>
       )}
       {price && <div class="aff-price">{price}</div>}
+      <div class="aff-actions">
       <a
         href={exitHref}
         class="aff-cta-btn exit-cta"
@@ -187,6 +212,26 @@ const formatCurrency = (amount: number) => {
           <line x1="10" y1="14" x2="21" y2="3" />
         </svg>
       </a>
+      <button
+        type="button"
+        class="radar-save-btn"
+        data-radar-toggle
+        data-radar-id={radarPayload.id}
+        data-radar-title={radarPayload.title}
+        data-radar-price={radarPayload.price}
+        data-radar-price-value={radarPayload.priceValue ?? undefined}
+        data-radar-image={radarPayload.image}
+        data-radar-url={radarPayload.buyUrl}
+        data-radar-store={radarPayload.store}
+        aria-pressed="false"
+        aria-label={`Guardar ${directTitle} en Mi Radar`}
+        title="Guardar en Mi Radar"
+      >
+        <svg class="radar-bookmark-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+        </svg>
+      </button>
+      </div>
     </div>
   </article>
 ) : (
@@ -302,6 +347,25 @@ const formatCurrency = (amount: number) => {
         <polyline points="12 5 19 12 12 19"></polyline>
       </svg>
     </a>
+    <button
+      type="button"
+      class="radar-save-btn"
+      data-radar-toggle
+      data-radar-id={radarPayload.id}
+      data-radar-title={radarPayload.title}
+      data-radar-price={radarPayload.price}
+      data-radar-price-value={radarPayload.priceValue ?? undefined}
+      data-radar-image={radarPayload.image}
+      data-radar-url={radarPayload.buyUrl}
+      data-radar-store={radarPayload.store}
+      aria-pressed="false"
+      aria-label={`Guardar ${product.title} en Mi Radar`}
+      title="Guardar en Mi Radar"
+    >
+      <svg class="radar-bookmark-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true">
+        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+      </svg>
+    </button>
   </div>
 
   <!-- Salida directa: enlace de compra directa (cesta de Amazon con tag → tramitación).
@@ -703,19 +767,84 @@ const formatCurrency = (amount: number) => {
 
   /* ============ CTA DE COMPRA (Compra Delegada) ============
      Hijo directo de la tarjeta: a ancho completo (fila propia en móvil),
-     con el mismo padding lateral que el contenido para alinearse. */
+     con el mismo padding lateral que el contenido para alinearse.
+     Fila: CTA principal flexible + botón "Guardar en Mi Radar" cuadrado. */
   .buy-actions {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: stretch;
     gap: 0.6rem;
     width: 100%;
     padding: 0 0.9rem;
     box-sizing: border-box;
   }
 
-  .buy-actions > * {
-    flex: none;
-    width: 100%;
+  .buy-actions > .affiliate-cta-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* ============ BOTÓN GUARDAR EN MI RADAR ============
+     Icono marcador; estado activo (.is-saved) rellena el icono y lo tiñe
+     en ámbar. El estado se sincroniza con LocalStorage/nube vía el script
+     global de radar (Layout.astro). */
+  .radar-save-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+    color: rgba(255, 255, 255, 0.65);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: color 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  }
+
+  .radar-save-btn:hover {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.1);
+    border-color: rgba(251, 191, 36, 0.4);
+  }
+
+  .radar-save-btn:active {
+    transform: scale(0.94);
+  }
+
+  .radar-save-btn.is-saved {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.14);
+    border-color: rgba(251, 191, 36, 0.55);
+  }
+
+  .radar-save-btn.is-saved .radar-bookmark-icon {
+    fill: #fbbf24;
+  }
+
+  /* Modo directo (aff-card): acciones en fila bajo el precio. */
+  .aff-actions {
+    display: flex;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .aff-actions .aff-cta-btn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .aff-actions .radar-save-btn {
+    width: 40px;
+    min-height: 40px;
+    border-radius: 10px;
+  }
+
+  /* Los hijos de .buy-actions ya se dimensionan arriba (CTA flexible +
+     botón radar fijo); sólo se limita el ancho mínimo del CTA. */
+  .buy-actions > .affiliate-cta-btn {
     min-width: 0;
   }
 

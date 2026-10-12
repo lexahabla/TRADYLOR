@@ -7,6 +7,8 @@ export default {
   content: [
     './src/pages/admin/trafico-ventas/**/*.astro',
     './src/components/admin/**/*.astro',
+    // Mi Radar (panel del usuario final): se usa Tailwind para layout básico.
+    './src/pages/mi-radar.astro',
   ],
   theme: {
     extend: {

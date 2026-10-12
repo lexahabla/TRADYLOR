@@ -1,0 +1,529 @@
+---
+/**
+ * ==============================================================================
+ * TRADYLOR — AUTH MODAL (Mi Radar)
+ * ==============================================================================
+ * Modal de autenticación dual: pestañas "Iniciar sesión" / "Crear cuenta",
+ * recuperación de contraseña y botón "Continuar con Google" (activo sólo si
+ * el server tiene GOOGLE_CLIENT_ID/SECRET; si no, avisa "próximamente").
+ *
+ * Se monta una sola vez en Layout.astro (páginas públicas). La lógica vive en
+ * el <script> bundled que importa src/utils/auth.ts. Se abre con:
+ *   window.TradylorAuth.open()  (o clase .is-open en #authModal)
+ * ==============================================================================
+ */
+---
+
+<div id="authModal" class="auth-modal" role="dialog" aria-modal="true" aria-labelledby="authModalTitle" hidden>
+  <div class="auth-modal-backdrop" data-auth-close></div>
+  <div class="auth-modal-panel">
+    <button type="button" class="auth-modal-close" data-auth-close aria-label="Cerrar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+
+    <h2 id="authModalTitle" class="auth-modal-title">Mi Radar</h2>
+    <p class="auth-modal-subtitle">Guarda productos, organiza proyectos y retoma compras desde cualquier dispositivo.</p>
+
+    <div class="auth-tabs" role="tablist" aria-label="Autenticación">
+      <button type="button" class="auth-tab is-active" role="tab" aria-selected="true" data-auth-tab="login">Iniciar sesión</button>
+      <button type="button" class="auth-tab" role="tab" aria-selected="false" data-auth-tab="register">Crear cuenta</button>
+    </div>
+
+    <p class="auth-error" data-auth-error role="alert" hidden></p>
+
+    <!-- Login -->
+    <form class="auth-form" data-auth-form="login" novalidate>
+      <label class="auth-field">
+        <span>Email</span>
+        <input type="email" name="email" autocomplete="email" required placeholder="tu@email.com" />
+      </label>
+      <label class="auth-field">
+        <span>Contraseña</span>
+        <input type="password" name="password" autocomplete="current-password" required minlength="8" placeholder="••••••••" />
+      </label>
+      <button type="submit" class="auth-submit">Entrar</button>
+      <button type="button" class="auth-link-btn" data-auth-view="forgot">¿Olvidaste tu contraseña?</button>
+    </form>
+
+    <!-- Registro -->
+    <form class="auth-form" data-auth-form="register" novalidate hidden>
+      <label class="auth-field">
+        <span>Nombre (opcional)</span>
+        <input type="text" name="name" autocomplete="name" placeholder="Cómo quieres que te llamemos" />
+      </label>
+      <label class="auth-field">
+        <span>Email</span>
+        <input type="email" name="email" autocomplete="email" required placeholder="tu@email.com" />
+      </label>
+      <label class="auth-field">
+        <span>Contraseña (mín. 8 caracteres)</span>
+        <input type="password" name="password" autocomplete="new-password" required minlength="8" placeholder="••••••••" />
+      </label>
+      <button type="submit" class="auth-submit">Crear cuenta gratis</button>
+    </form>
+
+    <!-- Recuperación -->
+    <form class="auth-form" data-auth-form="forgot" novalidate hidden>
+      <p class="auth-form-hint">Escribe tu email y te enviaremos un enlace para elegir una contraseña nueva.</p>
+      <label class="auth-field">
+        <span>Email</span>
+        <input type="email" name="email" autocomplete="email" required placeholder="tu@email.com" />
+      </label>
+      <button type="submit" class="auth-submit">Enviar enlace</button>
+      <button type="button" class="auth-link-btn" data-auth-view="login">Volver a iniciar sesión</button>
+    </form>
+
+    <!-- Reset (token en URL ?reset=…) -->
+    <form class="auth-form" data-auth-form="reset" novalidate hidden>
+      <p class="auth-form-hint">Elige una contraseña nueva para tu cuenta.</p>
+      <label class="auth-field">
+        <span>Nueva contraseña (mín. 8 caracteres)</span>
+        <input type="password" name="password" autocomplete="new-password" required minlength="8" placeholder="••••••••" />
+      </label>
+      <button type="submit" class="auth-submit">Guardar contraseña</button>
+    </form>
+
+    <div class="auth-separator" data-auth-google-wrap><span>o</span></div>
+
+    <button type="button" class="auth-google-btn" data-auth-google>
+      <svg width="17" height="17" viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1a11 11 0 0 0-9.82 6.06l3.66 2.84C6.71 7.29 9.14 5.38 12 5.38z"/>
+      </svg>
+      <span data-auth-google-label>Continuar con Google</span>
+    </button>
+    <p class="auth-google-hint" data-auth-google-hint hidden>Próximamente: configura GOOGLE_CLIENT_ID en el servidor para activarlo.</p>
+  </div>
+</div>
+
+<style>
+  .auth-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 9500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.25rem;
+  }
+
+  .auth-modal[hidden] {
+    display: none;
+  }
+
+  .auth-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(4, 8, 16, 0.72);
+    backdrop-filter: blur(6px);
+  }
+
+  .auth-modal-panel {
+    position: relative;
+    width: min(420px, 100%);
+    max-height: calc(100vh - 2.5rem);
+    overflow-y: auto;
+    padding: 1.75rem 1.6rem 1.6rem;
+    background: linear-gradient(160deg, #131b2c 0%, #0d1422 100%);
+    border: 1px solid rgba(96, 165, 250, 0.22);
+    border-radius: 20px;
+    box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+  }
+
+  .auth-modal-close {
+    position: absolute;
+    top: 0.9rem;
+    right: 0.9rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    color: rgba(255, 255, 255, 0.55);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  .auth-modal-close:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .auth-modal-title {
+    margin: 0 2rem 0.4rem 0;
+    font-family: var(--font-heading);
+    font-size: 1.55rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .auth-modal-subtitle {
+    margin: 0 0 1.25rem;
+    font-size: 0.85rem;
+    line-height: 1.55;
+    color: var(--color-text-muted);
+  }
+
+  .auth-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.3rem;
+    padding: 0.28rem;
+    margin-bottom: 1.1rem;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+  }
+
+  .auth-tab {
+    padding: 0.55rem 0.5rem;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    background: transparent;
+    border: 0;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .auth-tab.is-active {
+    color: #07111f;
+    background: #60a5fa;
+  }
+
+  .auth-error {
+    margin: 0 0 0.9rem;
+    padding: 0.65rem 0.85rem;
+    font-size: 0.8rem;
+    color: #fecaca;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 10px;
+  }
+
+  .auth-form {
+    display: grid;
+    gap: 0.9rem;
+  }
+
+  .auth-form[hidden] {
+    display: none;
+  }
+
+  .auth-form-hint {
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--color-text-muted);
+  }
+
+  .auth-field {
+    display: grid;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .auth-field input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.78rem 0.9rem;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--color-text-main);
+    background: rgba(10, 14, 23, 0.8);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .auth-field input:focus {
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.14);
+  }
+
+  .auth-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.85rem 1rem;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #07111f;
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    border: 0;
+    border-radius: 11px;
+    cursor: pointer;
+    transition: filter 0.2s ease;
+  }
+
+  .auth-submit:hover {
+    filter: brightness(1.1);
+  }
+
+  .auth-submit:disabled {
+    opacity: 0.55;
+    cursor: wait;
+  }
+
+  .auth-link-btn {
+    justify-self: center;
+    padding: 0.2rem;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #60a5fa;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+
+  .auth-link-btn:hover {
+    text-decoration: underline;
+  }
+
+  .auth-separator {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    margin: 1.1rem 0;
+    color: var(--color-text-dim);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+
+  .auth-separator::before,
+  .auth-separator::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .auth-separator[hidden] {
+    display: none;
+  }
+
+  .auth-google-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+    width: 100%;
+    padding: 0.8rem 1rem;
+    font: inherit;
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 11px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  .auth-google-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .auth-google-hint {
+    margin: 0.6rem 0 0;
+    font-size: 0.72rem;
+    text-align: center;
+    color: var(--color-text-dim);
+  }
+
+  .auth-google-hint[hidden] {
+    display: none;
+  }
+
+  @media (max-width: 480px) {
+    .auth-modal-panel {
+      padding: 1.4rem 1.15rem 1.25rem;
+    }
+  }
+</style>
+
+<script>
+  import { getSession, login, register, requestPasswordReset, resetPassword, loginWithGoogle } from '../utils/auth';
+
+  const modal = document.getElementById('authModal');
+  if (modal) {
+    const errorEl = modal.querySelector<HTMLElement>('[data-auth-error]');
+    const forms = {
+      login: modal.querySelector<HTMLFormElement>('[data-auth-form="login"]'),
+      register: modal.querySelector<HTMLFormElement>('[data-auth-form="register"]'),
+      forgot: modal.querySelector<HTMLFormElement>('[data-auth-form="forgot"]'),
+      reset: modal.querySelector<HTMLFormElement>('[data-auth-form="reset"]'),
+    } as const;
+    type View = keyof typeof forms;
+
+    const tabs = modal.querySelectorAll<HTMLButtonElement>('[data-auth-tab]');
+    const googleBtn = modal.querySelector<HTMLButtonElement>('[data-auth-google]');
+    const googleWrap = modal.querySelector<HTMLElement>('[data-auth-google-wrap]');
+    const googleHint = modal.querySelector<HTMLElement>('[data-auth-google-hint]');
+
+    let lastFocus: HTMLElement | null = null;
+
+    const showError = (message: string) => {
+      if (!errorEl) return;
+      errorEl.textContent = message;
+      errorEl.hidden = !message;
+    };
+
+    const showView = (view: View) => {
+      for (const [key, form] of Object.entries(forms)) {
+        if (form) form.hidden = key !== view;
+      }
+      tabs.forEach((tab) => {
+        const active = (view === 'login' && tab.dataset.authTab === 'login')
+          || (view === 'register' && tab.dataset.authTab === 'register');
+        tab.classList.toggle('is-active', active);
+        tab.setAttribute('aria-selected', String(active));
+      });
+      showError('');
+    };
+
+    const open = (view: View = 'login') => {
+      lastFocus = document.activeElement as HTMLElement | null;
+      modal.hidden = false;
+      document.body.classList.add('cart-is-open');
+      showView(view);
+      const firstInput = forms[view]?.querySelector<HTMLInputElement>('input');
+      firstInput?.focus();
+    };
+
+    const close = () => {
+      modal.hidden = true;
+      document.body.classList.remove('cart-is-open');
+      lastFocus?.focus?.();
+    };
+
+    // API pública para abrir el modal desde cualquier página/botón.
+    (window as unknown as Record<string, unknown>).TradylorAuth = { open, close };
+
+    modal.querySelectorAll('[data-auth-close]').forEach((el) => el.addEventListener('click', close));
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !modal.hidden) close();
+    });
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => showView(tab.dataset.authTab as View));
+    });
+    modal.querySelectorAll<HTMLElement>('[data-auth-view]').forEach((el) => {
+      el.addEventListener('click', () => showView(el.dataset.authView as View));
+    });
+
+    // Abre el modal automáticamente si la URL trae ?reset=<token>.
+    const resetToken = new URLSearchParams(window.location.search).get('reset');
+    if (resetToken) open('reset');
+
+    const setBusy = (busy: boolean) => {
+      modal.querySelectorAll<HTMLButtonElement>('.auth-submit').forEach((btn) => {
+        btn.disabled = busy;
+      });
+    };
+
+    forms.login?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(forms.login!);
+      setBusy(true);
+      const result = await login(String(data.get('email') ?? ''), String(data.get('password') ?? ''));
+      setBusy(false);
+      if (result.success) {
+        close();
+        window.location.reload();
+      } else {
+        showError(result.message ?? 'Error al iniciar sesión.');
+      }
+    });
+
+    forms.register?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(forms.register!);
+      setBusy(true);
+      const result = await register(
+        String(data.get('email') ?? ''),
+        String(data.get('password') ?? ''),
+        String(data.get('name') ?? ''),
+      );
+      setBusy(false);
+      if (result.success) {
+        close();
+        window.location.reload();
+      } else {
+        showError(result.message ?? 'No se pudo crear la cuenta.');
+      }
+    });
+
+    forms.forgot?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(forms.forgot!);
+      setBusy(true);
+      const result = await requestPasswordReset(String(data.get('email') ?? ''));
+      setBusy(false);
+      if (result.success) {
+        let message = result.message || 'Revisa tu email.';
+        if (result.devResetUrl) {
+          message += ` (dev: ${result.devResetUrl})`;
+        }
+        showError('');
+        const hint = forms.forgot?.querySelector('.auth-form-hint');
+        if (hint) {
+          hint.textContent = message;
+          hint.style.color = '#6ee7b7';
+        }
+      } else {
+        showError(result.message ?? 'No se pudo procesar la solicitud.');
+      }
+    });
+
+    forms.reset?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(forms.reset!);
+      setBusy(true);
+      const result = await resetPassword(resetToken ?? '', String(data.get('password') ?? ''));
+      setBusy(false);
+      if (result.success) {
+        close();
+        window.location.href = '/mi-radar';
+      } else {
+        showError(result.message ?? 'El enlace no es válido o ha caducado.');
+      }
+    });
+
+    googleBtn?.addEventListener('click', async () => {
+      showError('');
+      try {
+        await loginWithGoogle();
+      } catch (error) {
+        showError(error instanceof Error ? error.message : 'Google no disponible.');
+      }
+    });
+
+    // Activa o desactiva el botón de Google según el server.
+    void getSession().then((session) => {
+      const enabled = Boolean(session.googleEnabled);
+      if (googleBtn) googleBtn.hidden = !enabled;
+      if (googleWrap) googleWrap.hidden = !enabled;
+      if (googleHint) googleHint.hidden = enabled;
+    });
+  }
+</script>

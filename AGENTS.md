@@ -58,14 +58,19 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `out/[id].astro` - Redirecciones de afiliación (salida/out, legado)
   - `admin.astro` y `admin/curation.astro` - Panel de administración de curación
   - `admin/perfil.astro` y `admin/usuarios.astro` - Perfil del usuario y gestión de usuarios del backend
+  - `mi-radar.astro` - Panel personal del usuario final (anónimo LocalStorage + nube con sesión)
   - `api/` - Endpoints internos y la API pública `v1` (`docs/api-v1.md`)
   - `api/redirect.ts` - Salida registrada (302) al enlace de afiliado del checkout
   - `api/health.ts` - Healthcheck público para Docker / Easy Panel (sin auth)
   - `api/admin/add-product.ts` - Alta/actualización de producto con IA (texto + imagen)
   - `api/admin/users/` - CRUD de usuarios del backend (`index`, `[id]`, `[id]/avatar`)
+  - `api/radar/` - Mi Radar: `auth/` (register, login, logout, session, forgot, reset, google/),
+    sync de datos (`index.ts`) y Return Flow (`exits.ts`, `projects.ts`)
 - `src/lib/` - Lógica de negocio
   - `adminAuth.ts`, `apiAuth.ts` - Autenticación (admin y API)
   - `userStore.ts` - Usuarios del backend (roles admin/usuario, cuenta master, contraseñas scrypt)
+  - `radarAuth.ts` - Usuarios finales de Mi Radar (email+contraseña o Google; radar-users.json; cookie `tradylor_radar_session`)
+  - `radarStore.ts` - Datos de Mi Radar en la nube (radar-data.json: carpetas, productos, salidas pendientes; merge en sync)
   - `paths.ts` - Rutas persistentes: `DATA_DIR` / `IMAGES_DIR` (en prod: volumen vía env)
   - `catalog.ts`, `catalogStore.ts` - Catálogo de productos en memoria/almacenamiento
   - `productStore.ts` - Persistencia de `products.json` (lectura/escritura/upsert)
@@ -73,11 +78,19 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `categories.ts` - Categorías
   - `opportunity.ts` - Detección de oportunidades de contenido
   - `networks/` - Conectores con las redes de afiliación (registry, connectors, credentials, types)
+- `src/types/radar.ts` - Tipos compartidos cliente/servidor de Mi Radar
+- `src/utils/` - Lógica de navegador (bundled por Astro)
+  - `radarStore.ts` - Store Offline-First de Mi Radar (LocalStorage + sync con /api/radar)
+  - `auth.ts` - Wrappers de auth del cliente (sesión, login, registro, reset, Google)
+  - `amazon.ts`, `affiliate.ts` - Utilidades de enlaces de afiliación
 - `src/data/` - Datos
   - `products.json`, `categories.json`, `analytics.json`
   - `credentials.json` - Credenciales de redes de afiliación (glitch: NO se sube a git)
   - `users.json` - Usuarios del backend (sólo en local/prod, NO se crea en el repo: se genera en el volumen)
+  - `radar-users.json`, `radar-data.json` - Usuarios y datos de Mi Radar (volumen; NO se suben a git)
 - `src/components/AdminNav.astro` - Nav del backend: píldora de contexto + secciones + menú de usuario (perfil, crear usuarios, cerrar sesión)
+- `src/components/AuthModal.astro` - Modal de auth dual de Mi Radar (login/registro/reset + Google); se monta en Layout
+- `src/components/ProductCard.astro` - Tarjeta de producto con botón "Guardar en Mi Radar" (`[data-radar-toggle]`)
 - `public/images/products/` - Imágenes de producto generadas con IA (ignorado en git)
 - Despliegue
   - `Dockerfile` - Imagen de producción de un solo stage (build SSR en Node 22 Bookworm,
@@ -94,6 +107,9 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 - `TRADYLOR_API_TOKEN`: token Bearer para la API pública v1.
 - `N8N_CLICK_WEBHOOK_URL`: webhook opcional que recibe el evento `delegated_checkout_exit` en cada salida
   (sólo telemetría; el alta de productos ya no depende de n8n).
+- **Mi Radar (opcional)**: `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` activan el login con Google
+  (callback: `/api/radar/auth/google/callback`); sin ellas el botón muestra "próximamente".
+  `N8N_RESET_WEBHOOK_URL` recibe el email de recuperación de contraseña (`{ to, name, resetUrl }`).
 - **IA (opcional)**: `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` para el texto y
   `OPENAI_API_KEY` / `FLUX_API_KEY` para las imágenes; selectores
   `TEXT_AI_PROVIDER` y `IMAGE_AI_PROVIDER` (`openai` por defecto, `anthropic`/`flux`).

@@ -9,6 +9,7 @@ export interface Props {
 }
 
 import ReturnBanner from '../components/ReturnBanner.astro';
+import AuthModal from '../components/AuthModal.astro';
 
 const {
   title = "Tradylor | Portal de Curación, Recomendaciones y Comparativas de Productos",
@@ -856,6 +857,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                 <li><a href="/#destacados" class="nav-link">Top Selecciones</a></li>
                 <li><a href="/#metodologia" class="nav-link">Metodología</a></li>
                 <li><a href="/#comparativas" class="nav-link">Comparativas</a></li>
+                <li><a href="/mi-radar" class="nav-link nav-link-radar">🔖 Mi Radar</a></li>
                 <li><a href="#aviso-legal" class="nav-link">Aviso de Afiliación</a></li>
               </ul>
             </nav>
@@ -1210,6 +1212,94 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         }
       })();
     </script>
-    {!isBackend && <ReturnBanner />}
+    {!isBackend && (
+      <>
+        <ReturnBanner />
+        <AuthModal />
+      </>
+    )}
+    {!isBackend && (
+      <script>
+        // =====================================================================
+        // TRADYLOR — RADAR BOOTSTRAP (global, páginas públicas)
+        // =====================================================================
+        // 1) Sincroniza estado de sesión + nube al cargar.
+        // 2) Delegación de clics: [data-radar-toggle] alterna guardado.
+        // 3) Marca visual (.is-saved) según LocalStorage.
+        // 4) Registra salidas .exit-cta en el Return Flow.
+        // =====================================================================
+        import { initAuth, onAuthChange } from '../utils/auth';
+        import {
+          isSaved,
+          onRadarChange,
+          removeProduct,
+          saveToRadar,
+          trackExitClick,
+        } from '../utils/radarStore';
+        import type { SavedProduct } from '../types/radar';
+
+        const syncButtons = () => {
+          document.querySelectorAll<HTMLElement>('[data-radar-toggle]').forEach((btn) => {
+            const id = btn.dataset.radarId ?? '';
+            const saved = id ? isSaved(id) : false;
+            btn.classList.toggle('is-saved', saved);
+            btn.setAttribute('aria-pressed', String(saved));
+            btn.title = saved ? 'Quitar de Mi Radar' : 'Guardar en Mi Radar';
+          });
+        };
+
+        // Delegación de clics en cualquier botón "Guardar" (tarjetas, etc.).
+        document.addEventListener('click', (event) => {
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          const btn = target.closest<HTMLElement>('[data-radar-toggle]');
+          if (!btn) return;
+          event.preventDefault();
+          const { radarId, radarTitle, radarPrice, radarPriceValue, radarImage, radarUrl, radarStore } = btn.dataset;
+          if (!radarId) return;
+          if (isSaved(radarId)) {
+            removeProduct(radarId);
+          } else {
+            const payload: SavedProduct = {
+              id: radarId,
+              title: radarTitle ?? '',
+              price: radarPrice ?? '',
+              priceValue: radarPriceValue ? Number(radarPriceValue) : undefined,
+              image: radarImage ?? '',
+              buyUrl: radarUrl ?? '',
+              store: radarStore === 'aliexpress' ? 'aliexpress' : 'amazon',
+              dateAdded: new Date().toISOString(),
+            };
+            saveToRadar(payload);
+          }
+          syncButtons();
+        });
+
+        // Return Flow: registra salidas directas (.exit-cta) en el radar.
+        document.addEventListener(
+          'click',
+          (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            const exitEl = target.closest('a.exit-cta, button.exit-cta');
+            if (!exitEl) return;
+            const productId = exitEl.getAttribute('data-asin')
+              || exitEl.getAttribute('data-title')
+              || exitEl.getAttribute('href')
+              || '';
+            const title = exitEl.getAttribute('data-title') || '';
+            if (productId) trackExitClick(String(productId), title);
+          },
+          { capture: true },
+        );
+
+        onRadarChange(syncButtons);
+        onAuthChange(syncButtons);
+        void initAuth().then(syncButtons);
+        syncButtons();
+        // Re-sincroniza tras pintar tarjetas dinámicas (fetch del home, etc.).
+        window.addEventListener('load', syncButtons);
+      </script>
+    )}
   </body>
 </html>
