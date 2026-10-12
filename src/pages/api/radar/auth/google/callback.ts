@@ -14,7 +14,7 @@ export const prerender = false;
 /**
  * Callback del OAuth de Google: valida el state (CSRF), intercambia el code
  * por el perfil, hace upsert de la cuenta y crea la sesión. Redirige a
- * /mi-radar (con ?auth=ok o ?auth_error=…).
+ * / (con ?auth=ok o ?auth_error=…).
  */
 export const GET: APIRoute = async ({ request, redirect }) => {
   const url = new URL(request.url);
@@ -22,7 +22,7 @@ export const GET: APIRoute = async ({ request, redirect }) => {
   const state = url.searchParams.get('state');
   const origin = url.origin;
   const fail = (reason: string) => {
-    const response = redirect(`/mi-radar?auth_error=${encodeURIComponent(reason)}`);
+    const response = redirect(`/?auth_error=${encodeURIComponent(reason)}`);
     response.headers.append('Set-Cookie', clearOAuthStateCookie());
     return response;
   };
@@ -36,7 +36,7 @@ export const GET: APIRoute = async ({ request, redirect }) => {
   try {
     const profile = await exchangeGoogleCode(config, code, `${origin}/api/radar/auth/google/callback`);
     const user = upsertGoogleUser({ email: profile.email, name: profile.name });
-    const response = redirect('/mi-radar?auth=ok');
+    const response = redirect('/?auth=ok');
     response.headers.append('Set-Cookie', createRadarSession(user));
     response.headers.append('Set-Cookie', clearOAuthStateCookie());
     return response;

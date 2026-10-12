@@ -465,7 +465,7 @@
       setBusy(false);
       if (result.success) {
         close();
-        window.location.href = '/mi-radar';
+        window.location.href = '/';
       } else {
         showError(result.message ?? 'Error al iniciar sesión.');
       }
@@ -483,7 +483,7 @@
       setBusy(false);
       if (result.success) {
         close();
-        window.location.href = '/mi-radar';
+        window.location.href = '/';
       } else {
         showError(result.message ?? 'No se pudo crear la cuenta.');
       }
@@ -519,7 +519,7 @@
       setBusy(false);
       if (result.success) {
         close();
-        window.location.href = '/mi-radar';
+        window.location.href = '/';
       } else {
         showError(result.message ?? 'El enlace no es válido o ha caducado.');
       }
