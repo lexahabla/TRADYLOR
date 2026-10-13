@@ -98,7 +98,9 @@ export function buildShareEmailHtml(input: ShareEmailInput): string {
     category
       ? `<p style="margin:0 0 14px;font-family:${FONT};font-size:12px;line-height:1.4;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:#6b7280;">${category}</p>`
       : `<div style="height:8px;line-height:8px;font-size:0;">&nbsp;</div>`,
-    `<a href="${link}" target="_blank" style="display:inline-block;padding:10px 18px;border-radius:8px;background-color:#3b82f6;background-image:linear-gradient(135deg,#60a5fa 0%,#3b82f6 100%);color:#ffffff;font-family:${FONT};font-size:14px;line-height:1.3;font-weight:700;text-decoration:none;">${escapeHtml(labels.cta)}</a>`,
+    // Botón: enlace normal a la ficha (misma pestaña, sin target=_blank) con manita al pasar el ratón.
+    // La clase tz-cta sólo la usa la vista previa de /share para el efecto hover.
+    `<a class="tz-cta" href="${link}" style="display:inline-block;cursor:pointer;padding:10px 18px;border-radius:8px;background-color:#3b82f6;background-image:linear-gradient(135deg,#60a5fa 0%,#3b82f6 100%);color:#ffffff;font-family:${FONT};font-size:14px;line-height:1.3;font-weight:700;text-decoration:none;">${escapeHtml(labels.cta)}</a>`,
     `</td></tr></table>`,
     `</td></tr>`,
 

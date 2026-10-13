@@ -654,19 +654,22 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
         ? { ok: true, mode: 'opened' }
         : { ok: false, mode: 'opened', message: pack.openFailed(name) };
 
-    case 'email':
-      // Email: abrimos la página de preview con tarjeta HTML atractiva
-      // (imagen + colores + mensaje) que permite copiar el HTML formateado
-      // y pegarlo en Gmail/Outlook/Apple Mail, o enviar directamente con
-      // el cliente de correo. El lang va como query param porque la página
-      // es SSR y no puede leer localStorage en el servidor.
-      return openBlank(`/share/${encodeURIComponent(input.productId)}?lang=${lang}`)
-        ? { ok: true, mode: 'opened' }
-        : openBlank(
-            `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(text)}`,
-          )
+    case 'email': {
+      // Email: abrimos la tarjeta del producto (/share/<id>: mensaje + título +
+      // imagen + botón a la ficha) EN LA MISMA PESTAÑA (sin target=_blank): ahí el
+      // usuario elige su cliente de correo y la tarjeta se copia para pegarla.
+      // El lang va como query param porque la página es SSR y no puede leer
+      // localStorage en el servidor.
+      try {
+        window.location.assign(`/share/${encodeURIComponent(input.productId)}?lang=${lang}`);
+        return { ok: true, mode: 'opened' };
+      } catch {
+        // Sin navegación posible: al menos abrimos el correo con el texto plano.
+        return openBlank(`mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(text)}`)
           ? { ok: true, mode: 'opened' }
           : { ok: false, mode: 'opened', message: pack.openFailed(name) };
+      }
+    }
 
     case 'copy': {
       const copied = await copyText(text);
