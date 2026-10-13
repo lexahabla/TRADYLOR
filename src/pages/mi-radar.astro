@@ -15,6 +15,7 @@
 
 import Layout from '../layouts/Layout.astro';
 import { getRadarSessionUser } from '../lib/radarAuth';
+import { REMINDER_REASONS } from '../types/radar';
 
 export const prerender = false;
 
@@ -105,6 +106,46 @@ if (!sessionUser) {
       </form>
     </div>
   </div>
+
+  <!-- Modal de aviso diferido (fecha + hora + motivo) -->
+  <div class="radar-modal" data-reminder-modal hidden>
+    <div class="radar-modal-backdrop" data-reminder-close></div>
+    <div class="radar-modal-panel" role="dialog" aria-modal="true" aria-labelledby="reminderModalTitle">
+      <h3 id="reminderModalTitle">⏰ Aviso de compra</h3>
+      <p class="radar-modal-hint" data-reminder-product>—</p>
+      <form data-reminder-form>
+        <div class="radar-modal-row">
+          <label class="radar-modal-field">
+            <span>Fecha</span>
+            <input type="date" name="date" required />
+          </label>
+          <label class="radar-modal-field">
+            <span>Hora</span>
+            <input type="time" name="time" required />
+          </label>
+        </div>
+        <label class="radar-modal-field">
+          <span>Motivo</span>
+          <select name="reason" required>
+            {REMINDER_REASONS.map((reason) => <option value={reason}>{reason}</option>)}
+          </select>
+        </label>
+        <label class="radar-modal-field">
+          <span>Nota (opcional)</span>
+          <input type="text" name="note" maxlength="120" placeholder="Ej: espero a la Prime Day" autocomplete="off" />
+        </label>
+        <p class="radar-modal-error" data-reminder-error hidden></p>
+        <div class="radar-modal-actions">
+          <button type="button" class="radar-btn radar-btn-ghost" data-reminder-close>Cancelar</button>
+          <button type="button" class="radar-btn radar-btn-danger" data-reminder-cancel hidden>Eliminar aviso</button>
+          <button type="submit" class="radar-btn radar-btn-primary">Programar aviso</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast de confirmación (avisos / compartir) -->
+  <div class="radar-toast" data-radar-toast hidden></div>
 </Layout>
 
 <style>
@@ -729,6 +770,160 @@ if (!sessionUser) {
     display: flex;
     justify-content: flex-end;
     gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+
+  .radar-modal-hint {
+    margin: -0.4rem 0 1rem;
+    font-size: 0.76rem;
+    line-height: 1.45;
+    color: #9ca3af;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
+  .radar-modal-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .radar-modal-field select {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.75rem 0.9rem;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: var(--color-text-main);
+    background: rgba(10, 14, 23, 0.8);
+    border: 1px solid var(--color-border);
+    border-radius: 10px;
+  }
+
+  .radar-modal-field select:focus {
+    outline: none;
+    border-color: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.14);
+  }
+
+  .radar-modal-field input[type='date'],
+  .radar-modal-field input[type='time'] {
+    color-scheme: dark;
+  }
+
+  .radar-modal-error {
+    margin: -0.35rem 0 0.9rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #fca5a5;
+    line-height: 1.4;
+  }
+
+  .radar-btn-danger {
+    padding: 0.55rem 1rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #fca5a5;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  .radar-btn-danger:hover {
+    background: rgba(239, 68, 68, 0.28);
+    color: #fff;
+  }
+
+  /* Toast flotante (avisos / compartir) */
+  .radar-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.6rem;
+    transform: translateX(-50%) translateY(12px);
+    z-index: 200;
+    max-width: min(92vw, 420px);
+    padding: 0.7rem 1.1rem;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-align: center;
+    color: #f3f4f6;
+    background: #0d1422;
+    border: 1px solid rgba(96, 165, 250, 0.4);
+    border-radius: 999px;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    transition: opacity 0.22s ease, transform 0.22s ease;
+    pointer-events: none;
+  }
+
+  .radar-toast.is-on {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .radar-toast.is-error {
+    border-color: rgba(248, 113, 113, 0.55);
+    color: #fecaca;
+  }
+
+  /* Acciones de tarjeta: aviso + compartir */
+  :global(.radar-card-actions) {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.15rem;
+  }
+
+  :global(.radar-card-action) {
+    flex: 1;
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    padding: 0.36rem 0.4rem;
+    font-family: inherit;
+    font-size: 0.66rem;
+    font-weight: 800;
+    color: #9ca3af;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+  }
+
+  :global(.radar-card-action span) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  :global(.radar-card-action svg) {
+    flex-shrink: 0;
+  }
+
+  :global(.radar-card-action:hover) {
+    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.16);
+    border-color: rgba(59, 130, 246, 0.45);
+  }
+
+  :global(.radar-card-action.is-on) {
+    color: #fbbf24;
+    background: rgba(251, 191, 36, 0.12);
+    border-color: rgba(251, 191, 36, 0.45);
+  }
+
+  :global(.radar-card-action.is-on:hover) {
+    color: #fcd34d;
+    background: rgba(251, 191, 36, 0.2);
   }
 
   /* Responsive */
@@ -789,16 +984,20 @@ if (!sessionUser) {
 <script>
   import { getSession, onAuthChange } from '../utils/auth';
   import {
+    cancelReminder,
     createProject,
+    createReminder,
     deleteProject,
     getProjects,
     getRadarProducts,
+    getScheduledReminder,
     loadRadar,
     onRadarChange,
     removeProduct,
     resolveExit,
     setProductNote,
   } from '../utils/radarStore';
+  import { openSharePanel } from '../utils/shareUi';
   import { RETURN_FLOW_MIN_AGE_MS } from '../types/radar';
   import type { ProjectFolder, SavedProduct } from '../types/radar';
 
@@ -822,6 +1021,12 @@ if (!sessionUser) {
     modal: $('[data-radar-modal]'),
     modalTitle: $('[data-radar-modal-title]'),
     modalForm: $('[data-radar-modal-form]') as HTMLFormElement | null,
+    reminderModal: $('[data-reminder-modal]'),
+    reminderForm: $('[data-reminder-form]') as HTMLFormElement | null,
+    reminderProduct: $('[data-reminder-product]'),
+    reminderCancel: $('[data-reminder-cancel]'),
+    reminderError: $('[data-reminder-error]'),
+    toast: $('[data-radar-toast]'),
   };
 
   const euro = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
@@ -830,6 +1035,46 @@ if (!sessionUser) {
 
   const escapeHtml = (text: string): string =>
     text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  /* -------------------------------------------------------------- avisos */
+
+  const remindWhen = new Intl.DateTimeFormat('es-ES', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
+  /** Botón 🔔 de la tarjeta: muestra la fecha si hay aviso activo. */
+  function renderReminderBtn(product: SavedProduct): string {
+    const reminder = getScheduledReminder(product.id);
+    const has = Boolean(reminder);
+    const label = has && reminder ? `Aviso ${remindWhen.format(new Date(reminder.remindAt))}` : 'Aviso';
+    return `
+      <button type="button" class="radar-card-action${has ? ' is-on' : ''}" data-reminder-open="${escapeHtml(product.id)}"
+        title="${has ? 'Aviso programado. Pulsa para editar o eliminar.' : 'Avisarme cuando toque comprar'}"
+        aria-label="${has ? 'Editar aviso de compra' : 'Crear aviso de compra'} para ${escapeHtml(product.title)}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg>
+        <span>${escapeHtml(label)}</span>
+      </button>`;
+  }
+
+  /* --------------------------------------------------------------- toast */
+
+  let toastTimer: ReturnType<typeof setTimeout> | null = null;
+  function showToast(message: string, error = false): void {
+    const toast = els.toast;
+    if (!toast) return;
+    toast.textContent = message;
+    toast.classList.toggle('is-error', error);
+    toast.hidden = false;
+    toast.classList.add('is-on');
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.classList.remove('is-on');
+      toast.hidden = true;
+    }, 3200);
+  }
 
   /* ------------------------------------------------------------- render */
 
@@ -884,6 +1129,13 @@ if (!sessionUser) {
               <a href="/producto/${encodeURIComponent(product.id)}" title="Ver ficha de ${escapeHtml(product.title)}">${escapeHtml(product.title)}</a>
             </h3>
             <span class="radar-card-price">${escapeHtml(product.price)}</span>
+            <div class="radar-card-actions">
+              ${renderReminderBtn(product)}
+              <button type="button" class="radar-card-action" data-share-open="${escapeHtml(product.id)}" title="Compartir producto" aria-label="Compartir ${escapeHtml(product.title)}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"></line><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"></line></svg>
+                <span>Compartir</span>
+              </button>
+            </div>
             <a class="radar-card-buy" href="${escapeHtml(product.buyUrl || '#')}" target="_blank" rel="nofollow sponsored noopener noreferrer">
               Retomar compra
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline></svg>
@@ -971,6 +1223,134 @@ if (!sessionUser) {
     renderAll();
   };
 
+  /* ------------------------------------------------------------- avisos */
+
+  let reminderProductId: string | null = null;
+
+  const closeReminderModal = (): void => {
+    if (els.reminderModal) els.reminderModal.hidden = true;
+    if (els.reminderError) els.reminderError.hidden = true;
+    reminderProductId = null;
+  };
+
+  function setReminderError(message: string): void {
+    if (!els.reminderError) return;
+    els.reminderError.textContent = message;
+    els.reminderError.hidden = false;
+  }
+
+  function openReminderModal(productId: string): void {
+    const product = getRadarProducts().find((p) => p.id === productId);
+    if (!product || !els.reminderModal || !els.reminderForm) return;
+
+    reminderProductId = productId;
+    const dateInput = els.reminderForm.querySelector<HTMLInputElement>('input[name="date"]');
+    const timeInput = els.reminderForm.querySelector<HTMLInputElement>('input[name="time"]');
+    const reasonInput = els.reminderForm.querySelector<HTMLSelectElement>('select[name="reason"]');
+    const noteInput = els.reminderForm.querySelector<HTMLInputElement>('input[name="note"]');
+    const now = new Date();
+    const existing = getScheduledReminder(productId);
+
+    if (els.reminderProduct) {
+      els.reminderProduct.textContent = existing
+        ? `Aviso activo · ${remindWhen.format(new Date(existing.remindAt))} · ${existing.reason}`
+        : product.title;
+    }
+    if (els.reminderError) els.reminderError.hidden = true;
+
+    if (existing) {
+      const at = new Date(existing.remindAt);
+      if (dateInput) dateInput.value = toDateValue(at);
+      if (timeInput) timeInput.value = toTimeValue(at);
+      if (reasonInput) reasonInput.value = existing.reason;
+      if (noteInput) noteInput.value = existing.reasonNote ?? '';
+      if (els.reminderCancel) els.reminderCancel.hidden = false;
+    } else {
+      // Por defecto: mañana a las 10:00.
+      const def = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      def.setHours(10, 0, 0, 0);
+      if (dateInput) {
+        dateInput.min = toDateValue(now);
+        dateInput.value = toDateValue(def);
+      }
+      if (timeInput) timeInput.value = '10:00';
+      if (reasonInput) reasonInput.value = reasonInput.options[0]?.value ?? '';
+      if (noteInput) noteInput.value = '';
+      if (els.reminderCancel) els.reminderCancel.hidden = true;
+    }
+
+    els.reminderModal.hidden = false;
+    dateInput?.focus();
+  }
+
+  const toDateValue = (d: Date): string =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const toTimeValue = (d: Date): string =>
+    `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+
+  els.reminderForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!reminderProductId) return;
+    const product = getRadarProducts().find((p) => p.id === reminderProductId);
+    const date = els.reminderForm.querySelector<HTMLInputElement>('input[name="date"]')?.value ?? '';
+    const time = els.reminderForm.querySelector<HTMLInputElement>('input[name="time"]')?.value ?? '';
+    const reason = els.reminderForm.querySelector<HTMLSelectElement>('select[name="reason"]')?.value ?? '';
+    const note = els.reminderForm.querySelector<HTMLInputElement>('input[name="note"]')?.value.trim() ?? '';
+
+    if (!date || !time) {
+      setReminderError('Elige fecha y hora.');
+      return;
+    }
+    const remindAt = new Date(`${date}T${time}`).getTime();
+    if (!Number.isFinite(remindAt)) {
+      setReminderError('Fecha u hora no válidas.');
+      return;
+    }
+    if (remindAt <= Date.now() + 60_000) {
+      setReminderError('La fecha y hora deben estar al menos un minuto en el futuro.');
+      return;
+    }
+
+    const result = await createReminder({
+      productId: reminderProductId,
+      title: product?.title ?? 'Producto de Mi Radar',
+      remindAt,
+      reason,
+      reasonNote: note || undefined,
+    });
+    if (result.ok) {
+      closeReminderModal();
+      showToast('Aviso programado. Te escribiremos el día indicado.');
+      renderAll();
+    } else {
+      setReminderError(result.message ?? 'No se pudo programar el aviso.');
+    }
+  });
+
+  els.reminderCancel?.addEventListener('click', async () => {
+    const reminder = reminderProductId ? getScheduledReminder(reminderProductId) : null;
+    if (!reminder) {
+      closeReminderModal();
+      return;
+    }
+    const result = await cancelReminder(reminder.id);
+    closeReminderModal();
+    if (result.ok) {
+      showToast('Aviso eliminado.');
+      renderAll();
+    } else {
+      showToast(result.message ?? 'No se pudo eliminar el aviso.', true);
+    }
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-reminder-close]').forEach((el) => {
+    el.addEventListener('click', closeReminderModal);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && els.reminderModal && !els.reminderModal.hidden) closeReminderModal();
+  });
+
   /* ------------------------------------------------------------ eventos */
 
   els.tabs?.addEventListener('click', (event) => {
@@ -999,6 +1379,19 @@ if (!sessionUser) {
     const noteBtn = target.closest<HTMLElement>('[data-note-edit]');
     if (noteBtn) {
       editNote(noteBtn.dataset.noteEdit ?? '');
+      return;
+    }
+
+    const reminderBtn = target.closest<HTMLElement>('[data-reminder-open]');
+    if (reminderBtn?.dataset.reminderOpen) {
+      openReminderModal(reminderBtn.dataset.reminderOpen);
+      return;
+    }
+
+    const shareBtn = target.closest<HTMLElement>('[data-share-open]');
+    if (shareBtn?.dataset.shareOpen) {
+      const product = getRadarProducts().find((p) => p.id === shareBtn.dataset.shareOpen);
+      if (product) openSharePanel({ productId: product.id, title: product.title });
       return;
     }
 

@@ -10,6 +10,12 @@
 import type { MiddlewareHandler } from 'astro';
 import { clientIpFrom, trackProductVisit } from './lib/analytics';
 import { findCatalogProduct } from './lib/catalog';
+import { recordPricePoint } from './lib/priceHistory';
+import { startReminderScheduler } from './lib/reminders';
+
+// Los avisos diferidos de Mi Radar se envían desde el propio proceso SSR
+// (setInterval + unref): no hay cron externo. Se arranca una sola vez aquí.
+startReminderScheduler();
 
 /** /producto/<slug> o /productos/<slug>, con o sin barra final. */
 const PRODUCT_PATH = /^\/(productos?)\/([^/]+?)\/?$/i;
@@ -23,9 +29,12 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
       if (match) {
         const slug = decodeURIComponent(match[2]);
         // Sólo fichas reales del catálogo; nunca lanza ni bloquea.
-        if (findCatalogProduct(slug)) {
+        const product = findCatalogProduct(slug);
+        if (product) {
           // La IP sólo se usa para descartar el ordenador de desarrollo.
           trackProductVisit(slug, context.url.pathname, clientIpFrom(context.request));
+          // 1 punto de histórico de precio por día (cola con debounce).
+          recordPricePoint(product.id, product.price);
         }
       }
     }

@@ -17,6 +17,7 @@ import {
   type PendingExit,
   type ProjectFolder,
   type RadarData,
+  type Reminder,
   type SavedProduct,
 } from '../types/radar';
 
@@ -28,6 +29,7 @@ function emptyRadar(): RadarData {
   return {
     projects: [{ ...DEFAULT_PROJECT, products: [] }],
     pendingExits: [],
+    reminders: [],
   };
 }
 
@@ -57,6 +59,9 @@ export function loadRadar(): RadarData {
   return {
     projects,
     pendingExits: Array.isArray(stored.pendingExits) ? stored.pendingExits : [],
+    reminders: Array.isArray(stored.reminders)
+      ? stored.reminders.filter((r) => r && typeof r.id === 'string' && r.id)
+      : [],
   };
 }
 
@@ -201,6 +206,60 @@ export function resolveExit(productId: string, status: 'purchased' | 'dismissed'
 
 export function getPendingExits(): PendingExit[] {
   return loadRadar().pendingExits.filter((e) => e.status === 'pending');
+}
+
+/* ------------------------------------------------------------------ avisos */
+
+/** Aviso 'scheduled' activo de un producto (si lo hay). */
+export function getScheduledReminder(productId: string): Reminder | null {
+  return loadRadar().reminders?.find((r) => r.productId === productId && r.status === 'scheduled') ?? null;
+}
+
+export type ReminderActionResult = { ok: boolean; message?: string; radar?: RadarData };
+
+/**
+ * Crea (o reprograma) el aviso de compra de un producto. Requiere sesión: el
+ * servidor valida límites y fecha, y devuelve el radar mergeado.
+ */
+export async function createReminder(input: {
+  productId: string;
+  title: string;
+  remindAt: number;
+  reason: string;
+  reasonNote?: string;
+}): Promise<ReminderActionResult> {
+  try {
+    const res = await fetch('/api/radar/reminders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const payload = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string; radar?: RadarData };
+    if (res.ok && payload.success && payload.radar) {
+      localStorage.setItem(RADAR_STORAGE_KEY, JSON.stringify(payload.radar));
+      for (const listener of listeners) listener(payload.radar);
+      return { ok: true, radar: payload.radar };
+    }
+    return { ok: false, message: payload.message ?? 'No se pudo crear el aviso.' };
+  } catch {
+    return { ok: false, message: 'Sin conexión. Inténtalo de nuevo.' };
+  }
+}
+
+/** Cancela un aviso por id. */
+export async function cancelReminder(reminderId: string): Promise<ReminderActionResult> {
+  try {
+    const res = await fetch(`/api/radar/reminders?id=${encodeURIComponent(reminderId)}`, { method: 'DELETE' });
+    const payload = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string; radar?: RadarData };
+    if (res.ok && payload.success && payload.radar) {
+      localStorage.setItem(RADAR_STORAGE_KEY, JSON.stringify(payload.radar));
+      for (const listener of listeners) listener(payload.radar);
+      return { ok: true, radar: payload.radar };
+    }
+    return { ok: false, message: payload.message ?? 'No se pudo cancelar el aviso.' };
+  } catch {
+    return { ok: false, message: 'Sin conexión. Inténtalo de nuevo.' };
+  }
 }
 
 /* -------------------------------------------------------------------- sync */

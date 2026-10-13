@@ -124,6 +124,7 @@ function normalizeToProduct(schema: Product): FlatProduct {
     cons: schema.investigation.cons,
     badge: schema.badge ?? schema.awardBadge,
     techSheet: schema.techSheet,
+    priceHistory: schema.priceHistory,
     rating: schema.conversionHooks.rating,
     reviewsCount: schema.conversionHooks.totalReviewsCount,
     verdict: schema.verdict,

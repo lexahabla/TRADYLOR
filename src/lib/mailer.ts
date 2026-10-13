@@ -67,3 +67,40 @@ export async function sendVerificationEmailSmtp(payload: EmailPayload): Promise<
     return false;
   }
 }
+
+export interface GenericMailPayload {
+  to: string;
+  subject: string;
+  html: string;
+  text?: string;
+}
+
+/** Envío genérico (asunto + HTML a medida). Devuelve false si no hay SMTP. */
+export async function sendGenericMailSmtp(payload: GenericMailPayload): Promise<boolean> {
+  const config = getSmtpConfig();
+  if (!config) return false;
+
+  const transporter = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.port === 465,
+    auth: { user: config.user, pass: config.pass },
+    // El dispatcher es asíncrono; un SMTP lento no debe frenar el tick.
+    connectionTimeout: 15_000,
+    greetingTimeout: 10_000,
+  });
+
+  try {
+    await transporter.sendMail({
+      from: config.from,
+      to: payload.to,
+      subject: payload.subject,
+      html: payload.html,
+      text: payload.text,
+    });
+    return true;
+  } catch (error) {
+    console.error('[SMTP] Error enviando email genérico:', error);
+    return false;
+  }
+}

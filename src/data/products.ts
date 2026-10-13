@@ -49,6 +49,8 @@ export interface Product {
   /** Texto de ficha técnica (consulta en la página del producto). */
   techSheet?: string;
   fulfillmentProvider?: string;
+  /** Histórico de precio (1 punto por día; se completa con cada visita). */
+  priceHistory?: { date: string; price: number }[];
 
   // ─── New structured fields (optional for backward compat) ──────────────────
   awardBadge?: string;
@@ -161,6 +163,7 @@ export function toStructuredProduct(flat: Product): ProductSchema {
     badge: flat.badge,
     verdict: flat.verdict,
     techSheet: flat.techSheet,
+    priceHistory: flat.priceHistory,
   };
 }
 

@@ -56,10 +56,54 @@ export interface PendingExit {
   status: 'pending' | 'purchased' | 'dismissed';
 }
 
+/**
+ * Aviso / recordatorio de compra creado por el usuario sobre un producto de su
+ * radar. Se envía por correo en la fecha y hora elegidas (dispatcher en el SSR).
+ */
+export interface Reminder {
+  id: string;
+  /** id/slug del producto guardado en el radar. */
+  productId: string;
+  /** Copia del título en el momento de crear el aviso (como PendingExit). */
+  title: string;
+  /** Epoch ms de la fecha y hora elegidas por el usuario. */
+  remindAt: number;
+  /** Motivo predefinido (verbatim de REMINDER_REASONS). */
+  reason: string;
+  /** Texto libre opcional del usuario ("espero la nómina del día 15"...). */
+  reasonNote?: string;
+  status: 'scheduled' | 'sending' | 'sent' | 'cancelled';
+  createdAt: number;
+  sentAt?: number;
+  attempts?: number;
+  lastError?: string;
+}
+
+/** Estado de un aviso para pintar la UI del botón 🔔. */
+export type ReminderStatus = Reminder['status'];
+
+/** Motivos que el usuario elige al crear un aviso (se incluyen en el correo). */
+export const REMINDER_REASONS: readonly string[] = [
+  'Esperando fondos / cobro',
+  'Esperando oferta o descuento',
+  'Falta de stock',
+  'Regalo o fecha especial',
+  'Comparando con otro producto',
+  'Otro',
+] as const;
+
+/** Máximo de avisos por producto y por usuario (límite de abuso de SMTP). */
+export const REMINDER_MAX_PER_PRODUCT = 1;
+export const REMINDER_MAX_PER_USER = 20;
+/** Horizonte máximo de programación: 1 año. */
+export const REMINDER_MAX_HORIZON_MS = 365 * 24 * 60 * 60 * 1000;
+
 /** Estado completo de Mi Radar de un usuario (anónimo o en la nube). */
 export interface RadarData {
   projects: ProjectFolder[];
   pendingExits: PendingExit[];
+  /** Avisos/recordatorios (opcional para no romper clientes antiguos). */
+  reminders?: Reminder[];
 }
 
 /** Respuesta de /api/radar/auth/session. */

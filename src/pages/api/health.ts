@@ -55,6 +55,7 @@ export const GET: APIRoute = () => {
     n8nVerifyWebhook: Boolean((process.env.N8N_VERIFY_WEBHOOK_URL ?? '').trim()),
     n8nResetWebhook: Boolean((process.env.N8N_RESET_WEBHOOK_URL ?? '').trim()),
     n8nClickWebhook: Boolean((process.env.N8N_CLICK_WEBHOOK_URL ?? '').trim()),
+    n8nReminderWebhook: Boolean((process.env.N8N_REMINDER_WEBHOOK_URL ?? '').trim()),
     openai: Boolean((process.env.OPENAI_API_KEY ?? '').trim()),
     anthropic: Boolean((process.env.ANTHROPIC_API_KEY ?? '').trim()),
     groq: Boolean((process.env.GROQ_API_KEY ?? '').trim()),

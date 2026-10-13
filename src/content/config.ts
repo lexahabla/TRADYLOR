@@ -59,6 +59,11 @@ const productSchema = z.object({
       .default('En stock'),
   }),
 
+  // ─── Price history (capturado en cada visita a la ficha, 1 punto/día) ──────
+  priceHistory: z
+    .array(z.object({ date: z.string(), price: z.number() }))
+    .optional(),
+
   // ─── Conversion & Trust Metrics ────────────────────────────────────────────
   conversionHooks: z.object({
     idealFor: z.string().optional(),

@@ -20,6 +20,7 @@ export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
 import ComparisonTable from '../../components/ComparisonTable.astro';
+import PriceHistoryChart from '../../components/PriceHistoryChart.astro';
 import { getCatalogProducts, findCatalogProduct, productKey } from '../../lib/catalog';
 import { isVideoUrl, videoThumbUrl } from '../../lib/media';
 
@@ -271,6 +272,15 @@ const productSchema = {
         <!-- Título H1 del producto -->
         <h1 class="product-title-h1">{displayTitle}</h1>
 
+        <!-- Sello editorial: recomendación de Tradylor tras comparar la categoría -->
+        <div class="selection-seal" role="note">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+            <polyline points="9 12 11 14 15 10" />
+          </svg>
+          <span><strong>Selección Tradylor</strong> · Mejor opción comparada</span>
+        </div>
+
         <!-- Descripción editorial -->
         <p class="product-desc-text">{displayDescription}</p>
 
@@ -312,6 +322,32 @@ const productSchema = {
           Reserva tu opción sin compromiso: sólo se cobra en la pasarela oficial de {fulfillmentProvider}
         </p>
 
+        <!-- CTA secundario: guardar en Mi Radar (gratis, con o sin cuenta) -->
+        <button
+          type="button"
+          class="cta-radar-btn"
+          data-radar-toggle
+          data-radar-id={productKey(product)}
+          data-radar-title={product.title}
+          data-radar-price={formatCurrency(product.price)}
+          data-radar-price-value={product.price}
+          data-radar-image={product.image}
+          data-radar-url={checkoutUrl}
+          data-radar-store={/ali/i.test(product.merchant ?? '') ? 'aliexpress' : 'amazon'}
+          aria-pressed="false"
+          aria-label="Guardar en Mi Radar gratis"
+          title="Guardar en Mi Radar gratis"
+        >
+          <svg class="radar-anim-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" opacity="0.45"></circle>
+            <circle cx="12" cy="12" r="5" opacity="0.7"></circle>
+            <line class="radar-sweep" x1="12" y1="12" x2="12" y2="4"></line>
+            <circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"></circle>
+          </svg>
+          <span>Guardar en Mi Radar gratis</span>
+        </button>
+        <p class="cta-radar-micro">Organiza tus compras, pon avisos de fecha y recibe el histórico de precio en tu panel.</p>
+
         <!-- Acciones secundarias: ficha técnica -->
         <div class="cta-support-row">
           <a href="#ficha-tecnica" class="detail-cart-btn cta-ghost-link" id={`specs-cta-${product.id}`}>
@@ -341,6 +377,13 @@ const productSchema = {
           </div>
         )}
       </div>
+    </section>
+
+    <!-- ======================================================
+         HISTÓRICO DE PRECIO (captura progresiva, 1 punto/día)
+         ====================================================== -->
+    <section class="price-history-section container" id="historico-precio">
+      <PriceHistoryChart points={product.priceHistory ?? []} currentPrice={product.price} />
     </section>
 
     <!-- ======================================================
@@ -1245,6 +1288,111 @@ const productSchema = {
     z-index: 2;
   }
 
+  /* Sello editorial bajo el H1 (mismo lenguaje que .editorial-badge-img) */
+  .selection-seal {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    align-self: flex-start;
+    margin: -0.6rem 0 0;
+    padding: 0.35rem 0.8rem;
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.4);
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .selection-seal strong {
+    font-weight: 800;
+  }
+
+  /* CTA "Guardar en Mi Radar gratis" (bisagra con el botón Comprar ya) */
+  .cta-radar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    width: 100%;
+    padding: 0.8rem 1.25rem;
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.22s ease;
+  }
+
+  .cta-radar-btn:hover {
+    color: #ffffff;
+    background: rgba(59, 130, 246, 0.22);
+    border-color: rgba(59, 130, 246, 0.7);
+    box-shadow: 0 8px 20px rgba(37, 99, 235, 0.3);
+    transform: translateY(-1px);
+  }
+
+  .cta-radar-btn:active {
+    transform: scale(0.985);
+  }
+
+  .cta-radar-btn.is-saved {
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.5);
+  }
+
+  .cta-radar-btn.is-saved:hover {
+    color: #a7f3d0;
+    background: rgba(16, 185, 129, 0.2);
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.25);
+  }
+
+  .cta-radar-btn .radar-sweep {
+    transform-origin: 12px 12px;
+    animation: radarSweep 3.2s linear infinite;
+  }
+
+  .cta-radar-btn.is-saved .radar-anim-icon {
+    animation: radarPulse 0.7s ease;
+  }
+
+  @keyframes radarSweep {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes radarPulse {
+    0% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.25);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+
+  .cta-radar-micro {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin: -0.5rem 0 0;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    line-height: 1.45;
+  }
+
   .trust-row {
     display: flex;
     gap: 1.25rem;
@@ -1847,6 +1995,14 @@ const productSchema = {
   }
   .cta-ghost-link {
     color: #bfdbfe;
+  }
+
+  /* =====================================================
+     HISTÓRICO DE PRECIO
+     ===================================================== */
+  .price-history-section {
+    padding-bottom: 2.5rem;
+    scroll-margin-top: 100px;
   }
 
   /* =====================================================

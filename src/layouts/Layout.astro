@@ -15,7 +15,7 @@ const {
   title = "Tradylor | Portal de Curación, Recomendaciones y Comparativas de Productos",
   description = "Filtramos el ruido del mercado. Descubre análisis rigurosos, comparativas honestas y las mejores ofertas verificadas para tomar decisiones de compra inteligentes.",
   image = "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=1200&auto=format&fit=crop",
-  canonicalUrl = Astro.url.href,
+  canonicalUrl,
   type = "website",
   noindex = false,
 } = Astro.props;
@@ -23,6 +23,16 @@ const {
 const currentYear = new Date().getFullYear();
 // En las páginas del backend se ocultan la navegación pública y las acciones de cabecera
 const isBackend = Astro.url.pathname.startsWith('/admin');
+
+// URLs absolutas para SEO/OG: el social scrapers exigen https:// completo,
+// y el dominio canónico sale de `site` (no del host del proxy).
+const siteOrigin = Astro.site ?? new URL('https://tradylor.com');
+const toAbsolute = (value: string): string =>
+  /^https?:\/\//i.test(value) ? value : new URL(value, siteOrigin).href;
+const resolvedCanonical = canonicalUrl
+  ? toAbsolute(canonicalUrl)
+  : new URL(Astro.url.pathname + Astro.url.search, siteOrigin).href;
+const resolvedImage = toAbsolute(image);
 ---
 
 <!DOCTYPE html>
@@ -40,24 +50,24 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
     <title>{title}</title>
     <meta name="title" content={title} />
     <meta name="description" content={description} />
-    <link rel="canonical" href={canonicalUrl} />
+    <link rel="canonical" href={resolvedCanonical} />
     <meta name="robots" content={noindex ? "noindex, nofollow, noarchive" : "index, follow"} />
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content={type} />
-    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:url" content={resolvedCanonical} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
-    <meta property="og:image" content={image} />
+    <meta property="og:image" content={resolvedImage} />
     <meta property="og:site_name" content="Tradylor" />
     <meta property="og:locale" content="es_ES" />
 
     <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:url" content={canonicalUrl} />
+    <meta name="twitter:url" content={resolvedCanonical} />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={image} />
+    <meta name="twitter:image" content={resolvedImage} />
 
     <!-- Tipografía Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -332,6 +342,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
       }
       /* Usuario: botón circular coloreado + menú desplegable */
       .header-user-area {
+        position: relative;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -339,16 +350,22 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         height: 40px;
         border-radius: 50%;
         background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+        border: 1px solid rgba(96, 165, 250, 0.45);
         box-shadow: 0 4px 14px rgba(37, 99, 235, 0.45);
         cursor: pointer;
-        transition: transform 0.15s ease, box-shadow 0.2s ease;
+        transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
       }
       .header-user-area:hover {
         transform: translateY(-1px);
         box-shadow: 0 6px 18px rgba(37, 99, 235, 0.6);
+        border-color: rgba(147, 197, 253, 0.75);
       }
       .header-user-area:active {
         transform: scale(0.96);
+      }
+      .header-user-area.is-open {
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35), 0 6px 18px rgba(37, 99, 235, 0.6);
+        border-color: #93c5fd;
       }
       .header-user {
         position: relative;
@@ -370,6 +387,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         color: #ffffff;
         background: transparent;
         border: none;
+        border-radius: 50%;
         cursor: pointer;
         user-select: none;
       }
@@ -379,77 +397,227 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         object-fit: cover;
         border-radius: 50%;
       }
+      .header-radar-avatar:focus-visible {
+        outline: 2px solid #bfdbfe;
+        outline-offset: 2px;
+      }
+
+      /* ---------- Menú desplegable (mismo lenguaje que modales/drawer) ----- */
       .header-user-menu {
         position: absolute;
-        top: calc(100% + 10px);
-        right: 0;
-        min-width: 230px;
-        background: #101827;
-        border: 1px solid var(--color-border);
-        border-radius: 14px;
-        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
-        padding: 0.75rem;
+        top: calc(100% + 12px);
+        right: -4px;
+        min-width: 264px;
+        background: linear-gradient(160deg, #131b2c, #0d1422);
+        border: 1px solid rgba(96, 165, 250, 0.22);
+        border-radius: 16px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55), 0 2px 0 0 rgba(255, 255, 255, 0.03) inset;
+        padding: 0.6rem;
         z-index: 400;
         display: flex;
         flex-direction: column;
         gap: 0.15rem;
+        transform-origin: top right;
+        animation: headerUserMenuIn 0.16s ease both;
+      }
+      /* Flecha hacia el avatar (misma superficie que el panel) */
+      .header-user-menu::before {
+        content: '';
+        position: absolute;
+        top: -5px;
+        right: 16px;
+        width: 11px;
+        height: 11px;
+        background: linear-gradient(160deg, #131b2c, #0d1422);
+        border-left: 1px solid rgba(96, 165, 250, 0.22);
+        border-top: 1px solid rgba(96, 165, 250, 0.22);
+        border-radius: 3px 0 0 0;
+        transform: rotate(45deg);
       }
       .header-user-menu[hidden] {
         display: none;
       }
+      @keyframes headerUserMenuIn {
+        from {
+          opacity: 0;
+          transform: translateY(-6px) scale(0.97);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+
+      /* Perfil: mini avatar + nombre/email + estado de sesión */
       .header-user-menu-profile {
-        padding: 0 0.15rem;
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        padding: 0.6rem 0.6rem;
+        min-width: 0;
+        background: rgba(59, 130, 246, 0.07);
+        border: 1px solid rgba(59, 130, 246, 0.18);
+        border-radius: 12px;
+      }
+      .header-user-menu-avatar {
+        flex: 0 0 38px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #ffffff;
+        font-size: 0.95rem;
+        font-weight: 800;
+        line-height: 1;
+        overflow: hidden;
+      }
+      .header-user-menu-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .header-user-menu-profile-text {
         min-width: 0;
       }
       .header-user-menu-profile .radar-profile-name {
         margin: 0;
         font-weight: 700;
-        font-size: 0.92rem;
+        font-size: 0.9rem;
         color: var(--color-text-main);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .header-user-menu-profile .radar-profile-email {
-        margin: 0.15rem 0 0;
-        font-size: 0.75rem;
+        margin: 0.1rem 0 0;
+        font-size: 0.73rem;
         color: var(--color-text-dim);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
+      .header-user-menu-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        margin-top: 0.28rem;
+        font-size: 0.62rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #6ee7b7;
+      }
+      .header-user-menu-status i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #34d399;
+        box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
+      }
+
+      /* Separador con degradado (como el resto de la web) */
       .header-user-menu-divider {
         height: 1px;
-        background: var(--color-border);
-        margin: 0.35rem 0;
-        opacity: 0.6;
+        margin: 0.5rem 0.15rem;
+        background: linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.35), transparent);
       }
+
       .header-user-menu .radar-sync-badge {
         padding: 0 0.15rem;
         font-size: 0.75rem;
         font-weight: 700;
         color: #6ee7b7;
       }
+
+      /* Acciones del menú */
+      .header-user-menu-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+        margin-top: 0.15rem;
+      }
       .header-user-menu-btn {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: 0.6rem;
         width: 100%;
-        padding: 0.5rem 0.6rem;
-        font-size: 0.82rem;
+        padding: 0.45rem 0.5rem;
+        font-family: var(--font-body);
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--color-text-muted);
         text-align: left;
         text-decoration: none;
-        border-radius: 8px;
-        transition: background 0.15s ease;
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 12px;
+        cursor: pointer;
+        transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease,
+          transform 0.12s ease;
+      }
+      .header-user-menu-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        background: rgba(59, 130, 246, 0.12);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        color: #93c5fd;
+        transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+      }
+      .header-user-menu-label {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .header-user-menu-arrow {
+        flex-shrink: 0;
+        color: #64748b;
+        transition: transform 0.18s ease, color 0.18s ease;
       }
       .header-user-menu-btn:hover {
-        background: rgba(255, 255, 255, 0.07);
+        background: rgba(59, 130, 246, 0.14);
+        border-color: rgba(59, 130, 246, 0.34);
+        color: #ffffff;
+        transform: translateX(1px);
+      }
+      .header-user-menu-btn:hover .header-user-menu-arrow {
+        color: #93c5fd;
+        transform: translateX(2px);
+      }
+      .header-user-menu-btn:active {
+        transform: scale(0.99);
+      }
+      .header-user-menu-btn:focus-visible {
+        outline: 2px solid #60a5fa;
+        outline-offset: 1px;
       }
       .header-user-menu-logout {
-        color: #f87171;
+        color: #fca5a5;
+      }
+      .header-user-menu-logout .header-user-menu-icon {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.3);
+        color: #fca5a5;
       }
       .header-user-menu-logout:hover {
-        background: rgba(248, 113, 113, 0.1);
+        background: rgba(239, 68, 68, 0.14);
+        border-color: rgba(239, 68, 68, 0.42);
+        color: #ffffff;
+      }
+      .header-user-menu-logout:hover .header-user-menu-icon {
+        background: rgba(239, 68, 68, 0.26);
+        border-color: rgba(239, 68, 68, 0.55);
+        color: #fecaca;
       }
 
       /* =========================================================================
@@ -676,6 +844,30 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         color: #ffffff;
         border-color: #2563eb;
         box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+      }
+      .radar-drawer-item-actions {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+      }
+      .radar-drawer-item-share {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        color: #9ca3af;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .radar-drawer-item-share:hover {
+        background: rgba(96, 165, 250, 0.16);
+        border-color: rgba(96, 165, 250, 0.5);
+        color: #93c5fd;
       }
       .radar-drawer-empty {
         flex: 1;
@@ -1231,18 +1423,31 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                   <span class="radar-avatar header-radar-avatar" data-header-avatar data-user-menu-toggle role="button" tabindex="0" aria-haspopup="true" aria-expanded="false" aria-label="Menú de usuario">U</span>
                   <div class="header-user-menu" data-user-menu hidden>
                     <div class="header-user-menu-profile">
-                      <p class="radar-profile-name" data-header-username>Usuario</p>
-                      <p class="radar-profile-email" data-header-email>—</p>
+                      <span class="header-user-menu-avatar" data-header-avatar-menu aria-hidden="true">U</span>
+                      <div class="header-user-menu-profile-text">
+                        <p class="radar-profile-name" data-header-username>Usuario</p>
+                        <p class="radar-profile-email" data-header-email>—</p>
+                        <span class="header-user-menu-status">
+                          <i aria-hidden="true"></i> Sesión iniciada
+                        </span>
+                      </div>
                     </div>
                     <div class="header-user-menu-divider"></div>
-                    <a href="/mi-radar" class="radar-btn radar-btn-ghost header-user-menu-btn">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                      Mi Radar
-                    </a>
-                    <button type="button" class="radar-btn radar-btn-ghost header-user-menu-btn header-user-menu-logout" data-user-logout>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                      Cerrar sesión
-                    </button>
+                    <nav class="header-user-menu-list" aria-label="Cuenta">
+                      <a href="/mi-radar" class="header-user-menu-btn">
+                        <span class="header-user-menu-icon" aria-hidden="true">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        </span>
+                        <span class="header-user-menu-label">Mi Radar</span>
+                        <svg class="header-user-menu-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                      </a>
+                      <button type="button" class="header-user-menu-btn header-user-menu-logout" data-user-logout>
+                        <span class="header-user-menu-icon" aria-hidden="true">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                        </span>
+                        <span class="header-user-menu-label">Cerrar sesión</span>
+                      </button>
+                    </nav>
                   </div>
                 </div>
               </div>
@@ -1550,6 +1755,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           trackExitClick,
         } from '../utils/radarStore';
         import type { SavedProduct, UserProfile } from '../types/radar';
+        import { openSharePanel } from '../utils/shareUi';
 
         // ---------------------------------------------------------- helpers UI
         const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelector<T>(sel);
@@ -1561,6 +1767,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         const headerUsername = $('[data-header-username]');
         const headerEmail = $('[data-header-email]');
         const headerAvatarWrap = $('[data-header-avatar]');
+        const headerAvatarMenu = $('[data-header-avatar-menu]');
 
         function renderHeaderAuth(user: UserProfile | null) {
           if (!headerAnon || !headerUserArea) return;
@@ -1571,18 +1778,20 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
             const displayName = user.name || user.email.split('@')[0];
             if (headerUsername) headerUsername.textContent = displayName;
             if (headerEmail) headerEmail.textContent = user.email;
-            if (headerAvatarWrap) {
-              const v = user.updatedAt ? `?v=${encodeURIComponent(user.updatedAt)}` : '';
+            const v = user.updatedAt ? `?v=${encodeURIComponent(user.updatedAt)}` : '';
+            for (const wrap of [headerAvatarWrap, headerAvatarMenu]) {
+              if (!wrap) continue;
               if (user.avatar) {
-                headerAvatarWrap.innerHTML = `<img src="/api/radar/auth/avatar${v}" alt="" />`;
+                wrap.innerHTML = `<img src="/api/radar/auth/avatar${v}" alt="" />`;
               } else {
-                headerAvatarWrap.textContent = displayName.charAt(0).toUpperCase();
+                wrap.textContent = displayName.charAt(0).toUpperCase();
               }
             }
           } else {
             headerAnon.hidden = false;
             headerUserArea.hidden = true;
             if (headerRadarBtn) headerRadarBtn.hidden = true;
+            closeUserMenu();
             closeRadarDrawer();
           }
           if (radarDrawerLinkText) {
@@ -1696,10 +1905,15 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                   <a href="${productUrl}" class="radar-drawer-item-title" title="${safeTitle}">${safeTitle}</a>
                   <div class="radar-drawer-item-bottom">
                     <span class="radar-drawer-item-price">${priceDisplay}</span>
-                    <a href="${checkoutUrl}" class="radar-drawer-item-buy exit-cta" data-asin="${p.id}" data-title="${safeTitle}">
-                      <span>Comprar</span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-                    </a>
+                    <span class="radar-drawer-item-actions">
+                      <button type="button" class="radar-drawer-item-share" data-drawer-share="${p.id}" data-share-title="${safeTitle}" aria-label="Compartir producto" title="Compartir producto">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"></line><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"></line></svg>
+                      </button>
+                      <a href="${checkoutUrl}" class="radar-drawer-item-buy exit-cta" data-asin="${p.id}" data-title="${safeTitle}">
+                        <span>Comprar</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                      </a>
+                    </span>
                   </div>
                 </div>
               </article>
@@ -1729,6 +1943,14 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
             removeProduct(rm.dataset.drawerRemove);
             syncButtons();
             renderRadarDrawer();
+          }
+          const sh = t.closest<HTMLElement>('[data-drawer-share]');
+          if (sh?.dataset.drawerShare) {
+            const product = getRadarProducts().find((p) => p.id === sh.dataset.drawerShare);
+            openSharePanel({
+              productId: sh.dataset.drawerShare,
+              title: sh.dataset.shareTitle || product?.title || 'Este producto',
+            });
           }
         });
 
@@ -1773,13 +1995,24 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         // ---------------------------------------------------- menú de usuario
         const userMenuToggle = $('[data-user-menu-toggle]');
         const userMenu = $('[data-user-menu]');
+        const userMenuWrap = $('[data-header-user-menu-wrap]');
 
-        function toggleUserMenu() {
+        function setUserMenuOpen(open: boolean) {
           if (!userMenu || !userMenuToggle) return;
-          const open = userMenu.hidden;
           userMenu.hidden = !open;
           userMenuToggle.setAttribute('aria-expanded', String(open));
+          // Anillo activo en el avatar mientras el menú está desplegado.
+          userMenuWrap?.classList.toggle('is-open', open);
         }
+
+        function toggleUserMenu() {
+          setUserMenuOpen(Boolean(userMenu?.hidden));
+        }
+
+        function closeUserMenu() {
+          setUserMenuOpen(false);
+        }
+
         userMenuToggle?.addEventListener('click', (e) => {
           e.stopPropagation();
           toggleUserMenu();
@@ -1794,8 +2027,13 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
           const t = event.target;
           if (!(t instanceof Element)) return;
           if (userMenu && !userMenu.hidden && !t.closest('[data-header-user-menu-wrap]')) {
-            userMenu.hidden = true;
-            userMenuToggle?.setAttribute('aria-expanded', 'false');
+            closeUserMenu();
+          }
+        });
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && userMenu && !userMenu.hidden) {
+            closeUserMenu();
+            userMenuToggle?.focus();
           }
         });
 

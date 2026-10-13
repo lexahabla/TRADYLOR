@@ -30,6 +30,7 @@ export const POST: APIRoute = async ({ request }) => {
     const radar = syncRadar(user.id, {
       projects: Array.isArray(body.projects) ? body.projects : [],
       pendingExits: Array.isArray(body.pendingExits) ? body.pendingExits : [],
+      reminders: Array.isArray(body.reminders) ? body.reminders : [],
     });
     return json({ success: true, radar });
   } catch {

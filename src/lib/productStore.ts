@@ -28,6 +28,8 @@ export interface Product {
   /** Texto de ficha técnica (consulta en la página del producto). */
   techSheet?: string;
   fulfillmentProvider?: string;
+  /** Histórico de precio (1 punto por día; lo completa lib/priceHistory.ts). */
+  priceHistory?: { date: string; price: number }[];
 }
 
 // Ruta al archivo de persistencia JSON

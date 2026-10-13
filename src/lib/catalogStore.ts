@@ -141,6 +141,7 @@ export function upsertCatalogProduct(raw: N8nContractPayload): CatalogSaveResult
     techSheet: data.techSheet ? String(data.techSheet).trim() : existing?.techSheet,
     specs: data.specs ?? existing?.specs,
     fulfillmentProvider: data.fulfillmentProvider ?? existing?.fulfillmentProvider,
+    priceHistory: existing?.priceHistory,
   };
 
   const existingIndex = products.findIndex((p) => p.id === productId);
