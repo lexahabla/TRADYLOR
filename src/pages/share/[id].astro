@@ -62,16 +62,16 @@ const cleanTitle = product.title
 const langOptions = getShareLangOptions();
 
 // Textos de UI según idioma
-const UI: Record<string, { send: string; sendLabel: string; sendPlaceholder: string; sending: string; sentOk: string; sentErr: string; copyHtml: string; copyText: string; viewProduct: string; hint: string; footer: string; cta: string; htmlOk: string; textOk: string; invalidEmail: string }> = {
-  es: { send: 'Enviar', sendLabel: 'Enviar por email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Enviando…', sentOk: '¡Email enviado!', sentErr: 'No se pudo enviar. Inténtalo de nuevo.', copyHtml: 'Copiar HTML del email', copyText: 'Copiar solo texto', viewProduct: 'Ver ficha del producto', hint: 'Rellena el destinatario y pulsa Enviar, o copia el HTML para pegarlo en tu correo.', footer: 'Enviado desde', cta: 'Ver ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo en tu correo.', textOk: 'Texto copiado.', invalidEmail: 'Introduce un email válido.' },
-  ca: { send: 'Enviar', sendLabel: 'Enviar per email a:', sendPlaceholder: 'destinatari@email.com', sending: "S'està enviant…", sentOk: 'Email enviat!', sentErr: "No s'ha pogut enviar. Prova-ho de nou.", copyHtml: "Copiar l'HTML del correu", copyText: 'Copiar només el text', viewProduct: 'Veure la fitxa del producte', hint: "Omple el destinatari i prem Enviar, o copia l'HTML per enganxar-lo al teu correu.", footer: 'Enviat des de', cta: 'Veure la fitxa completa a Tradylor →', htmlOk: "HTML copiat. Enganxa'l al teu correu.", textOk: 'Text copiat.', invalidEmail: 'Introdueix un email vàlid.' },
-  eu: { send: 'Bidali', sendLabel: 'Bidali email honi:', sendPlaceholder: 'hartzailea@email.com', sending: 'Bidaltzen…', sentOk: 'Emaila bidali da!', sentErr: 'Ezin izan da bidali. Saiatu berriro.', copyHtml: 'Kopiatu posta HTMLa', copyText: 'Kopiatu testua bakarrik', viewProduct: 'Ikusi produktuaren fitxa', hint: 'Bete hartzailea eta sakatu Bidali, edo kopiatu HTMLa zure postara itsasteko.', footer: 'Bidali da', cta: 'Ikusi fitxa osoa Tradylor-en →', htmlOk: 'HTML kopiatua. Itsatsi zure postan.', textOk: 'Testua kopiatu da.', invalidEmail: 'Sartu baliozko email bat.' },
-  gl: { send: 'Enviar', sendLabel: 'Enviar por email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Enviando…', sentOk: 'Email enviado!', sentErr: 'Non se puido enviar. Inténtao de novo.', copyHtml: 'Copiar o HTML do correo', copyText: 'Copiar só o texto', viewProduct: 'Ver a ficha do produto', hint: 'Enche o destinatario e preme Enviar, ou copia o HTML para pegalo no teu correo.', footer: 'Enviado desde', cta: 'Ver a ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo no teu correo.', textOk: 'Texto copiado.', invalidEmail: 'Introduce un email válido.' },
-  en: { send: 'Send', sendLabel: 'Send by email to:', sendPlaceholder: 'recipient@email.com', sending: 'Sending…', sentOk: 'Email sent!', sentErr: 'Could not send. Please try again.', copyHtml: 'Copy email HTML', copyText: 'Copy text only', viewProduct: 'View product sheet', hint: 'Fill in the recipient and press Send, or copy the HTML to paste into your email.', footer: 'Sent from', cta: 'View full sheet on Tradylor →', htmlOk: 'HTML copied. Paste it into your email.', textOk: 'Text copied.', invalidEmail: 'Enter a valid email.' },
-  fr: { send: 'Envoyer', sendLabel: 'Envoyer par email à :', sendPlaceholder: 'destinataire@email.com', sending: 'Envoi…', sentOk: 'Email envoyé !', sentErr: "Impossible d'envoyer. Réessayez.", copyHtml: "Copier le HTML de l'email", copyText: 'Copier le texte seulement', viewProduct: 'Voir la fiche produit', hint: "Remplissez le destinataire et appuyez sur Envoyer, ou copiez le HTML pour le coller dans votre email.", footer: 'Envoyé depuis', cta: 'Voir la fiche complète sur Tradylor →', htmlOk: 'HTML copié. Collez-le dans votre email.', textOk: 'Texte copié.', invalidEmail: 'Entrez un email valide.' },
-  de: { send: 'Senden', sendLabel: 'Per E-Mail senden an:', sendPlaceholder: 'empfaenger@email.com', sending: 'Wird gesendet…', sentOk: 'E-Mail gesendet!', sentErr: 'Konnte nicht gesendet werden. Bitte erneut versuchen.', copyHtml: 'E-Mail-HTML kopieren', copyText: 'Nur Text kopieren', viewProduct: 'Produktdatenblatt ansehen', hint: 'Empfänger einfügen und auf Senden klicken, oder das HTML für Ihre E-Mail kopieren.', footer: 'Gesendet von', cta: 'Vollständiges Datenblatt auf Tradylor ansehen →', htmlOk: 'HTML kopiert. Fügen Sie es in Ihre E-Mail ein.', textOk: 'Text kopiert.', invalidEmail: 'Geben Sie eine gültige E-Mail ein.' },
-  pt: { send: 'Enviar', sendLabel: 'Enviar por email para:', sendPlaceholder: 'destinatario@email.com', sending: 'A enviar…', sentOk: 'Email enviado!', sentErr: 'Não foi possível enviar. Tente novamente.', copyHtml: 'Copiar HTML do email', copyText: 'Copiar apenas o texto', viewProduct: 'Ver a ficha do produto', hint: 'Preencha o destinatário e clique Enviar, ou copie o HTML para colar no seu email.', footer: 'Enviado desde', cta: 'Ver a ficha completa no Tradylor →', htmlOk: 'HTML copiado. Cole no seu email.', textOk: 'Texto copiado.', invalidEmail: 'Introduza um email válido.' },
-  it: { send: 'Invia', sendLabel: 'Invia via email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Invio in corso…', sentOk: 'Email inviata!', sentErr: "Impossibile inviare. Riprova.", copyHtml: "Copia l'HTML dell'email", copyText: 'Copia solo il testo', viewProduct: 'Vedi la scheda prodotto', hint: 'Compila il destinatario e premi Invia, o copia l\'HTML per incollarlo nella tua email.', footer: 'Inviato da', cta: 'Vedi la scheda completa su Tradylor →', htmlOk: 'HTML copiato. Incollalo nella tua email.', textOk: 'Testo copiato.', invalidEmail: 'Inserisci un email valido.' },
+const UI: Record<string, { send: string; sendLabel: string; sendPlaceholder: string; sending: string; sentOk: string; sentErr: string; copyHtml: string; copyText: string; viewProduct: string; hint: string; footer: string; cta: string; htmlOk: string; textOk: string; invalidEmail: string; openMail: string; openGmail: string }> = {
+  es: { send: 'Enviar', sendLabel: 'Enviar por email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Enviando…', sentOk: '¡Email enviado!', sentErr: 'No se pudo enviar. Inténtalo de nuevo.', copyHtml: 'Copiar HTML del email', copyText: 'Copiar solo texto', viewProduct: 'Ver ficha del producto', hint: 'Abre tu cliente de correo con el mensaje listo para enviar, o copia el HTML para pegarlo en Gmail/Outlook.', footer: 'Enviado desde', cta: 'Ver ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo en tu correo.', textOk: 'Texto copiado.', invalidEmail: 'Introduce un email válido.', openMail: 'Abrir en mi correo', openGmail: 'Abrir en Gmail' },
+  ca: { send: 'Enviar', sendLabel: 'Enviar per email a:', sendPlaceholder: 'destinatari@email.com', sending: "S'està enviant…", sentOk: 'Email enviat!', sentErr: "No s'ha pogut enviar. Prova-ho de nou.", copyHtml: "Copiar l'HTML del correu", copyText: 'Copiar només el text', viewProduct: 'Veure la fitxa del producte', hint: "Obre el teu correu amb el missatge llest per enviar, o copia l'HTML per enganxar-lo a Gmail/Outlook.", footer: 'Enviat des de', cta: 'Veure la fitxa completa a Tradylor →', htmlOk: "HTML copiat. Enganxa'l al teu correu.", textOk: 'Text copiat.', invalidEmail: 'Introdueix un email vàlid.', openMail: 'Obrir al meu correu', openGmail: 'Obrir a Gmail' },
+  eu: { send: 'Bidali', sendLabel: 'Bidali email honi:', sendPlaceholder: 'hartzailea@email.com', sending: 'Bidaltzen…', sentOk: 'Emaila bidali da!', sentErr: 'Ezin izan da bidali. Saiatu berriro.', copyHtml: 'Kopiatu posta HTMLa', copyText: 'Kopiatu testua bakarrik', viewProduct: 'Ikusi produktuaren fitxa', hint: 'Ireki zure posta mezua prest duela bidaltzeko, edo kopiatu HTMLa Gmail/Outlook-era itsasteko.', footer: 'Bidali da', cta: 'Ikusi fitxa osoa Tradylor-en →', htmlOk: 'HTML kopiatua. Itsatsi zure postan.', textOk: 'Testua kopiatu da.', invalidEmail: 'Sartu baliozko email bat.', openMail: 'Ireki nire postaz', openGmail: 'Ireki Gmail-en' },
+  gl: { send: 'Enviar', sendLabel: 'Enviar por email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Enviando…', sentOk: 'Email enviado!', sentErr: 'Non se puido enviar. Inténtao de novo.', copyHtml: 'Copiar o HTML do correo', copyText: 'Copiar só o texto', viewProduct: 'Ver a ficha do produto', hint: 'Abre o teu correo coa mensaxe lista para enviar, ou copia o HTML para pegalo en Gmail/Outlook.', footer: 'Enviado desde', cta: 'Ver a ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo no teu correo.', textOk: 'Texto copiado.', invalidEmail: 'Introduce un email válido.', openMail: 'Abrir no meu correo', openGmail: 'Abrir en Gmail' },
+  en: { send: 'Send', sendLabel: 'Send by email to:', sendPlaceholder: 'recipient@email.com', sending: 'Sending…', sentOk: 'Email sent!', sentErr: 'Could not send. Please try again.', copyHtml: 'Copy email HTML', copyText: 'Copy text only', viewProduct: 'View product sheet', hint: 'Open your mail client with the message ready to send, or copy the HTML to paste in Gmail/Outlook.', footer: 'Sent from', cta: 'View full sheet on Tradylor →', htmlOk: 'HTML copied. Paste it into your email.', textOk: 'Text copied.', invalidEmail: 'Enter a valid email.', openMail: 'Open in my mail app', openGmail: 'Open in Gmail' },
+  fr: { send: 'Envoyer', sendLabel: 'Envoyer par email à :', sendPlaceholder: 'destinataire@email.com', sending: 'Envoi…', sentOk: 'Email envoyé !', sentErr: "Impossible d'envoyer. Réessayez.", copyHtml: "Copier le HTML de l'email", copyText: 'Copier le texte seulement', viewProduct: 'Voir la fiche produit', hint: "Ouvrez votre messagerie avec le message prêt à envoyer, ou copiez le HTML pour le coller dans Gmail/Outlook.", footer: 'Envoyé depuis', cta: 'Voir la fiche complète sur Tradylor →', htmlOk: 'HTML copié. Collez-le dans votre email.', textOk: 'Texte copié.', invalidEmail: 'Entrez un email valide.', openMail: 'Ouvrir dans ma messagerie', openGmail: 'Ouvrir dans Gmail' },
+  de: { send: 'Senden', sendLabel: 'Per E-Mail senden an:', sendPlaceholder: 'empfaenger@email.com', sending: 'Wird gesendet…', sentOk: 'E-Mail gesendet!', sentErr: 'Konnte nicht gesendet werden. Bitte erneut versuchen.', copyHtml: 'E-Mail-HTML kopieren', copyText: 'Nur Text kopieren', viewProduct: 'Produktdatenblatt ansehen', hint: 'Öffne deinen Mail-Client mit der fertigen Nachricht, oder kopiere das HTML zum Einfügen in Gmail/Outlook.', footer: 'Gesendet von', cta: 'Vollständiges Datenblatt auf Tradylor ansehen →', htmlOk: 'HTML kopiert. Fügen Sie es in Ihre E-Mail ein.', textOk: 'Text kopiert.', invalidEmail: 'Geben Sie eine gültige E-Mail ein.', openMail: 'In meiner Mail-App öffnen', openGmail: 'In Gmail öffnen' },
+  pt: { send: 'Enviar', sendLabel: 'Enviar por email para:', sendPlaceholder: 'destinatario@email.com', sending: 'A enviar…', sentOk: 'Email enviado!', sentErr: 'Não foi possível enviar. Tente novamente.', copyHtml: 'Copiar HTML do email', copyText: 'Copiar apenas o texto', viewProduct: 'Ver a ficha do produto', hint: 'Abra o seu cliente de email com a mensagem pronta, ou copie o HTML para colar no Gmail/Outlook.', footer: 'Enviado desde', cta: 'Ver a ficha completa no Tradylor →', htmlOk: 'HTML copiado. Cole no seu email.', textOk: 'Texto copiado.', invalidEmail: 'Introduza um email válido.', openMail: 'Abrir no meu email', openGmail: 'Abrir no Gmail' },
+  it: { send: 'Invia', sendLabel: 'Invia via email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Invio in corso…', sentOk: 'Email inviata!', sentErr: "Impossibile inviare. Riprova.", copyHtml: "Copia l'HTML dell'email", copyText: 'Copia solo il testo', viewProduct: 'Vedi la scheda prodotto', hint: "Apri il tuo client di posta con il messaggio pronto, o copia l'HTML da incollare in Gmail/Outlook.", footer: 'Inviato da', cta: 'Vedi la scheda completa su Tradylor →', htmlOk: 'HTML copiato. Incollalo nella tua email.', textOk: 'Testo copiato.', invalidEmail: 'Inserisci un email valido.', openMail: 'Apri nel mio client email', openGmail: 'Apri in Gmail' },
 };
 const ui = UI[lang] ?? UI.es;
 ---
@@ -159,6 +159,14 @@ const ui = UI[lang] ?? UI.es;
       </div>
 
       <div class="share-actions">
+        <!-- Botón principal: abre el cliente de correo del usuario -->
+        <button type="button" class="share-btn share-btn-mail" id="openMailBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="5.5" width="18" height="13" rx="2.5"/>
+            <path d="m4.5 8 7.5 5 7.5-5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span id="openMailLabel">{ui.openMail}</span>
+        </button>
         <button type="button" class="share-btn share-btn-primary" id="copyHtmlBtn">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="9" y="9" width="11" height="11" rx="2"/>
@@ -268,6 +276,13 @@ const ui = UI[lang] ?? UI.es;
       color: #06281c; box-shadow: 0 4px 16px rgba(16,185,129,.35);
     }
     .share-btn-send:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(16,185,129,.5); }
+    /* Botón principal: abrir cliente de correo */
+    .share-btn-mail {
+      background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
+      color: #ffffff; box-shadow: 0 4px 16px rgba(124,58,237,.35);
+      width: 100%; justify-content: center; font-size: .9rem; padding: .8rem 1.5rem;
+    }
+    .share-btn-mail:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(124,58,237,.55); }
     .share-btn-primary {
       background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
       color: #0d1422; box-shadow: 0 4px 16px rgba(59,130,246,.35);
@@ -298,8 +313,94 @@ const ui = UI[lang] ?? UI.es;
   </style>
 
   <script define:vars={{ message, shortUrl, cleanTitle, lang, productId: key, uiSend: ui }}>
-    // ---- Persistencia de idioma en localStorage (corrige SSR) ----
-    const STORAGE_KEY = 'tradylor_share_lang';
+    // ---- Cambiar idioma: navegar a ?lang=xx (re-render SSR) ----
+    // Se guarda en localStorage para que el panel de compartir lo recuerde.
+    try { localStorage.setItem('tradylor_share_lang', lang); } catch {}
+    document.querySelectorAll('[data-page-lang]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const code = btn.getAttribute('data-page-lang');
+        if (code && code !== lang) {
+          try { localStorage.setItem('tradylor_share_lang', code); } catch {}
+          window.location.search = '?lang=' + encodeURIComponent(code);
+        }
+      });
+    });
+
+    // ---- Detección de Gmail y apertura del cliente de correo ----
+    // Intenta detectar si el usuario usa Gmail comprobando una imagen de
+    // accounts.google.com que solo carga si hay sesión de Google activa.
+    // Si se detecta Gmail → abre Gmail Compose con el mensaje pre-rellenado.
+    // Si no → usa mailto: (abre el cliente de correo nativo).
+    const mailBtn = document.getElementById('openMailBtn');
+    const mailLabel = document.getElementById('openMailLabel');
+
+    function buildMailtoUrl() {
+      const body = message + '\n\n' + shortUrl;
+      return 'mailto:?subject=' + encodeURIComponent(cleanTitle) + '&body=' + encodeURIComponent(body);
+    }
+
+    function buildGmailUrl() {
+      // Gmail Compose URL: abre la web de Gmail con asunto y cuerpo pre-rellenados.
+      // El cuerpo es texto plano porque Gmail Compose no acepta HTML vía URL.
+      const body = message + '\n\n' + shortUrl;
+      return 'https://mail.google.com/mail/?view=cm&fs=1&su=' +
+        encodeURIComponent(cleanTitle) + '&body=' + encodeURIComponent(body);
+    }
+
+    // Comprueba si hay sesión de Google activa cargando un recurso de cuenta
+    // mediante un <img> con crossorigin=anonymous. Si carga → Gmail disponible.
+    let isGmailDetected = false;
+    function detectGmail() {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        // Esta URL responde solo si hay sesión de Google activa
+        img.src = 'https://accounts.google.com/favicon.ico?ck=' + Date.now();
+        // Estrategia alternativa: intentar fetch con credenciales
+        fetch('https://accounts.google.com/ListAccounts?gpsia=1&source=ogb&mo=1&json=1', {
+          method: 'GET',
+          credentials: 'include',
+          mode: 'no-cors', // no-cors: si no lanza error CORS, hay sesión
+        })
+          .then(() => resolve(true))
+          .catch(() => resolve(false));
+        // Timeout de seguridad
+        setTimeout(() => resolve(false), 1500);
+      });
+    }
+
+    // Al cargar, intentamos detectar Gmail para actualizar la etiqueta del botón
+    detectGmail().then((hasGmail) => {
+      isGmailDetected = hasGmail;
+      if (hasGmail && mailLabel) {
+        mailLabel.textContent = uiSend.openGmail;
+        // Añadir logo de Gmail al botón
+        const gmailIcon = document.createElement('img');
+        gmailIcon.src = 'https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico';
+        gmailIcon.alt = 'Gmail';
+        gmailIcon.width = 16;
+        gmailIcon.height = 16;
+        gmailIcon.style.cssText = 'width:18px;height:18px;object-fit:contain;border-radius:3px;flex-shrink:0;';
+        // Insertar el ícono antes del SVG de sobre
+        const svgIcon = mailBtn?.querySelector('svg');
+        if (svgIcon && mailBtn) {
+          mailBtn.insertBefore(gmailIcon, svgIcon);
+          svgIcon.style.display = 'none'; // ocultar el ícono genérico
+        }
+      }
+    });
+
+    mailBtn?.addEventListener('click', () => {
+      const url = isGmailDetected ? buildGmailUrl() : buildMailtoUrl();
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
 
     function showToast(msg, isErr) {
       const toast = document.getElementById('shareToast');
