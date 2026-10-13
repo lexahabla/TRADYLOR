@@ -241,7 +241,9 @@ if (!sessionUser) {
     gap: 0.8rem;
   }
 
-  .radar-exit-card {
+  /* Nota: los bloques marcados con :global() maquetan HTML inyectado por JS
+     (renderTabs/renderGrid/renderExits) y Astro no les añade data-astro-cid. */
+  :global(.radar-exit-card) {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -252,17 +254,17 @@ if (!sessionUser) {
     border-radius: var(--border-radius-md);
   }
 
-  .radar-exit-card p {
+  :global(.radar-exit-card p) {
     margin: 0;
     font-size: 0.9rem;
     color: var(--color-text-main);
   }
 
-  .radar-exit-card p strong {
+  :global(.radar-exit-card p strong) {
     color: #fbbf24;
   }
 
-  .radar-exit-actions {
+  :global(.radar-exit-actions) {
     display: flex;
     gap: 0.5rem;
     flex-shrink: 0;
@@ -325,7 +327,7 @@ if (!sessionUser) {
     scrollbar-width: thin;
   }
 
-  .radar-tab {
+  :global(.radar-tab) {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
@@ -342,18 +344,18 @@ if (!sessionUser) {
     transition: all 0.2s ease;
   }
 
-  .radar-tab:hover {
+  :global(.radar-tab:hover) {
     color: var(--color-text-main);
     background: rgba(255, 255, 255, 0.08);
   }
 
-  .radar-tab.is-active {
+  :global(.radar-tab.is-active) {
     color: #07111f;
     background: #60a5fa;
     border-color: #60a5fa;
   }
 
-  .radar-tab-count {
+  :global(.radar-tab-count) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -367,7 +369,7 @@ if (!sessionUser) {
     border-radius: 999px;
   }
 
-  .radar-tab-delete {
+  :global(.radar-tab-delete) {
     display: inline-flex;
     margin-left: 0.15rem;
     padding: 0;
@@ -378,7 +380,7 @@ if (!sessionUser) {
     opacity: 0.55;
   }
 
-  .radar-tab-delete:hover {
+  :global(.radar-tab-delete:hover) {
     opacity: 1;
   }
 
@@ -401,74 +403,172 @@ if (!sessionUser) {
     flex-shrink: 0;
   }
 
-  /* Grid de productos */
+  /* Grid de productos — denso: ~5 columnas en escritorio, 2 en móvil */
   .radar-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
     gap: 1rem;
   }
 
-  .radar-card {
+  /* ================================================================
+     TARJETA DEL RADAR — versión mini del ProductCard del catálogo:
+     mismo lenguaje visual (degradado oscuro, borde translúcido, radio
+     12px, imagen sobre fondo claro con object-contain, precio en
+     degradado azul y CTA azul), en formato compacto para que quepan
+     2 por fila en móvil.
+     Nota: el HTML lo inyecta renderGrid() por innerHTML, así que todos
+     estos selectores van en :global() (Astro no añade data-astro-cid).
+     ================================================================ */
+  :global(.radar-card) {
+    position: relative;
     display: flex;
     flex-direction: column;
-    background: var(--color-bg-card);
-    border: 1px solid var(--color-border);
-    border-radius: var(--border-radius-md);
+    min-width: 0;
+    background: linear-gradient(135deg, rgba(17, 24, 39, 0.7) 0%, rgba(30, 41, 59, 0.5) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
     overflow: hidden;
-    transition: border-color 0.2s ease, transform 0.2s ease;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1), border-color 0.3s ease,
+      box-shadow 0.3s ease;
   }
 
-  .radar-card:hover {
-    border-color: var(--color-border-hover);
-    transform: translateY(-2px);
+  :global(.radar-card:hover) {
+    transform: translateY(-4px);
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 16px 40px rgba(59, 130, 246, 0.2);
   }
 
-  .radar-card-image {
+  /* Media: imagen cuadrada sobre fondo claro (como .image-wrapper) */
+  :global(.radar-card-media) {
     position: relative;
     aspect-ratio: 1 / 1;
     background: #f8fafc;
+    padding: 4px;
     overflow: hidden;
   }
 
-  .radar-card-image img {
+  :global(.radar-card-image-link) {
+    display: block;
     width: 100%;
     height: 100%;
-    object-fit: cover;
-    display: block;
+    min-width: 0;
   }
 
-  .radar-card-store {
+  :global(.radar-card-media img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    padding: 0.35rem;
+    background: rgba(248, 250, 252, 0.5);
+    border-radius: 8px;
+    transition: transform 0.4s ease;
+  }
+
+  :global(.radar-card:hover .radar-card-media img) {
+    transform: scale(1.03);
+  }
+
+  /* Badge de tienda (arriba-izquierda) */
+  :global(.radar-card-store) {
     position: absolute;
-    top: 0.55rem;
-    left: 0.55rem;
-    padding: 0.2rem 0.55rem;
-    font-size: 0.66rem;
+    top: 0.4rem;
+    left: 0.4rem;
+    max-width: calc(100% - 2.6rem);
+    padding: 0.16rem 0.45rem;
+    font-size: 0.58rem;
     font-weight: 800;
     letter-spacing: 0.04em;
     text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     color: #07111f;
     background: #fbbf24;
     border-radius: 999px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    pointer-events: none;
   }
 
-  .radar-card-store.is-aliexpress {
+  :global(.radar-card-store.is-aliexpress) {
     color: #fff;
     background: #ef4444;
   }
 
-  .radar-card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.9rem 1rem 1rem;
-    flex: 1;
+  /* Quitar: misma posición que la .discount-pill del catálogo */
+  :global(.radar-card-remove) {
+    position: absolute;
+    top: 0.35rem;
+    right: 0.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    font-size: 0.95rem;
+    line-height: 1;
+    color: #334155;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(15, 23, 42, 0.12);
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
   }
 
-  .radar-card-title {
+  :global(.radar-card-remove:hover) {
+    color: #ffffff;
+    background: #ef4444;
+    border-color: #ef4444;
+    transform: scale(1.06);
+  }
+
+  /* Indicador de nota personal (abajo-izquierda sobre la imagen) */
+  :global(.radar-card-note-dot) {
+    position: absolute;
+    left: 0.4rem;
+    bottom: 0.4rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 23px;
+    height: 23px;
+    padding: 0;
+    color: #93c5fd;
+    background: rgba(10, 14, 23, 0.78);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+
+  :global(.radar-card-note-dot:hover) {
+    color: #ffffff;
+    background: rgba(37, 99, 235, 0.9);
+  }
+
+  :global(.radar-card-note-dot.has-note) {
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.5);
+  }
+
+  :global(.radar-card-body) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.5rem 0.55rem 0.6rem;
+    flex: 1;
+    min-width: 0;
+  }
+
+  :global(.radar-card-title) {
     margin: 0;
-    font-size: 0.88rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    line-height: 1.35;
+    line-height: 1.3;
     color: var(--color-text-main);
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -476,67 +576,58 @@ if (!sessionUser) {
     overflow: hidden;
   }
 
-  .radar-card-price {
-    font-size: 1rem;
-    font-weight: 800;
-    color: #60a5fa;
-  }
-
-  .radar-card-note {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 0.45rem 0.6rem;
-    font: inherit;
-    font-size: 0.76rem;
-    color: var(--color-text-main);
-    background: rgba(10, 14, 23, 0.6);
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    resize: vertical;
-    min-height: 34px;
-  }
-
-  .radar-card-note:focus {
-    outline: none;
-    border-color: #38bdf8;
-  }
-
-  .radar-card-actions {
-    display: flex;
-    gap: 0.45rem;
-    margin-top: auto;
-    padding-top: 0.4rem;
-  }
-
-  .radar-card-buy {
-    flex: 1;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0.55rem 0.7rem;
-    font-size: 0.78rem;
-    font-weight: 800;
-    color: #07111f;
-    background: linear-gradient(135deg, #60a5fa, #3b82f6);
-    border-radius: 9px;
+  :global(.radar-card-title a) {
+    color: inherit;
     text-decoration: none;
   }
 
-  .radar-card-remove {
+  :global(.radar-card-title a:hover) {
+    color: #60a5fa;
+  }
+
+  :global(.radar-card-price) {
+    margin-top: auto;
+    font-family: var(--font-heading);
+    font-size: 0.95rem;
+    font-weight: 800;
+    line-height: 1.15;
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  :global(.radar-card-buy) {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    color: var(--color-text-dim);
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 9px;
-    cursor: pointer;
+    gap: 0.3rem;
+    width: 100%;
+    margin-top: 0.4rem;
+    padding: 0.42rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #ffffff;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-radius: 8px;
+    text-decoration: none;
+    box-shadow: 0 6px 16px rgba(59, 130, 246, 0.35);
+    transition: all 0.25s ease;
   }
 
-  .radar-card-remove:hover {
-    color: #f87171;
-    border-color: rgba(248, 113, 113, 0.4);
+  :global(.radar-card-buy:hover) {
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 22px rgba(59, 130, 246, 0.45);
+  }
+
+  :global(.radar-card-buy svg) {
+    flex-shrink: 0;
+    transition: transform 0.25s ease;
+  }
+
+  :global(.radar-card-buy:hover svg) {
+    transform: translate(2px, -2px);
   }
 
   /* Vacío */
@@ -652,7 +743,7 @@ if (!sessionUser) {
       align-items: flex-start;
     }
 
-    .radar-exit-card {
+    :global(.radar-exit-card) {
       flex-direction: column;
       align-items: flex-start;
     }
@@ -663,8 +754,34 @@ if (!sessionUser) {
     }
 
     .radar-grid {
-      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 0.65rem;
+    }
+
+    :global(.radar-card-title) {
+      font-size: 0.75rem;
+    }
+
+    :global(.radar-card-price) {
+      font-size: 0.9rem;
+    }
+
+    :global(.radar-card-buy) {
+      padding: 0.4rem 0.45rem;
+      font-size: 0.7rem;
+    }
+  }
+
+  /* Pantallas muy estrechas: 2 columnas de ~140px sin desbordar */
+  @media (max-width: 400px) {
+    .radar-grid {
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.5rem;
+    }
+
+    .radar-page {
+      padding-left: 1rem;
+      padding-right: 1rem;
     }
   }
 </style>
@@ -675,6 +792,7 @@ if (!sessionUser) {
     createProject,
     deleteProject,
     getProjects,
+    getRadarProducts,
     loadRadar,
     onRadarChange,
     removeProduct,
@@ -751,18 +869,25 @@ if (!sessionUser) {
       .map(
         (product: SavedProduct) => `
         <article class="radar-card">
-          <div class="radar-card-image">
-            <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.title)}" loading="lazy" />
+          <div class="radar-card-media">
+            <a class="radar-card-image-link" href="/producto/${encodeURIComponent(product.id)}" title="Ver ficha de ${escapeHtml(product.title)}" aria-label="Ver ficha de ${escapeHtml(product.title)}">
+              <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.title)}" loading="lazy" />
+            </a>
             <span class="radar-card-store${product.store === 'aliexpress' ? ' is-aliexpress' : ''}">${escapeHtml(product.store)}</span>
+            <button type="button" class="radar-card-remove" data-remove-id="${escapeHtml(product.id)}" aria-label="Quitar de Mi Radar" title="Quitar de Mi Radar">×</button>
+            <button type="button" class="radar-card-note-dot${product.userNote ? ' has-note' : ''}" data-note-edit="${escapeHtml(product.id)}" aria-label="${product.userNote ? 'Editar nota' : 'Añadir nota'}" title="${product.userNote ? 'Editar nota' : 'Añadir nota'}">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
+            </button>
           </div>
           <div class="radar-card-body">
-            <h3 class="radar-card-title">${escapeHtml(product.title)}</h3>
+            <h3 class="radar-card-title">
+              <a href="/producto/${encodeURIComponent(product.id)}" title="Ver ficha de ${escapeHtml(product.title)}">${escapeHtml(product.title)}</a>
+            </h3>
             <span class="radar-card-price">${escapeHtml(product.price)}</span>
-            <textarea class="radar-card-note" rows="1" placeholder="Nota personal…" data-note-for="${escapeHtml(product.id)}">${escapeHtml(product.userNote ?? '')}</textarea>
-            <div class="radar-card-actions">
-              <a class="radar-card-buy" href="${escapeHtml(product.buyUrl || '#')}" target="_blank" rel="nofollow sponsored noopener noreferrer">Retomar compra</a>
-              <button type="button" class="radar-card-remove" data-remove-id="${escapeHtml(product.id)}" aria-label="Quitar de Mi Radar">×</button>
-            </div>
+            <a class="radar-card-buy" href="${escapeHtml(product.buyUrl || '#')}" target="_blank" rel="nofollow sponsored noopener noreferrer">
+              Retomar compra
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline></svg>
+            </a>
           </div>
         </article>`,
       )
@@ -834,6 +959,18 @@ if (!sessionUser) {
     el.addEventListener('click', closeModal);
   });
 
+  /* -------------------------------------------------------------- notas */
+
+  const editNote = (productId: string): void => {
+    if (!productId) return;
+    const product = getRadarProducts().find((p) => p.id === productId);
+    if (!product) return;
+    const value = window.prompt('Nota personal', product.userNote ?? '');
+    if (value === null) return;
+    setProductNote(productId, value.trim());
+    renderAll();
+  };
+
   /* ------------------------------------------------------------ eventos */
 
   els.tabs?.addEventListener('click', (event) => {
@@ -858,21 +995,17 @@ if (!sessionUser) {
 
   els.grid?.addEventListener('click', (event) => {
     const target = event.target as Element;
+
+    const noteBtn = target.closest<HTMLElement>('[data-note-edit]');
+    if (noteBtn) {
+      editNote(noteBtn.dataset.noteEdit ?? '');
+      return;
+    }
+
     const removeBtn = target.closest<HTMLElement>('[data-remove-id]');
     if (removeBtn) {
       removeProduct(removeBtn.dataset.removeId ?? '');
       renderAll();
-      return;
-    }
-  });
-
-  els.grid?.addEventListener('focusout', (event) => {
-    const target = event.target as HTMLElement;
-    if (target.matches('[data-note-for]')) {
-      const id = target.dataset.noteFor ?? '';
-      if (id) {
-        setProductNote(id, target.value);
-      }
     }
   });
 
