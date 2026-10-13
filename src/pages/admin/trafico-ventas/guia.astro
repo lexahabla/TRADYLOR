@@ -8,6 +8,7 @@ export const prerender = false;
 
 import Layout from '../../../layouts/Layout.astro';
 import AdminNav from '../../../components/AdminNav.astro';
+import AdminUserMenu from '../../../components/AdminUserMenu.astro';
 import { getSessionUser } from '../../../lib/adminAuth';
 import {
   categoriasGlosario,
@@ -39,6 +40,9 @@ const total = glosarioMetricas.length;
   title="Guía y Glosario de Métricas | Admin Tradylor"
   description="Glosario completo de métricas de tráfico, SEO, ventas, producto, herramientas e IA del panel de Tradylor."
 >
+  <Fragment slot="header-end">
+    <AdminUserMenu user={sessionUser} active="analytics" />
+  </Fragment>
   <div class="mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-20 pt-10">
     <!-- Cabecera (patrón admin-header del backend) -->
     <header class="admin-header">

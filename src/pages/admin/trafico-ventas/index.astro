@@ -8,6 +8,7 @@ export const prerender = false;
 
 import Layout from '../../../layouts/Layout.astro';
 import AdminNav from '../../../components/AdminNav.astro';
+import AdminUserMenu from '../../../components/AdminUserMenu.astro';
 import TrafficSalesDashboard from '../../../components/admin/TrafficSalesDashboard.astro';
 import DateRangeFilter from '../../../components/admin/DateRangeFilter.astro';
 import FinancialHeaderCards from '../../../components/admin/FinancialHeaderCards.astro';
@@ -34,6 +35,9 @@ const registrosIniciales = registrosVentas.filter((v) => v.fecha >= desdeISO && 
   title="Tráfico y ventas | Admin Tradylor"
   description="Dashboard de tráfico y ventas de Tradylor: métricas globales, rendimiento por producto, gráficos y recomendaciones de IA."
 >
+  <Fragment slot="header-end">
+    <AdminUserMenu user={sessionUser} active="analytics" />
+  </Fragment>
   <div class="admin-module-wrapper">
     <!-- Cabecera del módulo (patrón admin-header del backend) -->
     <header class="admin-header">
