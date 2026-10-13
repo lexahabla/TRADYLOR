@@ -561,6 +561,15 @@
       });
     };
 
+    // Tras iniciar sesión / crear la cuenta se va a la portada, salvo en las páginas que dependen
+    // de la sesión y marcan <body data-auth-stay> (p. ej. /share/<id>): ahí se recarga la misma
+    // página (con su ?lang=…) para que siga donde estaba el usuario.
+    const afterAuth = () => {
+      close();
+      if (document.body.hasAttribute('data-auth-stay')) window.location.reload();
+      else window.location.href = '/';
+    };
+
     forms.login?.addEventListener('submit', async (event) => {
       event.preventDefault();
       const data = new FormData(forms.login!);
@@ -568,8 +577,7 @@
       const result = await login(String(data.get('email') ?? ''), String(data.get('password') ?? ''));
       setBusy(false);
       if (result.success) {
-        close();
-        window.location.href = '/';
+        afterAuth();
       } else if (result.code === 'verify_required') {
         pendingEmail = String(data.get('email') ?? '');
         showView('locked');
@@ -593,8 +601,7 @@
           pendingEmail = String(data.get('email') ?? '');
           showView('verify');
         } else {
-          close();
-          window.location.href = '/';
+          afterAuth();
         }
       } else {
         showError(result.message ?? 'No se pudo crear la cuenta.');

@@ -25,12 +25,50 @@ type Listener = (data: RadarData) => void;
 
 const listeners = new Set<Listener>();
 
+/** Las bajas se recuerdan 180 días (hasta 500): el servidor aplica el mismo límite. */
+const TOMBSTONE_TTL_MS = 180 * 24 * 60 * 60 * 1000;
+const TOMBSTONE_MAX = 500;
+
 function emptyRadar(): RadarData {
   return {
     projects: [{ ...DEFAULT_PROJECT, products: [] }],
     pendingExits: [],
     reminders: [],
   };
+}
+
+/* ------------------------------------------------- marcas de tiempo y bajas */
+
+function stampOf(value: unknown): number {
+  const ms = Date.parse(String(value ?? ''));
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+/** Último cambio de un producto (alta o movimiento): con él decide el servidor los conflictos. */
+function touchedAt(product: SavedProduct): number {
+  return Math.max(stampOf(product.dateAdded), stampOf(product.movedAt));
+}
+
+/** Marca de tiempo siempre posterior a `after`, aunque el reloj del dispositivo vaya por detrás. */
+function nextStamp(after = 0): number {
+  return Math.max(Date.now(), after + 1);
+}
+
+function cleanTombstones(input: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
+  const now = Date.now();
+  const entries = Object.entries(input as Record<string, unknown>)
+    .map(([id, at]) => [String(id).slice(0, 200), Number(at)] as const)
+    .filter(([id, at]) => id && Number.isFinite(at) && at > 0 && now - at <= TOMBSTONE_TTL_MS)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, TOMBSTONE_MAX);
+  for (const [id, at] of entries) out[id] = Math.max(out[id] ?? 0, Math.floor(at));
+  return out;
+}
+
+function withTombstone(map: Record<string, number> | undefined, id: string, at: number): Record<string, number> {
+  return cleanTombstones({ ...(map ?? {}), [id]: Math.max(at, map?.[id] ?? 0) });
 }
 
 function safeParse<T>(raw: string | null, fallback: T): T {
@@ -62,10 +100,16 @@ export function loadRadar(): RadarData {
     reminders: Array.isArray(stored.reminders)
       ? stored.reminders.filter((r) => r && typeof r.id === 'string' && r.id)
       : [],
+    removedProducts: cleanTombstones(stored.removedProducts),
+    removedProjects: cleanTombstones(stored.removedProjects),
   };
 }
 
+/** Cuenta los cambios locales: una respuesta de sincronización antigua no debe pisar uno posterior. */
+let localRev = 0;
+
 function persist(data: RadarData): RadarData {
+  localRev += 1;
   try {
     localStorage.setItem(RADAR_STORAGE_KEY, JSON.stringify(data));
   } catch {
@@ -97,12 +141,17 @@ export function saveToRadar(product: SavedProduct, projectId = DEFAULT_PROJECT.i
   let project = data.projects.find((p) => p.id === projectId) ?? data.projects[0];
   const exists = project.products.some((p) => p.id === product.id);
   if (exists) {
-    for (const p of data.projects) p.products = p.products.filter((item) => item.id !== product.id);
+    dropProduct(data, product.id);
     persist(data);
     void pushToCloud(data);
     return false;
   }
   const entry: SavedProduct = { ...product, dateAdded: product.dateAdded || new Date().toISOString() };
+  // Volver a guardar algo quitado antes: el alta debe ser posterior a la baja o la sync lo descartaría.
+  const removedAt = data.removedProducts?.[entry.id];
+  if (removedAt !== undefined && removedAt >= stampOf(entry.dateAdded)) {
+    entry.dateAdded = new Date(nextStamp(removedAt)).toISOString();
+  }
   project.products = [entry, ...project.products.filter((p) => p.id !== entry.id)];
   // Sin duplicados en otras carpetas.
   for (const p of data.projects) {
@@ -114,11 +163,21 @@ export function saveToRadar(product: SavedProduct, projectId = DEFAULT_PROJECT.i
   return true;
 }
 
-export function removeProduct(productId: string): void {
-  const data = loadRadar();
+/** Quita el producto de todas las listas y anota la baja (fecha posterior a su último cambio). */
+function dropProduct(data: RadarData, productId: string): void {
+  const touched = Math.max(
+    0,
+    ...data.projects.flatMap((project) => project.products.filter((p) => p.id === productId).map(touchedAt)),
+  );
   for (const project of data.projects) {
     project.products = project.products.filter((p) => p.id !== productId);
   }
+  data.removedProducts = withTombstone(data.removedProducts, productId.slice(0, 200), nextStamp(touched));
+}
+
+export function removeProduct(productId: string): void {
+  const data = loadRadar();
+  dropProduct(data, productId);
   persist(data);
   void pushToCloud(data);
 }
@@ -134,21 +193,25 @@ export function setProductNote(productId: string, note: string): void {
   void pushToCloud(data);
 }
 
-/** Mueve un producto de carpeta (por id de proyecto destino). */
-export function moveProduct(productId: string, targetProjectId: string): void {
+/**
+ * Mueve un producto a otra lista (id del proyecto destino) y anota la fecha del cambio,
+ * que es lo que decide en la sincronización en qué lista queda. Devuelve true si se movió;
+ * false si el producto no existe, la lista no existe o ya estaba en esa lista (no hace nada).
+ */
+export function moveProduct(productId: string, targetProjectId: string): boolean {
   const data = loadRadar();
-  let moved: SavedProduct | null = null;
+  const source = data.projects.find((project) => project.products.some((p) => p.id === productId));
+  const target = data.projects.find((project) => project.id === targetProjectId);
+  if (!source || !target || source.id === target.id) return false;
+  const found = source.products.find((p) => p.id === productId) as SavedProduct;
+  const moved: SavedProduct = { ...found, movedAt: new Date(nextStamp(touchedAt(found))).toISOString() };
   for (const project of data.projects) {
-    const found = project.products.find((p) => p.id === productId);
-    if (found) moved = found;
     project.products = project.products.filter((p) => p.id !== productId);
   }
-  if (moved) {
-    const target = data.projects.find((p) => p.id === targetProjectId) ?? data.projects[0];
-    target.products = [moved, ...target.products];
-  }
+  target.products = [moved, ...target.products];
   persist(data);
   void pushToCloud(data);
+  return true;
 }
 
 /* ----------------------------------------------------------------- carpetas */
@@ -175,12 +238,12 @@ export function deleteProject(projectId: string): void {
   data.projects = data.projects.filter((p) => p.id !== projectId);
   const general = data.projects.find((p) => p.id === DEFAULT_PROJECT.id);
   if (removed && general) {
-    const ids = new Set(removed.products.map((p) => p.id));
-    general.products = [
-      ...removed.products.filter((p) => !general.products.some((g) => g.id === p.id)),
-      ...general.products.filter((g) => !ids.has(g.id)),
-    ];
+    // Los productos vuelven a General con la fecha del cambio (así la sync respeta el movimiento).
+    const moved = removed.products.map((p) => ({ ...p, movedAt: new Date(nextStamp(touchedAt(p))).toISOString() }));
+    const ids = new Set(moved.map((p) => p.id));
+    general.products = [...moved, ...general.products.filter((g) => !ids.has(g.id))];
   }
+  data.removedProjects = withTombstone(data.removedProjects, projectId.slice(0, 200), Date.now());
   persist(data);
   void pushToCloud(data);
 }
@@ -264,21 +327,35 @@ export async function cancelReminder(reminderId: string): Promise<ReminderAction
 
 /* -------------------------------------------------------------------- sync */
 
-async function pushToCloud(data: RadarData): Promise<void> {
+/** Los envíos van uno tras otro: así el servidor los procesa en el orden de los cambios. */
+let pushChain: Promise<void> = Promise.resolve();
+
+function pushToCloud(data: RadarData): Promise<void> {
+  const body = JSON.stringify(data);
+  const rev = localRev;
+  pushChain = pushChain.then(() => pushSnapshot(body, rev));
+  return pushChain;
+}
+
+async function pushSnapshot(body: string, rev: number): Promise<void> {
   // Sólo empuja si hay sesión (cookie HttpOnly; si no, 401 y se ignora).
   try {
     const res = await fetch('/api/radar', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body,
+      // Si el usuario cambia de página justo después de soltar, el envío no se cancela
+      // (el navegador limita las peticiones "keepalive" a 64 KB: por encima se envía normal).
+      keepalive: body.length < 60_000,
     });
-    if (res.ok) {
-      const payload = (await res.json()) as { radar?: RadarData };
-      if (payload.radar) {
-        // Refleja el merge del server (conserva altas hechas en otro dispositivo).
-        localStorage.setItem(RADAR_STORAGE_KEY, JSON.stringify(payload.radar));
-        for (const listener of listeners) listener(payload.radar);
-      }
+    if (!res.ok) return;
+    const payload = (await res.json()) as { radar?: RadarData };
+    // Si mientras tanto hubo otro cambio local (p. ej. varios arrastres seguidos), esta respuesta
+    // ya es antigua: aplicarla borraría ese cambio. El envío posterior lo trae todo.
+    if (payload.radar && rev === localRev) {
+      // Refleja el merge del server (conserva altas hechas en otro dispositivo).
+      localStorage.setItem(RADAR_STORAGE_KEY, JSON.stringify(payload.radar));
+      for (const listener of listeners) listener(payload.radar);
     }
   } catch {
     /* offline: el próximo push llevará los cambios */

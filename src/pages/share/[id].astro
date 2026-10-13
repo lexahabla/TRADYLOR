@@ -1,46 +1,47 @@
 ---
 /**
  * ==============================================================================
- * TRADYLOR — PÁGINA DE COMPARTIR (TARJETA DEL PRODUCTO PARA EMAIL)
+ * TRADYLOR — "A MI CORREO": TARJETA DEL PRODUCTO PARA ENVIARTE POR EMAIL
  * ==============================================================================
  *
  * Ruta dinámica SSR: /share/[id]?lang=xx
  *
- * Cuando el usuario pulsa "Email" en el panel de compartir, se abre esta página
- * con la tarjeta del producto en HTML (mensaje, título, imagen y botón "Ver la
- * ficha del producto" que lleva a tradylor.com/producto/...). El usuario elige
- * su cliente de correo (su app por mailto:, Gmail, Outlook o Yahoo) y:
- *  1. La tarjeta se copia al portapapeles como contenido enriquecido (text/html).
- *  2. Se abre ese correo con el asunto ya puesto.
- *  3. El usuario pega la tarjeta en el cuerpo (Ctrl+V) y elige el destinatario
- *     entre SUS contactos. Ni mailto: ni las URL de Gmail/Outlook/Yahoo admiten
- *     HTML, y una web no puede escribir en otra aplicación: por eso el cuerpo
- *     viaja por el portapapeles y el pegado lo hace el usuario.
+ * Se llega desde la opción "A mi correo" del panel de compartir. Muestra la tarjeta del
+ * producto (mensaje, título, imagen y botón "Ver la ficha del producto" que lleva a
+ * https://tradylor.com/producto/<slug>), el selector de idioma y UN solo botón:
+ * "Enviar a {tu correo}". Al pulsarlo, POST /api/share/email manda la tarjeta a la
+ * dirección de la cuenta del usuario y desde su bandeja la reenvía a quien quiera.
  *
- * La vista previa y lo que se copia salen del mismo HTML (utils/shareEmail.ts):
- * lo que se ve es exactamente lo que llega.
+ * Sin sesión no se sabe a qué correo enviarla: se pide iniciar sesión (y la página se
+ * recarga sola al terminar). El destinatario nunca sale de esta página: lo decide el
+ * servidor a partir de la sesión.
  *
- * El idioma se pasa como query param (?lang=ca) porque la página es SSR y no
- * puede leer localStorage en el servidor. El selector se completa en el cliente
- * con los idiomas cooficiales de la región (navegador + IP, /api/share/region).
+ * El idioma se pasa como query param (?lang=ca) porque la página es SSR y no puede leer
+ * localStorage en el servidor. El selector se completa en el cliente con los idiomas
+ * cooficiales de la región (navegador + IP, /api/share/region).
  * ==============================================================================
  */
 export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
 import { findCatalogProduct, productKey } from '../../lib/catalog';
+import { getRadarSessionUser } from '../../lib/radarAuth';
 import { langsFromAcceptLanguage } from '../../lib/shareGeo';
 import {
-  buildProductUrl,
+  buildProductPageUrl,
   buildShareText,
   getShareLangOptions,
   SHARE_LANG_CODES,
   type ShareLangCode,
 } from '../../utils/share';
-import { buildShareEmailHtml } from '../../utils/shareEmail';
+import { buildShareEmailHtml, cleanShareTitle } from '../../utils/shareEmail';
 
 const product = findCatalogProduct(Astro.params.id);
 if (!product) return Astro.redirect('/', 302);
+
+// La página depende de la sesión (muestra el correo del usuario): nunca se cachea.
+Astro.response.headers.set('Cache-Control', 'no-store');
+const user = getRadarSessionUser(Astro.request);
 
 const key = productKey(product);
 
@@ -49,25 +50,23 @@ const key = productKey(product);
 const langParam = (Astro.url.searchParams.get('lang') ?? '').trim().toLowerCase() as ShareLangCode;
 const lang: ShareLangCode = SHARE_LANG_CODES.includes(langParam) ? langParam : 'es';
 
-// Enlace directo a la ficha del producto en tradylor.com (con UTM para medir el tráfico compartido).
-const productUrl = buildProductUrl(key, 'email');
+// Enlace a la ficha individual del producto en tradylor.com.
+const productUrl = buildProductPageUrl(key);
 const rawMessage = buildShareText(
   'email',
   { productId: key, title: product.title, category: product.category },
   productUrl,
   lang,
 );
-// El enlace se oculta del cuerpo: ya hay botón "Ver la ficha del producto"
+// El enlace va en el botón "Ver la ficha del producto", no repetido dentro del mensaje.
 const message = rawMessage.replace(productUrl, '').replace(/\s+/g, ' ').trim();
 const absoluteImage = /^https?:\/\//i.test(product.image)
   ? product.image
   : new URL(product.image, Astro.site ?? 'https://tradylor.com').href;
 
-const cleanTitle = product.title
-  .replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '')
-  .trim();
+const cleanTitle = cleanShareTitle(product.title);
 
-// Tarjeta del correo: se pinta tal cual en la vista previa y es lo que se copia.
+// Tarjeta del correo: se pinta tal cual en la vista previa y es la que recibe el usuario.
 const emailHtml = buildShareEmailHtml({
   message,
   title: cleanTitle,
@@ -84,136 +83,137 @@ const langOptions = getShareLangOptions([lang, ...headerLangs]);
 
 interface ShareUiStrings {
   hint: string;
-  sendApp: string;
-  sendGmail: string;
-  sendOutlook: string;
-  sendYahoo: string;
-  copyText: string;
-  note: string;
-  copied: string;
-  copyFailed: string;
-  textOk: string;
-  textFail: string;
+  sendTo: string;
+  sending: string;
+  /** {email} se sustituye por el correo de la cuenta. */
+  sent: string;
+  loginTitle: string;
+  loginText: string;
+  login: string;
+  errAuth: string;
+  errRate: string;
+  errSmtp: string;
+  errGeneric: string;
 }
 
 // Textos de UI según idioma
 const UI: Record<ShareLangCode, ShareUiStrings> = {
   es: {
-    hint: 'Revisa la tarjeta tal y como la recibirá tu contacto y elige con qué correo la envías.',
-    sendApp: 'Enviar con mi app de correo',
-    sendGmail: 'Enviar con Gmail',
-    sendOutlook: 'Enviar con Outlook',
-    sendYahoo: 'Enviar con Yahoo',
-    copyText: 'Copiar solo texto',
-    note: 'Al elegir tu correo, copiamos la tarjeta y lo abrimos: pégala en el cuerpo del mensaje (Ctrl+V / ⌘V) y elige el destinatario entre tus contactos.',
-    copied: 'Tarjeta copiada. Pégala en el cuerpo del correo (Ctrl+V / ⌘V).',
-    copyFailed: 'No se pudo copiar la tarjeta. Hemos puesto el mensaje en texto en el correo.',
-    textOk: 'Texto copiado.',
-    textFail: 'No se pudo copiar el texto.',
+    hint: 'Esta es la tarjeta que te enviaremos a tu correo. Desde tu bandeja podrás reenviarla a quien quieras.',
+    sendTo: 'Enviar a',
+    sending: 'Enviando…',
+    sent: 'Tarjeta enviada a {email}. Revisa tu bandeja de entrada (y la carpeta de spam).',
+    loginTitle: 'Inicia sesión para recibirla en tu correo',
+    loginText: 'Te la enviamos a la dirección de tu cuenta de Mi Radar y desde ahí podrás reenviarla a quien quieras.',
+    login: 'Iniciar sesión',
+    errAuth: 'Tu sesión ha caducado. Inicia sesión de nuevo.',
+    errRate: 'Has enviado muchas tarjetas seguidas. Inténtalo de nuevo más tarde.',
+    errSmtp: 'El envío por correo no está disponible ahora mismo. Inténtalo más tarde.',
+    errGeneric: 'No se pudo enviar la tarjeta. Inténtalo de nuevo.',
   },
   ca: {
-    hint: "Revisa la targeta tal com la rebrà el teu contacte i tria amb quin correu l'envies.",
-    sendApp: 'Enviar amb la meva app de correu',
-    sendGmail: 'Enviar amb Gmail',
-    sendOutlook: 'Enviar amb Outlook',
-    sendYahoo: 'Enviar amb Yahoo',
-    copyText: 'Copiar només el text',
-    note: "En triar el teu correu, copiem la targeta i l'obrim: enganxa-la al cos del missatge (Ctrl+V / ⌘V) i tria el destinatari entre els teus contactes.",
-    copied: 'Targeta copiada. Enganxa-la al cos del correu (Ctrl+V / ⌘V).',
-    copyFailed: "No s'ha pogut copiar la targeta. Hem posat el missatge en text al correu.",
-    textOk: 'Text copiat.',
-    textFail: "No s'ha pogut copiar el text.",
+    hint: "Aquesta és la targeta que t'enviarem al teu correu. Des de la teva safata podràs reenviar-la a qui vulguis.",
+    sendTo: 'Enviar a',
+    sending: "S'està enviant…",
+    sent: "Targeta enviada a {email}. Revisa la safata d'entrada (i la carpeta de correu brossa).",
+    loginTitle: 'Inicia la sessió per rebre-la al teu correu',
+    loginText: "Te l'enviem a l'adreça del teu compte de Mi Radar i des d'allà podràs reenviar-la a qui vulguis.",
+    login: 'Iniciar sessió',
+    errAuth: "La teva sessió ha caducat. Inicia la sessió de nou.",
+    errRate: 'Has enviat moltes targetes seguides. Prova-ho de nou més tard.',
+    errSmtp: "L'enviament per correu no està disponible ara mateix. Prova-ho més tard.",
+    errGeneric: "No s'ha pogut enviar la targeta. Prova-ho de nou.",
   },
   eu: {
-    hint: 'Berrikusi txartela zure kontaktuak jasoko duen bezala eta aukeratu zein postarekin bidaltzen duzun.',
-    sendApp: 'Bidali nire posta-aplikazioarekin',
-    sendGmail: 'Bidali Gmail-ekin',
-    sendOutlook: 'Bidali Outlook-ekin',
-    sendYahoo: 'Bidali Yahoo-rekin',
-    copyText: 'Kopiatu testua bakarrik',
-    note: 'Zure posta aukeratzean, txartela kopiatu eta posta irekiko dugu: itsatsi mezuaren gorputzean (Ctrl+V / ⌘V) eta aukeratu hartzailea zure kontaktuen artean.',
-    copied: 'Txartela kopiatu da. Itsatsi posta-mezuaren gorputzean (Ctrl+V / ⌘V).',
-    copyFailed: 'Ezin izan da txartela kopiatu. Mezua testu gisa jarri dugu postan.',
-    textOk: 'Testua kopiatu da.',
-    textFail: 'Ezin izan da testua kopiatu.',
+    hint: 'Hau da zure postara bidaliko dizugun txartela. Zure sarrera-ontzitik nahi duzunari birbidal diezaiokezu.',
+    sendTo: 'Bidali hona:',
+    sending: 'Bidaltzen…',
+    sent: 'Txartela bidali da: {email}. Begiratu zure sarrera-ontzia (eta spam karpeta).',
+    loginTitle: 'Hasi saioa zure postan jasotzeko',
+    loginText: 'Zure Mi Radar kontuaren helbidera bidaliko dizugu eta handik nahi duzunari birbidal diezaiokezu.',
+    login: 'Hasi saioa',
+    errAuth: 'Zure saioa iraungi da. Hasi saioa berriro.',
+    errRate: 'Txartel asko bidali dituzu segidan. Saiatu berriro geroago.',
+    errSmtp: 'Posta bidezko bidalketa ez dago eskuragarri orain. Saiatu geroago.',
+    errGeneric: 'Ezin izan da txartela bidali. Saiatu berriro.',
   },
   gl: {
-    hint: 'Revisa a tarxeta tal e como a recibirá o teu contacto e escolle con que correo a envías.',
-    sendApp: 'Enviar coa miña app de correo',
-    sendGmail: 'Enviar con Gmail',
-    sendOutlook: 'Enviar con Outlook',
-    sendYahoo: 'Enviar con Yahoo',
-    copyText: 'Copiar só o texto',
-    note: 'Ao escoller o teu correo, copiamos a tarxeta e abrímolo: pégaa no corpo da mensaxe (Ctrl+V / ⌘V) e escolle o destinatario entre os teus contactos.',
-    copied: 'Tarxeta copiada. Pégaa no corpo do correo (Ctrl+V / ⌘V).',
-    copyFailed: 'Non se puido copiar a tarxeta. Puxemos a mensaxe en texto no correo.',
-    textOk: 'Texto copiado.',
-    textFail: 'Non se puido copiar o texto.',
+    hint: 'Esta é a tarxeta que che enviaremos ao teu correo. Desde a túa caixa de entrada poderás reenviala a quen queiras.',
+    sendTo: 'Enviar a',
+    sending: 'Enviando…',
+    sent: 'Tarxeta enviada a {email}. Revisa a caixa de entrada (e o cartafol de spam).',
+    loginTitle: 'Inicia sesión para recibila no teu correo',
+    loginText: 'Envíámola ao enderezo da túa conta de Mi Radar e desde aí poderás reenviala a quen queiras.',
+    login: 'Iniciar sesión',
+    errAuth: 'A túa sesión caducou. Inicia sesión de novo.',
+    errRate: 'Enviaches moitas tarxetas seguidas. Inténtao de novo máis tarde.',
+    errSmtp: 'O envío por correo non está dispoñible agora mesmo. Inténtao máis tarde.',
+    errGeneric: 'Non se puido enviar a tarxeta. Inténtao de novo.',
   },
   en: {
-    hint: 'Review the card exactly as your contact will receive it and choose which email to send it with.',
-    sendApp: 'Send with my mail app',
-    sendGmail: 'Send with Gmail',
-    sendOutlook: 'Send with Outlook',
-    sendYahoo: 'Send with Yahoo',
-    copyText: 'Copy text only',
-    note: 'When you pick your email, we copy the card and open it: paste it into the message body (Ctrl+V / ⌘V) and pick the recipient from your contacts.',
-    copied: 'Card copied. Paste it into the email body (Ctrl+V / ⌘V).',
-    copyFailed: "Couldn't copy the card. We put the message in the email as plain text.",
-    textOk: 'Text copied.',
-    textFail: "Couldn't copy the text.",
+    hint: "This is the card we'll send to your email. From your inbox you can forward it to anyone you like.",
+    sendTo: 'Send to',
+    sending: 'Sending…',
+    sent: 'Card sent to {email}. Check your inbox (and your spam folder).',
+    loginTitle: 'Sign in to receive it in your email',
+    loginText: "We send it to the address of your Mi Radar account, and from there you can forward it to anyone you like.",
+    login: 'Sign in',
+    errAuth: 'Your session has expired. Please sign in again.',
+    errRate: "You've sent many cards in a row. Please try again later.",
+    errSmtp: 'Sending by email is not available right now. Please try again later.',
+    errGeneric: "Couldn't send the card. Please try again.",
   },
   fr: {
-    hint: "Vérifiez la carte telle que votre contact la recevra et choisissez avec quelle messagerie l'envoyer.",
-    sendApp: 'Envoyer avec mon appli de messagerie',
-    sendGmail: 'Envoyer avec Gmail',
-    sendOutlook: 'Envoyer avec Outlook',
-    sendYahoo: 'Envoyer avec Yahoo',
-    copyText: 'Copier le texte seulement',
-    note: 'En choisissant votre messagerie, nous copions la carte et l’ouvrons : collez-la dans le corps du message (Ctrl+V / ⌘V) et choisissez le destinataire parmi vos contacts.',
-    copied: "Carte copiée. Collez-la dans le corps de l'email (Ctrl+V / ⌘V).",
-    copyFailed: "Impossible de copier la carte. Nous avons mis le message en texte dans l'email.",
-    textOk: 'Texte copié.',
-    textFail: 'Impossible de copier le texte.',
+    hint: "Voici la carte que nous enverrons à votre adresse e-mail. Depuis votre boîte de réception, vous pourrez la transférer à qui vous voulez.",
+    sendTo: 'Envoyer à',
+    sending: 'Envoi…',
+    sent: 'Carte envoyée à {email}. Vérifiez votre boîte de réception (et le dossier spam).',
+    loginTitle: 'Connectez-vous pour la recevoir par e-mail',
+    loginText: "Nous l'envoyons à l'adresse de votre compte Mi Radar, et vous pourrez la transférer à qui vous voulez.",
+    login: 'Se connecter',
+    errAuth: 'Votre session a expiré. Reconnectez-vous.',
+    errRate: 'Vous avez envoyé beaucoup de cartes à la suite. Réessayez plus tard.',
+    errSmtp: "L'envoi par e-mail n'est pas disponible pour le moment. Réessayez plus tard.",
+    errGeneric: "Impossible d'envoyer la carte. Réessayez.",
   },
   de: {
-    hint: 'Prüfe die Karte so, wie dein Kontakt sie erhält, und wähle, mit welchem E-Mail-Dienst du sie sendest.',
-    sendApp: 'Mit meiner Mail-App senden',
-    sendGmail: 'Mit Gmail senden',
-    sendOutlook: 'Mit Outlook senden',
-    sendYahoo: 'Mit Yahoo senden',
-    copyText: 'Nur Text kopieren',
-    note: 'Wenn du deinen E-Mail-Dienst wählst, kopieren wir die Karte und öffnen ihn: Füge sie in den Nachrichtentext ein (Strg+V / ⌘V) und wähle den Empfänger aus deinen Kontakten.',
-    copied: 'Karte kopiert. Füge sie in den E-Mail-Text ein (Strg+V / ⌘V).',
-    copyFailed: 'Die Karte konnte nicht kopiert werden. Wir haben die Nachricht als Text in die E-Mail eingefügt.',
-    textOk: 'Text kopiert.',
-    textFail: 'Der Text konnte nicht kopiert werden.',
+    hint: 'Das ist die Karte, die wir an deine E-Mail-Adresse senden. Aus deinem Posteingang kannst du sie an jeden weiterleiten.',
+    sendTo: 'Senden an',
+    sending: 'Wird gesendet…',
+    sent: 'Karte an {email} gesendet. Sieh in deinem Posteingang (und im Spam-Ordner) nach.',
+    loginTitle: 'Melde dich an, um sie per E-Mail zu erhalten',
+    loginText: 'Wir senden sie an die Adresse deines Mi-Radar-Kontos, und von dort kannst du sie an jeden weiterleiten.',
+    login: 'Anmelden',
+    errAuth: 'Deine Sitzung ist abgelaufen. Bitte melde dich erneut an.',
+    errRate: 'Du hast viele Karten hintereinander gesendet. Bitte versuche es später erneut.',
+    errSmtp: 'Der E-Mail-Versand ist gerade nicht verfügbar. Bitte versuche es später erneut.',
+    errGeneric: 'Die Karte konnte nicht gesendet werden. Bitte versuche es erneut.',
   },
   pt: {
-    hint: 'Revê o cartão tal como o teu contacto o vai receber e escolhe com que email o envias.',
-    sendApp: 'Enviar com a minha app de email',
-    sendGmail: 'Enviar com o Gmail',
-    sendOutlook: 'Enviar com o Outlook',
-    sendYahoo: 'Enviar com o Yahoo',
-    copyText: 'Copiar apenas o texto',
-    note: 'Ao escolher o teu email, copiamos o cartão e abrimo-lo: cola-o no corpo da mensagem (Ctrl+V / ⌘V) e escolhe o destinatário entre os teus contactos.',
-    copied: 'Cartão copiado. Cola-o no corpo do email (Ctrl+V / ⌘V).',
-    copyFailed: 'Não foi possível copiar o cartão. Pusemos a mensagem em texto no email.',
-    textOk: 'Texto copiado.',
-    textFail: 'Não foi possível copiar o texto.',
+    hint: 'Este é o cartão que vamos enviar para o teu email. A partir da tua caixa de entrada podes reencaminhá-lo a quem quiseres.',
+    sendTo: 'Enviar para',
+    sending: 'A enviar…',
+    sent: 'Cartão enviado para {email}. Verifica a caixa de entrada (e a pasta de spam).',
+    loginTitle: 'Inicia sessão para o receberes no teu email',
+    loginText: 'Enviamo-lo para o endereço da tua conta Mi Radar e daí podes reencaminhá-lo a quem quiseres.',
+    login: 'Iniciar sessão',
+    errAuth: 'A tua sessão expirou. Inicia sessão de novo.',
+    errRate: 'Enviaste muitos cartões seguidos. Tenta de novo mais tarde.',
+    errSmtp: 'O envio por email não está disponível neste momento. Tenta mais tarde.',
+    errGeneric: 'Não foi possível enviar o cartão. Tenta novamente.',
   },
   it: {
-    hint: 'Controlla la scheda così come la riceverà il tuo contatto e scegli con quale email inviarla.',
-    sendApp: 'Invia con la mia app di posta',
-    sendGmail: 'Invia con Gmail',
-    sendOutlook: 'Invia con Outlook',
-    sendYahoo: 'Invia con Yahoo',
-    copyText: 'Copia solo il testo',
-    note: "Scegliendo la tua email, copiamo la scheda e la apriamo: incollala nel corpo del messaggio (Ctrl+V / ⌘V) e scegli il destinatario tra i tuoi contatti.",
-    copied: "Scheda copiata. Incollala nel corpo dell'email (Ctrl+V / ⌘V).",
-    copyFailed: "Impossibile copiare la scheda. Abbiamo messo il messaggio come testo nell'email.",
-    textOk: 'Testo copiato.',
-    textFail: 'Impossibile copiare il testo.',
+    hint: 'Questa è la scheda che invieremo alla tua email. Dalla tua casella potrai inoltrarla a chi vuoi.',
+    sendTo: 'Invia a',
+    sending: 'Invio in corso…',
+    sent: 'Scheda inviata a {email}. Controlla la posta in arrivo (e la cartella spam).',
+    loginTitle: 'Accedi per riceverla via email',
+    loginText: "Te la inviamo all'indirizzo del tuo account Mi Radar e da lì potrai inoltrarla a chi vuoi.",
+    login: 'Accedi',
+    errAuth: 'La tua sessione è scaduta. Accedi di nuovo.',
+    errRate: 'Hai inviato molte schede di seguito. Riprova più tardi.',
+    errSmtp: "L'invio per email non è disponibile in questo momento. Riprova più tardi.",
+    errGeneric: 'Impossibile inviare la scheda. Riprova.',
   },
 };
 const ui = UI[lang] ?? UI.es;
@@ -221,17 +221,24 @@ const ui = UI[lang] ?? UI.es;
 // Datos para el script del cliente (JSON inerte: no se ejecuta, sólo se lee).
 const clientData = {
   lang,
-  subject: cleanTitle,
-  text: `${message}\n\n${productUrl}`,
-  html: emailHtml,
-  ui: { copied: ui.copied, copyFailed: ui.copyFailed, textOk: ui.textOk, textFail: ui.textFail },
+  productId: key,
+  email: user?.email ?? '',
+  ui: {
+    sendTo: ui.sendTo,
+    sending: ui.sending,
+    sent: ui.sent,
+    errAuth: ui.errAuth,
+    errRate: ui.errRate,
+    errSmtp: ui.errSmtp,
+    errGeneric: ui.errGeneric,
+  },
 };
 const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
 ---
 
 <Layout
-  title={`Compartir: ${cleanTitle} | Tradylor`}
-  description="Vista previa del mensaje de recomendación para compartir por email."
+  title={`A mi correo: ${cleanTitle} | Tradylor`}
+  description="Recibe en tu correo la tarjeta de este producto para reenviarla a quien quieras."
   noindex={true}
 >
   <div class="share-preview-page">
@@ -257,52 +264,27 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
         </div>
       </header>
 
-      <!-- Tarjeta del correo: es exactamente el HTML que se copia al elegir tu correo -->
+      <!-- Tarjeta del correo: es exactamente la que llegará a tu bandeja -->
       <div class="email-preview" id="emailCard" set:html={emailHtml} />
 
-      <div class="share-actions">
-        <!-- Abre la app de correo del usuario (mailto:) -->
-        <button type="button" class="share-btn share-btn-mail" id="sendMailBtn">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <rect x="3" y="5.5" width="18" height="13" rx="2.5"/>
-            <path d="m4.5 8 7.5 5 7.5-5" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>{ui.sendApp}</span>
-        </button>
-        <!-- Abre Gmail (redactar) con el asunto puesto -->
-        <button type="button" class="share-btn share-btn-web" id="sendGmailBtn">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <path fill="#EA4335" d="M2 6.5v11A1.5 1.5 0 0 0 3.5 19H6V9.9l6 4.5 6-4.5V19h2.5a1.5 1.5 0 0 0 1.5-1.5v-11c0-1.7-1.9-2.6-3.2-1.6L12 9.6 5.2 4.9C3.9 3.9 2 4.8 2 6.5Z"/>
-          </svg>
-          <span>{ui.sendGmail}</span>
-        </button>
-        <!-- Abre Outlook en la web (redactar) con el asunto puesto -->
-        <button type="button" class="share-btn share-btn-web" id="sendOutlookBtn">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <rect x="2" y="4" width="20" height="16" rx="3.5" fill="#0078D4"/>
-            <ellipse cx="10.5" cy="12" rx="3.4" ry="4" fill="none" stroke="#ffffff" stroke-width="1.9"/>
-            <path d="M15.5 9.2h3.2M15.5 12h3.2M15.5 14.8h3.2" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round"/>
-          </svg>
-          <span>{ui.sendOutlook}</span>
-        </button>
-        <!-- Abre Yahoo Mail (redactar) con el asunto puesto -->
-        <button type="button" class="share-btn share-btn-web" id="sendYahooBtn">
-          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-            <rect x="2" y="2" width="20" height="20" rx="5.5" fill="#6001D2"/>
-            <path d="M7 7.5l5 6.3V18M17 7.5l-5 6.3" fill="none" stroke="#ffffff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          <span>{ui.sendYahoo}</span>
-        </button>
-        <button type="button" class="share-btn share-btn-secondary" id="copyTextBtn">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <rect x="9" y="9" width="11" height="11" rx="2"/>
-            <path d="M15 5.5A2.5 2.5 0 0 0 12.5 3H6a2.5 2.5 0 0 0-2.5 2.5V12A2.5 2.5 0 0 0 6 14.5"/>
-          </svg>
-          <span>{ui.copyText}</span>
-        </button>
-      </div>
-
-      <p class="share-note">{ui.note}</p>
+      {user ? (
+        <div class="share-actions">
+          <!-- Único botón: envía la tarjeta al correo de la cuenta -->
+          <button type="button" class="share-btn share-btn-mail" id="sendToMeBtn">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect x="3" y="5.5" width="18" height="13" rx="2.5"/>
+              <path d="m4.5 8 7.5 5 7.5-5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="share-btn-label">{ui.sendTo} <strong class="share-email">{user.email}</strong></span>
+          </button>
+        </div>
+      ) : (
+        <section class="share-login" data-share-login>
+          <p class="share-login-title">{ui.loginTitle}</p>
+          <p class="share-login-text">{ui.loginText}</p>
+          <button type="button" class="share-btn share-btn-mail" data-open-auth="login">{ui.login}</button>
+        </section>
+      )}
 
       <div class="share-toast" id="shareToast" role="status" aria-live="polite"></div>
     </div>
@@ -314,7 +296,7 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       background: linear-gradient(135deg, #0a0e17 0%, #111827 50%, #0a0e17 100%);
       padding: 2rem 1rem;
     }
-    /* 600 px = ancho de la tarjeta del correo: vista previa, botones y notas alineados */
+    /* 600 px = ancho de la tarjeta del correo: vista previa y botón alineados */
     .share-preview-container { max-width: 600px; margin: 0 auto; }
     .share-header { text-align: center; margin-bottom: 2rem; }
     .share-logo { display: inline-flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
@@ -325,7 +307,7 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       color: #0d1422; font-weight: 800; font-size: 1.1rem; font-family: 'Outfit', sans-serif;
     }
     .logo-text { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.25rem; color: #f3f4f6; }
-    .share-hint { font-size: .82rem; color: #9ca3af; max-width: 420px; margin: 0 auto .9rem; line-height: 1.5; }
+    .share-hint { font-size: .82rem; color: #9ca3af; max-width: 440px; margin: 0 auto .9rem; line-height: 1.5; }
 
     /* Los botones de idioma se (re)generan en el cliente: de ahí :global() */
     .lang-bar {
@@ -356,25 +338,32 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
     .email-preview :global(.tz-cta:active) { transform: translateY(0); box-shadow: none; }
     .email-preview :global(.tz-cta:focus-visible) { outline: 2px solid #1d4ed8; outline-offset: 2px; }
 
-    .share-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
-    .share-actions .share-btn-secondary { grid-column: 1 / -1; }
+    .share-actions { display: flex; }
     .share-btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: .5rem; width: 100%;
-      padding: .8rem 1.25rem; border-radius: 10px; font-weight: 700; font-size: .9rem;
+      display: inline-flex; align-items: center; justify-content: center; gap: .6rem; width: 100%;
+      padding: .9rem 1.25rem; border-radius: 10px; font-weight: 700; font-size: .95rem; line-height: 1.35;
       font-family: 'Inter', sans-serif; cursor: pointer; border: none; text-decoration: none; transition: .18s;
     }
+    .share-btn svg { flex-shrink: 0; }
+    .share-btn:disabled { opacity: .7; cursor: progress; }
     .share-btn-mail {
       background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
       color: #ffffff; box-shadow: 0 4px 16px rgba(124,58,237,.35);
     }
-    .share-btn-mail:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(124,58,237,.55); }
-    /* Gmail / Outlook / Yahoo: botón blanco con el icono de color de cada servicio */
-    .share-btn-web { background: #ffffff; color: #1f2937; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
-    .share-btn-web:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,.4); }
-    .share-btn-secondary { background: rgba(255,255,255,.08); color: #e5e7eb; border: 1px solid rgba(255,255,255,.12); }
-    .share-btn-secondary:hover { background: rgba(255,255,255,.14); }
+    .share-btn-mail:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(124,58,237,.55); }
+    .share-btn-mail:focus-visible { outline: 2px solid #c4b5fd; outline-offset: 3px; }
+    /* El correo puede ser largo: se parte en vez de desbordar el botón */
+    .share-btn-label { min-width: 0; text-align: left; }
+    .share-email { font-weight: 800; overflow-wrap: anywhere; }
 
-    .share-note { margin: 1rem auto 0; max-width: 480px; text-align: center; font-size: .76rem; line-height: 1.55; color: #9ca3af; }
+    /* Sin sesión: no se sabe a qué correo enviarla */
+    .share-login {
+      padding: 1.25rem 1.4rem 1.4rem; text-align: center;
+      background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); border-radius: 14px;
+    }
+    .share-login-title { margin: 0 0 .35rem; font-size: 1rem; font-weight: 800; color: #f3f4f6; }
+    .share-login-text { margin: 0 0 1rem; font-size: .82rem; line-height: 1.55; color: #9ca3af; }
+    .share-login .share-btn { width: auto; min-width: 200px; }
 
     .share-toast {
       position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px);
@@ -387,7 +376,7 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
     .share-toast.is-error { border-color: rgba(248,113,113,.6); color: #fca5a5; }
 
     @media (max-width: 520px) {
-      .share-actions { grid-template-columns: 1fr; }
+      .share-login .share-btn { width: 100%; }
 
       /* En móvil el bloque de producto de la vista previa se apila: imagen arriba y
          texto centrado debajo (ganchos tz-* de utils/shareEmail.ts). */
@@ -405,17 +394,15 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
   <script type="application/json" id="share-data" set:html={clientJson}></script>
 
   <script>
-    import { copyText, getShareLangOptions, refreshRegionLangs, setShareLang } from '../../utils/share';
+    import { getShareLangOptions, refreshRegionLangs, setShareLang } from '../../utils/share';
     import type { ShareLangCode } from '../../utils/share';
 
     interface ShareData {
       lang: ShareLangCode;
-      subject: string;
-      /** Mensaje + enlace en texto plano (alternativa si no se puede copiar la tarjeta). */
-      text: string;
-      /** HTML completo de la tarjeta (el mismo que la vista previa). */
-      html: string;
-      ui: { copied: string; copyFailed: string; textOk: string; textFail: string };
+      productId: string;
+      /** Correo de la cuenta (vacío si no hay sesión). */
+      email: string;
+      ui: { sendTo: string; sending: string; sent: string; errAuth: string; errRate: string; errSmtp: string; errGeneric: string };
     }
 
     const data = JSON.parse(document.getElementById('share-data')?.textContent || '{}') as ShareData;
@@ -454,7 +441,7 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
 
     // ---- Toast ----
     let toastTimer: number | undefined;
-    function showToast(message: string, isError = false, ms = 2800): void {
+    function showToast(message: string, isError = false, ms = 6000): void {
       const toast = document.getElementById('shareToast');
       if (!toast) return;
       toast.textContent = message;
@@ -464,102 +451,47 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       toastTimer = window.setTimeout(() => toast.classList.remove('is-on'), ms);
     }
 
-    // ---- Copiar la tarjeta como contenido enriquecido ----
-    async function copyCard(): Promise<boolean> {
-      // 1) API moderna: text/html (la tarjeta) + text/plain (mensaje y enlace).
+    // ---- Enviar la tarjeta al correo de la cuenta ----
+    const sendBtn = document.getElementById('sendToMeBtn') as HTMLButtonElement | null;
+    sendBtn?.addEventListener('click', async () => {
+      if (sendBtn.disabled) return;
+      const label = sendBtn.querySelector<HTMLElement>('.share-btn-label');
+      const original = label?.innerHTML ?? '';
+      sendBtn.disabled = true;
+      if (label) label.textContent = data.ui.sending;
       try {
-        if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
-          await navigator.clipboard.write([
-            new ClipboardItem({
-              'text/html': new Blob([data.html], { type: 'text/html' }),
-              'text/plain': new Blob([data.text], { type: 'text/plain' }),
-            }),
-          ]);
-          return true;
-        }
-      } catch {
-        /* sin permiso o navegador sin soporte: se prueba la alternativa */
-      }
-      // 2) Alternativa: seleccionar la tarjeta ya pintada y copiar la selección.
-      try {
-        const card = document.getElementById('emailCard');
-        const selection = window.getSelection();
-        if (!card || !selection) return false;
-        const range = document.createRange();
-        range.selectNodeContents(card);
-        selection.removeAllRanges();
-        selection.addRange(range);
-        const ok = document.execCommand('copy');
-        selection.removeAllRanges();
-        return ok;
-      } catch {
-        return false;
-      }
-    }
-
-    // ---- Enviar: copiar la tarjeta + abrir el correo elegido ----
-    // mailto: y las URL de redactar de Gmail / Outlook / Yahoo sólo admiten texto
-    // plano. Si la tarjeta se copió, el cuerpo se deja vacío (el usuario la pega);
-    // si no, va el texto plano.
-    type MailKind = 'mailto' | 'gmail' | 'outlook' | 'yahoo';
-
-    function mailtoUrl(withBody: boolean): string {
-      const body = data.text.replace(/\n/g, '\r\n');
-      return (
-        'mailto:?subject=' + encodeURIComponent(data.subject) + (withBody ? '&body=' + encodeURIComponent(body) : '')
-      );
-    }
-
-    const WEB_MAIL: Record<Exclude<MailKind, 'mailto'>, (subject: string, body: string) => string> = {
-      gmail: (subject, body) => 'https://mail.google.com/mail/?view=cm&fs=1&tf=1&su=' + subject + body,
-      outlook: (subject, body) => 'https://outlook.live.com/mail/0/deeplink/compose?subject=' + subject + body,
-      yahoo: (subject, body) => 'https://compose.mail.yahoo.com/?subject=' + subject + body,
-    };
-
-    function webMailUrl(kind: Exclude<MailKind, 'mailto'>, withBody: boolean): string {
-      return WEB_MAIL[kind](encodeURIComponent(data.subject), withBody ? '&body=' + encodeURIComponent(data.text) : '');
-    }
-
-    let busy = false;
-    async function sendVia(kind: MailKind): Promise<void> {
-      if (busy) return;
-      busy = true;
-      try {
-        const copied = await copyCard();
-        showToast(copied ? data.ui.copied : data.ui.copyFailed, !copied, 8000);
-        if (kind === 'mailto') {
-          window.location.href = mailtoUrl(!copied);
+        const res = await fetch('/api/share/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId: data.productId, lang: data.lang }),
+        });
+        const out = (await res.json().catch(() => ({}))) as { ok?: boolean };
+        if (res.ok && out.ok) {
+          showToast(data.ui.sent.replace('{email}', data.email));
+        } else if (res.status === 401) {
+          showToast(data.ui.errAuth, true);
+          window.setTimeout(() => window.location.reload(), 2200);
+        } else if (res.status === 429) {
+          showToast(data.ui.errRate, true);
+        } else if (res.status === 503) {
+          showToast(data.ui.errSmtp, true);
         } else {
-          const url = webMailUrl(kind, !copied);
-          const win = window.open(url, '_blank');
-          if (win) {
-            try {
-              win.opener = null;
-            } catch {
-              /* ya navegó a otro origen */
-            }
-          } else {
-            window.location.href = url; // ventana emergente bloqueada
-          }
+          showToast(data.ui.errGeneric, true);
         }
+      } catch {
+        showToast(data.ui.errGeneric, true);
       } finally {
-        busy = false;
+        if (label) label.innerHTML = original;
+        // Una pausa corta evita el doble clic accidental (el servidor además limita los envíos).
+        window.setTimeout(() => {
+          sendBtn.disabled = false;
+        }, 1500);
       }
-    }
-
-    const MAIL_BUTTONS: Array<[string, MailKind]> = [
-      ['sendMailBtn', 'mailto'],
-      ['sendGmailBtn', 'gmail'],
-      ['sendOutlookBtn', 'outlook'],
-      ['sendYahooBtn', 'yahoo'],
-    ];
-    for (const [id, kind] of MAIL_BUTTONS) {
-      document.getElementById(id)?.addEventListener('click', () => void sendVia(kind));
-    }
-
-    document.getElementById('copyTextBtn')?.addEventListener('click', async () => {
-      const ok = await copyText(data.text);
-      showToast(ok ? data.ui.textOk : data.ui.textFail, !ok);
     });
+
+    // Sin sesión: el modal de acceso, al terminar, normalmente lleva a la portada. Esta página
+    // pide quedarse (data-auth-stay en <body>): el modal la recarga con el botón de envío y el
+    // mismo ?lang=, así el usuario no pierde la tarjeta.
+    document.body.setAttribute('data-auth-stay', '');
   </script>
 </Layout>

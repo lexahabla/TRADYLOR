@@ -4,11 +4,12 @@
  * ==============================================================================
  * Fuente única del diseño de la tarjeta: barra azul superior, mensaje, producto
  * (imagen + título + categoría + botón) y pie. /share/[id] la usa para la vista
- * previa Y para el contenido que se copia al portapapeles, así que lo que se ve
- * es exactamente lo que se pega en el correo.
+ * previa y /api/share/email para el correo que se envía a la cuenta del usuario,
+ * así que lo que se ve es exactamente lo que llega.
  *
  * Compatibilidad con clientes de correo (Gmail, Outlook, Apple Mail):
- *  - maquetación con <table> y estilos 100 % inline (sin <style> ni clases);
+ *  - maquetación con <table> y estilos 100 % inline: el diseño no depende de ninguna hoja
+ *    de estilos. Las clases tz-* sólo sirven para apilar el producto en móvil (buildShareEmailDocument);
  *  - cada degradado lleva un color sólido de respaldo;
  *  - URLs absolutas (imagen y enlaces); todo el texto va escapado.
  * ==============================================================================
@@ -109,4 +110,37 @@ export function buildShareEmailHtml(input: ShareEmailInput): string {
 
     `</table></div>`,
   ].join('');
+}
+
+/** Título del producto sin el sufijo de tienda ("… - Amazon.es"), para el asunto y la tarjeta. */
+export function cleanShareTitle(title: string): string {
+  return String(title ?? '')
+    .replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '')
+    .trim();
+}
+
+/** Apila el bloque de producto en pantallas estrechas (mismas reglas que la vista previa de /share). */
+const MOBILE_CSS =
+  '@media only screen and (max-width:520px){.tz-prod,.tz-prod tbody,.tz-prod tr,.tz-prod td{display:block!important;width:auto!important}.tz-gap{display:none!important}.tz-img{padding-bottom:16px!important}.tz-img>div{margin:0 auto!important}.tz-txt{text-align:center!important}}';
+
+/**
+ * Correo completo (documento HTML) que se envía: la tarjeta sobre un fondo gris claro más las
+ * reglas para móvil. Los clientes que ignoran <style> (Outlook de escritorio) muestran la tarjeta
+ * igual, con su maquetación en tablas.
+ */
+export function buildShareEmailDocument(input: ShareEmailInput): string {
+  const card = buildShareEmailHtml(input);
+  return [
+    `<!doctype html><html lang="${escapeHtml(input.lang)}"><head>`,
+    `<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`,
+    `<meta name="x-apple-disable-message-reformatting"><meta name="color-scheme" content="light">`,
+    `<title>${escapeHtml(input.title)}</title><style>${MOBILE_CSS}</style></head>`,
+    `<body style="margin:0;padding:24px 12px;background-color:#f3f4f6;">${card}</body></html>`,
+  ].join('');
+}
+
+/** Versión en texto plano del correo (para clientes sin HTML; también la valoran los filtros antispam). */
+export function buildShareEmailText(input: Pick<ShareEmailInput, 'message' | 'title' | 'ctaUrl' | 'lang'>): string {
+  const labels = SHARE_EMAIL_LABELS[input.lang] ?? SHARE_EMAIL_LABELS.es;
+  return `${input.message}\n\n${input.title}\n${labels.cta}: ${input.ctaUrl}\n\n— ${labels.footer} Tradylor.com · ${labels.tagline}`;
 }

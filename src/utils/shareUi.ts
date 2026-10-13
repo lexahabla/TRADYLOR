@@ -22,10 +22,11 @@ import {
 } from './share';
 
 /**
- * Canales del panel, en este orden. "Email" abre la tarjeta del producto
- * (/share/<id>: mensaje + título + imagen + botón a la ficha) para copiarla y
- * pegarla en el cliente de correo que elija el usuario. "Compartir…" es el menú
- * nativo (con copia de texto como alternativa si el navegador no lo soporta).
+ * Canales del panel, en este orden. "A mi correo" (canal `email`) abre la tarjeta del
+ * producto (/share/<id>: mensaje + título + imagen + botón a la ficha), donde un solo
+ * botón la envía al correo de la cuenta del usuario para que la reenvíe a quien quiera.
+ * "Copiar enlace" copia sólo https://tradylor.com/producto/<slug>. "Compartir…" es el
+ * menú nativo (con copia de texto como alternativa si el navegador no lo soporta).
  */
 const CHANNELS: ShareChannel[] = ['whatsapp', 'telegram', 'x', 'facebook', 'reddit', 'pinterest', 'email', 'copy', 'native'];
 
