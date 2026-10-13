@@ -80,7 +80,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     label: 'Español',
     panelTitle: 'Compartir producto',
     dm: [
-      'Oye, le estaba echando un ojo a esto y tras comparar un buen rato en Tradylor.com, es claramente la mejor opción calidad-precio de la categoría. Te dejo la ficha con el análisis y la gráfica de precios: {url}',
+      'Oye por si te sirve, estuve usando esta web para buscar y comparar precios de esto y me ha parecido un hallazgo. Calidad-precio está de lujo! {url}',
     ],
     threads: [
       'Si alguien anda buscando {categoria}, en Tradylor.com lo han puesto como la opción top tras comparar especificaciones y precio. Aquí tenéis la ficha con el seguimiento de precio activo: {url}',
