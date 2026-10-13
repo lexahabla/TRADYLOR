@@ -25,7 +25,7 @@ export type ShareChannel =
   | 'native';
 
 /** Idiomas con plantilla propia (detección de región + en + zh obligatorios). */
-export type ShareLangCode = 'es' | 'en' | 'zh' | 'fr' | 'de' | 'pt' | 'it';
+export type ShareLangCode = 'es' | 'ca' | 'en' | 'zh' | 'fr' | 'de' | 'pt' | 'it';
 
 export interface ShareInput {
   productId: string;
@@ -63,6 +63,7 @@ interface LangPack {
 /** Etiquetas de canal traducidas (las marcas se quedan igual). */
 const CHANNEL_LABELS: Record<ShareLangCode, Partial<Record<ShareChannel, string>>> = {
   es: {},
+  ca: { copy: "Copia l'enllaç", native: 'Comparteix…' },
   en: { copy: 'Copy link', native: 'Share…' },
   zh: { copy: '复制链接', native: '分享…' },
   fr: { copy: 'Copier le lien', native: 'Partager…' },
@@ -94,6 +95,29 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     nativeFallback: 'Tu navegador no permite compartir: texto copiado.',
     openFailed: (ch) => `No se pudo abrir ${ch}.`,
     unsupported: 'Canal no soportado.',
+  },
+  ca: {
+    label: 'Català',
+    panelTitle: 'Compartir producte',
+    dm: [
+      "Oi, estava donant un cop d'ull a això i, després de comparar una bona estona a Tradylor.com, és clarament la millor opció qualitat-preu de la categoria. Aquí tens la fitxa amb l'anàlisi i el gràfic de preus: {url}",
+    ],
+    threads: [
+      "Si algú busca {categoria}, a Tradylor.com l'han posat com a opció top després de comparar especificacions i preu. Aquí teniu la fitxa amb el seguiment de preu actiu: {url}",
+    ],
+    visual: [
+      "La millor opció qualitat-preu en {categoria}, amb l'historial de preu verificat. Fitxa completa → {url}",
+      'Vaig comparar specs i preu de tot el que hi ha a {categoria}, i això es va quedar sol. Fitxa a Tradylor → {url}',
+      '{categoria}: anàlisi, pros/contres i gràfic de preu al dia. Tot aquí → {url}',
+    ],
+    copy: "Copia l'enllaç",
+    native: 'Comparteix…',
+    copiedLink: 'Enllaç copiat al porta-retalls.',
+    copiedText: (ch) => `Text copiat. Enganxa'l a ${ch}.`,
+    noClipboard: "No s'ha pogut copiar l'enllaç.",
+    nativeFallback: 'El teu navegador no permet compartir: text copiat.',
+    openFailed: (ch) => `No s'ha pogut obrir ${ch}.`,
+    unsupported: 'Canal no compatible.',
   },
   en: {
     label: 'English',
@@ -286,12 +310,12 @@ export function detectShareLang(): ShareLangCode {
 }
 
 /**
- * Opciones del selector: idioma detectado + inglés + chino (siempre), sin
- * duplicados y en ese orden.
+ * Opciones del selector: idioma detectado + español (si no es el detectado) +
+ * inglés + chino (siempre), sin duplicados y en ese orden.
  */
 export function getShareLangOptions(): { code: ShareLangCode; label: string }[] {
   const detected = detectShareLang();
-  const order: ShareLangCode[] = [detected, 'en', 'zh'];
+  const order: ShareLangCode[] = [detected, 'es', 'en', 'zh'];
   const seen = new Set<ShareLangCode>();
   const options: { code: ShareLangCode; label: string }[] = [];
   for (const code of order) {
@@ -319,7 +343,11 @@ export function buildShareText(
   lang?: ShareLangCode,
 ): string {
   const link = url ?? buildShareUrl(input.productId, channel);
-  const categoria = (input.category ?? '').trim() || (lang === 'zh' ? '该产品' : 'este producto');
+  const categoria =
+    (input.category ?? '').trim() ||
+    ({ zh: '该产品', ca: 'aquest producte' } as Partial<Record<ShareLangCode, string>>)[lang ??
+      getShareLang()] ||
+    'este producto';
   const pack = LANG_PACKS[lang ?? getShareLang()];
   const group =
     channel === 'whatsapp' || channel === 'telegram' || channel === 'email'
@@ -385,7 +413,12 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
   const pack = LANG_PACKS[lang];
   const link = buildShareUrl(input.productId, channel);
   const text = buildShareText(channel, input, link, lang);
-  const title = input.title || (lang === 'zh' ? 'Tradylor 上的一款产品' : 'Un producto en Tradylor');
+  const title =
+    input.title ||
+    ({ zh: 'Tradylor 上的一款产品', ca: 'Un producte a Tradylor' } as Partial<
+      Record<ShareLangCode, string>
+    >)[lang] ||
+    'Un producto en Tradylor';
   const name = shareLabel(channel, lang);
 
   switch (channel) {
