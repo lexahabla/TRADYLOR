@@ -62,16 +62,16 @@ const cleanTitle = product.title
 const langOptions = getShareLangOptions();
 
 // Textos de UI según idioma
-const UI: Record<string, { send: string; copyHtml: string; copyText: string; viewProduct: string; hint: string; footer: string; cta: string; htmlOk: string; textOk: string }> = {
-  es: { send: 'Enviar por email', copyHtml: 'Copiar HTML del email', copyText: 'Copiar solo texto', viewProduct: 'Ver ficha del producto', hint: 'Elige enviar directamente o copiar el HTML para pegarlo en tu correo.', footer: 'Enviado desde', cta: 'Ver ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo en tu correo.', textOk: 'Texto copiado.' },
-  ca: { send: 'Enviar per email', copyHtml: "Copiar l'HTML del correu", copyText: 'Copiar només el text', viewProduct: 'Veure la fitxa del producte', hint: "Tria enviar directament o copiar l'HTML per enganxar-lo al teu correu.", footer: 'Enviat des de', cta: 'Veure la fitxa completa a Tradylor →', htmlOk: "HTML copiat. Enganxa'l al teu correu.", textOk: 'Text copiat.' },
-  eu: { send: 'Bidali email bidez', copyHtml: 'Kopiatu posta HTMLa', copyText: 'Kopiatu testua bakarrik', viewProduct: 'Ikusi produktuaren fitxa', hint: 'Aukeratu zuzenean bidaltzea edo HTMLa kopiatzea zure postara itsasteko.', footer: 'Bidali da', cta: 'Ikusi fitxa osoa Tradylor-en →', htmlOk: 'HTML kopiatua. Itsatsi zure postan.', textOk: 'Testua kopiatu da.' },
-  gl: { send: 'Enviar por email', copyHtml: 'Copiar o HTML do correo', copyText: 'Copiar só o texto', viewProduct: 'Ver a ficha do produto', hint: 'Escolle enviar directamente ou copiar o HTML para pegalo no teu correo.', footer: 'Enviado desde', cta: 'Ver a ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo no teu correo.', textOk: 'Texto copiado.' },
-  en: { send: 'Send by email', copyHtml: 'Copy email HTML', copyText: 'Copy text only', viewProduct: 'View product sheet', hint: 'Choose to send directly or copy the HTML to paste into your email.', footer: 'Sent from', cta: 'View full sheet on Tradylor →', htmlOk: 'HTML copied. Paste it into your email.', textOk: 'Text copied.' },
-  fr: { send: 'Envoyer par email', copyHtml: "Copier le HTML de l'email", copyText: 'Copier le texte seulement', viewProduct: 'Voir la fiche produit', hint: "Choisissez d'envoyer directement ou de copier le HTML pour le coller dans votre email.", footer: 'Envoyé depuis', cta: 'Voir la fiche complète sur Tradylor →', htmlOk: 'HTML copié. Collez-le dans votre email.', textOk: 'Texte copié.' },
-  de: { send: 'Per E-Mail senden', copyHtml: 'E-Mail-HTML kopieren', copyText: 'Nur Text kopieren', viewProduct: 'Produktdatenblatt ansehen', hint: 'Wählen Sie, direkt zu senden oder das HTML für Ihre E-Mail zu kopieren.', footer: 'Gesendet von', cta: 'Vollständiges Datenblatt auf Tradylor ansehen →', htmlOk: 'HTML kopiert. Fügen Sie es in Ihre E-Mail ein.', textOk: 'Text kopiert.' },
-  pt: { send: 'Enviar por email', copyHtml: 'Copiar HTML do email', copyText: 'Copiar apenas o texto', viewProduct: 'Ver a ficha do produto', hint: 'Escolha enviar diretamente ou copiar o HTML para colar no seu email.', footer: 'Enviado desde', cta: 'Ver a ficha completa no Tradylor →', htmlOk: 'HTML copiado. Cole no seu email.', textOk: 'Texto copiado.' },
-  it: { send: 'Invia via email', copyHtml: "Copia l'HTML dell'email", copyText: 'Copia solo il testo', viewProduct: 'Vedi la scheda prodotto', hint: "Scegli di inviare direttamente o copiare l'HTML per incollarlo nella tua email.", footer: 'Inviato da', cta: 'Vedi la scheda completa su Tradylor →', htmlOk: 'HTML copiato. Incollalo nella tua email.', textOk: 'Testo copiato.' },
+const UI: Record<string, { send: string; sendLabel: string; sendPlaceholder: string; sending: string; sentOk: string; sentErr: string; copyHtml: string; copyText: string; viewProduct: string; hint: string; footer: string; cta: string; htmlOk: string; textOk: string; invalidEmail: string }> = {
+  es: { send: 'Enviar', sendLabel: 'Enviar por email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Enviando…', sentOk: '¡Email enviado!', sentErr: 'No se pudo enviar. Inténtalo de nuevo.', copyHtml: 'Copiar HTML del email', copyText: 'Copiar solo texto', viewProduct: 'Ver ficha del producto', hint: 'Rellena el destinatario y pulsa Enviar, o copia el HTML para pegarlo en tu correo.', footer: 'Enviado desde', cta: 'Ver ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo en tu correo.', textOk: 'Texto copiado.', invalidEmail: 'Introduce un email válido.' },
+  ca: { send: 'Enviar', sendLabel: 'Enviar per email a:', sendPlaceholder: 'destinatari@email.com', sending: "S'està enviant…", sentOk: 'Email enviat!', sentErr: "No s'ha pogut enviar. Prova-ho de nou.", copyHtml: "Copiar l'HTML del correu", copyText: 'Copiar només el text', viewProduct: 'Veure la fitxa del producte', hint: "Omple el destinatari i prem Enviar, o copia l'HTML per enganxar-lo al teu correu.", footer: 'Enviat des de', cta: 'Veure la fitxa completa a Tradylor →', htmlOk: "HTML copiat. Enganxa'l al teu correu.", textOk: 'Text copiat.', invalidEmail: 'Introdueix un email vàlid.' },
+  eu: { send: 'Bidali', sendLabel: 'Bidali email honi:', sendPlaceholder: 'hartzailea@email.com', sending: 'Bidaltzen…', sentOk: 'Emaila bidali da!', sentErr: 'Ezin izan da bidali. Saiatu berriro.', copyHtml: 'Kopiatu posta HTMLa', copyText: 'Kopiatu testua bakarrik', viewProduct: 'Ikusi produktuaren fitxa', hint: 'Bete hartzailea eta sakatu Bidali, edo kopiatu HTMLa zure postara itsasteko.', footer: 'Bidali da', cta: 'Ikusi fitxa osoa Tradylor-en →', htmlOk: 'HTML kopiatua. Itsatsi zure postan.', textOk: 'Testua kopiatu da.', invalidEmail: 'Sartu baliozko email bat.' },
+  gl: { send: 'Enviar', sendLabel: 'Enviar por email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Enviando…', sentOk: 'Email enviado!', sentErr: 'Non se puido enviar. Inténtao de novo.', copyHtml: 'Copiar o HTML do correo', copyText: 'Copiar só o texto', viewProduct: 'Ver a ficha do produto', hint: 'Enche o destinatario e preme Enviar, ou copia o HTML para pegalo no teu correo.', footer: 'Enviado desde', cta: 'Ver a ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo no teu correo.', textOk: 'Texto copiado.', invalidEmail: 'Introduce un email válido.' },
+  en: { send: 'Send', sendLabel: 'Send by email to:', sendPlaceholder: 'recipient@email.com', sending: 'Sending…', sentOk: 'Email sent!', sentErr: 'Could not send. Please try again.', copyHtml: 'Copy email HTML', copyText: 'Copy text only', viewProduct: 'View product sheet', hint: 'Fill in the recipient and press Send, or copy the HTML to paste into your email.', footer: 'Sent from', cta: 'View full sheet on Tradylor →', htmlOk: 'HTML copied. Paste it into your email.', textOk: 'Text copied.', invalidEmail: 'Enter a valid email.' },
+  fr: { send: 'Envoyer', sendLabel: 'Envoyer par email à :', sendPlaceholder: 'destinataire@email.com', sending: 'Envoi…', sentOk: 'Email envoyé !', sentErr: "Impossible d'envoyer. Réessayez.", copyHtml: "Copier le HTML de l'email", copyText: 'Copier le texte seulement', viewProduct: 'Voir la fiche produit', hint: "Remplissez le destinataire et appuyez sur Envoyer, ou copiez le HTML pour le coller dans votre email.", footer: 'Envoyé depuis', cta: 'Voir la fiche complète sur Tradylor →', htmlOk: 'HTML copié. Collez-le dans votre email.', textOk: 'Texte copié.', invalidEmail: 'Entrez un email valide.' },
+  de: { send: 'Senden', sendLabel: 'Per E-Mail senden an:', sendPlaceholder: 'empfaenger@email.com', sending: 'Wird gesendet…', sentOk: 'E-Mail gesendet!', sentErr: 'Konnte nicht gesendet werden. Bitte erneut versuchen.', copyHtml: 'E-Mail-HTML kopieren', copyText: 'Nur Text kopieren', viewProduct: 'Produktdatenblatt ansehen', hint: 'Empfänger einfügen und auf Senden klicken, oder das HTML für Ihre E-Mail kopieren.', footer: 'Gesendet von', cta: 'Vollständiges Datenblatt auf Tradylor ansehen →', htmlOk: 'HTML kopiert. Fügen Sie es in Ihre E-Mail ein.', textOk: 'Text kopiert.', invalidEmail: 'Geben Sie eine gültige E-Mail ein.' },
+  pt: { send: 'Enviar', sendLabel: 'Enviar por email para:', sendPlaceholder: 'destinatario@email.com', sending: 'A enviar…', sentOk: 'Email enviado!', sentErr: 'Não foi possível enviar. Tente novamente.', copyHtml: 'Copiar HTML do email', copyText: 'Copiar apenas o texto', viewProduct: 'Ver a ficha do produto', hint: 'Preencha o destinatário e clique Enviar, ou copie o HTML para colar no seu email.', footer: 'Enviado desde', cta: 'Ver a ficha completa no Tradylor →', htmlOk: 'HTML copiado. Cole no seu email.', textOk: 'Texto copiado.', invalidEmail: 'Introduza um email válido.' },
+  it: { send: 'Invia', sendLabel: 'Invia via email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Invio in corso…', sentOk: 'Email inviata!', sentErr: "Impossibile inviare. Riprova.", copyHtml: "Copia l'HTML dell'email", copyText: 'Copia solo il testo', viewProduct: 'Vedi la scheda prodotto', hint: 'Compila il destinatario e premi Invia, o copia l\'HTML per incollarlo nella tua email.', footer: 'Inviato da', cta: 'Vedi la scheda completa su Tradylor →', htmlOk: 'HTML copiato. Incollalo nella tua email.', textOk: 'Testo copiato.', invalidEmail: 'Inserisci un email valido.' },
 };
 const ui = UI[lang] ?? UI.es;
 ---
@@ -137,19 +137,28 @@ const ui = UI[lang] ?? UI.es;
         </div>
       </div>
 
-      <!-- Botones de acción -->
+      <!-- Formulario de envío + botones de acción -->
+      <div class="send-form">
+        <label class="send-label" for="sendTo">{ui.sendLabel}</label>
+        <div class="send-row">
+          <input
+            type="email"
+            id="sendTo"
+            class="send-input"
+            placeholder={ui.sendPlaceholder}
+            autocomplete="email"
+          />
+          <button type="button" class="share-btn share-btn-send" id="sendEmailBtn">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <polyline points="22,6 12,13 2,6"/>
+            </svg>
+            {ui.send}
+          </button>
+        </div>
+      </div>
+
       <div class="share-actions">
-        <a
-          href={`mailto:?subject=${encodeURIComponent(cleanTitle)}&body=${encodeURIComponent(message + '\n\n' + shortUrl)}`}
-          class="share-btn share-btn-send"
-          id="sendEmailBtn"
-        >
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-            <polyline points="22,6 12,13 2,6"/>
-          </svg>
-          {ui.send}
-        </a>
         <button type="button" class="share-btn share-btn-primary" id="copyHtmlBtn">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
             <rect x="9" y="9" width="11" height="11" rx="2"/>
@@ -237,6 +246,18 @@ const ui = UI[lang] ?? UI.es;
     .email-card-footer p { margin: 0; font-size: .72rem; color: #9ca3af; text-align: center; }
 
     .share-actions { display: flex; flex-wrap: wrap; gap: .65rem; justify-content: center; }
+
+    .send-form { margin-bottom: 1.25rem; }
+    .send-label { display: block; font-size: .8rem; font-weight: 700; color: #d1d5db; margin-bottom: .4rem; text-align: center; }
+    .send-row { display: flex; gap: .5rem; align-items: stretch; }
+    .send-input {
+      flex: 1; min-width: 0; padding: .7rem 1rem; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06);
+      color: #f3f4f6; font-family: 'Inter', sans-serif; font-size: .9rem; outline: none; transition: .18s;
+    }
+    .send-input::placeholder { color: #6b7280; }
+    .send-input:focus { border-color: rgba(96,165,250,.6); background: rgba(255,255,255,.1); box-shadow: 0 0 0 3px rgba(59,130,246,.2); }
+    .send-row .share-btn-send { flex-shrink: 0; }
     .share-btn {
       display: inline-flex; align-items: center; gap: .45rem;
       padding: .7rem 1.15rem; border-radius: 10px; font-weight: 700; font-size: .85rem;
@@ -265,6 +286,8 @@ const ui = UI[lang] ?? UI.es;
     }
     .share-toast.is-on { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     @media (max-width: 520px) {
       .email-product { flex-direction: column; align-items: center; text-align: center; }
       .email-product-image-wrap { width: 180px; height: 180px; }
@@ -274,29 +297,18 @@ const ui = UI[lang] ?? UI.es;
     }
   </style>
 
-  <script define:vars={{ message, shortUrl, cleanTitle, lang }}>
+  <script define:vars={{ message, shortUrl, cleanTitle, lang, productId: key, uiSend: ui }}>
     // ---- Persistencia de idioma en localStorage (corrige SSR) ----
     const STORAGE_KEY = 'tradylor_share_lang';
 
-    // Textos de UI por idioma para el script (btn labels, cta, toast, footer)
-    const UI_SCRIPT = {
-      es: { send: 'Enviar por email', copyHtml: 'Copiar HTML del email', copyText: 'Copiar solo texto', viewProduct: 'Ver ficha del producto', cta: 'Ver ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo en tu correo.', textOk: 'Texto copiado.' },
-      ca: { send: 'Enviar per email', copyHtml: "Copiar l'HTML del correu", copyText: 'Copiar només el text', viewProduct: 'Veure la fitxa del producte', cta: 'Veure la fitxa completa a Tradylor →', htmlOk: "HTML copiat. Enganxa'l al teu correu.", textOk: 'Text copiat.' },
-      eu: { send: 'Bidali email bidez', copyHtml: 'Kopiatu posta HTMLa', copyText: 'Kopiatu testua bakarrik', viewProduct: 'Ikusi produktuaren fitxa', cta: 'Ikusi fitxa osoa Tradylor-en →', htmlOk: 'HTML kopiatua. Itsatsi zure postan.', textOk: 'Testua kopiatu da.' },
-      gl: { send: 'Enviar por email', copyHtml: 'Copiar o HTML do correo', copyText: 'Copiar só o texto', viewProduct: 'Ver a ficha do produto', cta: 'Ver a ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo no teu correo.', textOk: 'Texto copiado.' },
-      en: { send: 'Send by email', copyHtml: 'Copy email HTML', copyText: 'Copy text only', viewProduct: 'View product sheet', cta: 'View full sheet on Tradylor →', htmlOk: 'HTML copied. Paste it into your email.', textOk: 'Text copied.' },
-      fr: { send: 'Envoyer par email', copyHtml: "Copier le HTML de l'email", copyText: 'Copier le texte seulement', viewProduct: 'Voir la fiche produit', cta: 'Voir la fiche complète sur Tradylor →', htmlOk: 'HTML copié. Collez-le dans votre email.', textOk: 'Texte copié.' },
-      de: { send: 'Per E-Mail senden', copyHtml: 'E-Mail-HTML kopieren', copyText: 'Nur Text kopieren', viewProduct: 'Produktdatenblatt ansehen', cta: 'Vollständiges Datenblatt auf Tradylor ansehen →', htmlOk: 'HTML kopiert. Fügen Sie es in Ihre E-Mail ein.', textOk: 'Text kopiert.' },
-      pt: { send: 'Enviar por email', copyHtml: 'Copiar HTML do email', copyText: 'Copiar apenas o texto', viewProduct: 'Ver a ficha do produto', cta: 'Ver a ficha completa no Tradylor →', htmlOk: 'HTML copiado. Cole no seu email.', textOk: 'Texto copiado.' },
-      it: { send: 'Invia via email', copyHtml: "Copia l'HTML dell'email", copyText: 'Copia solo il testo', viewProduct: 'Vedi la scheda prodotto', cta: 'Vedi la scheda completa su Tradylor →', htmlOk: 'HTML copiato. Incollalo nella tua email.', textOk: 'Testo copiato.' },
-    };
-
-    function showToast(msg) {
+    function showToast(msg, isErr) {
       const toast = document.getElementById('shareToast');
       if (!toast) return;
       toast.textContent = msg;
+      toast.style.borderColor = isErr ? 'rgba(248,113,113,.6)' : 'rgba(255,255,255,.14)';
+      toast.style.color = isErr ? '#fca5a5' : '#f3f4f6';
       toast.classList.add('is-on');
-      setTimeout(() => toast.classList.remove('is-on'), 2400);
+      setTimeout(() => toast.classList.remove('is-on'), 2800);
     }
 
     async function copyToClipboard(text, okMsg) {
@@ -344,14 +356,49 @@ const ui = UI[lang] ?? UI.es;
         '</div></div>';
     }
 
-    // Botones copiar (usan el idioma SSR por defecto)
+    // ---- Enviar por email via SMTP ----
+    const sendBtn = document.getElementById('sendEmailBtn');
+    const sendInput = document.getElementById('sendTo');
+    sendBtn?.addEventListener('click', async () => {
+      const to = (sendInput?.value || '').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+        showToast(uiSend.invalidEmail, true);
+        sendInput?.focus();
+        return;
+      }
+      sendBtn.disabled = true;
+      const originalHtml = sendBtn.innerHTML;
+      sendBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke-dasharray="30 60"/></svg> ' + uiSend.sending;
+      try {
+        const res = await fetch('/api/share/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId, to, lang }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok) {
+          showToast(uiSend.sentOk, false);
+          if (sendInput) sendInput.value = '';
+        } else {
+          showToast(uiSend.sentErr + (data.error ? ' (' + data.error + ')' : ''), true);
+        }
+      } catch {
+        showToast(uiSend.sentErr, true);
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = originalHtml;
+      }
+    });
+    sendInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') sendBtn?.click();
+    });
+
+    // ---- Copiar HTML / texto ----
     document.getElementById('copyHtmlBtn')?.addEventListener('click', () => {
-      const ui = UI_SCRIPT[lang] || UI_SCRIPT.es;
-      copyToClipboard(buildEmailHtml(message, ui.cta), ui.htmlOk);
+      copyToClipboard(buildEmailHtml(message, uiSend.cta), uiSend.htmlOk);
     });
     document.getElementById('copyTextBtn')?.addEventListener('click', () => {
-      const ui = UI_SCRIPT[lang] || UI_SCRIPT.es;
-      copyToClipboard(message + '\n\n' + shortUrl, ui.textOk);
+      copyToClipboard(message + '\n\n' + shortUrl, uiSend.textOk);
     });
   </script>
 </Layout>
