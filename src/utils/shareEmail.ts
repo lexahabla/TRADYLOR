@@ -26,15 +26,15 @@ export interface ShareEmailLabels {
 }
 
 export const SHARE_EMAIL_LABELS: Record<ShareLangCode, ShareEmailLabels> = {
-  es: { cta: 'Ver ficha completa en Tradylor →', footer: 'Enviado desde', tagline: 'Comparativa de precios y análisis' },
-  ca: { cta: 'Veure la fitxa completa a Tradylor →', footer: 'Enviat des de', tagline: 'Comparativa de preus i anàlisi' },
-  eu: { cta: 'Ikusi fitxa osoa Tradylor-en →', footer: 'Bidali da', tagline: 'Prezioen konparaketa eta azterketa' },
-  gl: { cta: 'Ver a ficha completa en Tradylor →', footer: 'Enviado desde', tagline: 'Comparativa de prezos e análise' },
-  en: { cta: 'View full sheet on Tradylor →', footer: 'Sent from', tagline: 'Price comparison and analysis' },
-  fr: { cta: 'Voir la fiche complète sur Tradylor →', footer: 'Envoyé depuis', tagline: 'Comparateur de prix et analyses' },
-  de: { cta: 'Vollständiges Datenblatt auf Tradylor ansehen →', footer: 'Gesendet von', tagline: 'Preisvergleich und Analyse' },
-  pt: { cta: 'Ver a ficha completa no Tradylor →', footer: 'Enviado desde', tagline: 'Comparação de preços e análise' },
-  it: { cta: 'Vedi la scheda completa su Tradylor →', footer: 'Inviato da', tagline: 'Confronto prezzi e analisi' },
+  es: { cta: 'Ver la ficha del producto', footer: 'Enviado desde', tagline: 'Comparativa de precios y análisis' },
+  ca: { cta: 'Veure la fitxa del producte', footer: 'Enviat des de', tagline: 'Comparativa de preus i anàlisi' },
+  eu: { cta: 'Ikusi produktuaren fitxa', footer: 'Bidali da', tagline: 'Prezioen konparaketa eta azterketa' },
+  gl: { cta: 'Ver a ficha do produto', footer: 'Enviado desde', tagline: 'Comparativa de prezos e análise' },
+  en: { cta: 'View the product page', footer: 'Sent from', tagline: 'Price comparison and analysis' },
+  fr: { cta: 'Voir la fiche du produit', footer: 'Envoyé depuis', tagline: 'Comparateur de prix et analyses' },
+  de: { cta: 'Zur Produktseite', footer: 'Gesendet von', tagline: 'Preisvergleich und Analyse' },
+  pt: { cta: 'Ver a ficha do produto', footer: 'Enviado desde', tagline: 'Comparação de preços e análise' },
+  it: { cta: 'Vedi la scheda del prodotto', footer: 'Inviato da', tagline: 'Confronto prezzi e analisi' },
 };
 
 export interface ShareEmailInput {

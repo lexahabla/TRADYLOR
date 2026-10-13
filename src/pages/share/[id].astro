@@ -1,19 +1,21 @@
 ---
 /**
  * ==============================================================================
- * TRADYLOR — PÁGINA DE COMPARTIR (PREVIEW HTML PARA EMAIL)
+ * TRADYLOR — PÁGINA DE COMPARTIR (TARJETA DEL PRODUCTO PARA EMAIL)
  * ==============================================================================
  *
  * Ruta dinámica SSR: /share/[id]?lang=xx
  *
  * Cuando el usuario pulsa "Email" en el panel de compartir, se abre esta página
- * con la tarjeta HTML del correo (imagen del producto, mensaje y botón). Al
- * pulsar "Enviar" (cliente de correo, mailto:) o "Enviar con Gmail":
+ * con la tarjeta del producto en HTML (mensaje, título, imagen y botón "Ver la
+ * ficha del producto" que lleva a tradylor.com/producto/...). El usuario elige
+ * su cliente de correo (su app por mailto:, Gmail, Outlook o Yahoo) y:
  *  1. La tarjeta se copia al portapapeles como contenido enriquecido (text/html).
- *  2. Se abre el correo con el asunto ya puesto.
+ *  2. Se abre ese correo con el asunto ya puesto.
  *  3. El usuario pega la tarjeta en el cuerpo (Ctrl+V) y elige el destinatario
- *     entre SUS contactos. Ni mailto: ni la URL de Gmail admiten HTML, por eso
- *     el cuerpo viaja por el portapapeles.
+ *     entre SUS contactos. Ni mailto: ni las URL de Gmail/Outlook/Yahoo admiten
+ *     HTML, y una web no puede escribir en otra aplicación: por eso el cuerpo
+ *     viaja por el portapapeles y el pegado lo hace el usuario.
  *
  * La vista previa y lo que se copia salen del mismo HTML (utils/shareEmail.ts):
  * lo que se ve es exactamente lo que llega.
@@ -29,8 +31,8 @@ import Layout from '../../layouts/Layout.astro';
 import { findCatalogProduct, productKey } from '../../lib/catalog';
 import { langsFromAcceptLanguage } from '../../lib/shareGeo';
 import {
+  buildProductUrl,
   buildShareText,
-  buildShareUrl,
   getShareLangOptions,
   SHARE_LANG_CODES,
   type ShareLangCode,
@@ -47,15 +49,16 @@ const key = productKey(product);
 const langParam = (Astro.url.searchParams.get('lang') ?? '').trim().toLowerCase() as ShareLangCode;
 const lang: ShareLangCode = SHARE_LANG_CODES.includes(langParam) ? langParam : 'es';
 
-const shortUrl = buildShareUrl(key, 'email');
+// Enlace directo a la ficha del producto en tradylor.com (con UTM para medir el tráfico compartido).
+const productUrl = buildProductUrl(key, 'email');
 const rawMessage = buildShareText(
   'email',
   { productId: key, title: product.title, category: product.category },
-  shortUrl,
+  productUrl,
   lang,
 );
-// El enlace se oculta del cuerpo: ya hay botón CTA "Ver ficha completa"
-const message = rawMessage.replace(shortUrl, '').replace(/\s+/g, ' ').trim();
+// El enlace se oculta del cuerpo: ya hay botón "Ver la ficha del producto"
+const message = rawMessage.replace(productUrl, '').replace(/\s+/g, ' ').trim();
 const absoluteImage = /^https?:\/\//i.test(product.image)
   ? product.image
   : new URL(product.image, Astro.site ?? 'https://tradylor.com').href;
@@ -70,7 +73,7 @@ const emailHtml = buildShareEmailHtml({
   title: cleanTitle,
   category: product.category,
   imageUrl: absoluteImage,
-  ctaUrl: shortUrl,
+  ctaUrl: productUrl,
   lang,
 });
 
@@ -81,8 +84,10 @@ const langOptions = getShareLangOptions([lang, ...headerLangs]);
 
 interface ShareUiStrings {
   hint: string;
-  send: string;
+  sendApp: string;
   sendGmail: string;
+  sendOutlook: string;
+  sendYahoo: string;
   copyText: string;
   note: string;
   copied: string;
@@ -94,99 +99,117 @@ interface ShareUiStrings {
 // Textos de UI según idioma
 const UI: Record<ShareLangCode, ShareUiStrings> = {
   es: {
-    hint: 'Revisa la tarjeta tal y como la recibirá tu contacto y envíala desde tu propio correo.',
-    send: 'Enviar',
+    hint: 'Revisa la tarjeta tal y como la recibirá tu contacto y elige con qué correo la envías.',
+    sendApp: 'Enviar con mi app de correo',
     sendGmail: 'Enviar con Gmail',
+    sendOutlook: 'Enviar con Outlook',
+    sendYahoo: 'Enviar con Yahoo',
     copyText: 'Copiar solo texto',
-    note: 'Al pulsar, copiamos la tarjeta y abrimos tu correo: pégala en el cuerpo del mensaje (Ctrl+V / ⌘V) y elige el destinatario entre tus contactos.',
+    note: 'Al elegir tu correo, copiamos la tarjeta y lo abrimos: pégala en el cuerpo del mensaje (Ctrl+V / ⌘V) y elige el destinatario entre tus contactos.',
     copied: 'Tarjeta copiada. Pégala en el cuerpo del correo (Ctrl+V / ⌘V).',
     copyFailed: 'No se pudo copiar la tarjeta. Hemos puesto el mensaje en texto en el correo.',
     textOk: 'Texto copiado.',
     textFail: 'No se pudo copiar el texto.',
   },
   ca: {
-    hint: 'Revisa la targeta tal com la rebrà el teu contacte i envia-la des del teu propi correu.',
-    send: 'Enviar',
+    hint: "Revisa la targeta tal com la rebrà el teu contacte i tria amb quin correu l'envies.",
+    sendApp: 'Enviar amb la meva app de correu',
     sendGmail: 'Enviar amb Gmail',
+    sendOutlook: 'Enviar amb Outlook',
+    sendYahoo: 'Enviar amb Yahoo',
     copyText: 'Copiar només el text',
-    note: "En prémer, copiem la targeta i obrim el teu correu: enganxa-la al cos del missatge (Ctrl+V / ⌘V) i tria el destinatari entre els teus contactes.",
+    note: "En triar el teu correu, copiem la targeta i l'obrim: enganxa-la al cos del missatge (Ctrl+V / ⌘V) i tria el destinatari entre els teus contactes.",
     copied: 'Targeta copiada. Enganxa-la al cos del correu (Ctrl+V / ⌘V).',
     copyFailed: "No s'ha pogut copiar la targeta. Hem posat el missatge en text al correu.",
     textOk: 'Text copiat.',
     textFail: "No s'ha pogut copiar el text.",
   },
   eu: {
-    hint: 'Berrikusi txartela zure kontaktuak jasoko duen bezala eta bidali zure posta elektronikotik.',
-    send: 'Bidali',
+    hint: 'Berrikusi txartela zure kontaktuak jasoko duen bezala eta aukeratu zein postarekin bidaltzen duzun.',
+    sendApp: 'Bidali nire posta-aplikazioarekin',
     sendGmail: 'Bidali Gmail-ekin',
+    sendOutlook: 'Bidali Outlook-ekin',
+    sendYahoo: 'Bidali Yahoo-rekin',
     copyText: 'Kopiatu testua bakarrik',
-    note: 'Sakatzean, txartela kopiatuko dugu eta zure posta irekiko dugu: itsatsi mezuaren gorputzean (Ctrl+V / ⌘V) eta aukeratu hartzailea zure kontaktuen artean.',
+    note: 'Zure posta aukeratzean, txartela kopiatu eta posta irekiko dugu: itsatsi mezuaren gorputzean (Ctrl+V / ⌘V) eta aukeratu hartzailea zure kontaktuen artean.',
     copied: 'Txartela kopiatu da. Itsatsi posta-mezuaren gorputzean (Ctrl+V / ⌘V).',
     copyFailed: 'Ezin izan da txartela kopiatu. Mezua testu gisa jarri dugu postan.',
     textOk: 'Testua kopiatu da.',
     textFail: 'Ezin izan da testua kopiatu.',
   },
   gl: {
-    hint: 'Revisa a tarxeta tal e como a recibirá o teu contacto e envíaa desde o teu propio correo.',
-    send: 'Enviar',
+    hint: 'Revisa a tarxeta tal e como a recibirá o teu contacto e escolle con que correo a envías.',
+    sendApp: 'Enviar coa miña app de correo',
     sendGmail: 'Enviar con Gmail',
+    sendOutlook: 'Enviar con Outlook',
+    sendYahoo: 'Enviar con Yahoo',
     copyText: 'Copiar só o texto',
-    note: 'Ao premer, copiamos a tarxeta e abrimos o teu correo: pégaa no corpo da mensaxe (Ctrl+V / ⌘V) e escolle o destinatario entre os teus contactos.',
+    note: 'Ao escoller o teu correo, copiamos a tarxeta e abrímolo: pégaa no corpo da mensaxe (Ctrl+V / ⌘V) e escolle o destinatario entre os teus contactos.',
     copied: 'Tarxeta copiada. Pégaa no corpo do correo (Ctrl+V / ⌘V).',
     copyFailed: 'Non se puido copiar a tarxeta. Puxemos a mensaxe en texto no correo.',
     textOk: 'Texto copiado.',
     textFail: 'Non se puido copiar o texto.',
   },
   en: {
-    hint: 'Review the card exactly as your contact will receive it and send it from your own email.',
-    send: 'Send',
+    hint: 'Review the card exactly as your contact will receive it and choose which email to send it with.',
+    sendApp: 'Send with my mail app',
     sendGmail: 'Send with Gmail',
+    sendOutlook: 'Send with Outlook',
+    sendYahoo: 'Send with Yahoo',
     copyText: 'Copy text only',
-    note: 'When you click, we copy the card and open your email: paste it into the message body (Ctrl+V / ⌘V) and pick the recipient from your contacts.',
+    note: 'When you pick your email, we copy the card and open it: paste it into the message body (Ctrl+V / ⌘V) and pick the recipient from your contacts.',
     copied: 'Card copied. Paste it into the email body (Ctrl+V / ⌘V).',
     copyFailed: "Couldn't copy the card. We put the message in the email as plain text.",
     textOk: 'Text copied.',
     textFail: "Couldn't copy the text.",
   },
   fr: {
-    hint: 'Vérifiez la carte telle que votre contact la recevra et envoyez-la depuis votre propre messagerie.',
-    send: 'Envoyer',
+    hint: "Vérifiez la carte telle que votre contact la recevra et choisissez avec quelle messagerie l'envoyer.",
+    sendApp: 'Envoyer avec mon appli de messagerie',
     sendGmail: 'Envoyer avec Gmail',
+    sendOutlook: 'Envoyer avec Outlook',
+    sendYahoo: 'Envoyer avec Yahoo',
     copyText: 'Copier le texte seulement',
-    note: 'En cliquant, nous copions la carte et ouvrons votre messagerie : collez-la dans le corps du message (Ctrl+V / ⌘V) et choisissez le destinataire parmi vos contacts.',
+    note: 'En choisissant votre messagerie, nous copions la carte et l’ouvrons : collez-la dans le corps du message (Ctrl+V / ⌘V) et choisissez le destinataire parmi vos contacts.',
     copied: "Carte copiée. Collez-la dans le corps de l'email (Ctrl+V / ⌘V).",
     copyFailed: "Impossible de copier la carte. Nous avons mis le message en texte dans l'email.",
     textOk: 'Texte copié.',
     textFail: 'Impossible de copier le texte.',
   },
   de: {
-    hint: 'Prüfe die Karte so, wie dein Kontakt sie erhält, und sende sie aus deinem eigenen E-Mail-Postfach.',
-    send: 'Senden',
+    hint: 'Prüfe die Karte so, wie dein Kontakt sie erhält, und wähle, mit welchem E-Mail-Dienst du sie sendest.',
+    sendApp: 'Mit meiner Mail-App senden',
     sendGmail: 'Mit Gmail senden',
+    sendOutlook: 'Mit Outlook senden',
+    sendYahoo: 'Mit Yahoo senden',
     copyText: 'Nur Text kopieren',
-    note: 'Beim Klicken kopieren wir die Karte und öffnen dein E-Mail-Programm: Füge sie in den Nachrichtentext ein (Strg+V / ⌘V) und wähle den Empfänger aus deinen Kontakten.',
+    note: 'Wenn du deinen E-Mail-Dienst wählst, kopieren wir die Karte und öffnen ihn: Füge sie in den Nachrichtentext ein (Strg+V / ⌘V) und wähle den Empfänger aus deinen Kontakten.',
     copied: 'Karte kopiert. Füge sie in den E-Mail-Text ein (Strg+V / ⌘V).',
     copyFailed: 'Die Karte konnte nicht kopiert werden. Wir haben die Nachricht als Text in die E-Mail eingefügt.',
     textOk: 'Text kopiert.',
     textFail: 'Der Text konnte nicht kopiert werden.',
   },
   pt: {
-    hint: 'Revê o cartão tal como o teu contacto o vai receber e envia-o a partir do teu próprio email.',
-    send: 'Enviar',
+    hint: 'Revê o cartão tal como o teu contacto o vai receber e escolhe com que email o envias.',
+    sendApp: 'Enviar com a minha app de email',
     sendGmail: 'Enviar com o Gmail',
+    sendOutlook: 'Enviar com o Outlook',
+    sendYahoo: 'Enviar com o Yahoo',
     copyText: 'Copiar apenas o texto',
-    note: 'Ao clicar, copiamos o cartão e abrimos o teu email: cola-o no corpo da mensagem (Ctrl+V / ⌘V) e escolhe o destinatário entre os teus contactos.',
+    note: 'Ao escolher o teu email, copiamos o cartão e abrimo-lo: cola-o no corpo da mensagem (Ctrl+V / ⌘V) e escolhe o destinatário entre os teus contactos.',
     copied: 'Cartão copiado. Cola-o no corpo do email (Ctrl+V / ⌘V).',
     copyFailed: 'Não foi possível copiar o cartão. Pusemos a mensagem em texto no email.',
     textOk: 'Texto copiado.',
     textFail: 'Não foi possível copiar o texto.',
   },
   it: {
-    hint: 'Controlla la scheda così come la riceverà il tuo contatto e inviala dalla tua email.',
-    send: 'Invia',
+    hint: 'Controlla la scheda così come la riceverà il tuo contatto e scegli con quale email inviarla.',
+    sendApp: 'Invia con la mia app di posta',
     sendGmail: 'Invia con Gmail',
+    sendOutlook: 'Invia con Outlook',
+    sendYahoo: 'Invia con Yahoo',
     copyText: 'Copia solo il testo',
-    note: 'Cliccando, copiamo la scheda e apriamo la tua email: incollala nel corpo del messaggio (Ctrl+V / ⌘V) e scegli il destinatario tra i tuoi contatti.',
+    note: "Scegliendo la tua email, copiamo la scheda e la apriamo: incollala nel corpo del messaggio (Ctrl+V / ⌘V) e scegli il destinatario tra i tuoi contatti.",
     copied: "Scheda copiata. Incollala nel corpo dell'email (Ctrl+V / ⌘V).",
     copyFailed: "Impossibile copiare la scheda. Abbiamo messo il messaggio come testo nell'email.",
     textOk: 'Testo copiato.',
@@ -199,7 +222,7 @@ const ui = UI[lang] ?? UI.es;
 const clientData = {
   lang,
   subject: cleanTitle,
-  text: `${message}\n\n${shortUrl}`,
+  text: `${message}\n\n${productUrl}`,
   html: emailHtml,
   ui: { copied: ui.copied, copyFailed: ui.copyFailed, textOk: ui.textOk, textFail: ui.textFail },
 };
@@ -234,24 +257,41 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
         </div>
       </header>
 
-      <!-- Tarjeta del correo: es exactamente el HTML que se copia al pulsar Enviar -->
+      <!-- Tarjeta del correo: es exactamente el HTML que se copia al elegir tu correo -->
       <div class="email-preview" id="emailCard" set:html={emailHtml} />
 
       <div class="share-actions">
-        <!-- Abre el cliente de correo del usuario (mailto:) -->
+        <!-- Abre la app de correo del usuario (mailto:) -->
         <button type="button" class="share-btn share-btn-mail" id="sendMailBtn">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <rect x="3" y="5.5" width="18" height="13" rx="2.5"/>
             <path d="m4.5 8 7.5 5 7.5-5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>{ui.send}</span>
+          <span>{ui.sendApp}</span>
         </button>
         <!-- Abre Gmail (redactar) con el asunto puesto -->
-        <button type="button" class="share-btn share-btn-gmail" id="sendGmailBtn">
+        <button type="button" class="share-btn share-btn-web" id="sendGmailBtn">
           <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
             <path fill="#EA4335" d="M2 6.5v11A1.5 1.5 0 0 0 3.5 19H6V9.9l6 4.5 6-4.5V19h2.5a1.5 1.5 0 0 0 1.5-1.5v-11c0-1.7-1.9-2.6-3.2-1.6L12 9.6 5.2 4.9C3.9 3.9 2 4.8 2 6.5Z"/>
           </svg>
           <span>{ui.sendGmail}</span>
+        </button>
+        <!-- Abre Outlook en la web (redactar) con el asunto puesto -->
+        <button type="button" class="share-btn share-btn-web" id="sendOutlookBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <rect x="2" y="4" width="20" height="16" rx="3.5" fill="#0078D4"/>
+            <ellipse cx="10.5" cy="12" rx="3.4" ry="4" fill="none" stroke="#ffffff" stroke-width="1.9"/>
+            <path d="M15.5 9.2h3.2M15.5 12h3.2M15.5 14.8h3.2" stroke="#ffffff" stroke-width="1.3" stroke-linecap="round"/>
+          </svg>
+          <span>{ui.sendOutlook}</span>
+        </button>
+        <!-- Abre Yahoo Mail (redactar) con el asunto puesto -->
+        <button type="button" class="share-btn share-btn-web" id="sendYahooBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <rect x="2" y="2" width="20" height="20" rx="5.5" fill="#6001D2"/>
+            <path d="M7 7.5l5 6.3V18M17 7.5l-5 6.3" fill="none" stroke="#ffffff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>{ui.sendYahoo}</span>
         </button>
         <button type="button" class="share-btn share-btn-secondary" id="copyTextBtn">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -322,8 +362,9 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       color: #ffffff; box-shadow: 0 4px 16px rgba(124,58,237,.35);
     }
     .share-btn-mail:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(124,58,237,.55); }
-    .share-btn-gmail { background: #ffffff; color: #1f2937; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
-    .share-btn-gmail:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,.4); }
+    /* Gmail / Outlook / Yahoo: botón blanco con el icono de color de cada servicio */
+    .share-btn-web { background: #ffffff; color: #1f2937; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+    .share-btn-web:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,.4); }
     .share-btn-secondary { background: rgba(255,255,255,.08); color: #e5e7eb; border: 1px solid rgba(255,255,255,.12); }
     .share-btn-secondary:hover { background: rgba(255,255,255,.14); }
 
@@ -450,9 +491,12 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       }
     }
 
-    // ---- Enviar: copiar la tarjeta + abrir el correo (mailto: o Gmail) ----
-    // mailto: y la URL de Gmail sólo admiten texto plano. Si la tarjeta se copió,
-    // el cuerpo se deja vacío (el usuario la pega); si no, va el texto plano.
+    // ---- Enviar: copiar la tarjeta + abrir el correo elegido ----
+    // mailto: y las URL de redactar de Gmail / Outlook / Yahoo sólo admiten texto
+    // plano. Si la tarjeta se copió, el cuerpo se deja vacío (el usuario la pega);
+    // si no, va el texto plano.
+    type MailKind = 'mailto' | 'gmail' | 'outlook' | 'yahoo';
+
     function mailtoUrl(withBody: boolean): string {
       const body = data.text.replace(/\n/g, '\r\n');
       return (
@@ -460,23 +504,27 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       );
     }
 
-    function gmailUrl(withBody: boolean): string {
-      return (
-        'https://mail.google.com/mail/?view=cm&fs=1&tf=1&su=' +
-        encodeURIComponent(data.subject) +
-        (withBody ? '&body=' + encodeURIComponent(data.text) : '')
-      );
+    const WEB_MAIL: Record<Exclude<MailKind, 'mailto'>, (subject: string, body: string) => string> = {
+      gmail: (subject, body) => 'https://mail.google.com/mail/?view=cm&fs=1&tf=1&su=' + subject + body,
+      outlook: (subject, body) => 'https://outlook.live.com/mail/0/deeplink/compose?subject=' + subject + body,
+      yahoo: (subject, body) => 'https://compose.mail.yahoo.com/?subject=' + subject + body,
+    };
+
+    function webMailUrl(kind: Exclude<MailKind, 'mailto'>, withBody: boolean): string {
+      return WEB_MAIL[kind](encodeURIComponent(data.subject), withBody ? '&body=' + encodeURIComponent(data.text) : '');
     }
 
     let busy = false;
-    async function sendVia(kind: 'mailto' | 'gmail'): Promise<void> {
+    async function sendVia(kind: MailKind): Promise<void> {
       if (busy) return;
       busy = true;
       try {
         const copied = await copyCard();
         showToast(copied ? data.ui.copied : data.ui.copyFailed, !copied, 8000);
-        if (kind === 'gmail') {
-          const url = gmailUrl(!copied);
+        if (kind === 'mailto') {
+          window.location.href = mailtoUrl(!copied);
+        } else {
+          const url = webMailUrl(kind, !copied);
           const win = window.open(url, '_blank');
           if (win) {
             try {
@@ -487,16 +535,21 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
           } else {
             window.location.href = url; // ventana emergente bloqueada
           }
-        } else {
-          window.location.href = mailtoUrl(!copied);
         }
       } finally {
         busy = false;
       }
     }
 
-    document.getElementById('sendMailBtn')?.addEventListener('click', () => void sendVia('mailto'));
-    document.getElementById('sendGmailBtn')?.addEventListener('click', () => void sendVia('gmail'));
+    const MAIL_BUTTONS: Array<[string, MailKind]> = [
+      ['sendMailBtn', 'mailto'],
+      ['sendGmailBtn', 'gmail'],
+      ['sendOutlookBtn', 'outlook'],
+      ['sendYahooBtn', 'yahoo'],
+    ];
+    for (const [id, kind] of MAIL_BUTTONS) {
+      document.getElementById(id)?.addEventListener('click', () => void sendVia(kind));
+    }
 
     document.getElementById('copyTextBtn')?.addEventListener('click', async () => {
       const ok = await copyText(data.text);

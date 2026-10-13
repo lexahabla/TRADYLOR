@@ -22,11 +22,12 @@ import {
 } from './share';
 
 /**
- * Canales del panel, en este orden. El botón de Email se retiró del panel;
- * "Copiar enlace" y "Compartir…" (menú nativo, con copia de texto como
- * alternativa si el navegador no lo soporta) se mantienen en todos los dispositivos.
+ * Canales del panel, en este orden. "Email" abre la tarjeta del producto
+ * (/share/<id>: mensaje + título + imagen + botón a la ficha) para copiarla y
+ * pegarla en el cliente de correo que elija el usuario. "Compartir…" es el menú
+ * nativo (con copia de texto como alternativa si el navegador no lo soporta).
  */
-const CHANNELS: ShareChannel[] = ['whatsapp', 'telegram', 'x', 'facebook', 'reddit', 'pinterest', 'copy', 'native'];
+const CHANNELS: ShareChannel[] = ['whatsapp', 'telegram', 'x', 'facebook', 'reddit', 'pinterest', 'email', 'copy', 'native'];
 
 const ICONS: Record<ShareChannel, string> = {
   whatsapp:
