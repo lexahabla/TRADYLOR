@@ -705,5 +705,16 @@ export function buildShareUrl(productId: string, channel: ShareChannel): string 
   return `${ORIGIN}/p/${id}?utm_source=mi_radar&utm_medium=share&utm_campaign=${encodeURIComponent(campaign)}`;
 }
 
+/**
+ * URL directa de la ficha del producto en tradylor.com, con las mismas UTM que el
+ * enlace corto (sin el salto por /p/<id>). La usa el botón de la tarjeta del email.
+ * `productKey` es la clave de ruta canónica del producto (slug o id).
+ */
+export function buildProductUrl(productKey: string, channel: ShareChannel): string {
+  const key = encodeURIComponent(String(productKey ?? '').trim());
+  const campaign = channel === 'copy' || channel === 'native' ? 'indirect_link' : `indirect_${channel}`;
+  return `${ORIGIN}/producto/${key}?utm_source=mi_radar&utm_medium=share&utm_campaign=${encodeURIComponent(campaign)}`;
+}
+
 /** Etiqueta de canal en español (compat con la UI existente). */
 export const SHARE_LABELS: Record<ShareChannel, string> = BASE_LABELS;
