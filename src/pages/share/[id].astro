@@ -349,6 +349,12 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       margin-bottom: 1.5rem; border-radius: 16px;
       box-shadow: 0 20px 60px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06);
     }
+    /* Botón "Ver la ficha del producto": manita + efecto al pasar el ratón (sólo en la
+       vista previa; en el correo el cursor y el clic los gestiona el cliente de correo). */
+    .email-preview :global(.tz-cta) { cursor: pointer; transition: filter .15s ease, transform .15s ease, box-shadow .15s ease; }
+    .email-preview :global(.tz-cta:hover) { filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(59,130,246,.45); }
+    .email-preview :global(.tz-cta:active) { transform: translateY(0); box-shadow: none; }
+    .email-preview :global(.tz-cta:focus-visible) { outline: 2px solid #1d4ed8; outline-offset: 2px; }
 
     .share-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
     .share-actions .share-btn-secondary { grid-column: 1 / -1; }
