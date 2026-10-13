@@ -8,7 +8,17 @@
  * ==============================================================================
  */
 
-import { SHARE_LABELS, shareTo, type ShareChannel, type ShareInput } from './share';
+import {
+  getShareLang,
+  getShareLangOptions,
+  setShareLang,
+  shareLabel,
+  sharePanelTitle,
+  shareTo,
+  type ShareChannel,
+  type ShareInput,
+  type ShareLangCode,
+} from './share';
 
 const CHANNELS: ShareChannel[] = [
   'whatsapp',
@@ -53,7 +63,12 @@ const STYLES = `
   .tz-share-panel{position:relative;width:min(420px,100%);background:#111827;border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:1.25rem;box-shadow:0 24px 60px rgba(0,0,0,.55);font-family:Inter,system-ui,Arial,sans-serif;color:#f3f4f6}
   .tz-share-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;margin-bottom:.35rem}
   .tz-share-title{margin:0;font-size:1rem;font-weight:800;letter-spacing:-.01em}
-  .tz-share-sub{margin:0 0 1rem;font-size:.78rem;color:#9ca3af;line-height:1.45;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .tz-share-sub{margin:0 0 .75rem;font-size:.78rem;color:#9ca3af;line-height:1.45;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .tz-share-langs{display:flex;gap:.35rem;flex-wrap:wrap;margin:0 0 .9rem;padding:.28rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:999px;width:fit-content;max-width:100%}
+  .tz-share-lang{padding:.34rem .72rem;font-family:inherit;font-size:.72rem;font-weight:700;color:#9ca3af;background:transparent;border:1px solid transparent;border-radius:999px;cursor:pointer;transition:.16s;white-space:nowrap}
+  .tz-share-lang:hover{color:#e5e7eb;background:rgba(255,255,255,.06)}
+  .tz-share-lang.is-active{color:#0d1422;background:linear-gradient(135deg,#60a5fa 0%,#3b82f6 100%);border-color:rgba(96,165,250,.6);box-shadow:0 4px 12px rgba(59,130,246,.35)}
+  .tz-share-lang:focus-visible{outline:2px solid #60a5fa;outline-offset:1px}
   .tz-share-close{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#e5e7eb;width:32px;height:32px;border-radius:9px;font-size:1rem;line-height:1;cursor:pointer;flex:0 0 auto}
   .tz-share-close:hover{background:rgba(255,255,255,.14)}
   .tz-share-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
@@ -94,28 +109,28 @@ function ensureRoot(): HTMLDivElement {
         <button type="button" class="tz-share-close" data-share-close aria-label="Cerrar">×</button>
       </div>
       <p class="tz-share-sub" data-share-subtitle></p>
+      <div class="tz-share-langs" data-share-langs role="group" aria-label="Idioma del mensaje"></div>
       <div class="tz-share-grid" data-share-grid></div>
       <div class="tz-share-toast" data-share-toast></div>
     </div>
   `;
   document.body.appendChild(root);
 
-  const grid = root.querySelector('[data-share-grid]');
-  if (grid) {
-    grid.innerHTML = CHANNELS.map(
-      (channel) => `
-      <button type="button" class="tz-share-opt" data-channel="${channel}">
-        <svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[channel]}</svg>
-        <span>${SHARE_LABELS[channel]}</span>
-      </button>`,
-    ).join('');
-  }
+  renderLangs();
+  renderChannels();
 
   root.addEventListener('click', (event) => {
     const target = event.target as Element | null;
     if (!target) return;
     if (target.closest('[data-share-close]')) {
       close();
+      return;
+    }
+    const lang = target.closest<HTMLElement>('[data-lang]');
+    if (lang?.dataset.lang) {
+      setShareLang(lang.dataset.lang as ShareLangCode);
+      renderLangs();
+      renderChannels();
       return;
     }
     const opt = target.closest<HTMLElement>('[data-channel]');
@@ -126,6 +141,35 @@ function ensureRoot(): HTMLDivElement {
   });
 
   return root;
+}
+
+/** Selector de idioma: detectado por región + inglés + chino (siempre). */
+function renderLangs(): void {
+  const box = root?.querySelector('[data-share-langs]');
+  if (!box) return;
+  const active = getShareLang();
+  box.innerHTML = getShareLangOptions()
+    .map(
+      (option) => `
+      <button type="button" class="tz-share-lang${option.code === active ? ' is-active' : ''}"
+        data-lang="${option.code}" aria-pressed="${option.code === active}">${option.label}</button>`,
+    )
+    .join('');
+}
+
+/** Re-pinta título y etiquetas de canal según el idioma elegido. */
+function renderChannels(): void {
+  const title = root?.querySelector('#tzShareTitle');
+  if (title) title.textContent = sharePanelTitle();
+  const grid = root?.querySelector('[data-share-grid]');
+  if (!grid) return;
+  grid.innerHTML = CHANNELS.map(
+    (channel) => `
+    <button type="button" class="tz-share-opt" data-channel="${channel}">
+      <svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[channel]}</svg>
+      <span>${shareLabel(channel)}</span>
+    </button>`,
+  ).join('');
 }
 
 let current: ShareInput | null = null;
@@ -157,6 +201,8 @@ function close(): void {
 export function openSharePanel(input: ShareInput): void {
   const el = ensureRoot();
   current = input;
+  renderLangs();
+  renderChannels();
   const subtitle = el.querySelector('[data-share-subtitle]');
   if (subtitle) {
     subtitle.textContent = input.title || 'Este producto';
