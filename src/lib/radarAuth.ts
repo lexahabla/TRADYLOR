@@ -2,7 +2,8 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 import fs from 'node:fs';
 import path from 'node:path';
 import { dataFile, RADAR_AVATARS_DIR } from './paths';
-import { sendVerificationEmailSmtp } from './mailer';
+import { sendGenericMailSmtp, sendVerificationEmailSmtp } from './mailer';
+import { radarEmailChanges } from './rateLimit';
 
 /**
  * ==============================================================================
@@ -29,6 +30,9 @@ const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 días
 const RESET_TTL_MS = 60 * 60 * 1000; // 1 hora
 const ACTIVATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_CHANGE_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas para confirmar un email nuevo
+const NAME_MAX = 80;
+const EMAIL_MAX = 120;
 
 export interface RadarUser {
   id: string;
@@ -49,9 +53,28 @@ export interface RadarUser {
   resetTokenExpires?: number;
   /** Nombre del fichero de avatar dentro de RADAR_AVATARS_DIR (opcional). */
   avatar?: string | null;
+  /** true si el usuario editó su nombre (el login con Google ya no lo pisa). */
+  nameCustomized?: boolean;
+  /** Preferencias para las recomendaciones: categorías (slugs) que más le interesan. */
+  preferences?: { categories: string[] };
+  /** Email nuevo pendiente de confirmar por enlace (el actual sigue siendo el de acceso). */
+  pendingEmail?: string;
+  pendingEmailToken?: string;
+  pendingEmailExpires?: number;
 }
 
-export type PublicRadarUser = Omit<RadarUser, 'passwordSalt' | 'passwordHash' | 'resetToken' | 'resetTokenExpires'>;
+/** Usuario que sale hacia el cliente: sin hash, sal ni ningún token (reset, activación, cambio de email). */
+export type PublicRadarUser = Omit<
+  RadarUser,
+  | 'passwordSalt'
+  | 'passwordHash'
+  | 'resetToken'
+  | 'resetTokenExpires'
+  | 'activationToken'
+  | 'activationTokenExpires'
+  | 'pendingEmailToken'
+  | 'pendingEmailExpires'
+>;
 
 export class RadarAuthError extends Error {
   status: number;
@@ -139,7 +162,17 @@ function writeUsers(users: RadarUser[]): void {
 }
 
 export function toPublicRadarUser(user: RadarUser): PublicRadarUser {
-  const { passwordSalt: _s, passwordHash: _h, resetToken: _r, resetTokenExpires: _e, ...rest } = user;
+  const {
+    passwordSalt: _s,
+    passwordHash: _h,
+    resetToken: _r,
+    resetTokenExpires: _re,
+    activationToken: _a,
+    activationTokenExpires: _ae,
+    pendingEmailToken: _p,
+    pendingEmailExpires: _pe,
+    ...rest
+  } = user;
   return { ...rest };
 }
 
@@ -252,7 +285,8 @@ export function upsertGoogleUser(input: { email: string; name?: string }): Radar
       throw new RadarAuthError('Ese email ya tiene una cuenta con contraseña. Inicia sesión con email.', 409);
     }
     user.verified = true;
-    if (input.name) {
+    // El nombre de Google sólo se aplica si el usuario no ha editado el suyo en su perfil.
+    if (input.name && !user.nameCustomized) {
       user.name = input.name;
       user.updatedAt = new Date().toISOString();
       writeUsers(users);
@@ -426,6 +460,189 @@ export function resetPassword(token: string, newPassword: string): PublicRadarUs
   user.passwordHash = hash;
   delete user.resetToken;
   delete user.resetTokenExpires;
+  user.updatedAt = new Date().toISOString();
+  writeUsers(users);
+  return toPublicRadarUser(user);
+}
+
+/* ------------------------------------------------------- perfil de la cuenta */
+
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function findUserOrThrow(users: RadarUser[], userId: string): RadarUser {
+  const user = users.find((u) => u.id === userId);
+  if (!user) throw new RadarAuthError('La cuenta no existe.', 404);
+  return user;
+}
+
+/** Normaliza y valida un nombre visible (1-80 caracteres). */
+export function normalizeRadarName(rawName: string): string {
+  const name = String(rawName ?? '').replace(/\s+/g, ' ').trim();
+  if (!name) throw new RadarAuthError('El nombre no puede estar vacío.');
+  if (name.length > NAME_MAX) throw new RadarAuthError(`El nombre no puede superar los ${NAME_MAX} caracteres.`);
+  return name;
+}
+
+/** Cambia el nombre visible de la cuenta. */
+export function updateRadarName(userId: string, rawName: string): PublicRadarUser {
+  const name = normalizeRadarName(rawName);
+  const users = readUsers();
+  const user = findUserOrThrow(users, userId);
+  if (user.name !== name) {
+    user.name = name;
+    user.nameCustomized = true;
+    user.updatedAt = new Date().toISOString();
+    writeUsers(users);
+  }
+  return toPublicRadarUser(user);
+}
+
+/**
+ * Cambia la contraseña de una cuenta con email (exige la actual). Devuelve el
+ * usuario completo para renovar la cookie: el token de sesión depende del hash,
+ * así que el cambio cierra todas las demás sesiones de la cuenta.
+ */
+export function changeRadarPassword(userId: string, currentPassword: string, newPassword: string): RadarUser {
+  const users = readUsers();
+  const user = findUserOrThrow(users, userId);
+  if (user.provider !== 'email') {
+    throw new RadarAuthError('Tu cuenta usa Google: la contraseña se gestiona en tu cuenta de Google.', 400);
+  }
+  if (!currentPassword || !verifySecret(user, currentPassword)) {
+    throw new RadarAuthError('La contraseña actual no es correcta.', 403);
+  }
+  assertPasswordStrength(newPassword);
+  if (verifySecret(user, newPassword)) {
+    throw new RadarAuthError('La nueva contraseña debe ser distinta de la actual.');
+  }
+  const { salt, hash } = createPasswordHash(newPassword);
+  user.passwordSalt = salt;
+  user.passwordHash = hash;
+  delete user.resetToken;
+  delete user.resetTokenExpires;
+  user.updatedAt = new Date().toISOString();
+  writeUsers(users);
+  return user;
+}
+
+/** Guarda las categorías de interés del usuario (slugs ya validados por el endpoint). */
+export function setRadarCategories(userId: string, categories: string[]): PublicRadarUser {
+  const users = readUsers();
+  const user = findUserOrThrow(users, userId);
+  user.preferences = { categories: Array.from(new Set(categories.map((slug) => String(slug)))) };
+  user.updatedAt = new Date().toISOString();
+  writeUsers(users);
+  return toPublicRadarUser(user);
+}
+
+export interface EmailChangeResult {
+  /** Email nuevo, pendiente de confirmar. */
+  pendingEmail: string;
+  /** true si el correo de confirmación salió por SMTP. */
+  sent: boolean;
+  /** Enlace de confirmación (sólo fuera de producción, para poder probar el flujo). */
+  devConfirmUrl?: string;
+}
+
+/**
+ * Pide cambiar el email de acceso. El email es el identificador de la cuenta y a
+ * él llegan los avisos de Mi Radar, así que el cambio exige la contraseña actual
+ * y sólo se aplica cuando se confirma desde la bandeja del email NUEVO.
+ */
+export async function requestRadarEmailChange(
+  userId: string,
+  rawEmail: string,
+  currentPassword: string,
+  origin: string,
+): Promise<EmailChangeResult> {
+  const email = String(rawEmail ?? '').trim().toLowerCase();
+  if (!EMAIL_RE.test(email) || email.length > EMAIL_MAX) throw new RadarAuthError('El email no es válido.');
+
+  const users = readUsers();
+  const user = findUserOrThrow(users, userId);
+  if (user.provider !== 'email') {
+    throw new RadarAuthError('Tu email lo gestiona Google y no se puede cambiar desde aquí.', 400);
+  }
+  if (!currentPassword || !verifySecret(user, currentPassword)) {
+    throw new RadarAuthError('La contraseña actual no es correcta.', 403);
+  }
+  if (email === user.email) throw new RadarAuthError('Ese ya es tu email actual.');
+  if (users.some((u) => u.id !== user.id && u.email === email)) {
+    throw new RadarAuthError('Ya existe una cuenta con ese email.', 409);
+  }
+  // Tope de correos de confirmación por hora y cuenta: sólo cuentan los que de verdad
+  // se van a enviar (no los intentos con email mal escrito, ocupado o contraseña errónea).
+  if (!radarEmailChanges.hit(userId)) {
+    throw new RadarAuthError('Has pedido demasiados cambios de email. Inténtalo de nuevo en una hora.', 429);
+  }
+
+  const token = randomBytes(24).toString('hex');
+  user.pendingEmail = email;
+  user.pendingEmailToken = token;
+  user.pendingEmailExpires = Date.now() + EMAIL_CHANGE_TTL_MS;
+  user.updatedAt = new Date().toISOString();
+  writeUsers(users);
+
+  const confirmUrl = `${origin.replace(/\/$/, '')}/perfil?confirm-email=${token}`;
+  const name = escapeHtml(user.name || email.split('@')[0]);
+  const html = `
+    <div style="max-width:560px;margin:0 auto;font-family:Inter,Arial,sans-serif;background:#0d1422;color:#f3f4f6;padding:2rem;border-radius:16px">
+      <h1 style="font-size:1.4rem;margin:0 0 .5rem">Confirma tu nuevo email, ${name}</h1>
+      <p style="color:#9ca3af;font-size:.9rem;line-height:1.6;margin:0 0 1.25rem">
+        Has pedido usar <strong>${escapeHtml(email)}</strong> como email de tu cuenta de <strong>Mi Radar</strong>.
+        El cambio solo se aplica cuando lo confirmas con el botón siguiente (el enlace caduca en 24 horas):
+      </p>
+      <a href="${confirmUrl}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;font-weight:700;padding:.85rem 1.5rem;border-radius:11px;font-size:.9rem">
+        Confirmar mi nuevo email
+      </a>
+      <p style="color:#6b7280;font-size:.75rem;margin-top:1.5rem">
+        Si no lo has pedido tú, ignora este email: tu cuenta seguirá con su email actual.
+      </p>
+    </div>
+  `;
+  const text = `Confirma tu nuevo email en Tradylor: ${confirmUrl}\n\nSi no lo has pedido tú, ignora este mensaje.`;
+  const sent = await sendGenericMailSmtp({ to: email, subject: 'Confirma tu nuevo email en Tradylor', html, text });
+
+  const isProd = (process.env.NODE_ENV ?? '') === 'production';
+  if (!sent && isProd) {
+    // Sin correo no hay forma de confirmar: se deshace la petición para no dejarla colgada.
+    const fresh = readUsers();
+    const again = fresh.find((u) => u.id === userId);
+    if (again && again.pendingEmailToken === token) {
+      delete again.pendingEmail;
+      delete again.pendingEmailToken;
+      delete again.pendingEmailExpires;
+      writeUsers(fresh);
+    }
+    throw new RadarAuthError('No pudimos enviar el email de confirmación. Inténtalo de nuevo en unos minutos.', 502);
+  }
+  return { pendingEmail: email, sent, devConfirmUrl: isProd ? undefined : confirmUrl };
+}
+
+/** Aplica el cambio de email con el token del enlace (un solo uso, caduca a las 24 h). */
+export function confirmRadarEmailChange(token: string): PublicRadarUser {
+  const needle = String(token ?? '').trim();
+  const users = readUsers();
+  const user = needle ? users.find((u) => u.pendingEmailToken && u.pendingEmailToken === needle) : undefined;
+  if (!user || !user.pendingEmail || !user.pendingEmailExpires || user.pendingEmailExpires < Date.now()) {
+    throw new RadarAuthError('El enlace de confirmación no es válido o ha caducado.', 400);
+  }
+  const target = user.pendingEmail;
+  const clearPending = () => {
+    delete user.pendingEmail;
+    delete user.pendingEmailToken;
+    delete user.pendingEmailExpires;
+  };
+  if (users.some((u) => u.id !== user.id && u.email === target)) {
+    clearPending();
+    writeUsers(users);
+    throw new RadarAuthError('Ese email ya pertenece a otra cuenta.', 409);
+  }
+  user.email = target;
+  user.verified = true; // ha demostrado que controla esa bandeja
+  clearPending();
   user.updatedAt = new Date().toISOString();
   writeUsers(users);
   return toPublicRadarUser(user);

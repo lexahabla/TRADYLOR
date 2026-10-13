@@ -479,7 +479,8 @@
       for (const [key, form] of Object.entries(forms)) {
         if (form) {
           form.hidden = key !== view;
-          form.reset();
+          // verify / locked / activated son <div>, no formularios: sólo un <form> tiene reset().
+          if (form instanceof HTMLFormElement) form.reset();
         }
       }
       tabs.forEach((tab) => {
@@ -496,7 +497,7 @@
       modal.hidden = false;
       document.body.classList.add('auth-modal-is-open');
       for (const form of Object.values(forms)) {
-        form?.reset();
+        if (form instanceof HTMLFormElement) form.reset();
       }
       showView(view);
       const firstInput = forms[view]?.querySelector<HTMLInputElement>('input');

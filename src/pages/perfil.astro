@@ -1,0 +1,559 @@
+---
+/**
+ * ==============================================================================
+ * TRADYLOR — PERFIL DEL USUARIO FINAL (Mi Radar)
+ * ==============================================================================
+ * Se llega desde la opción "Perfil" del menú de usuario de la cabecera. Reúne
+ * lo mismo que "Mi perfil" del backend (/admin/perfil): foto, nombre, email y
+ * contraseña. En el hueco del teléfono va "Mis preferencias": las categorías que
+ * más interesan al usuario, para poder recomendarle productos.
+ *
+ *  - Foto:        POST /api/radar/auth/avatar
+ *  - Nombre/email: PATCH /api/radar/auth/profile (el email se confirma por enlace)
+ *  - Contraseña:  POST /api/radar/auth/password (sólo cuentas con email)
+ *  - Preferencias: PUT /api/radar/preferences
+ *
+ * Confirmación del cambio de email: el correo enlaza a /perfil?confirm-email=<token>;
+ * aquí se aplica y se redirige a /perfil?notice=... (el token no queda en la URL).
+ * ==============================================================================
+ */
+export const prerender = false;
+
+import Layout from '../layouts/Layout.astro';
+import { getCategories } from '../lib/categories';
+import { confirmRadarEmailChange, getRadarSessionUser, RadarAuthError } from '../lib/radarAuth';
+
+// Enlace del correo de confirmación del nuevo email (un solo uso).
+const confirmToken = Astro.url.searchParams.get('confirm-email');
+if (confirmToken) {
+  let outcome = 'email-confirmed';
+  try {
+    confirmRadarEmailChange(confirmToken);
+  } catch (error) {
+    outcome = error instanceof RadarAuthError && error.status === 409 ? 'email-taken' : 'email-link-invalid';
+  }
+  return Astro.redirect(`/perfil?notice=${outcome}`, 303);
+}
+
+// Datos privados de la cuenta: nunca se cachean.
+Astro.response.headers.set('Cache-Control', 'no-store');
+
+const NOTICES: Record<string, { type: 'success' | 'error'; message: string }> = {
+  'email-confirmed': { type: 'success', message: 'Email confirmado. Desde ahora entras con tu nuevo email.' },
+  'email-taken': { type: 'error', message: 'Ese email ya pertenece a otra cuenta. Elige otro.' },
+  'email-link-invalid': {
+    type: 'error',
+    message: 'El enlace de confirmación no es válido o ha caducado. Pide el cambio de email otra vez.',
+  },
+};
+const notice = NOTICES[Astro.url.searchParams.get('notice') ?? ''] ?? null;
+
+const user = getRadarSessionUser(Astro.request);
+
+const categories = getCategories();
+const knownSlugs = new Set(categories.map((category) => category.slug));
+const selected = new Set((user?.preferences?.categories ?? []).filter((slug) => knownSlugs.has(slug)));
+
+const displayName = user ? user.name || user.email.split('@')[0] : '';
+const initial = displayName.charAt(0).toUpperCase();
+const avatarUrl = user?.avatar ? `/api/radar/auth/avatar?v=${encodeURIComponent(user.updatedAt ?? '')}` : null;
+const memberSince = user
+  ? new Date(user.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'long', year: 'numeric' })
+  : '';
+const isGoogle = user?.provider === 'google';
+const prefsLabel = (count: number) => (count ? `${count} categoría${count === 1 ? '' : 's'}` : 'Sin elegir');
+---
+
+<Layout
+  title="Mi perfil | Tradylor"
+  description="Gestiona tu foto, tus datos, tu contraseña y las categorías que más te interesan."
+  noindex={true}
+>
+  <main class="perfil-page">
+    <div class="container perfil-wrap">
+      <header class="perfil-header">
+        <div class="perfil-tag">
+          <span class="perfil-dot"></span>
+          <span>Tu cuenta de Mi Radar</span>
+        </div>
+        <h1 class="perfil-title">Mi perfil</h1>
+        <p class="perfil-subtitle">
+          Actualiza tu foto y tus datos, elige las categorías que más te interesan y gestiona tu contraseña.
+        </p>
+      </header>
+
+      <div
+        id="profileAlert"
+        class:list={['profile-alert', notice ? `is-${notice.type}` : '']}
+        hidden={!notice}
+        role="status"
+      >{notice?.message ?? ''}</div>
+
+      {!user ? (
+        <section class="p-card perfil-gate">
+          <h2 class="card-title">Inicia sesión para ver tu perfil</h2>
+          <p class="card-desc">Tu perfil guarda tu foto, tus datos y las categorías que más te interesan.</p>
+          <div class="form-actions gate-actions">
+            <button type="button" class="btn-primary" data-open-auth="login">Iniciar sesión</button>
+          </div>
+        </section>
+      ) : (
+        <div class="profile-grid">
+          <aside class="p-card identity-card">
+            <div class="profile-avatar-wrap">
+              {avatarUrl ? (
+                <img id="profileAvatarImg" class="profile-avatar" src={avatarUrl} alt="Foto de perfil" />
+              ) : (
+                <span id="profileAvatarImg" class="profile-avatar profile-avatar-initial" aria-hidden="true">{initial}</span>
+              )}
+            </div>
+            <h2 class="profile-name">{displayName}</h2>
+            <p class="profile-email">{user.email}</p>
+            <span class:list={['profile-badge', { 'is-google': isGoogle }]}>
+              {isGoogle ? 'Cuenta de Google' : 'Cuenta con email'}
+            </span>
+
+            <dl class="profile-meta">
+              <div>
+                <dt>Email</dt>
+                <dd>{user.email}</dd>
+              </div>
+              <div>
+                <dt>Miembro desde</dt>
+                <dd>{memberSince}</dd>
+              </div>
+              <div>
+                <dt>Preferencias</dt>
+                <dd id="metaPrefs">{prefsLabel(selected.size)}</dd>
+              </div>
+            </dl>
+          </aside>
+
+          <div class="profile-forms">
+            <!-- Datos personales: foto, nombre y email -->
+            <form id="profileDataForm" class="p-card" data-original-email={user.email} data-google={isGoogle ? 'true' : 'false'}>
+              <div class="card-header">
+                <div class="header-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                </div>
+                <div>
+                  <span class="card-title">Datos personales</span>
+                  <p class="card-desc">Nombre, email y foto de perfil.</p>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label class="field-label" for="profileAvatar">Foto de perfil <span class="label-hint">JPG, PNG o WebP · máx. 2MB</span></label>
+                <input id="profileAvatar" name="avatar" type="file" accept="image/jpeg,image/png,image/webp" />
+                {avatarUrl && (
+                  <button type="button" class="btn-link" id="btnRemoveAvatar">Quitar mi foto</button>
+                )}
+              </div>
+              <div class="form-group">
+                <label class="field-label" for="profileName">Nombre <span class="required">*</span></label>
+                <input id="profileName" name="name" type="text" value={user.name ?? displayName} required maxlength="80" autocomplete="name" />
+              </div>
+              <div class="form-group">
+                <label class="field-label" for="profileEmail">Email</label>
+                <input id="profileEmail" name="email" type="email" value={user.email} maxlength="120" autocomplete="email" readonly={isGoogle} />
+                {isGoogle ? (
+                  <p class="field-note">Tu email lo gestiona Google y no se puede cambiar aquí.</p>
+                ) : (
+                  <p class="field-note">Si lo cambias, te enviaremos un enlace para confirmar el nuevo email.</p>
+                )}
+                {user.pendingEmail && (
+                  <p class="field-note is-pending" id="pendingEmailNote">
+                    Pendiente de confirmar: <strong>{user.pendingEmail}</strong>. Revisa su bandeja de entrada.
+                  </p>
+                )}
+              </div>
+              {!isGoogle && (
+                <div class="form-group" id="emailPasswordGroup" hidden>
+                  <label class="field-label" for="emailCurrentPassword">Contraseña actual <span class="label-hint">para confirmar el cambio de email</span></label>
+                  <input id="emailCurrentPassword" name="currentPassword" type="password" autocomplete="current-password" />
+                </div>
+              )}
+
+              <div class="form-actions">
+                <button type="submit" class="btn-primary" id="btnSaveProfile">Guardar cambios</button>
+              </div>
+            </form>
+
+            <!-- Mis preferencias: categorías de interés para las recomendaciones -->
+            <form id="preferencesForm" class="p-card">
+              <div class="card-header">
+                <div class="header-icon icon-violet">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+                </div>
+                <div>
+                  <span class="card-title">Mis preferencias</span>
+                  <p class="card-desc">Elige las categorías que más te interesan y te recomendaremos productos de ellas.</p>
+                </div>
+              </div>
+
+              {categories.length === 0 ? (
+                <p class="field-note">Todavía no hay categorías disponibles.</p>
+              ) : (
+                <div class="chips" id="prefChips" role="group" aria-label="Categorías que me interesan">
+                  {categories.map((category) => (
+                    <button
+                      type="button"
+                      class:list={['chip', { 'is-on': selected.has(category.slug) }]}
+                      data-slug={category.slug}
+                      aria-pressed={selected.has(category.slug) ? 'true' : 'false'}
+                    >
+                      <span class="chip-icon" aria-hidden="true">{category.icon}</span>
+                      <span class="chip-name">{category.name}</span>
+                      <span class="chip-check" aria-hidden="true">✓</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p class="pref-count" id="prefCount" aria-live="polite">{prefsLabel(selected.size)} seleccionada{selected.size === 1 ? '' : 's'}</p>
+
+              <div class="form-actions">
+                <button type="submit" class="btn-primary" id="btnSavePrefs" disabled={categories.length === 0}>Guardar preferencias</button>
+              </div>
+            </form>
+
+            <!-- Contraseña (las cuentas de Google no tienen) -->
+            {isGoogle ? (
+              <section class="p-card">
+                <div class="card-header">
+                  <div class="header-icon icon-cyan">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                  </div>
+                  <div>
+                    <span class="card-title">Contraseña</span>
+                    <p class="card-desc">Entras con Google, así que no tienes contraseña en Tradylor. Se gestiona en tu cuenta de Google.</p>
+                  </div>
+                </div>
+              </section>
+            ) : (
+              <form id="profilePasswordForm" class="p-card">
+                <div class="card-header">
+                  <div class="header-icon icon-cyan">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                  </div>
+                  <div>
+                    <span class="card-title">Contraseña</span>
+                    <p class="card-desc">Se pide la actual. Al cambiarla se cierran tus demás sesiones.</p>
+                  </div>
+                </div>
+
+                <div class="form-group">
+                  <label class="field-label" for="currentPassword">Contraseña actual <span class="required">*</span></label>
+                  <input id="currentPassword" name="currentPassword" type="password" required autocomplete="current-password" />
+                </div>
+                <div class="form-group">
+                  <label class="field-label" for="newPassword">Nueva contraseña <span class="label-hint">mín. 8 caracteres</span></label>
+                  <input id="newPassword" name="newPassword" type="password" required minlength="8" autocomplete="new-password" />
+                </div>
+                <div class="form-group">
+                  <label class="field-label" for="repeatPassword">Repetir nueva contraseña</label>
+                  <input id="repeatPassword" name="repeatPassword" type="password" required minlength="8" autocomplete="new-password" />
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn-secondary" id="btnSavePassword">Cambiar contraseña</button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  </main>
+</Layout>
+
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const alertBox = document.getElementById('profileAlert');
+
+    function showAlert(type, message, keep) {
+      if (!alertBox) return;
+      alertBox.hidden = false;
+      alertBox.className = 'profile-alert is-' + type;
+      alertBox.textContent = message;
+      alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      window.clearTimeout(showAlert._timer);
+      if (type === 'success' && !keep) {
+        showAlert._timer = window.setTimeout(() => { alertBox.hidden = true; }, 6000);
+      }
+    }
+
+    // Tras iniciar sesión desde la pantalla "Inicia sesión", se muestra el perfil.
+    window.addEventListener('radar:auth-changed', (event) => {
+      if (event.detail && event.detail.user && document.querySelector('.perfil-gate')) window.location.reload();
+    });
+
+    function handleAuth(res) {
+      if (res.status === 401) {
+        showAlert('error', 'Tu sesión ha caducado. Inicia sesión de nuevo.');
+        window.setTimeout(() => window.location.reload(), 1800);
+        return true;
+      }
+      return false;
+    }
+
+    // ---- Datos personales ------------------------------------------------------------
+    const dataForm = document.getElementById('profileDataForm');
+    const avatarInput = document.getElementById('profileAvatar');
+    const emailInput = document.getElementById('profileEmail');
+    const emailPasswordGroup = document.getElementById('emailPasswordGroup');
+    const emailPasswordInput = document.getElementById('emailCurrentPassword');
+    const originalEmail = (dataForm && dataForm.getAttribute('data-original-email') || '').trim().toLowerCase();
+    const isGoogle = dataForm && dataForm.getAttribute('data-google') === 'true';
+
+    // La contraseña actual sólo se pide cuando se cambia el email.
+    function syncEmailPasswordGroup() {
+      if (!emailPasswordGroup || !emailInput) return;
+      const changed = emailInput.value.trim().toLowerCase() !== originalEmail;
+      emailPasswordGroup.hidden = !changed;
+      if (emailPasswordInput) emailPasswordInput.required = changed;
+    }
+    emailInput && emailInput.addEventListener('input', syncEmailPasswordGroup);
+
+    // Vista previa de la foto elegida
+    avatarInput && avatarInput.addEventListener('change', () => {
+      const file = avatarInput.files && avatarInput.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = document.getElementById('profileAvatarImg');
+        if (img && img.tagName === 'IMG') {
+          img.src = String(reader.result);
+        } else if (img) {
+          const replacement = document.createElement('img');
+          replacement.id = 'profileAvatarImg';
+          replacement.className = 'profile-avatar';
+          replacement.alt = 'Foto de perfil';
+          replacement.src = String(reader.result);
+          img.replaceWith(replacement);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    // Quitar la foto
+    document.getElementById('btnRemoveAvatar') && document.getElementById('btnRemoveAvatar').addEventListener('click', async () => {
+      try {
+        const formData = new FormData();
+        formData.append('action', 'delete');
+        const res = await fetch('/api/radar/auth/avatar', { method: 'POST', body: formData });
+        if (handleAuth(res)) return;
+        if (!res.ok) { showAlert('error', 'No se pudo quitar la foto.'); return; }
+        window.location.reload();
+      } catch {
+        showAlert('error', 'Error de conexión con el servidor.');
+      }
+    });
+
+    dataForm && dataForm.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = document.getElementById('btnSaveProfile');
+      if (button) button.disabled = true;
+      try {
+        const file = avatarInput && avatarInput.files && avatarInput.files[0];
+        if (file) {
+          if (file.size > 2 * 1024 * 1024) { showAlert('error', 'La imagen supera el máximo de 2MB.'); return; }
+          const formData = new FormData();
+          formData.append('avatar', file);
+          const avatarRes = await fetch('/api/radar/auth/avatar', { method: 'POST', body: formData });
+          if (handleAuth(avatarRes)) return;
+          const avatarData = await avatarRes.json().catch(() => ({}));
+          if (!avatarRes.ok) { showAlert('error', avatarData.message || 'No se pudo subir la imagen.'); return; }
+        }
+
+        const payload = { name: document.getElementById('profileName').value };
+        const emailChanged = !isGoogle && emailInput && emailInput.value.trim().toLowerCase() !== originalEmail;
+        if (emailChanged) {
+          payload.email = emailInput.value;
+          payload.currentPassword = emailPasswordInput ? emailPasswordInput.value : '';
+        }
+        const res = await fetch('/api/radar/auth/profile', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (handleAuth(res)) return;
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { showAlert('error', data.message || 'No se pudieron guardar los cambios.'); return; }
+
+        if (data.emailChange) {
+          // Se enseña unos segundos el aviso del enlace (y, sólo en local, el enlace para probar).
+          const dev = data.emailChange.devConfirmUrl ? ' [local] ' + data.emailChange.devConfirmUrl : '';
+          showAlert('success', 'Te hemos enviado un enlace a ' + data.emailChange.pendingEmail + '. Tu email cambiará cuando lo confirmes.' + dev, true);
+          window.setTimeout(() => window.location.reload(), data.emailChange.devConfirmUrl ? 600000 : 6000);
+        } else {
+          showAlert('success', 'Perfil actualizado correctamente.');
+          window.setTimeout(() => window.location.reload(), 900);
+        }
+      } catch {
+        showAlert('error', 'Error de conexión con el servidor.');
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+
+    // ---- Mis preferencias (categorías) -----------------------------------------------
+    const chips = document.getElementById('prefChips');
+    const prefCount = document.getElementById('prefCount');
+    const metaPrefs = document.getElementById('metaPrefs');
+
+    function selectedSlugs() {
+      return Array.from(document.querySelectorAll('#prefChips .chip.is-on')).map((chip) => chip.getAttribute('data-slug'));
+    }
+    function countLabel(n) {
+      return n ? n + ' categoría' + (n === 1 ? '' : 's') : 'Sin elegir';
+    }
+    function syncCount() {
+      if (prefCount) {
+        const n = selectedSlugs().length;
+        prefCount.textContent = countLabel(n) + ' seleccionada' + (n === 1 ? '' : 's');
+      }
+    }
+    chips && chips.addEventListener('click', (event) => {
+      const chip = event.target.closest && event.target.closest('.chip');
+      if (!chip) return;
+      const on = !chip.classList.contains('is-on');
+      chip.classList.toggle('is-on', on);
+      chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+      syncCount();
+    });
+
+    document.getElementById('preferencesForm') && document.getElementById('preferencesForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const button = document.getElementById('btnSavePrefs');
+      if (button) button.disabled = true;
+      try {
+        const res = await fetch('/api/radar/preferences', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ categories: selectedSlugs() }),
+        });
+        if (handleAuth(res)) return;
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { showAlert('error', data.message || 'No se pudieron guardar las preferencias.'); return; }
+        if (metaPrefs) metaPrefs.textContent = countLabel((data.categories || []).length);
+        showAlert('success', 'Preferencias guardadas. Las usaremos para recomendarte productos.');
+      } catch {
+        showAlert('error', 'Error de conexión con el servidor.');
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+
+    // ---- Contraseña ------------------------------------------------------------------
+    document.getElementById('profilePasswordForm') && document.getElementById('profilePasswordForm').addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const newPassword = document.getElementById('newPassword').value;
+      const repeat = document.getElementById('repeatPassword').value;
+      if (newPassword !== repeat) {
+        showAlert('error', 'La nueva contraseña y su repetición no coinciden.');
+        return;
+      }
+      const button = document.getElementById('btnSavePassword');
+      if (button) button.disabled = true;
+      try {
+        const res = await fetch('/api/radar/auth/password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword: document.getElementById('currentPassword').value, newPassword }),
+        });
+        if (handleAuth(res)) return;
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { showAlert('error', data.message || 'No se pudo cambiar la contraseña.'); return; }
+        document.getElementById('profilePasswordForm').reset();
+        showAlert('success', 'Contraseña actualizada correctamente.');
+      } catch {
+        showAlert('error', 'Error de conexión con el servidor.');
+      } finally {
+        if (button) button.disabled = false;
+      }
+    });
+  });
+</script>
+
+<style>
+  .perfil-page { padding: 2.5rem 0 5rem; }
+  .perfil-wrap { display: flex; flex-direction: column; gap: 1.75rem; }
+  .perfil-header { display: flex; flex-direction: column; gap: .5rem; padding-bottom: 1.75rem; border-bottom: 1px solid var(--color-border); }
+  .perfil-tag { display: inline-flex; align-items: center; gap: .5rem; padding: .35rem .85rem; background: rgba(59, 130, 246, .1); border: 1px solid rgba(59, 130, 246, .25); border-radius: 9999px; font-size: .75rem; font-weight: 600; color: #60a5fa; width: fit-content; }
+  .perfil-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 10px #10b981; }
+  .perfil-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: .5rem; }
+  .perfil-subtitle { color: var(--color-text-muted); font-size: .95rem; max-width: 760px; line-height: 1.6; }
+
+  .profile-alert { padding: .85rem 1rem; border-radius: var(--border-radius-sm); font-size: .85rem; font-weight: 600; border: 1px solid transparent; overflow-wrap: anywhere; }
+  .profile-alert[hidden] { display: none; }
+  .profile-alert.is-success { color: #6ee7b7; background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }
+  .profile-alert.is-error { color: #fecaca; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); }
+
+  .profile-grid { display: grid; grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
+  @media (max-width: 900px) { .profile-grid { grid-template-columns: 1fr; } }
+
+  .p-card { background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-lg); padding: 2rem; box-shadow: var(--shadow-card); }
+  @media (max-width: 520px) { .p-card { padding: 1.35rem; } }
+  .perfil-gate { max-width: 560px; }
+  .gate-actions { border-top: 0; padding-top: 0; }
+
+  .identity-card { display: flex; flex-direction: column; align-items: center; text-align: center; gap: .35rem; }
+  .profile-avatar-wrap { margin-bottom: .75rem; }
+  .profile-avatar { display: inline-flex; align-items: center; justify-content: center; width: 96px; height: 96px; border-radius: 50%; object-fit: cover; background: linear-gradient(135deg, #3b82f6, #60a5fa); color: #fff; font-size: 2.2rem; font-weight: 800; border: 3px solid rgba(96, 165, 250, .35); }
+  .profile-name { font-family: var(--font-heading); font-size: 1.35rem; font-weight: 800; color: var(--color-text-main); margin: .25rem 0 0; overflow-wrap: anywhere; }
+  .profile-email { color: var(--color-text-dim); font-size: .85rem; overflow-wrap: anywhere; }
+  .profile-badge { display: inline-flex; margin-top: .5rem; padding: .25rem .7rem; border-radius: 999px; font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #93c5fd; background: rgba(59, 130, 246, .12); border: 1px solid rgba(96, 165, 250, .3); }
+  .profile-badge.is-google { color: #fbbf24; background: rgba(245, 158, 11, .1); border-color: rgba(245, 158, 11, .3); }
+
+  .profile-meta { display: flex; flex-direction: column; gap: .65rem; width: 100%; margin: 1.25rem 0 0; padding-top: 1.1rem; border-top: 1px solid var(--color-border); text-align: left; }
+  .profile-meta div { display: flex; justify-content: space-between; gap: .75rem; align-items: baseline; }
+  .profile-meta dt { color: var(--color-text-dim); font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .profile-meta dd { margin: 0; color: var(--color-text-main); font-size: .84rem; text-align: right; overflow-wrap: anywhere; }
+
+  .profile-forms { display: flex; flex-direction: column; gap: 1.5rem; }
+
+  .card-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.75rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255, 255, 255, .05); }
+  .header-icon { width: 42px; height: 42px; border-radius: 12px; background: rgba(59, 130, 246, .15); color: #60a5fa; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .icon-cyan { background: rgba(6, 182, 212, .15); color: #22d3ee; }
+  .icon-violet { background: rgba(167, 139, 250, .15); color: #c4b5fd; }
+  .card-title { font-family: var(--font-heading); font-size: 1.25rem; font-weight: 700; color: var(--color-text-main); }
+  .card-desc { font-size: .85rem; color: var(--color-text-muted); margin-top: .2rem; line-height: 1.5; }
+
+  .form-group { display: flex; flex-direction: column; gap: .4rem; margin-bottom: 1rem; }
+  .form-group[hidden] { display: none; }
+  .field-label { display: flex; justify-content: space-between; align-items: center; gap: .5rem; font-size: .8rem; font-weight: 600; color: var(--color-text-main); }
+  .required { color: #f87171; }
+  .label-hint { font-size: .72rem; font-weight: 400; color: var(--color-text-dim); text-align: right; }
+  .field-note { font-size: .76rem; color: var(--color-text-dim); line-height: 1.5; margin: 0; }
+  .field-note.is-pending { color: #fbbf24; }
+
+  input[type="text"], input[type="email"], input[type="password"], input[type="file"] { width: 100%; box-sizing: border-box; background: #0d121f; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); padding: .75rem 1rem; color: var(--color-text-main); font-family: var(--font-body); font-size: .9rem; transition: all .2s ease; outline: none; }
+  input[readonly] { opacity: .7; cursor: not-allowed; }
+  input[type="file"] { padding: .6rem .75rem; font-size: .8rem; color: var(--color-text-muted); }
+  input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, .2); }
+  input[type="file"]::file-selector-button { margin-right: .75rem; padding: .4rem .8rem; color: var(--color-text-main); background: rgba(255, 255, 255, .06); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .78rem; font-weight: 700; cursor: pointer; }
+
+  .btn-link { align-self: flex-start; padding: 0; background: none; border: 0; color: #fca5a5; font: inherit; font-size: .78rem; font-weight: 600; cursor: pointer; text-decoration: underline; }
+  .btn-link:hover { color: #fecaca; }
+
+  /* Mis preferencias: categorías como etiquetas que se activan con un clic */
+  .chips { display: flex; flex-wrap: wrap; gap: .6rem; }
+  .chip { display: inline-flex; align-items: center; gap: .5rem; padding: .55rem .95rem; background: #0d121f; border: 1px solid var(--color-border); border-radius: 999px; color: var(--color-text-muted); font-family: var(--font-body); font-size: .85rem; font-weight: 600; cursor: pointer; transition: all .18s ease; }
+  .chip:hover { color: var(--color-text-main); border-color: rgba(96, 165, 250, .4); transform: translateY(-1px); }
+  .chip.is-on { color: #ffffff; background: rgba(59, 130, 246, .18); border-color: rgba(96, 165, 250, .6); box-shadow: 0 4px 14px rgba(59, 130, 246, .2); }
+  .chip:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+  .chip-icon { font-size: 1.05rem; line-height: 1; }
+  .chip-check { display: none; font-size: .75rem; color: #93c5fd; }
+  .chip.is-on .chip-check { display: inline; }
+  .pref-count { margin: 1rem 0 0; font-size: .78rem; color: var(--color-text-dim); }
+
+  .form-actions { display: flex; gap: 1rem; margin-top: 1rem; padding-top: 1.25rem; border-top: 1px solid var(--color-border); }
+
+  .btn-primary, .btn-secondary { font-family: var(--font-body); font-weight: 600; border: none; border-radius: var(--border-radius-sm); display: inline-flex; align-items: center; justify-content: center; gap: .5rem; transition: all .2s ease; cursor: pointer; padding: .75rem 1.25rem; }
+  .btn-primary { background: var(--color-primary); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+  .btn-secondary { background: var(--color-surface-subtle); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+  .btn-secondary:hover:not(:disabled) { color: var(--color-text-main); background: #242f45; }
+  .btn-secondary:disabled { opacity: .6; cursor: not-allowed; }
+</style>

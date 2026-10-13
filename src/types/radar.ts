@@ -8,6 +8,12 @@
  * ==============================================================================
  */
 
+/** Preferencias del usuario para las recomendaciones de productos. */
+export interface UserPreferences {
+  /** Slugs de las categorías que más le interesan (categories.json). */
+  categories: string[];
+}
+
 /** Perfil del usuario final (cuenta pública; no confundir con el backend admin). */
 export interface UserProfile {
   id: string;
@@ -19,6 +25,10 @@ export interface UserProfile {
   avatar?: string | null;
   /** Timestamp para cache-busting del avatar. */
   updatedAt?: string;
+  /** Categorías de interés elegidas en "Mis preferencias" (para recomendar productos). */
+  preferences?: UserPreferences;
+  /** Email nuevo pendiente de confirmar por enlace (mientras tanto sigue valiendo el actual). */
+  pendingEmail?: string;
 }
 
 /** Producto guardado en Mi Radar. */
