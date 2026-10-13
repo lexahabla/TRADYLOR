@@ -259,6 +259,11 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         border-color: transparent;
         box-shadow: var(--shadow-glow);
       }
+      /* Icono de usuario: sólo en móvil (el texto se oculta en @media ≤640px) */
+      .header-cta-icon {
+        display: none;
+        flex-shrink: 0;
+      }
 
       /* Acciones de cabecera: auth anónimo vs usuario logueado */
       .header-auth-actions {
@@ -1008,12 +1013,11 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         }
       }
       @media (max-width: 640px) {
-        /* Sólo la cabecera necesita más aire lateral en móvil;
-           el .container global se queda en su padding normal (1.5rem)
-           para que las imágenes de producto no queden estranguladas. */
+        /* Móvil: menos aire lateral para que el logo central quepa más grande
+           sin chocar con los botones de los extremos. */
         .site-header .container {
-          padding-left: 3rem;
-          padding-right: 3rem;
+          padding-left: 1.25rem;
+          padding-right: 1.25rem;
         }
         .header-inner {
           position: relative;
@@ -1021,16 +1025,56 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
         }
         .nav-toggle-btn {
           position: absolute;
-          left: 3rem;
+          left: 1.25rem;
           top: 50%;
           transform: translateY(-50%);
           z-index: 1;
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+        }
+        .nav-toggle-btn svg {
+          width: 22px;
+          height: 22px;
+        }
+        .header-actions {
+          gap: 0.6rem;
+        }
+        /* Login: botón cuadrado con icono de usuario (mismo lenguaje que el
+           resto de iconos de cabecera: tinte azul + radio 12px) */
+        .header-cta-btn {
+          width: 44px;
+          height: 44px;
+          padding: 0;
+          justify-content: center;
+          border-radius: 12px;
+        }
+        .header-cta-icon {
+          display: block;
+        }
+        .header-cta-text {
+          display: none;
+        }
+        .header-user-area {
+          width: 44px;
+          height: 44px;
         }
         .site-header .brand-logo {
           position: absolute;
           left: 50%;
           top: 50%;
           transform: translate(-50%, -50%);
+        }
+        .brand-text {
+          font-size: 1.15rem;
+        }
+        .logo-symbol {
+          width: 34px;
+          height: 34px;
+        }
+        .logo-symbol svg {
+          width: 20px;
+          height: 20px;
         }
       }
       @media (max-width: 600px) {
@@ -1044,20 +1088,20 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
       }
       @media (max-width: 480px) {
         .site-header .container {
-          padding-left: 2rem;
-          padding-right: 2rem;
+          padding-left: 1rem;
+          padding-right: 1rem;
         }
         .brand-text {
-          font-size: 1.05rem;
+          font-size: 1.1rem;
         }
         .header-actions {
-          gap: 0.6rem;
+          gap: 0.55rem;
         }
         .nav-toggle-btn {
-          left: 2rem;
+          left: 1rem;
         }
         .header-cta-btn {
-          padding: 0.5rem 0.85rem;
+          padding: 0;
         }
         .main-nav.is-open {
           padding: 0.5rem 1rem 0.75rem;
@@ -1065,28 +1109,37 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
       }
       @media (max-width: 430px) {
         .brand-text {
-          font-size: 0.95rem;
+          font-size: 1.05rem;
         }
         .logo-symbol {
-          width: 30px;
-          height: 30px;
+          width: 32px;
+          height: 32px;
         }
         .logo-symbol svg {
-          width: 18px;
-          height: 18px;
+          width: 19px;
+          height: 19px;
         }
       }
       @media (max-width: 370px) {
         .brand-text {
-          font-size: 0.85rem;
+          font-size: 0.95rem;
         }
         .logo-symbol {
-          width: 26px;
-          height: 26px;
+          width: 28px;
+          height: 28px;
         }
         .logo-symbol svg {
-          width: 15px;
-          height: 15px;
+          width: 16px;
+          height: 16px;
+        }
+        .nav-toggle-btn,
+        .header-cta-btn,
+        .header-user-area {
+          width: 40px;
+          height: 40px;
+        }
+        .header-actions {
+          gap: 0.4rem;
         }
       }
     </style>
@@ -1161,9 +1214,15 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
                 <span class="header-radar-count" id="radarHeaderCount" hidden>0</span>
               </button>
 
-              <!-- No autenticado: Iniciar sesión -->
+              <!-- No autenticado: Iniciar sesión (texto en escritorio, icono de usuario en móvil) -->
               <div class="header-auth-actions" data-header-anon>
-                <button type="button" class="header-cta-btn" data-open-auth="login">Iniciar sesión</button>
+                <button type="button" class="header-cta-btn" data-open-auth="login" aria-label="Iniciar sesión" title="Iniciar sesión">
+                  <svg class="header-cta-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                  </svg>
+                  <span class="header-cta-text">Iniciar sesión</span>
+                </button>
               </div>
 
               <!-- Autenticado: menú de usuario (avatar) -->
@@ -1616,7 +1675,7 @@ const isBackend = Astro.url.pathname.startsWith('/admin');
             const productUrl = `/producto/${encodeURIComponent(p.id)}`;
 
             return `
-              <article class="aff-product-card">
+              <article class="radar-drawer-item">
                 <a href="${productUrl}" class="radar-drawer-thumb" title="${safeTitle}">
                   ${p.image ? `<img src="${p.image}" alt="${safeTitle}" loading="lazy" />` : `
                     <div class="radar-drawer-no-img">
