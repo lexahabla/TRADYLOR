@@ -3,6 +3,7 @@ export const prerender = false;
 
 import Layout from '../layouts/Layout.astro';
 import AdminNav from '../components/AdminNav.astro';
+import AdminUserMenu from '../components/AdminUserMenu.astro';
 import TrafficSalesDashboard from '../components/admin/TrafficSalesDashboard.astro';
 import fs from 'node:fs';
 import { dataFile } from '../lib/paths';
@@ -72,6 +73,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
+  <Fragment slot="header-end">
+    {isAuthenticated && sessionUser && <AdminUserMenu user={sessionUser} active={initialSection} />}
+  </Fragment>
   {isAuthenticated && sessionUser ? (
   <div class="admin-wrapper">
     <!-- 1. HEADER DEL PANEL -->

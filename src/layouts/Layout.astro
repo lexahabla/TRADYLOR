@@ -1464,6 +1464,9 @@ const resolvedImage = toAbsolute(image);
             </div>
           </>
         )}
+
+        <!-- Backend: las páginas /admin colocan aquí su menú de usuario (alineado a la derecha) -->
+        <slot name="header-end" />
       </div>
     </header>
 

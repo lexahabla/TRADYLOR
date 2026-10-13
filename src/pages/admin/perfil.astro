@@ -3,6 +3,7 @@ export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
 import AdminNav from '../../components/AdminNav.astro';
+import AdminUserMenu from '../../components/AdminUserMenu.astro';
 import { getSessionUser } from '../../lib/adminAuth';
 import { findUserById, toPublicUser } from '../../lib/userStore';
 
@@ -23,6 +24,9 @@ const memberSince = new Date(user.createdAt).toLocaleDateString('es-ES', { day: 
 ---
 
 <Layout title="Mi perfil | Admin Tradylor" description="Gestiona tu foto, tus datos de contacto y tu contraseña en el backend de Tradylor.">
+  <Fragment slot="header-end">
+    <AdminUserMenu user={user} active="perfil" />
+  </Fragment>
   <div class="admin-wrapper" data-user-id={user.id}>
     <header class="admin-header">
       <div class="admin-header-main">

@@ -3,6 +3,7 @@ export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
 import AdminNav from '../../components/AdminNav.astro';
+import AdminUserMenu from '../../components/AdminUserMenu.astro';
 import { getSessionUser } from '../../lib/adminAuth';
 import { listUsers } from '../../lib/userStore';
 
@@ -19,6 +20,9 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { 
 ---
 
 <Layout title="Usuarios | Admin Tradylor" description="Crea y gestiona los usuarios del backend de Tradylor.">
+  <Fragment slot="header-end">
+    <AdminUserMenu user={sessionUser} active="usuarios" />
+  </Fragment>
   <div class="admin-wrapper">
     <header class="admin-header">
       <div class="admin-header-main">
