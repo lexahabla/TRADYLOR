@@ -7,9 +7,11 @@
  *
  * Tono: recomendación de persona a persona, jamás "compra en mi enlace".
  *
- * IDIOMAS: el texto se traduce según el idioma elegido en el panel. Las
- * opciones son el idioma detectado por región (navigator.language) + inglés y
- * chino, que siempre están. La elección se recuerda en LocalStorage.
+ * IDIOMAS: el texto se traduce según el idioma elegido en el panel. El
+ * catalán, euskera y gallego se detectan automáticamente si aparecen en la
+ * lista de idiomas del navegador (aunque no sean el primero), lo que cubre a
+ * usuarios de Catalunya, Euskadi o Galicia con el navegador en castellano.
+ * La elección se recuerda en LocalStorage.
  * ==============================================================================
  */
 
@@ -24,8 +26,8 @@ export type ShareChannel =
   | 'copy'
   | 'native';
 
-/** Idiomas con plantilla propia (detección de región + en + zh obligatorios). */
-export type ShareLangCode = 'es' | 'ca' | 'en' | 'zh' | 'fr' | 'de' | 'pt' | 'it';
+/** Idiomas con plantilla propia. */
+export type ShareLangCode = 'es' | 'ca' | 'eu' | 'gl' | 'en' | 'fr' | 'de' | 'pt' | 'it';
 
 export interface ShareInput {
   productId: string;
@@ -64,8 +66,9 @@ interface LangPack {
 const CHANNEL_LABELS: Record<ShareLangCode, Partial<Record<ShareChannel, string>>> = {
   es: {},
   ca: { copy: "Copia l'enllaç", native: 'Comparteix…' },
+  eu: { copy: 'Kopiatu esteka', native: 'Partekatu…' },
+  gl: { copy: 'Copiar ligazón', native: 'Compartir…' },
   en: { copy: 'Copy link', native: 'Share…' },
-  zh: { copy: '复制链接', native: '分享…' },
   fr: { copy: 'Copier le lien', native: 'Partager…' },
   de: { copy: 'Link kopieren', native: 'Teilen…' },
   pt: { copy: 'Copiar link', native: 'Compartilhar…' },
@@ -119,6 +122,52 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     openFailed: (ch) => `No s'ha pogut obrir ${ch}.`,
     unsupported: 'Canal no compatible.',
   },
+  eu: {
+    label: 'Euskera',
+    panelTitle: 'Produktua partekatu',
+    dm: [
+      'Aurkitu dut hau begiratzen ari nintzela eta, Tradylor.com-en denbora ona eman ondoren, kategoriako kalitate-preziorik onena da argi. Hemen duzu fitxa, azterketa eta prezio-grafikoarekin: {url}',
+    ],
+    threads: [
+      'Norbait {categoria} bilatzen ari bada, Tradylor.com-en ipini dute aukera onena, zehaztapenak eta prezioa konparatu ondoren. Hemen duzu prezio-jarraipen aktiboarekin: {url}',
+    ],
+    visual: [
+      '{categoria}-ren kalitate-preziorik onena, egiaztatutako prezio-historialarekin. Fitxa osoa → {url}',
+      '{categoria}-ko zehaztapen eta prezioak konparatu nituen, eta hau bakarrik geratu zen. Tradylor-en fitxa → {url}',
+      '{categoria}: azterketa, ondo/txarto eta eguneratutako prezio-grafikoa. Hemen dago → {url}',
+    ],
+    copy: 'Kopiatu esteka',
+    native: 'Partekatu…',
+    copiedLink: 'Esteka arakatzailera kopiatu da.',
+    copiedText: (ch) => `Testua kopiatu da. Itsatsi ${ch}-n.`,
+    noClipboard: 'Ezin izan da esteka kopiatu.',
+    nativeFallback: 'Zure arakatzaileak ez du partekatzera baimentzen: testua kopiatu da.',
+    openFailed: (ch) => `Ezin izan da ${ch} ireki.`,
+    unsupported: 'Kanal ez onartua.',
+  },
+  gl: {
+    label: 'Galego',
+    panelTitle: 'Compartir produto',
+    dm: [
+      'Ola, estaba a botarlle unha ollada a isto e, despois de comparar un bo rato en Tradylor.com, é claramente a mellor opción calidade-prezo da categoría. Aquí tes a ficha coa análise e o gráfico de prezos: {url}',
+    ],
+    threads: [
+      'Se alguén busca {categoria}, en Tradylor.com puxérona como a opción top despois de comparar especificacións e prezo. Aquí tedes a ficha co seguimento de prezo activo: {url}',
+    ],
+    visual: [
+      'A mellor opción calidade-prezo en {categoria}, co historial de prezo verificado. Ficha completa → {url}',
+      'Comparei especificacións e prezos de todo o que hai en {categoria} e isto quedou só. Ficha en Tradylor → {url}',
+      '{categoria}: análise, pros/contras e gráfico de prezo ao día. Todo aquí → {url}',
+    ],
+    copy: 'Copiar ligazón',
+    native: 'Compartir…',
+    copiedLink: 'Ligazón copiada ao portapapeis.',
+    copiedText: (ch) => `Texto copiado. Pégalo en ${ch}.`,
+    noClipboard: 'Non se puido copiar a ligazón.',
+    nativeFallback: 'O teu navegador non permite compartir: texto copiado.',
+    openFailed: (ch) => `Non se puido abrir ${ch}.`,
+    unsupported: 'Canal non compatible.',
+  },
   en: {
     label: 'English',
     panelTitle: 'Share product',
@@ -141,29 +190,6 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     nativeFallback: 'Your browser blocks sharing: text copied.',
     openFailed: (ch) => `Couldn't open ${ch}.`,
     unsupported: 'Unsupported channel.',
-  },
-  zh: {
-    label: '中文',
-    panelTitle: '分享产品',
-    dm: [
-      '嘿，我刚才看了这个，在 Tradylor.com 上对比了一圈之后，它显然是这个类别里性价比最高的选择。这是带分析和价格走势的详情页：{url}',
-    ],
-    threads: [
-      '如果有人在找{categoria}，Tradylor.com 对比了配置和价格之后把它列为首选。这是带实时价格追踪的详情页：{url}',
-    ],
-    visual: [
-      '{categoria}里性价比最高的选择，价格历史已验证。完整详情 → {url}',
-      '我把{categoria}的配置和价格都对比了一遍，只有这个胜出。Tradylor 详情页 → {url}',
-      '{categoria}：分析、优缺点和最新价格曲线，全在这里 → {url}',
-    ],
-    copy: '复制链接',
-    native: '分享…',
-    copiedLink: '链接已复制到剪贴板。',
-    copiedText: (ch) => `文字已复制，去${ch}粘贴即可。`,
-    noClipboard: '无法复制链接。',
-    nativeFallback: '你的浏览器不支持分享：文字已复制。',
-    openFailed: (ch) => `无法打开${ch}。`,
-    unsupported: '不支持该渠道。',
   },
   fr: {
     label: 'Français',
@@ -302,6 +328,19 @@ export function detectShareLang(): ShareLangCode {
   } catch {
     /* navegadores raros */
   }
+
+  // Priorizar idiomas colectivos de España (ca, eu, gl): un usuario de
+  // Catalunya/Euskadi/Galicia con el navegador en castellano suele tener
+  // "ca-ES", "eu-ES" o "gl-ES" en navigator.languages aunque no sea el primero.
+  const SPAIN_COLLECTIVE = new Set(['ca', 'eu', 'gl']);
+  for (const raw of candidates) {
+    const code = raw.toLowerCase().split(/[-_]/)[0];
+    if (code && SPAIN_COLLECTIVE.has(code) && code in LANG_PACKS) {
+      return code as ShareLangCode;
+    }
+  }
+
+  // Luego el primer idioma que coincida con alguna plantilla.
   for (const raw of candidates) {
     const code = raw.toLowerCase().split(/[-_]/)[0];
     if (code && code in LANG_PACKS) return code as ShareLangCode;
@@ -311,11 +350,11 @@ export function detectShareLang(): ShareLangCode {
 
 /**
  * Opciones del selector: idioma detectado + español (si no es el detectado) +
- * inglés + chino (siempre), sin duplicados y en ese orden.
+ * inglés (siempre), sin duplicados y en ese orden.
  */
 export function getShareLangOptions(): { code: ShareLangCode; label: string }[] {
   const detected = detectShareLang();
-  const order: ShareLangCode[] = [detected, 'es', 'en', 'zh'];
+  const order: ShareLangCode[] = [detected, 'es', 'en'];
   const seen = new Set<ShareLangCode>();
   const options: { code: ShareLangCode; label: string }[] = [];
   for (const code of order) {
@@ -345,8 +384,9 @@ export function buildShareText(
   const link = url ?? buildShareUrl(input.productId, channel);
   const categoria =
     (input.category ?? '').trim() ||
-    ({ zh: '该产品', ca: 'aquest producte' } as Partial<Record<ShareLangCode, string>>)[lang ??
-      getShareLang()] ||
+    ({ ca: 'aquest producte', eu: 'produktu hau', gl: 'este produto' } as Partial<
+      Record<ShareLangCode, string>
+    >)[lang ?? getShareLang()] ||
     'este producto';
   const pack = LANG_PACKS[lang ?? getShareLang()];
   const group =
@@ -415,7 +455,7 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
   const text = buildShareText(channel, input, link, lang);
   const title =
     input.title ||
-    ({ zh: 'Tradylor 上的一款产品', ca: 'Un producte a Tradylor' } as Partial<
+    ({ ca: 'Un producte a Tradylor', eu: 'Produktu bat Tradylor-en', gl: 'Un produto en Tradylor' } as Partial<
       Record<ShareLangCode, string>
     >)[lang] ||
     'Un producto en Tradylor';
