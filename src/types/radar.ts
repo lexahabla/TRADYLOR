@@ -47,6 +47,12 @@ export interface SavedProduct {
   /** ISO date. */
   dateAdded: string;
   userNote?: string;
+  /**
+   * ISO date de la última vez que se movió a otra lista (arrastrar o "Mover a…").
+   * Con `dateAdded` decide, al sincronizar varios dispositivos, en qué lista queda
+   * el producto: gana el cambio más reciente.
+   */
+  movedAt?: string;
 }
 
 /** Carpeta/lista de proyectos con sus productos. */
@@ -114,6 +120,14 @@ export interface RadarData {
   pendingExits: PendingExit[];
   /** Avisos/recordatorios (opcional para no romper clientes antiguos). */
   reminders?: Reminder[];
+  /**
+   * Bajas de productos: id → epoch ms. La sincronización fusiona por unión y nunca
+   * borraba nada, así que sin esto un producto quitado volvía a aparecer. Un
+   * producto sólo se descarta si la baja es igual o posterior a su último cambio.
+   */
+  removedProducts?: Record<string, number>;
+  /** Bajas de listas: id → epoch ms (los ids de lista son únicos, no se reutilizan). */
+  removedProjects?: Record<string, number>;
 }
 
 /** Respuesta de /api/radar/auth/session. */

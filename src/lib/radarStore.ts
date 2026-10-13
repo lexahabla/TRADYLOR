@@ -67,7 +67,60 @@ export function getRadar(userId: string): RadarData {
     projects: stored.projects.map((p) => ({ ...p, products: Array.isArray(p.products) ? p.products : [] })),
     pendingExits: Array.isArray(stored.pendingExits) ? stored.pendingExits : [],
     reminders: Array.isArray(stored.reminders) ? stored.reminders : [],
+    removedProducts: cleanTombstones(stored.removedProducts, Date.now()),
+    removedProjects: cleanTombstones(stored.removedProjects, Date.now()),
   };
+}
+
+/* ------------------------------------------------- marcas de tiempo y bajas */
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** Las bajas de productos se olvidan a los 180 días (o al pasar de 500). */
+const PRODUCT_TOMBSTONE_TTL_MS = 180 * DAY_MS;
+const PRODUCT_TOMBSTONE_MAX = 500;
+/** Las bajas de listas duran más: los ids de lista no se reutilizan. */
+const PROJECT_TOMBSTONE_TTL_MS = 730 * DAY_MS;
+const PROJECT_TOMBSTONE_MAX = 200;
+
+function toStamp(value: unknown): number {
+  const ms = Date.parse(String(value ?? ''));
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+/** Última vez que se tocó un producto: alta o cambio de lista. Manda en los conflictos. */
+function touchedAt(product: SavedProduct): number {
+  return Math.max(toStamp(product.dateAdded), toStamp(product.movedAt));
+}
+
+/** Normaliza un mapa de bajas {id → epoch ms}; el futuro se recorta a "ahora" (reloj desajustado). */
+function cleanTombstones(input: unknown, now: number): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return out;
+  for (const [rawId, rawAt] of Object.entries(input as Record<string, unknown>)) {
+    const id = String(rawId).slice(0, 200);
+    const at = Math.min(Number(rawAt), now);
+    if (!id || !Number.isFinite(at) || at <= 0) continue;
+    out[id] = Math.max(out[id] ?? 0, Math.floor(at));
+  }
+  return out;
+}
+
+/** Une dos mapas de bajas (gana la más reciente) y descarta las caducadas o sobrantes. */
+function mergeTombstones(
+  a: Record<string, number>,
+  b: Record<string, number>,
+  now: number,
+  ttlMs: number,
+  max: number,
+): Record<string, number> {
+  const merged: Record<string, number> = { ...a };
+  for (const [id, at] of Object.entries(b)) merged[id] = Math.max(merged[id] ?? 0, at);
+  return Object.fromEntries(
+    Object.entries(merged)
+      .filter(([, at]) => now - at <= ttlMs)
+      .sort((x, y) => y[1] - x[1])
+      .slice(0, max),
+  );
 }
 
 /* ------------------------------------------------------------------ merge */
@@ -151,35 +204,120 @@ function mergeReminders(incoming: Reminder[], existing: Reminder[]): Reminder[] 
     .slice(0, 50);
 }
 
+/** Une los campos de las dos copias de un mismo producto (la del cliente manda; la nota se conserva). */
+function mergeProductFields(current: SavedProduct, incoming: SavedProduct): SavedProduct {
+  const incomingNewer = String(incoming.dateAdded) >= String(current.dateAdded);
+  return {
+    ...current,
+    ...incoming,
+    dateAdded: incomingNewer ? incoming.dateAdded : current.dateAdded,
+    userNote: incoming.userNote ?? current.userNote,
+  };
+}
+
 /**
- * Sync LocalStorage → nube (upsert de proyectos y salidas pendientes).
- * Merge por id de producto conservando la fecha más reciente.
+ * Sync LocalStorage → nube. Fusión por unión con marcas de tiempo:
+ *  - Altas: lo que sólo existe en un lado se conserva (otro dispositivo, otra sesión).
+ *  - Mover: si un producto aparece en dos listas, queda en la del cambio más reciente
+ *    (`movedAt` o `dateAdded`); a igualdad gana la copia del cliente que sincroniza.
+ *  - Quitar / eliminar lista: se anota una baja con su fecha. Un producto sólo se
+ *    descarta si la baja es igual o posterior a su último cambio, así que volver a
+ *    guardarlo más tarde lo recupera. Sin esto la unión resucitaba todo lo borrado.
  */
 export function syncRadar(userId: string, incoming: Partial<RadarData>): RadarData {
   const all = readAll();
   const current = all[userId] ?? emptyRadar();
+  const now = Date.now();
 
-  const projects: ProjectFolder[] = [];
-  const seen = new Set<string>();
-  const incomingProjects = Array.isArray(incoming.projects) ? incoming.projects : [];
+  const removedProducts = mergeTombstones(
+    cleanTombstones(incoming.removedProducts, now),
+    cleanTombstones(current.removedProducts, now),
+    now,
+    PRODUCT_TOMBSTONE_TTL_MS,
+    PRODUCT_TOMBSTONE_MAX,
+  );
+  const removedProjects = mergeTombstones(
+    cleanTombstones(incoming.removedProjects, now),
+    cleanTombstones(current.removedProjects, now),
+    now,
+    PROJECT_TOMBSTONE_TTL_MS,
+    PROJECT_TOMBSTONE_MAX,
+  );
+
+  // --- Listas: nombre y descripción del cliente; las que sólo viven en la nube se conservan.
+  const incomingProjects = (Array.isArray(incoming.projects) ? incoming.projects : []).filter(
+    (project) => project && typeof project.id === 'string' && project.id,
+  );
+  const order: string[] = [];
+  const meta = new Map<string, { name: string; description?: string }>();
   for (const project of incomingProjects) {
-    if (!project || typeof project.id !== 'string' || !project.id) continue;
-    seen.add(project.id);
     const existing = current.projects.find((p) => p.id === project.id);
-    projects.push({
-      id: project.id,
+    if (!meta.has(project.id)) order.push(project.id);
+    meta.set(project.id, {
       name: String(project.name ?? existing?.name ?? 'Lista').slice(0, 60),
       description: String(project.description ?? existing?.description ?? '').slice(0, 200) || undefined,
-      products: mergeProducts(Array.isArray(project.products) ? project.products : [], existing?.products ?? []),
     });
   }
-  // Carpetas que sólo existían en la nube se conservan.
   for (const project of current.projects) {
-    if (!seen.has(project.id)) projects.push(project);
+    if (meta.has(project.id)) continue;
+    order.push(project.id);
+    meta.set(project.id, { name: project.name, description: project.description });
   }
-  if (!projects.some((p) => p.id === DEFAULT_PROJECT.id)) {
-    projects.unshift({ ...DEFAULT_PROJECT, products: [] });
+  // Las listas dadas de baja desaparecen (General nunca se borra).
+  const liveIds = order.filter((id) => id === DEFAULT_PROJECT.id || !(id in removedProjects));
+  if (!liveIds.includes(DEFAULT_PROJECT.id)) {
+    liveIds.unshift(DEFAULT_PROJECT.id);
+    meta.set(DEFAULT_PROJECT.id, { name: DEFAULT_PROJECT.name, description: DEFAULT_PROJECT.description });
   }
+  const live = new Set(liveIds);
+  /** Un producto en una lista que ya no existe pasa a General. */
+  const folderOf = (id: string): string => (live.has(id) ? id : DEFAULT_PROJECT.id);
+
+  // --- Productos: la copia más reciente de cada lado, y entre ambos lados la del último cambio.
+  type Entry = { folderId: string; product: SavedProduct; touched: number };
+  const bestByProduct = (projects: ProjectFolder[]): Map<string, Entry> => {
+    const best = new Map<string, Entry>();
+    for (const project of projects) {
+      for (const product of Array.isArray(project.products) ? project.products : []) {
+        if (!product || typeof product.id !== 'string' || !product.id) continue;
+        const entry: Entry = { folderId: folderOf(project.id), product, touched: touchedAt(product) };
+        const previous = best.get(product.id);
+        if (!previous || entry.touched > previous.touched) best.set(product.id, entry);
+      }
+    }
+    return best;
+  };
+  const fromClient = bestByProduct(incomingProjects);
+  const fromCloud = bestByProduct(current.projects);
+
+  const placed = new Map<string, SavedProduct[]>(liveIds.map((id) => [id, []]));
+  for (const id of new Set([...fromClient.keys(), ...fromCloud.keys()])) {
+    const client = fromClient.get(id);
+    const cloud = fromCloud.get(id);
+    let folderId: string;
+    let product: SavedProduct;
+    if (client && cloud) {
+      const winner = client.touched >= cloud.touched ? client : cloud;
+      product = mergeProductFields(cloud.product, client.product);
+      if (winner.product.movedAt) product.movedAt = winner.product.movedAt;
+      else delete product.movedAt;
+      folderId = winner.folderId;
+    } else {
+      const only = (client ?? cloud) as Entry;
+      product = only.product;
+      folderId = only.folderId;
+    }
+    const removedAt = removedProducts[id];
+    if (removedAt !== undefined && removedAt >= touchedAt(product)) continue;
+    placed.get(folderId)?.push(product);
+  }
+
+  const projects: ProjectFolder[] = liveIds.map((id) => ({
+    id,
+    name: meta.get(id)?.name ?? 'Lista',
+    description: meta.get(id)?.description,
+    products: (placed.get(id) ?? []).sort((a, b) => String(b.dateAdded).localeCompare(String(a.dateAdded))),
+  }));
 
   const exitsById = new Map<string, PendingExit>();
   for (const exit of current.pendingExits) exitsById.set(exit.productId, exit);
@@ -209,6 +347,8 @@ export function syncRadar(userId: string, incoming: Partial<RadarData>): RadarDa
     projects,
     pendingExits: [...exitsById.values()].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50),
     reminders,
+    removedProducts,
+    removedProjects,
   };
   all[userId] = merged;
   writeAll(all);
@@ -240,9 +380,22 @@ export function addProduct(userId: string, product: SavedProduct, projectId = DE
 export function removeProduct(userId: string, productId: string): RadarData {
   const all = readAll();
   const radar = all[userId] ?? emptyRadar();
+  const now = Date.now();
+  // La baja debe ser igual o posterior al último cambio del producto para que la sync la respete.
+  const touched = Math.max(
+    0,
+    ...radar.projects.flatMap((project) => project.products.filter((p) => p.id === productId).map(touchedAt)),
+  );
   for (const project of radar.projects) {
     project.products = project.products.filter((p) => p.id !== productId);
   }
+  radar.removedProducts = mergeTombstones(
+    cleanTombstones(radar.removedProducts, now),
+    { [productId.slice(0, 200)]: Math.min(Math.max(now, touched + 1), now + DAY_MS) },
+    now,
+    PRODUCT_TOMBSTONE_TTL_MS,
+    PRODUCT_TOMBSTONE_MAX,
+  );
   all[userId] = radar;
   writeAll(all);
   return radar;
@@ -272,11 +425,23 @@ export function deleteProject(userId: string, projectId: string): RadarData {
   if (projectId === DEFAULT_PROJECT.id) return radar; // General no se borra
   const removed = radar.projects.find((p) => p.id === projectId);
   radar.projects = radar.projects.filter((p) => p.id !== projectId);
-  // Los productos huérfanos vuelven a General.
+  // Los productos huérfanos vuelven a General (con la fecha del cambio, para que la sync lo respete).
   const general = radar.projects.find((p) => p.id === DEFAULT_PROJECT.id);
   if (removed && general) {
-    general.products = mergeProducts(removed.products, general.products);
+    const movedAt = new Date().toISOString();
+    general.products = mergeProducts(
+      removed.products.map((product) => ({ ...product, movedAt })),
+      general.products,
+    );
   }
+  const now = Date.now();
+  radar.removedProjects = mergeTombstones(
+    cleanTombstones(radar.removedProjects, now),
+    { [projectId.slice(0, 200)]: now },
+    now,
+    PROJECT_TOMBSTONE_TTL_MS,
+    PROJECT_TOMBSTONE_MAX,
+  );
   all[userId] = radar;
   writeAll(all);
   return radar;

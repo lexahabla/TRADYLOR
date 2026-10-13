@@ -2,8 +2,8 @@
  * ==============================================================================
  * TRADYLOR — COMPARTIR DESDE MI RADAR (marketing indirecto)
  * ==============================================================================
- * Plantillas de texto + envío a cada red. Todo lo que sale de aquí apunta al
- * enlace corto /p/<id> con UTM para medir el tráfico social indirecto.
+ * Plantillas de texto + envío a cada red. Todo lo que sale de aquí apunta a la
+ * ficha individual del producto: https://tradylor.com/producto/<slug>.
  *
  * Tono: recomendación de persona a persona, jamás "compra en mi enlace".
  *
@@ -76,15 +76,15 @@ interface LangPack {
 
 /** Etiquetas de canal traducidas (las marcas se quedan igual). */
 const CHANNEL_LABELS: Record<ShareLangCode, Partial<Record<ShareChannel, string>>> = {
-  es: {},
-  ca: { copy: "Copia l'enllaç", native: 'Comparteix…' },
-  eu: { copy: 'Kopiatu esteka', native: 'Partekatu…' },
-  gl: { copy: 'Copiar ligazón', native: 'Compartir…' },
-  en: { copy: 'Copy link', native: 'Share…' },
-  fr: { copy: 'Copier le lien', native: 'Partager…' },
-  de: { copy: 'Link kopieren', native: 'Teilen…' },
-  pt: { copy: 'Copiar link', native: 'Compartilhar…' },
-  it: { copy: 'Copia link', native: 'Condividi…' },
+  es: { email: 'A mi correo' },
+  ca: { copy: "Copia l'enllaç", native: 'Comparteix…', email: 'Al meu correu' },
+  eu: { copy: 'Kopiatu esteka', native: 'Partekatu…', email: 'Nire postara' },
+  gl: { copy: 'Copiar ligazón', native: 'Compartir…', email: 'Ao meu correo' },
+  en: { copy: 'Copy link', native: 'Share…', email: 'To my email' },
+  fr: { copy: 'Copier le lien', native: 'Partager…', email: 'À mon e-mail' },
+  de: { copy: 'Link kopieren', native: 'Teilen…', email: 'An meine E-Mail' },
+  pt: { copy: 'Copiar link', native: 'Compartilhar…', email: 'Para o meu email' },
+  it: { copy: 'Copia link', native: 'Condividi…', email: 'Alla mia email' },
 };
 
 const LANG_PACKS: Record<ShareLangCode, LangPack> = {
@@ -315,7 +315,7 @@ const BASE_LABELS: Record<ShareChannel, string> = {
   facebook: 'Facebook',
   reddit: 'Reddit',
   pinterest: 'Pinterest',
-  email: 'Email',
+  email: 'A mi correo',
   copy: 'Copiar enlace',
   native: 'Compartir…',
 };
@@ -655,11 +655,11 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
         : { ok: false, mode: 'opened', message: pack.openFailed(name) };
 
     case 'email': {
-      // Email: abrimos la tarjeta del producto (/share/<id>: mensaje + título +
-      // imagen + botón a la ficha) EN LA MISMA PESTAÑA (sin target=_blank): ahí el
-      // usuario elige su cliente de correo y la tarjeta se copia para pegarla.
-      // El lang va como query param porque la página es SSR y no puede leer
-      // localStorage en el servidor.
+      // "A mi correo": abrimos la tarjeta del producto (/share/<id>: mensaje + título +
+      // imagen + botón a la ficha) EN LA MISMA PESTAÑA (sin target=_blank). Allí un solo
+      // botón envía la tarjeta al correo de la cuenta del usuario, y desde su bandeja la
+      // reenvía a quien quiera. El lang va como query param porque la página es SSR y no
+      // puede leer localStorage en el servidor.
       try {
         window.location.assign(`/share/${encodeURIComponent(input.productId)}?lang=${lang}`);
         return { ok: true, mode: 'opened' };
@@ -672,7 +672,8 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
     }
 
     case 'copy': {
-      const copied = await copyText(text);
+      // Sólo el enlace a la ficha del producto (https://tradylor.com/producto/<slug>), sin texto.
+      const copied = await copyText(link);
       return copied
         ? { ok: true, mode: 'copied', message: pack.copiedLink }
         : { ok: false, mode: 'copied', message: pack.noClipboard };
@@ -701,22 +702,19 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
   }
 }
 
-/** Enlace corto con UTM para el canal indicado. */
-export function buildShareUrl(productId: string, channel: ShareChannel): string {
-  const id = encodeURIComponent(String(productId ?? '').trim());
-  const campaign = channel === 'copy' || channel === 'native' ? 'indirect_link' : `indirect_${channel}`;
-  return `${ORIGIN}/p/${id}?utm_source=mi_radar&utm_medium=share&utm_campaign=${encodeURIComponent(campaign)}`;
+/**
+ * URL de la ficha individual del producto en tradylor.com: https://tradylor.com/producto/<slug>.
+ * Es el enlace que llevan todos los canales de compartir (copiar enlace, WhatsApp, la tarjeta
+ * del correo…): directo a la ficha, sin el salto por /p/<id> y sin parámetros UTM (nada en la
+ * web los lee). `productKey` es la clave de ruta canónica del producto (slug, o id si no hay).
+ */
+export function buildProductPageUrl(productKey: string): string {
+  return `${ORIGIN}/producto/${encodeURIComponent(String(productKey ?? '').trim())}`;
 }
 
-/**
- * URL directa de la ficha del producto en tradylor.com, con las mismas UTM que el
- * enlace corto (sin el salto por /p/<id>). La usa el botón de la tarjeta del email.
- * `productKey` es la clave de ruta canónica del producto (slug o id).
- */
-export function buildProductUrl(productKey: string, channel: ShareChannel): string {
-  const key = encodeURIComponent(String(productKey ?? '').trim());
-  const campaign = channel === 'copy' || channel === 'native' ? 'indirect_link' : `indirect_${channel}`;
-  return `${ORIGIN}/producto/${key}?utm_source=mi_radar&utm_medium=share&utm_campaign=${encodeURIComponent(campaign)}`;
+/** Enlace que se comparte en el canal indicado: siempre la ficha del producto (el canal ya no cambia la URL). */
+export function buildShareUrl(productId: string, _channel?: ShareChannel): string {
+  return buildProductPageUrl(productId);
 }
 
 /** Etiqueta de canal en español (compat con la UI existente). */

@@ -69,6 +69,7 @@ if (!sessionUser) {
         <div class="radar-tabs" role="tablist" aria-label="Listas de Mi Radar" data-radar-tabs></div>
         <button type="button" class="radar-btn radar-btn-ghost radar-new-list-btn" data-radar-new-project>+ Nueva lista</button>
       </div>
+      <p class="radar-dnd-hint" data-radar-dnd-hint hidden></p>
       <div class="radar-project-summary" data-radar-summary>
         <span data-radar-summary-count>0 productos</span>
         <strong data-radar-summary-total>0,00 €</strong>
@@ -145,7 +146,7 @@ if (!sessionUser) {
   </div>
 
   <!-- Toast de confirmación (avisos / compartir) -->
-  <div class="radar-toast" data-radar-toast hidden></div>
+  <div class="radar-toast" data-radar-toast role="status" aria-live="polite" hidden></div>
 </Layout>
 
 <style>
@@ -926,6 +927,171 @@ if (!sessionUser) {
     background: rgba(251, 191, 36, 0.2);
   }
 
+  /* ================================================================
+     ARRASTRAR Y SOLTAR: productos sobre las listas para clasificarlos
+     ================================================================ */
+  .radar-dnd-hint {
+    margin: 0 0 0.6rem;
+    font-size: 0.74rem;
+    line-height: 1.45;
+    color: var(--color-text-dim);
+  }
+
+  .radar-dnd-hint[hidden] {
+    display: none;
+  }
+
+  /* Las tarjetas se pueden coger (sólo si hay otra lista donde soltarlas) */
+  :global(.radar-card) {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  :global(.radar-grid.can-drag .radar-card) {
+    cursor: grab;
+  }
+
+  :global(.radar-card.is-dragging) {
+    opacity: 0.35;
+    transform: scale(0.97) !important;
+    border-style: dashed;
+    border-color: rgba(96, 165, 250, 0.6);
+    box-shadow: none !important;
+  }
+
+  :global(body.radar-is-dragging),
+  :global(body.radar-is-dragging *) {
+    cursor: grabbing !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+  }
+
+  /* Tarjetita que sigue al puntero */
+  :global(.radar-drag-ghost) {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: min(230px, 70vw);
+    padding: 0.4rem 0.65rem 0.4rem 0.4rem;
+    background: rgba(13, 20, 34, 0.96);
+    border: 1px solid rgba(96, 165, 250, 0.7);
+    border-radius: 12px;
+    box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55), 0 0 0 3px rgba(59, 130, 246, 0.18);
+    pointer-events: none;
+    will-change: transform;
+  }
+
+  :global(.radar-drag-ghost img) {
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    padding: 3px;
+    object-fit: contain;
+    background: #f8fafc;
+    border-radius: 8px;
+  }
+
+  :global(.radar-drag-ghost span) {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-size: 0.74rem;
+    font-weight: 700;
+    line-height: 1.3;
+    color: #f3f4f6;
+  }
+
+  /* Listas como destino: se marcan al coger un producto y se iluminan al pasar por encima */
+  .radar-tabs.is-drop-mode :global(.radar-tab) {
+    border-style: dashed;
+    border-color: rgba(96, 165, 250, 0.55);
+  }
+
+  :global(.radar-tab.is-drop-over) {
+    color: #07111f;
+    background: #93c5fd;
+    border-color: #bfdbfe;
+    transform: scale(1.06);
+    box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.28), 0 8px 22px rgba(59, 130, 246, 0.45);
+  }
+
+  :global(.radar-tab.is-drop-current) {
+    opacity: 0.55;
+  }
+
+  :global(.radar-tab.is-dropped) {
+    animation: radarDropFlash 0.9s ease;
+  }
+
+  @keyframes radarDropFlash {
+    0% {
+      box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7);
+    }
+    40% {
+      color: #04210f;
+      background: #34d399;
+      box-shadow: 0 0 0 8px rgba(52, 211, 153, 0.35);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(52, 211, 153, 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :global(.radar-tab.is-dropped) {
+      animation: none;
+    }
+  }
+
+  /* "Mover a…": alternativa sin arrastrar (teclado, lector de pantalla, móvil).
+     Un <select> nativo transparente encima del icono: al pulsarlo se abre la lista. */
+  :global(.radar-card-move) {
+    position: absolute;
+    right: 0.4rem;
+    bottom: 0.4rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 23px;
+    height: 23px;
+    color: #93c5fd;
+    background: rgba(10, 14, 23, 0.78);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 7px;
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+
+  :global(.radar-card-move:hover),
+  :global(.radar-card-move:focus-within) {
+    color: #ffffff;
+    background: rgba(37, 99, 235, 0.9);
+  }
+
+  :global(.radar-card-move:focus-within) {
+    outline: 2px solid #60a5fa;
+    outline-offset: 2px;
+  }
+
+  :global(.radar-card-move select) {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    font-size: 16px;
+    color-scheme: dark;
+    opacity: 0;
+    cursor: pointer;
+  }
+
   /* Responsive */
   @media (max-width: 720px) {
     .radar-header {
@@ -992,6 +1158,7 @@ if (!sessionUser) {
     getRadarProducts,
     getScheduledReminder,
     loadRadar,
+    moveProduct,
     onRadarChange,
     removeProduct,
     resolveExit,
@@ -1013,6 +1180,7 @@ if (!sessionUser) {
     returnSection: $('[data-radar-return]'),
     exitCards: $('[data-radar-exit-cards]'),
     tabs: $('[data-radar-tabs]'),
+    dndHint: $('[data-radar-dnd-hint]'),
     newProject: $('[data-radar-new-project]'),
     summaryCount: $('[data-radar-summary-count]'),
     summaryTotal: $('[data-radar-summary-total]'),
@@ -1032,6 +1200,8 @@ if (!sessionUser) {
   const euro = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
 
   let activeProjectId = getProjects()[0]?.id ?? 'general';
+  /** Lista que acaba de recibir un producto (se ilumina un instante en verde). */
+  let flashProjectId: string | null = null;
 
   const escapeHtml = (text: string): string =>
     text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1083,10 +1253,14 @@ if (!sessionUser) {
     if (!projects.some((p) => p.id === activeProjectId)) {
       activeProjectId = projects[0]?.id ?? 'general';
     }
+    // Se repinta con cada cambio (también con la respuesta de la sincronización): que el
+    // teclado no pierda el foco si estaba en una lista.
+    const focusedTab = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-project-tab]');
+    const focusedId = focusedTab && els.tabs.contains(focusedTab) ? focusedTab.dataset.projectTab : null;
     els.tabs.innerHTML = projects
       .map(
         (project) => `
-        <button type="button" class="radar-tab${project.id === activeProjectId ? ' is-active' : ''}" role="tab"
+        <button type="button" class="radar-tab${project.id === activeProjectId ? ' is-active' : ''}${project.id === flashProjectId ? ' is-dropped' : ''}" role="tab"
           aria-selected="${project.id === activeProjectId}" data-project-tab="${escapeHtml(project.id)}">
           ${escapeHtml(project.name)}
           <span class="radar-tab-count">${project.products.length}</span>
@@ -1094,6 +1268,11 @@ if (!sessionUser) {
         </button>`,
       )
       .join('');
+    if (focusedId) {
+      Array.from(els.tabs.querySelectorAll<HTMLElement>('[data-project-tab]'))
+        .find((tab) => tab.dataset.projectTab === focusedId)
+        ?.focus({ preventScroll: true });
+    }
   }
 
   function renderSummary(projects: ProjectFolder[]): void {
@@ -1110,23 +1289,40 @@ if (!sessionUser) {
     const products = active?.products ?? [];
     els.empty.hidden = products.length > 0;
     els.grid.hidden = products.length === 0;
+    // Con otra lista a la vista, las tarjetas se pueden arrastrar y tienen el selector "Mover a…".
+    const canMove = projects.length > 1;
+    els.grid.classList.toggle('can-drag', canMove);
+    const moveOptions = projects
+      .map(
+        (project) =>
+          `<option value="${escapeHtml(project.id)}"${project.id === active?.id ? ' selected' : ''}>${escapeHtml(project.name)}</option>`,
+      )
+      .join('');
     els.grid.innerHTML = products
       .map(
         (product: SavedProduct) => `
-        <article class="radar-card">
+        <article class="radar-card" data-product-id="${escapeHtml(product.id)}">
           <div class="radar-card-media">
-            <a class="radar-card-image-link" href="/producto/${encodeURIComponent(product.id)}" title="Ver ficha de ${escapeHtml(product.title)}" aria-label="Ver ficha de ${escapeHtml(product.title)}">
-              <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.title)}" loading="lazy" />
+            <a class="radar-card-image-link" draggable="false" href="/producto/${encodeURIComponent(product.id)}" title="Ver ficha de ${escapeHtml(product.title)}" aria-label="Ver ficha de ${escapeHtml(product.title)}">
+              <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.title)}" loading="lazy" draggable="false" />
             </a>
             <span class="radar-card-store${product.store === 'aliexpress' ? ' is-aliexpress' : ''}">${escapeHtml(product.store)}</span>
             <button type="button" class="radar-card-remove" data-remove-id="${escapeHtml(product.id)}" aria-label="Quitar de Mi Radar" title="Quitar de Mi Radar">×</button>
             <button type="button" class="radar-card-note-dot${product.userNote ? ' has-note' : ''}" data-note-edit="${escapeHtml(product.id)}" aria-label="${product.userNote ? 'Editar nota' : 'Añadir nota'}" title="${product.userNote ? 'Editar nota' : 'Añadir nota'}">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path></svg>
             </button>
+            ${
+              canMove
+                ? `<label class="radar-card-move" title="Mover a otra lista">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><path d="M12 11v5"></path><path d="m9.5 13.5 2.5-2.5 2.5 2.5"></path></svg>
+              <select data-move-product="${escapeHtml(product.id)}" aria-label="Mover ${escapeHtml(product.title)} a otra lista">${moveOptions}</select>
+            </label>`
+                : ''
+            }
           </div>
           <div class="radar-card-body">
             <h3 class="radar-card-title">
-              <a href="/producto/${encodeURIComponent(product.id)}" title="Ver ficha de ${escapeHtml(product.title)}">${escapeHtml(product.title)}</a>
+              <a href="/producto/${encodeURIComponent(product.id)}" draggable="false" title="Ver ficha de ${escapeHtml(product.title)}">${escapeHtml(product.title)}</a>
             </h3>
             <span class="radar-card-price">${escapeHtml(product.price)}</span>
             <div class="radar-card-actions">
@@ -1136,7 +1332,7 @@ if (!sessionUser) {
                 <span>Compartir</span>
               </button>
             </div>
-            <a class="radar-card-buy" href="${escapeHtml(product.buyUrl || '#')}" target="_blank" rel="nofollow sponsored noopener noreferrer">
+            <a class="radar-card-buy" draggable="false" href="${escapeHtml(product.buyUrl || '#')}" target="_blank" rel="nofollow sponsored noopener noreferrer">
               Retomar compra
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline></svg>
             </a>
@@ -1167,11 +1363,23 @@ if (!sessionUser) {
       .join('');
   }
 
+  /** Pista bajo las listas: cómo clasificar (arrastrar con ratón o mantener pulsado en el móvil). */
+  function renderDndHint(projects: ProjectFolder[]): void {
+    if (!els.dndHint) return;
+    const total = projects.reduce((sum, project) => sum + project.products.length, 0);
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    els.dndHint.hidden = !(projects.length > 1 && total > 0);
+    els.dndHint.textContent = coarse
+      ? 'Mantén pulsado un producto y arrástralo a una lista para clasificarlo, o usa el botón de carpeta de la foto.'
+      : 'Arrastra un producto sobre una lista para clasificarlo, o usa el botón de carpeta de la foto.';
+  }
+
   function renderAll(): void {
     const projects = getProjects();
     renderTabs(projects);
     renderSummary(projects);
     renderGrid(projects);
+    renderDndHint(projects);
     renderExits();
   }
 
@@ -1398,6 +1606,313 @@ if (!sessionUser) {
     const removeBtn = target.closest<HTMLElement>('[data-remove-id]');
     if (removeBtn) {
       removeProduct(removeBtn.dataset.removeId ?? '');
+      renderAll();
+    }
+  });
+
+  /* --------------------------------------- arrastrar y soltar sobre las listas */
+
+  const DRAG_START_PX = 6; // ratón: píxeles que hay que mover antes de coger la tarjeta
+  const LONG_PRESS_MS = 350; // táctil y lápiz: pulsación larga para cogerla (así el scroll sigue funcionando)
+  const LONG_PRESS_SLOP_PX = 10; // táctil: lo que puede moverse el dedo mientras se espera
+  const EDGE_SCROLL_PX = 70; // cerca del borde de la pantalla la página se desplaza sola
+  const PAGE_SCROLL_PX_PER_SEC = 1080; // velocidad máxima del auto-scroll (pegado al borde)
+  const BAR_SCROLL_PX_PER_SEC = 600; // y la de la barra de listas
+
+  interface DragState {
+    productId: string;
+    title: string;
+    image: string;
+    pointerId: number;
+    pointerType: string;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+    active: boolean;
+    card: HTMLElement;
+    ghost: HTMLElement | null;
+    overProject: string | null;
+    timer: number | null;
+    raf: number;
+    /** Instante del último fotograma del auto-scroll (la velocidad no depende de los fps). */
+    lastTick: number;
+  }
+
+  let drag: DragState | null = null;
+  /** Tras arrastrar, el clic que dispara el navegador al soltar se ignora. */
+  let suppressClickUntil = 0;
+
+  const shortTitle = (title: string): string => (title.length > 38 ? `${title.slice(0, 37)}…` : title);
+
+  /** Lista en la que está ahora el producto. */
+  const currentProjectOf = (productId: string): string | null =>
+    getProjects().find((project) => project.products.some((p) => p.id === productId))?.id ?? null;
+
+  /** Marca las listas: la que hay bajo el puntero se ilumina y la actual del producto se atenúa. */
+  function markTabs(): void {
+    if (!els.tabs || !drag) return;
+    const current = currentProjectOf(drag.productId);
+    const active = drag.active;
+    const over = drag.overProject;
+    els.tabs.querySelectorAll<HTMLElement>('[data-project-tab]').forEach((tab) => {
+      const id = tab.dataset.projectTab ?? '';
+      tab.classList.toggle('is-drop-over', active && id === over && id !== current);
+      tab.classList.toggle('is-drop-current', active && id === current);
+    });
+  }
+
+  function updateDrag(): void {
+    if (!drag || !drag.active) return;
+    if (drag.ghost) {
+      // La tarjeta fantasma sigue al puntero sin salirse de la pantalla.
+      const x = Math.min(drag.x + 14, window.innerWidth - drag.ghost.offsetWidth - 8);
+      drag.ghost.style.transform = `translate3d(${Math.max(8, Math.round(x))}px, ${Math.round(drag.y + 14)}px, 0)`;
+    }
+    const under = document.elementFromPoint(drag.x, drag.y);
+    drag.overProject = under?.closest<HTMLElement>('[data-project-tab]')?.dataset.projectTab ?? null;
+    markTabs();
+  }
+
+  /**
+   * Auto-scroll: cerca del borde de la pantalla, o de los extremos de la barra de listas.
+   * La distancia recorrida depende del tiempo transcurrido, no del número de fotogramas:
+   * en un móvil lento (pocos fps) la velocidad es la misma.
+   */
+  function autoScroll(now: number): void {
+    if (!drag || !drag.active) return;
+    const dt = Math.min(64, drag.lastTick ? now - drag.lastTick : 16);
+    drag.lastTick = now;
+    // 0 en el límite de la zona y 1 pegado al borde.
+    const nearTop = Math.max(0, Math.min(1, (EDGE_SCROLL_PX - drag.y) / EDGE_SCROLL_PX));
+    const nearBottom = Math.max(0, Math.min(1, (drag.y - (window.innerHeight - EDGE_SCROLL_PX)) / EDGE_SCROLL_PX));
+    const dy = Math.round((nearBottom - nearTop) * PAGE_SCROLL_PX_PER_SEC * (dt / 1000));
+    let moved = false;
+    if (dy !== 0) {
+      const before = window.scrollY;
+      // La web usa scroll-behavior: smooth; con "instant" cada paso es inmediato (si no, cada
+      // llamada reiniciaría la animación y la página apenas avanzaría).
+      window.scrollBy({ top: dy, behavior: 'instant' });
+      moved = window.scrollY !== before;
+    }
+    const bar = els.tabs;
+    if (bar) {
+      const rect = bar.getBoundingClientRect();
+      if (drag.y >= rect.top - 12 && drag.y <= rect.bottom + 12) {
+        const step = Math.max(1, Math.round(BAR_SCROLL_PX_PER_SEC * (dt / 1000)));
+        const before = bar.scrollLeft;
+        if (drag.x < rect.left + 44) bar.scrollLeft -= step;
+        else if (drag.x > rect.right - 44) bar.scrollLeft += step;
+        moved = moved || bar.scrollLeft !== before;
+      }
+    }
+    if (moved) updateDrag();
+    drag.raf = requestAnimationFrame(autoScroll);
+  }
+
+  function beginDrag(): void {
+    if (!drag || drag.active) return;
+    if (drag.timer !== null) {
+      window.clearTimeout(drag.timer);
+      drag.timer = null;
+    }
+    drag.active = true;
+    const ghost = document.createElement('div');
+    ghost.className = 'radar-drag-ghost';
+    ghost.setAttribute('aria-hidden', 'true');
+    const image = document.createElement('img');
+    image.src = drag.image;
+    image.alt = '';
+    image.draggable = false;
+    const label = document.createElement('span');
+    label.textContent = drag.title;
+    ghost.append(image, label);
+    document.body.append(ghost);
+    drag.ghost = ghost;
+    drag.card.classList.add('is-dragging');
+    document.body.classList.add('radar-is-dragging');
+    els.tabs?.classList.add('is-drop-mode');
+    window.getSelection()?.removeAllRanges();
+    // Vibración al coger la tarjeta (sólo si el navegador ya permite vibrar: exige una interacción previa).
+    if (drag.pointerType !== 'mouse' && navigator.userActivation?.hasBeenActive) navigator.vibrate?.(12);
+    drag.raf = requestAnimationFrame(autoScroll);
+    updateDrag();
+  }
+
+  /**
+   * Con la tarjeta cogida en táctil, el dedo no debe desplazar la página. Este escuchador no pasivo
+   * sólo existe mientras hay una tarjeta pulsada: dejarlo siempre puesto frenaría el scroll de toda la página.
+   */
+  function blockTouchScroll(event: TouchEvent): void {
+    if (drag?.active && event.cancelable) event.preventDefault();
+  }
+
+  /** Limpia todo el estado del arrastre (se haya soltado, cancelado o interrumpido). */
+  function endDrag(): void {
+    if (!drag) return;
+    const state = drag;
+    document.removeEventListener('pointermove', onPointerMove);
+    document.removeEventListener('pointerup', onPointerUp);
+    document.removeEventListener('pointercancel', onPointerCancel);
+    document.removeEventListener('touchmove', blockTouchScroll);
+    if (state.timer !== null) window.clearTimeout(state.timer);
+    cancelAnimationFrame(state.raf);
+    state.ghost?.remove();
+    state.card.classList.remove('is-dragging');
+    document.body.classList.remove('radar-is-dragging');
+    els.tabs?.classList.remove('is-drop-mode');
+    els.tabs?.querySelectorAll('.is-drop-over, .is-drop-current').forEach((tab) => {
+      tab.classList.remove('is-drop-over', 'is-drop-current');
+    });
+    drag = null;
+  }
+
+  /** Mueve el producto a la lista (soltado o selector). Devuelve true si se movió. */
+  function dropOn(productId: string, title: string, projectId: string): boolean {
+    const target = getProjects().find((project) => project.id === projectId);
+    const from = currentProjectOf(productId);
+    if (!target || !from) return false;
+    if (from === target.id) {
+      showToast(`«${shortTitle(title)}» ya está en ${target.name}.`);
+      return false;
+    }
+    flashProjectId = target.id;
+    if (!moveProduct(productId, target.id)) {
+      flashProjectId = null;
+      return false;
+    }
+    showToast(`«${shortTitle(title)}» → ${target.name}`);
+    window.setTimeout(() => {
+      if (flashProjectId === target.id) {
+        flashProjectId = null;
+        renderTabs(getProjects());
+      }
+    }, 1000);
+    return true;
+  }
+
+  function onPointerMove(event: PointerEvent): void {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    if (!drag.active) {
+      const moved = Math.hypot(drag.x - drag.startX, drag.y - drag.startY);
+      if (drag.pointerType === 'mouse') {
+        if (event.buttons === 0) {
+          endDrag(); // el botón se soltó fuera de la ventana
+          return;
+        }
+        if (moved >= DRAG_START_PX) beginDrag();
+      } else if (moved > LONG_PRESS_SLOP_PX) {
+        endDrag(); // el dedo se mueve antes de tiempo: es un desplazamiento, no un arrastre
+      }
+      return;
+    }
+    if (drag.pointerType === 'mouse' && event.buttons === 0) {
+      endDrag();
+      return;
+    }
+    event.preventDefault();
+    updateDrag();
+  }
+
+  function onPointerUp(event: PointerEvent): void {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const state = drag;
+    let target: string | null = null;
+    if (state.active) {
+      suppressClickUntil = performance.now() + 400;
+      state.x = event.clientX;
+      state.y = event.clientY;
+      updateDrag(); // se decide con el punto exacto del soltado
+      target = state.overProject;
+    }
+    endDrag();
+    if (target) dropOn(state.productId, state.title, target);
+  }
+
+  function onPointerCancel(event: PointerEvent): void {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    endDrag();
+  }
+
+  els.grid?.addEventListener('pointerdown', (event) => {
+    if (drag || !event.isPrimary) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    const target = event.target as Element;
+    // Los botones, el selector y el enlace de compra son para hacer clic, no para arrastrar.
+    if (target.closest('button, select, option, input, textarea, label, a.radar-card-buy')) return;
+    const card = target.closest<HTMLElement>('.radar-card[data-product-id]');
+    if (!card) return;
+    if (getProjects().length < 2) return; // sin otra lista no hay dónde soltarla
+    const productId = card.dataset.productId ?? '';
+    const product = getRadarProducts().find((p) => p.id === productId);
+    if (!product) return;
+    drag = {
+      productId,
+      title: product.title,
+      image: product.image,
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      active: false,
+      card,
+      ghost: null,
+      overProject: null,
+      timer: null,
+      raf: 0,
+      lastTick: 0,
+    };
+    document.addEventListener('pointermove', onPointerMove, { passive: false });
+    document.addEventListener('pointerup', onPointerUp);
+    document.addEventListener('pointercancel', onPointerCancel);
+    if (event.pointerType !== 'mouse') {
+      document.addEventListener('touchmove', blockTouchScroll, { passive: false });
+      drag.timer = window.setTimeout(() => {
+        if (drag && !drag.active) beginDrag();
+      }, LONG_PRESS_MS);
+    }
+  });
+
+  // Que el navegador no arranque su propio arrastre de imágenes/enlaces (cancelaría el nuestro).
+  els.grid?.addEventListener('dragstart', (event) => event.preventDefault());
+  // La pulsación larga abriría el menú contextual (guardar imagen…) en lugar de arrastrar.
+  document.addEventListener('contextmenu', (event) => {
+    if (drag && (drag.active || drag.timer !== null)) event.preventDefault();
+  });
+  document.addEventListener('selectstart', (event) => {
+    if (drag?.active) event.preventDefault();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && drag) endDrag();
+  });
+  window.addEventListener('blur', () => {
+    if (drag) endDrag();
+  });
+  document.addEventListener(
+    'click',
+    (event) => {
+      if (performance.now() < suppressClickUntil) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    },
+    true,
+  );
+
+  // "Mover a…": la misma acción sin arrastrar (teclado, lectores de pantalla, móvil).
+  els.grid?.addEventListener('change', (event) => {
+    const select = (event.target as Element | null)?.closest<HTMLSelectElement>('select[data-move-product]');
+    if (!select) return;
+    const productId = select.dataset.moveProduct ?? '';
+    const title = getRadarProducts().find((p) => p.id === productId)?.title ?? '';
+    if (dropOn(productId, title, select.value)) {
+      // La tarjeta desaparece de esta lista: el foco pasa a la lista activa para no perderlo.
+      els.tabs?.querySelector<HTMLElement>('.radar-tab.is-active')?.focus();
+    } else {
       renderAll();
     }
   });

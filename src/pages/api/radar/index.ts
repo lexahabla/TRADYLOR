@@ -31,6 +31,9 @@ export const POST: APIRoute = async ({ request }) => {
       projects: Array.isArray(body.projects) ? body.projects : [],
       pendingExits: Array.isArray(body.pendingExits) ? body.pendingExits : [],
       reminders: Array.isArray(body.reminders) ? body.reminders : [],
+      // Bajas (quitar producto / eliminar lista): sin ellas la fusión por unión las deshacía.
+      removedProducts: body.removedProducts,
+      removedProjects: body.removedProjects,
     });
     return json({ success: true, radar });
   } catch {
