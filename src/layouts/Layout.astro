@@ -3,9 +3,14 @@ export interface Props {
   title?: string;
   description?: string;
   image?: string;
+  imageAlt?: string;
   canonicalUrl?: string;
   type?: string;
   noindex?: boolean;
+  /** Título corto para las tarjetas sociales (Open Graph / Twitter). */
+  ogTitle?: string;
+  /** Descripción corta para las tarjetas sociales (máx. ~160 caracteres). */
+  ogDescription?: string;
 }
 
 import ReturnBanner from '../components/ReturnBanner.astro';
@@ -15,9 +20,12 @@ const {
   title = "Tradylor | Portal de Curación, Recomendaciones y Comparativas de Productos",
   description = "Filtramos el ruido del mercado. Descubre análisis rigurosos, comparativas honestas y las mejores ofertas verificadas para tomar decisiones de compra inteligentes.",
   image = "https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=1200&auto=format&fit=crop",
+  imageAlt,
   canonicalUrl,
   type = "website",
   noindex = false,
+  ogTitle,
+  ogDescription,
 } = Astro.props;
 
 const currentYear = new Date().getFullYear();
@@ -53,21 +61,23 @@ const resolvedImage = toAbsolute(image);
     <link rel="canonical" href={resolvedCanonical} />
     <meta name="robots" content={noindex ? "noindex, nofollow, noarchive" : "index, follow"} />
 
-    <!-- Open Graph / Facebook -->
+    <!-- Open Graph / Facebook / WhatsApp / Telegram -->
     <meta property="og:type" content={type} />
     <meta property="og:url" content={resolvedCanonical} />
-    <meta property="og:title" content={title} />
-    <meta property="og:description" content={description} />
+    <meta property="og:title" content={ogTitle ?? title} />
+    <meta property="og:description" content={ogDescription ?? description} />
     <meta property="og:image" content={resolvedImage} />
+    <meta property="og:image:alt" content={imageAlt ?? title} />
     <meta property="og:site_name" content="Tradylor" />
     <meta property="og:locale" content="es_ES" />
 
     <!-- Twitter Cards -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:url" content={resolvedCanonical} />
-    <meta name="twitter:title" content={title} />
-    <meta name="twitter:description" content={description} />
+    <meta name="twitter:title" content={ogTitle ?? title} />
+    <meta name="twitter:description" content={ogDescription ?? description} />
     <meta name="twitter:image" content={resolvedImage} />
+    <meta name="twitter:image:alt" content={imageAlt ?? title} />
 
     <!-- Tipografía Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />

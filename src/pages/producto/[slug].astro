@@ -121,7 +121,10 @@ const productSchema = {
   title={`${product.title} — Análisis y Mejor Precio | Tradylor`}
   description={product.description}
   image={product.image}
+  imageAlt={product.title}
   type="product"
+  ogTitle={`${product.title} | Tradylor`}
+  ogDescription="Historial de precios y análisis de la mejor opción calidad-precio."
 >
   <!-- Schema.org Product estructurado -->
   <script type="application/ld+json" set:html={JSON.stringify(productSchema)} />
