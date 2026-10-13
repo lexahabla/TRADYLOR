@@ -19,9 +19,7 @@ export type ShareChannel =
   | 'x'
   | 'facebook'
   | 'reddit'
-  | 'instagram'
   | 'pinterest'
-  | 'tiktok'
   | 'email'
   | 'copy'
   | 'native';
@@ -244,9 +242,7 @@ const BASE_LABELS: Record<ShareChannel, string> = {
   x: 'X',
   facebook: 'Facebook',
   reddit: 'Reddit',
-  instagram: 'Instagram',
   pinterest: 'Pinterest',
-  tiktok: 'TikTok',
   email: 'Email',
   copy: 'Copiar enlace',
   native: 'Compartir…',
@@ -441,16 +437,6 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
       )
         ? { ok: true, mode: 'opened' }
         : { ok: false, mode: 'opened', message: pack.openFailed(name) };
-
-    case 'instagram':
-    case 'tiktok': {
-      // Sin web intent fiable: copiamos el texto y abrimos la app/web.
-      const copied = await copyText(text);
-      openBlank(channel === 'instagram' ? 'https://www.instagram.com/' : 'https://www.tiktok.com/');
-      return copied
-        ? { ok: true, mode: 'copied', message: pack.copiedText(name) }
-        : { ok: false, mode: 'copied', message: pack.noClipboard };
-    }
 
     case 'copy': {
       const copied = await copyText(text);
