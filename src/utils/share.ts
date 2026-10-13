@@ -551,9 +551,10 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
     case 'email':
       // Email: abrimos la página de preview con tarjeta HTML atractiva
       // (imagen + colores + mensaje) que permite copiar el HTML formateado
-      // y pegarlo en Gmail/Outlook/Apple Mail. El mailto: plano queda como
-      // fallback si falla la apertura de la página.
-      return openBlank(`/share/${encodeURIComponent(input.productId)}`)
+      // y pegarlo en Gmail/Outlook/Apple Mail, o enviar directamente con
+      // el cliente de correo. El lang va como query param porque la página
+      // es SSR y no puede leer localStorage en el servidor.
+      return openBlank(`/share/${encodeURIComponent(input.productId)}?lang=${lang}`)
         ? { ok: true, mode: 'opened' }
         : openBlank(
             `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(text)}`,
