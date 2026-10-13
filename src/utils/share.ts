@@ -9,9 +9,10 @@
  *
  * IDIOMAS: el texto se traduce según el idioma elegido en el panel. El
  * catalán, euskera y gallego se detectan automáticamente si aparecen en la
- * lista de idiomas del navegador (aunque no sean el primero), lo que cubre a
- * usuarios de Catalunya, Euskadi o Galicia con el navegador en castellano.
- * La elección se recuerda en LocalStorage.
+ * lista de idiomas del navegador (aunque no sean el primero) o si el servidor
+ * ubica al visitante en su región por IP (/api/share/region, lib/shareGeo.ts):
+ * cubre a usuarios de Catalunya, Euskadi o Galicia con el navegador en
+ * castellano. La elección se recuerda en LocalStorage.
  * ==============================================================================
  */
 
@@ -340,6 +341,10 @@ export function setShareLang(code: ShareLangCode): void {
 
 /** Detecta la región del navegador y la mapea a un idioma con plantilla. */
 export function detectShareLang(): ShareLangCode {
+  // En el servidor (SSR) no hay navegador: Node 21+ expone un `navigator` con el
+  // idioma del sistema, que no tiene nada que ver con el del visitante.
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return 'es';
+
   const candidates: string[] = [];
   try {
     if (navigator.languages?.length) candidates.push(...navigator.languages);
@@ -369,17 +374,115 @@ export function detectShareLang(): ShareLangCode {
   return 'es';
 }
 
+// ---------------------------------------------------------------------------
+// Idiomas cooficiales por región (catalán, euskera, gallego)
+// ---------------------------------------------------------------------------
+
+/** Idiomas cooficiales con plantilla propia que se ofrecen según la región. */
+const REGIONAL_LANGS: ShareLangCode[] = ['ca', 'eu', 'gl'];
+const REGION_STORAGE_KEY = 'tradylor_share_region';
+/** Región ya resuelta por el servidor: se reutiliza 7 días. */
+const REGION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Si el servidor no pudo resolverla, se reintenta pasados 30 min. */
+const REGION_RETRY_MS = 30 * 60 * 1000;
+
+function isRegionalLang(code: unknown): code is ShareLangCode {
+  return typeof code === 'string' && (REGIONAL_LANGS as string[]).includes(code);
+}
+
+interface RegionCache {
+  langs: ShareLangCode[];
+  resolved: boolean;
+  ts: number;
+}
+
+function readRegionCache(): RegionCache | null {
+  try {
+    const raw = localStorage.getItem(REGION_STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as Partial<RegionCache> | null;
+    if (!data || !Array.isArray(data.langs)) return null;
+    return {
+      langs: data.langs.filter(isRegionalLang),
+      resolved: data.resolved === true,
+      ts: Number(data.ts) || 0,
+    };
+  } catch {
+    return null; // sin LocalStorage (SSR / modo privado)
+  }
+}
+
+function writeRegionCache(cache: RegionCache): void {
+  try {
+    localStorage.setItem(REGION_STORAGE_KEY, JSON.stringify(cache));
+  } catch {
+    /* sin LocalStorage */
+  }
+}
+
+/** Idiomas cooficiales que declara el navegador (ca / eu / gl en cualquier posición). */
+function browserRegionalLangs(): ShareLangCode[] {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return [];
+  try {
+    return [...(navigator.languages ?? []), navigator.language]
+      .filter(Boolean)
+      .map((raw) => raw.toLowerCase().split(/[-_]/)[0])
+      .filter(isRegionalLang);
+  } catch {
+    return [];
+  }
+}
+
 /**
- * Opciones del selector: idioma detectado + español (si no es el detectado) +
- * inglés (siempre), sin duplicados y en ese orden.
+ * Pide al servidor los idiomas cooficiales de la región del visitante (IP +
+ * cabecera Accept-Language) y los recuerda en LocalStorage. Gracias a esto un
+ * usuario de Catalunya con el navegador en castellano también ve "Català".
+ * Devuelve los idiomas regionales conocidos (vacío si no hay ninguno).
  */
-export function getShareLangOptions(): { code: ShareLangCode; label: string }[] {
+export async function refreshRegionLangs(): Promise<ShareLangCode[]> {
+  if (typeof window === 'undefined') return [];
+  const cached = readRegionCache();
+  const ttl = cached?.resolved ? REGION_TTL_MS : REGION_RETRY_MS;
+  if (cached && Date.now() - cached.ts < ttl) return cached.langs;
+  try {
+    const res = await fetch('/api/share/region', { headers: { Accept: 'application/json' } });
+    if (!res.ok) return cached?.langs ?? [];
+    const data = (await res.json()) as { langs?: unknown; resolved?: unknown };
+    const langs = (Array.isArray(data.langs) ? data.langs : []).filter(isRegionalLang);
+    writeRegionCache({ langs, resolved: data.resolved === true, ts: Date.now() });
+    return langs;
+  } catch {
+    return cached?.langs ?? [];
+  }
+}
+
+export interface ShareLangOption {
+  code: ShareLangCode;
+  label: string;
+}
+
+/**
+ * Opciones del selector, sin duplicados y en este orden: idiomas cooficiales de
+ * la región (catalán, euskera, gallego), idioma detectado, español, inglés y,
+ * al final, los que se pasen en `extra` (p. ej. el idioma activo de la página).
+ *
+ * `extra` también admite idiomas regionales ya conocidos (el servidor los
+ * deduce de Accept-Language en SSR, donde no existe `navigator`).
+ */
+export function getShareLangOptions(extra: ShareLangCode[] = []): ShareLangOption[] {
   const detected = detectShareLang();
-  const order: ShareLangCode[] = [detected, 'es', 'en'];
+  const known = new Set<ShareLangCode>([
+    ...extra,
+    ...(readRegionCache()?.langs ?? []),
+    ...browserRegionalLangs(),
+  ]);
+  const regional = REGIONAL_LANGS.filter((code) => known.has(code));
+  const order: ShareLangCode[] = [...regional, detected, 'es', 'en', ...extra];
+
   const seen = new Set<ShareLangCode>();
-  const options: { code: ShareLangCode; label: string }[] = [];
+  const options: ShareLangOption[] = [];
   for (const code of order) {
-    if (seen.has(code)) continue;
+    if (!(code in LANG_PACKS) || seen.has(code)) continue;
     seen.add(code);
     options.push({ code, label: LANG_PACKS[code].label });
   }

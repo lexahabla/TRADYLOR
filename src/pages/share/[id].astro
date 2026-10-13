@@ -7,21 +7,27 @@
  * Ruta dinámica SSR: /share/[id]?lang=xx
  *
  * Cuando el usuario pulsa "Email" en el panel de compartir, se abre esta página
- * que muestra una tarjeta HTML atractiva con imagen del producto, colores y el
- * mensaje de recomendación. El usuario puede:
- *  - Enviar directamente con su cliente de correo (mailto:)
- *  - Copiar el HTML formateado y pegarlo en Gmail/Outlook/Apple Mail
- *  - Copiar solo el texto
+ * con la tarjeta HTML del correo (imagen del producto, mensaje y botón). Al
+ * pulsar "Enviar" (cliente de correo, mailto:) o "Enviar con Gmail":
+ *  1. La tarjeta se copia al portapapeles como contenido enriquecido (text/html).
+ *  2. Se abre el correo con el asunto ya puesto.
+ *  3. El usuario pega la tarjeta en el cuerpo (Ctrl+V) y elige el destinatario
+ *     entre SUS contactos. Ni mailto: ni la URL de Gmail admiten HTML, por eso
+ *     el cuerpo viaja por el portapapeles.
+ *
+ * La vista previa y lo que se copia salen del mismo HTML (utils/shareEmail.ts):
+ * lo que se ve es exactamente lo que llega.
  *
  * El idioma se pasa como query param (?lang=ca) porque la página es SSR y no
- * puede leer localStorage en el servidor. En el cliente se corrige con
- * localStorage si difiere.
+ * puede leer localStorage en el servidor. El selector se completa en el cliente
+ * con los idiomas cooficiales de la región (navegador + IP, /api/share/region).
  * ==============================================================================
  */
 export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
 import { findCatalogProduct, productKey } from '../../lib/catalog';
+import { langsFromAcceptLanguage } from '../../lib/shareGeo';
 import {
   buildShareText,
   buildShareUrl,
@@ -29,6 +35,7 @@ import {
   SHARE_LANG_CODES,
   type ShareLangCode,
 } from '../../utils/share';
+import { buildShareEmailHtml } from '../../utils/shareEmail';
 
 const product = findCatalogProduct(Astro.params.id);
 if (!product) return Astro.redirect('/', 302);
@@ -36,9 +43,8 @@ if (!product) return Astro.redirect('/', 302);
 const key = productKey(product);
 
 // Idioma desde query param (lo pasa el panel de compartir al abrir la página).
-// Se valida contra SHARE_LANG_CODES (lista fija) porque getShareLangOptions()
-// depende de navigator, que no existe en el servidor SSR.
-const langParam = (Astro.url.searchParams.get('lang') ?? '').trim() as ShareLangCode;
+// Se valida contra SHARE_LANG_CODES (lista fija).
+const langParam = (Astro.url.searchParams.get('lang') ?? '').trim().toLowerCase() as ShareLangCode;
 const lang: ShareLangCode = SHARE_LANG_CODES.includes(langParam) ? langParam : 'es';
 
 const shortUrl = buildShareUrl(key, 'email');
@@ -58,22 +64,146 @@ const cleanTitle = product.title
   .replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '')
   .trim();
 
-// Opciones de idioma para el selector de la página
-const langOptions = getShareLangOptions();
+// Tarjeta del correo: se pinta tal cual en la vista previa y es lo que se copia.
+const emailHtml = buildShareEmailHtml({
+  message,
+  title: cleanTitle,
+  category: product.category,
+  imageUrl: absoluteImage,
+  ctaUrl: shortUrl,
+  lang,
+});
+
+// Selector de idioma (SSR): el idioma activo + los cooficiales que declara la
+// cabecera Accept-Language. El cliente lo completa con la región por IP.
+const headerLangs = langsFromAcceptLanguage(Astro.request.headers.get('accept-language'));
+const langOptions = getShareLangOptions([lang, ...headerLangs]);
+
+interface ShareUiStrings {
+  hint: string;
+  send: string;
+  sendGmail: string;
+  copyText: string;
+  note: string;
+  copied: string;
+  copyFailed: string;
+  textOk: string;
+  textFail: string;
+}
 
 // Textos de UI según idioma
-const UI: Record<string, { send: string; sendLabel: string; sendPlaceholder: string; sending: string; sentOk: string; sentErr: string; copyHtml: string; copyText: string; viewProduct: string; hint: string; footer: string; cta: string; htmlOk: string; textOk: string; invalidEmail: string; openMail: string; openGmail: string }> = {
-  es: { send: 'Enviar', sendLabel: 'Enviar por email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Enviando…', sentOk: '¡Email enviado!', sentErr: 'No se pudo enviar. Inténtalo de nuevo.', copyHtml: 'Copiar HTML del email', copyText: 'Copiar solo texto', viewProduct: 'Ver ficha del producto', hint: 'Abre tu cliente de correo con el mensaje listo para enviar, o copia el HTML para pegarlo en Gmail/Outlook.', footer: 'Enviado desde', cta: 'Ver ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo en tu correo.', textOk: 'Texto copiado.', invalidEmail: 'Introduce un email válido.', openMail: 'Abrir en mi correo', openGmail: 'Abrir en Gmail' },
-  ca: { send: 'Enviar', sendLabel: 'Enviar per email a:', sendPlaceholder: 'destinatari@email.com', sending: "S'està enviant…", sentOk: 'Email enviat!', sentErr: "No s'ha pogut enviar. Prova-ho de nou.", copyHtml: "Copiar l'HTML del correu", copyText: 'Copiar només el text', viewProduct: 'Veure la fitxa del producte', hint: "Obre el teu correu amb el missatge llest per enviar, o copia l'HTML per enganxar-lo a Gmail/Outlook.", footer: 'Enviat des de', cta: 'Veure la fitxa completa a Tradylor →', htmlOk: "HTML copiat. Enganxa'l al teu correu.", textOk: 'Text copiat.', invalidEmail: 'Introdueix un email vàlid.', openMail: 'Obrir al meu correu', openGmail: 'Obrir a Gmail' },
-  eu: { send: 'Bidali', sendLabel: 'Bidali email honi:', sendPlaceholder: 'hartzailea@email.com', sending: 'Bidaltzen…', sentOk: 'Emaila bidali da!', sentErr: 'Ezin izan da bidali. Saiatu berriro.', copyHtml: 'Kopiatu posta HTMLa', copyText: 'Kopiatu testua bakarrik', viewProduct: 'Ikusi produktuaren fitxa', hint: 'Ireki zure posta mezua prest duela bidaltzeko, edo kopiatu HTMLa Gmail/Outlook-era itsasteko.', footer: 'Bidali da', cta: 'Ikusi fitxa osoa Tradylor-en →', htmlOk: 'HTML kopiatua. Itsatsi zure postan.', textOk: 'Testua kopiatu da.', invalidEmail: 'Sartu baliozko email bat.', openMail: 'Ireki nire postaz', openGmail: 'Ireki Gmail-en' },
-  gl: { send: 'Enviar', sendLabel: 'Enviar por email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Enviando…', sentOk: 'Email enviado!', sentErr: 'Non se puido enviar. Inténtao de novo.', copyHtml: 'Copiar o HTML do correo', copyText: 'Copiar só o texto', viewProduct: 'Ver a ficha do produto', hint: 'Abre o teu correo coa mensaxe lista para enviar, ou copia o HTML para pegalo en Gmail/Outlook.', footer: 'Enviado desde', cta: 'Ver a ficha completa en Tradylor →', htmlOk: 'HTML copiado. Pégalo no teu correo.', textOk: 'Texto copiado.', invalidEmail: 'Introduce un email válido.', openMail: 'Abrir no meu correo', openGmail: 'Abrir en Gmail' },
-  en: { send: 'Send', sendLabel: 'Send by email to:', sendPlaceholder: 'recipient@email.com', sending: 'Sending…', sentOk: 'Email sent!', sentErr: 'Could not send. Please try again.', copyHtml: 'Copy email HTML', copyText: 'Copy text only', viewProduct: 'View product sheet', hint: 'Open your mail client with the message ready to send, or copy the HTML to paste in Gmail/Outlook.', footer: 'Sent from', cta: 'View full sheet on Tradylor →', htmlOk: 'HTML copied. Paste it into your email.', textOk: 'Text copied.', invalidEmail: 'Enter a valid email.', openMail: 'Open in my mail app', openGmail: 'Open in Gmail' },
-  fr: { send: 'Envoyer', sendLabel: 'Envoyer par email à :', sendPlaceholder: 'destinataire@email.com', sending: 'Envoi…', sentOk: 'Email envoyé !', sentErr: "Impossible d'envoyer. Réessayez.", copyHtml: "Copier le HTML de l'email", copyText: 'Copier le texte seulement', viewProduct: 'Voir la fiche produit', hint: "Ouvrez votre messagerie avec le message prêt à envoyer, ou copiez le HTML pour le coller dans Gmail/Outlook.", footer: 'Envoyé depuis', cta: 'Voir la fiche complète sur Tradylor →', htmlOk: 'HTML copié. Collez-le dans votre email.', textOk: 'Texte copié.', invalidEmail: 'Entrez un email valide.', openMail: 'Ouvrir dans ma messagerie', openGmail: 'Ouvrir dans Gmail' },
-  de: { send: 'Senden', sendLabel: 'Per E-Mail senden an:', sendPlaceholder: 'empfaenger@email.com', sending: 'Wird gesendet…', sentOk: 'E-Mail gesendet!', sentErr: 'Konnte nicht gesendet werden. Bitte erneut versuchen.', copyHtml: 'E-Mail-HTML kopieren', copyText: 'Nur Text kopieren', viewProduct: 'Produktdatenblatt ansehen', hint: 'Öffne deinen Mail-Client mit der fertigen Nachricht, oder kopiere das HTML zum Einfügen in Gmail/Outlook.', footer: 'Gesendet von', cta: 'Vollständiges Datenblatt auf Tradylor ansehen →', htmlOk: 'HTML kopiert. Fügen Sie es in Ihre E-Mail ein.', textOk: 'Text kopiert.', invalidEmail: 'Geben Sie eine gültige E-Mail ein.', openMail: 'In meiner Mail-App öffnen', openGmail: 'In Gmail öffnen' },
-  pt: { send: 'Enviar', sendLabel: 'Enviar por email para:', sendPlaceholder: 'destinatario@email.com', sending: 'A enviar…', sentOk: 'Email enviado!', sentErr: 'Não foi possível enviar. Tente novamente.', copyHtml: 'Copiar HTML do email', copyText: 'Copiar apenas o texto', viewProduct: 'Ver a ficha do produto', hint: 'Abra o seu cliente de email com a mensagem pronta, ou copie o HTML para colar no Gmail/Outlook.', footer: 'Enviado desde', cta: 'Ver a ficha completa no Tradylor →', htmlOk: 'HTML copiado. Cole no seu email.', textOk: 'Texto copiado.', invalidEmail: 'Introduza um email válido.', openMail: 'Abrir no meu email', openGmail: 'Abrir no Gmail' },
-  it: { send: 'Invia', sendLabel: 'Invia via email a:', sendPlaceholder: 'destinatario@email.com', sending: 'Invio in corso…', sentOk: 'Email inviata!', sentErr: "Impossibile inviare. Riprova.", copyHtml: "Copia l'HTML dell'email", copyText: 'Copia solo il testo', viewProduct: 'Vedi la scheda prodotto', hint: "Apri il tuo client di posta con il messaggio pronto, o copia l'HTML da incollare in Gmail/Outlook.", footer: 'Inviato da', cta: 'Vedi la scheda completa su Tradylor →', htmlOk: 'HTML copiato. Incollalo nella tua email.', textOk: 'Testo copiato.', invalidEmail: 'Inserisci un email valido.', openMail: 'Apri nel mio client email', openGmail: 'Apri in Gmail' },
+const UI: Record<ShareLangCode, ShareUiStrings> = {
+  es: {
+    hint: 'Revisa la tarjeta tal y como la recibirá tu contacto y envíala desde tu propio correo.',
+    send: 'Enviar',
+    sendGmail: 'Enviar con Gmail',
+    copyText: 'Copiar solo texto',
+    note: 'Al pulsar, copiamos la tarjeta y abrimos tu correo: pégala en el cuerpo del mensaje (Ctrl+V / ⌘V) y elige el destinatario entre tus contactos.',
+    copied: 'Tarjeta copiada. Pégala en el cuerpo del correo (Ctrl+V / ⌘V).',
+    copyFailed: 'No se pudo copiar la tarjeta. Hemos puesto el mensaje en texto en el correo.',
+    textOk: 'Texto copiado.',
+    textFail: 'No se pudo copiar el texto.',
+  },
+  ca: {
+    hint: 'Revisa la targeta tal com la rebrà el teu contacte i envia-la des del teu propi correu.',
+    send: 'Enviar',
+    sendGmail: 'Enviar amb Gmail',
+    copyText: 'Copiar només el text',
+    note: "En prémer, copiem la targeta i obrim el teu correu: enganxa-la al cos del missatge (Ctrl+V / ⌘V) i tria el destinatari entre els teus contactes.",
+    copied: 'Targeta copiada. Enganxa-la al cos del correu (Ctrl+V / ⌘V).',
+    copyFailed: "No s'ha pogut copiar la targeta. Hem posat el missatge en text al correu.",
+    textOk: 'Text copiat.',
+    textFail: "No s'ha pogut copiar el text.",
+  },
+  eu: {
+    hint: 'Berrikusi txartela zure kontaktuak jasoko duen bezala eta bidali zure posta elektronikotik.',
+    send: 'Bidali',
+    sendGmail: 'Bidali Gmail-ekin',
+    copyText: 'Kopiatu testua bakarrik',
+    note: 'Sakatzean, txartela kopiatuko dugu eta zure posta irekiko dugu: itsatsi mezuaren gorputzean (Ctrl+V / ⌘V) eta aukeratu hartzailea zure kontaktuen artean.',
+    copied: 'Txartela kopiatu da. Itsatsi posta-mezuaren gorputzean (Ctrl+V / ⌘V).',
+    copyFailed: 'Ezin izan da txartela kopiatu. Mezua testu gisa jarri dugu postan.',
+    textOk: 'Testua kopiatu da.',
+    textFail: 'Ezin izan da testua kopiatu.',
+  },
+  gl: {
+    hint: 'Revisa a tarxeta tal e como a recibirá o teu contacto e envíaa desde o teu propio correo.',
+    send: 'Enviar',
+    sendGmail: 'Enviar con Gmail',
+    copyText: 'Copiar só o texto',
+    note: 'Ao premer, copiamos a tarxeta e abrimos o teu correo: pégaa no corpo da mensaxe (Ctrl+V / ⌘V) e escolle o destinatario entre os teus contactos.',
+    copied: 'Tarxeta copiada. Pégaa no corpo do correo (Ctrl+V / ⌘V).',
+    copyFailed: 'Non se puido copiar a tarxeta. Puxemos a mensaxe en texto no correo.',
+    textOk: 'Texto copiado.',
+    textFail: 'Non se puido copiar o texto.',
+  },
+  en: {
+    hint: 'Review the card exactly as your contact will receive it and send it from your own email.',
+    send: 'Send',
+    sendGmail: 'Send with Gmail',
+    copyText: 'Copy text only',
+    note: 'When you click, we copy the card and open your email: paste it into the message body (Ctrl+V / ⌘V) and pick the recipient from your contacts.',
+    copied: 'Card copied. Paste it into the email body (Ctrl+V / ⌘V).',
+    copyFailed: "Couldn't copy the card. We put the message in the email as plain text.",
+    textOk: 'Text copied.',
+    textFail: "Couldn't copy the text.",
+  },
+  fr: {
+    hint: 'Vérifiez la carte telle que votre contact la recevra et envoyez-la depuis votre propre messagerie.',
+    send: 'Envoyer',
+    sendGmail: 'Envoyer avec Gmail',
+    copyText: 'Copier le texte seulement',
+    note: 'En cliquant, nous copions la carte et ouvrons votre messagerie : collez-la dans le corps du message (Ctrl+V / ⌘V) et choisissez le destinataire parmi vos contacts.',
+    copied: "Carte copiée. Collez-la dans le corps de l'email (Ctrl+V / ⌘V).",
+    copyFailed: "Impossible de copier la carte. Nous avons mis le message en texte dans l'email.",
+    textOk: 'Texte copié.',
+    textFail: 'Impossible de copier le texte.',
+  },
+  de: {
+    hint: 'Prüfe die Karte so, wie dein Kontakt sie erhält, und sende sie aus deinem eigenen E-Mail-Postfach.',
+    send: 'Senden',
+    sendGmail: 'Mit Gmail senden',
+    copyText: 'Nur Text kopieren',
+    note: 'Beim Klicken kopieren wir die Karte und öffnen dein E-Mail-Programm: Füge sie in den Nachrichtentext ein (Strg+V / ⌘V) und wähle den Empfänger aus deinen Kontakten.',
+    copied: 'Karte kopiert. Füge sie in den E-Mail-Text ein (Strg+V / ⌘V).',
+    copyFailed: 'Die Karte konnte nicht kopiert werden. Wir haben die Nachricht als Text in die E-Mail eingefügt.',
+    textOk: 'Text kopiert.',
+    textFail: 'Der Text konnte nicht kopiert werden.',
+  },
+  pt: {
+    hint: 'Revê o cartão tal como o teu contacto o vai receber e envia-o a partir do teu próprio email.',
+    send: 'Enviar',
+    sendGmail: 'Enviar com o Gmail',
+    copyText: 'Copiar apenas o texto',
+    note: 'Ao clicar, copiamos o cartão e abrimos o teu email: cola-o no corpo da mensagem (Ctrl+V / ⌘V) e escolhe o destinatário entre os teus contactos.',
+    copied: 'Cartão copiado. Cola-o no corpo do email (Ctrl+V / ⌘V).',
+    copyFailed: 'Não foi possível copiar o cartão. Pusemos a mensagem em texto no email.',
+    textOk: 'Texto copiado.',
+    textFail: 'Não foi possível copiar o texto.',
+  },
+  it: {
+    hint: 'Controlla la scheda così come la riceverà il tuo contatto e inviala dalla tua email.',
+    send: 'Invia',
+    sendGmail: 'Invia con Gmail',
+    copyText: 'Copia solo il testo',
+    note: 'Cliccando, copiamo la scheda e apriamo la tua email: incollala nel corpo del messaggio (Ctrl+V / ⌘V) e scegli il destinatario tra i tuoi contatti.',
+    copied: "Scheda copiata. Incollala nel corpo dell'email (Ctrl+V / ⌘V).",
+    copyFailed: "Impossibile copiare la scheda. Abbiamo messo il messaggio come testo nell'email.",
+    textOk: 'Testo copiato.',
+    textFail: 'Impossibile copiare il testo.',
+  },
 };
 const ui = UI[lang] ?? UI.es;
+
+// Datos para el script del cliente (JSON inerte: no se ejecuta, sólo se lee).
+const clientData = {
+  lang,
+  subject: cleanTitle,
+  text: `${message}\n\n${shortUrl}`,
+  html: emailHtml,
+  ui: { copied: ui.copied, copyFailed: ui.copyFailed, textOk: ui.textOk, textFail: ui.textFail },
+};
+const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
 ---
 
 <Layout
@@ -90,8 +220,8 @@ const ui = UI[lang] ?? UI.es;
         </div>
         <p class="share-hint">{ui.hint}</p>
 
-        <!-- Selector de idioma -->
-        <div class="lang-bar" role="group" aria-label="Idioma">
+        <!-- Selector de idioma (el cliente lo completa con los idiomas de la región) -->
+        <div class="lang-bar" data-lang-bar role="group" aria-label="Idioma">
           {langOptions.map((opt) => (
             <button
               type="button"
@@ -104,90 +234,37 @@ const ui = UI[lang] ?? UI.es;
         </div>
       </header>
 
-      <!-- Tarjeta HTML del email -->
-      <div class="email-card" id="emailCard">
-        <div class="email-card-bar"></div>
-        <div class="email-card-body">
-          <p class="email-message" id="emailMessage">{message}</p>
-          <div class="email-divider"></div>
-          <div class="email-product">
-            <div class="email-product-image-wrap">
-              <img
-                src={absoluteImage}
-                alt={cleanTitle}
-                class="email-product-image"
-                width="280"
-                height="280"
-                loading="eager"
-              />
-            </div>
-            <div class="email-product-info">
-              <h2 class="email-product-title">{cleanTitle}</h2>
-              {product.category && (
-                <p class="email-product-category">{product.category}</p>
-              )}
-              <a href={shortUrl} class="email-cta" target="_blank" rel="noopener noreferrer" id="emailCta">
-                {ui.cta}
-              </a>
-            </div>
-          </div>
-        </div>
-        <div class="email-card-footer">
-          <p>{ui.footer} <strong>Tradylor.com</strong> · Comparativa de precios y análisis</p>
-        </div>
-      </div>
-
-      <!-- Formulario de envío + botones de acción -->
-      <div class="send-form">
-        <label class="send-label" for="sendTo">{ui.sendLabel}</label>
-        <div class="send-row">
-          <input
-            type="email"
-            id="sendTo"
-            class="send-input"
-            placeholder={ui.sendPlaceholder}
-            autocomplete="email"
-          />
-          <button type="button" class="share-btn share-btn-send" id="sendEmailBtn">
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
-              <polyline points="22,6 12,13 2,6"/>
-            </svg>
-            {ui.send}
-          </button>
-        </div>
-      </div>
+      <!-- Tarjeta del correo: es exactamente el HTML que se copia al pulsar Enviar -->
+      <div class="email-preview" id="emailCard" set:html={emailHtml} />
 
       <div class="share-actions">
-        <!-- Botón principal: abre el cliente de correo del usuario -->
-        <button type="button" class="share-btn share-btn-mail" id="openMailBtn">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- Abre el cliente de correo del usuario (mailto:) -->
+        <button type="button" class="share-btn share-btn-mail" id="sendMailBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <rect x="3" y="5.5" width="18" height="13" rx="2.5"/>
             <path d="m4.5 8 7.5 5 7.5-5" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span id="openMailLabel">{ui.openMail}</span>
+          <span>{ui.send}</span>
         </button>
-        <button type="button" class="share-btn share-btn-primary" id="copyHtmlBtn">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+        <!-- Abre Gmail (redactar) con el asunto puesto -->
+        <button type="button" class="share-btn share-btn-gmail" id="sendGmailBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+            <path fill="#EA4335" d="M2 6.5v11A1.5 1.5 0 0 0 3.5 19H6V9.9l6 4.5 6-4.5V19h2.5a1.5 1.5 0 0 0 1.5-1.5v-11c0-1.7-1.9-2.6-3.2-1.6L12 9.6 5.2 4.9C3.9 3.9 2 4.8 2 6.5Z"/>
+          </svg>
+          <span>{ui.sendGmail}</span>
+        </button>
+        <button type="button" class="share-btn share-btn-secondary" id="copyTextBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <rect x="9" y="9" width="11" height="11" rx="2"/>
             <path d="M15 5.5A2.5 2.5 0 0 0 12.5 3H6a2.5 2.5 0 0 0-2.5 2.5V12A2.5 2.5 0 0 0 6 14.5"/>
           </svg>
-          {ui.copyHtml}
+          <span>{ui.copyText}</span>
         </button>
-        <button type="button" class="share-btn share-btn-secondary" id="copyTextBtn">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
-            <polyline points="16 6 12 2 8 6"/>
-            <line x1="12" y1="2" x2="12" y2="15"/>
-          </svg>
-          {ui.copyText}
-        </button>
-        <a href={`/producto/${key}`} class="share-btn share-btn-ghost" target="_blank" rel="noopener noreferrer">
-          {ui.viewProduct}
-        </a>
       </div>
 
-      <div class="share-toast" id="shareToast"></div>
+      <p class="share-note">{ui.note}</p>
+
+      <div class="share-toast" id="shareToast" role="status" aria-live="polite"></div>
     </div>
   </div>
 
@@ -197,7 +274,8 @@ const ui = UI[lang] ?? UI.es;
       background: linear-gradient(135deg, #0a0e17 0%, #111827 50%, #0a0e17 100%);
       padding: 2rem 1rem;
     }
-    .share-preview-container { max-width: 640px; margin: 0 auto; }
+    /* 600 px = ancho de la tarjeta del correo: vista previa, botones y notas alineados */
+    .share-preview-container { max-width: 600px; margin: 0 auto; }
     .share-header { text-align: center; margin-bottom: 2rem; }
     .share-logo { display: inline-flex; align-items: center; gap: .5rem; margin-bottom: .75rem; }
     .logo-mark {
@@ -209,297 +287,220 @@ const ui = UI[lang] ?? UI.es;
     .logo-text { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.25rem; color: #f3f4f6; }
     .share-hint { font-size: .82rem; color: #9ca3af; max-width: 420px; margin: 0 auto .9rem; line-height: 1.5; }
 
+    /* Los botones de idioma se (re)generan en el cliente: de ahí :global() */
     .lang-bar {
       display: inline-flex; gap: .3rem; padding: .28rem;
       background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09);
       border-radius: 999px; flex-wrap: wrap; justify-content: center;
     }
-    .lang-btn {
+    .lang-bar :global(.lang-btn) {
       padding: .32rem .7rem; font-family: inherit; font-size: .72rem; font-weight: 700;
       color: #9ca3af; background: transparent; border: 1px solid transparent;
       border-radius: 999px; cursor: pointer; transition: .16s; white-space: nowrap;
     }
-    .lang-btn:hover { color: #e5e7eb; background: rgba(255,255,255,.07); }
-    .lang-btn.is-active {
+    .lang-bar :global(.lang-btn:hover) { color: #e5e7eb; background: rgba(255,255,255,.07); }
+    .lang-bar :global(.lang-btn.is-active) {
       color: #0d1422; background: linear-gradient(135deg,#60a5fa 0%,#3b82f6 100%);
       border-color: rgba(96,165,250,.6); box-shadow: 0 3px 10px rgba(59,130,246,.35);
     }
 
-    .email-card {
-      background: #ffffff; border-radius: 16px; overflow: hidden;
+    /* Vista previa: el diseño de la tarjeta va inline en el propio HTML del correo */
+    .email-preview {
+      margin-bottom: 1.5rem; border-radius: 16px;
       box-shadow: 0 20px 60px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06);
-      margin-bottom: 1.5rem;
     }
-    .email-card-bar { height: 6px; background: linear-gradient(90deg, #60a5fa 0%, #3b82f6 40%, #2563eb 100%); }
-    .email-card-body { padding: 1.75rem 1.75rem 1.25rem; }
-    .email-message { font-size: 1rem; line-height: 1.65; color: #1f2937; margin: 0 0 1.25rem; font-family: 'Inter', sans-serif; }
-    .email-divider { height: 1px; background: linear-gradient(90deg, transparent, #e5e7eb 20%, #e5e7eb 80%, transparent); margin: 0 0 1.25rem; }
-    .email-product { display: flex; gap: 1.25rem; align-items: flex-start; }
-    .email-product-image-wrap {
-      flex-shrink: 0; width: 140px; height: 140px; border-radius: 12px;
-      background: #f8fafc; border: 1px solid #e5e7eb;
-      display: flex; align-items: center; justify-content: center; overflow: hidden;
-    }
-    .email-product-image { width: 100%; height: 100%; object-fit: contain; padding: .5rem; }
-    .email-product-info { flex: 1; min-width: 0; }
-    .email-product-title { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.05rem; color: #0d1422; margin: 0 0 .35rem; line-height: 1.3; }
-    .email-product-category { font-size: .78rem; color: #6b7280; margin: 0 0 .85rem; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
-    .email-cta {
-      display: inline-block; background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
-      color: #fff; text-decoration: none; font-weight: 700; font-size: .85rem;
-      padding: .6rem 1.1rem; border-radius: 8px; transition: .2s; font-family: 'Inter', sans-serif;
-    }
-    .email-cta:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,.4); }
-    .email-card-footer { background: #f8fafc; padding: .85rem 1.75rem; border-top: 1px solid #e5e7eb; }
-    .email-card-footer p { margin: 0; font-size: .72rem; color: #9ca3af; text-align: center; }
 
-    .share-actions { display: flex; flex-wrap: wrap; gap: .65rem; justify-content: center; }
-
-    .send-form { margin-bottom: 1.25rem; }
-    .send-label { display: block; font-size: .8rem; font-weight: 700; color: #d1d5db; margin-bottom: .4rem; text-align: center; }
-    .send-row { display: flex; gap: .5rem; align-items: stretch; }
-    .send-input {
-      flex: 1; min-width: 0; padding: .7rem 1rem; border-radius: 10px;
-      border: 1px solid rgba(255,255,255,.14); background: rgba(255,255,255,.06);
-      color: #f3f4f6; font-family: 'Inter', sans-serif; font-size: .9rem; outline: none; transition: .18s;
-    }
-    .send-input::placeholder { color: #6b7280; }
-    .send-input:focus { border-color: rgba(96,165,250,.6); background: rgba(255,255,255,.1); box-shadow: 0 0 0 3px rgba(59,130,246,.2); }
-    .send-row .share-btn-send { flex-shrink: 0; }
+    .share-actions { display: grid; grid-template-columns: 1fr 1fr; gap: .65rem; }
+    .share-actions .share-btn-secondary { grid-column: 1 / -1; }
     .share-btn {
-      display: inline-flex; align-items: center; gap: .45rem;
-      padding: .7rem 1.15rem; border-radius: 10px; font-weight: 700; font-size: .85rem;
+      display: inline-flex; align-items: center; justify-content: center; gap: .5rem; width: 100%;
+      padding: .8rem 1.25rem; border-radius: 10px; font-weight: 700; font-size: .9rem;
       font-family: 'Inter', sans-serif; cursor: pointer; border: none; text-decoration: none; transition: .18s;
     }
-    .share-btn-send {
-      background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
-      color: #06281c; box-shadow: 0 4px 16px rgba(16,185,129,.35);
-    }
-    .share-btn-send:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(16,185,129,.5); }
-    /* Botón principal: abrir cliente de correo */
     .share-btn-mail {
       background: linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%);
       color: #ffffff; box-shadow: 0 4px 16px rgba(124,58,237,.35);
-      width: 100%; justify-content: center; font-size: .9rem; padding: .8rem 1.5rem;
     }
     .share-btn-mail:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(124,58,237,.55); }
-    .share-btn-primary {
-      background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
-      color: #0d1422; box-shadow: 0 4px 16px rgba(59,130,246,.35);
-    }
-    .share-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(59,130,246,.5); }
+    .share-btn-gmail { background: #ffffff; color: #1f2937; box-shadow: 0 4px 16px rgba(0,0,0,.25); }
+    .share-btn-gmail:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(0,0,0,.4); }
     .share-btn-secondary { background: rgba(255,255,255,.08); color: #e5e7eb; border: 1px solid rgba(255,255,255,.12); }
     .share-btn-secondary:hover { background: rgba(255,255,255,.14); }
-    .share-btn-ghost { background: transparent; color: #9ca3af; border: 1px solid rgba(255,255,255,.1); }
-    .share-btn-ghost:hover { color: #e5e7eb; border-color: rgba(255,255,255,.2); }
+
+    .share-note { margin: 1rem auto 0; max-width: 480px; text-align: center; font-size: .76rem; line-height: 1.55; color: #9ca3af; }
 
     .share-toast {
       position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%) translateY(20px);
-      background: rgba(13,20,34,.95); color: #f3f4f6; border: 1px solid rgba(255,255,255,.14);
-      padding: .65rem 1.25rem; border-radius: 999px; font-size: .82rem; font-weight: 600;
+      width: max-content; max-width: min(92vw, 520px); text-align: center; line-height: 1.45;
+      background: rgba(13,20,34,.97); color: #f3f4f6; border: 1px solid rgba(255,255,255,.14);
+      padding: .7rem 1.2rem; border-radius: 16px; font-size: .82rem; font-weight: 600;
       opacity: 0; pointer-events: none; transition: .25s; z-index: 999;
     }
     .share-toast.is-on { opacity: 1; transform: translateX(-50%) translateY(0); }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .share-toast.is-error { border-color: rgba(248,113,113,.6); color: #fca5a5; }
 
     @media (max-width: 520px) {
-      .email-product { flex-direction: column; align-items: center; text-align: center; }
-      .email-product-image-wrap { width: 180px; height: 180px; }
-      .email-card-body { padding: 1.25rem; }
-      .share-actions { flex-direction: column; }
-      .share-btn { justify-content: center; }
+      .share-actions { grid-template-columns: 1fr; }
+
+      /* En móvil el bloque de producto de la vista previa se apila: imagen arriba y
+         texto centrado debajo (ganchos tz-* de utils/shareEmail.ts). */
+      .email-preview :global(.tz-prod),
+      .email-preview :global(.tz-prod tbody),
+      .email-preview :global(.tz-prod tr),
+      .email-preview :global(.tz-prod td) { display: block !important; width: auto !important; }
+      .email-preview :global(.tz-gap) { display: none !important; }
+      .email-preview :global(.tz-img) { padding-bottom: 16px; }
+      .email-preview :global(.tz-img > div) { margin: 0 auto; }
+      .email-preview :global(.tz-txt) { text-align: center; }
     }
   </style>
 
-  <script define:vars={{ message, shortUrl, cleanTitle, lang, productId: key, uiSend: ui }}>
-    // ---- Cambiar idioma: navegar a ?lang=xx (re-render SSR) ----
-    // Se guarda en localStorage para que el panel de compartir lo recuerde.
-    try { localStorage.setItem('tradylor_share_lang', lang); } catch {}
-    document.querySelectorAll('[data-page-lang]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const code = btn.getAttribute('data-page-lang');
-        if (code && code !== lang) {
-          try { localStorage.setItem('tradylor_share_lang', code); } catch {}
-          window.location.search = '?lang=' + encodeURIComponent(code);
-        }
-      });
-    });
+  <script type="application/json" id="share-data" set:html={clientJson}></script>
 
-    // ---- Detección de Gmail y apertura del cliente de correo ----
-    // Intenta detectar si el usuario usa Gmail comprobando una imagen de
-    // accounts.google.com que solo carga si hay sesión de Google activa.
-    // Si se detecta Gmail → abre Gmail Compose con el mensaje pre-rellenado.
-    // Si no → usa mailto: (abre el cliente de correo nativo).
-    const mailBtn = document.getElementById('openMailBtn');
-    const mailLabel = document.getElementById('openMailLabel');
+  <script>
+    import { copyText, getShareLangOptions, refreshRegionLangs, setShareLang } from '../../utils/share';
+    import type { ShareLangCode } from '../../utils/share';
 
-    function buildMailtoUrl() {
-      const body = message + '\n\n' + shortUrl;
-      return 'mailto:?subject=' + encodeURIComponent(cleanTitle) + '&body=' + encodeURIComponent(body);
+    interface ShareData {
+      lang: ShareLangCode;
+      subject: string;
+      /** Mensaje + enlace en texto plano (alternativa si no se puede copiar la tarjeta). */
+      text: string;
+      /** HTML completo de la tarjeta (el mismo que la vista previa). */
+      html: string;
+      ui: { copied: string; copyFailed: string; textOk: string; textFail: string };
     }
 
-    function buildGmailUrl() {
-      // Gmail Compose URL: abre la web de Gmail con asunto y cuerpo pre-rellenados.
-      // El cuerpo es texto plano porque Gmail Compose no acepta HTML vía URL.
-      const body = message + '\n\n' + shortUrl;
-      return 'https://mail.google.com/mail/?view=cm&fs=1&su=' +
-        encodeURIComponent(cleanTitle) + '&body=' + encodeURIComponent(body);
+    const data = JSON.parse(document.getElementById('share-data')?.textContent || '{}') as ShareData;
+
+    // La página recuerda el idioma que se está viendo (el panel de compartir lo reutiliza).
+    setShareLang(data.lang);
+
+    // ---- Selector de idioma: idiomas cooficiales de la región + es + en ----
+    const bar = document.querySelector<HTMLElement>('[data-lang-bar]');
+
+    function renderLangBar(): void {
+      if (!bar) return;
+      bar.innerHTML = getShareLangOptions([data.lang])
+        .map(
+          (opt) =>
+            `<button type="button" class="lang-btn${opt.code === data.lang ? ' is-active' : ''}" data-page-lang="${opt.code}">${opt.label}</button>`,
+        )
+        .join('');
     }
 
-    // Comprueba si hay sesión de Google activa cargando un recurso de cuenta
-    // mediante un <img> con crossorigin=anonymous. Si carga → Gmail disponible.
-    let isGmailDetected = false;
-    function detectGmail() {
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        // Esta URL responde solo si hay sesión de Google activa
-        img.src = 'https://accounts.google.com/favicon.ico?ck=' + Date.now();
-        // Estrategia alternativa: intentar fetch con credenciales
-        fetch('https://accounts.google.com/ListAccounts?gpsia=1&source=ogb&mo=1&json=1', {
-          method: 'GET',
-          credentials: 'include',
-          mode: 'no-cors', // no-cors: si no lanza error CORS, hay sesión
-        })
-          .then(() => resolve(true))
-          .catch(() => resolve(false));
-        // Timeout de seguridad
-        setTimeout(() => resolve(false), 1500);
-      });
-    }
-
-    // Al cargar, intentamos detectar Gmail para actualizar la etiqueta del botón
-    detectGmail().then((hasGmail) => {
-      isGmailDetected = hasGmail;
-      if (hasGmail && mailLabel) {
-        mailLabel.textContent = uiSend.openGmail;
-        // Añadir logo de Gmail al botón
-        const gmailIcon = document.createElement('img');
-        gmailIcon.src = 'https://ssl.gstatic.com/ui/v1/icons/mail/rfr/gmail.ico';
-        gmailIcon.alt = 'Gmail';
-        gmailIcon.width = 16;
-        gmailIcon.height = 16;
-        gmailIcon.style.cssText = 'width:18px;height:18px;object-fit:contain;border-radius:3px;flex-shrink:0;';
-        // Insertar el ícono antes del SVG de sobre
-        const svgIcon = mailBtn?.querySelector('svg');
-        if (svgIcon && mailBtn) {
-          mailBtn.insertBefore(gmailIcon, svgIcon);
-          svgIcon.style.display = 'none'; // ocultar el ícono genérico
-        }
-      }
+    // Cambiar de idioma = recargar con ?lang=xx (la tarjeta se genera en el servidor).
+    bar?.addEventListener('click', (event) => {
+      const btn = (event.target as Element | null)?.closest<HTMLElement>('[data-page-lang]');
+      const code = btn?.dataset.pageLang as ShareLangCode | undefined;
+      if (!code || code === data.lang) return;
+      setShareLang(code);
+      window.location.search = '?lang=' + encodeURIComponent(code);
     });
 
-    mailBtn?.addEventListener('click', () => {
-      const url = isGmailDetected ? buildGmailUrl() : buildMailtoUrl();
-      const a = document.createElement('a');
-      a.href = url;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.style.display = 'none';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+    renderLangBar();
+    // Región del visitante (IP): añade catalán / euskera / gallego aunque el
+    // navegador esté en castellano. El resultado se cachea varios días.
+    void refreshRegionLangs().then((langs) => {
+      if (langs.length) renderLangBar();
     });
 
-    function showToast(msg, isErr) {
+    // ---- Toast ----
+    let toastTimer: number | undefined;
+    function showToast(message: string, isError = false, ms = 2800): void {
       const toast = document.getElementById('shareToast');
       if (!toast) return;
-      toast.textContent = msg;
-      toast.style.borderColor = isErr ? 'rgba(248,113,113,.6)' : 'rgba(255,255,255,.14)';
-      toast.style.color = isErr ? '#fca5a5' : '#f3f4f6';
+      toast.textContent = message;
+      toast.classList.toggle('is-error', isError);
       toast.classList.add('is-on');
-      setTimeout(() => toast.classList.remove('is-on'), 2800);
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => toast.classList.remove('is-on'), ms);
     }
 
-    async function copyToClipboard(text, okMsg) {
+    // ---- Copiar la tarjeta como contenido enriquecido ----
+    async function copyCard(): Promise<boolean> {
+      // 1) API moderna: text/html (la tarjeta) + text/plain (mensaje y enlace).
       try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(text);
-          showToast(okMsg);
-          return;
-        }
-      } catch {}
-      const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.setAttribute('readonly', '');
-      ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
-      document.body.appendChild(ta);
-      ta.select();
-      document.execCommand('copy');
-      document.body.removeChild(ta);
-      showToast(okMsg);
-    }
-
-    function buildEmailHtml(msgText, ctaLabel) {
-      const card = document.getElementById('emailCard');
-      if (!card) return '';
-      const img = card.querySelector('.email-product-image');
-      const imgUrl = img ? img.src : '';
-      const imgAlt = img ? img.alt : '';
-      const title = document.querySelector('.email-product-title')?.textContent || '';
-
-      return '<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1);border:1px solid #e5e7eb;">' +
-        '<div style="height:6px;background:linear-gradient(90deg,#60a5fa,#3b82f6,#2563eb);"></div>' +
-        '<div style="padding:28px 28px 20px;background:#ffffff;">' +
-        '<p style="font-size:15px;line-height:1.65;color:#1f2937;margin:0 0 20px;">' + msgText + '</p>' +
-        '<div style="height:1px;background:linear-gradient(90deg,transparent,#e5e7eb,#e5e7eb,transparent);margin:0 0 20px;"></div>' +
-        '<div style="display:flex;gap:20px;align-items:flex-start;">' +
-        '<div style="flex-shrink:0;width:140px;height:140px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
-        '<img src="' + imgUrl + '" alt="' + imgAlt + '" width="130" height="130" style="width:100%;height:100%;object-fit:contain;padding:8px;" />' +
-        '</div>' +
-        '<div style="flex:1;min-width:0;">' +
-        '<h2 style="font-size:16px;font-weight:700;color:#0d1422;margin:0 0 6px;line-height:1.3;">' + title + '</h2>' +
-        '<a href="' + shortUrl + '" style="display:inline-block;background:linear-gradient(135deg,#60a5fa,#3b82f6);color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;padding:10px 18px;border-radius:8px;">' + ctaLabel + '</a>' +
-        '</div></div></div>' +
-        '<div style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e5e7eb;">' +
-        '<p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;">Enviado desde <strong>Tradylor.com</strong> · Comparativa de precios y análisis</p>' +
-        '</div></div>';
-    }
-
-    // ---- Enviar por email via SMTP ----
-    const sendBtn = document.getElementById('sendEmailBtn');
-    const sendInput = document.getElementById('sendTo');
-    sendBtn?.addEventListener('click', async () => {
-      const to = (sendInput?.value || '').trim();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
-        showToast(uiSend.invalidEmail, true);
-        sendInput?.focus();
-        return;
-      }
-      sendBtn.disabled = true;
-      const originalHtml = sendBtn.innerHTML;
-      sendBtn.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="animation:spin 1s linear infinite"><circle cx="12" cy="12" r="10" stroke-dasharray="30 60"/></svg> ' + uiSend.sending;
-      try {
-        const res = await fetch('/api/share/email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ productId, to, lang }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && data.ok) {
-          showToast(uiSend.sentOk, false);
-          if (sendInput) sendInput.value = '';
-        } else {
-          showToast(uiSend.sentErr + (data.error ? ' (' + data.error + ')' : ''), true);
+        if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+          await navigator.clipboard.write([
+            new ClipboardItem({
+              'text/html': new Blob([data.html], { type: 'text/html' }),
+              'text/plain': new Blob([data.text], { type: 'text/plain' }),
+            }),
+          ]);
+          return true;
         }
       } catch {
-        showToast(uiSend.sentErr, true);
-      } finally {
-        sendBtn.disabled = false;
-        sendBtn.innerHTML = originalHtml;
+        /* sin permiso o navegador sin soporte: se prueba la alternativa */
       }
-    });
-    sendInput?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') sendBtn?.click();
-    });
+      // 2) Alternativa: seleccionar la tarjeta ya pintada y copiar la selección.
+      try {
+        const card = document.getElementById('emailCard');
+        const selection = window.getSelection();
+        if (!card || !selection) return false;
+        const range = document.createRange();
+        range.selectNodeContents(card);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        const ok = document.execCommand('copy');
+        selection.removeAllRanges();
+        return ok;
+      } catch {
+        return false;
+      }
+    }
 
-    // ---- Copiar HTML / texto ----
-    document.getElementById('copyHtmlBtn')?.addEventListener('click', () => {
-      copyToClipboard(buildEmailHtml(message, uiSend.cta), uiSend.htmlOk);
-    });
-    document.getElementById('copyTextBtn')?.addEventListener('click', () => {
-      copyToClipboard(message + '\n\n' + shortUrl, uiSend.textOk);
+    // ---- Enviar: copiar la tarjeta + abrir el correo (mailto: o Gmail) ----
+    // mailto: y la URL de Gmail sólo admiten texto plano. Si la tarjeta se copió,
+    // el cuerpo se deja vacío (el usuario la pega); si no, va el texto plano.
+    function mailtoUrl(withBody: boolean): string {
+      const body = data.text.replace(/\n/g, '\r\n');
+      return (
+        'mailto:?subject=' + encodeURIComponent(data.subject) + (withBody ? '&body=' + encodeURIComponent(body) : '')
+      );
+    }
+
+    function gmailUrl(withBody: boolean): string {
+      return (
+        'https://mail.google.com/mail/?view=cm&fs=1&tf=1&su=' +
+        encodeURIComponent(data.subject) +
+        (withBody ? '&body=' + encodeURIComponent(data.text) : '')
+      );
+    }
+
+    let busy = false;
+    async function sendVia(kind: 'mailto' | 'gmail'): Promise<void> {
+      if (busy) return;
+      busy = true;
+      try {
+        const copied = await copyCard();
+        showToast(copied ? data.ui.copied : data.ui.copyFailed, !copied, 8000);
+        if (kind === 'gmail') {
+          const url = gmailUrl(!copied);
+          const win = window.open(url, '_blank');
+          if (win) {
+            try {
+              win.opener = null;
+            } catch {
+              /* ya navegó a otro origen */
+            }
+          } else {
+            window.location.href = url; // ventana emergente bloqueada
+          }
+        } else {
+          window.location.href = mailtoUrl(!copied);
+        }
+      } finally {
+        busy = false;
+      }
+    }
+
+    document.getElementById('sendMailBtn')?.addEventListener('click', () => void sendVia('mailto'));
+    document.getElementById('sendGmailBtn')?.addEventListener('click', () => void sendVia('gmail'));
+
+    document.getElementById('copyTextBtn')?.addEventListener('click', async () => {
+      const ok = await copyText(data.text);
+      showToast(ok ? data.ui.textOk : data.ui.textFail, !ok);
     });
   </script>
 </Layout>

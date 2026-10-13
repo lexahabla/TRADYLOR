@@ -11,6 +11,7 @@
 import {
   getShareLang,
   getShareLangOptions,
+  refreshRegionLangs,
   setShareLang,
   shareLabel,
   sharePanelTitle,
@@ -135,12 +136,12 @@ function ensureRoot(): HTMLDivElement {
   return root;
 }
 
-/** Selector de idioma: detectado por región + inglés + chino (siempre). */
+/** Selector de idioma: idiomas cooficiales de la región + detectado + español + inglés. */
 function renderLangs(): void {
   const box = root?.querySelector('[data-share-langs]');
   if (!box) return;
   const active = getShareLang();
-  box.innerHTML = getShareLangOptions()
+  box.innerHTML = getShareLangOptions([active])
     .map(
       (option) => `
       <button type="button" class="tz-share-lang${option.code === active ? ' is-active' : ''}"
@@ -200,4 +201,10 @@ export function openSharePanel(input: ShareInput): void {
     subtitle.textContent = input.title || 'Este producto';
   }
   el.classList.add('is-open');
+
+  // Región del visitante (IP): puede añadir catalán / euskera / gallego al
+  // selector aunque el navegador esté en castellano. Se cachea varios días.
+  void refreshRegionLangs().then((langs) => {
+    if (langs.length && el.classList.contains('is-open')) renderLangs();
+  });
 }
