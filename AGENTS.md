@@ -21,7 +21,9 @@ al abrir el proyecto, y el agente debe seguirlas en cada sesión.
 3. El push a `main` **despliega automáticamente** en https://tradylor.com
    (webhook de GitHub → Easy Panel → build Docker, ~2-3 minutos). No hace falta
    tocar ningún panel. Para confirmar que el deploy terminó:
-   `curl https://tradylor.com/api/health` debe devolver `"status":"ok"`.
+   `curl https://tradylor.com/api/health` debe devolver `"status":"ok"` **y el
+   campo `commit` igual al hash recién pusheado** (si no coincide, el build
+   anterior sigue vivo: esperar y volver a consultar).
 4. **Los datos NO van en git**: productos, categorías, analytics,
    `credentials.json` e imágenes IA viven en el **volumen** del servidor
    (`/app/data`). Es normal que falten ficheros en `src/data/` o en
@@ -31,6 +33,9 @@ al abrir el proyecto, y el agente debe seguirlas en cada sesión.
    `.gitignore`; no forzar su inclusión ni pegar claves en el código.
 6. Tras un push, si el deploy falla (webhook/health), informar al usuario en vez
    de reintentar deploys a ciegas.
+7. **Cada tarea termina con commit + push + verificación de deploy + aviso al
+   usuario** con el resultado (y con el fallo si lo hay) en el mismo turno; esta
+   regla es obligatoria también entre sesiones y agentes distintos.
 
 ## Qué es este proyecto
 
