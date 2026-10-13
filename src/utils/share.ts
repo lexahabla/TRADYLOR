@@ -505,11 +505,17 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
         : { ok: false, mode: 'opened', message: pack.openFailed(name) };
 
     case 'email':
-      return openBlank(
-        `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(text)}`,
-      )
+      // Email: abrimos la página de preview con tarjeta HTML atractiva
+      // (imagen + colores + mensaje) que permite copiar el HTML formateado
+      // y pegarlo en Gmail/Outlook/Apple Mail. El mailto: plano queda como
+      // fallback si falla la apertura de la página.
+      return openBlank(`/share/${encodeURIComponent(input.productId)}`)
         ? { ok: true, mode: 'opened' }
-        : { ok: false, mode: 'opened', message: pack.openFailed(name) };
+        : openBlank(
+            `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(text)}`,
+          )
+          ? { ok: true, mode: 'opened' }
+          : { ok: false, mode: 'opened', message: pack.openFailed(name) };
 
     case 'copy': {
       const copied = await copyText(text);

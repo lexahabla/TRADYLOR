@@ -1,0 +1,431 @@
+---
+/**
+ * ==============================================================================
+ * TRADYLOR — PÁGINA DE COMPARTIR (PREVIEW HTML PARA EMAIL)
+ * ==============================================================================
+ *
+ * Ruta dinámica SSR: /share/[id]
+ *
+ * Cuando el usuario pulsa "Email" en el panel de compartir, se abre esta página
+ * que muestra una tarjeta HTML atractiva con imagen del producto, colores y el
+ * mensaje de recomendación. El usuario puede copiar el HTML formateado y pegarlo
+ * directamente en su cliente de correo (Gmail, Outlook, Apple Mail, etc.).
+ *
+ * Las demás vías (WhatsApp, Telegram, X, etc.) ya muestran la preview visual
+ * automáticamente gracias a las etiquetas Open Graph de la ficha de producto.
+ * ==============================================================================
+ */
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import { findCatalogProduct, productKey } from '../../lib/catalog';
+import { getShareLang, buildShareText, buildShareUrl, shareLabel } from '../../utils/share';
+
+const product = findCatalogProduct(Astro.params.id);
+if (!product) return Astro.redirect('/', 302);
+
+const key = productKey(product);
+const lang = getShareLang();
+const shortUrl = buildShareUrl(key, 'email');
+const message = buildShareText('email', { productId: key, title: product.title, category: product.category }, shortUrl, lang);
+const absoluteImage = /^https?:\/\//i.test(product.image) ? product.image : new URL(product.image, Astro.site ?? 'https://tradylor.com').href;
+
+// Título limpio para el email
+const cleanTitle = product.title.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
+
+// Colores de marca
+const BRAND_BLUE = '#3b82f6';
+const BRAND_DARK = '#0d1422';
+const BRAND_LIGHT = '#f0f6ff';
+---
+
+<Layout
+  title={`Compartir: ${cleanTitle} | Tradylor`}
+  description="Vista previa del mensaje de recomendación para compartir por email."
+  noindex={true}
+>
+  <div class="share-preview-page">
+    <div class="share-preview-container">
+      <!-- Cabecera con info -->
+      <header class="share-header">
+        <div class="share-logo">
+          <span class="logo-mark">T</span>
+          <span class="logo-text">Tradylor</span>
+        </div>
+        <p class="share-hint">Copia el HTML y pégalo en tu cliente de correo (Gmail, Outlook, Apple Mail…)</p>
+      </header>
+
+      <!-- Tarjeta HTML del email -->
+      <div class="email-card" id="emailCard">
+        <!-- Barra de color superior -->
+        <div class="email-card-bar"></div>
+
+        <!-- Contenido del email -->
+        <div class="email-card-body">
+          <!-- Mensaje del usuario arriba -->
+          <p class="email-message">{message}</p>
+
+          <!-- Separador -->
+          <div class="email-divider"></div>
+
+          <!-- Ficha del producto -->
+          <div class="email-product">
+            <div class="email-product-image-wrap">
+              <img
+                src={absoluteImage}
+                alt={cleanTitle}
+                class="email-product-image"
+                width="280"
+                height="280"
+                loading="eager"
+              />
+            </div>
+            <div class="email-product-info">
+              <h2 class="email-product-title">{cleanTitle}</h2>
+              {product.category && (
+                <p class="email-product-category">{product.category}</p>
+              )}
+              <a href={shortUrl} class="email-cta" target="_blank" rel="noopener noreferrer">
+                Ver ficha completa en Tradylor →
+              </a>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pie del email -->
+        <div class="email-card-footer">
+          <p>Enviado desde <strong>Tradylor.com</strong> · Comparativa de precios y análisis</p>
+        </div>
+      </div>
+
+      <!-- Botones de acción -->
+      <div class="share-actions">
+        <button type="button" class="share-btn share-btn-primary" id="copyHtmlBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="11" height="11" rx="2"/>
+            <path d="M15 5.5A2.5 2.5 0 0 0 12.5 3H6a2.5 2.5 0 0 0-2.5 2.5V12A2.5 2.5 0 0 0 6 14.5"/>
+          </svg>
+          Copiar HTML del email
+        </button>
+        <button type="button" class="share-btn share-btn-secondary" id="copyTextBtn">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+            <polyline points="16 6 12 2 8 6"/>
+            <line x1="12" y1="2" x2="12" y2="15"/>
+          </svg>
+          Copiar solo texto
+        </button>
+        <a href={`/producto/${key}`} class="share-btn share-btn-ghost" target="_blank" rel="noopener noreferrer">
+          Ver ficha del producto
+        </a>
+      </div>
+
+      <!-- Toast de confirmación -->
+      <div class="share-toast" id="shareToast"></div>
+    </div>
+  </div>
+
+  <style>
+    .share-preview-page {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0a0e17 0%, #111827 50%, #0a0e17 100%);
+      padding: 2rem 1rem;
+    }
+    .share-preview-container {
+      max-width: 640px;
+      margin: 0 auto;
+    }
+    .share-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .share-logo {
+      display: inline-flex;
+      align-items: center;
+      gap: .5rem;
+      margin-bottom: .75rem;
+    }
+    .logo-mark {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+      color: #0d1422;
+      font-weight: 800;
+      font-size: 1.1rem;
+      font-family: 'Outfit', sans-serif;
+    }
+    .logo-text {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1.25rem;
+      color: #f3f4f6;
+    }
+    .share-hint {
+      font-size: .82rem;
+      color: #9ca3af;
+      max-width: 420px;
+      margin: 0 auto;
+      line-height: 1.5;
+    }
+
+    /* ---- Tarjeta del email (HTML inline-friendly) ---- */
+    .email-card {
+      background: #ffffff;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,.45), 0 0 0 1px rgba(255,255,255,.06);
+      margin-bottom: 1.5rem;
+    }
+    .email-card-bar {
+      height: 6px;
+      background: linear-gradient(90deg, #60a5fa 0%, #3b82f6 40%, #2563eb 100%);
+    }
+    .email-card-body {
+      padding: 1.75rem 1.75rem 1.25rem;
+    }
+    .email-message {
+      font-size: 1rem;
+      line-height: 1.65;
+      color: #1f2937;
+      margin: 0 0 1.25rem;
+      font-family: 'Inter', sans-serif;
+    }
+    .email-divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, #e5e7eb 20%, #e5e7eb 80%, transparent);
+      margin: 0 0 1.25rem;
+    }
+    .email-product {
+      display: flex;
+      gap: 1.25rem;
+      align-items: flex-start;
+    }
+    .email-product-image-wrap {
+      flex-shrink: 0;
+      width: 140px;
+      height: 140px;
+      border-radius: 12px;
+      background: #f8fafc;
+      border: 1px solid #e5e7eb;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .email-product-image {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      padding: .5rem;
+    }
+    .email-product-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .email-product-title {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      color: #0d1422;
+      margin: 0 0 .35rem;
+      line-height: 1.3;
+    }
+    .email-product-category {
+      font-size: .78rem;
+      color: #6b7280;
+      margin: 0 0 .85rem;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      font-weight: 600;
+    }
+    .email-cta {
+      display: inline-block;
+      background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: .85rem;
+      padding: .6rem 1.1rem;
+      border-radius: 8px;
+      transition: .2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .email-cta:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(59,130,246,.4);
+    }
+    .email-card-footer {
+      background: #f8fafc;
+      padding: .85rem 1.75rem;
+      border-top: 1px solid #e5e7eb;
+    }
+    .email-card-footer p {
+      margin: 0;
+      font-size: .72rem;
+      color: #9ca3af;
+      text-align: center;
+    }
+
+    /* ---- Botones ---- */
+    .share-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .65rem;
+      justify-content: center;
+    }
+    .share-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      padding: .7rem 1.15rem;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: .85rem;
+      font-family: 'Inter', sans-serif;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
+      transition: .18s;
+    }
+    .share-btn-primary {
+      background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+      color: #0d1422;
+      box-shadow: 0 4px 16px rgba(59,130,246,.35);
+    }
+    .share-btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(59,130,246,.5);
+    }
+    .share-btn-secondary {
+      background: rgba(255,255,255,.08);
+      color: #e5e7eb;
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    .share-btn-secondary:hover {
+      background: rgba(255,255,255,.14);
+    }
+    .share-btn-ghost {
+      background: transparent;
+      color: #9ca3af;
+      border: 1px solid rgba(255,255,255,.1);
+    }
+    .share-btn-ghost:hover {
+      color: #e5e7eb;
+      border-color: rgba(255,255,255,.2);
+    }
+
+    /* ---- Toast ---- */
+    .share-toast {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: rgba(13,20,34,.95);
+      color: #f3f4f6;
+      border: 1px solid rgba(255,255,255,.14);
+      padding: .65rem 1.25rem;
+      border-radius: 999px;
+      font-size: .82rem;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: .25s;
+      z-index: 999;
+    }
+    .share-toast.is-on {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (max-width: 520px) {
+      .email-product {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+      }
+      .email-product-image-wrap {
+        width: 180px;
+        height: 180px;
+      }
+      .email-card-body {
+        padding: 1.25rem;
+      }
+      .share-actions {
+        flex-direction: column;
+      }
+      .share-btn {
+        justify-content: center;
+      }
+    }
+  </style>
+
+  <script define:vars={{ message, shortUrl, cleanTitle }}>
+    function showToast(msg) {
+      const toast = document.getElementById('shareToast');
+      if (!toast) return;
+      toast.textContent = msg;
+      toast.classList.add('is-on');
+      setTimeout(() => toast.classList.remove('is-on'), 2400);
+    }
+
+    async function copyToClipboard(text, okMsg) {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+          showToast(okMsg);
+          return;
+        }
+      } catch {}
+      // Fallback
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;top:-1000px;opacity:0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast(okMsg);
+    }
+
+    // Generar el HTML del email listo para pegar
+    function buildEmailHtml() {
+      const card = document.getElementById('emailCard');
+      if (!card) return '';
+      const img = card.querySelector('.email-product-image');
+      const imgUrl = img ? img.src : '';
+      const imgAlt = img ? img.alt : '';
+      const title = document.querySelector('.email-product-title')?.textContent || '';
+      const ctaUrl = shortUrl;
+
+      return '<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.1);border:1px solid #e5e7eb;">' +
+        '<div style="height:6px;background:linear-gradient(90deg,#60a5fa,#3b82f6,#2563eb);"></div>' +
+        '<div style="padding:28px 28px 20px;background:#ffffff;">' +
+        '<p style="font-size:15px;line-height:1.65;color:#1f2937;margin:0 0 20px;">' + message + '</p>' +
+        '<div style="height:1px;background:linear-gradient(90deg,transparent,#e5e7eb,#e5e7eb,transparent);margin:0 0 20px;"></div>' +
+        '<div style="display:flex;gap:20px;align-items:flex-start;">' +
+        '<div style="flex-shrink:0;width:140px;height:140px;border-radius:12px;background:#f8fafc;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;overflow:hidden;">' +
+        '<img src="' + imgUrl + '" alt="' + imgAlt + '" width="130" height="130" style="width:100%;height:100%;object-fit:contain;padding:8px;" />' +
+        '</div>' +
+        '<div style="flex:1;min-width:0;">' +
+        '<h2 style="font-size:16px;font-weight:700;color:#0d1422;margin:0 0 6px;line-height:1.3;">' + title + '</h2>' +
+        '<a href="' + ctaUrl + '" style="display:inline-block;background:linear-gradient(135deg,#60a5fa,#3b82f6);color:#ffffff;text-decoration:none;font-weight:700;font-size:13px;padding:10px 18px;border-radius:8px;">Ver ficha completa en Tradylor →</a>' +
+        '</div></div></div>' +
+        '<div style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e5e7eb;">' +
+        '<p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;">Enviado desde <strong>Tradylor.com</strong> · Comparativa de precios y análisis</p>' +
+        '</div></div>';
+    }
+
+    document.getElementById('copyHtmlBtn')?.addEventListener('click', () => {
+      copyToClipboard(buildEmailHtml(), 'HTML copiado. Pégalo en tu correo.');
+    });
+
+    document.getElementById('copyTextBtn')?.addEventListener('click', () => {
+      copyToClipboard(message + '\n\n' + shortUrl, 'Texto copiado.');
+    });
+  </script>
+</Layout>
