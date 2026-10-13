@@ -21,28 +21,12 @@ import {
   type ShareLangCode,
 } from './share';
 
-/** Canales siempre visibles. Email y "Copiar enlace" se retiraron del panel. */
-const CHANNELS: ShareChannel[] = ['whatsapp', 'telegram', 'x', 'facebook', 'reddit', 'pinterest'];
-
-/** Canales que sólo se ofrecen en móvil: el menú de compartir nativo del sistema. */
-const MOBILE_ONLY_CHANNELS: ShareChannel[] = ['native'];
-
 /**
- * ¿Móvil o tablet? Los navegadores Chromium lo declaran en userAgentData.mobile;
- * el resto se reconoce por el user agent (iPadOS 13+ se hace pasar por Mac, pero
- * tiene pantalla táctil) o porque su puntero principal es táctil.
+ * Canales del panel, en este orden. El botón de Email se retiró del panel;
+ * "Copiar enlace" y "Compartir…" (menú nativo, con copia de texto como
+ * alternativa si el navegador no lo soporta) se mantienen en todos los dispositivos.
  */
-function isMobileDevice(): boolean {
-  try {
-    const nav = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
-    if (nav.userAgentData?.mobile === true) return true;
-    if (/Android|iPhone|iPad|iPod|Mobile|Windows Phone|Silk/i.test(nav.userAgent)) return true;
-    if (/Macintosh/i.test(nav.userAgent) && nav.maxTouchPoints > 1) return true;
-    return window.matchMedia('(pointer: coarse)').matches;
-  } catch {
-    return false;
-  }
-}
+const CHANNELS: ShareChannel[] = ['whatsapp', 'telegram', 'x', 'facebook', 'reddit', 'pinterest', 'copy', 'native'];
 
 const ICONS: Record<ShareChannel, string> = {
   whatsapp:
@@ -167,8 +151,7 @@ function renderChannels(): void {
   if (title) title.textContent = sharePanelTitle();
   const grid = root?.querySelector('[data-share-grid]');
   if (!grid) return;
-  const channels = isMobileDevice() ? [...CHANNELS, ...MOBILE_ONLY_CHANNELS] : CHANNELS;
-  grid.innerHTML = channels.map(
+  grid.innerHTML = CHANNELS.map(
     (channel) => `
     <button type="button" class="tz-share-opt" data-channel="${channel}">
       <svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[channel]}</svg>
