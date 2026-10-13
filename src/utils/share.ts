@@ -51,6 +51,14 @@ interface LangPack {
   panelTitle: string;
   dm: string[];
   threads: string[];
+  /** Plantilla específica para X (fallback: threads). */
+  x?: string[];
+  /** Plantilla específica para Reddit (fallback: threads). */
+  reddit?: string[];
+  /** Título del post de Reddit (fallback: título del producto). */
+  redditTitle?: string;
+  /** Plantilla específica para Facebook (fallback: threads). */
+  facebook?: string[];
   visual: string[];
   copy: string;
   native: string;
@@ -84,6 +92,16 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     ],
     threads: [
       'Si alguien anda buscando {categoria}, en Tradylor.com lo han puesto como la opción top tras comparar especificaciones y precio. Aquí tenéis la ficha con el seguimiento de precio activo: {url}',
+    ],
+    x: [
+      'Descubrí esta web para comparar precios y la verdad que te saca muy bien las opciones calidad-precio reales.\n\nDejo por aquí el análisis de este modelo por si a alguien le sirve 👇\n{url}\n\n#Chollos #Ofertas #Tecnologia',
+    ],
+    reddit: [
+      'Buenas! Estuve un buen rato buscando y comparando precios para renovar/comprar {titulo}. Usé un buscador nuevo que encontré (Tradylor) para ver gráficas e historial y por especificaciones/precio parece de lo mejorcito en este rango.\n\nOs dejo la ficha por si queréis echarle un ojo o si alguien lo tiene y me confirma qué tal sale: {url}',
+    ],
+    redditTitle: '¿Qué opináis de esta opción calidad-precio para {categoria}?',
+    facebook: [
+      'Os comparto esto por si a alguien le viene bien. Estuve usando esta web para buscar y comparar precios de {categoria} y me ha parecido un hallazgo para no volverse loco entre tantas opciones.\n\nTe analiza las mejores opciones calidad-precio con gráficas de evolución. Esta en concreto me ha parecido que está genial de precio ahora mismo:\n\n{url}',
     ],
     visual: [
       'La mejor opción calidad-precio en {categoria}, con el histórico de precio verificado. Ficha completa → {url}',
@@ -388,15 +406,23 @@ export function buildShareText(
       Record<ShareLangCode, string>
     >)[lang ?? getShareLang()] ||
     'este producto';
+  const titulo = (input.title ?? '').trim() || categoria;
   const pack = LANG_PACKS[lang ?? getShareLang()];
   const group =
     channel === 'whatsapp' || channel === 'telegram' || channel === 'email'
       ? pack.dm
-      : channel === 'x' || channel === 'reddit' || channel === 'facebook'
-        ? pack.threads
-        : pack.visual;
+      : channel === 'x'
+        ? (pack.x ?? pack.threads)
+        : channel === 'reddit'
+          ? (pack.reddit ?? pack.threads)
+          : channel === 'facebook'
+            ? (pack.facebook ?? pack.threads)
+            : pack.visual;
   const template = group[Math.floor(Math.random() * group.length)] ?? group[0] ?? '';
-  return template.replace(/\{categoria\}/g, categoria).replace(/\{url\}/g, link);
+  return template
+    .replace(/\{categoria\}/g, categoria)
+    .replace(/\{titulo\}/g, titulo)
+    .replace(/\{url\}/g, link);
 }
 
 /**
@@ -486,14 +512,32 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
         ? { ok: true, mode: 'opened' }
         : { ok: false, mode: 'opened', message: pack.openFailed(name) };
 
-    case 'reddit':
+    case 'reddit': {
+      // Reddit: el campo "title" va en la URL; el cuerpo se copia al
+      // portapapeles para que el usuario lo pegue en el formulario.
+      const categoria =
+        (input.category ?? '').trim() ||
+        ({ ca: 'aquest producte', eu: 'produktu hau', gl: 'este produto' } as Partial<
+          Record<ShareLangCode, string>
+        >)[lang] ||
+        'este producto';
+      const redditTitleRaw =
+        (pack.redditTitle ?? '¿Qué opináis de esta opción calidad-precio para {categoria}?')
+          .replace(/\{categoria\}/g, categoria)
+          .replace(/\{titulo\}/g, input.title || title);
+      const bodyCopied = await copyText(text);
       return openBlank(
         `https://www.reddit.com/submit?url=${encodeURIComponent(link)}&title=${encodeURIComponent(
-          input.title || title,
+          redditTitleRaw,
         )}`,
       )
-        ? { ok: true, mode: 'opened' }
+        ? {
+            ok: true,
+            mode: 'opened',
+            message: bodyCopied ? pack.copiedText(name) : pack.noClipboard,
+          }
         : { ok: false, mode: 'opened', message: pack.openFailed(name) };
+    }
 
     case 'pinterest':
       return openBlank(
