@@ -26,6 +26,7 @@ import {
   buildShareText,
   buildShareUrl,
   getShareLangOptions,
+  SHARE_LANG_CODES,
   type ShareLangCode,
 } from '../../utils/share';
 
@@ -34,10 +35,11 @@ if (!product) return Astro.redirect('/', 302);
 
 const key = productKey(product);
 
-// Idioma desde query param (lo pasa el panel de compartir al abrir la página)
+// Idioma desde query param (lo pasa el panel de compartir al abrir la página).
+// Se valida contra SHARE_LANG_CODES (lista fija) porque getShareLangOptions()
+// depende de navigator, que no existe en el servidor SSR.
 const langParam = (Astro.url.searchParams.get('lang') ?? '').trim() as ShareLangCode;
-const validLangs = getShareLangOptions().map((o) => o.code);
-const lang: ShareLangCode = validLangs.includes(langParam) ? langParam : 'es';
+const lang: ShareLangCode = SHARE_LANG_CODES.includes(langParam) ? langParam : 'es';
 
 const shortUrl = buildShareUrl(key, 'email');
 const rawMessage = buildShareText(

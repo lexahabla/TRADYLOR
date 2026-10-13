@@ -29,6 +29,9 @@ export type ShareChannel =
 /** Idiomas con plantilla propia. */
 export type ShareLangCode = 'es' | 'ca' | 'eu' | 'gl' | 'en' | 'fr' | 'de' | 'pt' | 'it';
 
+/** Todos los códigos de idioma válidos (para validar query params en SSR). */
+export const SHARE_LANG_CODES: ShareLangCode[] = ['es', 'ca', 'eu', 'gl', 'en', 'fr', 'de', 'pt', 'it'];
+
 export interface ShareInput {
   productId: string;
   title: string;
