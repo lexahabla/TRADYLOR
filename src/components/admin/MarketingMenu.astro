@@ -1,0 +1,65 @@
+---
+/**
+ * Menú de secciones de Marketing (submenú tras admin-section-nav).
+ * Se usa en /admin/marketing y en cada opción del módulo.
+ */
+interface Props {
+  active?: 'usuarios' | 'market-map' | 'calendario' | 'market-action' | 'tendencias';
+}
+
+const { active } = Astro.props;
+
+const OPTIONS = [
+  { id: 'usuarios', href: '/admin/marketing/usuarios', label: 'Usuarios' },
+  { id: 'market-map', href: '/admin/marketing/market-map', label: 'Market Map' },
+  { id: 'calendario', href: '/admin/marketing/calendario', label: 'Calendario' },
+  { id: 'market-action', href: '/admin/marketing/market-action', label: 'Market Action' },
+  { id: 'tendencias', href: '/admin/marketing/tendencias', label: 'Tendencias' },
+] as const;
+---
+
+<nav class="marketing-menu" aria-label="Secciones de Marketing">
+  {
+    OPTIONS.map((option) => (
+      <a
+        class:list={['marketing-menu-item', { 'is-active': active === option.id }]}
+        href={option.href}
+        aria-current={active === option.id ? 'page' : undefined}
+      >
+        {option.label}
+      </a>
+    ))
+  }
+</nav>
+
+<style>
+  .marketing-menu {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    padding: 0.3rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+  }
+
+  .marketing-menu-item {
+    padding: 0.55rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    border-radius: 10px;
+    transition: color 0.16s ease, background 0.16s ease;
+  }
+
+  .marketing-menu-item:hover {
+    color: var(--color-text-main);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  .marketing-menu-item.is-active {
+    color: #07111f;
+    background: #60a5fa;
+  }
+</style>

@@ -1,0 +1,71 @@
+---
+/**
+ * TRADYLOR — /admin/marketing/tendencias (sección Tendencias del módulo Marketing)
+ */
+export const prerender = false;
+
+import Layout from '../../../layouts/Layout.astro';
+import AdminNav from '../../../components/AdminNav.astro';
+import AdminUserMenu from '../../../components/AdminUserMenu.astro';
+import MarketingMenu from '../../../components/admin/MarketingMenu.astro';
+import { getSessionUser } from '../../../lib/adminAuth';
+
+const sessionUser = getSessionUser(Astro.request);
+if (!sessionUser) return Astro.redirect('/admin');
+if (sessionUser.role !== 'admin') return Astro.redirect('/admin/perfil');
+
+Astro.response.headers.set('Cache-Control', 'no-store');
+---
+
+<Layout
+  title="Tendencias | Marketing | Admin Tradylor"
+  description="Escucha activa y tendencias del módulo de Marketing."
+>
+  <Fragment slot="header-end">
+    <AdminUserMenu user={sessionUser} active="marketing" />
+  </Fragment>
+  <div class="admin-module-wrapper">
+    <header class="admin-header">
+      <div class="admin-tag-row">
+        <a class="admin-tag-link" href="/admin">Panel de administración</a>
+        <span class="admin-tag-sep" aria-hidden="true">/</span>
+        <a class="admin-tag-link" href="/admin/marketing">Marketing</a>
+        <span class="admin-tag-sep" aria-hidden="true">/</span>
+        <div class="admin-tag-pill">Tendencias</div>
+      </div>
+      <h1 class="admin-title">Tendencias</h1>
+      <p class="admin-subtitle">
+        Qué se busca y dónde publicarlo: tendencias de keyword por categoría del catálogo y
+        matriz que recomienda canal, formato y gancho según el tipo de producto.
+      </p>
+    </header>
+
+    <AdminNav context="catalogo" active="marketing" user={sessionUser} />
+
+    <MarketingMenu active="tendencias" />
+
+    <section class="marketing-placeholder">
+      <span class="marketing-placeholder-pill">En preparación</span>
+      <p>
+        Aquí se mostrará la tabla de tendencias por categoría (keyword, fuente, volumen y
+        variación) y la matriz de canales con el canal ideal, el mejor formato y el gancho
+        sugerido para cada tipo de producto.
+      </p>
+    </section>
+  </div>
+</Layout>
+
+<style>
+  .admin-module-wrapper { display: flex; flex-direction: column; gap: 2rem; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
+  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; width: fit-content; }
+  .admin-tag-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+  .admin-tag-row .admin-tag-pill { margin: 0; }
+  .admin-tag-link { font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; text-decoration: none; transition: color 0.16s ease; }
+  .admin-tag-link:hover { color: #93c5fd; }
+  .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
+  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
+  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
+  .marketing-placeholder { display: flex; flex-direction: column; align-items: flex-start; gap: 0.9rem; padding: 1.6rem 1.4rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; color: var(--color-text-muted); font-size: 0.92rem; line-height: 1.65; }
+  .marketing-placeholder-pill { padding: 0.35rem 0.85rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+</style>
