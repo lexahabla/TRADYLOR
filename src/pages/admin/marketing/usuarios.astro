@@ -479,6 +479,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
           <div><span class="mu-k">Comprados</span><ul class="mu-mini-list">${listItems(b.purchases)}</ul></div>
           <div><span class="mu-k">Carrito pendiente</span><ul class="mu-mini-list">${listItems(b.cartItems)}</ul></div>
           <button type="button" class="mu-btn mu-btn-small" data-remind title="${esc(remindHint)}"${remindDisabled ? ' disabled' : ''}>Enviar aviso de carrito</button>
+          <button type="button" class="mu-btn mu-btn-small mu-btn-danger" data-delete-user>Eliminar usuario</button>
         </section>
         <section class="mu-dcol">
           <h3 class="mu-dtitle">Lead score</h3>
@@ -828,12 +829,46 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     }
   }
 
+  async function deleteUser(userId: string, button: HTMLButtonElement): Promise<void> {
+    if (!confirm('¿Eliminar este usuario y todos sus datos? Esta acción no se puede deshacer.')) return;
+    button.disabled = true;
+    button.textContent = 'Eliminando…';
+    try {
+      const response = await fetch(`/api/admin/marketing/usuarios/${encodeURIComponent(userId)}`, {
+        method: 'DELETE',
+        credentials: 'same-origin',
+      });
+      const body = await response.json();
+      if (body?.success) {
+        users = users.filter((user) => user.id !== userId);
+        reindex();
+        toast('Usuario eliminado.');
+        applyFicha(true);
+      } else {
+        toast(body?.message ?? 'No se pudo eliminar el usuario.', true);
+        button.disabled = false;
+        button.textContent = 'Eliminar usuario';
+      }
+    } catch {
+      toast('Error de red al eliminar el usuario.', true);
+      button.disabled = false;
+      button.textContent = 'Eliminar usuario';
+    }
+  }
+
   // Delegación: las fichas se re-renderizan al paginar, filtrar o refrescar.
   document.addEventListener('click', (event) => {
     const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-remind]');
     if (!button || button.disabled) return;
     const userId = button.closest<HTMLElement>('[data-user-id]')?.dataset.userId;
     if (userId) void sendRemind(userId, button);
+  });
+
+  document.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-delete-user]');
+    if (!button || button.disabled) return;
+    const userId = button.closest<HTMLElement>('[data-user-id]')?.dataset.userId;
+    if (userId) void deleteUser(userId, button);
   });
 
   // ------------------------------------------------------------ integraciones

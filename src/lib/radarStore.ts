@@ -591,3 +591,10 @@ export function deferReminder(userId: string, reminderId: string, remindAt: numb
   all[userId] = radar;
   writeAll(all);
 }
+
+/** Elimina todos los datos del radar asociados al usuario. */
+export function deleteRadar(userId: string): void {
+  const all = readAll();
+  delete all[userId];
+  writeAll(all);
+}
