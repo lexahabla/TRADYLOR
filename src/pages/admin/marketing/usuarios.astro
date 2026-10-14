@@ -308,7 +308,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
   }
 
   const data = JSON.parse(document.getElementById('mu-data')?.textContent ?? '{}') as Payload;
-  let users: User360[] = Array.isArray(data.users) ? data.users : [];
+  let users: User360[] = (Array.isArray(data.users) ? data.users : []).filter((user) => user.provider !== 'anonymous');
   let usersById = new Map<string, User360>();
   const reindex = (): void => {
     usersById = new Map(users.map((user) => [user.id, user] as const));
@@ -712,6 +712,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
   function filterUsers(filters: Filters): User360[] {
     const now = Date.now();
     return users.filter((user) => {
+      if (user.provider === 'anonymous') return false;
       const q = filters.q?.trim().toLowerCase();
       if (q && !`${user.email} ${user.name ?? ''}`.toLowerCase().includes(q)) return false;
       if (filters.hobby && !user.declared.hobbies.includes(filters.hobby)) return false;
