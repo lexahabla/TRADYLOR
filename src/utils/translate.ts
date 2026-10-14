@@ -159,3 +159,25 @@ export const GOOGLE_TRANSLATE_LANGS: TranslateLang[] = [
   { code: 'yo', label: 'Yorùbá' },
   { code: 'zu', label: 'isiZulu' },
 ];
+
+/**
+ * Bandera del idioma para el botón del traductor: código de país ISO 3166-1
+ * (imágenes de flagcdn.com) por cada código gtx. Los idiomas sin país propio
+ * (esperanto, kurdo, latín, hmong, yiddish) no tienen entrada y se quedan con
+ * el icono de traducción.
+ */
+export const TRANSLATE_FLAG_CC: Record<string, string> = {
+  af: 'za', sq: 'al', am: 'et', hy: 'am', ar: 'sa', as: 'in', az: 'az', eu: 'es',
+  be: 'by', bn: 'bd', bs: 'ba', bg: 'bg', ca: 'es', ceb: 'ph', 'zh-CN': 'cn', 'zh-TW': 'tw',
+  co: 'fr', hr: 'hr', cs: 'cz', da: 'dk', nl: 'nl', en: 'gb', et: 'ee', fi: 'fi',
+  fr: 'fr', fy: 'nl', gl: 'es', ka: 'ge', de: 'de', el: 'gr', gu: 'in', ht: 'ht',
+  ha: 'ng', haw: 'us', he: 'il', hi: 'in', hu: 'hu', is: 'is', ig: 'ng', id: 'id',
+  ga: 'ie', it: 'it', ja: 'jp', jw: 'id', kn: 'in', kk: 'kz', km: 'kh', ko: 'kr',
+  ky: 'kg', lo: 'la', lv: 'lv', lt: 'lt', lb: 'lu', mk: 'mk', mg: 'mg', ml: 'in',
+  mt: 'mt', mi: 'nz', mr: 'in', mn: 'mn', my: 'mm', ne: 'np', no: 'no', ny: 'mw',
+  ps: 'ps', fa: 'ir', pl: 'pl', pt: 'pt', 'pt-BR': 'br', pa: 'in', ro: 'ro', ru: 'ru',
+  sm: 'ws', gd: 'gb', sr: 'rs', sn: 'zw', sd: 'pk', si: 'lk', sk: 'sk', sl: 'si',
+  so: 'so', es: 'es', su: 'id', sw: 'ke', sv: 'se', tl: 'ph', tg: 'tj', ta: 'in',
+  te: 'in', th: 'th', tr: 'tr', tk: 'tm', uk: 'ua', ur: 'pk', ug: 'cn', uz: 'uz',
+  vi: 'vn', cy: 'gb', xh: 'za', yo: 'ng', zu: 'za',
+};

@@ -378,47 +378,69 @@ const resolvedImage = toAbsolute(image);
         box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35), 0 6px 18px rgba(37, 99, 235, 0.6);
         border-color: #93c5fd;
       }
-      /* Traductor de Google (junto al menú de usuario) */
+      /* Traductor de Google (a la derecha de todo): icono/bandera + siglas.
+         El select nativo tapa el botón (opacity 0) y abre el desplegable. */
       .header-translate {
         position: relative;
         display: inline-flex;
         align-items: center;
+        gap: 0.4rem;
         height: 40px;
-      }
-      .header-translate-globe {
-        position: absolute;
-        left: 0.6rem;
-        color: #93c5fd;
-        pointer-events: none;
-      }
-      .header-translate-select {
-        appearance: none;
-        -webkit-appearance: none;
-        height: 40px;
-        max-width: 138px;
-        padding: 0 0.55rem 0 1.9rem;
-        font-family: var(--font-body);
-        font-size: 0.74rem;
-        font-weight: 700;
-        color: #e5e7eb;
+        padding: 0 0.7rem;
         background: rgba(59, 130, 246, 0.08);
         border: 1px solid rgba(59, 130, 246, 0.3);
         border-radius: 12px;
-        cursor: pointer;
-        text-overflow: ellipsis;
         transition: background 0.2s ease, border-color 0.2s ease;
       }
-      .header-translate-select:hover {
+      .header-translate:hover {
         background: rgba(59, 130, 246, 0.18);
         border-color: rgba(96, 165, 250, 0.55);
       }
-      .header-translate-select:focus-visible {
+      .header-translate:focus-within {
         outline: 2px solid #60a5fa;
         outline-offset: 2px;
       }
-      .header-translate-select option {
-        background: #111827;
-        color: #f3f4f6;
+      .header-translate-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 17px;
+        height: 17px;
+        flex: none;
+      }
+      .header-translate-globe {
+        color: #60a5fa;
+      }
+      .header-translate-flag {
+        width: 21px;
+        height: 16px;
+        object-fit: cover;
+        border-radius: 3px;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.25);
+      }
+      .header-translate-code {
+        font-family: var(--font-body);
+        font-size: 0.72rem;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        line-height: 1;
+        color: #e5e7eb;
+      }
+      .header-translate-native {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        opacity: 0;
+        appearance: none;
+        -webkit-appearance: none;
+        border: 0;
+        background: transparent;
+        cursor: pointer;
+        font-size: 16px; /* evita el zoom automático al enfocar en iOS */
       }
       .header-user {
         position: relative;
@@ -1304,10 +1326,8 @@ const resolvedImage = toAbsolute(image);
           width: 44px;
           height: 44px;
         }
-        .header-translate-select {
-          max-width: 120px;
-          padding-left: 1.8rem;
-          font-size: 0.7rem;
+        .header-translate {
+          height: 44px;
         }
         .site-header .brand-logo {
           position: absolute;
@@ -1388,9 +1408,11 @@ const resolvedImage = toAbsolute(image);
           width: 40px;
           height: 40px;
         }
-        .header-translate-select {
-          max-width: 100px;
-          padding-left: 1.7rem;
+        .header-translate {
+          height: 36px;
+          padding: 0 0.55rem;
+        }
+        .header-translate-code {
           font-size: 0.68rem;
         }
         .header-actions {
@@ -1497,21 +1519,6 @@ const resolvedImage = toAbsolute(image);
                 </button>
               </div>
 
-              <!-- Traductor de Google: traduce la página al idioma elegido -->
-              <div class="header-translate" data-header-translate>
-                <svg class="header-translate-globe" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <circle cx="12" cy="12" r="10"></circle>
-                  <line x1="2" y1="12" x2="22" y2="12"></line>
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                </svg>
-                <select class="header-translate-select" data-translate-select aria-label="Traducir esta página">
-                  <option value="">Idioma original</option>
-                  {GOOGLE_TRANSLATE_LANGS.filter((item) => item.code !== 'es').map((item) => (
-                    <option value={item.code}>{item.label}</option>
-                  ))}
-                </select>
-              </div>
-
               <!-- Autenticado: menú de usuario (avatar) -->
               <div class="header-user-area" data-header-user hidden>
                 <div class="header-user" data-header-user-menu-wrap>
@@ -1552,6 +1559,27 @@ const resolvedImage = toAbsolute(image);
                     </nav>
                   </div>
                 </div>
+              </div>
+
+              <!-- Traductor de Google: icono de traducción (o bandera del idioma
+                   elegido) + siglas; el select nativo tapa el botón y abre el
+                   desplegable de idiomas. Va el último: a la derecha de todo. -->
+              <div class="header-translate" data-header-translate>
+                <span class="header-translate-icon" aria-hidden="true">
+                  <svg class="header-translate-globe" data-translate-globe width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="2" y1="12" x2="22" y2="12"></line>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                  </svg>
+                  <img class="header-translate-flag" data-translate-flag alt="" hidden />
+                </span>
+                <span class="header-translate-code" data-translate-code>ES</span>
+                <select class="header-translate-native" data-translate-select aria-label="Idioma de la página">
+                  <option value="">Español</option>
+                  {GOOGLE_TRANSLATE_LANGS.filter((item) => item.code !== 'es').map((item) => (
+                    <option value={item.code}>{item.label}</option>
+                  ))}
+                </select>
               </div>
             </div>
           </>
@@ -2229,13 +2257,13 @@ const resolvedImage = toAbsolute(image);
     <div id="google_translate_element" style="position:absolute;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;" aria-hidden="true"></div>
 
     <script>
-      import { GOOGLE_TRANSLATE_LANGS } from '../utils/translate';
+      import { GOOGLE_TRANSLATE_LANGS, TRANSLATE_FLAG_CC } from '../utils/translate';
 
       /**
-       * Desplegable del header: traduce la página a cualquier idioma con el
-       * traductor de Google. Escribe la cookie `googtrans` que lee el widget
-       * oficial de Google y recarga la página para que la aplique; al volver,
-       * el desplegable muestra el idioma activo y "Idioma original" lo quita.
+       * Botón del traductor del header: muestra un icono de traducción con las
+       * siglas del idioma original ("ES") o, si la página está traducida, la
+       * bandera del idioma elegido con sus siglas. Escribe la cookie `googtrans`
+       * que lee el widget oficial de Google y recarga la página para aplicarla.
        */
       (function initHeaderTranslate(): void {
         const select = document.querySelector<HTMLSelectElement>('[data-translate-select]');
@@ -2243,7 +2271,9 @@ const resolvedImage = toAbsolute(image);
 
         const targets = GOOGLE_TRANSLATE_LANGS.filter((lang) => lang.code !== 'es');
         const current = readTargetCookie();
-        select.value = targets.some((lang) => lang.code === current) ? current : '';
+        const active = targets.some((lang) => lang.code === current) ? current : '';
+        select.value = active;
+        renderIndicator(active);
 
         select.addEventListener('change', () => {
           const target = select.value;
@@ -2251,6 +2281,31 @@ const resolvedImage = toAbsolute(image);
           else writeTargetCookie('', true);
           window.location.reload();
         });
+
+        /** Icono + siglas del botón: globe "ES" al original; bandera + siglas al traducir. */
+        function renderIndicator(target: string): void {
+          const codeEl = document.querySelector<HTMLElement>('[data-translate-code]');
+          const globe = document.querySelector<SVGElement>('[data-translate-globe]');
+          const flag = document.querySelector<HTMLImageElement>('[data-translate-flag]');
+          if (codeEl) codeEl.textContent = target ? target.toUpperCase() : 'ES';
+
+          const cc = target ? TRANSLATE_FLAG_CC[target] : undefined;
+          if (!flag || !cc) {
+            if (flag) {
+              flag.hidden = true;
+              flag.removeAttribute('src');
+            }
+            if (globe) globe.style.display = '';
+            return;
+          }
+          flag.onerror = () => {
+            flag.hidden = true;
+            if (globe) globe.style.display = '';
+          };
+          flag.src = `https://flagcdn.com/w40/${cc}.png`;
+          flag.hidden = false;
+          if (globe) globe.style.display = 'none';
+        }
 
         // Widget oficial de Google (fuera de pantalla): aplica la traducción
         // de la cookie en cada carga de página.
