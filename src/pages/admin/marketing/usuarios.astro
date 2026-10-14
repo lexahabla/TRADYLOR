@@ -680,7 +680,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     const country = countrySelect.value;
     const hobby = hobbySelect.value;
     const sortKey = (sortSelect.value in sortFns ? sortSelect.value : 'visitas') as SortKey;
-    const list = users
+    const list = users.filter(user => user.provider !== 'anonymous')
       .filter((user) => {
         if (query && !`${user.email} ${user.name ?? ''}`.toLowerCase().includes(query)) return false;
         if (country && countryKey(user.declared.country) !== country) return false;
