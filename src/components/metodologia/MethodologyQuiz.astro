@@ -591,80 +591,88 @@ const recommendations: Record<string, Recommendation> = {
     'avanzado-equilibrio-premium': { title: 'La referencia absoluta', desc: 'El producto que define su categoría: el que todos los demás intentan superar.', badge: 'Smart Match: Avanzado · Equilibrio', products: ['apple-macbook-air-m3'] },
   };
 
-  const root = document.querySelector<HTMLElement>('[data-quiz]');
-  if (!root) return;
+  const initQuiz = () => {
+    const root = document.querySelector<HTMLElement>('[data-quiz]');
+    if (!root) return;
 
-  const stepEls = root.querySelectorAll<HTMLElement>('[data-quiz-step]');
-  const indicators = root.querySelectorAll<HTMLElement>('[data-step-indicator]');
-  const resultEl = root.querySelector<HTMLElement>('[data-quiz-result]');
-  const badgeEl = root.querySelector<HTMLElement>('[data-result-badge]');
-  const titleEl = root.querySelector<HTMLElement>('[data-result-title]');
-  const descEl = root.querySelector<HTMLElement>('[data-result-desc]');
-  const productsEl = root.querySelector<HTMLElement>('[data-result-products]');
-  const restartBtn = root.querySelector<HTMLButtonElement>('[data-quiz-restart]');
+    const stepEls = root.querySelectorAll<HTMLElement>('[data-quiz-step]');
+    const indicators = root.querySelectorAll<HTMLElement>('[data-step-indicator]');
+    const resultEl = root.querySelector<HTMLElement>('[data-quiz-result]');
+    const badgeEl = root.querySelector<HTMLElement>('[data-result-badge]');
+    const titleEl = root.querySelector<HTMLElement>('[data-result-title]');
+    const descEl = root.querySelector<HTMLElement>('[data-result-desc]');
+    const productsEl = root.querySelector<HTMLElement>('[data-result-products]');
+    const restartBtn = root.querySelector<HTMLButtonElement>('[data-quiz-restart]');
 
-  let currentStep = 0;
-  const answers: Record<string, string> = {};
+    let currentStep = 0;
+    const answers: Record<string, string> = {};
 
-  const showStep = (index: number) => {
-    stepEls.forEach((el, i) => {
-      el.hidden = i !== index;
-    });
-    indicators.forEach((el, i) => {
-      el.classList.toggle('is-active', i === index);
-      el.classList.toggle('is-done', i < index);
-    });
-    currentStep = index;
-  };
+    const showStep = (index: number) => {
+      stepEls.forEach((el, i) => {
+        el.hidden = i !== index;
+      });
+      indicators.forEach((el, i) => {
+        el.classList.toggle('is-active', i === index);
+        el.classList.toggle('is-done', i < index);
+      });
+      currentStep = index;
+    };
 
-  const showResult = () => {
-    const key = `${answers.perfil ?? ''}-${answers.objetivo ?? ''}-${answers.presupuesto ?? ''}`;
-    const rec = recommendations[key];
+    const showResult = () => {
+      const key = `${answers.perfil ?? ''}-${answers.objetivo ?? ''}-${answers.presupuesto ?? ''}`;
+      const rec = recommendations[key];
 
-    stepEls.forEach((el) => { el.hidden = true; });
-    indicators.forEach((el) => {
-      el.classList.remove('is-active');
-      el.classList.add('is-done');
-    });
+      stepEls.forEach((el) => { el.hidden = true; });
+      indicators.forEach((el) => {
+        el.classList.remove('is-active');
+        el.classList.add('is-done');
+      });
 
-    if (rec && badgeEl && titleEl && descEl && productsEl) {
-      badgeEl.textContent = rec.badge;
-      titleEl.textContent = rec.title;
-      descEl.textContent = rec.desc;
-      productsEl.innerHTML = rec.products
-        .map((slug) => `<a class="quiz-result-product" href="/producto/${slug}" target="_blank" rel="nofollow noopener sponsored">Ver ${slug.replace(/-/g, ' ')}</a>`)
-        .join('');
-    }
-
-    if (resultEl) resultEl.hidden = false;
-  };
-
-  root.querySelectorAll<HTMLButtonElement>('[data-quiz-option]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const field = btn.dataset.quizOption;
-      const value = btn.dataset.value;
-      if (!field || !value) return;
-
-      answers[field] = value;
-
-      const siblings = root.querySelectorAll<HTMLButtonElement>(`[data-quiz-option="${field}"]`);
-      siblings.forEach((s) => s.classList.remove('is-selected'));
-      btn.classList.add('is-selected');
-
-      if (currentStep < steps.length - 1) {
-        showStep(currentStep + 1);
-      } else {
-        showResult();
+      if (rec && badgeEl && titleEl && descEl && productsEl) {
+        badgeEl.textContent = rec.badge;
+        titleEl.textContent = rec.title;
+        descEl.textContent = rec.desc;
+        productsEl.innerHTML = rec.products
+          .map((slug) => `<a class="quiz-result-product" href="/producto/${slug}" target="_blank" rel="nofollow noopener sponsored">Ver ${slug.replace(/-/g, ' ')}</a>`)
+          .join('');
       }
+
+      if (resultEl) resultEl.hidden = false;
+    };
+
+    root.querySelectorAll<HTMLButtonElement>('[data-quiz-option]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const field = btn.dataset.quizOption;
+        const value = btn.dataset.value;
+        if (!field || !value) return;
+
+        answers[field] = value;
+
+        const siblings = root.querySelectorAll<HTMLButtonElement>(`[data-quiz-option="${field}"]`);
+        siblings.forEach((s) => s.classList.remove('is-selected'));
+        btn.classList.add('is-selected');
+
+        if (currentStep < steps.length - 1) {
+          showStep(currentStep + 1);
+        } else {
+          showResult();
+        }
+      });
     });
-  });
 
-  restartBtn?.addEventListener('click', () => {
-    Object.keys(answers).forEach((key) => { delete answers[key]; });
-    root.querySelectorAll('.quiz-option.is-selected').forEach((el) => el.classList.remove('is-selected'));
-    if (resultEl) resultEl.hidden = true;
+    restartBtn?.addEventListener('click', () => {
+      Object.keys(answers).forEach((key) => { delete answers[key]; });
+      root.querySelectorAll('.quiz-option.is-selected').forEach((el) => el.classList.remove('is-selected'));
+      if (resultEl) resultEl.hidden = true;
+      showStep(0);
+    });
+
     showStep(0);
-  });
+  };
 
-  showStep(0);
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initQuiz);
+  } else {
+    initQuiz();
+  }
 </script>

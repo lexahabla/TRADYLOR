@@ -265,6 +265,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
   interface CartItem { productId: string; title: string; atISO: string; value: number }
   interface Purchase { productId: string; title: string; atISO: string; value: number }
   interface Viewed { id: string; title: string; atISO: string }
+  interface SavedProduct { id: string; title: string; price: string; priceValue?: number; image: string; buyUrl: string; store: string; dateAdded: string; userNote?: string; movedAt?: string }
   interface User360 {
     id: string; email: string; name?: string; provider: string; createdAtISO: string;
     declared: {
@@ -279,6 +280,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
       cartItems: CartItem[]; cartTotal: number; cartAbandonRatePct: number | null;
       cartReminder?: { sentAtISO: string; count: number };
       purchases: Purchase[]; viewedNotBought: Viewed[]; savedCount: number;
+      savedProducts: SavedProduct[];
     };
     leadScore: { value: number; band: 'caliente' | 'tibio' | 'frio'; factors: { label: string; points: number }[] };
   }
@@ -421,6 +423,23 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     }, 3800);
   };
 
+  function savedProductsHtml(user: User360): string {
+    const products = user.behavior.savedProducts ?? [];
+    if (products.length === 0) {
+      return '<ul class="mu-mini-list"><li class="mu-empty-inline">Sin productos guardados</li></ul>';
+    }
+    const items = products
+      .slice(0, 8)
+      .map((p) => {
+        const note = p.userNote ? `<span class="mu-note" title="${esc(p.userNote)}">📝</span>` : `<span class="mu-note"></span>`;
+        const value = p.price && p.price !== '—' ? p.price : p.priceValue != null ? money(p.priceValue) : '—';
+        return `<li><span>${note}${esc(p.title)}</span><span class="mu-saved-price">${value}</span></li>`;
+      })
+      .join('');
+    const more = products.length > 8 ? `<li class="mu-empty-inline">… y ${products.length - 8} más</li>` : '';
+    return `<ul class="mu-mini-list mu-saved-list">${items}${more}</ul>`;
+  }
+
   // ----------------------------------------------- ficha desplegable (detalle)
   function detailHtml(user: User360): string {
     const b = user.behavior;
@@ -465,6 +484,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
             <dt>Compartidos</dt><dd class="mu-soon">Sin captura aún</dd>
           </dl>
           <div><span class="mu-k">Vistos, no comprados</span><ul class="mu-mini-list">${listItems(b.viewedNotBought)}</ul></div>
+          <div><span class="mu-k">Guardados en su radar</span>${savedProductsHtml(user)}</div>
         </section>
         <section class="mu-dcol">
           <h3 class="mu-dtitle">Compras y carrito</h3>
@@ -1041,6 +1061,9 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
   .mu-mini-list li { display: flex; justify-content: space-between; gap: 0.8rem; font-size: 0.74rem; color: var(--color-text-main); }
   .mu-mini-list time { color: var(--color-text-muted); flex: 0 0 auto; }
   .mu-empty-inline { color: var(--color-text-muted); font-style: italic; font-size: 0.74rem; }
+  .mu-saved-list li { align-items: baseline; }
+  .mu-saved-price { color: #93c5fd; font-weight: 700; flex: 0 0 auto; }
+  .mu-note { display: inline-block; width: 1.1rem; flex: 0 0 auto; }
   .mu-score { display: flex; flex-direction: column; align-items: center; justify-content: center; align-self: flex-start; min-width: 76px; padding: 0.55rem 0.8rem; border-radius: 12px; border: 1px solid; }
   .mu-score[data-band='caliente'] { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35); }
   .mu-score[data-band='tibio'] { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.35); }
