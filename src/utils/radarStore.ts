@@ -21,6 +21,8 @@ import {
   type SavedProduct,
 } from '../types/radar';
 
+export { RADAR_STORAGE_KEY };
+
 type Listener = (data: RadarData) => void;
 
 const listeners = new Set<Listener>();
