@@ -17,6 +17,7 @@ import type { NetworkConnector } from './connectors/base';
 import { AmazonConnector } from './connectors/amazon';
 import { AwinConnector } from './connectors/awin';
 import { EbayConnector } from './connectors/ebay';
+import { AliExpressConnector } from './connectors/aliexpress';
 import { GenericConnector } from './connectors/generic';
 import type {
   NetworkSearchResult,
@@ -31,6 +32,7 @@ const CONNECTORS: Record<string, NetworkConnector> = {
   amazon: new AmazonConnector(),
   awin: new AwinConnector(),
   ebay: new EbayConnector(),
+  aliexpress: new AliExpressConnector(),
 };
 
 export function getConnector(networkId: string): NetworkConnector | null {

@@ -31,7 +31,7 @@ export class ConnectorError extends Error {
 }
 
 /** Helper: fetch con timeout para que una red caída nunca bloquee la búsqueda global. */
-export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 8000): Promise<Response> {
+export async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs = 12000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
