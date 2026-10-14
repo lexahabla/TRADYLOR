@@ -15,6 +15,7 @@ export interface Props {
 
 import ReturnBanner from '../components/ReturnBanner.astro';
 import AuthModal from '../components/AuthModal.astro';
+import { GOOGLE_TRANSLATE_LANGS } from '../utils/translate';
 
 const {
   title = "Tradylor | Portal de Curación, Recomendaciones y Comparativas de Productos",
@@ -376,6 +377,48 @@ const resolvedImage = toAbsolute(image);
       .header-user-area.is-open {
         box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35), 0 6px 18px rgba(37, 99, 235, 0.6);
         border-color: #93c5fd;
+      }
+      /* Traductor de Google (junto al menú de usuario) */
+      .header-translate {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        height: 40px;
+      }
+      .header-translate-globe {
+        position: absolute;
+        left: 0.6rem;
+        color: #93c5fd;
+        pointer-events: none;
+      }
+      .header-translate-select {
+        appearance: none;
+        -webkit-appearance: none;
+        height: 40px;
+        max-width: 138px;
+        padding: 0 0.55rem 0 1.9rem;
+        font-family: var(--font-body);
+        font-size: 0.74rem;
+        font-weight: 700;
+        color: #e5e7eb;
+        background: rgba(59, 130, 246, 0.08);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        border-radius: 12px;
+        cursor: pointer;
+        text-overflow: ellipsis;
+        transition: background 0.2s ease, border-color 0.2s ease;
+      }
+      .header-translate-select:hover {
+        background: rgba(59, 130, 246, 0.18);
+        border-color: rgba(96, 165, 250, 0.55);
+      }
+      .header-translate-select:focus-visible {
+        outline: 2px solid #60a5fa;
+        outline-offset: 2px;
+      }
+      .header-translate-select option {
+        background: #111827;
+        color: #f3f4f6;
       }
       .header-user {
         position: relative;
@@ -1261,6 +1304,11 @@ const resolvedImage = toAbsolute(image);
           width: 44px;
           height: 44px;
         }
+        .header-translate-select {
+          max-width: 120px;
+          padding-left: 1.8rem;
+          font-size: 0.7rem;
+        }
         .site-header .brand-logo {
           position: absolute;
           left: 50%;
@@ -1340,9 +1388,31 @@ const resolvedImage = toAbsolute(image);
           width: 40px;
           height: 40px;
         }
+        .header-translate-select {
+          max-width: 100px;
+          padding-left: 1.7rem;
+          font-size: 0.68rem;
+        }
         .header-actions {
           gap: 0.4rem;
         }
+      }
+    </style>
+
+    <!-- Oculta el banner y el gadget del widget de Google Translate (sólo usamos
+         el desplegable propio del header; la traducción la aplica la cookie). -->
+    <style is:global>
+      .goog-te-banner-frame,
+      .goog-te-menu-frame,
+      .goog-te-gadget {
+        display: none !important;
+      }
+      body {
+        top: 0 !important;
+      }
+      .goog-text-highlight {
+        background: none !important;
+        box-shadow: none !important;
       }
     </style>
 
@@ -1425,6 +1495,21 @@ const resolvedImage = toAbsolute(image);
                   </svg>
                   <span class="header-cta-text">Iniciar sesión</span>
                 </button>
+              </div>
+
+              <!-- Traductor de Google: traduce la página al idioma elegido -->
+              <div class="header-translate" data-header-translate>
+                <svg class="header-translate-globe" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+                <select class="header-translate-select" data-translate-select aria-label="Traducir esta página">
+                  <option value="">Idioma original</option>
+                  {GOOGLE_TRANSLATE_LANGS.filter((item) => item.code !== 'es').map((item) => (
+                    <option value={item.code}>{item.label}</option>
+                  ))}
+                </select>
               </div>
 
               <!-- Autenticado: menú de usuario (avatar) -->
@@ -2137,6 +2222,77 @@ const resolvedImage = toAbsolute(image);
         syncButtons();
         // Re-sincroniza tras pintar tarjetas dinámicas (fetch del home, etc.).
         window.addEventListener('load', syncButtons);
+    </script>
+
+    <!-- Contenedor del widget de Google Translate (fuera de pantalla: sólo lo
+         usamos para que aplique la traducción marcada por la cookie). -->
+    <div id="google_translate_element" style="position:absolute;top:-9999px;left:-9999px;width:1px;height:1px;overflow:hidden;" aria-hidden="true"></div>
+
+    <script>
+      import { GOOGLE_TRANSLATE_LANGS } from '../utils/translate';
+
+      /**
+       * Desplegable del header: traduce la página a cualquier idioma con el
+       * traductor de Google. Escribe la cookie `googtrans` que lee el widget
+       * oficial de Google y recarga la página para que la aplique; al volver,
+       * el desplegable muestra el idioma activo y "Idioma original" lo quita.
+       */
+      (function initHeaderTranslate(): void {
+        const select = document.querySelector<HTMLSelectElement>('[data-translate-select]');
+        if (!select) return;
+
+        const targets = GOOGLE_TRANSLATE_LANGS.filter((lang) => lang.code !== 'es');
+        const current = readTargetCookie();
+        select.value = targets.some((lang) => lang.code === current) ? current : '';
+
+        select.addEventListener('change', () => {
+          const target = select.value;
+          if (target) writeTargetCookie(`/es/${target}`, false);
+          else writeTargetCookie('', true);
+          window.location.reload();
+        });
+
+        // Widget oficial de Google (fuera de pantalla): aplica la traducción
+        // de la cookie en cada carga de página.
+        (window as unknown as Record<string, unknown>).googleTranslateElementInit = () => {
+          const google = (window as unknown as { google?: { translate?: { TranslateElement?: unknown } } }).google;
+          const TranslateElement = google?.translate?.TranslateElement as
+            | (new (options: object, elementId: string) => unknown)
+            | undefined;
+          if (!TranslateElement) return;
+          new TranslateElement(
+            {
+              pageLanguage: 'es',
+              includedLanguages: targets.map((lang) => lang.code).join(','),
+              autoDisplay: false,
+            },
+            'google_translate_element',
+          );
+        };
+        const script = document.createElement('script');
+        script.src = 'https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit';
+        script.async = true;
+        document.body.appendChild(script);
+
+        /** Último segmento de /es/<idioma> (vacío si no hay cookie). */
+        function readTargetCookie(): string {
+          const match = /(?:^|;\s*)googtrans=([^;]+)/.exec(document.cookie);
+          if (!match) return '';
+          const parts = decodeURIComponent(match[1] ?? '').split('/').filter(Boolean);
+          return parts.length > 1 ? (parts[parts.length - 1] ?? '') : '';
+        }
+
+        /** Escribe (o borra) la cookie que usa el widget de Google Translate. */
+        function writeTargetCookie(value: string, clear: boolean): void {
+          const expires = clear ? ';expires=Thu, 01 Jan 1970 00:00:00 GMT' : '';
+          const attrs = `;path=/${expires};SameSite=Lax`;
+          if (window.location.hostname.endsWith('tradylor.com')) {
+            document.cookie = `googtrans=${value}${attrs};domain=.tradylor.com`;
+          } else {
+            document.cookie = `googtrans=${value}${attrs}`;
+          }
+        }
+      })();
     </script>
   </body>
 </html>

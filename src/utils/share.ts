@@ -16,6 +16,8 @@
  * ==============================================================================
  */
 
+import { escapeHtml, SHARE_EMAIL_LABELS } from './shareEmail';
+
 export type ShareChannel =
   | 'whatsapp'
   | 'telegram'
@@ -37,6 +39,18 @@ export interface ShareInput {
   productId: string;
   title: string;
   category?: string;
+}
+
+/** Datos públicos de la ficha que pinta la tarjeta copiada (ver buildShareCardHtml). */
+export interface ShareCardInfo {
+  title: string;
+  category?: string;
+  /** URL absoluta de la imagen del producto. */
+  image: string;
+  /** Enlace a la ficha individual (https://tradylor.com/producto/<slug>). */
+  url: string;
+  /** Ventajas del producto (máx. 3). */
+  pros: string[];
 }
 
 export interface ShareResult {
@@ -114,7 +128,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     ],
     copy: 'Copiar enlace',
     native: 'Compartir…',
-    copiedLink: 'Enlace copiado al portapapeles.',
+    copiedLink: 'Enlace copiado. Pégalo en un correo o editor y se verá la ficha del producto.',
     copiedText: (ch) => `Texto copiado. Pégalo en ${ch}.`,
     noClipboard: 'No se pudo copiar el enlace.',
     nativeFallback: 'Tu navegador no permite compartir: texto copiado.',
@@ -137,7 +151,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     ],
     copy: "Copia l'enllaç",
     native: 'Comparteix…',
-    copiedLink: 'Enllaç copiat al porta-retalls.',
+    copiedLink: "Enllaç copiat. Enganxa'l en un correu o editor i es veurà la fitxa del producte.",
     copiedText: (ch) => `Text copiat. Enganxa'l a ${ch}.`,
     noClipboard: "No s'ha pogut copiar l'enllaç.",
     nativeFallback: 'El teu navegador no permet compartir: text copiat.',
@@ -160,7 +174,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     ],
     copy: 'Kopiatu esteka',
     native: 'Partekatu…',
-    copiedLink: 'Esteka arakatzailera kopiatu da.',
+    copiedLink: 'Esteka kopiatu. Itsatsi posta-edizaile batean eta produktuaren fitxa ikusiko da.',
     copiedText: (ch) => `Testua kopiatu da. Itsatsi ${ch}-n.`,
     noClipboard: 'Ezin izan da esteka kopiatu.',
     nativeFallback: 'Zure arakatzaileak ez du partekatzera baimentzen: testua kopiatu da.',
@@ -183,7 +197,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     ],
     copy: 'Copiar ligazón',
     native: 'Compartir…',
-    copiedLink: 'Ligazón copiada ao portapapeis.',
+    copiedLink: 'Ligazón copiada. Pégaa nun correo ou editor e verase a ficha do produto.',
     copiedText: (ch) => `Texto copiado. Pégalo en ${ch}.`,
     noClipboard: 'Non se puido copiar a ligazón.',
     nativeFallback: 'O teu navegador non permite compartir: texto copiado.',
@@ -206,7 +220,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     ],
     copy: 'Copy link',
     native: 'Share…',
-    copiedLink: 'Link copied to clipboard.',
+    copiedLink: 'Link copied. Paste it into an email or editor and the product card appears.',
     copiedText: (ch) => `Text copied. Paste it into ${ch}.`,
     noClipboard: "Couldn't copy the link.",
     nativeFallback: 'Your browser blocks sharing: text copied.',
@@ -229,7 +243,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     ],
     copy: 'Copier le lien',
     native: 'Partager…',
-    copiedLink: 'Lien copié dans le presse-papiers.',
+    copiedLink: 'Lien copié. Collez-le dans un e-mail ou un éditeur : la fiche du produit s’affiche.',
     copiedText: (ch) => `Texte copié. Collez-le dans ${ch}.`,
     noClipboard: 'Impossible de copier le lien.',
     nativeFallback: 'Votre navigateur bloque le partage : texte copié.',
@@ -252,7 +266,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     ],
     copy: 'Link kopieren',
     native: 'Teilen…',
-    copiedLink: 'Link in die Zwischenablage kopiert.',
+    copiedLink: 'Link kopiert. Füge ihn in eine E-Mail oder einen Editor ein – die Produktkarte erscheint.',
     copiedText: (ch) => `Text kopiert. Füge ihn in ${ch} ein.`,
     noClipboard: 'Link konnte nicht kopiert werden.',
     nativeFallback: 'Dein Browser blockiert Teilen: Text kopiert.',
@@ -275,7 +289,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     ],
     copy: 'Copiar link',
     native: 'Partilhar…',
-    copiedLink: 'Link copiado para a área de transferência.',
+    copiedLink: 'Link copiado. Cola-o num email ou editor e aparece o cartão do produto.',
     copiedText: (ch) => `Texto copiado. Cola-o no ${ch}.`,
     noClipboard: 'Não foi possível copiar o link.',
     nativeFallback: 'O teu navegador bloqueia a partilha: texto copiado.',
@@ -298,7 +312,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     ],
     copy: 'Copia link',
     native: 'Condividi…',
-    copiedLink: 'Link copiato negli appunti.',
+    copiedLink: 'Link copiato. Incollalo in una email o un editor e appare la scheda del prodotto.',
     copiedText: (ch) => `Testo copiato. Incollalo in ${ch}.`,
     noClipboard: 'Impossibile copiare il link.',
     nativeFallback: 'Il browser blocca la condivisione: testo copiato.',
@@ -576,6 +590,79 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
+/** Datos públicos de la ficha para la tarjeta que se copia en "Copiar enlace". */
+async function fetchShareCard(productId: string): Promise<ShareCardInfo | null> {
+  try {
+    const res = await fetch(`/api/share/card?productId=${encodeURIComponent(productId)}`, {
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Partial<ShareCardInfo> | null;
+    if (!data || typeof data.url !== 'string' || typeof data.title !== 'string') return null;
+    return {
+      title: data.title,
+      category: typeof data.category === 'string' ? data.category : undefined,
+      image: typeof data.image === 'string' ? data.image : '',
+      url: data.url,
+      pros: Array.isArray(data.pros)
+        ? data.pros.filter((pros): pros is string => typeof pros === 'string' && pros.trim() !== '').slice(0, 3)
+        : [],
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ficha visual del producto en HTML con estilos inline: imagen, categoría,
+ * título, algunas ventajas y botón a la ficha. Al pegarla en un correo o en
+ * cualquier editor que admita HTML se ve como una tarjeta de producto.
+ */
+export function buildShareCardHtml(card: ShareCardInfo, ctaLabel: string): string {
+  const title = escapeHtml(card.title);
+  const category = escapeHtml((card.category ?? '').trim() || 'Tradylor');
+  const image = escapeHtml(card.image);
+  const url = escapeHtml(card.url);
+  const cta = escapeHtml(ctaLabel);
+  const pros = card.pros
+    .map((pros) => `<li style="margin:0 0 4px;">${escapeHtml(pros)}</li>`)
+    .join('');
+
+  return [
+    `<a href="${url}" style="display:block;max-width:420px;margin:0 auto;background:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;text-decoration:none;color:#111827;font-family:Inter,Arial,Helvetica,sans-serif;">`,
+    card.image
+      ? `<img src="${image}" alt="${title}" width="420" style="display:block;width:100%;height:200px;object-fit:contain;background:#f8fafc;padding:8px;box-sizing:border-box;" />`
+      : '',
+    `<div style="padding:14px 18px 18px;">`,
+    `<p style="margin:0 0 4px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#2563eb;">${category}</p>`,
+    `<p style="margin:0 0 10px;font-size:16px;font-weight:800;line-height:1.35;color:#111827;">${title}</p>`,
+    pros ? `<ul style="margin:0 0 14px;padding:0 0 0 18px;font-size:14px;line-height:1.55;color:#374151;">${pros}</ul>` : '',
+    `<span style="display:inline-block;background:#2563eb;color:#ffffff;font-size:14px;font-weight:700;padding:10px 18px;border-radius:10px;">${cta}</span>`,
+    `</div></a>`,
+  ].join('');
+}
+
+/**
+ * Copia la ficha como HTML (tarjeta visible al pegarla en Gmail, WordPress,
+ * un editor…) y, como texto plano, sólo el enlace (para pegados sin formato).
+ * Devuelve false si el navegador no soporta portapapeles enriquecido.
+ */
+async function copyRichCard(html: string, plain: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.write && typeof ClipboardItem !== 'undefined') {
+      const item = new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([plain], { type: 'text/plain' }),
+      });
+      await navigator.clipboard.write([item]);
+      return true;
+    }
+  } catch {
+    /* fallback: sólo el enlace */
+  }
+  return false;
+}
+
 /**
  * Ejecuta el compartir en el canal indicado (siempre en target=_blank).
  * Devuelve cómo terminó para que la UI muestre el toast adecuado.
@@ -672,7 +759,19 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
     }
 
     case 'copy': {
-      // Sólo el enlace a la ficha del producto (https://tradylor.com/producto/<slug>), sin texto.
+      // Copia una ficha visual del producto en HTML (imagen, categoría, ventajas
+      // y botón a la ficha): al pegarla en un correo o editor que admita HTML se
+      // ve como tarjeta. El texto plano del portapapeles sólo lleva el enlace
+      // (para los pegados sin formato). Si el navegador no soporta el portapapeles
+      // enriquecido o falla la ficha, se copia sólo el enlace.
+      const card = await fetchShareCard(input.productId);
+      if (card) {
+        const ctaLabel = (SHARE_EMAIL_LABELS[lang] ?? SHARE_EMAIL_LABELS.es).cta;
+        const html = buildShareCardHtml(card, ctaLabel);
+        if (await copyRichCard(html, link)) {
+          return { ok: true, mode: 'copied', message: pack.copiedLink };
+        }
+      }
       const copied = await copyText(link);
       return copied
         ? { ok: true, mode: 'copied', message: pack.copiedLink }

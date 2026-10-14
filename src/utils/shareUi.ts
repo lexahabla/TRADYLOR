@@ -9,24 +9,21 @@
  */
 
 import {
-  getShareLang,
-  getShareLangOptions,
-  refreshRegionLangs,
-  setShareLang,
   shareLabel,
   sharePanelTitle,
   shareTo,
   type ShareChannel,
   type ShareInput,
-  type ShareLangCode,
 } from './share';
 
 /**
  * Canales del panel, en este orden. "A mi correo" (canal `email`) abre la tarjeta del
  * producto (/share/<id>: mensaje + título + imagen + botón a la ficha), donde un solo
  * botón la envía al correo de la cuenta del usuario para que la reenvíe a quien quiera.
- * "Copiar enlace" copia sólo https://tradylor.com/producto/<slug>. "Compartir…" es el
- * menú nativo (con copia de texto como alternativa si el navegador no lo soporta).
+ * "Copiar enlace" copia una ficha visual del producto en HTML (imagen, título, ventajas
+ * y botón) que, al pegarla en un correo o editor, se ve como tarjeta; en texto plano
+ * sólo lleva el enlace. "Compartir…" es el menú nativo (con copia de texto como
+ * alternativa si el navegador no lo soporta).
  */
 const CHANNELS: ShareChannel[] = ['whatsapp', 'telegram', 'x', 'facebook', 'reddit', 'pinterest', 'email', 'copy', 'native'];
 
@@ -56,11 +53,6 @@ const STYLES = `
   .tz-share-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;margin-bottom:.35rem}
   .tz-share-title{margin:0;font-size:1rem;font-weight:800;letter-spacing:-.01em}
   .tz-share-sub{margin:0 0 .75rem;font-size:.78rem;color:#9ca3af;line-height:1.45;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-  .tz-share-langs{display:flex;gap:.35rem;flex-wrap:wrap;margin:0 0 .9rem;padding:.28rem;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);border-radius:999px;width:fit-content;max-width:100%}
-  .tz-share-lang{padding:.34rem .72rem;font-family:inherit;font-size:.72rem;font-weight:700;color:#9ca3af;background:transparent;border:1px solid transparent;border-radius:999px;cursor:pointer;transition:.16s;white-space:nowrap}
-  .tz-share-lang:hover{color:#e5e7eb;background:rgba(255,255,255,.06)}
-  .tz-share-lang.is-active{color:#0d1422;background:linear-gradient(135deg,#60a5fa 0%,#3b82f6 100%);border-color:rgba(96,165,250,.6);box-shadow:0 4px 12px rgba(59,130,246,.35)}
-  .tz-share-lang:focus-visible{outline:2px solid #60a5fa;outline-offset:1px}
   .tz-share-close{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);color:#e5e7eb;width:32px;height:32px;border-radius:9px;font-size:1rem;line-height:1;cursor:pointer;flex:0 0 auto}
   .tz-share-close:hover{background:rgba(255,255,255,.14)}
   .tz-share-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem}
@@ -99,14 +91,12 @@ function ensureRoot(): HTMLDivElement {
         <button type="button" class="tz-share-close" data-share-close aria-label="Cerrar">×</button>
       </div>
       <p class="tz-share-sub" data-share-subtitle></p>
-      <div class="tz-share-langs" data-share-langs role="group" aria-label="Idioma del mensaje"></div>
       <div class="tz-share-grid" data-share-grid></div>
       <div class="tz-share-toast" data-share-toast></div>
     </div>
   `;
   document.body.appendChild(root);
 
-  renderLangs();
   renderChannels();
 
   root.addEventListener('click', (event) => {
@@ -114,13 +104,6 @@ function ensureRoot(): HTMLDivElement {
     if (!target) return;
     if (target.closest('[data-share-close]')) {
       close();
-      return;
-    }
-    const lang = target.closest<HTMLElement>('[data-lang]');
-    if (lang?.dataset.lang) {
-      setShareLang(lang.dataset.lang as ShareLangCode);
-      renderLangs();
-      renderChannels();
       return;
     }
     const opt = target.closest<HTMLElement>('[data-channel]');
@@ -131,20 +114,6 @@ function ensureRoot(): HTMLDivElement {
   });
 
   return root;
-}
-
-/** Selector de idioma: idiomas cooficiales de la región + detectado + español + inglés. */
-function renderLangs(): void {
-  const box = root?.querySelector('[data-share-langs]');
-  if (!box) return;
-  const active = getShareLang();
-  box.innerHTML = getShareLangOptions([active])
-    .map(
-      (option) => `
-      <button type="button" class="tz-share-lang${option.code === active ? ' is-active' : ''}"
-        data-lang="${option.code}" aria-pressed="${option.code === active}">${option.label}</button>`,
-    )
-    .join('');
 }
 
 /** Re-pinta título y etiquetas de canal según el idioma elegido. */
@@ -191,17 +160,10 @@ function close(): void {
 export function openSharePanel(input: ShareInput): void {
   const el = ensureRoot();
   current = input;
-  renderLangs();
   renderChannels();
   const subtitle = el.querySelector('[data-share-subtitle]');
   if (subtitle) {
     subtitle.textContent = input.title || 'Este producto';
   }
   el.classList.add('is-open');
-
-  // Región del visitante (IP): puede añadir catalán / euskera / gallego al
-  // selector aunque el navegador esté en castellano. Se cachea varios días.
-  void refreshRegionLangs().then((langs) => {
-    if (langs.length && el.classList.contains('is-open')) renderLangs();
-  });
 }
