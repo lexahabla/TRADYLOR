@@ -81,10 +81,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     <!-- 1. HEADER DEL PANEL -->
     <header class="admin-header">
       <div class="admin-header-main">
-        <div class="admin-tag-pill">
-          <span class="status-indicator"></span>
-          <span>Motor de Curación & Scraping Híbrido (SSR Activo)</span>
-        </div>
+        <div class="admin-tag-pill">Panel de administración</div>
         <h1 class="admin-title">Panel de Administración de Productos</h1>
         <p class="admin-subtitle">
           Pega el enlace de cualquier comercio para autocompletar metadatos OpenGraph (título, imagen, precio). Edita y afina la ficha antes de guardarla de forma persistente.
@@ -2981,12 +2978,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.35rem 0.85rem;
-    background: rgba(59, 130, 246, 0.1);
-    border: 1px solid rgba(59, 130, 246, 0.25);
-    border-radius: 9999px;
-    font-size: 0.75rem;
-    font-weight: 600;
+    margin: 0 0 0.4rem;
+    padding: 0;
+    background: none;
+    border: 0;
+    border-radius: 0;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
     color: #60a5fa;
     width: fit-content;
   }

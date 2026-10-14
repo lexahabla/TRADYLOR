@@ -30,11 +30,9 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { findCatalogProduct, productKey } from '../../lib/catalog';
 import { getRadarSessionUser } from '../../lib/radarAuth';
-import { langsFromAcceptLanguage } from '../../lib/shareGeo';
 import {
   buildProductPageUrl,
   buildShareText,
-  getShareLangOptions,
   SHARE_LANG_CODES,
   type ShareLangCode,
 } from '../../utils/share';
@@ -81,11 +79,6 @@ const emailHtml = buildShareEmailHtml({
   lang,
 });
 
-// Selector de idioma (SSR): el idioma activo + los cooficiales que declara la
-// cabecera Accept-Language. El cliente lo completa con la región por IP.
-const headerLangs = langsFromAcceptLanguage(Astro.request.headers.get('accept-language'));
-const langOptions = getShareLangOptions([lang, ...headerLangs]);
-
 interface ShareUiStrings {
   hint: string;
   sendTo: string;
@@ -115,7 +108,7 @@ interface ShareUiStrings {
 // Textos de UI según idioma
 const UI: Record<ShareLangCode, ShareUiStrings> = {
   es: {
-    hint: 'Esta es la tarjeta que te enviaremos a tu correo. Desde tu bandeja podrás reenviarla a quien quieras.',
+    hint: 'Esta es la tarjeta que te enviaremos a tu correo. También puedes enviarla escribiendo directamente la dirección de correo a la que quieras mandarla, o reenviarla desde tu bandeja a quien quieras.',
     sendTo: 'Enviar a',
     sending: 'Enviando…',
     sent: 'Tarjeta enviada a {email}. Revisa tu bandeja de entrada (y la carpeta de spam).',
@@ -137,7 +130,7 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     invalidEmail: 'Escribe una dirección de correo válida.',
   },
   ca: {
-    hint: "Aquesta és la targeta que t'enviarem al teu correu. Des de la teva safata podràs reenviar-la a qui vulguis.",
+    hint: "Aquesta és la targeta que t'enviarem al teu correu. També la pots enviar escrivint directament l'adreça de correu a la qual la vulguis enviar, o reenviar-la des de la teva safata a qui vulguis.",
     sendTo: 'Enviar a',
     sending: "S'està enviant…",
     sent: "Targeta enviada a {email}. Revisa la safata d'entrada (i la carpeta de correu brossa).",
@@ -159,7 +152,7 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     invalidEmail: 'Escriu una adreça de correu vàlida.',
   },
   eu: {
-    hint: 'Hau da zure postara bidaliko dizugun txartela. Zure sarrera-ontzitik nahi duzunari birbidal diezaiokezu.',
+    hint: 'Hau da zure postara bidaliko dizugun txartela. Zuzenean idatzi dezakezu nahi dion posta-helbidea, edo zure sarrera-ontzitik nahi duzunari birbidali.',
     sendTo: 'Bidali hona:',
     sending: 'Bidaltzen…',
     sent: 'Txartela bidali da: {email}. Begiratu zure sarrera-ontzia (eta spam karpeta).',
@@ -181,7 +174,7 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     invalidEmail: 'Idatzi posta-helbide baliozko bat.',
   },
   gl: {
-    hint: 'Esta é a tarxeta que che enviaremos ao teu correo. Desde a túa caixa de entrada poderás reenviala a quen queiras.',
+    hint: 'Esta é a tarxeta que che enviaremos ao teu correo. Tamén podes enviala escribindo directamente o enderezo de correo ao que queiras mandala, ou reenviala desde a túa caixa de entrada a quen queiras.',
     sendTo: 'Enviar a',
     sending: 'Enviando…',
     sent: 'Tarxeta enviada a {email}. Revisa a caixa de entrada (e o cartafol de spam).',
@@ -203,7 +196,7 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     invalidEmail: 'Escribe un enderezo de correo válido.',
   },
   en: {
-    hint: "This is the card we'll send to your email. From your inbox you can forward it to anyone you like.",
+    hint: "This is the card we'll send to your email. You can also send it by typing the email address you want, or forward it from your inbox to anyone you like.",
     sendTo: 'Send to',
     sending: 'Sending…',
     sent: 'Card sent to {email}. Check your inbox (and your spam folder).',
@@ -225,7 +218,7 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     invalidEmail: 'Enter a valid email address.',
   },
   fr: {
-    hint: "Voici la carte que nous enverrons à votre adresse e-mail. Depuis votre boîte de réception, vous pourrez la transférer à qui vous voulez.",
+    hint: "Voici la carte que nous enverrons à votre adresse e-mail. Vous pouvez aussi l'envoyer en saisissant directement l'adresse e-mail de votre choix, ou la transférer depuis votre boîte de réception.",
     sendTo: 'Envoyer à',
     sending: 'Envoi…',
     sent: 'Carte envoyée à {email}. Vérifiez votre boîte de réception (et le dossier spam).',
@@ -247,7 +240,7 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     invalidEmail: 'Saisissez une adresse e-mail valide.',
   },
   de: {
-    hint: 'Das ist die Karte, die wir an deine E-Mail-Adresse senden. Aus deinem Posteingang kannst du sie an jeden weiterleiten.',
+    hint: 'Das ist die Karte, die wir an deine E-Mail-Adresse senden. Du kannst sie auch senden, indem du die gewünschte E-Mail-Adresse direkt eingibst, oder sie aus deinem Posteingang an jeden weiterleiten.',
     sendTo: 'Senden an',
     sending: 'Wird gesendet…',
     sent: 'Karte an {email} gesendet. Sieh in deinem Posteingang (und im Spam-Ordner) nach.',
@@ -269,7 +262,7 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     invalidEmail: 'Gib eine gültige E-Mail-Adresse ein.',
   },
   pt: {
-    hint: 'Este é o cartão que vamos enviar para o teu email. A partir da tua caixa de entrada podes reencaminhá-lo a quem quiseres.',
+    hint: 'Este é o cartão que vamos enviar para o teu email. Também o podes enviar escrevendo diretamente o endereço de email para o qual o queres mandar, ou reencaminhá-lo da tua caixa de entrada a quem quiseres.',
     sendTo: 'Enviar para',
     sending: 'A enviar…',
     sent: 'Cartão enviado para {email}. Verifica a caixa de entrada (e a pasta de spam).',
@@ -291,7 +284,7 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     invalidEmail: 'Introduz um endereço de email válido.',
   },
   it: {
-    hint: 'Questa è la scheda che invieremo alla tua email. Dalla tua casella potrai inoltrarla a chi vuoi.',
+    hint: "Questa è la scheda che invieremo alla tua email. Puoi anche inviarla scrivendo direttamente l'indirizzo email a cui vuoi mandarla, oppure inoltrarla dalla tua casella a chi vuoi.",
     sendTo: 'Invia a',
     sending: 'Invio in corso…',
     sent: 'Scheda inviata a {email}. Controlla la posta in arrivo (e la cartella spam).',
@@ -354,19 +347,6 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
           <span class="logo-text">Tradylor</span>
         </div>
         <p class="share-hint">{ui.hint}</p>
-
-        <!-- Selector de idioma (el cliente lo completa con los idiomas de la región) -->
-        <div class="lang-bar" data-lang-bar role="group" aria-label="Idioma">
-          {langOptions.map((opt) => (
-            <button
-              type="button"
-              class={`lang-btn${opt.code === lang ? ' is-active' : ''}`}
-              data-page-lang={opt.code}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
       </header>
 
       <!-- Toolbar: el mensaje es editable y se puede traducir con el traductor de Google -->
@@ -449,24 +429,7 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       color: #0d1422; font-weight: 800; font-size: 1.1rem; font-family: 'Outfit', sans-serif;
     }
     .logo-text { font-family: 'Outfit', sans-serif; font-weight: 700; font-size: 1.25rem; color: #f3f4f6; }
-    .share-hint { font-size: .82rem; color: #9ca3af; max-width: 440px; margin: 0 auto .9rem; line-height: 1.5; }
-
-    /* Los botones de idioma se (re)generan en el cliente: de ahí :global() */
-    .lang-bar {
-      display: inline-flex; gap: .3rem; padding: .28rem;
-      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.09);
-      border-radius: 999px; flex-wrap: wrap; justify-content: center;
-    }
-    .lang-bar :global(.lang-btn) {
-      padding: .32rem .7rem; font-family: inherit; font-size: .72rem; font-weight: 700;
-      color: #9ca3af; background: transparent; border: 1px solid transparent;
-      border-radius: 999px; cursor: pointer; transition: .16s; white-space: nowrap;
-    }
-    .lang-bar :global(.lang-btn:hover) { color: #e5e7eb; background: rgba(255,255,255,.07); }
-    .lang-bar :global(.lang-btn.is-active) {
-      color: #0d1422; background: linear-gradient(135deg,#60a5fa 0%,#3b82f6 100%);
-      border-color: rgba(96,165,250,.6); box-shadow: 0 3px 10px rgba(59,130,246,.35);
-    }
+    .share-hint { font-size: .82rem; color: #9ca3af; max-width: 440px; margin: 0 auto; line-height: 1.5; }
 
     /* Vista previa: el diseño de la tarjeta va inline en el propio HTML del correo */
     .email-preview {
@@ -594,7 +557,7 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
   <script type="application/json" id="share-data" set:html={clientJson}></script>
 
   <script>
-    import { getShareLangOptions, refreshRegionLangs, setShareLang } from '../../utils/share';
+    import { setShareLang } from '../../utils/share';
     import type { ShareLangCode } from '../../utils/share';
     import { googleTranslateText } from '../../utils/translate';
 
@@ -626,35 +589,6 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
 
     // La página recuerda el idioma que se está viendo (el panel de compartir lo reutiliza).
     setShareLang(data.lang);
-
-    // ---- Selector de idioma: idiomas cooficiales de la región + es + en ----
-    const bar = document.querySelector<HTMLElement>('[data-lang-bar]');
-
-    function renderLangBar(): void {
-      if (!bar) return;
-      bar.innerHTML = getShareLangOptions([data.lang])
-        .map(
-          (opt) =>
-            `<button type="button" class="lang-btn${opt.code === data.lang ? ' is-active' : ''}" data-page-lang="${opt.code}">${opt.label}</button>`,
-        )
-        .join('');
-    }
-
-    // Cambiar de idioma = recargar con ?lang=xx (la tarjeta se genera en el servidor).
-    bar?.addEventListener('click', (event) => {
-      const btn = (event.target as Element | null)?.closest<HTMLElement>('[data-page-lang]');
-      const code = btn?.dataset.pageLang as ShareLangCode | undefined;
-      if (!code || code === data.lang) return;
-      setShareLang(code);
-      window.location.search = '?lang=' + encodeURIComponent(code);
-    });
-
-    renderLangBar();
-    // Región del visitante (IP): añade catalán / euskera / gallego aunque el
-    // navegador esté en castellano. El resultado se cachea varios días.
-    void refreshRegionLangs().then((langs) => {
-      if (langs.length) renderLangBar();
-    });
 
     // ---- Toast ----
     let toastTimer: number | undefined;
@@ -786,6 +720,8 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
         const out = (await res.json().catch(() => ({}))) as { ok?: boolean; to?: string };
         if (res.ok && out.ok) {
           showToast(data.ui.sent.replace('{email}', out.to || to || data.email));
+          // Envío correcto: volvemos al panel privado (Mi Radar) con el aviso a la vista.
+          window.setTimeout(() => window.location.assign('/mi-radar'), 1600);
         } else if (res.status === 401) {
           showToast(data.ui.errAuth, true);
           window.setTimeout(() => window.location.reload(), 2200);

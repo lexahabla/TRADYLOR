@@ -36,7 +36,11 @@ if (!sessionUser) {
     <!-- 1. Barra superior / estado -->
     <header class="radar-header">
       <div class="radar-header-text">
-        <p class="radar-kicker">Tu panel privado</p>
+        <div class="radar-kicker-row">
+          <a href="/" class="radar-kicker">Inicio</a>
+          <span class="radar-kicker-sep" aria-hidden="true">/</span>
+          <p class="radar-kicker">Tu panel privado</p>
+        </div>
         <h1 class="radar-title">Mi Radar</h1>
         <p class="radar-subtitle">Guarda productos, organiza proyectos de compra y retoma lo pendiente desde cualquier dispositivo.</p>
       </div>
@@ -166,13 +170,36 @@ if (!sessionUser) {
     margin-bottom: 1.75rem;
   }
 
+  .radar-kicker-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+  }
+
   .radar-kicker {
-    margin: 0 0 0.4rem;
+    margin: 0;
     font-size: 0.74rem;
     font-weight: 800;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     color: #60a5fa;
+  }
+
+  .radar-kicker-sep {
+    font-size: 0.74rem;
+    font-weight: 800;
+    color: #60a5fa;
+    opacity: 0.5;
+  }
+
+  a.radar-kicker {
+    text-decoration: none;
+    transition: color 0.16s ease;
+  }
+
+  a.radar-kicker:hover {
+    color: #93c5fd;
   }
 
   .radar-title {
@@ -366,7 +393,14 @@ if (!sessionUser) {
     gap: 0.4rem;
     overflow-x: auto;
     padding-bottom: 0.2rem;
-    scrollbar-width: thin;
+    /* Sin barra de scroll visible: al arrastrar un producto sobre las listas
+       la pestaña activa se escala y aparecía una scroll horizontal fea. */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .radar-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   :global(.radar-tab) {

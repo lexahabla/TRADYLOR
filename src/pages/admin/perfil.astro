@@ -30,10 +30,7 @@ const memberSince = new Date(user.createdAt).toLocaleDateString('es-ES', { day: 
   <div class="admin-wrapper" data-user-id={user.id}>
     <header class="admin-header">
       <div class="admin-header-main">
-        <div class="admin-tag-pill">
-          <span class="status-indicator"></span>
-          <span>Área de usuario</span>
-        </div>
+        <div class="admin-tag-pill">Panel de administración</div>
         <h1 class="admin-title">Mi perfil</h1>
         <p class="admin-subtitle">Actualiza tu foto, tus datos de contacto y tu contraseña de acceso al panel.</p>
       </div>
@@ -270,9 +267,7 @@ const memberSince = new Date(user.createdAt).toLocaleDateString('es-ES', { day: 
 <style>
   .admin-wrapper { max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; display: flex; flex-direction: column; gap: 2.5rem; }
   .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
-  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.85rem; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 9999px; font-size: 0.75rem; font-weight: 600; color: #60a5fa; width: fit-content; }
-  .status-indicator { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 10px #10b981; animation: profilePulseGlow 2s infinite ease-in-out; }
-  @keyframes profilePulseGlow { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.85); } }
+  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; width: fit-content; }
   .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
   .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
 

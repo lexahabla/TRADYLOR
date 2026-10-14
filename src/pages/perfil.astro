@@ -85,6 +85,15 @@ const PROFILE_TYPE_OPTIONS: { value: string; label: string }[] = [
 const selectedHobbies = new Set(user?.hobbies ?? []);
 const profileType = user?.profileType ?? '';
 const todayIso = new Date().toISOString().slice(0, 10);
+
+// Datos guardados que se muestran en la tarjeta de identidad (sólo los rellenos).
+const fmtBirth = (iso: string) => (/^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso.split('-').reverse().join('/') : iso);
+const hobbyLabels = (user?.hobbies ?? [])
+  .map((code) =>
+    code === 'otros' ? (user?.hobbiesOther ?? '').trim() || 'Otros' : HOBBIES.find((hobby) => hobby.value === code)?.label ?? '',
+  )
+  .filter(Boolean);
+const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === (user?.profileType ?? ''))?.label ?? '';
 ---
 
 <Layout
@@ -95,9 +104,10 @@ const todayIso = new Date().toISOString().slice(0, 10);
   <main class="perfil-page">
     <div class="container perfil-wrap">
       <header class="perfil-header">
-        <div class="perfil-tag">
-          <span class="perfil-dot"></span>
-          <span>Tu cuenta de Mi Radar</span>
+        <div class="perfil-kicker-row">
+          <a href="/" class="perfil-tag">Inicio</a>
+          <span class="perfil-tag-sep" aria-hidden="true">/</span>
+          <span class="perfil-tag">Tu panel privado</span>
         </div>
         <h1 class="perfil-title">Mi perfil</h1>
         <p class="perfil-subtitle">
@@ -150,6 +160,48 @@ const todayIso = new Date().toISOString().slice(0, 10);
                 <dd id="metaPrefs">{prefsLabel(selected.size)}</dd>
               </div>
             </dl>
+
+            <!-- Datos personales guardados: apellido, nacimiento, ciudad, país, ocio y tipo -->
+            {(user.lastName || user.birthDate || user.city || user.country || hobbyLabels.length > 0 || profileTypeLabel) && (
+              <dl class="profile-meta profile-personal" id="profilePersonal">
+                {user.lastName && (
+                  <div>
+                    <dt>Apellido</dt>
+                    <dd>{user.lastName}</dd>
+                  </div>
+                )}
+                {user.birthDate && (
+                  <div>
+                    <dt>Fecha de nacimiento</dt>
+                    <dd>{fmtBirth(user.birthDate)}</dd>
+                  </div>
+                )}
+                {user.city && (
+                  <div>
+                    <dt>Ciudad</dt>
+                    <dd>{user.city}</dd>
+                  </div>
+                )}
+                {user.country && (
+                  <div>
+                    <dt>País</dt>
+                    <dd>{user.country}</dd>
+                  </div>
+                )}
+                {hobbyLabels.length > 0 && (
+                  <div>
+                    <dt>Tiempo libre</dt>
+                    <dd>{hobbyLabels.join(', ')}</dd>
+                  </div>
+                )}
+                {profileTypeLabel && (
+                  <div>
+                    <dt>Nos visitas como</dt>
+                    <dd>{profileTypeLabel}</dd>
+                  </div>
+                )}
+              </dl>
+            )}
           </aside>
 
           <div class="profile-forms">
@@ -601,8 +653,12 @@ const todayIso = new Date().toISOString().slice(0, 10);
   .perfil-page { padding: 2.5rem 0 5rem; }
   .perfil-wrap { display: flex; flex-direction: column; gap: 1.75rem; }
   .perfil-header { display: flex; flex-direction: column; gap: .5rem; padding-bottom: 1.75rem; border-bottom: 1px solid var(--color-border); }
-  .perfil-tag { display: inline-flex; align-items: center; gap: .5rem; padding: .35rem .85rem; background: rgba(59, 130, 246, .1); border: 1px solid rgba(59, 130, 246, .25); border-radius: 9999px; font-size: .75rem; font-weight: 600; color: #60a5fa; width: fit-content; }
-  .perfil-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; box-shadow: 0 0 10px #10b981; }
+  /* Kicker de página (mismo formato que radar-kicker de Mi Radar) */
+  .perfil-kicker-row { display: flex; align-items: center; gap: .5rem; margin-bottom: .4rem; }
+  .perfil-tag { margin: 0; font-size: .74rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: #60a5fa; }
+  .perfil-tag-sep { font-size: .74rem; font-weight: 800; color: #60a5fa; opacity: .5; }
+  a.perfil-tag { text-decoration: none; transition: color .16s ease; }
+  a.perfil-tag:hover { color: #93c5fd; }
   .perfil-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: .5rem; }
   .perfil-subtitle { color: var(--color-text-muted); font-size: .95rem; max-width: 760px; line-height: 1.6; }
 
