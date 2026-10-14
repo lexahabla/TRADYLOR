@@ -8,13 +8,17 @@
  *
  * Se llega desde la opción "A mi correo" del panel de compartir. Muestra la tarjeta del
  * producto (mensaje, título, imagen y botón "Ver la ficha del producto" que lleva a
- * https://tradylor.com/producto/<slug>), el selector de idioma y UN solo botón:
- * "Enviar a {tu correo}". Al pulsarlo, POST /api/share/email manda la tarjeta a la
- * dirección de la cuenta del usuario y desde su bandeja la reenvía a quien quiera.
+ * https://tradylor.com/producto/<slug>), el selector de idioma y dos botones de envío:
+ * "Enviar a {tu correo}" y "Enviar a otra dirección" (una dirección que el usuario escribe).
+ *
+ * El mensaje es editable (botón "Editar texto") y traducible con el traductor de Google
+ * (desplegable de idiomas): lo que se ve en la vista previa es exactamente lo que llega
+ * al correo, ya sea el texto original, el editado o el traducido.
  *
  * Sin sesión no se sabe a qué correo enviarla: se pide iniciar sesión (y la página se
- * recarga sola al terminar). El destinatario nunca sale de esta página: lo decide el
- * servidor a partir de la sesión.
+ * recarga sola al terminar). El destinatario de "Enviar a {tu correo}" lo decide el
+ * servidor a partir de la sesión; el de "Enviar a otra dirección" va en el body con
+ * tope de envíos propios.
  *
  * El idioma se pasa como query param (?lang=ca) porque la página es SSR y no puede leer
  * localStorage en el servidor. El selector se completa en el cliente con los idiomas
@@ -35,6 +39,7 @@ import {
   type ShareLangCode,
 } from '../../utils/share';
 import { buildShareEmailHtml, cleanShareTitle } from '../../utils/shareEmail';
+import { GOOGLE_TRANSLATE_LANGS } from '../../utils/translate';
 
 const product = findCatalogProduct(Astro.params.id);
 if (!product) return Astro.redirect('/', 302);
@@ -94,6 +99,17 @@ interface ShareUiStrings {
   errRate: string;
   errSmtp: string;
   errGeneric: string;
+  /** Toolbar: edición y traducción del mensaje de la tarjeta. */
+  editText: string;
+  editTextDone: string;
+  translateLabel: string;
+  translateOriginal: string;
+  translating: string;
+  translateFailed: string;
+  /** Envío a otra dirección de correo. */
+  otherPlaceholder: string;
+  sendOther: string;
+  invalidEmail: string;
 }
 
 // Textos de UI según idioma
@@ -110,6 +126,15 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     errRate: 'Has enviado muchas tarjetas seguidas. Inténtalo de nuevo más tarde.',
     errSmtp: 'El envío por correo no está disponible ahora mismo. Inténtalo más tarde.',
     errGeneric: 'No se pudo enviar la tarjeta. Inténtalo de nuevo.',
+    editText: 'Editar texto',
+    editTextDone: 'Hecho',
+    translateLabel: 'Traducir el mensaje',
+    translateOriginal: 'Idioma original',
+    translating: 'Traduciendo…',
+    translateFailed: 'No se pudo traducir el texto. Inténtalo de nuevo.',
+    otherPlaceholder: 'otro@correo.com',
+    sendOther: 'Enviar a otra dirección',
+    invalidEmail: 'Escribe una dirección de correo válida.',
   },
   ca: {
     hint: "Aquesta és la targeta que t'enviarem al teu correu. Des de la teva safata podràs reenviar-la a qui vulguis.",
@@ -123,6 +148,15 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     errRate: 'Has enviat moltes targetes seguides. Prova-ho de nou més tard.',
     errSmtp: "L'enviament per correu no està disponible ara mateix. Prova-ho més tard.",
     errGeneric: "No s'ha pogut enviar la targeta. Prova-ho de nou.",
+    editText: 'Editar text',
+    editTextDone: 'Fet',
+    translateLabel: 'Traduir el missatge',
+    translateOriginal: 'Idioma original',
+    translating: 'Traduint…',
+    translateFailed: "No s'ha pogut traduir el text. Prova-ho de nou.",
+    otherPlaceholder: 'un altre@correu.com',
+    sendOther: 'Enviar a una altra adreça',
+    invalidEmail: 'Escriu una adreça de correu vàlida.',
   },
   eu: {
     hint: 'Hau da zure postara bidaliko dizugun txartela. Zure sarrera-ontzitik nahi duzunari birbidal diezaiokezu.',
@@ -136,6 +170,15 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     errRate: 'Txartel asko bidali dituzu segidan. Saiatu berriro geroago.',
     errSmtp: 'Posta bidezko bidalketa ez dago eskuragarri orain. Saiatu geroago.',
     errGeneric: 'Ezin izan da txartela bidali. Saiatu berriro.',
+    editText: 'Testua editatu',
+    editTextDone: 'Eginda',
+    translateLabel: 'Itzuli mezua',
+    translateOriginal: 'Jatorrizko hizkuntza',
+    translating: 'Itzultzen…',
+    translateFailed: 'Ezin izan da testua itzuli. Saiatu berriro.',
+    otherPlaceholder: 'beste@posta.bat',
+    sendOther: 'Beste helbide batera bidali',
+    invalidEmail: 'Idatzi posta-helbide baliozko bat.',
   },
   gl: {
     hint: 'Esta é a tarxeta que che enviaremos ao teu correo. Desde a túa caixa de entrada poderás reenviala a quen queiras.',
@@ -149,6 +192,15 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     errRate: 'Enviaches moitas tarxetas seguidas. Inténtao de novo máis tarde.',
     errSmtp: 'O envío por correo non está dispoñible agora mesmo. Inténtao máis tarde.',
     errGeneric: 'Non se puido enviar a tarxeta. Inténtao de novo.',
+    editText: 'Editar texto',
+    editTextDone: 'Feito',
+    translateLabel: 'Traducir a mensaxe',
+    translateOriginal: 'Idioma orixinal',
+    translating: 'Traducindo…',
+    translateFailed: 'Non se puido traducir o texto. Inténtao de novo.',
+    otherPlaceholder: 'outro@correo.com',
+    sendOther: 'Enviar a outro enderezo',
+    invalidEmail: 'Escribe un enderezo de correo válido.',
   },
   en: {
     hint: "This is the card we'll send to your email. From your inbox you can forward it to anyone you like.",
@@ -162,6 +214,15 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     errRate: "You've sent many cards in a row. Please try again later.",
     errSmtp: 'Sending by email is not available right now. Please try again later.',
     errGeneric: "Couldn't send the card. Please try again.",
+    editText: 'Edit text',
+    editTextDone: 'Done',
+    translateLabel: 'Translate the message',
+    translateOriginal: 'Original language',
+    translating: 'Translating…',
+    translateFailed: "Couldn't translate the text. Please try again.",
+    otherPlaceholder: 'another@email.com',
+    sendOther: 'Send to another address',
+    invalidEmail: 'Enter a valid email address.',
   },
   fr: {
     hint: "Voici la carte que nous enverrons à votre adresse e-mail. Depuis votre boîte de réception, vous pourrez la transférer à qui vous voulez.",
@@ -175,6 +236,15 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     errRate: 'Vous avez envoyé beaucoup de cartes à la suite. Réessayez plus tard.',
     errSmtp: "L'envoi par e-mail n'est pas disponible pour le moment. Réessayez plus tard.",
     errGeneric: "Impossible d'envoyer la carte. Réessayez.",
+    editText: 'Modifier le texte',
+    editTextDone: 'Terminé',
+    translateLabel: 'Traduire le message',
+    translateOriginal: "Langue d'origine",
+    translating: 'Traduction…',
+    translateFailed: 'Impossible de traduire le texte. Réessayez.',
+    otherPlaceholder: 'une.autre@email.com',
+    sendOther: 'Envoyer à une autre adresse',
+    invalidEmail: 'Saisissez une adresse e-mail valide.',
   },
   de: {
     hint: 'Das ist die Karte, die wir an deine E-Mail-Adresse senden. Aus deinem Posteingang kannst du sie an jeden weiterleiten.',
@@ -188,6 +258,15 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     errRate: 'Du hast viele Karten hintereinander gesendet. Bitte versuche es später erneut.',
     errSmtp: 'Der E-Mail-Versand ist gerade nicht verfügbar. Bitte versuche es später erneut.',
     errGeneric: 'Die Karte konnte nicht gesendet werden. Bitte versuche es erneut.',
+    editText: 'Text bearbeiten',
+    editTextDone: 'Fertig',
+    translateLabel: 'Nachricht übersetzen',
+    translateOriginal: 'Ausgangssprache',
+    translating: 'Wird übersetzt…',
+    translateFailed: 'Der Text konnte nicht übersetzt werden. Bitte versuche es erneut.',
+    otherPlaceholder: 'andere@email.de',
+    sendOther: 'An andere Adresse senden',
+    invalidEmail: 'Gib eine gültige E-Mail-Adresse ein.',
   },
   pt: {
     hint: 'Este é o cartão que vamos enviar para o teu email. A partir da tua caixa de entrada podes reencaminhá-lo a quem quiseres.',
@@ -201,6 +280,15 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     errRate: 'Enviaste muitos cartões seguidos. Tenta de novo mais tarde.',
     errSmtp: 'O envio por email não está disponível neste momento. Tenta mais tarde.',
     errGeneric: 'Não foi possível enviar o cartão. Tenta novamente.',
+    editText: 'Editar texto',
+    editTextDone: 'Concluído',
+    translateLabel: 'Traduzir a mensagem',
+    translateOriginal: 'Idioma original',
+    translating: 'A traduzir…',
+    translateFailed: 'Não foi possível traduzir o texto. Tenta novamente.',
+    otherPlaceholder: 'outro@email.com',
+    sendOther: 'Enviar para outro endereço',
+    invalidEmail: 'Introduz um endereço de email válido.',
   },
   it: {
     hint: 'Questa è la scheda che invieremo alla tua email. Dalla tua casella potrai inoltrarla a chi vuoi.',
@@ -214,6 +302,15 @@ const UI: Record<ShareLangCode, ShareUiStrings> = {
     errRate: 'Hai inviato molte schede di seguito. Riprova più tardi.',
     errSmtp: "L'invio per email non è disponibile in questo momento. Riprova più tardi.",
     errGeneric: 'Impossibile inviare la scheda. Riprova.',
+    editText: 'Modifica il testo',
+    editTextDone: 'Fatto',
+    translateLabel: 'Traduci il messaggio',
+    translateOriginal: 'Lingua originale',
+    translating: 'Traduzione…',
+    translateFailed: 'Impossibile tradurre il testo. Riprova.',
+    otherPlaceholder: 'un.altro@email.com',
+    sendOther: 'Invia a un altro indirizzo',
+    invalidEmail: 'Inserisci un indirizzo email valido.',
   },
 };
 const ui = UI[lang] ?? UI.es;
@@ -231,6 +328,14 @@ const clientData = {
     errRate: ui.errRate,
     errSmtp: ui.errSmtp,
     errGeneric: ui.errGeneric,
+    editText: ui.editText,
+    editTextDone: ui.editTextDone,
+    translateLabel: ui.translateLabel,
+    translating: ui.translating,
+    translateFailed: ui.translateFailed,
+    otherPlaceholder: ui.otherPlaceholder,
+    sendOther: ui.sendOther,
+    invalidEmail: ui.invalidEmail,
   },
 };
 const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
@@ -267,9 +372,28 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       <!-- Tarjeta del correo: es exactamente la que llegará a tu bandeja -->
       <div class="email-preview" id="emailCard" set:html={emailHtml} />
 
+      <!-- Toolbar: el mensaje es editable y se puede traducir con el traductor de Google -->
+      <div class="preview-toolbar">
+        <button type="button" class="tool-btn" id="editTextBtn" aria-pressed="false">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+          </svg>
+          <span id="editTextLabel">{ui.editText}</span>
+        </button>
+        <label class="tool-select" for="translateSelect">
+          <span class="tool-select-globe" aria-hidden="true">🌐</span>
+          <select id="translateSelect" aria-label={ui.translateLabel}>
+            <option value="">{ui.translateOriginal}</option>
+            {GOOGLE_TRANSLATE_LANGS.map((item) => (
+              <option value={item.code}>{item.label}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
       {user ? (
         <div class="share-actions">
-          <!-- Único botón: envía la tarjeta al correo de la cuenta -->
+          <!-- Botón 1: envía la tarjeta al correo de la cuenta -->
           <button type="button" class="share-btn share-btn-mail" id="sendToMeBtn">
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <rect x="3" y="5.5" width="18" height="13" rx="2.5"/>
@@ -277,6 +401,24 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
             </svg>
             <span class="share-btn-label">{ui.sendTo} <strong class="share-email">{user.email}</strong></span>
           </button>
+          <!-- Botón 2: envía la tarjeta a otra dirección de correo que el usuario escribe -->
+          <div class="share-other">
+            <input
+              id="otherEmail"
+              type="email"
+              maxlength="120"
+              autocomplete="email"
+              placeholder={ui.otherPlaceholder}
+              aria-label={ui.otherPlaceholder}
+            />
+            <button type="button" class="share-btn share-btn-alt" id="sendOtherBtn">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <rect x="3" y="5.5" width="18" height="13" rx="2.5"/>
+                <path d="m4.5 8 7.5 5 7.5-5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span class="share-btn-label" id="sendOtherLabel">{ui.sendOther}</span>
+            </button>
+          </div>
         </div>
       ) : (
         <section class="share-login" data-share-login>
@@ -338,7 +480,49 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
     .email-preview :global(.tz-cta:active) { transform: translateY(0); box-shadow: none; }
     .email-preview :global(.tz-cta:focus-visible) { outline: 2px solid #1d4ed8; outline-offset: 2px; }
 
-    .share-actions { display: flex; }
+    /* Toolbar de la vista previa: editar el mensaje + traductor de Google */
+    .preview-toolbar {
+      display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+      gap: .55rem; margin-bottom: 1.1rem;
+    }
+    .tool-btn {
+      display: inline-flex; align-items: center; gap: .45rem;
+      padding: .5rem .95rem; border-radius: 999px; cursor: pointer;
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
+      color: #e5e7eb; font-family: 'Inter', sans-serif; font-size: .78rem; font-weight: 700; transition: .16s;
+    }
+    .tool-btn:hover { background: rgba(255,255,255,.1); border-color: rgba(96,165,250,.45); }
+    .tool-btn.is-on {
+      color: #0d1422; background: linear-gradient(135deg,#60a5fa 0%,#3b82f6 100%);
+      border-color: rgba(96,165,250,.6); box-shadow: 0 3px 10px rgba(59,130,246,.35);
+    }
+    .tool-btn:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+    .tool-select { position: relative; display: inline-flex; align-items: center; }
+    .tool-select-globe { position: absolute; left: .7rem; font-size: .85rem; pointer-events: none; }
+    .tool-select select {
+      appearance: none; -webkit-appearance: none; cursor: pointer;
+      padding: .5rem 2rem .5rem 2rem; border-radius: 999px;
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12);
+      color: #e5e7eb; font-family: 'Inter', sans-serif; font-size: .78rem; font-weight: 700; transition: .16s;
+    }
+    .tool-select select:hover { background: rgba(255,255,255,.1); border-color: rgba(96,165,250,.45); }
+    .tool-select select:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+    .tool-select select:disabled { opacity: .6; cursor: progress; }
+    .tool-select::after {
+      content: '▾'; position: absolute; right: .75rem; top: 50%; transform: translateY(-50%);
+      color: #9ca3af; font-size: .7rem; pointer-events: none;
+    }
+    .tool-select select option { background: #0d1422; color: #f3f4f6; }
+
+    /* Mensaje editable: sólo en la vista previa (el correo conserva su diseño) */
+    .email-preview :global(.tz-msg.is-editing) {
+      cursor: text; border-radius: 6px;
+      background: rgba(59,130,246,.07);
+      outline: 2px dashed #60a5fa; outline-offset: 6px;
+    }
+    .email-preview :global(.tz-msg.is-editing:focus) { outline-style: solid; }
+
+    .share-actions { display: flex; flex-direction: column; gap: .7rem; }
     .share-btn {
       display: inline-flex; align-items: center; justify-content: center; gap: .6rem; width: 100%;
       padding: .9rem 1.25rem; border-radius: 10px; font-weight: 700; font-size: .95rem; line-height: 1.35;
@@ -355,6 +539,19 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
     /* El correo puede ser largo: se parte en vez de desbordar el botón */
     .share-btn-label { min-width: 0; text-align: left; }
     .share-email { font-weight: 800; overflow-wrap: anywhere; }
+
+    /* Envío a otra dirección: campo escribible + botón secundario */
+    .share-other { display: flex; flex-direction: column; gap: .55rem; }
+    .share-other input {
+      width: 100%; box-sizing: border-box; padding: .8rem 1rem; border-radius: 10px;
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.14);
+      color: #f3f4f6; font-family: 'Inter', sans-serif; font-size: .9rem; outline: none; transition: .16s;
+    }
+    .share-other input::placeholder { color: #6b7280; }
+    .share-other input:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(59,130,246,.25); }
+    .share-btn-alt { background: rgba(255,255,255,.06); color: #e5e7eb; border: 1px solid rgba(255,255,255,.16); }
+    .share-btn-alt:hover:not(:disabled) { background: rgba(255,255,255,.12); transform: translateY(-2px); }
+    .share-btn-alt:focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; }
 
     /* Sin sesión: no se sabe a qué correo enviarla */
     .share-login {
@@ -402,7 +599,23 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       productId: string;
       /** Correo de la cuenta (vacío si no hay sesión). */
       email: string;
-      ui: { sendTo: string; sending: string; sent: string; errAuth: string; errRate: string; errSmtp: string; errGeneric: string };
+      ui: {
+        sendTo: string;
+        sending: string;
+        sent: string;
+        errAuth: string;
+        errRate: string;
+        errSmtp: string;
+        errGeneric: string;
+        editText: string;
+        editTextDone: string;
+        translateLabel: string;
+        translating: string;
+        translateFailed: string;
+        otherPlaceholder: string;
+        sendOther: string;
+        invalidEmail: string;
+      };
     }
 
     const data = JSON.parse(document.getElementById('share-data')?.textContent || '{}') as ShareData;
@@ -451,23 +664,119 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       toastTimer = window.setTimeout(() => toast.classList.remove('is-on'), ms);
     }
 
-    // ---- Enviar la tarjeta al correo de la cuenta ----
+    // ---- Editar el texto del mensaje de la tarjeta ---------------------------------
+    const msgEl = document.querySelector<HTMLElement>('.email-preview .tz-msg');
+    const MESSAGE_MAX = 1500;
+    /** Texto original de la plantilla (el que se restaura al volver al idioma original). */
+    const originalMessage = (msgEl?.textContent ?? '').replace(/\s+/g, ' ').trim();
+    /** Último texto escrito por el usuario (siempre sin traducir: las traducciones parten de él). */
+    let baseMessage = originalMessage;
+    /** Texto que se ve ahora mismo en la tarjeta (y por tanto el que se envía). */
+    let currentMessage = originalMessage;
+    let editing = false;
+
+    const editBtn = document.getElementById('editTextBtn') as HTMLButtonElement | null;
+    const editLabel = document.getElementById('editTextLabel');
+
+    function setEditing(on: boolean): void {
+      if (!msgEl || !editBtn) return;
+      editing = on;
+      msgEl.contentEditable = on ? 'true' : 'false';
+      msgEl.classList.toggle('is-editing', on);
+      editBtn.classList.toggle('is-on', on);
+      editBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      if (editLabel) editLabel.textContent = on ? data.ui.editTextDone : data.ui.editText;
+      if (on) {
+        msgEl.focus();
+        const range = document.createRange();
+        range.selectNodeContents(msgEl);
+        range.collapse(false);
+        const selection = window.getSelection();
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+      } else {
+        const text = (msgEl.textContent || '').replace(/\s+/g, ' ').trim().slice(0, MESSAGE_MAX);
+        msgEl.textContent = text;
+        baseMessage = text;
+        currentMessage = text;
+      }
+    }
+
+    editBtn?.addEventListener('mousedown', (event) => event.preventDefault()); // no robar el foco al texto
+    editBtn?.addEventListener('click', () => setEditing(!editing));
+    // Al salir del texto (clic fuera o tabulador) se guarda y se cierra la edición.
+    msgEl?.addEventListener('blur', () => {
+      if (editing) setEditing(false);
+    });
+
+    // ---- Traducir el mensaje con el traductor de Google ----------------------------
+    const translateSelect = document.getElementById('translateSelect') as HTMLSelectElement | null;
+
+    translateSelect?.addEventListener('change', async () => {
+      if (editing) setEditing(false);
+      const target = translateSelect.value;
+      if (!target) {
+        if (msgEl) msgEl.textContent = baseMessage;
+        currentMessage = baseMessage;
+        return;
+      }
+      if (!baseMessage) return;
+      translateSelect.disabled = true;
+      showToast(data.ui.translating, false, 4000);
+      try {
+        const res = await fetch('/api/share/translate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: baseMessage, target }),
+        });
+        const out = (await res.json().catch(() => ({}))) as { ok?: boolean; text?: string };
+        if (res.status === 401) {
+          showToast(data.ui.errAuth, true);
+          window.setTimeout(() => window.location.reload(), 2200);
+          return;
+        }
+        if (res.ok && out.ok && out.text) {
+          if (msgEl) msgEl.textContent = out.text;
+          currentMessage = out.text;
+        } else {
+          translateSelect.value = '';
+          showToast(data.ui.translateFailed, true);
+        }
+      } catch {
+        translateSelect.value = '';
+        showToast(data.ui.translateFailed, true);
+      } finally {
+        translateSelect.disabled = false;
+      }
+    });
+
+    // ---- Enviar la tarjeta (a la cuenta o a otra dirección) ------------------------
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const sendBtn = document.getElementById('sendToMeBtn') as HTMLButtonElement | null;
-    sendBtn?.addEventListener('click', async () => {
-      if (sendBtn.disabled) return;
-      const label = sendBtn.querySelector<HTMLElement>('.share-btn-label');
+    const sendOtherBtn = document.getElementById('sendOtherBtn') as HTMLButtonElement | null;
+    const otherEmailInput = document.getElementById('otherEmail') as HTMLInputElement | null;
+
+    async function sendCard(to: string | null, btn: HTMLButtonElement): Promise<void> {
+      if (btn.disabled) return;
+      const label = btn.querySelector<HTMLElement>('.share-btn-label');
       const original = label?.innerHTML ?? '';
-      sendBtn.disabled = true;
+      // Los dos botones se bloquean a la vez: sólo un envío en vuelo.
+      if (sendBtn) sendBtn.disabled = true;
+      if (sendOtherBtn) sendOtherBtn.disabled = true;
       if (label) label.textContent = data.ui.sending;
       try {
+        const body: Record<string, unknown> = { productId: data.productId, lang: data.lang };
+        // Lo que se ve en la vista previa (editado o traducido) es lo que llega al correo.
+        if (currentMessage) body.message = currentMessage;
+        if (to) body.to = to;
         const res = await fetch('/api/share/email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ productId: data.productId, lang: data.lang }),
+          body: JSON.stringify(body),
         });
-        const out = (await res.json().catch(() => ({}))) as { ok?: boolean };
+        const out = (await res.json().catch(() => ({}))) as { ok?: boolean; to?: string };
         if (res.ok && out.ok) {
-          showToast(data.ui.sent.replace('{email}', data.email));
+          showToast(data.ui.sent.replace('{email}', out.to || to || data.email));
         } else if (res.status === 401) {
           showToast(data.ui.errAuth, true);
           window.setTimeout(() => window.location.reload(), 2200);
@@ -484,9 +793,24 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
         if (label) label.innerHTML = original;
         // Una pausa corta evita el doble clic accidental (el servidor además limita los envíos).
         window.setTimeout(() => {
-          sendBtn.disabled = false;
+          if (sendBtn) sendBtn.disabled = false;
+          if (sendOtherBtn) sendOtherBtn.disabled = false;
         }, 1500);
       }
+    }
+
+    sendBtn?.addEventListener('click', () => {
+      void sendCard(null, sendBtn);
+    });
+
+    sendOtherBtn?.addEventListener('click', () => {
+      const to = (otherEmailInput?.value ?? '').trim().toLowerCase();
+      if (!EMAIL_RE.test(to)) {
+        showToast(data.ui.invalidEmail, true);
+        otherEmailInput?.focus();
+        return;
+      }
+      void sendCard(to, sendOtherBtn);
     });
 
     // Sin sesión: el modal de acceso, al terminar, normalmente lleva a la portada. Esta página

@@ -82,7 +82,9 @@ export function buildShareEmailHtml(input: ShareEmailInput): string {
 
     // Cuerpo
     `<tr><td style="padding:28px 28px 20px;background-color:#ffffff;">`,
-    `<p style="margin:0 0 20px;font-family:${FONT};font-size:16px;line-height:1.65;color:#1f2937;">${message}</p>`,
+    // Clase tz-msg: gancho de la vista previa de /share para editar/traducir el mensaje
+    // (en el correo no tiene efecto; el diseño va en estilos inline).
+    `<p class="tz-msg" style="margin:0 0 20px;font-family:${FONT};font-size:16px;line-height:1.65;color:#1f2937;">${message}</p>`,
     `<div style="height:1px;line-height:1px;font-size:0;margin:0 0 20px;background-color:#e5e7eb;background-image:linear-gradient(90deg,rgba(229,231,235,0) 0%,#e5e7eb 20%,#e5e7eb 80%,rgba(229,231,235,0) 100%);">&nbsp;</div>`,
 
     // Producto: imagen | separación | título + categoría + botón.
