@@ -5,11 +5,15 @@
  * ==============================================================================
  * Se llega desde la opción "Perfil" del menú de usuario de la cabecera. Reúne
  * lo mismo que "Mi perfil" del backend (/admin/perfil): foto, nombre, email y
- * contraseña. En el hueco del teléfono va "Mis preferencias": las categorías que
- * más interesan al usuario, para poder recomendarle productos.
+ * contraseña, más los datos personales adicionales (apellido, fecha de
+ * nacimiento, ciudad y país), el tiempo libre (hasta 3 opciones) y el tipo de
+ * visitante (particular / profesional / empresa). En el hueco del teléfono va
+ * "Mis preferencias": las categorías que más interesan al usuario.
  *
  *  - Foto:        POST /api/radar/auth/avatar
- *  - Nombre/email: PATCH /api/radar/auth/profile (el email se confirma por enlace)
+ *  - Datos:       PATCH /api/radar/auth/profile (email, apellido, nacimiento,
+ *                 ciudad, país, tiempo libre y tipo de visitante; el email se
+ *                 confirma por enlace)
  *  - Contraseña:  POST /api/radar/auth/password (sólo cuentas con email)
  *  - Preferencias: PUT /api/radar/preferences
  *
@@ -54,7 +58,8 @@ const categories = getCategories();
 const knownSlugs = new Set(categories.map((category) => category.slug));
 const selected = new Set((user?.preferences?.categories ?? []).filter((slug) => knownSlugs.has(slug)));
 
-const displayName = user ? user.name || user.email.split('@')[0] : '';
+const baseName = user ? user.name || user.email.split('@')[0] : '';
+const displayName = user ? [baseName, user.lastName].filter(Boolean).join(' ') : '';
 const initial = displayName.charAt(0).toUpperCase();
 const avatarUrl = user?.avatar ? `/api/radar/auth/avatar?v=${encodeURIComponent(user.updatedAt ?? '')}` : null;
 const memberSince = user
@@ -62,6 +67,24 @@ const memberSince = user
   : '';
 const isGoogle = user?.provider === 'google';
 const prefsLabel = (count: number) => (count ? `${count} categoría${count === 1 ? '' : 's'}` : 'Sin elegir');
+
+// Opciones del tiempo libre (máx. 3) y tipo de visitante del formulario de datos.
+const HOBBIES: { value: string; label: string }[] = [
+  { value: 'fotografia-video', label: 'Fotografía y Vídeo' },
+  { value: 'rutas-aventura', label: 'Rutas y Aventura' },
+  { value: 'musica-audio', label: 'Música y Audio' },
+  { value: 'bricolaje-diy', label: 'Bricolaje y DIY' },
+  { value: 'decoracion', label: 'Decoración' },
+  { value: 'otros', label: 'Otros' },
+];
+const PROFILE_TYPE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'particular', label: 'Particular' },
+  { value: 'profesional', label: 'Profesional / Autónomo' },
+  { value: 'empresa', label: 'Empresa' },
+];
+const selectedHobbies = new Set(user?.hobbies ?? []);
+const profileType = user?.profileType ?? '';
+const todayIso = new Date().toISOString().slice(0, 10);
 ---
 
 <Layout
@@ -130,7 +153,7 @@ const prefsLabel = (count: number) => (count ? `${count} categoría${count === 1
           </aside>
 
           <div class="profile-forms">
-            <!-- Datos personales: foto, nombre y email -->
+            <!-- Datos personales: foto, nombre, email y datos adicionales -->
             <form id="profileDataForm" class="p-card" data-original-email={user.email} data-google={isGoogle ? 'true' : 'false'}>
               <div class="card-header">
                 <div class="header-icon">
@@ -138,7 +161,7 @@ const prefsLabel = (count: number) => (count ? `${count} categoría${count === 1
                 </div>
                 <div>
                   <span class="card-title">Datos personales</span>
-                  <p class="card-desc">Nombre, email y foto de perfil.</p>
+                  <p class="card-desc">Foto, nombre y contacto, además de tus datos personales y de ocio.</p>
                 </div>
               </div>
 
@@ -149,9 +172,15 @@ const prefsLabel = (count: number) => (count ? `${count} categoría${count === 1
                   <button type="button" class="btn-link" id="btnRemoveAvatar">Quitar mi foto</button>
                 )}
               </div>
-              <div class="form-group">
-                <label class="field-label" for="profileName">Nombre <span class="required">*</span></label>
-                <input id="profileName" name="name" type="text" value={user.name ?? displayName} required maxlength="80" autocomplete="name" />
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="field-label" for="profileName">Nombre <span class="required">*</span></label>
+                  <input id="profileName" name="name" type="text" value={user.name ?? baseName} required maxlength="80" autocomplete="given-name" />
+                </div>
+                <div class="form-group">
+                  <label class="field-label" for="profileLastName">Apellido</label>
+                  <input id="profileLastName" name="lastName" type="text" value={user.lastName ?? ''} maxlength="80" autocomplete="family-name" />
+                </div>
               </div>
               <div class="form-group">
                 <label class="field-label" for="profileEmail">Email</label>
@@ -159,7 +188,7 @@ const prefsLabel = (count: number) => (count ? `${count} categoría${count === 1
                 {isGoogle ? (
                   <p class="field-note">Tu email lo gestiona Google y no se puede cambiar aquí.</p>
                 ) : (
-                  <p class="field-note">Si lo cambias, te enviaremos un enlace para confirmar el nuevo email.</p>
+                  <p class="field-note">Se rellena con tu email actual: si lo cambias, te enviaremos un enlace para confirmarlo.</p>
                 )}
                 {user.pendingEmail && (
                   <p class="field-note is-pending" id="pendingEmailNote">
@@ -173,6 +202,52 @@ const prefsLabel = (count: number) => (count ? `${count} categoría${count === 1
                   <input id="emailCurrentPassword" name="currentPassword" type="password" autocomplete="current-password" />
                 </div>
               )}
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="field-label" for="profileBirthDate">Fecha de nacimiento</label>
+                  <input id="profileBirthDate" name="birthDate" type="date" value={user.birthDate ?? ''} max={todayIso} autocomplete="bday" />
+                </div>
+                <div class="form-group">
+                  <label class="field-label" for="profileCity">Ciudad</label>
+                  <input id="profileCity" name="city" type="text" value={user.city ?? ''} maxlength="80" autocomplete="address-level2" />
+                </div>
+                <div class="form-group">
+                  <label class="field-label" for="profileCountry">País</label>
+                  <input id="profileCountry" name="country" type="text" value={user.country ?? ''} maxlength="80" autocomplete="country-name" />
+                </div>
+              </div>
+
+              <div class="form-group fieldset-box" role="group" aria-labelledby="hobbiesLegend">
+                <span class="field-label" id="hobbiesLegend">
+                  ¿A qué dedicas tu tiempo libre?
+                  <span class="label-hint">Selecciona hasta 3</span>
+                </span>
+                <div class="opt-grid" id="hobbyGroup">
+                  {HOBBIES.map((hobby) => (
+                    <label class="opt">
+                      <input type="checkbox" name="hobby" value={hobby.value} checked={selectedHobbies.has(hobby.value)} />
+                      <span>{hobby.label}</span>
+                    </label>
+                  ))}
+                </div>
+                <div class="form-group" id="hobbyOtherGroup" hidden>
+                  <label class="field-label" for="hobbyOther">Otros <span class="label-hint">cuéntanos a qué te dedicas</span></label>
+                  <input id="hobbyOther" name="hobbiesOther" type="text" maxlength="120" value={user.hobbiesOther ?? ''} placeholder="Escribe aquí tu ocio favorito" />
+                </div>
+                <p class="field-note" id="hobbyCount" aria-live="polite"></p>
+              </div>
+
+              <div class="form-group fieldset-box" role="radiogroup" aria-labelledby="profileTypeLegend">
+                <span class="field-label" id="profileTypeLegend">¿Nos visitas como profesional o particular?</span>
+                <div class="opt-grid" id="profileTypeGroup">
+                  {PROFILE_TYPE_OPTIONS.map((option) => (
+                    <label class="opt">
+                      <input type="radio" name="profileType" value={option.value} checked={profileType === option.value} />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
               <div class="form-actions">
                 <button type="submit" class="btn-primary" id="btnSaveProfile">Guardar cambios</button>
@@ -349,6 +424,39 @@ const prefsLabel = (count: number) => (count ? `${count} categoría${count === 1
       }
     });
 
+    // ---- Tiempo libre (máx. 3) y tipo de visitante ---------------------------------
+    const HOBBY_MAX = 3;
+    const hobbyBoxes = Array.from(document.querySelectorAll('#hobbyGroup input[type="checkbox"]'));
+    const hobbyOtherGroup = document.getElementById('hobbyOtherGroup');
+    const hobbyOtherInput = document.getElementById('hobbyOther');
+    const hobbyCount = document.getElementById('hobbyCount');
+    const profileTypeInputs = Array.from(document.querySelectorAll('#profileTypeGroup input[type="radio"]'));
+
+    function syncOptStyles() {
+      document.querySelectorAll('.opt').forEach((label) => {
+        const input = label.querySelector('input');
+        label.classList.toggle('is-on', Boolean(input && input.checked));
+      });
+    }
+
+    function syncHobbies() {
+      const checked = hobbyBoxes.filter((box) => box.checked);
+      hobbyBoxes.forEach((box) => { box.disabled = !box.checked && checked.length >= HOBBY_MAX; });
+      if (hobbyCount) {
+        hobbyCount.textContent = checked.length >= HOBBY_MAX
+          ? `Máximo de ${HOBBY_MAX} opciones alcanzado.`
+          : `Puedes elegir hasta ${HOBBY_MAX} opciones (${checked.length} de ${HOBBY_MAX} seleccionadas).`;
+      }
+      const hasOther = checked.some((box) => box.value === 'otros');
+      if (hobbyOtherGroup) hobbyOtherGroup.hidden = !hasOther;
+      if (hobbyOtherInput) hobbyOtherInput.required = hasOther;
+      syncOptStyles();
+    }
+
+    hobbyBoxes.forEach((box) => box.addEventListener('change', syncHobbies));
+    profileTypeInputs.forEach((input) => input.addEventListener('change', syncOptStyles));
+    syncHobbies();
+
     dataForm && dataForm.addEventListener('submit', async (event) => {
       event.preventDefault();
       const button = document.getElementById('btnSaveProfile');
@@ -365,7 +473,21 @@ const prefsLabel = (count: number) => (count ? `${count} categoría${count === 1
           if (!avatarRes.ok) { showAlert('error', avatarData.message || 'No se pudo subir la imagen.'); return; }
         }
 
-        const payload = { name: document.getElementById('profileName').value };
+        const payload = {
+          name: document.getElementById('profileName').value,
+          lastName: (document.getElementById('profileLastName') || {}).value || '',
+          birthDate: (document.getElementById('profileBirthDate') || {}).value || '',
+          city: (document.getElementById('profileCity') || {}).value || '',
+          country: (document.getElementById('profileCountry') || {}).value || '',
+          hobbies: hobbyBoxes.filter((box) => box.checked).map((box) => box.value),
+          hobbiesOther: hobbyOtherInput ? hobbyOtherInput.value : '',
+          profileType: (profileTypeInputs.find((input) => input.checked) || {}).value || '',
+        };
+        if (payload.hobbies.indexOf('otros') !== -1 && !payload.hobbiesOther.trim()) {
+          showAlert('error', 'Si eliges "Otros", escribe tu propia opción.');
+          if (hobbyOtherInput) hobbyOtherInput.focus();
+          return;
+        }
         const emailChanged = !isGoogle && emailInput && emailInput.value.trim().toLowerCase() !== originalEmail;
         if (emailChanged) {
           payload.email = emailInput.value;
@@ -521,13 +643,25 @@ const prefsLabel = (count: number) => (count ? `${count} categoría${count === 1
 
   .form-group { display: flex; flex-direction: column; gap: .4rem; margin-bottom: 1rem; }
   .form-group[hidden] { display: none; }
+  .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 1rem; }
+  .form-row .form-group { margin-bottom: 0; }
+  .fieldset-box { background: rgba(255, 255, 255, .02); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); padding: 1rem; }
+  .fieldset-box .form-group { margin-bottom: 0; }
+  .fieldset-box > .field-label { margin-bottom: .1rem; }
+  .opt-grid { display: flex; flex-wrap: wrap; gap: .6rem; }
+  .opt { display: inline-flex; align-items: center; gap: .55rem; padding: .55rem .9rem; background: #0d121f; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); color: var(--color-text-muted); font-family: var(--font-body); font-size: .85rem; font-weight: 600; cursor: pointer; transition: all .18s ease; }
+  .opt:hover { color: var(--color-text-main); border-color: rgba(96, 165, 250, .4); transform: translateY(-1px); }
+  .opt.is-on { color: #fff; background: rgba(59, 130, 246, .18); border-color: rgba(96, 165, 250, .6); box-shadow: 0 4px 14px rgba(59, 130, 246, .2); }
+  .opt input { width: auto; margin: 0; accent-color: var(--color-primary); cursor: pointer; flex-shrink: 0; }
+  .opt input:disabled { cursor: not-allowed; }
+  .opt:has(input:disabled) { opacity: .5; cursor: not-allowed; transform: none; }
   .field-label { display: flex; justify-content: space-between; align-items: center; gap: .5rem; font-size: .8rem; font-weight: 600; color: var(--color-text-main); }
   .required { color: #f87171; }
   .label-hint { font-size: .72rem; font-weight: 400; color: var(--color-text-dim); text-align: right; }
   .field-note { font-size: .76rem; color: var(--color-text-dim); line-height: 1.5; margin: 0; }
   .field-note.is-pending { color: #fbbf24; }
 
-  input[type="text"], input[type="email"], input[type="password"], input[type="file"] { width: 100%; box-sizing: border-box; background: #0d121f; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); padding: .75rem 1rem; color: var(--color-text-main); font-family: var(--font-body); font-size: .9rem; transition: all .2s ease; outline: none; }
+  input[type="text"], input[type="email"], input[type="password"], input[type="file"], input[type="date"] { width: 100%; box-sizing: border-box; background: #0d121f; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); padding: .75rem 1rem; color: var(--color-text-main); font-family: var(--font-body); font-size: .9rem; transition: all .2s ease; outline: none; color-scheme: dark; }
   input[readonly] { opacity: .7; cursor: not-allowed; }
   input[type="file"] { padding: .6rem .75rem; font-size: .8rem; color: var(--color-text-muted); }
   input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, .2); }

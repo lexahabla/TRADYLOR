@@ -92,7 +92,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     label: 'Español',
     panelTitle: 'Compartir producto',
     dm: [
-      'Oye por si te sirve, estuve usando esta web para buscar y comparar precios de esto y me ha parecido un hallazgo. Calidad-precio está de lujo! {url}',
+      'Por si te sirve, estuve usando esta web para buscar y comparar precios de esto y me ha parecido un hallazgo. Calidad-precio está de lujo! {url}',
     ],
     threads: [
       'Si alguien anda buscando {categoria}, en Tradylor.com lo han puesto como la opción top tras comparar especificaciones y precio. Aquí tenéis la ficha con el seguimiento de precio activo: {url}',
@@ -125,7 +125,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     label: 'Català',
     panelTitle: 'Compartir producte',
     dm: [
-      "Oi, estava donant un cop d'ull a això i, després de comparar una bona estona a Tradylor.com, és clarament la millor opció qualitat-preu de la categoria. Aquí tens la fitxa amb l'anàlisi i el gràfic de preus: {url}",
+      "Per si et serveix, estava fent servir aquesta web per buscar i comparar preus d'això i m'ha semblat un bon troballa. Qualitat-preu està de luxe! {url}",
     ],
     threads: [
       "Si algú busca {categoria}, a Tradylor.com l'han posat com a opció top després de comparar especificacions i preu. Aquí teniu la fitxa amb el seguiment de preu actiu: {url}",
@@ -148,7 +148,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     label: 'Euskera',
     panelTitle: 'Produktua partekatu',
     dm: [
-      'Aurkitu dut hau begiratzen ari nintzela eta, Tradylor.com-en denbora ona eman ondoren, kategoriako kalitate-preziorik onena da argi. Hemen duzu fitxa, azterketa eta prezio-grafikoarekin: {url}',
+      'Bali bada, web hau erabiltzen ari nintzen hau bilatzeko eta prezioak konparatzeko, eta aurkikuntza ona iruditu zait. Kalitate-prezioa primerakoa da! {url}',
     ],
     threads: [
       'Norbait {categoria} bilatzen ari bada, Tradylor.com-en ipini dute aukera onena, zehaztapenak eta prezioa konparatu ondoren. Hemen duzu prezio-jarraipen aktiboarekin: {url}',
@@ -171,7 +171,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     label: 'Galego',
     panelTitle: 'Compartir produto',
     dm: [
-      'Ola, estaba a botarlle unha ollada a isto e, despois de comparar un bo rato en Tradylor.com, é claramente a mellor opción calidade-prezo da categoría. Aquí tes a ficha coa análise e o gráfico de prezos: {url}',
+      'Por se che sirva, estaba a usar esta web para buscar e comparar prezos disto e pareceume un achado. Calidade-prezo está de luxo! {url}',
     ],
     threads: [
       'Se alguén busca {categoria}, en Tradylor.com puxérona como a opción top despois de comparar especificacións e prezo. Aquí tedes a ficha co seguimento de prezo activo: {url}',
@@ -194,7 +194,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     label: 'English',
     panelTitle: 'Share product',
     dm: [
-      "Hey, I was having a look at this and after comparing for a good while on Tradylor.com, it's clearly the best value for money in its category. Here's the sheet with the analysis and the price chart: {url}",
+      "In case it's useful, I was using this website to search and compare prices for this and I think it's a great find. Value for money is great! {url}",
     ],
     threads: [
       "If anyone is looking for {categoria}, Tradylor.com has it as the top pick after comparing specs and price. Here's the sheet with price tracking live: {url}",
@@ -217,7 +217,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     label: 'Français',
     panelTitle: 'Partager le produit',
     dm: [
-      "Salut, je regardais ça et après avoir bien comparé sur Tradylor.com, c'est clairement le meilleur rapport qualité-prix de la catégorie. Voici la fiche avec l'analyse et le graphique des prix : {url}",
+      "Au cas où ça pourrait t'être utile, j'utilisais ce site pour chercher et comparer les prix de ça et j'ai trouvé ça une bonne affaire. Rapport qualité-prix excellent ! {url}",
     ],
     threads: [
       "Si quelqu'un cherche {categoria}, Tradylor.com le place en tête après avoir comparé specs et prix. Voici la fiche avec le suivi de prix actif : {url}",
@@ -240,7 +240,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     label: 'Deutsch',
     panelTitle: 'Produkt teilen',
     dm: [
-      'Hey, ich habe mir das mal angeschaut und nach dem Vergleich auf Tradylor.com ist es klar das Preis-Leistungs-Top der Kategorie. Hier das Datenblatt mit Analyse und Preisverlauf: {url}',
+      'Falls es dir nützt: Ich habe diese Website genutzt, um die Preise dafür zu suchen und zu vergleichen, und fand es einen tollen Fund. Preis-Leistung ist top! {url}',
     ],
     threads: [
       'Falls jemand {categoria} sucht: Auf Tradylor.com ist es nach Vergleich von Specs und Preis die Top-Empfehlung. Hier das Blatt mit aktivem Preis-Tracking: {url}',
@@ -263,7 +263,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     label: 'Português',
     panelTitle: 'Partilhar produto',
     dm: [
-      'Olha, estava a dar uma vista de olhos nisto e, depois de comparar bastante no Tradylor.com, é de longe a melhor relação qualidade-preço da categoria. Aqui fica a ficha com a análise e o gráfico de preços: {url}',
+      'Por acaso te sirva, estava a usar este site para procurar e comparar preços disto e pareceu-me um achado. A relação qualidade-preço está ótima! {url}',
     ],
     threads: [
       'Se alguém procura {categoria}, no Tradylor.com ficou como a melhor opção depois de comparar especificações e preço. Aqui fica a ficha com o acompanhamento de preço ativo: {url}',
@@ -286,7 +286,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     label: 'Italiano',
     panelTitle: 'Condividi il prodotto',
     dm: [
-      "Ciao, davo un'occhiata a questo e dopo aver confrontato a lungo su Tradylor.com è chiaramente il miglior rapporto qualità-prezzo della categoria. Ecco la scheda con l'analisi e il grafico dei prezzi: {url}",
+      "Nel caso ti serva, stavo usando questo sito per cercare e confrontare i prezzi di questo e mi è sembrato una bella scoperta. Il rapporto qualità-prezzo è perfetto! {url}",
     ],
     threads: [
       'Se qualcuno sta cercando {categoria}, su Tradylor.com è la scelta top dopo aver confrontato specifiche e prezzo. Ecco la scheda con il tracking del prezzo attivo: {url}',
