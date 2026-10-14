@@ -61,6 +61,8 @@ export interface UnifiedProduct {
   inStock: boolean;
   shippingInfo?: string;
   estimated: boolean;
+  /** Datos extra de la red (tienda, ventas, alcance, descuento, enlace de afiliado…). */
+  extra?: Record<string, string | number | boolean | null>;
 }
 
 /** Parámetros de búsqueda unificada */

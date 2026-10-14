@@ -2292,6 +2292,48 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (btnImportAll) btnImportAll.disabled = total <= 0 || isBulkImporting;
     }
 
+    const escapeHtml = (value) => String(value ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+
+    const money = (value, currency = 'EUR') => (value == null || value === '' ? '—' : `${Number(value).toFixed(2)} ${currency === 'EUR' ? '€' : currency}`);
+
+    function productDetailRows(product) {
+      const rows = [
+        ['Red', product.network],
+        ['ID externo', product.externalId],
+        ['Categoría', product.category],
+        ['Descripción', product.description],
+        ['Precio', money(product.price, product.currency)],
+        ['Precio original', product.originalPrice != null ? money(product.originalPrice, product.currency) : null],
+        ['Moneda', product.currency],
+        ['Comisión (%)', product.commissionRate != null ? `${product.commissionRate}%` : null],
+        ['Comisión estimada', product.commissionAmount != null ? money(product.commissionAmount, product.currency) : null],
+        ['Valoración', product.rating != null ? `${product.rating} / 5` : null],
+        ['Reseñas', product.reviewsCount],
+        ['Ventas / alcance', product.popularity],
+        ['Stock', product.inStock ? 'En stock' : 'Sin stock'],
+        ['Envío', product.shippingInfo],
+        ['Origen de datos', product.estimated ? 'Estimado (API no cableada)' : 'API oficial'],
+        ['URL del producto', product.productUrl],
+      ];
+      for (const [label, value] of Object.entries(product.extra || {})) {
+        if (value != null && value !== '') rows.push([label, value]);
+      }
+      return rows
+        .filter(([, value]) => value != null && value !== '')
+        .map(([label, value]) => {
+          const raw = String(value);
+          const cell = /^https?:\/\//i.test(raw)
+            ? `<a href="${escapeHtml(raw)}" target="_blank" rel="noopener noreferrer">${escapeHtml(raw)}</a>`
+            : escapeHtml(raw);
+          return `<div class="aff-detail-item"><dt>${escapeHtml(label)}</dt><dd>${cell}</dd></div>`;
+        })
+        .join('');
+    }
+
     function renderResults(products) {
       if (!unifiedResults) return;
       currentResults = products;
@@ -2300,30 +2342,54 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         unifiedResults.innerHTML = '<div class="empty-dashboard">Sin resultados con estos filtros. Prueba a ampliar el rango de precio, quitar el filtro de stock o pulsa "Ver catálogo completo".</div>';
         return;
       }
-      unifiedResults.innerHTML = products.map((product, index) => `
-        <article class="unified-card">
-          <div class="unified-thumb">
-            <img src="${product.image}" alt="" loading="lazy" />
-          </div>
-          <div class="unified-body">
-            <div class="unified-top">
-              <span class="network-mini-tag">${product.network}</span>
-              <span class="network-mini-tag is-category">${product.category || 'Sin categoría'}</span>
-              ${product.estimated ? '<span class="estimated-tag">Estimado</span>' : ''}
-              ${product.inStock ? '<span class="stock-tag">En stock</span>' : '<span class="stock-tag is-out">Sin stock</span>'}
-            </div>
-            <h4 class="unified-title">${product.title}</h4>
-            <div class="unified-metrics">
-              <span class="unified-price">${product.price.toFixed(2)} €</span>
-              <span class="unified-commission">Comisión: ${product.commissionRate != null ? product.commissionRate + '%' : '—'}${product.commissionAmount != null ? ` (${product.commissionAmount.toFixed(2)} €)` : ''}</span>
-              ${product.rating != null ? `<span class="unified-rating">★ ${product.rating}</span>` : ''}
-            </div>
-          </div>
-          <button type="button" class="btn-success btn-sm unified-import" data-index="${index}" title="Importar con la categoría seleccionada">
-            Importar a Tradylor
-          </button>
-        </article>
-      `).join('');
+      unifiedResults.innerHTML = `
+        <div class="aff-table-wrap">
+          <table class="aff-table">
+            <thead>
+              <tr>
+                <th>Foto</th>
+                <th>Producto</th>
+                <th class="aff-num">Precio</th>
+                <th class="aff-num">Comisión</th>
+                <th class="aff-num">% venta</th>
+                <th class="aff-num">Alcance</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${products.map((product, index) => `
+                <tr class="aff-row" data-aff-row="${index}" tabindex="0" aria-expanded="false">
+                  <td><span class="aff-thumb">${product.image ? `<img src="${escapeHtml(product.image)}" alt="" loading="lazy" />` : ''}</span></td>
+                  <td class="aff-name">
+                    <strong>${escapeHtml(product.title)}</strong>
+                    <span>${escapeHtml(product.network)}${product.category ? ` · ${escapeHtml(product.category)}` : ''}${product.estimated ? ' · estimado' : ''}</span>
+                  </td>
+                  <td class="aff-num">${money(product.price, product.currency)}</td>
+                  <td class="aff-num">${product.commissionAmount != null ? money(product.commissionAmount, product.currency) : '—'}<small>${product.commissionRate != null ? `${product.commissionRate}%` : ''}</small></td>
+                  <td class="aff-num">${product.rating != null ? product.rating : '—'}</td>
+                  <td class="aff-num">${product.popularity != null ? product.popularity : '—'}</td>
+                  <td class="aff-actions">
+                    <button type="button" class="btn-success btn-sm unified-import" data-index="${index}">Añadir</button>
+                    <button type="button" class="aff-caret" data-aff-toggle="${index}" aria-label="Ver todos los datos">▸</button>
+                  </td>
+                </tr>
+                <tr class="aff-detail" data-aff-detail="${index}" hidden>
+                  <td colspan="7"><dl class="aff-detail-grid">${productDetailRows(product)}</dl></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    function toggleAffiliateRow(index) {
+      const row = unifiedResults?.querySelector(`[data-aff-row="${index}"]`);
+      const detail = unifiedResults?.querySelector(`[data-aff-detail="${index}"]`);
+      if (!row || !detail) return;
+      const open = detail.hidden;
+      detail.hidden = !open;
+      row.classList.toggle('is-open', open);
+      row.setAttribute('aria-expanded', String(open));
     }
 
     /** Construye el payload de guardado compartido por importación simple y masiva. */
@@ -2453,6 +2519,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     // Importación rápida al catálogo (el cloaking /out/[id] ya está activo en frontend)
     unifiedResults?.addEventListener('click', async (event) => {
+      const toggle = event.target.closest('[data-aff-toggle]');
+      if (toggle) {
+        event.stopPropagation();
+        toggleAffiliateRow(toggle.dataset.affToggle);
+        return;
+      }
+      if (event.target.closest('a, button')) return;
+      const row = event.target.closest('[data-aff-row]');
+      if (row) toggleAffiliateRow(row.dataset.affRow);
+
       const btn = event.target.closest('.unified-import');
       if (!btn || isBulkImporting) return;
       const index = Number(btn.dataset.index);
@@ -2857,7 +2933,29 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .network-chip.is-ok { color: #6ee7b7; border-color: rgba(16, 185, 129, .3); background: rgba(16, 185, 129, .08); }
   .network-chip.is-fail { color: #fca5a5; border-color: rgba(239, 68, 68, .3); background: rgba(239, 68, 68, .08); }
 
-  .unified-results { display: flex; flex-direction: column; gap: .75rem; max-height: 640px; overflow-y: auto; }
+  .unified-results { display: flex; flex-direction: column; gap: .75rem; }
+  .aff-table-wrap { max-height: 680px; overflow: auto; border: 1px solid var(--color-border); border-radius: 14px; }
+  .aff-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .78rem; background: rgba(255, 255, 255, .02); }
+  .aff-table th { position: sticky; top: 0; z-index: 1; padding: .65rem .75rem; text-align: left; font-size: .62rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--color-text-muted); background: #121826; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+  .aff-table td { padding: .55rem .75rem; color: var(--color-text-main); border-bottom: 1px solid rgba(255, 255, 255, .05); vertical-align: middle; }
+  .aff-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .aff-num small { display: block; color: #6ee7b7; font-size: .68rem; }
+  .aff-row { cursor: pointer; }
+  .aff-row:hover { background: rgba(96, 165, 250, .06); }
+  .aff-row.is-open { background: rgba(96, 165, 250, .1); }
+  .aff-thumb { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; padding: 3px; background: #fff; border-radius: 8px; }
+  .aff-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .aff-name { min-width: 220px; }
+  .aff-name strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 650; line-height: 1.35; }
+  .aff-name span { display: block; margin-top: .2rem; color: var(--color-text-dim); font-size: .68rem; }
+  .aff-actions { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; white-space: nowrap; }
+  .aff-caret { width: 28px; height: 28px; color: #93c5fd; background: rgba(96, 165, 250, .1); border: 1px solid rgba(96, 165, 250, .25); border-radius: 8px; cursor: pointer; }
+  .aff-row.is-open .aff-caret { transform: rotate(90deg); }
+  .aff-detail td { background: rgba(4, 10, 18, .55); }
+  .aff-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .65rem .9rem; margin: 0; }
+  .aff-detail-item dt { color: var(--color-text-dim); font-size: .64rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  .aff-detail-item dd { margin: .15rem 0 0; color: var(--color-text-main); font-size: .76rem; word-break: break-word; }
+  .aff-detail-item a { color: #93c5fd; }
   .unified-card { display: flex; align-items: center; gap: 1rem; padding: .85rem 1rem; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
   .unified-thumb { width: 64px; height: 64px; border-radius: 8px; background: #fff; padding: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
   .unified-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
