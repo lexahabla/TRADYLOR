@@ -44,6 +44,10 @@
         <span>Contraseña</span>
         <input type="password" name="password" autocomplete="current-password" required minlength="8" />
       </label>
+      <label class="auth-remember">
+        <input type="checkbox" name="remember" data-auth-remember />
+        <span>Mantener sesión iniciada</span>
+      </label>
       <button type="submit" class="auth-submit">Entrar</button>
       <button type="button" class="auth-link-btn" data-auth-view="forgot">¿Olvidaste tu contraseña?</button>
     </form>
@@ -336,6 +340,35 @@
     box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.14);
   }
 
+  .auth-remember {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .auth-remember input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: #60a5fa;
+    cursor: pointer;
+  }
+
+  .auth-remember input:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
+  }
+
+  .auth-remember:hover {
+    color: var(--color-text-main);
+  }
+
   .auth-submit {
     display: inline-flex;
     align-items: center;
@@ -574,7 +607,11 @@
       event.preventDefault();
       const data = new FormData(forms.login!);
       setBusy(true);
-      const result = await login(String(data.get('email') ?? ''), String(data.get('password') ?? ''));
+      const result = await login(
+        String(data.get('email') ?? ''),
+        String(data.get('password') ?? ''),
+        data.get('remember') === 'on',
+      );
       setBusy(false);
       if (result.success) {
         afterAuth();

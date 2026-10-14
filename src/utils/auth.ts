@@ -110,11 +110,11 @@ export async function register(email: string, password: string, name?: string): 
   };
 }
 
-export async function login(email: string, password: string): Promise<AuthResult> {
+export async function login(email: string, password: string, rememberMe = false): Promise<AuthResult> {
   const res = await fetch('/api/radar/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, rememberMe }),
   });
   const data = await parseJson(res);
   if (res.ok && data.success) {
