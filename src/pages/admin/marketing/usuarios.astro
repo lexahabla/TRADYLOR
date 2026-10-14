@@ -1,6 +1,8 @@
 ---
 /**
- * TRADYLOR — /admin/marketing/usuarios (sección Usuarios del módulo Marketing)
+ * TRADYLOR — /admin/marketing/usuarios
+ * Módulo de Usuarios del Marketing: Ficha de Usuario 360, Segmentador de
+ * Audiencias e Integración de Email Marketing (Mailchimp / Brevo / Resend).
  */
 export const prerender = false;
 
@@ -9,12 +11,54 @@ import AdminNav from '../../../components/AdminNav.astro';
 import AdminUserMenu from '../../../components/AdminUserMenu.astro';
 import MarketingMenu from '../../../components/admin/MarketingMenu.astro';
 import { getSessionUser } from '../../../lib/adminAuth';
+import { RADAR_HOBBIES, RADAR_PROFILE_TYPES } from '../../../lib/radarAuth';
+import { getAudience360, profileTypeLabel } from '../../../lib/marketingAudience';
+import { emailPlatformStatus, getMarketingEmailConfig, hasEmailChannel } from '../../../lib/marketingEmail';
+import { getSmtpConfig } from '../../../lib/mailer';
+import { getCategories } from '../../../lib/categories';
 
 const sessionUser = getSessionUser(Astro.request);
 if (!sessionUser) return Astro.redirect('/admin');
 if (sessionUser.role !== 'admin') return Astro.redirect('/admin/perfil');
 
 Astro.response.headers.set('Cache-Control', 'no-store');
+
+const HOBBY_LABELS: Record<string, string> = {
+  'fotografia-video': 'Fotografía & Vídeo',
+  'rutas-aventura': 'Rutas & Aventura',
+  'musica-audio': 'Música & Audio',
+  'bricolaje-diy': 'Bricolaje & DIY',
+  decoracion: 'Decoración',
+  otros: 'Otros',
+};
+
+const users = getAudience360();
+const hobbySlugs = Array.from(
+  new Set<string>([...RADAR_HOBBIES, ...users.flatMap((user) => user.declared.hobbies)]),
+);
+const hobbyOptions = hobbySlugs.map((slug) => ({ slug, label: HOBBY_LABELS[slug] ?? slug }));
+const profileOptions = RADAR_PROFILE_TYPES.map((value) => ({
+  value,
+  label: profileTypeLabel(value),
+}));
+const categoryLabels: Record<string, string> = {};
+for (const category of getCategories()) categoryLabels[category.slug] = category.name;
+const platformStates = (['mailchimp', 'brevo', 'resend'] as const).map((id) => ({
+  id,
+  ...emailPlatformStatus(id),
+}));
+
+const payload = {
+  users,
+  config: getMarketingEmailConfig(),
+  channels: { smtp: Boolean(getSmtpConfig()), email: hasEmailChannel() },
+  platformStates,
+  hobbyOptions,
+  profileOptions,
+  categoryLabels,
+};
+// `</` evita cerrar el <script> accidentalmente si un título lo contiene.
+const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
 ---
 
 <Layout
@@ -44,16 +88,531 @@ Astro.response.headers.set('Cache-Control', 'no-store');
 
     <MarketingMenu active="usuarios" />
 
-    <section class="marketing-placeholder">
-      <span class="marketing-placeholder-pill">En preparación</span>
-      <p>
-        Aquí se mostrarán las tarjetas de perfil 360°, el lead score con su desglose de factores,
-        los segmentos guardados y el estado de sincronización con las herramientas de email
-        (Brevo / Mailchimp / Resend).
-      </p>
+    <nav class="mu-tabs" aria-label="Apartados de Usuarios">
+      <button type="button" class="mu-tab is-active" data-mu-tab="ficha">Ficha de Usuario 360</button>
+      <button type="button" class="mu-tab" data-mu-tab="segmentador">Segmentador de Audiencias</button>
+      <button type="button" class="mu-tab" data-mu-tab="integracion">Integración Email Marketing</button>
+    </nav>
+
+    <!-- ============ Ficha de Usuario 360 ============ -->
+    <section class="mu-panel is-active" data-mu-panel="ficha">
+      <div class="mu-toolbar">
+        <input type="search" class="mu-input mu-search" placeholder="Buscar por email o nombre…" data-mu-search />
+        <span class="mu-count" data-mu-count></span>
+        <button type="button" class="mu-btn mu-btn-ghost" data-mu-refresh>Actualizar</button>
+      </div>
+      <div class="mu-list" data-mu-users>
+        <p class="mu-loading">Cargando usuarios…</p>
+      </div>
+    </section>
+
+    <!-- ============ Segmentador de Audiencias ============ -->
+    <section class="mu-panel" data-mu-panel="segmentador">
+      <form class="mu-filters" data-mu-filters>
+        <label class="mu-field">
+          <span class="mu-k">Hobby</span>
+          <select class="mu-input" name="hobby">
+            <option value="">Todos</option>
+            {hobbyOptions.map((hobby) => <option value={hobby.slug}>{hobby.label}</option>)}
+          </select>
+        </label>
+        <label class="mu-field">
+          <span class="mu-k">Tipo de perfil</span>
+          <select class="mu-input" name="profile">
+            <option value="">Todos</option>
+            {profileOptions.map((profile) => <option value={profile.value}>{profile.label}</option>)}
+          </select>
+        </label>
+        <label class="mu-field">
+          <span class="mu-k">Lead score mínimo</span>
+          <select class="mu-input" name="minScore">
+            <option value="">Cualquiera</option>
+            <option value="40">40+ (tibio o caliente)</option>
+            <option value="70">70+ (caliente)</option>
+          </select>
+        </label>
+        <label class="mu-field">
+          <span class="mu-k">Carrito</span>
+          <select class="mu-input" name="hasCart">
+            <option value="">Cualquiera</option>
+            <option value="1">Con producto pendiente</option>
+            <option value="0">Sin producto pendiente</option>
+          </select>
+        </label>
+        <label class="mu-field">
+          <span class="mu-k">Compró en los últimos</span>
+          <select class="mu-input" name="boughtDays">
+            <option value="">Cualquiera</option>
+            <option value="7">7 días</option>
+            <option value="30">30 días</option>
+            <option value="90">90 días</option>
+          </select>
+        </label>
+        <label class="mu-field">
+          <span class="mu-k">Sin comprar desde hace</span>
+          <select class="mu-input" name="notBoughtDays">
+            <option value="">Cualquiera</option>
+            <option value="30">30 días (o nunca)</option>
+            <option value="90">90 días (o nunca)</option>
+          </select>
+        </label>
+        <div class="mu-filter-actions">
+          <button type="submit" class="mu-btn">Aplicar filtros</button>
+          <button type="button" class="mu-btn mu-btn-ghost" data-mu-reset>Limpiar</button>
+        </div>
+      </form>
+      <div class="mu-toolbar">
+        <span class="mu-count" data-mu-segment-count></span>
+        <button type="button" class="mu-btn mu-btn-ghost" data-mu-copy-emails>Copiar emails</button>
+      </div>
+      <div class="mu-list" data-mu-segment>
+        <p class="mu-empty">Elige filtros y pulsa «Aplicar filtros» para ver el segmento.</p>
+      </div>
+    </section>
+
+    <!-- ============ Integración Email Marketing ============ -->
+    <section class="mu-panel" data-mu-panel="integracion">
+      <div class="mu-integrations">
+        <div class="mu-int-card">
+          <h2 class="mu-int-title">Plataforma de email</h2>
+          <p class="mu-int-desc">
+            Elige la herramienta con la que sincronizarás los segmentos. La API key se
+            configura en el entorno (nunca en el panel).
+          </p>
+          <div class="mu-platforms" data-mu-platforms>
+            {platformStates.map((platform) => (
+              <label class="mu-platform">
+                <input type="radio" name="platform" value={platform.id} data-mu-platform-radio />
+                <span class="mu-platform-body">
+                  <span class="mu-platform-name">
+                    {platform.id === 'mailchimp' ? 'Mailchimp' : platform.id === 'brevo' ? 'Brevo' : 'Resend'}
+                  </span>
+                  <span class="mu-platform-env" data-env-key={platform.envKey}>
+                    {platform.envConfigured ? 'API key detectada en el entorno' : `Pendiente: definir ${platform.envKey}`}
+                  </span>
+                </span>
+              </label>
+            ))}
+            <label class="mu-platform">
+              <input type="radio" name="platform" value="" data-mu-platform-radio />
+              <span class="mu-platform-body">
+                <span class="mu-platform-name">Sin plataforma</span>
+                <span class="mu-platform-env">Sólo envíos directos (SMTP / n8n)</span>
+              </span>
+            </label>
+          </div>
+
+          <h2 class="mu-int-title mu-int-title-spaced">Triggers automáticos</h2>
+          <div class="mu-triggers">
+            <label class="mu-trigger">
+              <input type="checkbox" name="welcome" data-mu-trigger />
+              <span>
+                <strong>Bienvenida</strong>
+                <em>Email de verificación de cuenta al registrarse (activo por el sistema).</em>
+              </span>
+            </label>
+            <label class="mu-trigger">
+              <input type="checkbox" name="cartRecovery" data-mu-trigger />
+              <span>
+                <strong>Carrito abandonado · cada 24 h</strong>
+                <em>Aviso automático mientras el producto siga pendiente (máx. 3 por carrito).</em>
+              </span>
+            </label>
+            <label class="mu-trigger">
+              <input type="checkbox" name="birthday" data-mu-trigger />
+              <span>
+                <strong>Cumpleaños</strong>
+                <em>Felicitación una vez al año si el perfil tiene fecha de nacimiento.</em>
+              </span>
+            </label>
+          </div>
+
+          <div class="mu-channels" data-mu-channels></div>
+
+          <div class="mu-int-actions">
+            <button type="button" class="mu-btn" data-mu-save-integrations>Guardar configuración</button>
+            <span class="mu-int-saved" data-mu-int-saved hidden></span>
+          </div>
+        </div>
+      </div>
     </section>
   </div>
+
+  <div class="mu-toast" data-mu-toast hidden></div>
+
+  <script type="application/json" id="mu-data" set:html={payloadJson} />
 </Layout>
+
+<script>
+  interface CartItem { productId: string; title: string; atISO: string; value: number }
+  interface Purchase { productId: string; title: string; atISO: string; value: number }
+  interface Viewed { id: string; title: string; atISO: string }
+  interface User360 {
+    id: string; email: string; name?: string; provider: string; createdAtISO: string;
+    declared: {
+      hobbies: string[]; hobbiesOther?: string; profileType?: string;
+      preferredCategories: string[]; city?: string; country?: string; birthDate?: string;
+    };
+    behavior: {
+      lastCategoryId?: string; lastCategoryLabel?: string; lastVisitAtISO?: string;
+      ltv: number; purchaseCount: number; lastPurchaseAtISO?: string;
+      affiliateClicks: number; dismissedCount: number;
+      cartItems: CartItem[]; cartTotal: number; cartAbandonRatePct: number | null;
+      cartReminder?: { sentAtISO: string; count: number };
+      purchases: Purchase[]; viewedNotBought: Viewed[]; savedCount: number;
+    };
+    leadScore: { value: number; band: 'caliente' | 'tibio' | 'frio'; factors: { label: string; points: number }[] };
+  }
+  interface Payload {
+    users: User360[];
+    config: { platform: string | null; triggers: { welcome: boolean; cartRecovery: boolean; birthday: boolean }; updatedAt?: string };
+    channels: { smtp: boolean; email: boolean };
+    platformStates: { id: string; envConfigured: boolean; envKey: string }[];
+    hobbyOptions: { slug: string; label: string }[];
+    profileOptions: { value: string; label: string }[];
+    categoryLabels: Record<string, string>;
+  }
+
+  const dataEl = document.getElementById('mu-data');
+  const data = JSON.parse(dataEl?.textContent ?? '{}') as Payload;
+  const usersRoot = document.querySelector('[data-mu-users]') as HTMLElement;
+  const segmentRoot = document.querySelector('[data-mu-segment]') as HTMLElement;
+  const toastEl = document.querySelector('[data-mu-toast]') as HTMLElement;
+  let users: User360[] = Array.isArray(data.users) ? data.users : [];
+
+  const esc = (value: string): string =>
+    value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const money = (value: number): string =>
+    new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
+
+  const shortDate = (iso?: string): string => {
+    if (!iso) return '—';
+    try {
+      return new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeZone: 'Europe/Madrid' }).format(new Date(iso));
+    } catch {
+      return iso;
+    }
+  };
+
+  const hobbyLabel = (slug: string): string =>
+    data.hobbyOptions.find((hobby) => hobby.slug === slug)?.label ?? slug;
+
+  const categoryLabel = (slug: string): string => data.categoryLabels[slug] ?? slug;
+
+  let toastTimer: number | undefined;
+  const toast = (message: string, isError = false): void => {
+    toastEl.textContent = message;
+    toastEl.classList.toggle('is-error', isError);
+    toastEl.hidden = false;
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => {
+      toastEl.hidden = true;
+    }, 3800);
+  };
+
+  const chips = (values: string[], label: (value: string) => string): string =>
+    values.length
+      ? values.map((value) => `<span class="mu-chip">${esc(label(value))}</span>`).join('')
+      : '<span class="mu-empty-inline">Sin declarar</span>';
+
+  const listItems = (items: { title: string; atISO?: string }[]): string =>
+    items.length
+      ? items
+          .slice(0, 5)
+          .map((item) => `<li><span>${esc(item.title)}</span><time>${shortDate(item.atISO)}</time></li>`)
+          .join('')
+      : '<li class="mu-empty-inline">Ninguno</li>';
+
+  const bandLabel: Record<string, string> = { caliente: 'Caliente', tibio: 'Tibio', frio: 'Frío' };
+
+  function userCard(user: User360): string {
+    const b = user.behavior;
+    const cartBadge = b.cartItems.length
+      ? `<span class="mu-chip mu-chip-cart">${b.cartItems.length} en carrito · ${money(b.cartTotal)}</span>`
+      : '<span class="mu-chip">Sin carrito</span>';
+    const reminder = b.cartReminder
+      ? `Último aviso: ${shortDate(b.cartReminder.sentAtISO)} (${b.cartReminder.count} enviados)`
+      : 'Sin avisos de carrito';
+    const remindDisabled = b.cartItems.length === 0 || !data.channels.email;
+    const factors = user.leadScore.factors
+      .map((factor) => `<li><span>${esc(factor.label)}</span><strong>+${factor.points}</strong></li>`)
+      .join('');
+    return `
+      <article class="mu-card" data-user-id="${esc(user.id)}">
+        <header class="mu-card-head">
+          <div class="mu-card-id">
+            <p class="mu-card-name">${esc(user.name || '(sin nombre)')}</p>
+            <p class="mu-card-email">${esc(user.email)} · ${esc(user.provider)} · alta ${shortDate(user.createdAtISO)}</p>
+          </div>
+          <div class="mu-score" data-band="${esc(user.leadScore.band)}" title="Lead score">
+            <span class="mu-score-value">${user.leadScore.value}</span>
+            <span class="mu-score-band">${bandLabel[user.leadScore.band] ?? user.leadScore.band}</span>
+          </div>
+        </header>
+        <details class="mu-factors">
+          <summary>Desglose del lead score (${user.leadScore.factors.length} factores)</summary>
+          <ul>${factors || '<li class="mu-empty-inline">Sin factores: perfil frío sin actividad.</li>'}</ul>
+        </details>
+        <div class="mu-grid">
+          <div class="mu-cell"><span class="mu-k">Hobbies</span>${chips(user.declared.hobbies, hobbyLabel)}</div>
+          <div class="mu-cell"><span class="mu-k">Perfil</span>${esc(user.declared.profileType ?? 'Sin definir')}</div>
+          <div class="mu-cell"><span class="mu-k">Categorías de interés</span>${chips(user.declared.preferredCategories, categoryLabel)}</div>
+          <div class="mu-cell"><span class="mu-k">Ubicación</span>${esc([user.declared.city, user.declared.country].filter(Boolean).join(', ') || 'Sin declarar')}</div>
+          <div class="mu-cell"><span class="mu-k">Cumpleaños</span>${esc(user.declared.birthDate ?? 'Sin declarar')}</div>
+          <div class="mu-cell"><span class="mu-k">Favoritos en radar</span>${b.savedCount}</div>
+        </div>
+        <div class="mu-stats">
+          <div class="mu-stat"><span class="mu-k">LTV (compras)</span><strong>${money(b.ltv)}</strong></div>
+          <div class="mu-stat"><span class="mu-k">Compras</span><strong>${b.purchaseCount}</strong></div>
+          <div class="mu-stat"><span class="mu-k">Clics en comprar</span><strong>${b.affiliateClicks}</strong></div>
+          <div class="mu-stat"><span class="mu-k">Carrito</span><strong>${b.cartItems.length} · ${money(b.cartTotal)}</strong></div>
+          <div class="mu-stat"><span class="mu-k">Abandono</span><strong>${b.cartAbandonRatePct === null ? '—' : `${b.cartAbandonRatePct}%`}</strong></div>
+          <div class="mu-stat"><span class="mu-k">Última compra</span><strong>${shortDate(b.lastPurchaseAtISO)}</strong></div>
+          <div class="mu-stat"><span class="mu-k">Última categoría</span><strong>${esc(b.lastCategoryLabel ?? '—')}</strong></div>
+          <div class="mu-stat"><span class="mu-k">Última visita</span><strong>${shortDate(b.lastVisitAtISO)}</strong></div>
+        </div>
+        <div class="mu-cols">
+          <div class="mu-col">
+            <span class="mu-k">Comprados (Return Flow)</span>
+            <ul class="mu-mini-list">${listItems(b.purchases)}</ul>
+          </div>
+          <div class="mu-col">
+            <span class="mu-k">Vistos, no comprados</span>
+            <ul class="mu-mini-list">${listItems(b.viewedNotBought)}</ul>
+          </div>
+        </div>
+        <footer class="mu-card-foot">
+          <span class="mu-reminder" data-reminder>${esc(reminder)}${cartBadge}</span>
+          <button type="button" class="mu-btn mu-btn-small" data-remind ${remindDisabled ? 'disabled' : ''}>
+            Enviar aviso de carrito
+          </button>
+        </footer>
+      </article>`;
+  }
+
+  function renderUsers(): void {
+    const query = ((document.querySelector('[data-mu-search]') as HTMLInputElement)?.value ?? '').trim().toLowerCase();
+    const list = query
+      ? users.filter((user) => `${user.email} ${user.name ?? ''}`.toLowerCase().includes(query))
+      : users;
+    (document.querySelector('[data-mu-count]') as HTMLElement).textContent =
+      `${list.length} de ${users.length} usuarios`;
+    usersRoot.innerHTML = list.length
+      ? list.map(userCard).join('')
+      : '<p class="mu-empty">No hay usuarios de Mi Radar todavía.</p>';
+  }
+
+  interface Filters {
+    q?: string; hobby?: string; profile?: string; minScore?: number;
+    hasCart?: boolean; boughtDays?: number; notBoughtDays?: number;
+  }
+
+  function filterUsers(filters: Filters): User360[] {
+    const now = Date.now();
+    const day = 24 * 60 * 60 * 1000;
+    return users.filter((user) => {
+      const q = filters.q?.trim().toLowerCase();
+      if (q && !`${user.email} ${user.name ?? ''}`.toLowerCase().includes(q)) return false;
+      if (filters.hobby && !user.declared.hobbies.includes(filters.hobby)) return false;
+      if (filters.profile) {
+        const label = data.profileOptions.find((option) => option.value === filters.profile)?.label;
+        if (user.declared.profileType !== label) return false;
+      }
+      if (typeof filters.minScore === 'number' && user.leadScore.value < filters.minScore) return false;
+      if (filters.hasCart !== undefined && (user.behavior.cartItems.length > 0) !== filters.hasCart) return false;
+      if (typeof filters.boughtDays === 'number') {
+        const last = user.behavior.lastPurchaseAtISO ? Date.parse(user.behavior.lastPurchaseAtISO) : null;
+        if (last === null || now - last > filters.boughtDays * day) return false;
+      }
+      if (typeof filters.notBoughtDays === 'number') {
+        const last = user.behavior.lastPurchaseAtISO ? Date.parse(user.behavior.lastPurchaseAtISO) : null;
+        if (last !== null && now - last <= filters.notBoughtDays * day) return false;
+      }
+      return true;
+    });
+  }
+
+  let segment: User360[] = [];
+
+  function renderSegment(): void {
+    const countEl = document.querySelector('[data-mu-segment-count]') as HTMLElement;
+    countEl.textContent = `${segment.length} usuario${segment.length === 1 ? '' : 's'} en el segmento`;
+    segmentRoot.innerHTML = segment.length
+      ? segment.map(userCard).join('')
+      : '<p class="mu-empty">Ningún usuario cumple esos filtros. Prueba a ampliar el segmento.</p>';
+  }
+
+  function readFilters(form: HTMLFormElement): Filters {
+    const value = (name: string): string => (new FormData(form).get(name) ?? '').toString();
+    const num = (name: string): number | undefined => {
+      const raw = value(name);
+      return raw ? Number.parseInt(raw, 10) : undefined;
+    };
+    const hasCart = value('hasCart');
+    return {
+      q: value('q') || undefined,
+      hobby: value('hobby') || undefined,
+      profile: value('profile') || undefined,
+      minScore: num('minScore'),
+      hasCart: hasCart === '1' ? true : hasCart === '0' ? false : undefined,
+      boughtDays: num('boughtDays'),
+      notBoughtDays: num('notBoughtDays'),
+    };
+  }
+
+  async function refreshUsers(): Promise<void> {
+    try {
+      const response = await fetch('/api/admin/marketing/usuarios', { credentials: 'same-origin' });
+      const body = await response.json();
+      if (body?.success && Array.isArray(body.users)) {
+        users = body.users as User360[];
+        renderUsers();
+      }
+    } catch {
+      toast('No se pudo actualizar la lista de usuarios.', true);
+    }
+  }
+
+  async function sendRemind(card: HTMLElement): Promise<void> {
+    const userId = card.dataset.userId;
+    const button = card.querySelector('[data-remind]') as HTMLButtonElement;
+    if (!userId || !button) return;
+    button.disabled = true;
+    button.textContent = 'Enviando…';
+    try {
+      const response = await fetch(`/api/admin/marketing/usuarios/${encodeURIComponent(userId)}/remind`, {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      const body = await response.json();
+      if (body?.success) {
+        toast(`Aviso de carrito enviado (${body.pendingCount} producto/s).`);
+        await refreshUsers();
+      } else {
+        toast(body?.message ?? 'No se pudo enviar el aviso.', true);
+        button.disabled = false;
+        button.textContent = 'Enviar aviso de carrito';
+      }
+    } catch {
+      toast('Error de red al enviar el aviso.', true);
+      button.disabled = false;
+      button.textContent = 'Enviar aviso de carrito';
+    }
+  }
+
+  function renderChannels(): void {
+    const el = document.querySelector('[data-mu-channels]') as HTMLElement;
+    const lines: string[] = [];
+    lines.push(
+      data.channels.smtp
+        ? '<span class="mu-chip mu-chip-ok">SMTP configurado</span>'
+        : '<span class="mu-chip mu-chip-warn">Sin SMTP</span>',
+    );
+    lines.push(
+      '<span class="mu-k">Avisos de carrito:</span> SMTP con fallback a N8N_CART_WEBHOOK_URL; sin ninguno, el envío se bloquea con aviso en el panel.',
+    );
+    el.innerHTML = lines.join(' ');
+  }
+
+  function syncIntegrationsForm(): void {
+    const radios = document.querySelectorAll<HTMLInputElement>('[data-mu-platform-radio]');
+    radios.forEach((radio) => {
+      radio.checked = (radio.value || '') === (data.config.platform ?? '');
+    });
+    const triggers = data.config.triggers;
+    (document.querySelector('[data-mu-trigger][name="welcome"]') as HTMLInputElement).checked = Boolean(triggers.welcome);
+    (document.querySelector('[data-mu-trigger][name="cartRecovery"]') as HTMLInputElement).checked = Boolean(triggers.cartRecovery);
+    (document.querySelector('[data-mu-trigger][name="birthday"]') as HTMLInputElement).checked = Boolean(triggers.birthday);
+    renderChannels();
+  }
+
+  async function saveIntegrations(): Promise<void> {
+    const platform = (document.querySelector('[data-mu-platform-radio]:checked') as HTMLInputElement | null)?.value ?? '';
+    const triggers = {
+      welcome: (document.querySelector('[data-mu-trigger][name="welcome"]') as HTMLInputElement).checked,
+      cartRecovery: (document.querySelector('[data-mu-trigger][name="cartRecovery"]') as HTMLInputElement).checked,
+      birthday: (document.querySelector('[data-mu-trigger][name="birthday"]') as HTMLInputElement).checked,
+    };
+    try {
+      const response = await fetch('/api/admin/marketing/usuarios/integrations', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ platform: platform || null, triggers }),
+      });
+      const body = await response.json();
+      if (body?.success) {
+        data.config = body.config;
+        const saved = document.querySelector('[data-mu-int-saved]') as HTMLElement;
+        saved.textContent = 'Configuración guardada.';
+        saved.hidden = false;
+        window.setTimeout(() => {
+          saved.hidden = true;
+        }, 2500);
+      } else {
+        toast(body?.message ?? 'No se pudo guardar la configuración.', true);
+      }
+    } catch {
+      toast('Error de red al guardar la configuración.', true);
+    }
+  }
+
+  // --- Pestañas ---
+  document.querySelectorAll<HTMLButtonElement>('[data-mu-tab]').forEach((tab) => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('[data-mu-tab]').forEach((other) => other.classList.toggle('is-active', other === tab));
+      document.querySelectorAll<HTMLElement>('[data-mu-panel]').forEach((panel) => {
+        panel.classList.toggle('is-active', panel.dataset.muPanel === tab.dataset.muTab);
+      });
+    });
+  });
+
+  // --- Ficha 360 ---
+  (document.querySelector('[data-mu-search]') as HTMLInputElement).addEventListener('input', renderUsers);
+  (document.querySelector('[data-mu-refresh]') as HTMLButtonElement).addEventListener('click', () => {
+    void refreshUsers();
+  });
+
+  // --- Segmentador ---
+  (document.querySelector('[data-mu-filters]') as HTMLFormElement).addEventListener('submit', (event) => {
+    event.preventDefault();
+    segment = filterUsers(readFilters(event.currentTarget as HTMLFormElement));
+    renderSegment();
+  });
+  (document.querySelector('[data-mu-reset]') as HTMLButtonElement).addEventListener('click', () => {
+    (document.querySelector('[data-mu-filters]') as HTMLFormElement).reset();
+    segment = [];
+    segmentRoot.innerHTML = '<p class="mu-empty">Elige filtros y pulsa «Aplicar filtros» para ver el segmento.</p>';
+    (document.querySelector('[data-mu-segment-count]') as HTMLElement).textContent = '';
+  });
+  (document.querySelector('[data-mu-copy-emails]') as HTMLButtonElement).addEventListener('click', async () => {
+    if (!segment.length) {
+      toast('Aplica primero un filtro: el segmento está vacío.', true);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(segment.map((user) => user.email).join('\n'));
+      toast(`${segment.length} email${segment.length === 1 ? '' : 's'} copiado${segment.length === 1 ? '' : 's'} al portapapeles.`);
+    } catch {
+      toast('El navegador ha bloqueado el portapapeles.', true);
+    }
+  });
+
+  // --- Integraciones ---
+  (document.querySelector('[data-mu-save-integrations]') as HTMLButtonElement).addEventListener('click', () => {
+    void saveIntegrations();
+  });
+
+  // --- Acciones por tarjeta (delegación: la lista se re-renderiza) ---
+  document.addEventListener('click', (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLElement>('[data-remind]');
+    if (target) void sendRemind(target.closest('.mu-card') as HTMLElement);
+  });
+
+  renderUsers();
+  syncIntegrationsForm();
+</script>
 
 <style>
   .admin-module-wrapper { display: flex; flex-direction: column; gap: 2rem; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
@@ -66,6 +625,94 @@ Astro.response.headers.set('Cache-Control', 'no-store');
   .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
   .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
   .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
-  .marketing-placeholder { display: flex; flex-direction: column; align-items: flex-start; gap: 0.9rem; padding: 1.6rem 1.4rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; color: var(--color-text-muted); font-size: 0.92rem; line-height: 1.65; }
-  .marketing-placeholder-pill { padding: 0.35rem 0.85rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  .mu-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; border-bottom: 1px solid var(--color-border); padding-bottom: 0.6rem; }
+  .mu-tab { appearance: none; background: none; border: 1px solid transparent; border-radius: 10px; color: var(--color-text-muted); font-size: 0.82rem; font-weight: 700; padding: 0.5rem 0.9rem; cursor: pointer; transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease; }
+  .mu-tab:hover { color: var(--color-text-main); }
+  .mu-tab.is-active { color: #93c5fd; background: rgba(96, 165, 250, 0.1); border-color: rgba(96, 165, 250, 0.25); }
+
+  .mu-panel { display: none; }
+  .mu-panel.is-active { display: flex; flex-direction: column; gap: 1.2rem; }
+
+  .mu-toolbar { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+  .mu-count { color: var(--color-text-muted); font-size: 0.82rem; margin-right: auto; }
+  .mu-input { appearance: none; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text-main); font-size: 0.85rem; padding: 0.55rem 0.8rem; min-width: 0; }
+  .mu-input:focus { outline: none; border-color: rgba(96, 165, 250, 0.5); }
+  .mu-search { flex: 1 1 220px; max-width: 340px; }
+  .mu-btn { appearance: none; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 10px; color: #fff; font-size: 0.82rem; font-weight: 700; padding: 0.55rem 1rem; cursor: pointer; transition: filter 0.16s ease; }
+  .mu-btn:hover { filter: brightness(1.08); }
+  .mu-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .mu-btn-ghost { background: rgba(255, 255, 255, 0.04); border-color: var(--color-border); color: var(--color-text-muted); }
+  .mu-btn-ghost:hover { color: var(--color-text-main); }
+  .mu-btn-small { font-size: 0.75rem; padding: 0.4rem 0.75rem; }
+
+  .mu-list { display: flex; flex-direction: column; gap: 1rem; }
+  .mu-loading, .mu-empty { color: var(--color-text-muted); font-size: 0.88rem; padding: 1.2rem; background: rgba(255, 255, 255, 0.03); border: 1px dashed var(--color-border); border-radius: 12px; }
+
+  .mu-card { display: flex; flex-direction: column; gap: 0.9rem; padding: 1.2rem 1.2rem 1rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; }
+  .mu-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+  .mu-card-name { margin: 0 0 0.2rem; font-size: 1rem; font-weight: 800; color: var(--color-text-main); }
+  .mu-card-email { margin: 0; font-size: 0.75rem; color: var(--color-text-muted); }
+  .mu-score { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 0 0 auto; min-width: 64px; padding: 0.45rem 0.6rem; border-radius: 12px; border: 1px solid; }
+  .mu-score[data-band='caliente'] { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35); }
+  .mu-score[data-band='tibio'] { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.35); }
+  .mu-score[data-band='frio'] { background: rgba(148, 163, 184, 0.12); border-color: rgba(148, 163, 184, 0.3); }
+  .mu-score-value { font-size: 1.15rem; font-weight: 800; color: var(--color-text-main); line-height: 1.1; }
+  .mu-score-band { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); }
+
+  .mu-factors { font-size: 0.78rem; color: var(--color-text-muted); }
+  .mu-factors summary { cursor: pointer; }
+  .mu-factors ul { margin: 0.5rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.25rem; }
+  .mu-factors li { display: flex; justify-content: space-between; gap: 1rem; }
+  .mu-factors strong { color: #86efac; }
+
+  .mu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.7rem; }
+  .mu-cell { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; color: var(--color-text-main); }
+  .mu-k { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
+  .mu-chip { display: inline-flex; align-items: center; width: fit-content; padding: 0.22rem 0.55rem; border-radius: 9999px; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.25); color: #93c5fd; font-size: 0.7rem; font-weight: 700; margin: 0 0.25rem 0.25rem 0; }
+  .mu-chip-cart { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }
+  .mu-chip-ok { background: rgba(34, 197, 94, 0.1); border-color: rgba(34, 197, 94, 0.3); color: #86efac; }
+  .mu-chip-warn { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }
+
+  .mu-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.6rem; }
+  .mu-stat { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.55rem 0.7rem; background: rgba(255, 255, 255, 0.025); border: 1px solid var(--color-border); border-radius: 10px; }
+  .mu-stat strong { font-size: 0.88rem; color: var(--color-text-main); }
+
+  .mu-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8rem; }
+  .mu-col { display: flex; flex-direction: column; gap: 0.35rem; }
+  .mu-mini-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.25rem; }
+  .mu-mini-list li { display: flex; justify-content: space-between; gap: 0.8rem; font-size: 0.78rem; color: var(--color-text-main); }
+  .mu-mini-list time { color: var(--color-text-muted); flex: 0 0 auto; }
+  .mu-empty-inline { color: var(--color-text-muted); font-style: italic; font-size: 0.78rem; }
+
+  .mu-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; padding-top: 0.7rem; border-top: 1px solid var(--color-border); }
+  .mu-reminder { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.75rem; color: var(--color-text-muted); }
+
+  .mu-filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.8rem; padding: 1.1rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 14px; }
+  .mu-field { display: flex; flex-direction: column; gap: 0.3rem; }
+  .mu-filter-actions { display: flex; align-items: flex-end; gap: 0.5rem; grid-column: 1 / -1; }
+
+  .mu-integrations { display: flex; flex-direction: column; gap: 1rem; }
+  .mu-int-card { display: flex; flex-direction: column; gap: 0.9rem; padding: 1.4rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; }
+  .mu-int-title { margin: 0; font-size: 0.95rem; font-weight: 800; color: var(--color-text-main); }
+  .mu-int-title-spaced { margin-top: 0.6rem; }
+  .mu-int-desc { margin: 0; font-size: 0.82rem; color: var(--color-text-muted); line-height: 1.6; }
+  .mu-platforms { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.6rem; }
+  .mu-platform { display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.7rem 0.85rem; background: rgba(255, 255, 255, 0.025); border: 1px solid var(--color-border); border-radius: 12px; cursor: pointer; }
+  .mu-platform input { margin-top: 0.2rem; accent-color: #3b82f6; }
+  .mu-platform-body { display: flex; flex-direction: column; gap: 0.2rem; }
+  .mu-platform-name { font-size: 0.85rem; font-weight: 700; color: var(--color-text-main); }
+  .mu-platform-env { font-size: 0.7rem; color: var(--color-text-muted); }
+  .mu-triggers { display: flex; flex-direction: column; gap: 0.55rem; }
+  .mu-trigger { display: flex; align-items: flex-start; gap: 0.65rem; padding: 0.65rem 0.85rem; background: rgba(255, 255, 255, 0.025); border: 1px solid var(--color-border); border-radius: 12px; cursor: pointer; }
+  .mu-trigger input { margin-top: 0.25rem; accent-color: #3b82f6; }
+  .mu-trigger span { display: flex; flex-direction: column; gap: 0.15rem; }
+  .mu-trigger strong { font-size: 0.84rem; color: var(--color-text-main); }
+  .mu-trigger em { font-style: normal; font-size: 0.72rem; color: var(--color-text-muted); line-height: 1.5; }
+  .mu-channels { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-size: 0.76rem; color: var(--color-text-muted); }
+  .mu-int-actions { display: flex; align-items: center; gap: 0.8rem; }
+  .mu-int-saved { font-size: 0.78rem; color: #86efac; }
+
+  .mu-toast { position: fixed; bottom: 1.4rem; right: 1.4rem; z-index: 90; max-width: 340px; padding: 0.75rem 1.1rem; background: #111827; border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 12px; color: #e5e7eb; font-size: 0.82rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
+  .mu-toast.is-error { border-color: rgba(239, 68, 68, 0.5); }
 </style>

@@ -91,6 +91,19 @@ export interface RadarUser {
   hobbiesOther?: string;
   /** Tipo de visitante: particular, profesional/autónomo o empresa. */
   profileType?: RadarProfileType;
+  /* --- Comportamiento observado (captura automática para Marketing) --- */
+  /** Slug de la última categoría de ficha visitada con sesión. */
+  lastCategoryId?: string;
+  /** Etiqueta legible de la última categoría visitada. */
+  lastCategoryLabel?: string;
+  /** ISO date de la última visita a una ficha con sesión. */
+  lastVisitAt?: string;
+  /** Últimos productos vistos en ficha (máx. 12, más reciente primero). */
+  viewedProducts?: { id: string; title: string; at: string }[];
+  /** Último aviso de carrito abandonado enviado por Marketing. */
+  cartReminder?: { sentAt: string; count: number };
+  /** Último año en el que se envió la felicitación de cumpleaños. */
+  birthdayGreetingYear?: number;
 }
 
 /** Usuario que sale hacia el cliente: sin hash, sal ni ningún token (reset, activación, cambio de email). */
@@ -412,6 +425,77 @@ export function getRadarSessionUser(request: Request): PublicRadarUser | null {
   const a = Buffer.from(token);
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b) ? toPublicRadarUser(user) : null;
+}
+
+/* ------------------------------------------ comportamiento (Marketing) */
+
+const VISIT_THROTTLE_MS = 3 * 60 * 1000; // no escribir users.json más de cada3 min por usuario
+const VIEWED_PRODUCTS_MAX = 12;
+const visitWrites = new Map<string, number>();
+
+/**
+ * Registra la visita de una ficha de producto con sesión de Mi Radar:
+ * última categoría, fecha de visita y productos vistos (para "vistos pero
+ * no comprados"). Throttle en memoria: como máximo una escritura cada3 min
+ * por usuario para no saturar radar-users.json.
+ */
+export function recordRadarUserVisit(
+  userId: string,
+  product: { id: string; title: string; category?: string },
+): void {
+  const last = visitWrites.get(userId) ?? 0;
+  if (Date.now() - last < VISIT_THROTTLE_MS) return;
+  const users = readUsers();
+  const user = users.find((u) => u.id === userId);
+  if (!user) return;
+  const category = String(product.category ?? '').trim();
+  user.lastCategoryId = category
+    ? category
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/(^-|-$)/g, '')
+    : user.lastCategoryId;
+  user.lastCategoryLabel = category || user.lastCategoryLabel;
+  user.lastVisitAt = new Date().toISOString();
+  const id = String(product.id ?? '').trim();
+  if (id) {
+    user.viewedProducts = [
+      { id, title: String(product.title ?? '').slice(0, 200), at: user.lastVisitAt },
+      ...(user.viewedProducts ?? []).filter((v) => v.id !== id),
+    ].slice(0, VIEWED_PRODUCTS_MAX);
+  }
+  visitWrites.set(userId, Date.now());
+  writeUsers(users);
+}
+
+/** Marca el envío (o reenvío) del aviso de carrito abandonado. */
+export function markCartReminderSent(userId: string): PublicRadarUser | null {
+  const users = readUsers();
+  const user = users.find((u) => u.id === userId);
+  if (!user) return null;
+  user.cartReminder = {
+    sentAt: new Date().toISOString(),
+    count: (user.cartReminder?.count ?? 0) + 1,
+  };
+  user.updatedAt = user.cartReminder.sentAt;
+  writeUsers(users);
+  return toPublicRadarUser(user);
+}
+
+/** Marca la felicitación de cumpleaños enviada en el año dado. */
+export function markBirthdayGreetingSent(userId: string, year: number): void {
+  const users = readUsers();
+  const user = users.find((u) => u.id === userId);
+  if (!user) return;
+  user.birthdayGreetingYear = year;
+  writeUsers(users);
+}
+
+/** Todos los usuarios de Mi Radar (perfil público, sin hashes). */
+export function getAllRadarUsers(): PublicRadarUser[] {
+  return readUsers().map(toPublicRadarUser);
 }
 
 /* ---------------------------------------------------- activación por email */

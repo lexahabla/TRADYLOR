@@ -58,3 +58,4 @@ public/images/products/
 # analitica real (eventos en bruto y agregados mensuales: viven en el volumen)
 src/data/analytics.json
 src/data/analytics-months.json
+src/data/marketing-email-config.json
