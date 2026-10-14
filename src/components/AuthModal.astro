@@ -44,10 +44,16 @@
         <span>Contraseña</span>
         <input type="password" name="password" autocomplete="current-password" required minlength="8" />
       </label>
-      <label class="auth-remember">
-        <input type="checkbox" name="remember" data-auth-remember />
-        <span>Mantener sesión iniciada</span>
-      </label>
+      <div class="auth-remember" role="radiogroup" aria-label="Persistencia de sesión">
+        <label class="auth-radio">
+          <input type="radio" name="remember" value="yes" checked />
+          <span>Mantener mi sesión abierta</span>
+        </label>
+        <label class="auth-radio">
+          <input type="radio" name="remember" value="no" />
+          <span>No mantener mi sesión</span>
+        </label>
+      </div>
       <button type="submit" class="auth-submit">Entrar</button>
       <button type="button" class="auth-link-btn" data-auth-view="forgot">¿Olvidaste tu contraseña?</button>
     </form>
@@ -342,16 +348,22 @@
 
   .auth-remember {
     display: flex;
-    align-items: center;
-    gap: 0.55rem;
+    flex-direction: column;
+    gap: 0.45rem;
     font-size: 0.8rem;
     font-weight: 600;
     color: var(--color-text-muted);
+  }
+
+  .auth-radio {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
     cursor: pointer;
     user-select: none;
   }
 
-  .auth-remember input {
+  .auth-radio input {
     width: 16px;
     height: 16px;
     margin: 0;
@@ -360,12 +372,12 @@
     cursor: pointer;
   }
 
-  .auth-remember input:focus-visible {
+  .auth-radio input:focus-visible {
     outline: 2px solid #38bdf8;
     outline-offset: 2px;
   }
 
-  .auth-remember:hover {
+  .auth-radio:hover {
     color: var(--color-text-main);
   }
 
@@ -610,7 +622,7 @@
       const result = await login(
         String(data.get('email') ?? ''),
         String(data.get('password') ?? ''),
-        data.get('remember') === 'on',
+        String(data.get('remember') ?? 'yes') === 'yes',
       );
       setBusy(false);
       if (result.success) {

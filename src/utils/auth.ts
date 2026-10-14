@@ -9,7 +9,7 @@
  */
 
 import type { SessionResponse, UserProfile } from '../types/radar';
-import { pullFromCloud, syncLocalToCloud } from './radarStore';
+import { loadRadar, pullFromCloud, RADAR_STORAGE_KEY, syncLocalToCloud } from './radarStore';
 
 let cachedSession: SessionResponse | null = null;
 let sessionPromise: Promise<SessionResponse> | null = null;
@@ -78,7 +78,6 @@ async function afterAuthSuccess(): Promise<void> {
   cachedSession = null;
   const session = await getSession(true);
   if (session.authenticated) {
-    const { loadRadar, RADAR_STORAGE_KEY } = await import('./radarStore');
     localStorage.removeItem(RADAR_STORAGE_KEY);
     await pullFromCloud();
     loadRadar();
@@ -134,10 +133,7 @@ export async function login(email: string, password: string, rememberMe = false)
 export async function logout(): Promise<void> {
   await fetch('/api/radar/auth/logout', { method: 'POST' }).catch(() => {});
   cachedSession = null;
-  try {
-    const { RADAR_STORAGE_KEY } = await import('./radarStore');
-    localStorage.removeItem(RADAR_STORAGE_KEY);
-  } catch { /* noop */ }
+  localStorage.removeItem(RADAR_STORAGE_KEY);
   emitAuth(null);
 }
 
