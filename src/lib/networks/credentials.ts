@@ -134,14 +134,28 @@ export function getAllNetworkViews(): NetworkView[] {
   return getAllNetworks().map((network) => getNetworkView(network.id)).filter(Boolean) as NetworkView[];
 }
 
-/** IDs de redes con credenciales completas (todos los campos requeridos con valor). */
+const ENV_CREDENTIALS: Record<string, Record<string, string>> = {
+  aliexpress: {
+    appKey: 'ALIEXPRESS_APP_KEY',
+    appSecret: 'ALIEXPRESS_APP_SECRET',
+    trackingId: 'ALIEXPRESS_TRACKING_ID',
+  },
+};
+
+function envCredential(name: string): string {
+  return String(process.env[name] ?? '').trim();
+}
+
+/** IDs de redes con credenciales completas (archivo o variables de entorno). */
 export function getConnectedNetworkIds(): string[] {
   const data = readFile();
   return getAllNetworks()
     .filter((network) => {
-      const stored = data.networks[network.id];
-      if (!stored) return false;
-      return network.fields.filter((f) => f.required).every((f) => Boolean(stored.values?.[f.key]));
+      const stored = data.networks[network.id]?.values ?? {};
+      const fromEnv = ENV_CREDENTIALS[network.id] ?? {};
+      return network.fields
+        .filter((f) => f.required)
+        .every((f) => Boolean(stored[f.key] || envCredential(fromEnv[f.key] ?? '')));
     })
     .map((network) => network.id);
 }

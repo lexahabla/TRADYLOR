@@ -61,6 +61,26 @@ interface AliProduct {
   product_video_url?: string;
 }
 
+function envValue(name: string): string {
+  const fromProcess = process.env[name];
+  const fromMeta = (import.meta.env as Record<string, string | undefined>)[name];
+  return String(fromProcess ?? fromMeta ?? '').trim();
+}
+
+/**
+ * Credenciales del panel (credentials.json) o, si faltan, las variables de
+ * EasyPanel: ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET, ALIEXPRESS_TRACKING_ID.
+ */
+function resolveCreds(): Record<string, string> | null {
+  const stored = getCredentialValues('aliexpress') ?? {};
+  const creds = {
+    appKey: stored.appKey || envValue('ALIEXPRESS_APP_KEY'),
+    appSecret: stored.appSecret || envValue('ALIEXPRESS_APP_SECRET'),
+    trackingId: stored.trackingId || envValue('ALIEXPRESS_TRACKING_ID'),
+  };
+  return creds.appKey && creds.appSecret ? creds : null;
+}
+
 function sign(params: Record<string, string>, secret: string): string {
   const base = Object.keys(params)
     .sort()
@@ -232,7 +252,7 @@ export class AliExpressConnector implements NetworkConnector {
   readonly networkId = 'aliexpress';
 
   async validate(): Promise<{ ok: boolean; message: string }> {
-    const creds = getCredentialValues(this.networkId);
+    const creds = resolveCreds();
     if (!creds?.appKey || !creds?.appSecret || !creds?.trackingId) {
       const message = 'Faltan credenciales obligatorias (App Key, App Secret o Tracking ID).';
       setNetworkStatus(this.networkId, 'error', message);
@@ -251,7 +271,7 @@ export class AliExpressConnector implements NetworkConnector {
   }
 
   async search(params: UnifiedSearchParams): Promise<UnifiedProduct[]> {
-    const creds = getCredentialValues(this.networkId);
+    const creds = resolveCreds();
     if (!creds?.appKey || !creds?.appSecret) {
       throw new ConnectorError(this.networkId, 'AliExpress no está conectado. Añade sus credenciales primero.');
     }
