@@ -1247,6 +1247,22 @@ const resolvedImage = toAbsolute(image);
         }
         .nav-toggle-btn {
           display: inline-flex;
+          position: absolute;
+          left: 0;
+          top: 50%;
+          transform: translateY(-50%);
+          z-index: 2;
+        }
+        .header-inner {
+          position: relative;
+          justify-content: flex-end;
+        }
+        .site-header .brand-logo {
+          position: absolute;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+          z-index: 1;
         }
         /* Login: icono de usuario en cuanto el menú se colapsa */
         .header-cta-btn {
@@ -1300,16 +1316,7 @@ const resolvedImage = toAbsolute(image);
           padding-left: 1.25rem;
           padding-right: 1.25rem;
         }
-        .header-inner {
-          position: relative;
-          justify-content: flex-end;
-        }
         .nav-toggle-btn {
-          position: absolute;
-          left: 1.25rem;
-          top: 50%;
-          transform: translateY(-50%);
-          z-index: 1;
           width: 44px;
           height: 44px;
           border-radius: 12px;
@@ -1380,9 +1387,6 @@ const resolvedImage = toAbsolute(image);
         }
         .header-actions {
           gap: 0.55rem;
-        }
-        .nav-toggle-btn {
-          left: 1rem;
         }
         .header-cta-btn {
           padding: 0;
