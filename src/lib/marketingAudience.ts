@@ -80,6 +80,8 @@ export interface AudienceUser360 {
     lastCategoryId?: string;
     lastCategoryLabel?: string;
     lastVisitAtISO?: string;
+    /** Visitas acumuladas a fichas de producto (captura automática). */
+    visits: number;
     /** Suma de precios de las compras confirmadas (Return Flow). */
     ltv: number;
     purchaseCount: number;
@@ -251,6 +253,7 @@ export function buildAudienceUser360(user: PublicRadarUser): AudienceUser360 {
       lastCategoryId: user.lastCategoryId,
       lastCategoryLabel: user.lastCategoryLabel,
       lastVisitAtISO: user.lastVisitAt,
+      visits: user.visitCount ?? 0,
       ltv,
       purchaseCount: purchases.length,
       lastPurchaseAtISO: lastPurchase?.atISO,
