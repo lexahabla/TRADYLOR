@@ -81,11 +81,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     <!-- 1. HEADER DEL PANEL -->
     <header class="admin-header">
       <div class="admin-header-main">
-        <div class="admin-tag-row">
-          <a class="admin-tag-link" href="/admin">Panel de administración</a>
-          <span class="admin-tag-sep" aria-hidden="true">/</span>
-          <div class="admin-tag-pill">Panel de control</div>
-        </div>
+        <div class="admin-tag-pill">Panel de control</div>
         <h1 class="admin-title">Panel de Administración de Productos</h1>
         <p class="admin-subtitle">
           Pega el enlace de cualquier comercio para autocompletar metadatos OpenGraph (título, imagen, precio). Edita y afina la ficha antes de guardarla de forma persistente.
@@ -2993,34 +2989,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     text-transform: uppercase;
     color: #60a5fa;
     width: fit-content;
-  }
-  .admin-tag-row {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin-bottom: 0.4rem;
-  }
-  .admin-tag-row .admin-tag-pill {
-    margin: 0;
-  }
-  .admin-tag-link {
-    font-size: 0.74rem;
-    font-weight: 800;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    color: #60a5fa;
-    text-decoration: none;
-    transition: color 0.16s ease;
-  }
-  .admin-tag-link:hover {
-    color: #93c5fd;
-  }
-  .admin-tag-sep {
-    font-size: 0.74rem;
-    font-weight: 800;
-    color: #60a5fa;
-    opacity: 0.5;
   }
 
   .status-indicator {
