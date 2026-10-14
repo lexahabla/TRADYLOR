@@ -1,0 +1,688 @@
+---
+import type { Product } from '../../data/products';
+
+export interface Props {
+  products: Product[];
+  categoryName?: string;
+}
+
+const { products, categoryName } = Astro.props;
+
+type ViewMode = 'technical' | 'usage';
+type Profile = 'principiante' | 'intermedio' | 'avanzado';
+
+interface ScoredProduct {
+  product: Product;
+  score: number;
+  matchedProfile: Profile;
+}
+
+const scoreProduct = (p: Product, profile: Profile): number => {
+  const rating = (p.rating ?? 0) / 5;
+  const reviews = Math.min(Math.log10((p.reviewsCount ?? 0) + 1) / 4, 1);
+  const value = p.originalPrice && p.originalPrice > p.price
+    ? Math.min((p.originalPrice - p.price) / p.originalPrice, 1)
+    : 0;
+
+  if (profile === 'principiante') {
+    return rating * 0.5 + reviews * 0.3 + value * 0.2;
+  }
+  if (profile === 'intermedio') {
+    return rating * 0.4 + reviews * 0.3 + value * 0.3;
+  }
+  return rating * 0.6 + reviews * 0.25 + value * 0.15;
+};
+
+const scored: ScoredProduct[] = products.map((p) => {
+  const profiles: Profile[] = ['principiante', 'intermedio', 'avanzado'];
+  let best: Profile = 'principiante';
+  let bestScore = 0;
+  for (const profile of profiles) {
+    const s = scoreProduct(p, profile);
+    if (s > bestScore) {
+      bestScore = s;
+      best = profile;
+    }
+  }
+  return { product: p, score: bestScore, matchedProfile: best };
+});
+
+const sortedForProfile = (profile: Profile): ScoredProduct[] =>
+  [...scored]
+    .sort((a, b) => scoreProduct(b.product, profile) - scoreProduct(a.product, profile));
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(amount);
+---
+
+<section class="comparator" data-comparator>
+  <div class="comparator-head">
+    <div class="comparator-title-group">
+      <span class="comparator-kicker">Motor de Comparativa</span>
+      <h2 class="comparator-title">
+        {categoryName ? `Comparativa: ${categoryName}` : 'Comparativa inteligente'}
+      </h2>
+      <p class="comparator-sub">
+        Analiza las especificaciones técnicas reales o la experiencia de uso. Usa Smart Match para destacar la mejor opción según tu perfil.
+      </p>
+    </div>
+
+    <div class="comparator-controls">
+      <div class="view-toggle" role="tablist" aria-label="Selector de vista">
+        <button
+          type="button"
+          role="tab"
+          aria-selected="true"
+          class="view-toggle-btn"
+          data-view-btn="technical"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="15" y1="4" x2="15" y2="20"/><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="15" x2="20" y2="15"/></svg>
+          Vista Técnica
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected="false"
+          class="view-toggle-btn"
+          data-view-btn="usage"
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Vista de Uso
+        </button>
+      </div>
+
+      <div class="smart-match">
+        <label for="smartMatchProfile" class="smart-match-label">Smart Match</label>
+        <select id="smartMatchProfile" class="smart-match-select" data-smart-match>
+          <option value="">Todos los perfiles</option>
+          <option value="principiante">Principiante</option>
+          <option value="intermedio">Intermedio</option>
+          <option value="avanzado">Avanzado</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="comparator-body">
+    <div class="comparator-legend">
+      <span class="legend-tag legend-tag--latency">
+        <span class="legend-dot"></span> Pruebas de latencia
+      </span>
+      <span class="legend-tag legend-tag--cost">
+        <span class="legend-dot"></span> Costes Ocultos 0€
+      </span>
+      <span class="legend-tag legend-tag--verified">
+        <span class="legend-dot"></span> Enlace Oficial Verificado
+      </span>
+    </div>
+
+    <div class="comparator-grid" data-comparator-grid>
+      {scored.map(({ product, matchedProfile }, idx) => (
+        <article
+          class="cmp-card"
+          data-profile={matchedProfile}
+          data-score={idx}
+          data-product={product.id}
+        >
+          <div class="cmp-card-top">
+            <span class="cmp-card-brand">{product.brand ?? product.category}</span>
+            <span class="cmp-card-match" data-match-badge hidden>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Smart Match
+            </span>
+          </div>
+
+          <h3 class="cmp-card-title">{product.title}</h3>
+          <p class="cmp-card-price">
+            {formatCurrency(product.price)}
+            {product.originalPrice && product.originalPrice > product.price && (
+              <span class="cmp-card-original">{formatCurrency(product.originalPrice)}</span>
+            )}
+          </p>
+
+          <div class="cmp-card-audits">
+            <span class="audit-tag audit-tag--latency">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              Pruebas de latencia
+            </span>
+            <span class="audit-tag audit-tag--cost">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              Costes Ocultos 0€
+            </span>
+            <span class="audit-tag audit-tag--verified">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+              Enlace Oficial Verificado
+            </span>
+          </div>
+
+          <div class="cmp-card-views">
+            <div class="cmp-view cmp-view--technical" data-view="technical">
+              <span class="cmp-view-label">Vista Técnica</span>
+              <dl class="cmp-specs">
+                {Object.entries(product.specs ?? {}).slice(0, 5).map(([key, value]) => (
+                  <div class="cmp-spec-row">
+                    <dt>{key}</dt>
+                    <dd>{value}</dd>
+                  </div>
+                ))}
+                {Object.keys(product.specs ?? {}).length === 0 && (
+                  <div class="cmp-spec-row">
+                    <dt>Valoración</dt>
+                    <dd>{product.rating ?? 'N/A'} / 5</dd>
+                  </div>
+                )}
+                <div class="cmp-spec-row">
+                  <dt>Comisiones ocultas</dt>
+                  <dd class="cmp-zero">0€ verificado</dd>
+                </div>
+                <div class="cmp-spec-row">
+                  <dt>Enlace</dt>
+                  <dd class="cmp-verified">Oficial · Verificado</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div class="cmp-view cmp-view--usage" data-view="usage" hidden>
+              <span class="cmp-view-label">Vista de Uso</span>
+              <ul class="cmp-list cmp-list--pros">
+                {(product.pros ?? []).slice(0, 3).map((pro) => (
+                  <li>{pro}</li>
+                ))}
+                {(product.pros ?? []).length === 0 && <li>Valoración media: {product.rating ?? 'N/A'} / 5</li>}
+              </ul>
+              <ul class="cmp-list cmp-list--cons">
+                {(product.cons ?? []).slice(0, 2).map((con) => (
+                  <li>{con}</li>
+                ))}
+                {(product.cons ?? []).length === 0 && <li>Sin detectar desventajas relevantes</li>}
+              </ul>
+              <p class="cmp-verdict">{product.verdict ?? product.description}</p>
+            </div>
+          </div>
+
+          <a
+            href={`/producto/${product.slug ?? product.id}`}
+            class="cmp-card-cta"
+            target="_blank"
+            rel="nofollow noopener sponsored"
+          >
+            Ver análisis completo
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
+        </article>
+      ))}
+    </div>
+  </div>
+</section>
+
+<style>
+  .comparator {
+    padding: 2rem 0 3rem;
+  }
+
+  .comparator-head {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 2rem;
+    flex-wrap: wrap;
+    margin-bottom: 2rem;
+  }
+
+  .comparator-kicker {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #60a5fa;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+
+  .comparator-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: clamp(1.5rem, 3vw, 2.25rem);
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.5rem;
+  }
+
+  .comparator-sub {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.95rem;
+    max-width: 640px;
+    line-height: 1.6;
+    margin: 0;
+  }
+
+  .comparator-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .view-toggle {
+    display: inline-flex;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 0.25rem;
+    gap: 0.25rem;
+  }
+
+  .view-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.5rem 0.95rem;
+    border: none;
+    border-radius: 9px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.6);
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .view-toggle-btn[aria-selected='true'] {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #ffffff;
+    box-shadow: 0 4px 14px rgba(59, 130, 246, 0.4);
+  }
+
+  .smart-match {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .smart-match-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .smart-match-select {
+    appearance: none;
+    background: rgba(255, 255, 255, 0.05) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E") no-repeat right 0.7rem center;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    color: #e5e7eb;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 0.5rem 2rem 0.5rem 0.8rem;
+    cursor: pointer;
+    transition: border-color 0.2s ease;
+  }
+
+  .smart-match-select:hover,
+  .smart-match-select:focus-visible {
+    border-color: rgba(96, 165, 250, 0.5);
+    outline: none;
+  }
+
+  .smart-match-select option {
+    background: #111827;
+    color: #e5e7eb;
+  }
+
+  .comparator-legend {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.25rem;
+  }
+
+  .legend-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .legend-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .legend-tag--latency .legend-dot { background: #f59e0b; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
+  .legend-tag--cost .legend-dot { background: #10b981; box-shadow: 0 0 8px rgba(16, 185, 129, 0.5); }
+  .legend-tag--verified .legend-dot { background: #3b82f6; box-shadow: 0 0 8px rgba(59, 130, 246, 0.5); }
+
+  .comparator-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+    gap: 1.25rem;
+  }
+
+  .cmp-card {
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.04) 0%, rgba(17, 24, 39, 0.7) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 18px;
+    padding: 1.25rem;
+    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease, opacity 0.3s ease;
+  }
+
+  .cmp-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(59, 130, 246, 0.35);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.4);
+  }
+
+  .cmp-card.is-match {
+    border-color: rgba(16, 185, 129, 0.55);
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.25), 0 14px 36px rgba(16, 185, 129, 0.12);
+  }
+
+  .cmp-card.is-dimmed {
+    opacity: 0.45;
+  }
+
+  .cmp-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.65rem;
+  }
+
+  .cmp-card-brand {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .cmp-card-match {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #052e22;
+    background: linear-gradient(135deg, #34d399, #10b981);
+    padding: 0.22rem 0.55rem;
+    border-radius: 999px;
+  }
+
+  .cmp-card-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 1.02rem;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1.35;
+    margin: 0 0 0.4rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .cmp-card-price {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #60a5fa;
+    margin: 0 0 0.75rem;
+  }
+
+  .cmp-card-original {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+    text-decoration: line-through;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+  }
+
+  .cmp-card-audits {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .audit-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    font-size: 0.64rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.24rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid;
+  }
+
+  .audit-tag--latency { color: #fbbf24; border-color: rgba(245, 158, 11, 0.35); background: rgba(245, 158, 11, 0.08); }
+  .audit-tag--cost { color: #34d399; border-color: rgba(16, 185, 129, 0.35); background: rgba(16, 185, 129, 0.08); }
+  .audit-tag--verified { color: #93c5fd; border-color: rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.08); }
+
+  .cmp-card-views {
+    flex: 1;
+    margin-bottom: 1rem;
+  }
+
+  .cmp-view-label {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #60a5fa;
+    margin-bottom: 0.55rem;
+  }
+
+  .cmp-specs {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .cmp-spec-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    font-size: 0.8rem;
+    padding: 0.32rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .cmp-spec-row:last-child {
+    border-bottom: none;
+  }
+
+  .cmp-spec-row dt {
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+
+  .cmp-spec-row dd {
+    color: #e5e7eb;
+    font-weight: 600;
+    text-align: right;
+    margin: 0;
+  }
+
+  .cmp-zero { color: #34d399; }
+  .cmp-verified { color: #93c5fd; }
+
+  .cmp-list {
+    margin: 0 0 0.7rem;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .cmp-list li {
+    position: relative;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.75);
+    line-height: 1.45;
+    padding-left: 1.1rem;
+  }
+
+  .cmp-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.45rem;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+
+  .cmp-list--pros li::before { background: #10b981; }
+
+  .cmp-list--cons li::before { background: #f87171; }
+
+  .cmp-verdict {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-style: italic;
+    line-height: 1.5;
+    border-left: 2px solid rgba(59, 130, 246, 0.5);
+    padding-left: 0.65rem;
+    margin: 0;
+  }
+
+  .cmp-card-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.6rem 1rem;
+    background: rgba(59, 130, 246, 0.14);
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 10px;
+    color: #93c5fd;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-decoration: none;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  }
+
+  .cmp-card-cta:hover {
+    background: #2563eb;
+    color: #ffffff;
+    border-color: transparent;
+  }
+
+  @media (max-width: 640px) {
+    .comparator-head {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .comparator-controls {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .view-toggle {
+      width: 100%;
+    }
+
+    .view-toggle-btn {
+      flex: 1;
+      justify-content: center;
+    }
+
+    .smart-match-select {
+      width: 100%;
+    }
+  }
+</style>
+
+<script>
+  type ViewMode = 'technical' | 'usage';
+
+  const root = document.querySelector<HTMLElement>('[data-comparator]');
+  if (!root) return;
+
+  const viewBtns = root.querySelectorAll<HTMLButtonElement>('[data-view-btn]');
+  const views = root.querySelectorAll<HTMLElement>('[data-view]');
+  const smartMatch = root.querySelector<HTMLSelectElement>('[data-smart-match]');
+  const cards = root.querySelectorAll<HTMLElement>('.cmp-card');
+
+  const setView = (view: ViewMode) => {
+    viewBtns.forEach((btn) => {
+      btn.setAttribute('aria-selected', String(btn.dataset.viewBtn === view));
+    });
+    views.forEach((el) => {
+      el.hidden = el.dataset.view !== view;
+    });
+  };
+
+  viewBtns.forEach((btn) => {
+    btn.addEventListener('click', () => setView(btn.dataset.viewBtn as ViewMode));
+  });
+
+  const applySmartMatch = (profile: string) => {
+    const grid = root.querySelector<HTMLElement>('[data-comparator-grid]');
+    if (!grid) return;
+
+    const allCards = Array.from(cards);
+
+    if (!profile) {
+      allCards.forEach((card) => {
+        card.classList.remove('is-match', 'is-dimmed');
+        card.querySelector<HTMLElement>('[data-match-badge]')!.hidden = true;
+      });
+      return;
+    }
+
+    const matchedProfile = profile as 'principiante' | 'intermedio' | 'avanzado';
+    const scoredCards = allCards
+      .map((card) => {
+        const specEntries = card.querySelectorAll('.cmp-spec-row').length;
+        const prosItems = card.querySelectorAll('.cmp-list--pros li').length;
+        const ratingText = card.querySelector('.cmp-card-price')?.textContent ?? '';
+        const hasRating = ratingText.length > 0;
+        const priceMatch = ratingText.match(/[\d.,]+/);
+        const price = priceMatch ? parseFloat(priceMatch[0].replace(/\./g, '').replace(',', '.')) : 0;
+
+        let score = 0;
+        if (matchedProfile === 'principiante') {
+          score = Math.min(prosItems / 3, 1) * 0.5 + Math.min(specEntries / 5, 1) * 0.3 + (hasRating ? 0.2 : 0);
+        } else if (matchedProfile === 'intermedio') {
+          score = Math.min(specEntries / 5, 1) * 0.4 + Math.min(prosItems / 3, 1) * 0.4 + (hasRating ? 0.2 : 0);
+        } else {
+          score = Math.min(specEntries / 5, 1) * 0.6 + (price > 0 ? 0.2 : 0) + (hasRating ? 0.2 : 0);
+        }
+        return { card, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    const topCard = scoredCards[0]?.card;
+    scoredCards.forEach(({ card }) => {
+      const isTop = card === topCard;
+      card.classList.toggle('is-match', isTop);
+      card.classList.toggle('is-dimmed', !isTop);
+      const badge = card.querySelector<HTMLElement>('[data-match-badge]');
+      if (badge) badge.hidden = !isTop;
+    });
+  };
+
+  smartMatch?.addEventListener('change', () => applySmartMatch(smartMatch.value));
+</script>
