@@ -206,6 +206,18 @@ function writeUsers(users: RadarUser[]): void {
   fs.renameSync(tmp, USERS_FILE);
 }
 
+export function deleteRadarUser(userId: string): boolean {
+  if (!userId) return false;
+  const users = readUsers();
+  const idx = users.findIndex((u) => u.id === userId);
+  if (idx === -1) return false;
+  const avatar = users[idx].avatar;
+  if (avatar) removeRadarAvatarFile(avatar);
+  users.splice(idx, 1);
+  writeUsers(users);
+  return true;
+}
+
 export function toPublicRadarUser(user: RadarUser): PublicRadarUser {
   const {
     passwordSalt: _s,
