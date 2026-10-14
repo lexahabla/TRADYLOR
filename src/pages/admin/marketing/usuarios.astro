@@ -3,6 +3,11 @@
  * TRADYLOR — /admin/marketing/usuarios
  * Módulo de Usuarios del Marketing: Ficha de Usuario 360, Segmentador de
  * Audiencias e Integración de Email Marketing (Mailchimp / Brevo / Resend).
+ *
+ * Nota de estilos: la lista de usuarios y las fichas se pintan desde JavaScript
+ * (innerHTML). El CSS con scope de Astro ([data-astro-cid-*]) NO alcanza a esos
+ * nodos, por eso todas las reglas `.mu-*` viven en el bloque `<style is:global>`
+ * del final (el prefijo `mu-` es exclusivo de esta página).
  */
 export const prerender = false;
 
@@ -97,7 +102,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     <!-- ============ Ficha de Usuario 360 ============ -->
     <section class="mu-panel is-active" data-mu-panel="ficha">
       <div class="mu-listbar">
-        <input type="search" class="mu-input mu-search" placeholder="Buscar por email o nombre…" data-mu-search />
+        <input type="search" class="mu-input mu-search" placeholder="Buscar por correo o nombre…" data-mu-search />
         <select class="mu-input" data-mu-filter-country aria-label="Filtrar por país">
           <option value="">Todos los países</option>
         </select>
@@ -109,7 +114,8 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
           <option value="visitas">Más visitas</option>
           <option value="compras">Más compras</option>
           <option value="gastado">Más dinero gastado</option>
-          <option value="radar">Más productos en radar</option>
+          <option value="radar">Más productos en el radar</option>
+          <option value="compartidos" disabled>Más compartidos (sin datos aún)</option>
           <option value="cumpleanos">Cumpleaños más próximo</option>
           <option value="score">Lead score más alto</option>
           <option value="nombre">Nombre (A-Z)</option>
@@ -117,28 +123,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
         <span class="mu-count" data-mu-count></span>
         <button type="button" class="mu-btn mu-btn-ghost" data-mu-refresh>Actualizar</button>
       </div>
-      <div class="mu-table-wrap">
-        <table class="mu-table">
-          <thead>
-            <tr>
-              <th>Correo electrónico</th>
-              <th>Nombre</th>
-              <th class="mu-num">Visitas</th>
-              <th class="mu-num">Compras</th>
-              <th class="mu-num">Gastado</th>
-              <th class="mu-num">En radar</th>
-              <th class="mu-num">Compartidos</th>
-              <th>Cumpleaños</th>
-              <th class="mu-num" aria-label="Detalles"></th>
-            </tr>
-          </thead>
-          <tbody data-mu-users>
-            <tr><td colspan="9" class="mu-loading">Cargando usuarios…</td></tr>
-          </tbody>
-        </tbody>
-        </table>
-      </div>
-      <div class="mu-pager" data-mu-pager></div>
+      <div class="mu-table-host" data-mu-table="ficha"></div>
     </section>
 
     <!-- ============ Segmentador de Audiencias ============ -->
@@ -200,9 +185,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
         <span class="mu-count" data-mu-segment-count></span>
         <button type="button" class="mu-btn mu-btn-ghost" data-mu-copy-emails>Copiar emails</button>
       </div>
-      <div class="mu-list" data-mu-segment>
-        <p class="mu-empty">Elige filtros y pulsa «Aplicar filtros» para ver el segmento.</p>
-      </div>
+      <div class="mu-table-host" data-mu-table="segmento"></div>
     </section>
 
     <!-- ============ Integración Email Marketing ============ -->
@@ -308,37 +291,125 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     profileOptions: { value: string; label: string }[];
     categoryLabels: Record<string, string>;
   }
+  interface Filters {
+    q?: string; hobby?: string; profile?: string; minScore?: number;
+    hasCart?: boolean; boughtDays?: number; notBoughtDays?: number;
+  }
+  type SortKey = 'visitas' | 'compras' | 'gastado' | 'radar' | 'cumpleanos' | 'score' | 'nombre';
 
-  const dataEl = document.getElementById('mu-data');
-  const data = JSON.parse(dataEl?.textContent ?? '{}') as Payload;
-  const usersRoot = document.querySelector('[data-mu-users]') as HTMLElement;
-  const segmentRoot = document.querySelector('[data-mu-segment]') as HTMLElement;
-  const toastEl = document.querySelector('[data-mu-toast]') as HTMLElement;
+  const DAY_MS = 86_400_000;
+  const PAGE_SIZE = 50;
+  const COLS = 11;
+
+  function must<T extends Element>(selector: string): T {
+    const el = document.querySelector<T>(selector);
+    if (!el) throw new Error(`[usuarios] falta el elemento ${selector}`);
+    return el;
+  }
+
+  const data = JSON.parse(document.getElementById('mu-data')?.textContent ?? '{}') as Payload;
   let users: User360[] = Array.isArray(data.users) ? data.users : [];
+  let usersById = new Map<string, User360>();
+  const reindex = (): void => {
+    usersById = new Map(users.map((user) => [user.id, user] as const));
+  };
 
+  // ---------------------------------------------------------------- formato
   const esc = (value: string): string =>
     value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-  const money = (value: number): string =>
-    new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
+  const moneyFmt = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' });
+  const money = (value: number): string => moneyFmt.format(value);
 
-  const visitLabel = (visits: number): string =>
-    visits === 1 ? '1 visita' : `${visits} visitas`;
+  const shortFmt = new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeZone: 'Europe/Madrid' });
+  const longFmt = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Madrid' });
+  const dayMonthFmt = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' });
+  const dayMonthLongFmt = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'long' });
 
-  const shortDate = (iso?: string): string => {
+  const fmtDate = (fmt: Intl.DateTimeFormat, iso?: string): string => {
     if (!iso) return '—';
-    try {
-      return new Intl.DateTimeFormat('es-ES', { dateStyle: 'short', timeZone: 'Europe/Madrid' }).format(new Date(iso));
-    } catch {
-      return iso;
-    }
+    const time = Date.parse(iso);
+    return Number.isNaN(time) ? '—' : fmt.format(new Date(time));
   };
 
-  const hobbyLabel = (slug: string): string =>
-    data.hobbyOptions.find((hobby) => hobby.slug === slug)?.label ?? slug;
+  interface Birth { month: number; day: number; year?: number }
 
+  function parseBirth(value?: string): Birth | null {
+    const match = /^(?:(\d{4})-)?(\d{2})-(\d{2})$/.exec((value ?? '').trim());
+    if (!match) return null;
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+    return { month, day, year: match[1] ? Number(match[1]) : undefined };
+  }
+
+  /** Días que faltan hasta el próximo cumpleaños (0 = hoy). null si no hay fecha válida. */
+  function daysToBirthday(value?: string): number | null {
+    const birth = parseBirth(value);
+    if (!birth) return null;
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    let next = new Date(today.getFullYear(), birth.month - 1, birth.day);
+    if (next.getTime() < today.getTime()) next = new Date(today.getFullYear() + 1, birth.month - 1, birth.day);
+    return Math.round((next.getTime() - today.getTime()) / DAY_MS);
+  }
+
+  function birthdayCell(value?: string): string {
+    const birth = parseBirth(value);
+    if (!birth) return '<span class="mu-soon">—</span>';
+    const label = dayMonthFmt.format(new Date(2000, birth.month - 1, birth.day));
+    const days = daysToBirthday(value);
+    if (days === 0) return `${esc(label)} <span class="mu-bday is-today">hoy</span>`;
+    if (days !== null && days <= 30) return `${esc(label)} <span class="mu-bday">en ${days} d</span>`;
+    return esc(label);
+  }
+
+  function birthdayDetail(value?: string): string {
+    const birth = parseBirth(value);
+    if (!birth) return 'Sin declarar';
+    const parts = [dayMonthLongFmt.format(new Date(2000, birth.month - 1, birth.day))];
+    if (birth.year) {
+      const now = new Date();
+      const hadBirthday =
+        now.getMonth() + 1 > birth.month || (now.getMonth() + 1 === birth.month && now.getDate() >= birth.day);
+      parts.push(`${now.getFullYear() - birth.year - (hadBirthday ? 0 : 1)} años`);
+    }
+    const days = daysToBirthday(value);
+    if (days !== null) parts.push(days === 0 ? 'es hoy' : `faltan ${days} día${days === 1 ? '' : 's'}`);
+    return esc(parts.join(' · '));
+  }
+
+  const hobbyLabel = (slug: string): string => data.hobbyOptions.find((hobby) => hobby.slug === slug)?.label ?? slug;
   const categoryLabel = (slug: string): string => data.categoryLabels[slug] ?? slug;
+  const providerLabel = (provider: string): string =>
+    provider === 'google' ? 'Google' : provider === 'email' ? 'Email y contraseña' : provider;
+  const bandLabel: Record<string, string> = { caliente: 'Caliente', tibio: 'Tibio', frio: 'Frío' };
 
+  const chips = (values: string[], label: (value: string) => string): string =>
+    values.length
+      ? values.map((value) => `<span class="mu-chip">${esc(label(value))}</span>`).join('')
+      : '<span class="mu-empty-inline">Sin declarar</span>';
+
+  function hobbyChips(declared: User360['declared']): string {
+    if (!declared.hobbies.length) return '<span class="mu-empty-inline">Sin declarar</span>';
+    return declared.hobbies
+      .map((slug) => {
+        const label = slug === 'otros' && declared.hobbiesOther ? `Otros: ${declared.hobbiesOther}` : hobbyLabel(slug);
+        return `<span class="mu-chip">${esc(label)}</span>`;
+      })
+      .join('');
+  }
+
+  const listItems = (items: { title: string; atISO?: string }[]): string =>
+    items.length
+      ? items
+          .slice(0, 5)
+          .map((item) => `<li><span>${esc(item.title)}</span><time>${fmtDate(shortFmt, item.atISO)}</time></li>`)
+          .join('') + (items.length > 5 ? `<li class="mu-empty-inline">… y ${items.length - 5} más</li>` : '')
+      : '<li class="mu-empty-inline">Ninguno</li>';
+
+  // ----------------------------------------------------------------- toast
+  const toastEl = must<HTMLElement>('[data-mu-toast]');
   let toastTimer: number | undefined;
   const toast = (message: string, isError = false): void => {
     toastEl.textContent = message;
@@ -350,181 +421,296 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     }, 3800);
   };
 
-  const chips = (values: string[], label: (value: string) => string): string =>
-    values.length
-      ? values.map((value) => `<span class="mu-chip">${esc(label(value))}</span>`).join('')
-      : '<span class="mu-empty-inline">Sin declarar</span>';
-
-  const listItems = (items: { title: string; atISO?: string }[]): string =>
-    items.length
-      ? items
-          .slice(0, 5)
-          .map((item) => `<li><span>${esc(item.title)}</span><time>${shortDate(item.atISO)}</time></li>`)
-          .join('')
-      : '<li class="mu-empty-inline">Ninguno</li>';
-
-  const bandLabel: Record<string, string> = { caliente: 'Caliente', tibio: 'Tibio', frio: 'Frío' };
-
-  function userCard(user: User360): string {
+  // ----------------------------------------------- ficha desplegable (detalle)
+  function detailHtml(user: User360): string {
     const b = user.behavior;
-    const cartBadge = b.cartItems.length
-      ? `<span class="mu-chip mu-chip-cart">${b.cartItems.length} en carrito · ${money(b.cartTotal)}</span>`
-      : '<span class="mu-chip">Sin carrito</span>';
+    const d = user.declared;
     const reminder = b.cartReminder
-      ? `Último aviso: ${shortDate(b.cartReminder.sentAtISO)} (${b.cartReminder.count} enviados)`
-      : 'Sin avisos de carrito';
+      ? `${fmtDate(shortFmt, b.cartReminder.sentAtISO)} · ${b.cartReminder.count} envío${b.cartReminder.count === 1 ? '' : 's'}`
+      : 'Ninguno';
     const remindDisabled = b.cartItems.length === 0 || !data.channels.email;
+    const remindHint =
+      b.cartItems.length === 0
+        ? 'No tiene productos pendientes en el carrito'
+        : !data.channels.email
+          ? 'Sin canal de email configurado (SMTP o N8N_CART_WEBHOOK_URL)'
+          : 'Envía ahora el aviso de carrito';
     const factors = user.leadScore.factors
       .map((factor) => `<li><span>${esc(factor.label)}</span><strong>+${factor.points}</strong></li>`)
       .join('');
     return `
-      <article class="mu-card" data-user-id="${esc(user.id)}">
-        <header class="mu-card-head">
-          <div class="mu-card-id">
-            <p class="mu-card-name">${esc(user.name || '(sin nombre)')}</p>
-            <p class="mu-card-email">${esc(user.email)} · ${esc(user.provider)} · alta ${shortDate(user.createdAtISO)}</p>
-          </div>
-          <div class="mu-score" data-band="${esc(user.leadScore.band)}" title="Lead score">
+      <div class="mu-detail" data-user-id="${esc(user.id)}">
+        <section class="mu-dcol">
+          <h3 class="mu-dtitle">Perfil declarado</h3>
+          <dl class="mu-dl">
+            <dt>Nombre</dt><dd>${esc(user.name || 'Sin nombre')}</dd>
+            <dt>Correo</dt><dd>${esc(user.email)}</dd>
+            <dt>Alta</dt><dd>${esc(providerLabel(user.provider))} · ${fmtDate(longFmt, user.createdAtISO)}</dd>
+            <dt>Tipo de perfil</dt><dd>${esc(d.profileType ?? 'Sin definir')}</dd>
+            <dt>Ubicación</dt><dd>${esc([d.city, d.country].filter(Boolean).join(', ') || 'Sin declarar')}</dd>
+            <dt>Cumpleaños</dt><dd>${birthdayDetail(d.birthDate)}</dd>
+          </dl>
+          <div><span class="mu-k">Hobbies</span><div class="mu-chips">${hobbyChips(d)}</div></div>
+          <div><span class="mu-k">Categorías de interés</span><div class="mu-chips">${chips(d.preferredCategories, categoryLabel)}</div></div>
+        </section>
+        <section class="mu-dcol">
+          <h3 class="mu-dtitle">Actividad</h3>
+          <dl class="mu-dl">
+            <dt>Visitas a fichas</dt><dd>${b.visits}</dd>
+            <dt>Última visita</dt><dd>${fmtDate(longFmt, b.lastVisitAtISO)}</dd>
+            <dt>Última categoría</dt><dd>${esc(b.lastCategoryLabel ?? '—')}</dd>
+            <dt>Productos en su radar</dt><dd>${b.savedCount}</dd>
+            <dt>Clics en «Comprar»</dt><dd>${b.affiliateClicks}</dd>
+            <dt>Descartados</dt><dd>${b.dismissedCount}</dd>
+            <dt>Compartidos</dt><dd class="mu-soon">Sin captura aún</dd>
+          </dl>
+          <div><span class="mu-k">Vistos, no comprados</span><ul class="mu-mini-list">${listItems(b.viewedNotBought)}</ul></div>
+        </section>
+        <section class="mu-dcol">
+          <h3 class="mu-dtitle">Compras y carrito</h3>
+          <dl class="mu-dl">
+            <dt title="Compras que el usuario confirmó en Mi Radar («¿Compraste este producto?»)">Compras confirmadas</dt><dd>${b.purchaseCount}</dd>
+            <dt>Dinero gastado (LTV)</dt><dd>${money(b.ltv)}</dd>
+            <dt>Última compra</dt><dd>${fmtDate(longFmt, b.lastPurchaseAtISO)}</dd>
+            <dt>En el carrito</dt><dd>${b.cartItems.length} · ${money(b.cartTotal)}</dd>
+            <dt>Tasa de abandono</dt><dd>${b.cartAbandonRatePct === null ? '—' : `${b.cartAbandonRatePct}%`}</dd>
+            <dt>Avisos de carrito</dt><dd>${esc(reminder)}</dd>
+          </dl>
+          <div><span class="mu-k">Comprados</span><ul class="mu-mini-list">${listItems(b.purchases)}</ul></div>
+          <div><span class="mu-k">Carrito pendiente</span><ul class="mu-mini-list">${listItems(b.cartItems)}</ul></div>
+          <button type="button" class="mu-btn mu-btn-small" data-remind title="${esc(remindHint)}"${remindDisabled ? ' disabled' : ''}>Enviar aviso de carrito</button>
+        </section>
+        <section class="mu-dcol">
+          <h3 class="mu-dtitle">Lead score</h3>
+          <div class="mu-score" data-band="${esc(user.leadScore.band)}">
             <span class="mu-score-value">${user.leadScore.value}</span>
-            <span class="mu-score-band">${bandLabel[user.leadScore.band] ?? user.leadScore.band}</span>
+            <span class="mu-score-band">${esc(bandLabel[user.leadScore.band] ?? user.leadScore.band)}</span>
           </div>
-        </header>
-        <details class="mu-factors">
-          <summary>Desglose del lead score (${user.leadScore.factors.length} factores)</summary>
-          <ul>${factors || '<li class="mu-empty-inline">Sin factores: perfil frío sin actividad.</li>'}</ul>
-        </details>
-        <div class="mu-grid">
-          <div class="mu-cell"><span class="mu-k">Hobbies</span>${chips(user.declared.hobbies, hobbyLabel)}</div>
-          <div class="mu-cell"><span class="mu-k">Perfil</span>${esc(user.declared.profileType ?? 'Sin definir')}</div>
-          <div class="mu-cell"><span class="mu-k">Categorías de interés</span>${chips(user.declared.preferredCategories, categoryLabel)}</div>
-          <div class="mu-cell"><span class="mu-k">Ubicación</span>${esc([user.declared.city, user.declared.country].filter(Boolean).join(', ') || 'Sin declarar')}</div>
-          <div class="mu-cell"><span class="mu-k">Cumpleaños</span>${esc(user.declared.birthDate ?? 'Sin declarar')}</div>
-          <div class="mu-cell"><span class="mu-k">Favoritos en radar</span>${b.savedCount}</div>
-        </div>
-        <div class="mu-stats">
-          <div class="mu-stat"><span class="mu-k">LTV (compras)</span><strong>${money(b.ltv)}</strong></div>
-          <div class="mu-stat"><span class="mu-k">Compras</span><strong>${b.purchaseCount}</strong></div>
-          <div class="mu-stat"><span class="mu-k">Clics en comprar</span><strong>${b.affiliateClicks}</strong></div>
-          <div class="mu-stat"><span class="mu-k">Carrito</span><strong>${b.cartItems.length} · ${money(b.cartTotal)}</strong></div>
-          <div class="mu-stat"><span class="mu-k">Abandono</span><strong>${b.cartAbandonRatePct === null ? '—' : `${b.cartAbandonRatePct}%`}</strong></div>
-          <div class="mu-stat"><span class="mu-k">Última compra</span><strong>${shortDate(b.lastPurchaseAtISO)}</strong></div>
-          <div class="mu-stat"><span class="mu-k">Última categoría</span><strong>${esc(b.lastCategoryLabel ?? '—')}</strong></div>
-          <div class="mu-stat"><span class="mu-k">Última visita</span><strong>${shortDate(b.lastVisitAtISO)}</strong></div>
-        </div>
-        <div class="mu-cols">
-          <div class="mu-col">
-            <span class="mu-k">Comprados (Return Flow)</span>
-            <ul class="mu-mini-list">${listItems(b.purchases)}</ul>
-          </div>
-          <div class="mu-col">
-            <span class="mu-k">Vistos, no comprados</span>
-            <ul class="mu-mini-list">${listItems(b.viewedNotBought)}</ul>
-          </div>
-        </div>
-        <footer class="mu-card-foot">
-          <span class="mu-reminder" data-reminder>${esc(reminder)}${cartBadge}</span>
-          <button type="button" class="mu-btn mu-btn-small" data-remind ${remindDisabled ? 'disabled' : ''}>
-            Enviar aviso de carrito
-          </button>
-        </footer>
-      </article>`;
+          <ul class="mu-factors-list">${factors || '<li class="mu-empty-inline">Sin factores: perfil frío sin actividad.</li>'}</ul>
+        </section>
+      </div>`;
   }
 
-  function renderTable(): void {
-    let list = users;
-
-    // Filtro búsqueda
-    const searchInput = document.querySelector('[data-mu-search]') as HTMLInputElement;
-    const searchQ = (searchInput?.value ?? '').trim().toLowerCase();
-    if (searchQ) {
-      list = list.filter((u) =>
-        `${u.email} ${u.name ?? ''}`.toLowerCase().includes(searchQ)
-      );
-    }
-
-    // Filtro país
-    const countrySelect = document.querySelector('[data-mu-filter-country]') as HTMLSelectElement;
-    const country = countrySelect?.value;
-    if (country) {
-      list = list.filter((u) => u.declared.country === country);
-    }
-
-    // Filtro hobby
-    const hobbySelect = document.querySelector('[data-mu-filter-hobby]') as HTMLSelectElement;
-    const hobby = hobbySelect?.value;
-    if (hobby) {
-      list = list.filter((u) => u.declared.hobbies.includes(hobby));
-    }
-
-    // Orden
-    const sortSelect = document.querySelector('[data-mu-sort]') as HTMLSelectElement;
-    const sortBy = sortSelect?.value ?? 'visitas';
-    const desc = sortBy !== 'nombre';
-    list = [...list].sort((a, b) => {
-      let pa = a.behavior.visits, pb = b.behavior.visits;
-      if (sortBy === 'compras') { pa = a.behavior.purchaseCount; pb = b.behavior.purchaseCount; }
-      else if (sortBy === 'gastado') { pa = a.behavior.ltv; pb = b.behavior.ltv; }
-      else if (sortBy === 'radar') { pa = a.behavior.savedCount; pb = b.behavior.savedCount; }
-      else if (sortBy === 'cumpleanos') {
-        const da = a.declared.birthDate ? new Date(a.declared.birthDate).getMonth() * 30 + new Date(a.declared.birthDate).getDate() : -1;
-        const db = b.declared.birthDate ? new Date(b.declared.birthDate).getMonth() * 30 + new Date(b.declared.birthDate).getDate() : -1;
-        pa = da; pb = db;
-      }
-      else if (sortBy === 'score') { pa = a.leadScore.value; pb = b.leadScore.value; }
-      else if (sortBy === 'nombre') { pa = (a.name || '').localeCompare(b.name || ''); }
-      return (desc ? pb : pa) - (desc ? pa : pb);
-    });
-
-    const PAGE_SIZE = 50;
-    const page = 1; // simplified: always show first page for now
-    const sliced = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-    const countEl = document.querySelector('[data-mu-count]') as HTMLElement;
-    countEl.textContent = `${list.length} de ${users.length} usuarios · página ${page} de ${Math.max(1, Math.ceil(list.length / PAGE_SIZE))}`;
-
-    const tbody = document.querySelector('tbody[data-mu-users]') as HTMLElement;
-    tbody.innerHTML = sliced.map((user) => rowHtml(user)).join('') ||
-      '<tr><td colspan="9" class="mu-loading">Cargando usuarios…</td></tr>';
-
-    // Delegación de clic en fila para expandir
-    document.querySelector('tbody[data-mu-users]')?.addEventListener('click', (e) => {
-      const row = (e.target as HTMLElement).closest('tr[data-row-id]');
-      if (row) {
-        const detail = row.queryNext()?.closest('tr.mu-row-detail');
-        if (detail) detail.hidden = !detail.hidden;
-        row.classList.toggle('is-open', !detail.hidden);
-      }
-    });
-  }
-
-  function rowHtml(user: User360): string {
-    const birth = user.declared.birthDate ?
-      new Intl.DateTimeFormat('es-ES', {day:'numeric',month:'short'}).format(new Date(user.declared.birthDate)) : '—';
+  // ------------------------------------------------------------- tabla de usuarios
+  function rowHtml(user: User360, isOpen: boolean): string {
+    const b = user.behavior;
+    const id = esc(user.id);
     return `
-      <tr data-row-id="${user.id}">
+      <tr class="mu-row${isOpen ? ' is-open' : ''}" data-row-id="${id}" tabindex="0" aria-expanded="${isOpen}">
         <td class="mu-cell-email">${esc(user.email)}</td>
-        <td>${esc(user.name || '—')}</td>
-        <td class="mu-num">${user.behavior.visits}</td>
-        <td class="mu-num">${user.behavior.purchaseCount}</td>
-        <td class="mu-num">${user.behavior.ltv === 0 ? '—' : money(user.behavior.ltv)}</td>
-        <td class="mu-num">${user.behavior.savedCount}</td>
-        <td class="mu-num mu-soon" title="Métrica pendiente de implementar">—</td>
-        <td>${birth}</td>
-        <td class="mu-num"><button class="mu-btn mu-btn-small" aria-label="Ver detalles">▸</button></td>
+        <td class="mu-cell-name">${esc(user.name || '—')}</td>
+        <td class="mu-hide-md">${esc(user.declared.country || '—')}</td>
+        <td class="mu-num">${b.visits}</td>
+        <td class="mu-num">${b.purchaseCount}</td>
+        <td class="mu-num">${b.ltv > 0 ? money(b.ltv) : '—'}</td>
+        <td class="mu-num">${b.savedCount}</td>
+        <td class="mu-num mu-hide-md mu-soon" title="Métrica aún sin captura">—</td>
+        <td class="mu-num"><span class="mu-score-pill" data-band="${esc(user.leadScore.band)}" title="${esc(bandLabel[user.leadScore.band] ?? '')}">${user.leadScore.value}</span></td>
+        <td class="mu-hide-sm">${birthdayCell(user.declared.birthDate)}</td>
+        <td class="mu-num mu-caret-cell"><button type="button" class="mu-caret" aria-label="Ver ficha completa de ${id}">▸</button></td>
       </tr>
-      <tr class="mu-row-detail" hidden>
-        <td colspan="9">${userCard(user)}</td>
+      <tr class="mu-detail-row" data-detail-id="${id}"${isOpen ? '' : ' hidden'}>
+        <td colspan="${COLS}">${isOpen ? detailHtml(user) : ''}</td>
       </tr>`;
   }
 
-  interface Filters {
-    q?: string; hobby?: string; profile?: string; minScore?: number;
-    hasCart?: boolean; boughtDays?: number; notBoughtDays?: number;
+  function pageWindow(page: number, pages: number): Array<number | '…'> {
+    const wanted = new Set<number>([1, pages, page - 1, page, page + 1]);
+    const nums = [...wanted].filter((n) => n >= 1 && n <= pages).sort((a, b) => a - b);
+    const out: Array<number | '…'> = [];
+    nums.forEach((n, index) => {
+      if (index > 0 && n - nums[index - 1] > 1) out.push('…');
+      out.push(n);
+    });
+    return out;
   }
+
+  function pagerHtml(page: number, pages: number, total: number, start: number, shown: number): string {
+    if (total === 0) return '';
+    const info = `<span class="mu-page-info">Mostrando ${start + 1}–${start + shown} de ${total}</span>`;
+    if (pages <= 1) return info;
+    const btn = (label: string, target: number, opts: { disabled?: boolean; current?: boolean; aria?: string } = {}): string =>
+      `<button type="button" class="mu-page-btn${opts.current ? ' is-current' : ''}" data-page="${target}"${opts.disabled ? ' disabled' : ''}${opts.current ? ' aria-current="page"' : ''}${opts.aria ? ` aria-label="${opts.aria}"` : ''}>${label}</button>`;
+    const nums = pageWindow(page, pages)
+      .map((n) => (n === '…' ? '<span class="mu-page-gap">…</span>' : btn(String(n), n, { current: n === page })))
+      .join('');
+    return `${info}<div class="mu-pager-nav">${btn('‹', page - 1, { disabled: page <= 1, aria: 'Página anterior' })}${nums}${btn('›', page + 1, { disabled: page >= pages, aria: 'Página siguiente' })}</div>`;
+  }
+
+  interface RenderOptions { emptyHtml?: string; keepPage?: boolean }
+  interface UserTable { render(list: User360[], options?: RenderOptions): void }
+
+  function createTable(root: HTMLElement): UserTable {
+    root.innerHTML = `
+      <table class="mu-table">
+        <thead>
+          <tr>
+            <th>Correo electrónico</th>
+            <th>Nombre</th>
+            <th class="mu-hide-md">País</th>
+            <th class="mu-num">Visitas</th>
+            <th class="mu-num">Compras</th>
+            <th class="mu-num">Gastado</th>
+            <th class="mu-num">En radar</th>
+            <th class="mu-num mu-hide-md" title="Métrica aún sin captura">Compartidos</th>
+            <th class="mu-num">Score</th>
+            <th class="mu-hide-sm">Cumpleaños</th>
+            <th class="mu-num mu-caret-cell"><span class="mu-sr">Detalles</span></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="mu-pager"></div>`;
+    const tbody = root.querySelector('tbody') as HTMLElement;
+    const pager = root.querySelector('.mu-pager') as HTMLElement;
+
+    let list: User360[] = [];
+    let page = 1;
+    let emptyHtml = '';
+    const openIds = new Set<string>();
+
+    function draw(): void {
+      const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+      page = Math.min(Math.max(1, page), pages);
+      const start = (page - 1) * PAGE_SIZE;
+      const slice = list.slice(start, start + PAGE_SIZE);
+      tbody.innerHTML = slice.length
+        ? slice.map((user) => rowHtml(user, openIds.has(user.id))).join('')
+        : `<tr><td colspan="${COLS}" class="mu-empty-cell">${emptyHtml}</td></tr>`;
+      pager.innerHTML = pagerHtml(page, pages, list.length, start, slice.length);
+    }
+
+    function toggleRow(row: HTMLElement): void {
+      const id = row.dataset.rowId;
+      const detail = row.nextElementSibling as HTMLElement | null;
+      if (!id || !detail || !detail.classList.contains('mu-detail-row')) return;
+      const willOpen = detail.hidden;
+      if (willOpen) {
+        const user = usersById.get(id);
+        const cell = detail.firstElementChild as HTMLElement | null;
+        if (user && cell) cell.innerHTML = detailHtml(user);
+        openIds.add(id);
+      } else {
+        openIds.delete(id);
+      }
+      detail.hidden = !willOpen;
+      row.classList.toggle('is-open', willOpen);
+      row.setAttribute('aria-expanded', String(willOpen));
+    }
+
+    tbody.addEventListener('click', (event) => {
+      const row = (event.target as HTMLElement).closest<HTMLElement>('tr.mu-row');
+      if (row) toggleRow(row);
+    });
+    tbody.addEventListener('keydown', (event) => {
+      const row = event.target as HTMLElement;
+      if ((event.key === 'Enter' || event.key === ' ') && row.classList.contains('mu-row')) {
+        event.preventDefault();
+        toggleRow(row);
+      }
+    });
+    pager.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-page]');
+      if (!button || button.disabled) return;
+      page = Number(button.dataset.page) || 1;
+      draw();
+      root.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+
+    return {
+      render(next, options = {}) {
+        list = next;
+        if (!options.keepPage) page = 1;
+        emptyHtml = options.emptyHtml ?? 'Sin resultados.';
+        draw();
+      },
+    };
+  }
+
+  // ----------------------------------------------------- ficha: filtros y orden
+  const searchInput = must<HTMLInputElement>('[data-mu-search]');
+  const countrySelect = must<HTMLSelectElement>('[data-mu-filter-country]');
+  const hobbySelect = must<HTMLSelectElement>('[data-mu-filter-hobby]');
+  const sortSelect = must<HTMLSelectElement>('[data-mu-sort]');
+  const countEl = must<HTMLElement>('[data-mu-count]');
+  const fichaTable = createTable(must<HTMLElement>('[data-mu-table="ficha"]'));
+
+  const sortFns: Record<SortKey, (a: User360, b: User360) => number> = {
+    visitas: (a, b) => b.behavior.visits - a.behavior.visits,
+    compras: (a, b) => b.behavior.purchaseCount - a.behavior.purchaseCount,
+    gastado: (a, b) => b.behavior.ltv - a.behavior.ltv,
+    radar: (a, b) => b.behavior.savedCount - a.behavior.savedCount,
+    cumpleanos: (a, b) =>
+      (daysToBirthday(a.declared.birthDate) ?? Number.MAX_SAFE_INTEGER) -
+      (daysToBirthday(b.declared.birthDate) ?? Number.MAX_SAFE_INTEGER),
+    score: (a, b) => b.leadScore.value - a.leadScore.value,
+    nombre: (a, b) => (a.name || a.email).localeCompare(b.name || b.email, 'es'),
+  };
+
+  /** Clave para agrupar países escritos distinto ("España", "españa"). */
+  const countryKey = (value?: string): string =>
+    (value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+
+  function fillCountries(): void {
+    const keep = countrySelect.value;
+    // Se agrupan grafías distintas ("España", "españa") y se muestra la más frecuente.
+    const groups = new Map<string, { spellings: Map<string, number>; count: number }>();
+    for (const user of users) {
+      const label = (user.declared.country ?? '').trim();
+      if (!label) continue;
+      const key = countryKey(label);
+      const group = groups.get(key) ?? { spellings: new Map<string, number>(), count: 0 };
+      group.count += 1;
+      group.spellings.set(label, (group.spellings.get(label) ?? 0) + 1);
+      groups.set(key, group);
+    }
+    const bestLabel = (group: { spellings: Map<string, number> }): string =>
+      [...group.spellings.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es'))[0][0];
+    const options = [...groups.entries()]
+      .map(([key, group]) => ({ key, label: bestLabel(group), count: group.count }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'es'));
+    countrySelect.innerHTML =
+      '<option value="">Todos los países</option>' +
+      options.map((o) => `<option value="${esc(o.key)}">${esc(o.label)} (${o.count})</option>`).join('');
+    countrySelect.value = groups.has(keep) ? keep : '';
+  }
+
+  function applyFicha(keepPage = false): void {
+    const query = searchInput.value.trim().toLowerCase();
+    const country = countrySelect.value;
+    const hobby = hobbySelect.value;
+    const sortKey = (sortSelect.value in sortFns ? sortSelect.value : 'visitas') as SortKey;
+    const list = users
+      .filter((user) => {
+        if (query && !`${user.email} ${user.name ?? ''}`.toLowerCase().includes(query)) return false;
+        if (country && countryKey(user.declared.country) !== country) return false;
+        if (hobby && !user.declared.hobbies.includes(hobby)) return false;
+        return true;
+      })
+      .sort((a, b) => sortFns[sortKey](a, b) || a.email.localeCompare(b.email));
+    countEl.textContent = `${list.length} de ${users.length} usuario${users.length === 1 ? '' : 's'}`;
+    fichaTable.render(list, {
+      keepPage,
+      emptyHtml: users.length
+        ? 'Ningún usuario coincide con los filtros.'
+        : 'Todavía no hay usuarios registrados en Mi Radar.',
+    });
+  }
+
+  searchInput.addEventListener('input', () => applyFicha());
+  countrySelect.addEventListener('change', () => applyFicha());
+  hobbySelect.addEventListener('change', () => applyFicha());
+  sortSelect.addEventListener('change', () => applyFicha());
+
+  // ------------------------------------------------------------- segmentador
+  const segmentCount = must<HTMLElement>('[data-mu-segment-count]');
+  const segmentTable = createTable(must<HTMLElement>('[data-mu-table="segmento"]'));
+  const SEGMENT_HINT = 'Elige filtros y pulsa «Aplicar filtros» para ver el segmento.';
+  let segment: User360[] = [];
+  let lastFilters: Filters | null = null;
 
   function filterUsers(filters: Filters): User360[] {
     const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
     return users.filter((user) => {
       const q = filters.q?.trim().toLowerCase();
       if (q && !`${user.email} ${user.name ?? ''}`.toLowerCase().includes(q)) return false;
@@ -535,30 +721,26 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
       }
       if (typeof filters.minScore === 'number' && user.leadScore.value < filters.minScore) return false;
       if (filters.hasCart !== undefined && (user.behavior.cartItems.length > 0) !== filters.hasCart) return false;
-      if (typeof filters.boughtDays === 'number') {
-        const last = user.behavior.lastPurchaseAtISO ? Date.parse(user.behavior.lastPurchaseAtISO) : null;
-        if (last === null || now - last > filters.boughtDays * day) return false;
-      }
-      if (typeof filters.notBoughtDays === 'number') {
-        const last = user.behavior.lastPurchaseAtISO ? Date.parse(user.behavior.lastPurchaseAtISO) : null;
-        if (last !== null && now - last <= filters.notBoughtDays * day) return false;
-      }
+      const last = user.behavior.lastPurchaseAtISO ? Date.parse(user.behavior.lastPurchaseAtISO) : null;
+      if (typeof filters.boughtDays === 'number' && (last === null || now - last > filters.boughtDays * DAY_MS)) return false;
+      if (typeof filters.notBoughtDays === 'number' && last !== null && now - last <= filters.notBoughtDays * DAY_MS) return false;
       return true;
     });
   }
 
-  let segment: User360[] = [];
-
-  function renderSegment(): void {
-    const countEl = document.querySelector('[data-mu-segment-count]') as HTMLElement;
-    countEl.textContent = `${segment.length} usuario${segment.length === 1 ? '' : 's'} en el segmento`;
-    segmentRoot.innerHTML = segment.length
-      ? segment.map(userCard).join('')
-      : '<p class="mu-empty">Ningún usuario cumple esos filtros. Prueba a ampliar el segmento.</p>';
+  function applySegment(keepPage = false): void {
+    if (!lastFilters) return;
+    segment = filterUsers(lastFilters).sort((a, b) => b.leadScore.value - a.leadScore.value || a.email.localeCompare(b.email));
+    segmentCount.textContent = `${segment.length} usuario${segment.length === 1 ? '' : 's'} en el segmento`;
+    segmentTable.render(segment, {
+      keepPage,
+      emptyHtml: 'Ningún usuario cumple esos filtros. Prueba a ampliar el segmento.',
+    });
   }
 
   function readFilters(form: HTMLFormElement): Filters {
-    const value = (name: string): string => (new FormData(form).get(name) ?? '').toString();
+    const formData = new FormData(form);
+    const value = (name: string): string => (formData.get(name) ?? '').toString();
     const num = (name: string): number | undefined => {
       const raw = value(name);
       return raw ? Number.parseInt(raw, 10) : undefined;
@@ -575,23 +757,53 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     };
   }
 
+  const filtersForm = must<HTMLFormElement>('[data-mu-filters]');
+  filtersForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    lastFilters = readFilters(filtersForm);
+    applySegment();
+  });
+  must<HTMLButtonElement>('[data-mu-reset]').addEventListener('click', () => {
+    filtersForm.reset();
+    lastFilters = null;
+    segment = [];
+    segmentCount.textContent = '';
+    segmentTable.render([], { emptyHtml: SEGMENT_HINT });
+  });
+  must<HTMLButtonElement>('[data-mu-copy-emails]').addEventListener('click', async () => {
+    if (!segment.length) {
+      toast('Aplica primero un filtro: el segmento está vacío.', true);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(segment.map((user) => user.email).join('\n'));
+      toast(`${segment.length} email${segment.length === 1 ? '' : 's'} copiado${segment.length === 1 ? '' : 's'} al portapapeles.`);
+    } catch {
+      toast('El navegador ha bloqueado el portapapeles.', true);
+    }
+  });
+
+  // ------------------------------------------------------ refresco y avisos
   async function refreshUsers(): Promise<void> {
     try {
       const response = await fetch('/api/admin/marketing/usuarios', { credentials: 'same-origin' });
       const body = await response.json();
       if (body?.success && Array.isArray(body.users)) {
         users = body.users as User360[];
-        renderTable();
+        reindex();
+        fillCountries();
+        applyFicha(true);
+        applySegment(true);
       }
     } catch {
       toast('No se pudo actualizar la lista de usuarios.', true);
     }
   }
+  must<HTMLButtonElement>('[data-mu-refresh]').addEventListener('click', () => {
+    void refreshUsers();
+  });
 
-  async function sendRemind(card: HTMLElement): Promise<void> {
-    const userId = card.dataset.userId;
-    const button = card.querySelector('[data-remind]') as HTMLButtonElement;
-    if (!userId || !button) return;
+  async function sendRemind(userId: string, button: HTMLButtonElement): Promise<void> {
     button.disabled = true;
     button.textContent = 'Enviando…';
     try {
@@ -615,8 +827,17 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     }
   }
 
+  // Delegación: las fichas se re-renderizan al paginar, filtrar o refrescar.
+  document.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-remind]');
+    if (!button || button.disabled) return;
+    const userId = button.closest<HTMLElement>('[data-user-id]')?.dataset.userId;
+    if (userId) void sendRemind(userId, button);
+  });
+
+  // ------------------------------------------------------------ integraciones
   function renderChannels(): void {
-    const el = document.querySelector('[data-mu-channels]') as HTMLElement;
+    const el = must<HTMLElement>('[data-mu-channels]');
     const lines: string[] = [];
     lines.push(
       data.channels.smtp
@@ -630,23 +851,22 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
   }
 
   function syncIntegrationsForm(): void {
-    const radios = document.querySelectorAll<HTMLInputElement>('[data-mu-platform-radio]');
-    radios.forEach((radio) => {
+    document.querySelectorAll<HTMLInputElement>('[data-mu-platform-radio]').forEach((radio) => {
       radio.checked = (radio.value || '') === (data.config.platform ?? '');
     });
     const triggers = data.config.triggers;
-    (document.querySelector('[data-mu-trigger][name="welcome"]') as HTMLInputElement).checked = Boolean(triggers.welcome);
-    (document.querySelector('[data-mu-trigger][name="cartRecovery"]') as HTMLInputElement).checked = Boolean(triggers.cartRecovery);
-    (document.querySelector('[data-mu-trigger][name="birthday"]') as HTMLInputElement).checked = Boolean(triggers.birthday);
+    must<HTMLInputElement>('[data-mu-trigger][name="welcome"]').checked = Boolean(triggers.welcome);
+    must<HTMLInputElement>('[data-mu-trigger][name="cartRecovery"]').checked = Boolean(triggers.cartRecovery);
+    must<HTMLInputElement>('[data-mu-trigger][name="birthday"]').checked = Boolean(triggers.birthday);
     renderChannels();
   }
 
   async function saveIntegrations(): Promise<void> {
-    const platform = (document.querySelector('[data-mu-platform-radio]:checked') as HTMLInputElement | null)?.value ?? '';
+    const platform = document.querySelector<HTMLInputElement>('[data-mu-platform-radio]:checked')?.value ?? '';
     const triggers = {
-      welcome: (document.querySelector('[data-mu-trigger][name="welcome"]') as HTMLInputElement).checked,
-      cartRecovery: (document.querySelector('[data-mu-trigger][name="cartRecovery"]') as HTMLInputElement).checked,
-      birthday: (document.querySelector('[data-mu-trigger][name="birthday"]') as HTMLInputElement).checked,
+      welcome: must<HTMLInputElement>('[data-mu-trigger][name="welcome"]').checked,
+      cartRecovery: must<HTMLInputElement>('[data-mu-trigger][name="cartRecovery"]').checked,
+      birthday: must<HTMLInputElement>('[data-mu-trigger][name="birthday"]').checked,
     };
     try {
       const response = await fetch('/api/admin/marketing/usuarios/integrations', {
@@ -658,7 +878,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
       const body = await response.json();
       if (body?.success) {
         data.config = body.config;
-        const saved = document.querySelector('[data-mu-int-saved]') as HTMLElement;
+        const saved = must<HTMLElement>('[data-mu-int-saved]');
         saved.textContent = 'Configuración guardada.';
         saved.hidden = false;
         window.setTimeout(() => {
@@ -671,8 +891,11 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
       toast('Error de red al guardar la configuración.', true);
     }
   }
+  must<HTMLButtonElement>('[data-mu-save-integrations]').addEventListener('click', () => {
+    void saveIntegrations();
+  });
 
-  // --- Pestañas ---
+  // ----------------------------------------------------------------- pestañas
   document.querySelectorAll<HTMLButtonElement>('[data-mu-tab]').forEach((tab) => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('[data-mu-tab]').forEach((other) => other.classList.toggle('is-active', other === tab));
@@ -682,54 +905,16 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     });
   });
 
-  // --- Ficha 360 ---
-  (document.querySelector('[data-mu-search]') as HTMLInputElement).addEventListener('input', () => renderTable());
-  (document.querySelector('[data-mu-refresh]') as HTMLButtonElement).addEventListener('click', () => {
-    void refreshUsers();
-  });
-
-  // --- Segmentador ---
-  (document.querySelector('[data-mu-filters]') as HTMLFormElement).addEventListener('submit', (event) => {
-    event.preventDefault();
-    segment = filterUsers(readFilters(event.currentTarget as HTMLFormElement));
-    renderSegment();
-  });
-  (document.querySelector('[data-mu-reset]') as HTMLButtonElement).addEventListener('click', () => {
-    (document.querySelector('[data-mu-filters]') as HTMLFormElement).reset();
-    segment = [];
-    segmentRoot.innerHTML = '<p class="mu-empty">Elige filtros y pulsa «Aplicar filtros» para ver el segmento.</p>';
-    (document.querySelector('[data-mu-segment-count]') as HTMLElement).textContent = '';
-  });
-  (document.querySelector('[data-mu-copy-emails]') as HTMLButtonElement).addEventListener('click', async () => {
-    if (!segment.length) {
-      toast('Aplica primero un filtro: el segmento está vacío.', true);
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(segment.map((user) => user.email).join('\n'));
-      toast(`${segment.length} email${segment.length === 1 ? '' : 's'} copiado${segment.length === 1 ? '' : 's'} al portapapeles.`);
-    } catch {
-      toast('El navegador ha bloqueado el portapapeles.', true);
-    }
-  });
-
-  // --- Integraciones ---
-  (document.querySelector('[data-mu-save-integrations]') as HTMLButtonElement).addEventListener('click', () => {
-    void saveIntegrations();
-  });
-
-  // --- Acciones por tarjeta (delegación: la lista se re-renderiza) ---
-  document.addEventListener('click', (event) => {
-    const target = (event.target as HTMLElement).closest<HTMLElement>('[data-remind]');
-    if (target) void sendRemind(target.closest('.mu-card') as HTMLElement);
-  });
-
-  renderTable();
+  // --------------------------------------------------------------------- init
+  reindex();
+  fillCountries();
+  applyFicha();
+  segmentTable.render([], { emptyHtml: SEGMENT_HINT });
   syncIntegrationsForm();
 </script>
 
 <style>
-  .admin-module-wrapper { display: flex; flex-direction: column; gap: 2rem; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+  .admin-module-wrapper { display: flex; flex-direction: column; gap: 2rem; max-width: min(1600px, 100%); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
   .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
   .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; width: fit-content; }
   .admin-tag-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
@@ -739,73 +924,112 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
   .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
   .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
   .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
+</style>
 
+<style is:global>
+  /* ===== Usuarios de Marketing: estilos globales (prefijo mu- exclusivo de esta página) ===== */
+
+  /* Pestañas y paneles */
   .mu-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; border-bottom: 1px solid var(--color-border); padding-bottom: 0.6rem; }
-  .mu-tab { appearance: none; background: none; border: 1px solid transparent; border-radius: 10px; color: var(--color-text-muted); font-size: 0.82rem; font-weight: 700; padding: 0.5rem 0.9rem; cursor: pointer; transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease; }
+  .mu-tab { appearance: none; background: none; border: 1px solid transparent; border-radius: 10px; color: var(--color-text-muted); font: inherit; font-size: 0.82rem; font-weight: 700; padding: 0.5rem 0.9rem; cursor: pointer; transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease; }
   .mu-tab:hover { color: var(--color-text-main); }
   .mu-tab.is-active { color: #93c5fd; background: rgba(96, 165, 250, 0.1); border-color: rgba(96, 165, 250, 0.25); }
-
   .mu-panel { display: none; }
-  .mu-panel.is-active { display: flex; flex-direction: column; gap: 1.2rem; }
+  .mu-panel.is-active { display: flex; flex-direction: column; gap: 1.1rem; }
 
-  .mu-toolbar { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
-  .mu-count { color: var(--color-text-muted); font-size: 0.82rem; margin-right: auto; }
-  .mu-input { appearance: none; background: #0b1220; border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text-main); font-size: 0.85rem; padding: 0.55rem 0.8rem; min-width: 0; }
-  .mu-input:focus { outline: none; border-color: rgba(96, 165, 250, 0.5); }
-  .mu-search { flex: 1 1 220px; max-width: 340px; }
-  .mu-btn { appearance: none; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 10px; color: #fff; font-size: 0.82rem; font-weight: 700; padding: 0.55rem 1rem; cursor: pointer; transition: filter 0.16s ease; }
-  .mu-btn:hover { filter: brightness(1.08); }
+  /* Controles: negro sólido, borde visible, flecha propia y desplegable oscuro */
+  .mu-input { color-scheme: dark; background-color: #0b1220; color: #e5e7eb; border: 1px solid rgba(148, 163, 184, 0.32); border-radius: 10px; font: inherit; font-size: 0.8rem; line-height: 1.2; padding: 0.55rem 0.8rem; min-width: 0; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+  .mu-input::placeholder { color: #64748b; }
+  .mu-input:hover { border-color: rgba(148, 163, 184, 0.55); }
+  .mu-input:focus { outline: none; border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18); }
+  select.mu-input { appearance: none; -webkit-appearance: none; cursor: pointer; padding-right: 2.2rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%2394a3b8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.8rem center; background-size: 0.7rem; }
+  select.mu-input option { background-color: #0b1220; color: #e5e7eb; }
+  select.mu-input option:disabled { color: #64748b; }
+
+  .mu-btn { appearance: none; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 10px; color: #fff; font: inherit; font-size: 0.8rem; font-weight: 700; padding: 0.55rem 1rem; cursor: pointer; transition: filter 0.16s ease; }
+  .mu-btn:hover:not(:disabled) { filter: brightness(1.08); }
   .mu-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .mu-btn-ghost { background: rgba(255, 255, 255, 0.04); border-color: var(--color-border); color: var(--color-text-muted); }
-  .mu-btn-ghost:hover { color: var(--color-text-main); }
-  .mu-btn-small { font-size: 0.75rem; padding: 0.4rem 0.75rem; }
+  .mu-btn-ghost { background: #0b1220; border-color: rgba(148, 163, 184, 0.32); color: #cbd5e1; }
+  .mu-btn-small { font-size: 0.74rem; padding: 0.4rem 0.75rem; align-self: flex-start; }
 
-  .mu-list { display: flex; flex-direction: column; gap: 1rem; }
-  .mu-loading, .mu-empty { color: var(--color-text-muted); font-size: 0.88rem; padding: 1.2rem; background: rgba(255, 255, 255, 0.03); border: 1px dashed var(--color-border); border-radius: 12px; }
+  /* Barra de filtros de la ficha */
+  .mu-listbar { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+  .mu-search { flex: 1 1 240px; max-width: 360px; }
+  .mu-count { margin-left: auto; color: var(--color-text-muted); font-size: 0.78rem; }
+  .mu-toolbar { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+  .mu-toolbar .mu-count { margin-left: 0; margin-right: auto; }
 
-  .mu-card { display: flex; flex-direction: column; gap: 0.9rem; padding: 1.2rem 1.2rem 1rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; }
-  .mu-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
-  .mu-card-name { margin: 0 0 0.2rem; font-size: 1rem; font-weight: 800; color: var(--color-text-main); }
-  .mu-card-email { margin: 0; font-size: 0.75rem; color: var(--color-text-muted); }
-  .mu-score { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 0 0 auto; min-width: 64px; padding: 0.45rem 0.6rem; border-radius: 12px; border: 1px solid; }
+  /* Tabla de usuarios (a todo el ancho, letra compacta) */
+  .mu-table-host { display: flex; flex-direction: column; gap: 0.8rem; }
+  .mu-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.76rem; line-height: 1.35; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--color-border); border-radius: 14px; overflow: hidden; }
+  .mu-table th { padding: 0.65rem 0.75rem; text-align: left; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--color-text-muted); background: rgba(255, 255, 255, 0.04); border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+  .mu-table td { padding: 0.5rem 0.75rem; color: var(--color-text-main); border-bottom: 1px solid rgba(255, 255, 255, 0.05); vertical-align: middle; }
+  .mu-table tbody tr:last-child > td { border-bottom: 0; }
+  .mu-table .mu-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mu-cell-email { font-weight: 600; overflow-wrap: anywhere; }
+  .mu-cell-name { overflow-wrap: anywhere; }
+  .mu-row { cursor: pointer; transition: background 0.15s ease; }
+  .mu-row:hover { background: rgba(96, 165, 250, 0.06); }
+  .mu-row:focus-visible { outline: 2px solid #60a5fa; outline-offset: -2px; }
+  .mu-row.is-open { background: rgba(96, 165, 250, 0.1); }
+  .mu-row.is-open > td { border-bottom-color: transparent; }
+  .mu-caret-cell { width: 2.6rem; padding-right: 0.6rem !important; }
+  .mu-caret { appearance: none; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--color-border); border-radius: 8px; color: #93c5fd; font: inherit; font-size: 0.8rem; line-height: 1; width: 1.7rem; height: 1.7rem; cursor: pointer; transition: transform 0.18s ease, background 0.15s ease; }
+  .mu-row.is-open .mu-caret { transform: rotate(90deg); background: rgba(96, 165, 250, 0.2); }
+  .mu-soon { color: var(--color-text-muted); }
+  .mu-empty-cell { padding: 1.6rem !important; text-align: center; color: var(--color-text-muted) !important; }
+  .mu-score-pill { display: inline-block; min-width: 2rem; padding: 0.15rem 0.5rem; border-radius: 9999px; border: 1px solid; font-size: 0.72rem; font-weight: 800; text-align: center; }
+  .mu-score-pill[data-band='caliente'] { background: rgba(239, 68, 68, 0.14); border-color: rgba(239, 68, 68, 0.4); color: #fca5a5; }
+  .mu-score-pill[data-band='tibio'] { background: rgba(245, 158, 11, 0.14); border-color: rgba(245, 158, 11, 0.4); color: #fcd34d; }
+  .mu-score-pill[data-band='frio'] { background: rgba(148, 163, 184, 0.12); border-color: rgba(148, 163, 184, 0.3); color: #cbd5e1; }
+  .mu-bday { margin-left: 0.3rem; padding: 0.05rem 0.4rem; border-radius: 9999px; background: rgba(96, 165, 250, 0.14); color: #93c5fd; font-size: 0.64rem; font-weight: 700; white-space: nowrap; }
+  .mu-bday.is-today { background: rgba(34, 197, 94, 0.16); color: #86efac; }
+  .mu-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* Ficha desplegada: cuatro columnas */
+  .mu-detail-row > td { padding: 0 !important; background: rgba(6, 10, 20, 0.6); border-bottom: 1px solid var(--color-border) !important; }
+  .mu-detail-row[hidden] { display: none; }
+  .mu-detail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.2rem 1.6rem; padding: 1.1rem 1.2rem 1.3rem; }
+  .mu-dcol { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+  .mu-dtitle { margin: 0; padding-bottom: 0.45rem; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #93c5fd; border-bottom: 1px solid rgba(96, 165, 250, 0.2); }
+  .mu-dl { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 0.35rem 0.9rem; margin: 0; font-size: 0.76rem; }
+  .mu-dl dt { color: var(--color-text-muted); }
+  .mu-dl dd { margin: 0; color: var(--color-text-main); text-align: right; overflow-wrap: anywhere; }
+  .mu-k { display: block; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
+  .mu-chips { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-top: 0.35rem; }
+  .mu-chip { display: inline-flex; align-items: center; width: fit-content; padding: 0.2rem 0.55rem; border-radius: 9999px; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.25); color: #93c5fd; font-size: 0.68rem; font-weight: 700; }
+  .mu-chip-ok { background: rgba(34, 197, 94, 0.1); border-color: rgba(34, 197, 94, 0.3); color: #86efac; }
+  .mu-chip-warn { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }
+  .mu-mini-list { margin: 0.35rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.25rem; }
+  .mu-mini-list li { display: flex; justify-content: space-between; gap: 0.8rem; font-size: 0.74rem; color: var(--color-text-main); }
+  .mu-mini-list time { color: var(--color-text-muted); flex: 0 0 auto; }
+  .mu-empty-inline { color: var(--color-text-muted); font-style: italic; font-size: 0.74rem; }
+  .mu-score { display: flex; flex-direction: column; align-items: center; justify-content: center; align-self: flex-start; min-width: 76px; padding: 0.55rem 0.8rem; border-radius: 12px; border: 1px solid; }
   .mu-score[data-band='caliente'] { background: rgba(239, 68, 68, 0.12); border-color: rgba(239, 68, 68, 0.35); }
   .mu-score[data-band='tibio'] { background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.35); }
   .mu-score[data-band='frio'] { background: rgba(148, 163, 184, 0.12); border-color: rgba(148, 163, 184, 0.3); }
-  .mu-score-value { font-size: 1.15rem; font-weight: 800; color: var(--color-text-main); line-height: 1.1; }
+  .mu-score-value { font-size: 1.4rem; font-weight: 800; color: var(--color-text-main); line-height: 1.1; }
   .mu-score-band { font-size: 0.62rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-muted); }
+  .mu-factors-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.74rem; color: var(--color-text-muted); }
+  .mu-factors-list li { display: flex; justify-content: space-between; gap: 0.8rem; }
+  .mu-factors-list strong { color: #86efac; }
 
-  .mu-factors { font-size: 0.78rem; color: var(--color-text-muted); }
-  .mu-factors summary { cursor: pointer; }
-  .mu-factors ul { margin: 0.5rem 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.25rem; }
-  .mu-factors li { display: flex; justify-content: space-between; gap: 1rem; }
-  .mu-factors strong { color: #86efac; }
+  /* Paginación */
+  .mu-pager { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; font-size: 0.76rem; color: var(--color-text-muted); }
+  .mu-pager:empty { display: none; }
+  .mu-pager-nav { display: flex; gap: 0.3rem; flex-wrap: wrap; }
+  .mu-page-btn { appearance: none; min-width: 2rem; height: 2rem; padding: 0 0.6rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, 0.32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: 0.76rem; font-weight: 700; cursor: pointer; }
+  .mu-page-btn:hover:not(:disabled) { border-color: #60a5fa; }
+  .mu-page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .mu-page-btn.is-current { background: rgba(96, 165, 250, 0.2); border-color: #60a5fa; color: #bfdbfe; }
+  .mu-page-gap { align-self: center; padding: 0 0.2rem; }
 
-  .mu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 0.7rem; }
-  .mu-cell { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; color: var(--color-text-main); }
-  .mu-k { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-muted); }
-  .mu-chip { display: inline-flex; align-items: center; width: fit-content; padding: 0.22rem 0.55rem; border-radius: 9999px; background: rgba(96, 165, 250, 0.1); border: 1px solid rgba(96, 165, 250, 0.25); color: #93c5fd; font-size: 0.7rem; font-weight: 700; margin: 0 0.25rem 0.25rem 0; }
-  .mu-chip-cart { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }
-  .mu-chip-ok { background: rgba(34, 197, 94, 0.1); border-color: rgba(34, 197, 94, 0.3); color: #86efac; }
-  .mu-chip-warn { background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.3); color: #fbbf24; }
-
-  .mu-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0.6rem; }
-  .mu-stat { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.55rem 0.7rem; background: rgba(255, 255, 255, 0.025); border: 1px solid var(--color-border); border-radius: 10px; }
-  .mu-stat strong { font-size: 0.88rem; color: var(--color-text-main); }
-
-  .mu-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0.8rem; }
-  .mu-col { display: flex; flex-direction: column; gap: 0.35rem; }
-  .mu-mini-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.25rem; }
-  .mu-mini-list li { display: flex; justify-content: space-between; gap: 0.8rem; font-size: 0.78rem; color: var(--color-text-main); }
-  .mu-mini-list time { color: var(--color-text-muted); flex: 0 0 auto; }
-  .mu-empty-inline { color: var(--color-text-muted); font-style: italic; font-size: 0.78rem; }
-
-  .mu-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; padding-top: 0.7rem; border-top: 1px solid var(--color-border); }
-  .mu-reminder { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; font-size: 0.75rem; color: var(--color-text-muted); }
-
-  .mu-filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.8rem; padding: 1.1rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 14px; }
+  /* Segmentador */
+  .mu-filters { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.8rem; padding: 1.1rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 14px; }
   .mu-field { display: flex; flex-direction: column; gap: 0.3rem; }
   .mu-filter-actions { display: flex; align-items: flex-end; gap: 0.5rem; grid-column: 1 / -1; }
 
+  /* Integración de email */
   .mu-integrations { display: flex; flex-direction: column; gap: 1rem; }
   .mu-int-card { display: flex; flex-direction: column; gap: 0.9rem; padding: 1.4rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; }
   .mu-int-title { margin: 0; font-size: 0.95rem; font-weight: 800; color: var(--color-text-main); }
@@ -827,10 +1051,12 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
   .mu-int-actions { display: flex; align-items: center; gap: 0.8rem; }
   .mu-int-saved { font-size: 0.78rem; color: #86efac; }
 
-  /* Selects oscuros – concordan con el tono oscuro del panel */
-  .mu-input select,
-  .mu-input option { background: #05080f; color: #e5e7eb; }
-
   .mu-toast { position: fixed; bottom: 1.4rem; right: 1.4rem; z-index: 90; max-width: 340px; padding: 0.75rem 1.1rem; background: #111827; border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 12px; color: #e5e7eb; font-size: 0.82rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
   .mu-toast.is-error { border-color: rgba(239, 68, 68, 0.5); }
+
+  /* Responsive: se ocultan columnas secundarias y la ficha pasa a 2 / 1 columnas */
+  @media (max-width: 1280px) { .mu-detail { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 1180px) { .mu-hide-md { display: none; } }
+  @media (max-width: 820px) { .mu-hide-sm { display: none; } .mu-count { margin-left: 0; width: 100%; } }
+  @media (max-width: 700px) { .mu-detail { grid-template-columns: 1fr; } }
 </style>

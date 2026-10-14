@@ -269,7 +269,7 @@ export function buildAudienceUser360(user: PublicRadarUser): AudienceUser360 {
         : undefined,
       purchases,
       viewedNotBought,
-      savedCount: Object.values(savedById).length,
+      savedCount: savedById.size,
     },
     leadScore,
   };
