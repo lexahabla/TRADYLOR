@@ -18,6 +18,39 @@ export interface TranslateLang {
   label: string;
 }
 
+/**
+ * Traduce un texto con el traductor de Google (endpoint público gtx).
+ * Se llama desde el navegador (CORS abierto: Access-Control-Allow-Origin: *),
+ * así que la petición sale con la IP del usuario y no con la del servidor.
+ */
+export async function googleTranslateText(text: string, target: string): Promise<string> {
+  const url = new URL('https://translate.googleapis.com/translate_a/single');
+  url.searchParams.set('client', 'gtx');
+  url.searchParams.set('sl', 'auto');
+  url.searchParams.set('tl', target);
+  url.searchParams.set('dt', 't');
+  url.searchParams.set('q', text);
+
+  const res = await fetch(url.toString(), {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!res.ok) throw new Error('translate_unavailable');
+
+  const translated = parseGtxResponse(await res.json().catch(() => null));
+  if (!translated) throw new Error('translate_empty');
+  return translated;
+}
+
+/** Extrae el texto traducido de la respuesta del endpoint gtx (por segmentos). */
+export function parseGtxResponse(data: unknown): string {
+  if (!Array.isArray(data) || !Array.isArray(data[0])) return '';
+  return (data[0] as unknown[])
+    .map((segment) => (Array.isArray(segment) && typeof segment[0] === 'string' ? segment[0] : ''))
+    .join('')
+    .trim();
+}
+
 export const GOOGLE_TRANSLATE_LANGS: TranslateLang[] = [
   { code: 'af', label: 'Afrikaans' },
   { code: 'sq', label: 'Shqip' },

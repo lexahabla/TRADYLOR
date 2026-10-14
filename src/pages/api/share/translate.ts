@@ -1,8 +1,7 @@
 import type { APIRoute } from 'astro';
-import { getRadarSessionUser } from '../../../lib/radarAuth';
 import { shareTranslatesPerIp } from '../../../lib/rateLimit';
 import { clientIp } from '../../../lib/shareGeo';
-import { GOOGLE_TRANSLATE_LANGS } from '../../../utils/translate';
+import { GOOGLE_TRANSLATE_LANGS, parseGtxResponse } from '../../../utils/translate';
 
 export const prerender = false;
 
@@ -22,15 +21,12 @@ const cache = new Map<string, { text: string; at: number }>();
 /**
  * POST /api/share/translate  { text, target }
  *
- * Traduce el mensaje de la tarjeta "A mi correo" con el traductor de Google
- * (endpoint público gtx), para que el usuario vea y envíe el texto en el
- * idioma que elija antes de pulsar "Enviar". Requiere sesión de Mi Radar y
- * limita los pedidos por IP; las respuestas se cachean un rato en el servidor.
+ * Traduce el mensaje de la tarjeta "A mi correo" con el traductor de Google.
+ * El cliente lo llama directamente a Google desde el navegador; este endpoint
+ * sólo es el RESPALDO por si el navegador no puede llegar (red bloqueada,
+ * extensor, etc.). Limita los pedidos por IP y cachea la respuesta un rato.
  */
 export const POST: APIRoute = async ({ request }) => {
-  const session = getRadarSessionUser(request);
-  if (!session) return json({ ok: false, error: 'auth_required' }, 401);
-
   let body: { text?: unknown; target?: unknown };
   try {
     body = await request.json();
@@ -70,13 +66,7 @@ export const POST: APIRoute = async ({ request }) => {
     });
     if (!res.ok) return json({ ok: false, error: 'translate_unavailable' }, 502);
 
-    const data = (await res.json()) as unknown;
-    // Respuesta gtx: [[[ "traducción", "original", ...], ["...", ...], ...], ...]
-    const segments = Array.isArray(data) && Array.isArray(data[0]) ? (data[0] as unknown[]) : [];
-    const translated = segments
-      .map((segment) => (Array.isArray(segment) && typeof segment[0] === 'string' ? segment[0] : ''))
-      .join('')
-      .trim();
+    const translated = parseGtxResponse(await res.json().catch(() => null));
     if (!translated) return json({ ok: false, error: 'translate_empty' }, 502);
 
     if (cache.size >= CACHE_MAX) cache.clear();

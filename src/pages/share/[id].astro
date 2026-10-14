@@ -369,9 +369,6 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
         </div>
       </header>
 
-      <!-- Tarjeta del correo: es exactamente la que llegará a tu bandeja -->
-      <div class="email-preview" id="emailCard" set:html={emailHtml} />
-
       <!-- Toolbar: el mensaje es editable y se puede traducir con el traductor de Google -->
       <div class="preview-toolbar">
         <button type="button" class="tool-btn" id="editTextBtn" aria-pressed="false">
@@ -390,6 +387,9 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
           </select>
         </label>
       </div>
+
+      <!-- Tarjeta del correo: es exactamente la que llegará a tu bandeja -->
+      <div class="email-preview" id="emailCard" set:html={emailHtml} />
 
       {user ? (
         <div class="share-actions">
@@ -540,16 +540,19 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
     .share-btn-label { min-width: 0; text-align: left; }
     .share-email { font-weight: 800; overflow-wrap: anywhere; }
 
-    /* Envío a otra dirección: campo escribible + botón secundario */
-    .share-other { display: flex; flex-direction: column; gap: .55rem; }
+    /* Envío a otra dirección: campo escribible + botón en la misma línea */
+    .share-other { display: flex; flex-direction: row; align-items: stretch; gap: .55rem; }
     .share-other input {
-      width: 100%; box-sizing: border-box; padding: .8rem 1rem; border-radius: 10px;
+      flex: 1 1 auto; min-width: 0; box-sizing: border-box; padding: .8rem 1rem; border-radius: 10px;
       background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.14);
       color: #f3f4f6; font-family: 'Inter', sans-serif; font-size: .9rem; outline: none; transition: .16s;
     }
     .share-other input::placeholder { color: #6b7280; }
     .share-other input:focus { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(59,130,246,.25); }
-    .share-btn-alt { background: rgba(255,255,255,.06); color: #e5e7eb; border: 1px solid rgba(255,255,255,.16); }
+    .share-btn-alt {
+      flex: 0 0 auto; width: auto; white-space: nowrap;
+      background: rgba(255,255,255,.06); color: #e5e7eb; border: 1px solid rgba(255,255,255,.16);
+    }
     .share-btn-alt:hover:not(:disabled) { background: rgba(255,255,255,.12); transform: translateY(-2px); }
     .share-btn-alt:focus-visible { outline: 2px solid #93c5fd; outline-offset: 3px; }
 
@@ -593,6 +596,7 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
   <script>
     import { getShareLangOptions, refreshRegionLangs, setShareLang } from '../../utils/share';
     import type { ShareLangCode } from '../../utils/share';
+    import { googleTranslateText } from '../../utils/translate';
 
     interface ShareData {
       lang: ShareLangCode;
@@ -710,7 +714,21 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
     });
 
     // ---- Traducir el mensaje con el traductor de Google ----------------------------
+    // Se traduce DESDE EL NAVEGADOR contra translate.googleapis.com (el endpoint
+    // admite CORS con la IP del usuario). Si el navegador no puede llegar, se usa
+    // como respaldo el proxy del servidor (/api/share/translate).
     const translateSelect = document.getElementById('translateSelect') as HTMLSelectElement | null;
+
+    async function translateViaServer(text: string, target: string): Promise<string> {
+      const res = await fetch('/api/share/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, target }),
+      });
+      const out = (await res.json().catch(() => ({}))) as { ok?: boolean; text?: string };
+      if (!res.ok || !out.ok || !out.text) throw new Error(out.error || 'translate_failed');
+      return out.text;
+    }
 
     translateSelect?.addEventListener('change', async () => {
       if (editing) setEditing(false);
@@ -724,24 +742,15 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
       translateSelect.disabled = true;
       showToast(data.ui.translating, false, 4000);
       try {
-        const res = await fetch('/api/share/translate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: baseMessage, target }),
-        });
-        const out = (await res.json().catch(() => ({}))) as { ok?: boolean; text?: string };
-        if (res.status === 401) {
-          showToast(data.ui.errAuth, true);
-          window.setTimeout(() => window.location.reload(), 2200);
-          return;
+        let translated = '';
+        try {
+          translated = await googleTranslateText(baseMessage, target);
+        } catch {
+          translated = await translateViaServer(baseMessage, target);
         }
-        if (res.ok && out.ok && out.text) {
-          if (msgEl) msgEl.textContent = out.text;
-          currentMessage = out.text;
-        } else {
-          translateSelect.value = '';
-          showToast(data.ui.translateFailed, true);
-        }
+        if (!translated) throw new Error('translate_empty');
+        if (msgEl) msgEl.textContent = translated;
+        currentMessage = translated;
       } catch {
         translateSelect.value = '';
         showToast(data.ui.translateFailed, true);
