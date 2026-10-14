@@ -2,8 +2,8 @@
 /**
  * Submenú de secciones de Marketing (va pegado debajo de admin-section-nav).
  * Se usa en /admin/marketing y en cada opción del módulo.
- * Aspecto de submenú: barra ligera centrada con etiqueta "Marketing ›"
- * (el tab principal usa pills sólidas; aquí el activo es un tintado suave).
+ * Aspecto de submenú: barra ligera y centrada (el tab principal usa pills
+ * sólidas; aquí el activo es un tintado suave).
  */
 interface Props {
   active?: 'usuarios' | 'market-map' | 'calendario' | 'market-action' | 'tendencias';
@@ -21,7 +21,6 @@ const OPTIONS = [
 ---
 
 <nav class="marketing-submenu" aria-label="Submenú de Marketing">
-  <span class="marketing-submenu-label" aria-hidden="true">Marketing&nbsp;›</span>
   {
     OPTIONS.map((option) => (
       <a
@@ -44,17 +43,6 @@ const OPTIONS = [
     gap: 0.25rem;
     /* El wrapper usa gap: 2rem entre bloques: lo subimos para pegarlo al nav. */
     margin-top: -1.6rem;
-  }
-
-  .marketing-submenu-label {
-    margin-right: 0.35rem;
-    font-size: 0.64rem;
-    font-weight: 800;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--color-text-muted);
-    opacity: 0.7;
-    user-select: none;
   }
 
   .marketing-submenu-item {
