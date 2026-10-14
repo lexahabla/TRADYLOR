@@ -1,0 +1,95 @@
+---
+/**
+ * /admin/marketing — Resumen del backend de Marketing (hub de módulos).
+ */
+export const prerender = false;
+
+import MarketingAdminLayout from '../../../layouts/MarketingAdminLayout.astro';
+import ModuleHeader from '../../../components/admin/marketing/ModuleHeader.astro';
+
+const MODULES = [
+  {
+    href: '/admin/marketing/users',
+    title: 'Audiencias & Perfiles 360°',
+    description:
+      'Cruce de datos declarados (hobbies, perfil profesional) y comportamiento: LTV, última compra, favoritos, carrito y Lead Score 0–100. Conector de sincronización con Brevo / Mailchimp / Resend.',
+    tags: ['Lead Score', 'LTV', 'Email Marketing'],
+  },
+  {
+    href: '/admin/marketing/map',
+    title: 'Market Map',
+    description:
+      'Mapa mundial interactivo de tráfico y ventas por país con capas conmutables y detección automática de mercados emergentes: picos de tráfico donde la conversión todavía es baja.',
+    tags: ['Leaflet / Mapbox', 'Capas de datos', 'Mercados emergentes'],
+  },
+  {
+    href: '/admin/marketing/calendar',
+    title: 'Calendario Comercial Global',
+    description:
+      'Fechas clave de todo el año (Black Friday, Singles\u2019 Day, Navidad, estacionales de nicho) con alertas de 3–4 semanas de antelación, mix de canales sugerido y ángulos de copy.',
+    tags: ['Alertas', 'Mix de canales', 'Copy suggestions'],
+  },
+  {
+    href: '/admin/marketing/agency-ai',
+    title: 'TRADYLOR AI Agency',
+    description:
+      'Agente LLM autónomo con 4 skills de marketing: Paid Media, Copywriter de e-commerce, Social Media Strategy y Growth Consultant que consume datos internos de /map y /users.',
+    tags: ['Agente LLM', '4 skills', 'Salidas estructuradas'],
+  },
+  {
+    href: '/admin/marketing/actions',
+    title: 'Playbooks & Calculadora ROI/ROAS',
+    description:
+      'Biblioteca de manuales de conversión (up-selling, cross-selling, fidelización) adaptados al catálogo, más la calculadora interactiva de rentabilidad antes de ejecutar presupuesto.',
+    tags: ['Up/Cross-selling', 'ROAS', 'KPIs'],
+  },
+  {
+    href: '/admin/marketing/trends',
+    title: 'Escucha Activa & Tendencias',
+    description:
+      'Tendencias de búsqueda globales vinculadas a las categorías del catálogo y matriz de recomendación de redes sociales por tipo de producto (formato, gancho y canal ideal).',
+    tags: ['Google Trends', 'Social listening', 'Matriz de canales'],
+  },
+];
+---
+
+<MarketingAdminLayout
+  title="Marketing | Panel de control TRADYLOR"
+  description="Backend de marketing de Tradylor: audiencias, market map, calendario comercial, agente de IA, playbooks y tendencias."
+  active="overview"
+>
+  <ModuleHeader
+    kicker="TRADYLOR Marketing"
+    title="Panel de Control de Marketing"
+    description="Módulo central para maximizar ventas globales: segmentación de audiencias, inteligencia geográfica, planificación comercial, automatización con IA, playbooks de conversión y escucha activa. Todos los datos llegan de la API mock preparada para conectar con la base de la tienda."
+  />
+
+  <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    {
+      MODULES.map((module) => (
+        <a
+          href={module.href}
+          class="group flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-blue-400/40 hover:bg-blue-500/[0.07]"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="text-[15px] font-bold text-white group-hover:text-blue-100">{module.title}</h2>
+            <span class="text-blue-400 transition group-hover:translate-x-0.5" aria-hidden="true">→</span>
+          </div>
+          <p class="text-[13px] leading-relaxed text-white/55">{module.description}</p>
+          <div class="mt-auto flex flex-wrap gap-1.5">
+            {module.tags.map((tag) => (
+              <span class="rounded-full border border-white/10 bg-white/[0.04] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white/50">
+                {tag}
+              </span>
+            ))}
+          </div>
+        </a>
+      ))
+    }
+  </div>
+
+  <p class="mt-6 text-xs text-white/40">
+    Fuente actual: <code class="rounded bg-white/[0.06] px-1.5 py-0.5 text-white/60">GET /api/admin/marketing/*</code>
+    (mock, protegido con sesión y rol admin) · punto de sustitución para la BD de la tienda.
+  </p>
+</MarketingAdminLayout>

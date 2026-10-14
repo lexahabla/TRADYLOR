@@ -9,6 +9,9 @@ export default {
     './src/components/admin/**/*.astro',
     // Mi Radar (panel del usuario final): se usa Tailwind para layout básico.
     './src/pages/mi-radar.astro',
+    // Módulo de Marketing del backend: layout + páginas con Tailwind.
+    './src/layouts/MarketingAdminLayout.astro',
+    './src/pages/admin/marketing/**/*.astro',
   ],
   theme: {
     extend: {
