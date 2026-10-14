@@ -9,6 +9,7 @@
  */
 import type { MiddlewareHandler } from 'astro';
 import { clientIpFrom, trackProductVisit } from './lib/analytics';
+import { getSessionUser } from './lib/adminAuth';
 import { findCatalogProduct } from './lib/catalog';
 import { recordPricePoint } from './lib/priceHistory';
 import { startReminderScheduler } from './lib/reminders';
@@ -21,6 +22,13 @@ startReminderScheduler();
 const PRODUCT_PATH = /^\/(productos?)\/([^/]+?)\/?$/i;
 
 export const onRequest: MiddlewareHandler = async (context, next) => {
+  // Rutas /admin/<...>: sesión de backend obligatoria. La raíz /admin queda
+  // fuera para que el formulario de acceso siga funcionando (el login POST y
+  // el GET con el formulario se resuelven en la propia página).
+  if (context.url.pathname.startsWith('/admin/') && !getSessionUser(context.request)) {
+    return context.redirect('/admin');
+  }
+
   const response = await next();
 
   try {

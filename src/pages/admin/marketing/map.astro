@@ -1,0 +1,32 @@
+---
+/**
+ * /admin/marketing/map — Market Map (placeholder de UI).
+ */
+export const prerender = false;
+
+import MarketingAdminLayout from '../../../layouts/MarketingAdminLayout.astro';
+import ModuleHeader from '../../../components/admin/marketing/ModuleHeader.astro';
+import MockEndpointCard from '../../../components/admin/marketing/MockEndpointCard.astro';
+---
+
+<MarketingAdminLayout
+  title="Market Map | Marketing"
+  description="Mapa mundial de tráfico y ventas con detección de mercados emergentes."
+  active="map"
+>
+  <ModuleHeader
+    kicker="Market Map"
+    title="Market Map"
+    description="Inteligencia geográfica de la tienda: dónde entra el tráfico, dónde se compra y dónde está la oportunidad. Las capas conmutables comparan sesiones, ventas, ingresos y conversión por país."
+  />
+
+  <MockEndpointCard
+    endpoint="/api/admin/marketing/map"
+    spec={[
+      'Mapa mundial interactivo (Leaflet / Mapbox) con capas conmutables: sesiones, ventas, ingresos y conversión.',
+      'Ranking de países con variación de tráfico (trafficChangePct) y tasa de conversión por mercado.',
+      'Panel de mercados emergentes: señal, severidad (alta / media) y recomendación accionable por país.',
+      'Clic en un país → detalle de top categorías y productos (siguiente iteración).',
+    ]}
+  />
+</MarketingAdminLayout>

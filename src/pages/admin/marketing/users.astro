@@ -1,0 +1,32 @@
+---
+/**
+ * /admin/marketing/users — Audiencias & Perfiles 360° (placeholder de UI).
+ */
+export const prerender = false;
+
+import MarketingAdminLayout from '../../../layouts/MarketingAdminLayout.astro';
+import ModuleHeader from '../../../components/admin/marketing/ModuleHeader.astro';
+import MockEndpointCard from '../../../components/admin/marketing/MockEndpointCard.astro';
+---
+
+<MarketingAdminLayout
+  title="Audiencias & Perfiles 360° | Marketing"
+  description="Segmentación avanzada: perfiles 360°, lead score, LTV y sincronización con email marketing."
+  active="users"
+>
+  <ModuleHeader
+    kicker="Audiencias"
+    title="Audiencias & Perfiles 360°"
+    description="Cruce de datos declarados y de comportamiento para entender a cada usuario: hobbies, perfil profesional, LTV, última compra, favoritos y carrito. Lead score con factores explicables y segmentos listos para email marketing."
+  />
+
+  <MockEndpointCard
+    endpoint="/api/admin/marketing/users"
+    spec={[
+      'Tarjetas de perfil 360°: hobbies declarados + comportamiento (LTV, última compra, favoritos, carrito y sesiones).',
+      'Lead Score 0–100 con banda (caliente / tibio / frío) y desglose de puntos por factor.',
+      'Segmentos guardados (calientes, B2B, compra única) con tamaño y lead score medio.',
+      'Sincronización con herramientas de email (Brevo / Mailchimp / Resend): estado, audiencia y última sincronización.',
+    ]}
+  />
+</MarketingAdminLayout>

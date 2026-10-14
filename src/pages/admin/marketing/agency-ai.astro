@@ -1,0 +1,320 @@
+---
+/**
+ * /admin/marketing/agency-ai — TRADYLOR AI Agency (base funcional).
+ *
+ * Renderiza las 4 skills del agente (marketingSkills.ts) y ejecuta cada una
+ * vía POST /api/admin/marketing/agency-ai (mock, mismo contrato que un LLM real).
+ */
+export const prerender = false;
+
+import MarketingAdminLayout from '../../../layouts/MarketingAdminLayout.astro';
+import ModuleHeader from '../../../components/admin/marketing/ModuleHeader.astro';
+import { AGENT_SKILLS } from '../../../lib/marketingSkills';
+---
+
+<MarketingAdminLayout
+  title="TRADYLOR AI Agency | Marketing"
+  description="Agente autónomo de marketing con skills de Paid Media, Copy, Social y Growth."
+  active="agency-ai"
+>
+  <ModuleHeader
+    kicker="IA Agency"
+    title="TRADYLOR AI Agency"
+    description="Cuatro skills especializadas que comparten un brief de campaña. Elige la skill, revisa la salida estructurada y edítala antes de llevarla a producción. Hoy responde con datos de ejemplo (source: mock)."
+  />
+
+  <div class="mb-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+    <h2 class="mb-4 text-sm font-extrabold uppercase tracking-wider text-white/70">Brief de campaña</h2>
+    <div class="grid gap-4 md:grid-cols-3">
+      <label class="flex flex-col gap-1.5 md:col-span-3">
+        <span class="text-xs font-bold text-white/60">Brief</span>
+        <textarea
+          id="agency-brief"
+          rows="3"
+          placeholder="Ej: Queremos aumentar las ventas de sillas ergonómicas en oficinas pequeñas durante el próximo trimestre."
+          class="w-full resize-y rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-blue-400/60 focus:outline-none"></textarea>
+      </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="text-xs font-bold text-white/60">Nicho / categoría</span>
+        <input
+          id="agency-niche"
+          type="text"
+          placeholder="sillas ergonómicas de oficina"
+          class="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-blue-400/60 focus:outline-none"
+        />
+      </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="text-xs font-bold text-white/60">Objetivo</span>
+        <input
+          id="agency-objective"
+          type="text"
+          placeholder="maximizar ROAS con envío en 48h"
+          class="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-blue-400/60 focus:outline-none"
+        />
+      </label>
+      <label class="flex flex-col gap-1.5">
+        <span class="text-xs font-bold text-white/60">Idiomas (separados por coma)</span>
+        <input
+          id="agency-languages"
+          type="text"
+          placeholder="es, en, fr"
+          class="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder:text-white/30 focus:border-blue-400/60 focus:outline-none"
+        />
+      </label>
+    </div>
+  </div>
+
+  <h2 class="mb-3 text-sm font-extrabold uppercase tracking-wider text-white/70">Skills del Agente IA</h2>
+  <div class="grid gap-4 lg:grid-cols-2">
+    {
+      AGENT_SKILLS.map((skill) => (
+        <section
+          data-skill-card={skill.id}
+          class="flex flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5"
+        >
+          <div class="flex items-start justify-between gap-3">
+            <div>
+              <h3 class="text-[15px] font-bold text-white">{skill.name}</h3>
+              <p class="text-xs font-bold uppercase tracking-wide text-blue-400">{skill.role}</p>
+            </div>
+            <button
+              type="button"
+              data-run-skill={skill.id}
+              class="shrink-0 rounded-xl bg-blue-500 px-4 py-2 text-xs font-extrabold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Ejecutar
+            </button>
+          </div>
+          <p class="text-[13px] leading-relaxed text-white/55">{skill.description}</p>
+          <ul class="flex flex-col gap-1.5">
+            {skill.capabilities.map((capability) => (
+              <li class="flex gap-2 text-xs text-white/60">
+                <span class="text-blue-400">▸</span>
+                <span>{capability}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))
+    }
+  </div>
+
+  <div
+    id="agency-status"
+    class="mt-6 hidden rounded-2xl border border-blue-400/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-100"
+    role="status"
+  >
+  </div>
+
+  <section id="agency-output" class="mt-6 hidden">
+    <div class="mb-3 flex items-center justify-between gap-3">
+      <h2 class="text-sm font-extrabold uppercase tracking-wider text-white/70">Salida del agente</h2>
+      <span id="agency-output-meta" class="text-xs text-white/40"></span>
+    </div>
+    <div
+      id="agency-output-body"
+      class="rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.06] p-5 text-sm text-white/80"
+    >
+    </div>
+  </section>
+</MarketingAdminLayout>
+
+<script>
+  interface SkillOutput {
+    kind: string;
+    [key: string]: unknown;
+  }
+
+  const briefEl = document.getElementById('agency-brief') as HTMLTextAreaElement;
+  const nicheEl = document.getElementById('agency-niche') as HTMLInputElement;
+  const objectiveEl = document.getElementById('agency-objective') as HTMLInputElement;
+  const languagesEl = document.getElementById('agency-languages') as HTMLInputElement;
+  const statusEl = document.getElementById('agency-status') as HTMLElement;
+  const outputEl = document.getElementById('agency-output') as HTMLElement;
+  const outputMetaEl = document.getElementById('agency-output-meta') as HTMLElement;
+  const outputBodyEl = document.getElementById('agency-output-body') as HTMLElement;
+
+  let running = false;
+
+  function setStatus(message: string, isError = false): void {
+    statusEl.textContent = message;
+    statusEl.classList.toggle('hidden', !message);
+    statusEl.classList.toggle('border-rose-400/30', isError);
+    statusEl.classList.toggle('bg-rose-500/10', isError);
+    statusEl.classList.toggle('text-rose-100', isError);
+    statusEl.classList.toggle('border-blue-400/30', !isError);
+    statusEl.classList.toggle('bg-blue-500/10', !isError);
+    statusEl.classList.toggle('text-blue-100', !isError);
+  }
+
+  function el<K extends keyof HTMLElementTagNameMap>(
+    tag: K,
+    className?: string,
+    text?: string,
+  ): HTMLElementTagNameMap[K] {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function listBlock(title: string, items: string[]): HTMLElement {
+    const wrap = el('div', 'mb-4');
+    wrap.appendChild(el('p', 'mb-1.5 text-xs font-extrabold uppercase tracking-wider text-emerald-300', title));
+    const ul = el('ul', 'flex flex-col gap-1');
+    for (const item of items) ul.appendChild(el('li', 'text-white/70', `• ${item}`));
+    wrap.appendChild(ul);
+    return wrap;
+  }
+
+  function renderPaidMedia(data: Record<string, unknown>): HTMLElement {
+    const wrap = el('div');
+    const campaigns = Array.isArray(data.campaigns) ? (data.campaigns as Record<string, unknown>[]) : [];
+    for (const campaign of campaigns) {
+      const card = el('div', 'mb-3 rounded-xl border border-white/10 bg-black/25 p-4');
+      card.appendChild(
+        el(
+          'p',
+          'text-xs font-extrabold uppercase tracking-wide text-blue-300',
+          String(campaign.channel ?? 'canal'),
+        ),
+      );
+      card.appendChild(el('p', 'mb-2 font-bold text-white', String(campaign.campaignName ?? '')));
+      if (Array.isArray(campaign.audiences)) {
+        card.appendChild(listBlock('Audiencias', (campaign.audiences as unknown[]).map(String)));
+      }
+      if (Array.isArray(campaign.ads)) {
+        for (const adRaw of campaign.ads as Record<string, unknown>[]) {
+          const ad = el('div', 'mb-2 rounded-lg bg-white/[0.04] p-3');
+          ad.appendChild(el('p', 'font-bold text-white', String(adRaw.headline ?? '')));
+          ad.appendChild(el('p', 'text-xs text-white/60', String(adRaw.primaryText ?? '')));
+          ad.appendChild(el('p', 'mt-1 text-xs font-bold text-emerald-300', `CTA: ${String(adRaw.cta ?? '')}`));
+          card.appendChild(ad);
+        }
+      }
+      if (campaign.dailyBudgetHint) {
+        card.appendChild(el('p', 'text-xs text-amber-200', `Presupuesto: ${String(campaign.dailyBudgetHint)}`));
+      }
+      wrap.appendChild(card);
+    }
+    return wrap;
+  }
+
+  function renderEmailSequence(data: Record<string, unknown>): HTMLElement {
+    const wrap = el('div');
+    wrap.appendChild(el('p', 'mb-2 font-bold text-white', String(data.sequenceName ?? 'Secuencia')));
+    const emails = Array.isArray(data.emails) ? (data.emails as Record<string, unknown>[]) : [];
+    for (const email of emails) {
+      const row = el('div', 'mb-2 rounded-xl border border-white/10 bg-black/25 p-3');
+      row.appendChild(
+        el('p', 'text-xs font-extrabold text-blue-300', `Paso ${String(email.step ?? '?')} · D+${String(email.delayDays ?? 0)}`),
+      );
+      row.appendChild(el('p', 'font-bold text-white', String(email.subject ?? '')));
+      row.appendChild(el('p', 'text-xs text-white/60', String(email.body ?? '')));
+      wrap.appendChild(row);
+    }
+    return wrap;
+  }
+
+  function renderSocialCalendar(data: Record<string, unknown>): HTMLElement {
+    const wrap = el('div');
+    const days = Array.isArray(data.days) ? (data.days as Record<string, unknown>[]) : [];
+    for (const day of days) {
+      const row = el('div', 'mb-2 rounded-xl border border-white/10 bg-black/25 p-3');
+      row.appendChild(
+        el('p', 'text-xs font-extrabold text-blue-300', `${String(day.day ?? '')} · ${String(day.channel ?? '')} · ${String(day.format ?? '')}`),
+      );
+      row.appendChild(el('p', 'font-bold text-white', `Gancho: ${String(day.hook ?? '')}`));
+      row.appendChild(el('p', 'text-xs text-white/60', String(day.script ?? '')));
+      row.appendChild(el('p', 'mt-1 text-xs font-bold text-emerald-300', `CTA: ${String(day.cta ?? '')}`));
+      wrap.appendChild(row);
+    }
+    return wrap;
+  }
+
+  function renderGrowthInsights(data: Record<string, unknown>): HTMLElement {
+    const wrap = el('div');
+    const insights = Array.isArray(data.insights) ? (data.insights as Record<string, unknown>[]) : [];
+    for (const insight of insights) {
+      const row = el('div', 'mb-3 rounded-xl border border-white/10 bg-black/25 p-4');
+      const head = el('div', 'mb-1 flex items-center justify-between gap-3');
+      head.appendChild(el('p', 'font-bold text-white', String(insight.title ?? '')));
+      const impact = String(insight.impact ?? '');
+      head.appendChild(
+        el(
+          'span',
+          `shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase ${impact === 'alto' ? 'bg-rose-500/20 text-rose-200' : 'bg-amber-500/20 text-amber-200'}`,
+          impact,
+        ),
+      );
+      row.appendChild(head);
+      row.appendChild(el('p', 'text-xs text-white/60', String(insight.analysis ?? '')));
+      row.appendChild(el('p', 'mt-1.5 text-xs text-emerald-200', `Recomendación: ${String(insight.recommendation ?? '')}`));
+      wrap.appendChild(row);
+    }
+    return wrap;
+  }
+
+  function renderOutput(kind: string, data: Record<string, unknown>): HTMLElement {
+    if (kind === 'paid_media') return renderPaidMedia(data);
+    if (kind === 'email_sequence') return renderEmailSequence(data);
+    if (kind === 'social_calendar') return renderSocialCalendar(data);
+    if (kind === 'growth_insights') return renderGrowthInsights(data);
+    return el('p', 'text-white/50', 'Salida sin formato conocido.');
+  }
+
+  async function runSkill(skillId: string, button: HTMLButtonElement): Promise<void> {
+    if (running) return;
+    const brief = briefEl.value.trim();
+    if (brief.length < 10) {
+      setStatus('Escribe un brief de al menos 10 caracteres antes de ejecutar la skill.', true);
+      briefEl.focus();
+      return;
+    }
+    running = true;
+    button.disabled = true;
+    setStatus('Ejecutando skill… consultando el agente.');
+    outputEl.classList.add('hidden');
+    try {
+      const response = await fetch('/api/admin/marketing/agency-ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          skillId,
+          brief,
+          niche: nicheEl.value.trim() || undefined,
+          objective: objectiveEl.value.trim() || undefined,
+          languages: languagesEl.value
+            .split(',')
+            .map((value) => value.trim())
+            .filter(Boolean),
+        }),
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+        data?: { skillId?: string; output?: SkillOutput; generatedAt?: string; model?: string };
+      };
+      if (!response.ok || !payload.ok || !payload.data || !payload.data.output) {
+        throw new Error(payload.error || `HTTP ${response.status}`);
+      }
+      outputBodyEl.replaceChildren(renderOutput(payload.data.output.kind, payload.data.output));
+      outputMetaEl.textContent = `${payload.data.skillId} · ${payload.data.model ?? 'mock'} · ${payload.data.generatedAt ?? ''}`;
+      outputEl.classList.remove('hidden');
+      setStatus('Completado. Revisa la salida y edítala antes de usarla.');
+      outputEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    } catch (error) {
+      setStatus(`Error al ejecutar la skill: ${error instanceof Error ? error.message : 'error desconocido'}`, true);
+    } finally {
+      running = false;
+      button.disabled = false;
+    }
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('[data-run-skill]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const skillId = button.getAttribute('data-run-skill');
+      if (skillId) void runSkill(skillId, button);
+    });
+  });
+</script>
