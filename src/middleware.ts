@@ -13,10 +13,15 @@ import { getSessionUser } from './lib/adminAuth';
 import { findCatalogProduct } from './lib/catalog';
 import { recordPricePoint } from './lib/priceHistory';
 import { startReminderScheduler } from './lib/reminders';
+import { getRadarSessionUser, recordRadarUserVisit, SESSION_COOKIE_NAME } from './lib/radarAuth';
+import { startMarketingScheduler } from './lib/marketingEmail';
 
 // Los avisos diferidos de Mi Radar se envían desde el propio proceso SSR
 // (setInterval + unref): no hay cron externo. Se arranca una sola vez aquí.
 startReminderScheduler();
+// Scheduler de Marketing: avisos de carrito abandonado (cada 24 h) y
+// felicitaciones de cumpleaños (una vez al año por usuario).
+startMarketingScheduler();
 
 /** /producto/<slug> o /productos/<slug>, con o sin barra final. */
 const PRODUCT_PATH = /^\/(productos?)\/([^/]+?)\/?$/i;
@@ -43,6 +48,19 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
           trackProductVisit(slug, context.url.pathname, clientIpFrom(context.request));
           // 1 punto de histórico de precio por día (cola con debounce).
           recordPricePoint(product.id, product.price);
+          // Comportamiento por usuario de Mi Radar (última categoría, vistos).
+          // Sólo si hay cookie de sesión de radar; el throttle por usuario vive
+          // dentro de recordRadarUserVisit para no saturar radar-users.json.
+          if (context.request.headers.get('cookie')?.includes(SESSION_COOKIE_NAME)) {
+            const radarUser = getRadarSessionUser(context.request);
+            if (radarUser) {
+              recordRadarUserVisit(radarUser.id, {
+                id: product.id,
+                title: product.title,
+                category: product.category,
+              });
+            }
+          }
         }
       }
     }
