@@ -1,0 +1,670 @@
+---
+export interface Props {
+  compact?: boolean;
+}
+
+const { compact = false } = Astro.props;
+
+interface QuizOption {
+  value: string;
+  label: string;
+  desc: string;
+}
+
+interface QuizStep {
+  id: string;
+  title: string;
+  subtitle: string;
+  options: QuizOption[];
+}
+
+const steps: QuizStep[] = [
+  {
+    id: 'perfil',
+    title: 'Tu perfil y nivel de experiencia',
+    subtitle: '¿Cómo te defines como usuario?',
+    options: [
+      { value: 'principiante', label: 'Principiante', desc: 'Empiezo desde cero y necesito guía clara' },
+      { value: 'intermedio', label: 'Intermedio', desc: 'Tengo experiencia y busco optimizar' },
+      { value: 'avanzado', label: 'Avanzado', desc: 'Domino el tema y quiero lo más exigente' },
+    ],
+  },
+  {
+    id: 'objetivo',
+    title: 'Tu objetivo principal',
+    subtitle: '¿Qué quieres conseguir?',
+    options: [
+      { value: 'ahorro', label: 'Ahorrar dinero', desc: 'Maximizar el valor por euro invertido' },
+      { value: 'rendimiento', label: 'Rendimiento máximo', desc: 'El mejor resultado sin importar el precio' },
+      { value: 'equilibrio', label: 'Equilibrio', desc: 'La mejor relación entre coste y beneficio' },
+    ],
+  },
+  {
+    id: 'presupuesto',
+    title: 'Tu presupuesto y modelo de costos',
+    subtitle: '¿Cómo prefieres invertir?',
+    options: [
+      { value: 'ajustado', label: 'Ajustado', desc: 'Menos de 200€, cada euro cuenta' },
+      { value: 'moderado', label: 'Moderado', desc: '200€ – 800€, calidad razonable' },
+      { value: 'premium', label: 'Premium', desc: 'Más de 800€, sin compromisos' },
+    ],
+  },
+];
+
+interface Recommendation {
+  title: string;
+  desc: string;
+  badge: string;
+  products: string[];
+}
+
+const recommendations: Record<string, Recommendation> = {
+  'principiante-ahorro-ajustado': {
+    title: 'Mejor opción económica para empezar',
+    desc: 'Prioriza productos con curva de aprendizaje suave, garantía del fabricante y opiniones verificadas de otros principiantes.',
+    badge: 'Smart Match: Principiante · Ahorro',
+    products: ['kindle-paperwhite-signature'],
+  },
+  'principiante-ahorro-moderado': {
+    title: 'Calidad-precio con margen para aprender',
+    desc: 'Un producto con buena autonomía y soporte oficial te permitirá explorar sin frustraciones ni gastar de más.',
+    badge: 'Smart Match: Principiante · Ahorro',
+    products: ['kindle-paperwhite-signature'],
+  },
+  'principiante-ahorro-premium': {
+    title: 'Inversión segura a largo plazo',
+    desc: 'Aunque tu presupuesto es alto, como principiante te conviene un producto con ecosistema maduro y reventa fácil.',
+    badge: 'Smart Match: Principiante · Ahorro',
+    products: ['sony-wh-1000xm5'],
+  },
+  'principiante-rendimiento-ajustado': {
+    title: 'Rendimiento sorprendente en su gama',
+    desc: 'Busca modelos con especificaciones por encima de su precio: la relación valoración/precio es tu mejor aliada.',
+    badge: 'Smart Match: Principiante · Rendimiento',
+    products: ['roborock-q-revo'],
+  },
+  'principiante-rendimiento-moderado': {
+    title: 'El equilibrio perfecto para crecer',
+    desc: 'Productos con prestaciones de gama alta a precio medio: suficientes para años de uso sin arrepentimiento.',
+    badge: 'Smart Match: Principiante · Rendimiento',
+    products: ['sony-wh-1000xm5'],
+  },
+  'principiante-rendimiento-premium': {
+    title: 'Sin límites: lo mejor del mercado',
+    desc: 'Como principiante con presupuesto premium, elige el referente de su categoría para no tener que actualizar pronto.',
+    badge: 'Smart Match: Principiante · Rendimiento',
+    products: ['apple-macbook-air-m3'],
+  },
+  'principiante-equilibrio-ajustado': {
+    title: 'El favorito de la comunidad',
+    desc: 'Los productos más vendidos y mejor valorados de su categoría suelen ser la apuesta más segura para empezar.',
+    badge: 'Smart Match: Principiante · Equilibrio',
+    products: ['kindle-paperwhite-signature'],
+  },
+  'principiante-equilibrio-moderado': {
+    title: 'La elección más sensata',
+    desc: 'Un producto con 4.5+ estrellas, cientos de opiniones y precio justo: difícil equivocarse.',
+    badge: 'Smart Match: Principiante · Equilibrio',
+    products: ['sony-wh-1000xm5'],
+  },
+  'principiante-equilibrio-premium': {
+    title: 'Premium sin complicaciones',
+    desc: 'La opción más completa de su categoría con la mejor experiencia de usuario documentada.',
+    badge: 'Smart Match: Principiante · Equilibrio',
+    products: ['apple-macbook-air-m3'],
+  },
+  'intermedio-ahorro-ajustado': {
+    title: 'Optimización inteligente de recursos',
+    desc: 'Ficha productos con descuentos reales (no inflados) y costes de uso bajos: la clave está en el TCO.',
+    badge: 'Smart Match: Intermedio · Ahorro',
+    products: ['roborock-q-revo'],
+  },
+  'intermedio-ahorro-moderado': {
+    title: 'La joya oculta de su categoría',
+    desc: 'Modelos que los expertos recomiendan pero que el gran público pasa por alto: máximo valor por euro.',
+    badge: 'Smart Match: Intermedio · Ahorro',
+    products: ['sony-wh-1000xm5'],
+  },
+  'intermedio-ahorro-premium': {
+    title: 'Inversión con visión de futuro',
+    desc: 'Aunque tu presupuesto permite más, como intermedio sabes que el mejor producto no es siempre el más caro.',
+    badge: 'Smart Match: Intermedio · Ahorro',
+    products: ['apple-macbook-air-m3'],
+  },
+  'intermedio-rendimiento-ajustado': {
+    title: 'Rendimiento de gama alta a precio medio',
+    desc: 'Busca la generación anterior del modelo flagship: conserva el 90% del rendimiento por la mitad de precio.',
+    badge: 'Smart Match: Intermedio · Rendimiento',
+    products: ['roborock-q-revo'],
+  },
+  'intermedio-rendimiento-moderado': {
+    title: 'El punto dulce del mercado',
+    desc: 'Productos con especificaciones premium y precio de gama media: la elección favorita de los expertos.',
+    badge: 'Smart Match: Intermedio · Rendimiento',
+    products: ['sony-wh-1000xm5'],
+  },
+  'intermedio-rendimiento-premium': {
+    title: 'Potencia sin concesiones',
+    desc: 'El modelo más capaz de su categoría, ideal si tu tiempo vale más que el dinero.',
+    badge: 'Smart Match: Intermedio · Rendimiento',
+    products: ['apple-macbook-air-m3'],
+  },
+  'intermedio-equilibrio-ajustado': {
+    title: 'El más vendido, por algo será',
+    desc: 'Los best-sellers con miles de opiniones verificadas son la apuesta más equilibrada para usuarios exigentes.',
+    badge: 'Smart Match: Intermedio · Equilibrio',
+    products: ['kindle-paperwhite-signature'],
+  },
+  'intermedio-equilibrio-moderado': {
+    title: 'La recomendación de los expertos',
+    desc: 'El producto que más veces aparece en listas especializadas de su categoría: consenso = confianza.',
+    badge: 'Smart Match: Intermedio · Equilibrio',
+    products: ['sony-wh-1000xm5'],
+  },
+  'intermedio-equilibrio-premium': {
+    title: 'Lo mejor, sin pagar de más',
+    desc: 'El tope de gama con descuento o la generación anterior del flagship: máxima calidad a precio inteligente.',
+    badge: 'Smart Match: Intermedio · Equilibrio',
+    products: ['apple-macbook-air-m3'],
+  },
+  'avanzado-ahorro-ajustado': {
+    title: 'Cazador de ofertas experto',
+    desc: 'Tu perfil avanzado te permite detectar el momento exacto de compra: histórico de precios y alertas son tu ventaja.',
+    badge: 'Smart Match: Avanzado · Ahorro',
+    products: ['roborock-q-revo'],
+  },
+  'avanzado-ahorro-moderado': {
+    title: 'La compra más inteligente del año',
+    desc: 'Productos con mejor puntuación en tests de estrés y análisis de costes ocultos: tu criterio experto lo reconocerá.',
+    badge: 'Smart Match: Avanzado · Ahorro',
+    products: ['sony-wh-1000xm5'],
+  },
+  'avanzado-ahorro-premium': {
+    title: 'Inversión estratégica',
+    desc: 'Aunque tu presupuesto es alto, tu ojo experto busca el producto con mejor TCO a 3 años, no el más llamativo.',
+    badge: 'Smart Match: Avanzado · Ahorro',
+    products: ['apple-macbook-air-m3'],
+  },
+  'avanzado-rendimiento-ajustado': {
+    title: 'Rendimiento bruto, precio imbatible',
+    desc: 'Tu experiencia te permite exprimir productos modestos: busca modelos con overclocking o modos avanzados.',
+    badge: 'Smart Match: Avanzado · Rendimiento',
+    products: ['roborock-q-revo'],
+  },
+  'avanzado-rendimiento-moderado': {
+    title: 'El favorito de los power users',
+    desc: 'El producto que los foros especializados recomiendan para usuarios que exprimen cada especificación.',
+    badge: 'Smart Match: Avanzado · Rendimiento',
+    products: ['sony-wh-1000xm5'],
+  },
+  'avanzado-rendimiento-premium': {
+    title: 'Sin límites técnicos',
+    desc: 'El producto con las especificaciones más altas de su categoría, verificado en tests de estrés reales.',
+    badge: 'Smart Match: Avanzado · Rendimiento',
+    products: ['apple-macbook-air-m3'],
+  },
+  'avanzado-equilibrio-ajustado': {
+    title: 'La elección más racional',
+    desc: 'Tu perfil avanzado valora la eficiencia: el producto con mejor ratio prestaciones/precio de su categoría.',
+    badge: 'Smart Match: Avanzado · Equilibrio',
+    products: ['kindle-paperwhite-signature'],
+  },
+  'avanzado-equilibrio-moderado': {
+    title: 'El estándar de la industria',
+    desc: 'El producto que los profesionales usan a diario: fiabilidad demostrada y soporte a largo plazo.',
+    badge: 'Smart Match: Avanzado · Equilibrio',
+    products: ['sony-wh-1000xm5'],
+  },
+  'avanzado-equilibrio-premium': {
+    title: 'La referencia absoluta',
+    desc: 'El producto que define su categoría: el que todos los demás intentan superar.',
+    badge: 'Smart Match: Avanzado · Equilibrio',
+    products: ['apple-macbook-air-m3'],
+  },
+};
+---
+
+<div class:list={['quiz', { 'quiz--compact': compact }]} data-quiz>
+  <div class="quiz-progress" data-quiz-progress>
+    {steps.map((step, i) => (
+      <div class="quiz-step-indicator" data-step-indicator={i}>
+        <span class="quiz-step-number">{i + 1}</span>
+        <span class="quiz-step-name">{step.title.split(' ').slice(0, 2).join(' ')}</span>
+      </div>
+    ))}
+  </div>
+
+  <div class="quiz-body">
+    {steps.map((step, i) => (
+      <div
+        class="quiz-step"
+        data-quiz-step={i}
+        hidden={i !== 0}
+      >
+        <h3 class="quiz-step-title">{step.title}</h3>
+        <p class="quiz-step-subtitle">{step.subtitle}</p>
+        <div class="quiz-options">
+          {step.options.map((opt) => (
+            <button
+              type="button"
+              class="quiz-option"
+              data-quiz-option={step.id}
+              data-value={opt.value}
+            >
+              <span class="quiz-option-label">{opt.label}</span>
+              <span class="quiz-option-desc">{opt.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    ))}
+
+    <div class="quiz-result" data-quiz-result hidden>
+      <div class="quiz-result-badge" data-result-badge></div>
+      <h3 class="quiz-result-title" data-result-title></h3>
+      <p class="quiz-result-desc" data-result-desc></p>
+      <div class="quiz-result-products" data-result-products></div>
+      <button type="button" class="quiz-restart" data-quiz-restart>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+        Empezar de nuevo
+      </button>
+    </div>
+  </div>
+</div>
+
+<style>
+  .quiz {
+    background: linear-gradient(160deg, rgba(59, 130, 246, 0.06) 0%, rgba(17, 24, 39, 0.8) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.18);
+    border-radius: 20px;
+    padding: 2rem;
+  }
+
+  .quiz--compact {
+    padding: 1.5rem;
+  }
+
+  .quiz-progress {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .quiz-step-indicator {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    transition: border-color 0.3s ease, background 0.3s ease;
+  }
+
+  .quiz-step-indicator.is-active {
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(59, 130, 246, 0.1);
+  }
+
+  .quiz-step-indicator.is-done {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.08);
+  }
+
+  .quiz-step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.72rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+
+  .quiz-step-indicator.is-active .quiz-step-number {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #ffffff;
+  }
+
+  .quiz-step-indicator.is-done .quiz-step-number {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #ffffff;
+  }
+
+  .quiz-step-name {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .quiz-step-indicator.is-active .quiz-step-name {
+    color: #93c5fd;
+  }
+
+  .quiz-step-indicator.is-done .quiz-step-name {
+    color: #6ee7b7;
+  }
+
+  .quiz-step-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.35rem;
+  }
+
+  .quiz-step-subtitle {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.95rem;
+    margin: 0 0 1.5rem;
+  }
+
+  .quiz-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+
+  .quiz-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+    padding: 1rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    transition: border-color 0.25s ease, background 0.25s ease, transform 0.25s ease;
+  }
+
+  .quiz-option:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(59, 130, 246, 0.08);
+    transform: translateY(-2px);
+  }
+
+  .quiz-option-label {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .quiz-option-desc {
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.55);
+    line-height: 1.4;
+  }
+
+  .quiz-result {
+    text-align: center;
+    padding: 1rem 0;
+  }
+
+  .quiz-result-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #052e22;
+    background: linear-gradient(135deg, #34d399, #10b981);
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    margin-bottom: 1rem;
+  }
+
+  .quiz-result-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.75rem;
+  }
+
+  .quiz-result-desc {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.95rem;
+    line-height: 1.65;
+    max-width: 560px;
+    margin: 0 auto 1.5rem;
+  }
+
+  .quiz-result-products {
+    display: flex;
+    justify-content: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    margin-bottom: 1.5rem;
+  }
+
+  .quiz-result-product {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 999px;
+    color: #93c5fd;
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .quiz-result-product:hover {
+    background: #2563eb;
+    color: #ffffff;
+  }
+
+  .quiz-restart {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.6rem 1.2rem;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .quiz-restart:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+    color: #ffffff;
+  }
+
+  @media (max-width: 640px) {
+    .quiz {
+      padding: 1.25rem;
+    }
+
+    .quiz-progress {
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .quiz-options {
+      grid-template-columns: 1fr;
+    }
+
+    .quiz-step-title {
+      font-size: 1.15rem;
+    }
+
+    .quiz-result-title {
+      font-size: 1.3rem;
+    }
+  }
+</style>
+
+<script>
+  interface QuizOption {
+    value: string;
+    label: string;
+    desc: string;
+  }
+
+  interface QuizStep {
+    id: string;
+    title: string;
+    subtitle: string;
+    options: QuizOption[];
+  }
+
+  const steps: QuizStep[] = [
+    {
+      id: 'perfil',
+      title: 'Tu perfil y nivel de experiencia',
+      subtitle: '¿Cómo te defines como usuario?',
+      options: [
+        { value: 'principiante', label: 'Principiante', desc: 'Empiezo desde cero y necesito guía clara' },
+        { value: 'intermedio', label: 'Intermedio', desc: 'Tengo experiencia y busco optimizar' },
+        { value: 'avanzado', label: 'Avanzado', desc: 'Domino el tema y quiero lo más exigente' },
+      ],
+    },
+    {
+      id: 'objetivo',
+      title: 'Tu objetivo principal',
+      subtitle: '¿Qué quieres conseguir?',
+      options: [
+        { value: 'ahorro', label: 'Ahorrar dinero', desc: 'Maximizar el valor por euro invertido' },
+        { value: 'rendimiento', label: 'Rendimiento máximo', desc: 'El mejor resultado sin importar el precio' },
+        { value: 'equilibrio', label: 'Equilibrio', desc: 'La mejor relación entre coste y beneficio' },
+      ],
+    },
+    {
+      id: 'presupuesto',
+      title: 'Tu presupuesto y modelo de costos',
+      subtitle: '¿Cómo prefieres invertir?',
+      options: [
+        { value: 'ajustado', label: 'Ajustado', desc: 'Menos de 200€, cada euro cuenta' },
+        { value: 'moderado', label: 'Moderado', desc: '200€ – 800€, calidad razonable' },
+        { value: 'premium', label: 'Premium', desc: 'Más de 800€, sin compromisos' },
+      ],
+    },
+  ];
+
+  const recommendations: Record<string, { title: string; desc: string; badge: string; products: string[] }> = {
+    'principiante-ahorro-ajustado': { title: 'Mejor opción económica para empezar', desc: 'Prioriza productos con curva de aprendizaje suave, garantía del fabricante y opiniones verificadas de otros principiantes.', badge: 'Smart Match: Principiante · Ahorro', products: ['kindle-paperwhite-signature'] },
+    'principiante-ahorro-moderado': { title: 'Calidad-precio con margen para aprender', desc: 'Un producto con buena autonomía y soporte oficial te permitirá explorar sin frustraciones ni gastar de más.', badge: 'Smart Match: Principiante · Ahorro', products: ['kindle-paperwhite-signature'] },
+    'principiante-ahorro-premium': { title: 'Inversión segura a largo plazo', desc: 'Aunque tu presupuesto es alto, como principiante te conviene un producto con ecosistema maduro y reventa fácil.', badge: 'Smart Match: Principiante · Ahorro', products: ['sony-wh-1000xm5'] },
+    'principiante-rendimiento-ajustado': { title: 'Rendimiento sorprendente en su gama', desc: 'Busca modelos con especificaciones por encima de su precio: la relación valoración/precio es tu mejor aliada.', badge: 'Smart Match: Principiante · Rendimiento', products: ['roborock-q-revo'] },
+    'principiante-rendimiento-moderado': { title: 'El equilibrio perfecto para crecer', desc: 'Productos con prestaciones de gama alta a precio medio: suficientes para años de uso sin arrepentimiento.', badge: 'Smart Match: Principiante · Rendimiento', products: ['sony-wh-1000xm5'] },
+    'principiante-rendimiento-premium': { title: 'Sin límites: lo mejor del mercado', desc: 'Como principiante con presupuesto premium, elige el referente de su categoría para no tener que actualizar pronto.', badge: 'Smart Match: Principiante · Rendimiento', products: ['apple-macbook-air-m3'] },
+    'principiante-equilibrio-ajustado': { title: 'El favorito de la comunidad', desc: 'Los productos más vendidos y mejor valorados de su categoría suelen ser la apuesta más segura para empezar.', badge: 'Smart Match: Principiante · Equilibrio', products: ['kindle-paperwhite-signature'] },
+    'principiante-equilibrio-moderado': { title: 'La elección más sensata', desc: 'Un producto con 4.5+ estrellas, cientos de opiniones y precio justo: difícil equivocarse.', badge: 'Smart Match: Principiante · Equilibrio', products: ['sony-wh-1000xm5'] },
+    'principiante-equilibrio-premium': { title: 'Premium sin complicaciones', desc: 'La opción más completa de su categoría con la mejor experiencia de usuario documentada.', badge: 'Smart Match: Principiante · Equilibrio', products: ['apple-macbook-air-m3'] },
+    'intermedio-ahorro-ajustado': { title: 'Optimización inteligente de recursos', desc: 'Ficha productos con descuentos reales (no inflados) y costes de uso bajos: la clave está en el TCO.', badge: 'Smart Match: Intermedio · Ahorro', products: ['roborock-q-revo'] },
+    'intermedio-ahorro-moderado': { title: 'La joya oculta de su categoría', desc: 'Modelos que los expertos recomiendan pero que el gran público pasa por alto: máximo valor por euro.', badge: 'Smart Match: Intermedio · Ahorro', products: ['sony-wh-1000xm5'] },
+    'intermedio-ahorro-premium': { title: 'Inversión con visión de futuro', desc: 'Aunque tu presupuesto permite más, como intermedio sabes que el mejor producto no es siempre el más caro.', badge: 'Smart Match: Intermedio · Ahorro', products: ['apple-macbook-air-m3'] },
+    'intermedio-rendimiento-ajustado': { title: 'Rendimiento de gama alta a precio medio', desc: 'Busca la generación anterior del modelo flagship: conserva el 90% del rendimiento por la mitad de precio.', badge: 'Smart Match: Intermedio · Rendimiento', products: ['roborock-q-revo'] },
+    'intermedio-rendimiento-moderado': { title: 'El punto dulce del mercado', desc: 'Productos con especificaciones premium y precio de gama media: la elección favorita de los expertos.', badge: 'Smart Match: Intermedio · Rendimiento', products: ['sony-wh-1000xm5'] },
+    'intermedio-rendimiento-premium': { title: 'Potencia sin concesiones', desc: 'El modelo más capaz de su categoría, ideal si tu tiempo vale más que el dinero.', badge: 'Smart Match: Intermedio · Rendimiento', products: ['apple-macbook-air-m3'] },
+    'intermedio-equilibrio-ajustado': { title: 'El más vendido, por algo será', desc: 'Los best-sellers con miles de opiniones verificadas son la apuesta más equilibrada para usuarios exigentes.', badge: 'Smart Match: Intermedio · Equilibrio', products: ['kindle-paperwhite-signature'] },
+    'intermedio-equilibrio-moderado': { title: 'La recomendación de los expertos', desc: 'El producto que más veces aparece en listas especializadas de su categoría: consenso = confianza.', badge: 'Smart Match: Intermedio · Equilibrio', products: ['sony-wh-1000xm5'] },
+    'intermedio-equilibrio-premium': { title: 'Lo mejor, sin pagar de más', desc: 'El tope de gama con descuento o la generación anterior del flagship: máxima calidad a precio inteligente.', badge: 'Smart Match: Intermedio · Equilibrio', products: ['apple-macbook-air-m3'] },
+    'avanzado-ahorro-ajustado': { title: 'Cazador de ofertas experto', desc: 'Tu perfil avanzado te permite detectar el momento exacto de compra: histórico de precios y alertas son tu ventaja.', badge: 'Smart Match: Avanzado · Ahorro', products: ['roborock-q-revo'] },
+    'avanzado-ahorro-moderado': { title: 'La compra más inteligente del año', desc: 'Productos con mejor puntuación en tests de estrés y análisis de costes ocultos: tu criterio experto lo reconocerá.', badge: 'Smart Match: Avanzado · Ahorro', products: ['sony-wh-1000xm5'] },
+    'avanzado-ahorro-premium': { title: 'Inversión estratégica', desc: 'Aunque tu presupuesto es alto, tu ojo experto busca el producto con mejor TCO a 3 años, no el más llamativo.', badge: 'Smart Match: Avanzado · Ahorro', products: ['apple-macbook-air-m3'] },
+    'avanzado-rendimiento-ajustado': { title: 'Rendimiento bruto, precio imbatible', desc: 'Tu experiencia te permite exprimir productos modestos: busca modelos con overclocking o modos avanzados.', badge: 'Smart Match: Avanzado · Rendimiento', products: ['roborock-q-revo'] },
+    'avanzado-rendimiento-moderado': { title: 'El favorito de los power users', desc: 'El producto que los foros especializados recomiendan para usuarios que exprimen cada especificación.', badge: 'Smart Match: Avanzado · Rendimiento', products: ['sony-wh-1000xm5'] },
+    'avanzado-rendimiento-premium': { title: 'Sin límites técnicos', desc: 'El producto con las especificaciones más altas de su categoría, verificado en tests de estrés reales.', badge: 'Smart Match: Avanzado · Rendimiento', products: ['apple-macbook-air-m3'] },
+    'avanzado-equilibrio-ajustado': { title: 'La elección más racional', desc: 'Tu perfil avanzado valora la eficiencia: el producto con mejor ratio prestaciones/precio de su categoría.', badge: 'Smart Match: Avanzado · Equilibrio', products: ['kindle-paperwhite-signature'] },
+    'avanzado-equilibrio-moderado': { title: 'El estándar de la industria', desc: 'El producto que los profesionales usan a diario: fiabilidad demostrada y soporte a largo plazo.', badge: 'Smart Match: Avanzado · Equilibrio', products: ['sony-wh-1000xm5'] },
+    'avanzado-equilibrio-premium': { title: 'La referencia absoluta', desc: 'El producto que define su categoría: el que todos los demás intentan superar.', badge: 'Smart Match: Avanzado · Equilibrio', products: ['apple-macbook-air-m3'] },
+  };
+
+  const root = document.querySelector<HTMLElement>('[data-quiz]');
+  if (!root) return;
+
+  const stepEls = root.querySelectorAll<HTMLElement>('[data-quiz-step]');
+  const indicators = root.querySelectorAll<HTMLElement>('[data-step-indicator]');
+  const resultEl = root.querySelector<HTMLElement>('[data-quiz-result]');
+  const badgeEl = root.querySelector<HTMLElement>('[data-result-badge]');
+  const titleEl = root.querySelector<HTMLElement>('[data-result-title]');
+  const descEl = root.querySelector<HTMLElement>('[data-result-desc]');
+  const productsEl = root.querySelector<HTMLElement>('[data-result-products]');
+  const restartBtn = root.querySelector<HTMLButtonElement>('[data-quiz-restart]');
+
+  let currentStep = 0;
+  const answers: Record<string, string> = {};
+
+  const showStep = (index: number) => {
+    stepEls.forEach((el, i) => {
+      el.hidden = i !== index;
+    });
+    indicators.forEach((el, i) => {
+      el.classList.toggle('is-active', i === index);
+      el.classList.toggle('is-done', i < index);
+    });
+    currentStep = index;
+  };
+
+  const showResult = () => {
+    const key = `${answers.perfil ?? ''}-${answers.objetivo ?? ''}-${answers.presupuesto ?? ''}`;
+    const rec = recommendations[key];
+
+    stepEls.forEach((el) => { el.hidden = true; });
+    indicators.forEach((el) => {
+      el.classList.remove('is-active');
+      el.classList.add('is-done');
+    });
+
+    if (rec && badgeEl && titleEl && descEl && productsEl) {
+      badgeEl.textContent = rec.badge;
+      titleEl.textContent = rec.title;
+      descEl.textContent = rec.desc;
+      productsEl.innerHTML = rec.products
+        .map((slug) => `<a class="quiz-result-product" href="/producto/${slug}" target="_blank" rel="nofollow noopener sponsored">Ver ${slug.replace(/-/g, ' ')}</a>`)
+        .join('');
+    }
+
+    if (resultEl) resultEl.hidden = false;
+  };
+
+  root.querySelectorAll<HTMLButtonElement>('[data-quiz-option]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const field = btn.dataset.quizOption;
+      const value = btn.dataset.value;
+      if (!field || !value) return;
+
+      answers[field] = value;
+
+      const siblings = root.querySelectorAll<HTMLButtonElement>(`[data-quiz-option="${field}"]`);
+      siblings.forEach((s) => s.classList.remove('is-selected'));
+      btn.classList.add('is-selected');
+
+      if (currentStep < steps.length - 1) {
+        showStep(currentStep + 1);
+      } else {
+        showResult();
+      }
+    });
+  });
+
+  restartBtn?.addEventListener('click', () => {
+    Object.keys(answers).forEach((key) => { delete answers[key]; });
+    root.querySelectorAll('.quiz-option.is-selected').forEach((el) => el.classList.remove('is-selected'));
+    if (resultEl) resultEl.hidden = true;
+    showStep(0);
+  });
+
+  showStep(0);
+</script>

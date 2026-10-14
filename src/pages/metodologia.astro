@@ -1,0 +1,343 @@
+---
+import Layout from '../layouts/Layout.astro';
+import MethodologyQuiz from '../components/metodologia/MethodologyQuiz.astro';
+import TrustMetrics from '../components/common/TrustMetrics.astro';
+
+const pageTitle = 'Metodología Test & Proof | Tradylor';
+const pageDescription = 'Descubre cómo evaluamos cada producto: pruebas de estrés en real, desglose de costes ocultos, auditorías periódicas y análisis 100% independientes.';
+
+const pillars = [
+  {
+    title: 'Pruebas de estrés en real',
+    desc: 'Sometemos cada producto a tests de rendimiento sostenido, latencia y uso intensivo durante semanas. Nada de especificidades de laboratorio: validamos el comportamiento real que vas a experimentar tú.',
+    icon: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
+  },
+  {
+    title: 'Desglose de costes ocultos',
+    desc: 'El precio de compra es solo el inicio. Analizamos suscripciones obligatorias, consumibles, compatibilidad con accesorios y TCO a 3 años. Si un producto tiene costes ocultos, lo destacamos en rojo.',
+    icon: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  },
+  {
+    title: 'Auditorías periódicas',
+    desc: 'Nuestras recomendaciones no son estáticas. Revisamos trimestralmente precios, actualizaciones de firmware, nuevas opiniones y alternativas emergentes. Lo que era buen día, puede dejar de serlo.',
+    icon: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+  },
+];
+---
+
+<Layout title={pageTitle} description={pageDescription}>
+  <section class="methodology-hero">
+    <div class="container">
+      <span class="hero-kicker">Metodología Editorial</span>
+      <h1 class="hero-title">
+        Test &amp; Proof:<br />
+        <span class="hero-gradient">Análisis que puedes verificar</span>
+      </h1>
+      <p class="hero-sub">
+        En Tradylor no recomendamos productos: los sometemos a pruebas. Cada recomendación está respaldada por datos medibles, tests de estrés reales y un desglose transparente de costes que nadie más te muestra.
+      </p>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <span class="hero-stat-value">3</span>
+          <span class="hero-stat-label">Pilares de análisis</span>
+        </div>
+        <div class="hero-stat-divider"></div>
+        <div class="hero-stat">
+          <span class="hero-stat-value">+300h</span>
+          <span class="hero-stat-label">Tests trimestrales</span>
+        </div>
+        <div class="hero-stat-divider"></div>
+        <div class="hero-stat">
+          <span class="hero-stat-value">0€</span>
+          <span class="hero-stat-label">Coste oculto</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="pillars-section">
+    <div class="container">
+      <div class="section-header center">
+        <div class="section-tag">Los 3 Pilares</div>
+        <h2 class="section-title">Metodología Test &amp; Proof</h2>
+        <p class="section-desc max-700">
+          Cada producto que recomendamos supera estos tres filtros. Si falla uno, no lo publicamos.
+        </p>
+      </div>
+
+      <div class="pillars-grid">
+        {pillars.map((pillar, i) => (
+          <div class="pillar-card">
+            <div class="pillar-number">0{i + 1}</div>
+            <div class="pillar-icon-box" set:html={pillar.icon} />
+            <h3 class="pillar-title">{pillar.title}</h3>
+            <p class="pillar-text">{pillar.desc}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="quiz-section">
+    <div class="container">
+      <div class="section-header center">
+        <div class="section-tag">Asistente Interactivo</div>
+        <h2 class="section-title">¿Qué producto encaja contigo?</h2>
+        <p class="section-desc max-600">
+          Responde 3 preguntas rápidas y te recomendamos la mejor opción según tu perfil, objetivo y presupuesto.
+        </p>
+      </div>
+      <MethodologyQuiz />
+    </div>
+  </section>
+
+  <section class="metrics-section">
+    <div class="container">
+      <div class="section-header center">
+        <div class="section-tag">Métricas de Compromiso</div>
+        <h2 class="section-title">Nuestros números hablan</h2>
+        <p class="section-desc max-600">
+          Estos son los indicadores que respaldan nuestra independencia y rigor editorial.
+        </p>
+      </div>
+      <TrustMetrics />
+    </div>
+  </section>
+</Layout>
+
+<style>
+  .methodology-hero {
+    position: relative;
+    padding: 5rem 0 4rem;
+    background: radial-gradient(ellipse at center top, rgba(59, 130, 246, 0.14) 0%, transparent 65%);
+    text-align: center;
+    overflow: hidden;
+  }
+
+  .hero-kicker {
+    display: inline-block;
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    padding: 0.45rem 1.1rem;
+    border-radius: 999px;
+    margin-bottom: 1.5rem;
+  }
+
+  .hero-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: clamp(2.25rem, 5vw, 3.75rem);
+    font-weight: 800;
+    line-height: 1.08;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.25rem;
+    color: #ffffff;
+  }
+
+  .hero-gradient {
+    background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 50%, #34d399 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-sub {
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.65);
+    max-width: 680px;
+    margin: 0 auto 2.5rem;
+    line-height: 1.7;
+  }
+
+  .hero-stats {
+    display: inline-flex;
+    align-items: center;
+    gap: 2rem;
+    background: rgba(17, 24, 39, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    padding: 1.5rem 2.5rem;
+    backdrop-filter: blur(10px);
+  }
+
+  .hero-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .hero-stat-value {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 1.8rem;
+    font-weight: 800;
+    background: linear-gradient(135deg, #ffffff, #93c5fd);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-stat-label {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 500;
+  }
+
+  .hero-stat-divider {
+    width: 1px;
+    height: 36px;
+    background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+  }
+
+  .pillars-section {
+    padding: 5rem 0 3rem;
+  }
+
+  .section-header.center {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .section-tag {
+    font-size: 0.78rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #60a5fa;
+    display: inline-block;
+    margin-bottom: 0.75rem;
+  }
+
+  .section-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.75rem;
+  }
+
+  .section-desc {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.95rem;
+    line-height: 1.65;
+    margin: 0 auto;
+  }
+
+  .max-700 { max-width: 700px; }
+  .max-600 { max-width: 600px; }
+
+  .pillars-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+
+  .pillar-card {
+    position: relative;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.04) 0%, rgba(17, 24, 39, 0.75) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 20px;
+    padding: 2rem 1.5rem 1.75rem;
+    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .pillar-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(59, 130, 246, 0.4);
+    box-shadow: 0 18px 44px rgba(59, 130, 246, 0.14);
+  }
+
+  .pillar-number {
+    position: absolute;
+    top: 1.25rem;
+    right: 1.5rem;
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 3.2rem;
+    font-weight: 800;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.05);
+    pointer-events: none;
+  }
+
+  .pillar-icon-box {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.22) 0%, rgba(59, 130, 246, 0.08) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.32);
+    color: #60a5fa;
+    margin-bottom: 1.25rem;
+  }
+
+  .pillar-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 0 0 0.6rem;
+  }
+
+  .pillar-text {
+    font-size: 0.88rem;
+    color: rgba(255, 255, 255, 0.62);
+    line-height: 1.65;
+    margin: 0;
+  }
+
+  .quiz-section {
+    padding: 4rem 0 5rem;
+  }
+
+  .metrics-section {
+    padding: 0 0 6rem;
+  }
+
+  @media (max-width: 900px) {
+    .pillars-grid {
+      grid-template-columns: 1fr;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .methodology-hero {
+      padding: 3.5rem 0 3rem;
+    }
+
+    .hero-stats {
+      flex-direction: column;
+      gap: 1.25rem;
+      padding: 1.5rem 2rem;
+    }
+
+    .hero-stat-divider {
+      width: 60px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    }
+
+    .pillars-section {
+      padding: 3.5rem 0 2rem;
+    }
+
+    .pillar-card {
+      padding: 1.5rem 1.25rem;
+    }
+
+    .pillar-number {
+      font-size: 2.5rem;
+    }
+
+    .quiz-section {
+      padding: 3rem 0 3.5rem;
+    }
+  }
+</style>

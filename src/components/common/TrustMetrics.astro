@@ -1,0 +1,134 @@
+---
+export interface Props {
+  variant?: 'card' | 'inline';
+}
+
+const { variant = 'card' } = Astro.props;
+
+const metrics = [
+  {
+    value: '+300h',
+    label: 'De análisis y tests trimestrales',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+  },
+  {
+    value: '100%',
+    label: 'Independencia editorial garantizada',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>',
+  },
+  {
+    value: '0€',
+    label: 'Coste adicional por comprar con nosotros',
+    icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  },
+];
+---
+
+<div class:list={['trust-metrics', `trust-metrics--${variant}`]}>
+  {metrics.map((m) => (
+    <div class="trust-metric">
+      <span class="trust-metric-icon" set:html={m.icon} />
+      <span class="trust-metric-value">{m.value}</span>
+      <span class="trust-metric-label">{m.label}</span>
+    </div>
+  ))}
+</div>
+
+<style>
+  .trust-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+
+  .trust-metrics--inline {
+    grid-template-columns: repeat(3, auto);
+    gap: 2.5rem;
+  }
+
+  .trust-metric {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.4rem;
+    padding: 1.5rem 1.25rem;
+    background: linear-gradient(160deg, rgba(59, 130, 246, 0.08) 0%, rgba(17, 24, 39, 0.6) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.18);
+    border-radius: 16px;
+    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  .trust-metric:hover {
+    transform: translateY(-4px);
+    border-color: rgba(59, 130, 246, 0.45);
+    box-shadow: 0 12px 32px rgba(59, 130, 246, 0.15);
+  }
+
+  .trust-metrics--inline .trust-metric {
+    background: none;
+    border: none;
+    padding: 0;
+  }
+
+  .trust-metrics--inline .trust-metric:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .trust-metric-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0.08) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+    margin-bottom: 0.25rem;
+  }
+
+  .trust-metric-value {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 1.9rem;
+    font-weight: 800;
+    line-height: 1.1;
+    background: linear-gradient(135deg, #ffffff 0%, #93c5fd 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .trust-metric-label {
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  @media (max-width: 640px) {
+    .trust-metrics,
+    .trust-metrics--inline {
+      grid-template-columns: 1fr;
+      gap: 1rem;
+    }
+
+    .trust-metrics--inline .trust-metric {
+      flex-direction: row;
+      text-align: left;
+      gap: 0.75rem;
+      padding: 0;
+    }
+
+    .trust-metrics--inline .trust-metric-icon {
+      width: 36px;
+      height: 36px;
+      flex-shrink: 0;
+    }
+
+    .trust-metric-value {
+      font-size: 1.5rem;
+    }
+  }
+</style>
