@@ -1,7 +1,9 @@
 ---
 /**
- * Menú de secciones de Marketing (submenú tras admin-section-nav).
+ * Submenú de secciones de Marketing (va pegado debajo de admin-section-nav).
  * Se usa en /admin/marketing y en cada opción del módulo.
+ * Aspecto de submenú: barra ligera centrada con etiqueta "Marketing ›"
+ * (el tab principal usa pills sólidas; aquí el activo es un tintado suave).
  */
 interface Props {
   active?: 'usuarios' | 'market-map' | 'calendario' | 'market-action' | 'tendencias';
@@ -18,11 +20,12 @@ const OPTIONS = [
 ] as const;
 ---
 
-<nav class="marketing-menu" aria-label="Secciones de Marketing">
+<nav class="marketing-submenu" aria-label="Submenú de Marketing">
+  <span class="marketing-submenu-label" aria-hidden="true">Marketing&nbsp;›</span>
   {
     OPTIONS.map((option) => (
       <a
-        class:list={['marketing-menu-item', { 'is-active': active === option.id }]}
+        class:list={['marketing-submenu-item', { 'is-active': active === option.id }]}
         href={option.href}
         aria-current={active === option.id ? 'page' : undefined}
       >
@@ -33,33 +36,46 @@ const OPTIONS = [
 </nav>
 
 <style>
-  .marketing-menu {
+  .marketing-submenu {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.3rem;
-    padding: 0.3rem;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid var(--color-border);
-    border-radius: 14px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    /* El wrapper usa gap: 2rem entre bloques: lo subimos para pegarlo al nav. */
+    margin-top: -1.6rem;
   }
 
-  .marketing-menu-item {
-    padding: 0.55rem 1rem;
-    font-size: 0.8rem;
+  .marketing-submenu-label {
+    margin-right: 0.35rem;
+    font-size: 0.64rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    opacity: 0.7;
+    user-select: none;
+  }
+
+  .marketing-submenu-item {
+    padding: 0.32rem 0.8rem;
+    font-size: 0.72rem;
     font-weight: 700;
     color: var(--color-text-muted);
     text-decoration: none;
-    border-radius: 10px;
-    transition: color 0.16s ease, background 0.16s ease;
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease;
   }
 
-  .marketing-menu-item:hover {
+  .marketing-submenu-item:hover {
     color: var(--color-text-main);
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.05);
   }
 
-  .marketing-menu-item.is-active {
-    color: #07111f;
-    background: #60a5fa;
+  .marketing-submenu-item.is-active {
+    color: #93c5fd;
+    background: rgba(96, 165, 250, 0.12);
+    border-color: rgba(96, 165, 250, 0.35);
   }
 </style>
