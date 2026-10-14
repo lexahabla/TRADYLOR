@@ -33,6 +33,24 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMAIL_CHANGE_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas para confirmar un email nuevo
 const NAME_MAX = 80;
 const EMAIL_MAX = 120;
+const PROFILE_TEXT_MAX = 80;
+const HOBBIES_OTHER_MAX = 120;
+const HOBBIES_MAX = 3;
+
+/** Opciones válidas de "¿A qué dedicas tu tiempo libre?" (se pueden elegir hasta 3). */
+export const RADAR_HOBBIES = [
+  'fotografia-video',
+  'rutas-aventura',
+  'musica-audio',
+  'bricolaje-diy',
+  'decoracion',
+  'otros',
+] as const;
+export type RadarHobby = (typeof RADAR_HOBBIES)[number];
+
+/** Tipo de visitante: "¿Nos visitas como profesional o particular?" */
+export const RADAR_PROFILE_TYPES = ['particular', 'profesional', 'empresa'] as const;
+export type RadarProfileType = (typeof RADAR_PROFILE_TYPES)[number];
 
 export interface RadarUser {
   id: string;
@@ -61,6 +79,18 @@ export interface RadarUser {
   pendingEmail?: string;
   pendingEmailToken?: string;
   pendingEmailExpires?: number;
+  /** Datos personales adicionales del perfil (todos opcionales). */
+  lastName?: string;
+  /** Fecha de nacimiento en formato ISO (YYYY-MM-DD). */
+  birthDate?: string;
+  city?: string;
+  country?: string;
+  /** Opciones de "¿A qué dedicas tu tiempo libre?" (máx. 3, ver RADAR_HOBBIES). */
+  hobbies?: string[];
+  /** Texto libre de la opción "Otros" del tiempo libre. */
+  hobbiesOther?: string;
+  /** Tipo de visitante: particular, profesional/autónomo o empresa. */
+  profileType?: RadarProfileType;
 }
 
 /** Usuario que sale hacia el cliente: sin hash, sal ni ningún token (reset, activación, cambio de email). */
@@ -493,6 +523,100 @@ export function updateRadarName(userId: string, rawName: string): PublicRadarUse
   if (user.name !== name) {
     user.name = name;
     user.nameCustomized = true;
+    user.updatedAt = new Date().toISOString();
+    writeUsers(users);
+  }
+  return toPublicRadarUser(user);
+}
+
+/* ------------------------------------- datos personales del perfil (extras) */
+
+/** Texto opcional: colapsa espacios, vacío → '' y valida el máximo de longitud. */
+function normalizeProfileText(value: unknown, max: number, label: string): string {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (text.length > max) throw new RadarAuthError(`El campo "${label}" no puede superar los ${max} caracteres.`);
+  return text;
+}
+
+/** Fecha de nacimiento en YYYY-MM-DD (vacío → null; no puede ser futura). */
+function normalizeBirthDate(value: unknown): string | undefined {
+  const raw = String(value ?? '').trim();
+  if (!raw) return undefined;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new RadarAuthError('La fecha de nacimiento no es válida.');
+  const date = new Date(`${raw}T00:00:00`);
+  if (Number.isNaN(date.getTime()) || date.getFullYear() < 1900) {
+    throw new RadarAuthError('La fecha de nacimiento no es válida.');
+  }
+  if (date.getTime() > Date.now()) throw new RadarAuthError('La fecha de nacimiento no puede ser futura.');
+  return raw;
+}
+
+/** Campos extras del perfil: presente = sobrescribir (vacío = borrar), ausente = no tocar. */
+export interface RadarProfilePatch {
+  lastName?: string;
+  birthDate?: string;
+  city?: string;
+  country?: string;
+  hobbies?: string[];
+  hobbiesOther?: string;
+  profileType?: RadarProfileType;
+}
+
+/**
+ * Valida los datos personales adicionales del body del PATCH sin guardar nada:
+ * apellido, fecha de nacimiento, ciudad, país, tiempo libre (máx. 3 opciones,
+ * con texto libre para "Otros") y tipo de visitante.
+ */
+export function normalizeRadarProfileDetails(raw: Record<string, unknown>): RadarProfilePatch {
+  const patch: RadarProfilePatch = {};
+
+  if ('lastName' in raw) patch.lastName = normalizeProfileText(raw.lastName, PROFILE_TEXT_MAX, 'apellido') || undefined;
+  if ('birthDate' in raw) patch.birthDate = normalizeBirthDate(raw.birthDate);
+  if ('city' in raw) patch.city = normalizeProfileText(raw.city, PROFILE_TEXT_MAX, 'ciudad') || undefined;
+  if ('country' in raw) patch.country = normalizeProfileText(raw.country, PROFILE_TEXT_MAX, 'país') || undefined;
+
+  if ('profileType' in raw) {
+    const value = String(raw.profileType ?? '').trim().toLowerCase();
+    if (value && !(RADAR_PROFILE_TYPES as readonly string[]).includes(value)) {
+      throw new RadarAuthError('El tipo de visitante no es válido.');
+    }
+    patch.profileType = (value || undefined) as RadarProfileType | undefined;
+  }
+
+  if ('hobbies' in raw) {
+    const list = Array.isArray(raw.hobbies) ? raw.hobbies.map((hobby) => String(hobby).trim().toLowerCase()) : [];
+    const hobbies = Array.from(new Set(list));
+    if (hobbies.some((hobby) => !(RADAR_HOBBIES as readonly string[]).includes(hobby))) {
+      throw new RadarAuthError('Hay una opción de tiempo libre no válida.');
+    }
+    if (hobbies.length > HOBBIES_MAX) {
+      throw new RadarAuthError(`Puedes elegir hasta ${HOBBIES_MAX} opciones de tiempo libre.`);
+    }
+    const other = normalizeProfileText(raw.hobbiesOther, HOBBIES_OTHER_MAX, 'Otros');
+    if (hobbies.includes('otros') && !other) {
+      throw new RadarAuthError('Si eliges "Otros", escribe tu propia opción.');
+    }
+    patch.hobbies = hobbies.length ? hobbies : undefined;
+    patch.hobbiesOther = hobbies.includes('otros') ? other : undefined;
+  } else if ('hobbiesOther' in raw) {
+    patch.hobbiesOther = normalizeProfileText(raw.hobbiesOther, HOBBIES_OTHER_MAX, 'Otros') || undefined;
+  }
+
+  return patch;
+}
+
+/** Aplica los datos personales adicionales ya validados (escritura atómica). */
+export function applyRadarProfileDetails(userId: string, patch: RadarProfilePatch): PublicRadarUser {
+  const users = readUsers();
+  const user = findUserOrThrow(users, userId);
+  let changed = false;
+  for (const [key, value] of Object.entries(patch) as [keyof RadarProfilePatch, unknown][]) {
+    if (JSON.stringify(user[key] ?? null) !== JSON.stringify(value ?? null)) {
+      (user as unknown as Record<string, unknown>)[key] = value;
+      changed = true;
+    }
+  }
+  if (changed) {
     user.updatedAt = new Date().toISOString();
     writeUsers(users);
   }
