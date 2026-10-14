@@ -25,8 +25,8 @@ import { radarEmailChanges } from './rateLimit';
  */
 
 const USERS_FILE = dataFile('radar-users.json');
-const SESSION_COOKIE_NAME = 'tradylor_radar_session';
-const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 días
+export const SESSION_COOKIE_NAME = 'tradylor_radar_session';
+export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 días (sólo con "Recordarme")
 const RESET_TTL_MS = 60 * 60 * 1000; // 1 hora
 const ACTIVATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -344,8 +344,54 @@ export function upsertGoogleUser(input: { email: string; name?: string }): Radar
 
 /* ------------------------------------------------------------------ sesión */
 
-export function createRadarSession(user: RadarUser): string {
-  return `${SESSION_COOKIE_NAME}=${user.id}.${sessionToken(user)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`;
+/** Valor de la cookie de sesión: id de usuario + token derivado del hash. */
+export function radarSessionValue(user: RadarUser): string {
+  return `${user.id}.${sessionToken(user)}`;
+}
+
+/**
+ * Opciones OWASP de la cookie de sesión para Astro (`cookies.set`):
+ * httpOnly + sameSite=lax + secure en producción. `maxAge` (30 días) SÓLO se
+ * añade con `rememberMe: true`; sin él no se envía maxAge ni expires y el
+ * navegador la trata como Session Cookie (se borra al cerrar la ventana).
+ */
+export interface RadarSessionCookieOptions {
+  path: string;
+  httpOnly: boolean;
+  sameSite: 'lax';
+  secure: boolean;
+  maxAge?: number;
+}
+
+export function radarSessionCookieOptions(rememberMe: boolean): RadarSessionCookieOptions {
+  const options: RadarSessionCookieOptions = {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    // Secure sólo en producción (el contenedor fija NODE_ENV=production):
+    // en local http://localhost la cookie sigue funcionando sin él.
+    secure: (process.env.NODE_ENV ?? '') === 'production',
+  };
+  if (rememberMe) options.maxAge = SESSION_TTL_SECONDS;
+  return options;
+}
+
+/**
+ * Cookie `Set-Cookie` en crudo (flujos sin Astro cookies API: registro,
+ * Google OAuth y renovación tras cambio de contraseña). `rememberMe` por
+ * defecto true para conservar el comportamiento histórico de esos flujos.
+ */
+export function createRadarSession(user: RadarUser, rememberMe = true): string {
+  const options = radarSessionCookieOptions(rememberMe);
+  const parts = [
+    `${SESSION_COOKIE_NAME}=${radarSessionValue(user)}`,
+    `Path=${options.path}`,
+    'HttpOnly',
+    'SameSite=Lax',
+  ];
+  if (options.secure) parts.push('Secure');
+  if (typeof options.maxAge === 'number') parts.push(`Max-Age=${options.maxAge}`);
+  return parts.join('; ');
 }
 
 export function clearRadarSession(): string {
