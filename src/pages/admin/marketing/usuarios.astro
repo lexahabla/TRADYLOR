@@ -96,14 +96,49 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
 
     <!-- ============ Ficha de Usuario 360 ============ -->
     <section class="mu-panel is-active" data-mu-panel="ficha">
-      <div class="mu-toolbar">
+      <div class="mu-listbar">
         <input type="search" class="mu-input mu-search" placeholder="Buscar por email o nombre…" data-mu-search />
+        <select class="mu-input" data-mu-filter-country aria-label="Filtrar por país">
+          <option value="">Todos los países</option>
+        </select>
+        <select class="mu-input" data-mu-filter-hobby aria-label="Filtrar por hobby">
+          <option value="">Todos los hobbies</option>
+          {hobbyOptions.map((hobby) => <option value={hobby.slug}>{hobby.label}</option>)}
+        </select>
+        <select class="mu-input" data-mu-sort aria-label="Ordenar la lista">
+          <option value="visitas">Más visitas</option>
+          <option value="compras">Más compras</option>
+          <option value="gastado">Más dinero gastado</option>
+          <option value="radar">Más productos en radar</option>
+          <option value="cumpleanos">Cumpleaños más próximo</option>
+          <option value="score">Lead score más alto</option>
+          <option value="nombre">Nombre (A-Z)</option>
+        </select>
         <span class="mu-count" data-mu-count></span>
         <button type="button" class="mu-btn mu-btn-ghost" data-mu-refresh>Actualizar</button>
       </div>
-      <div class="mu-list" data-mu-users>
-        <p class="mu-loading">Cargando usuarios…</p>
+      <div class="mu-table-wrap">
+        <table class="mu-table">
+          <thead>
+            <tr>
+              <th>Correo electrónico</th>
+              <th>Nombre</th>
+              <th class="mu-num">Visitas</th>
+              <th class="mu-num">Compras</th>
+              <th class="mu-num">Gastado</th>
+              <th class="mu-num">En radar</th>
+              <th class="mu-num">Compartidos</th>
+              <th>Cumpleaños</th>
+              <th class="mu-num" aria-label="Detalles"></th>
+            </tr>
+          </thead>
+          <tbody data-mu-users>
+            <tr><td colspan="9" class="mu-loading">Cargando usuarios…</td></tr>
+          </tbody>
+        </tbody>
+        </table>
       </div>
+      <div class="mu-pager" data-mu-pager></div>
     </section>
 
     <!-- ============ Segmentador de Audiencias ============ -->
@@ -255,6 +290,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     };
     behavior: {
       lastCategoryId?: string; lastCategoryLabel?: string; lastVisitAtISO?: string;
+      visits: number;
       ltv: number; purchaseCount: number; lastPurchaseAtISO?: string;
       affiliateClicks: number; dismissedCount: number;
       cartItems: CartItem[]; cartTotal: number; cartAbandonRatePct: number | null;
@@ -285,6 +321,9 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
 
   const money = (value: number): string =>
     new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(value);
+
+  const visitLabel = (visits: number): string =>
+    visits === 1 ? '1 visita' : `${visits} visitas`;
 
   const shortDate = (iso?: string): string => {
     if (!iso) return '—';
@@ -391,16 +430,91 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
       </article>`;
   }
 
-  function renderUsers(): void {
-    const query = ((document.querySelector('[data-mu-search]') as HTMLInputElement)?.value ?? '').trim().toLowerCase();
-    const list = query
-      ? users.filter((user) => `${user.email} ${user.name ?? ''}`.toLowerCase().includes(query))
-      : users;
-    (document.querySelector('[data-mu-count]') as HTMLElement).textContent =
-      `${list.length} de ${users.length} usuarios`;
-    usersRoot.innerHTML = list.length
-      ? list.map(userCard).join('')
-      : '<p class="mu-empty">No hay usuarios de Mi Radar todavía.</p>';
+  function renderTable(): void {
+    let list = users;
+
+    // Filtro búsqueda
+    const searchInput = document.querySelector('[data-mu-search]') as HTMLInputElement;
+    const searchQ = (searchInput?.value ?? '').trim().toLowerCase();
+    if (searchQ) {
+      list = list.filter((u) =>
+        `${u.email} ${u.name ?? ''}`.toLowerCase().includes(searchQ)
+      );
+    }
+
+    // Filtro país
+    const countrySelect = document.querySelector('[data-mu-filter-country]') as HTMLSelectElement;
+    const country = countrySelect?.value;
+    if (country) {
+      list = list.filter((u) => u.declared.country === country);
+    }
+
+    // Filtro hobby
+    const hobbySelect = document.querySelector('[data-mu-filter-hobby]') as HTMLSelectElement;
+    const hobby = hobbySelect?.value;
+    if (hobby) {
+      list = list.filter((u) => u.declared.hobbies.includes(hobby));
+    }
+
+    // Orden
+    const sortSelect = document.querySelector('[data-mu-sort]') as HTMLSelectElement;
+    const sortBy = sortSelect?.value ?? 'visitas';
+    const desc = sortBy !== 'nombre';
+    list = [...list].sort((a, b) => {
+      let pa = a.behavior.visits, pb = b.behavior.visits;
+      if (sortBy === 'compras') { pa = a.behavior.purchaseCount; pb = b.behavior.purchaseCount; }
+      else if (sortBy === 'gastado') { pa = a.behavior.ltv; pb = b.behavior.ltv; }
+      else if (sortBy === 'radar') { pa = a.behavior.savedCount; pb = b.behavior.savedCount; }
+      else if (sortBy === 'cumpleanos') {
+        const da = a.declared.birthDate ? new Date(a.declared.birthDate).getMonth() * 30 + new Date(a.declared.birthDate).getDate() : -1;
+        const db = b.declared.birthDate ? new Date(b.declared.birthDate).getMonth() * 30 + new Date(b.declared.birthDate).getDate() : -1;
+        pa = da; pb = db;
+      }
+      else if (sortBy === 'score') { pa = a.leadScore.value; pb = b.leadScore.value; }
+      else if (sortBy === 'nombre') { pa = (a.name || '').localeCompare(b.name || ''); }
+      return (desc ? pb : pa) - (desc ? pa : pb);
+    });
+
+    const PAGE_SIZE = 50;
+    const page = 1; // simplified: always show first page for now
+    const sliced = list.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+    const countEl = document.querySelector('[data-mu-count]') as HTMLElement;
+    countEl.textContent = `${list.length} de ${users.length} usuarios · página ${page} de ${Math.max(1, Math.ceil(list.length / PAGE_SIZE))}`;
+
+    const tbody = document.querySelector('tbody[data-mu-users]') as HTMLElement;
+    tbody.innerHTML = sliced.map((user) => rowHtml(user)).join('') ||
+      '<tr><td colspan="9" class="mu-loading">Cargando usuarios…</td></tr>';
+
+    // Delegación de clic en fila para expandir
+    document.querySelector('tbody[data-mu-users]')?.addEventListener('click', (e) => {
+      const row = (e.target as HTMLElement).closest('tr[data-row-id]');
+      if (row) {
+        const detail = row.queryNext()?.closest('tr.mu-row-detail');
+        if (detail) detail.hidden = !detail.hidden;
+        row.classList.toggle('is-open', !detail.hidden);
+      }
+    });
+  }
+
+  function rowHtml(user: User360): string {
+    const birth = user.declared.birthDate ?
+      new Intl.DateTimeFormat('es-ES', {day:'numeric',month:'short'}).format(new Date(user.declared.birthDate)) : '—';
+    return `
+      <tr data-row-id="${user.id}">
+        <td class="mu-cell-email">${esc(user.email)}</td>
+        <td>${esc(user.name || '—')}</td>
+        <td class="mu-num">${user.behavior.visits}</td>
+        <td class="mu-num">${user.behavior.purchaseCount}</td>
+        <td class="mu-num">${user.behavior.ltv === 0 ? '—' : money(user.behavior.ltv)}</td>
+        <td class="mu-num">${user.behavior.savedCount}</td>
+        <td class="mu-num mu-soon" title="Métrica pendiente de implementar">—</td>
+        <td>${birth}</td>
+        <td class="mu-num"><button class="mu-btn mu-btn-small" aria-label="Ver detalles">▸</button></td>
+      </tr>
+      <tr class="mu-row-detail" hidden>
+        <td colspan="9">${userCard(user)}</td>
+      </tr>`;
   }
 
   interface Filters {
@@ -467,7 +581,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
       const body = await response.json();
       if (body?.success && Array.isArray(body.users)) {
         users = body.users as User360[];
-        renderUsers();
+        renderTable();
       }
     } catch {
       toast('No se pudo actualizar la lista de usuarios.', true);
@@ -569,7 +683,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
   });
 
   // --- Ficha 360 ---
-  (document.querySelector('[data-mu-search]') as HTMLInputElement).addEventListener('input', renderUsers);
+  (document.querySelector('[data-mu-search]') as HTMLInputElement).addEventListener('input', () => renderTable());
   (document.querySelector('[data-mu-refresh]') as HTMLButtonElement).addEventListener('click', () => {
     void refreshUsers();
   });
@@ -610,7 +724,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
     if (target) void sendRemind(target.closest('.mu-card') as HTMLElement);
   });
 
-  renderUsers();
+  renderTable();
   syncIntegrationsForm();
 </script>
 
@@ -636,7 +750,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
 
   .mu-toolbar { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
   .mu-count { color: var(--color-text-muted); font-size: 0.82rem; margin-right: auto; }
-  .mu-input { appearance: none; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text-main); font-size: 0.85rem; padding: 0.55rem 0.8rem; min-width: 0; }
+  .mu-input { appearance: none; background: #0b1220; border: 1px solid var(--color-border); border-radius: 10px; color: var(--color-text-main); font-size: 0.85rem; padding: 0.55rem 0.8rem; min-width: 0; }
   .mu-input:focus { outline: none; border-color: rgba(96, 165, 250, 0.5); }
   .mu-search { flex: 1 1 220px; max-width: 340px; }
   .mu-btn { appearance: none; background: #3b82f6; border: 1px solid #3b82f6; border-radius: 10px; color: #fff; font-size: 0.82rem; font-weight: 700; padding: 0.55rem 1rem; cursor: pointer; transition: filter 0.16s ease; }
@@ -712,6 +826,10 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
   .mu-channels { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; font-size: 0.76rem; color: var(--color-text-muted); }
   .mu-int-actions { display: flex; align-items: center; gap: 0.8rem; }
   .mu-int-saved { font-size: 0.78rem; color: #86efac; }
+
+  /* Selects oscuros – concordan con el tono oscuro del panel */
+  .mu-input select,
+  .mu-input option { background: #05080f; color: #e5e7eb; }
 
   .mu-toast { position: fixed; bottom: 1.4rem; right: 1.4rem; z-index: 90; max-width: 340px; padding: 0.75rem 1.1rem; background: #111827; border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 12px; color: #e5e7eb; font-size: 0.82rem; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
   .mu-toast.is-error { border-color: rgba(239, 68, 68, 0.5); }

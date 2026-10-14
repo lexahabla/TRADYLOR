@@ -98,6 +98,8 @@ export interface RadarUser {
   lastCategoryLabel?: string;
   /** ISO date de la última visita a una ficha con sesión. */
   lastVisitAt?: string;
+  /** Total de visitas a fichas registradas (Marketing; se acumula al escribir). */
+  visitCount?: number;
   /** Últimos productos vistos en ficha (máx. 12, más reciente primero). */
   viewedProducts?: { id: string; title: string; at: string }[];
   /** Último aviso de carrito abandonado enviado por Marketing. */
@@ -459,6 +461,7 @@ export function recordRadarUserVisit(
     : user.lastCategoryId;
   user.lastCategoryLabel = category || user.lastCategoryLabel;
   user.lastVisitAt = new Date().toISOString();
+  user.visitCount = (user.visitCount ?? 0) + 1;
   const id = String(product.id ?? '').trim();
   if (id) {
     user.viewedProducts = [
