@@ -78,7 +78,10 @@ async function afterAuthSuccess(): Promise<void> {
   cachedSession = null;
   const session = await getSession(true);
   if (session.authenticated) {
-    await syncLocalToCloud();
+    const { loadRadar, RADAR_STORAGE_KEY } = await import('./radarStore');
+    localStorage.removeItem(RADAR_STORAGE_KEY);
+    await pullFromCloud();
+    loadRadar();
     emitAuth(session.user);
   }
 }
@@ -131,6 +134,10 @@ export async function login(email: string, password: string, rememberMe = false)
 export async function logout(): Promise<void> {
   await fetch('/api/radar/auth/logout', { method: 'POST' }).catch(() => {});
   cachedSession = null;
+  try {
+    const { RADAR_STORAGE_KEY } = await import('./radarStore');
+    localStorage.removeItem(RADAR_STORAGE_KEY);
+  } catch { /* noop */ }
   emitAuth(null);
 }
 

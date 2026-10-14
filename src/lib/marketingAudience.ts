@@ -98,6 +98,7 @@ export interface AudienceUser360 {
     purchases: PurchaseMetric[];
     viewedNotBought: ViewedNotBoughtMetric[];
     savedCount: number;
+    savedProducts: SavedProduct[];
   };
   leadScore: LeadScore;
 }
@@ -270,6 +271,7 @@ export function buildAudienceUser360(user: PublicRadarUser): AudienceUser360 {
       purchases,
       viewedNotBought,
       savedCount: savedById.size,
+      savedProducts: [...savedById.values()],
     },
     leadScore,
   };
