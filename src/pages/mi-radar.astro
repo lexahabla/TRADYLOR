@@ -46,21 +46,6 @@ if (!sessionUser) {
       </div>
     </header>
 
-    <!-- Perfil (solo sesión) -->
-    <section class="radar-profile" data-radar-profile hidden>
-      <div class="radar-profile-info">
-        <span class="radar-avatar" data-radar-avatar aria-hidden="true">R</span>
-        <div>
-          <p class="radar-profile-name" data-radar-name>—</p>
-          <p class="radar-profile-email" data-radar-email>—</p>
-        </div>
-      </div>
-      <div class="radar-profile-actions">
-        <span class="radar-sync-badge" data-radar-sync>Sincronizado ✓</span>
-        <button type="button" class="radar-btn radar-btn-ghost" data-radar-exit>Salir</button>
-      </div>
-    </section>
-
     <!-- 2. Return Flow -->
     <section class="radar-return-flow" data-radar-return hidden>
       <h2 class="radar-section-title">¿Compraste algo recientemente?</h2>
@@ -216,76 +201,6 @@ if (!sessionUser) {
     font-size: 0.9rem;
     line-height: 1.6;
     color: var(--color-text-muted);
-  }
-
-  /* Perfil */
-  .radar-profile {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 1.75rem;
-    padding: 1rem 1.25rem;
-    background: var(--color-bg-card);
-    border: 1px solid var(--color-border);
-    border-radius: var(--border-radius-md);
-  }
-
-  .radar-profile[hidden] {
-    display: none;
-  }
-
-  .radar-profile-info {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    min-width: 0;
-  }
-
-  .radar-avatar {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 42px;
-    height: 42px;
-    flex-shrink: 0;
-    font-weight: 800;
-    font-size: 1rem;
-    color: #07111f;
-    background: linear-gradient(135deg, #60a5fa, #3b82f6);
-    border-radius: 50%;
-  }
-
-  .radar-profile-name {
-    margin: 0;
-    font-weight: 700;
-    font-size: 0.95rem;
-    color: var(--color-text-main);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .radar-profile-email {
-    margin: 0.1rem 0 0;
-    font-size: 0.78rem;
-    color: var(--color-text-dim);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .radar-profile-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.7rem;
-    flex-shrink: 0;
-  }
-
-  .radar-sync-badge {
-    font-size: 0.75rem;
-    font-weight: 700;
-    color: #6ee7b7;
   }
 
   /* Return Flow */
@@ -1133,11 +1048,6 @@ if (!sessionUser) {
       align-items: flex-start;
     }
 
-    .radar-profile {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
     :global(.radar-exit-card) {
       flex-direction: column;
       align-items: flex-start;
@@ -1206,11 +1116,6 @@ if (!sessionUser) {
     document.querySelector<T>(selector);
 
   const els = {
-    profile: $('[data-radar-profile]'),
-    avatar: $('[data-radar-avatar]'),
-    name: $('[data-radar-name]'),
-    email: $('[data-radar-email]'),
-    exitBtn: $('[data-radar-exit]'),
     returnSection: $('[data-radar-return]'),
     exitCards: $('[data-radar-exit-cards]'),
     tabs: $('[data-radar-tabs]'),
@@ -1961,23 +1866,12 @@ if (!sessionUser) {
     renderExits();
   });
 
-  els.exitBtn?.addEventListener('click', () => {
-    window.location.href = 'https://tradylor.com';
-  });
-
   /* ------------------------------------------------------------- sesión */
 
   function updateStatus(user: { email: string; name?: string } | null): void {
     // Página privada: sin sesión siempre se vuelve a tradylor.com.
     if (!user) {
       window.location.replace('https://tradylor.com');
-      return;
-    }
-    if (els.profile) els.profile.hidden = false;
-    if (els.name && els.email && els.avatar) {
-      els.name.textContent = user.name || user.email.split('@')[0];
-      els.email.textContent = user.email;
-      els.avatar.textContent = (user.name || user.email).charAt(0).toUpperCase();
     }
   }
 
