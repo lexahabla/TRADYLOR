@@ -23,6 +23,18 @@ export const shareEmailsPerUser: RateLimiter = createRateLimiter(12, 60 * 60 * 1
 /** ...y por IP (varias cuentas detrás de una misma conexión): 40 por hora. */
 export const shareEmailsPerIp: RateLimiter = createRateLimiter(40, 60 * 60 * 1000);
 
+/**
+ * Tarjetas enviadas a una dirección EXTERNA (distinta de la de la cuenta): el
+ * endpoint puede usarse para escribir a terceros, así que el tope es más bajo.
+ */
+export const shareEmailsExternalPerUser: RateLimiter = createRateLimiter(6, 60 * 60 * 1000);
+
+/** ...y por IP: 15 por hora. */
+export const shareEmailsExternalPerIp: RateLimiter = createRateLimiter(15, 60 * 60 * 1000);
+
+/** Traducciones del mensaje de la tarjeta (proxy de Google Translate) por IP: 120 por hora. */
+export const shareTranslatesPerIp: RateLimiter = createRateLimiter(120, 60 * 60 * 1000);
+
 export function createRateLimiter(max: number, windowMs: number): RateLimiter {
   const entries = new Map<string, { count: number; resetAt: number }>();
   return {
