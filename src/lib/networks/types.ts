@@ -58,6 +58,8 @@ export interface UnifiedProduct {
   rating?: number;
   reviewsCount?: number;
   popularity?: number;
+  /** Visitas del producto cuando la red las facilita (AliExpress no las da). */
+  visits?: number;
   inStock: boolean;
   shippingInfo?: string;
   estimated: boolean;
