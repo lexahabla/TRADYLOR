@@ -22,7 +22,7 @@ function gateways(): string[] {
   return [...new Set([configured, 'https://api-sg.aliexpress.com/sync', 'https://eco.taobao.com/router/rest'].filter(Boolean))];
 }
 
-const CATALOG_KEYWORDS = [
+export const CATALOG_KEYWORDS = [
   'auriculares bluetooth',
   'robot aspirador',
   'smartwatch',
