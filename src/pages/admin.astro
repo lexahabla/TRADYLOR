@@ -547,7 +547,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <div class="loading-panel">Cargando redes...</div>
           </div>
           <div id="removedNetworks" class="removed-networks"></div>
-          <div id="networkNewHost" class="network-new-host"></div>
         </div>
 
         <!-- Columna 2: Buscador global unificado -->
@@ -689,6 +688,77 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <strong id="aliCatalogStatusTitle">Estado</strong>
             <p id="aliCatalogStatusText">Mensaje...</p>
           </div>
+        </div>
+
+        <!-- Filtros y ordenación del catálogo (aplican antes de paginar) -->
+        <div id="aliFilters" class="ali-filters" hidden>
+          <div class="filter-field ali-f-search">
+            <label for="aliFQ">Buscar</label>
+            <input type="search" id="aliFQ" placeholder="Título, tienda o categoría..." />
+          </div>
+          <div class="filter-field">
+            <label for="aliFCat">Categoría</label>
+            <select id="aliFCat"><option value="">Todas</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="aliFShop">Tienda</label>
+            <select id="aliFShop"><option value="">Todas</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="aliFMinPrice">Precio mín.</label>
+            <input type="number" id="aliFMinPrice" min="0" step="0.5" placeholder="0" />
+          </div>
+          <div class="filter-field">
+            <label for="aliFMaxPrice">Precio máx.</label>
+            <input type="number" id="aliFMaxPrice" min="0" step="0.5" placeholder="∞" />
+          </div>
+          <div class="filter-field">
+            <label for="aliFMinDisc">Dto. mín. %</label>
+            <input type="number" id="aliFMinDisc" min="0" max="100" step="1" placeholder="0" />
+          </div>
+          <div class="filter-field">
+            <label for="aliFMinComm">Comisión % mín.</label>
+            <input type="number" id="aliFMinComm" min="0" max="100" step="0.5" placeholder="0" />
+          </div>
+          <div class="filter-field">
+            <label for="aliFMinCommEur">Comisión € mín.</label>
+            <input type="number" id="aliFMinCommEur" min="0" step="0.1" placeholder="0" />
+          </div>
+          <div class="filter-field">
+            <label for="aliFMinSales">Ventas mín.</label>
+            <input type="number" id="aliFMinSales" min="0" step="1" placeholder="0" />
+          </div>
+          <div class="filter-field">
+            <label for="aliFMinRating">Valoración mín.</label>
+            <input type="number" id="aliFMinRating" min="0" max="5" step="0.1" placeholder="0" />
+          </div>
+          <div class="filter-field">
+            <label for="aliFMaxShip">Envío máx. (días)</label>
+            <input type="number" id="aliFMaxShip" min="0" step="1" placeholder="∞" />
+          </div>
+          <div class="filter-field">
+            <label for="aliFSort">Ordenar por</label>
+            <select id="aliFSort">
+              <option value="sales_desc" selected>Más vendidos</option>
+              <option value="comm_eur_desc">Mayor comisión €</option>
+              <option value="comm_pct_desc">Mayor comisión %</option>
+              <option value="rating_desc">Mejor valoración</option>
+              <option value="disc_desc">Mayor descuento</option>
+              <option value="price_asc">Precio: menor a mayor</option>
+              <option value="price_desc">Precio: mayor a menor</option>
+              <option value="title_asc">Nombre A–Z</option>
+            </select>
+          </div>
+          <button type="button" id="aliFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
+        </div>
+
+        <!-- Selección masiva: la casilla de la cabecera marca la página actual;
+             estos botones seleccionan todo lo filtrado o limpian. -->
+        <div id="aliSelectionBar" class="ali-selection" hidden>
+          <span id="aliSelCount" class="ali-sel-count">0 seleccionados</span>
+          <button type="button" id="aliSelAllFiltered" class="btn-secondary btn-sm">Seleccionar todos los filtrados</button>
+          <button type="button" id="aliSelClear" class="btn-secondary btn-sm">Limpiar selección</button>
+          <button type="button" id="aliSelImport" class="btn-success btn-sm">Importar seleccionados</button>
         </div>
 
         <div id="aliCatalogHost">
@@ -2008,7 +2078,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // =========================================================================
     const networkList = document.getElementById('networkList');
     const networksCard = document.getElementById('networksCard');
-    const networkNewHost = document.getElementById('networkNewHost');
     const removedNetworks = document.getElementById('removedNetworks');
     const unifiedQuery = document.getElementById('unifiedQuery');
     const btnUnifiedSearch = document.getElementById('btnUnifiedSearch');
@@ -2151,8 +2220,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 </label>
               `).join('')}
               <div class="network-actions">
-                <button type="submit" class="btn-primary btn-sm">Guardar</button>
+                <button type="submit" class="btn-primary btn-sm">Guardar y validar</button>
                 <button type="button" class="btn-secondary btn-sm" data-network-validate="${escapeHtml(network.id)}">Validar</button>
+                <button type="button" class="btn-secondary btn-sm" data-network-reveal="${escapeHtml(network.id)}" title="Muestra u oculta los valores guardados de esta red">Ver</button>
                 <button type="button" class="btn-danger-ghost btn-sm" data-network-delete="${escapeHtml(network.id)}">Desconectar</button>
                 <button type="button" class="btn-danger-ghost btn-sm network-remove" data-network-remove="${escapeHtml(network.id)}" title="Eliminar este afiliado de la lista">Eliminar</button>
                 ${network.docUrl ? `<a class="network-doc" href="${escapeHtml(network.docUrl)}" target="_blank" rel="noopener noreferrer">Documentación</a>` : ''}
@@ -2161,7 +2231,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </form>
           </div>
         </details>
-      `).join('');
+      `).join('') + newNetworkPanelHtml();
     }
 
     /** Redibuja la lista activa y el aviso de redes predefinidas eliminadas. */
@@ -2217,7 +2287,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         if (submitBtn) submitBtn.disabled = false;
         if (data.success) {
           applyNetworks(data);
-          if (networkNewHost) networkNewHost.innerHTML = newNetworkPanelHtml();
           const created = networkList.querySelector(`details[data-network-id="${data.network.id}"]`);
           if (created) created.open = true;
         } else if (feedback) {
@@ -2236,10 +2305,82 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         applyNetworks(data);
         const item = networkList.querySelector(`details[data-network-id="${networkId}"]`);
         if (item) item.open = true;
+        // Guardar valida en segundo plano: así la red queda "Conectada" sin
+        // pasos extra y la sincronización del catálogo no necesita revalidar.
+        await validateNetwork(networkId);
+      } else {
         const feedback = networkList.querySelector(`[data-network-feedback="${networkId}"]`);
-        if (feedback) feedback.textContent = 'Credenciales guardadas. Pulsa "Validar" para comprobar la conexión.';
+        if (feedback) feedback.textContent = data.message || 'No se pudieron guardar las credenciales.';
+        const item = networkList.querySelector(`details[data-network-id="${networkId}"]`);
+        if (item) item.open = true;
       }
     });
+
+    /** Valida una red desde el panel: estado + efectos según la red conectada. */
+    async function validateNetwork(networkId) {
+      const feedback = networkList?.querySelector(`[data-network-feedback="${networkId}"]`);
+      if (feedback) feedback.textContent = 'Validando conexión...';
+      const data = await postNetworks({ action: 'validate', networkId });
+      applyNetworks(data);
+      const item = networkList?.querySelector(`details[data-network-id="${networkId}"]`);
+      if (item) item.open = true;
+      const newFeedback = networkList?.querySelector(`[data-network-feedback="${networkId}"]`);
+      if (newFeedback) newFeedback.textContent = data.message || '';
+
+      // Al conectar una red, cargamos su catálogo para poder revisarlo e
+      // importarlo en bloque. AliExpress refresca la caché de la tabla 3
+      // (POST manual/automático de conexión); el resto usa el buscador unificado.
+      const validated = (data.networks || []).find((n) => n.id === networkId);
+      if (validated && validated.status === 'connected') {
+        if (networkId === 'aliexpress') {
+          await syncAliCatalogUI();
+        } else {
+          showSearchStatus('success', 'Red conectada', `Cargando el catálogo de ${validated.name}...`);
+          runUnifiedSearch({ catalog: true });
+        }
+      }
+      return data;
+    }
+
+    /** Muestra/oculta los valores reales guardados de una red en su formulario. */
+    async function toggleRevealCredentials(networkId, button) {
+      const form = networkList?.querySelector(`.network-cred-form[data-network-id="${networkId}"]`);
+      if (!form) return;
+      const revealed = form.dataset.revealed === '1';
+      if (revealed) {
+        for (const input of form.querySelectorAll('input[name]')) {
+          input.value = '';
+          const field = (networksCache || []).find((n) => n.id === networkId)?.fields?.find((f) => f.key === input.name);
+          input.type = field?.secret ? 'password' : 'text';
+        }
+        form.dataset.revealed = '0';
+        if (button) button.textContent = 'Ver';
+        return;
+      }
+      if (button) {
+        button.disabled = true;
+        button.textContent = '...';
+      }
+      try {
+        const data = await postNetworks({ action: 'reveal', networkId });
+        if (!data.success) {
+          const feedback = networkList.querySelector(`[data-network-feedback="${networkId}"]`);
+          if (feedback) feedback.textContent = data.message || 'No hay credenciales guardadas para mostrar.';
+          return;
+        }
+        for (const input of form.querySelectorAll('input[name]')) {
+          const value = data.values?.[input.name];
+          if (value != null) {
+            input.value = value;
+            input.type = 'text';
+          }
+        }
+        form.dataset.revealed = '1';
+        if (button) button.textContent = 'Ocultar';
+      } finally {
+        if (button) button.disabled = false;
+      }
+    }
 
     networksCard?.addEventListener('click', async (event) => {
       const addFieldBtn = event.target.closest('[data-add-field]');
@@ -2259,34 +2400,23 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
 
       const validateBtn = event.target.closest('[data-network-validate]');
+      const revealBtn = event.target.closest('[data-network-reveal]');
       const deleteBtn = event.target.closest('[data-network-delete]');
       const removeBtn = event.target.closest('[data-network-remove]');
 
       if (validateBtn) {
-        const networkId = validateBtn.dataset.networkValidate;
-        const feedback = networkList.querySelector(`[data-network-feedback="${networkId}"]`);
         validateBtn.disabled = true;
-        if (feedback) feedback.textContent = 'Validando conexión...';
-        const data = await postNetworks({ action: 'validate', networkId });
-        validateBtn.disabled = false;
-        applyNetworks(data);
-        const item = networkList.querySelector(`details[data-network-id="${networkId}"]`);
-        if (item) item.open = true;
-        const newFeedback = networkList.querySelector(`[data-network-feedback="${networkId}"]`);
-        if (newFeedback) newFeedback.textContent = data.message || '';
-
-        // Al conectar una red, cargamos su catálogo para poder revisarlo e
-        // importarlo en bloque. AliExpress refresca la caché de la tabla 3
-        // (POST manual/automático de conexión); el resto usa el buscador unificado.
-        const validated = (data.networks || []).find((n) => n.id === networkId);
-        if (validated && validated.status === 'connected') {
-          if (networkId === 'aliexpress') {
-            await syncAliCatalogUI();
-          } else {
-            showSearchStatus('success', 'Red conectada', `Cargando el catálogo de ${validated.name}...`);
-            runUnifiedSearch({ catalog: true });
-          }
+        try {
+          await validateNetwork(validateBtn.dataset.networkValidate);
+        } finally {
+          validateBtn.disabled = false;
         }
+        return;
+      }
+
+      if (revealBtn) {
+        await toggleRevealCredentials(revealBtn.dataset.networkReveal, revealBtn);
+        return;
       }
 
       if (deleteBtn) {
@@ -2632,7 +2762,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       await reloadProductsTable();
     });
 
-    if (networkNewHost) networkNewHost.innerHTML = newNetworkPanelHtml();
     if (networkList) loadNetworks();
 
     // =========================================================================
@@ -2650,12 +2779,36 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const aliCatalogStatusTitle = document.getElementById('aliCatalogStatusTitle');
     const aliCatalogStatusText = document.getElementById('aliCatalogStatusText');
     const btnAliSync = document.getElementById('btnAliSync');
+    const aliFilters = document.getElementById('aliFilters');
+    const aliSelectionBar = document.getElementById('aliSelectionBar');
+    const aliSelCount = document.getElementById('aliSelCount');
+    const btnAliSelAllFiltered = document.getElementById('aliSelAllFiltered');
+    const btnAliSelClear = document.getElementById('aliSelClear');
+    const btnAliSelImport = document.getElementById('aliSelImport');
 
     const ALI_PAGE_SIZE = 50;
-    const ALI_COLS = 13;
+    const ALI_COLS = 14;
     let aliProducts = [];
+    let aliVisible = [];
     let aliPage = 1;
     let aliSyncing = false;
+    let aliImportingSelection = false;
+    const aliSelected = new Set();
+
+    const aliFilterInputs = {
+      q: document.getElementById('aliFQ'),
+      cat: document.getElementById('aliFCat'),
+      shop: document.getElementById('aliFShop'),
+      minPrice: document.getElementById('aliFMinPrice'),
+      maxPrice: document.getElementById('aliFMaxPrice'),
+      minDisc: document.getElementById('aliFMinDisc'),
+      minComm: document.getElementById('aliFMinComm'),
+      minCommEur: document.getElementById('aliFMinCommEur'),
+      minSales: document.getElementById('aliFMinSales'),
+      minRating: document.getElementById('aliFMinRating'),
+      maxShip: document.getElementById('aliFMaxShip'),
+      sort: document.getElementById('aliFSort'),
+    };
 
     function showAliStatus(type, title, message) {
       if (!aliCatalogStatus) return;
@@ -2693,6 +2846,103 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       return null;
     }
 
+    function aliNum(value) {
+      if (value == null || value === '') return null;
+      const n = Number(String(value).replace(/[^\d.,-]/g, '').replace(',', '.'));
+      return Number.isFinite(n) ? n : null;
+    }
+
+    function aliDiscountPct(product) {
+      const raw = aliExtra(product, 'Descuento');
+      if (raw != null) return aliNum(raw);
+      const price = Number(product.price);
+      const original = Number(product.originalPrice);
+      if (price > 0 && original > price) return ((original - price) / original) * 100;
+      return null;
+    }
+
+    /** Valor numérico de un filtro o null si está vacío. */
+    function aliFilterNum(input) {
+      return input && input.value !== '' ? aliNum(input.value) : null;
+    }
+
+    /** Aplica los filtros activos y ordena el catálogo completo. */
+    function aliFilterApply() {
+      const q = (aliFilterInputs.q?.value || '').trim().toLowerCase();
+      const cat = aliFilterInputs.cat?.value || '';
+      const shop = aliFilterInputs.shop?.value || '';
+      const minPrice = aliFilterNum(aliFilterInputs.minPrice);
+      const maxPrice = aliFilterNum(aliFilterInputs.maxPrice);
+      const minDisc = aliFilterNum(aliFilterInputs.minDisc);
+      const minComm = aliFilterNum(aliFilterInputs.minComm);
+      const minCommEur = aliFilterNum(aliFilterInputs.minCommEur);
+      const minSales = aliFilterNum(aliFilterInputs.minSales);
+      const minRating = aliFilterNum(aliFilterInputs.minRating);
+      const maxShip = aliFilterNum(aliFilterInputs.maxShip);
+      const sort = aliFilterInputs.sort?.value || 'sales_desc';
+
+      const filtered = aliProducts.filter((product) => {
+        if (cat && (product.category || '') !== cat) return false;
+        if (shop && (aliExtra(product, 'Tienda') || '') !== shop) return false;
+        const price = aliNum(product.price);
+        if (minPrice != null && (price == null || price < minPrice)) return false;
+        if (maxPrice != null && (price == null || price > maxPrice)) return false;
+        const disc = aliDiscountPct(product);
+        if (minDisc != null && (disc == null || disc < minDisc)) return false;
+        const rate = aliNum(product.commissionRate);
+        if (minComm != null && (rate == null || rate < minComm)) return false;
+        const amount = aliNum(product.commissionAmount);
+        if (minCommEur != null && (amount == null || amount < minCommEur)) return false;
+        const sales = aliNum(product.popularity);
+        if (minSales != null && (sales == null || sales < minSales)) return false;
+        const rating = aliNum(product.rating);
+        if (minRating != null && (rating == null || rating < minRating)) return false;
+        const ship = aliNum(aliExtra(product, 'Días de envío'));
+        if (maxShip != null && (ship == null || ship > maxShip)) return false;
+        if (q) {
+          const haystack = `${product.title} ${product.category || ''} ${aliExtra(product, 'Tienda') || ''}`.toLowerCase();
+          if (!haystack.includes(q)) return false;
+        }
+        return true;
+      });
+
+      const numOr = (value, fallback) => (value == null ? fallback : value);
+      const comparators = {
+        sales_desc: (a, b) => numOr(aliNum(b.popularity), -1) - numOr(aliNum(a.popularity), -1),
+        comm_eur_desc: (a, b) => numOr(aliNum(b.commissionAmount), -1) - numOr(aliNum(a.commissionAmount), -1),
+        comm_pct_desc: (a, b) => numOr(aliNum(b.commissionRate), -1) - numOr(aliNum(a.commissionRate), -1),
+        rating_desc: (a, b) => numOr(aliNum(b.rating), -1) - numOr(aliNum(a.rating), -1),
+        disc_desc: (a, b) => numOr(aliDiscountPct(b), -1) - numOr(aliDiscountPct(a), -1),
+        price_asc: (a, b) => numOr(aliNum(a.price), Infinity) - numOr(aliNum(b.price), Infinity),
+        price_desc: (a, b) => numOr(aliNum(b.price), -1) - numOr(aliNum(a.price), -1),
+        title_asc: (a, b) => String(a.title).localeCompare(String(b.title), 'es'),
+      };
+      return filtered.sort(comparators[sort] || comparators.sales_desc);
+    }
+
+    /** Rellena los selects de categoría/tienda con los datos del catálogo. */
+    function aliPopulateFilterOptions() {
+      const fill = (select, values, anyLabel) => {
+        if (!select) return;
+        const current = select.value;
+        select.innerHTML = `<option value="">${anyLabel}</option>` + values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+        if (values.includes(current)) select.value = current;
+      };
+      fill(aliFilterInputs.cat, [...new Set(aliProducts.map((p) => p.category).filter(Boolean))].sort(), 'Todas');
+      fill(aliFilterInputs.shop, [...new Set(aliProducts.map((p) => aliExtra(p, 'Tienda')).filter(Boolean))].sort(), 'Todas');
+    }
+
+    function aliUpdateSelectionUI(pageIds) {
+      if (aliSelectionBar) aliSelectionBar.hidden = aliSelected.size === 0;
+      if (aliSelCount) aliSelCount.textContent = `${aliSelected.size} seleccionado${aliSelected.size === 1 ? '' : 's'}`;
+      const master = aliCatalogHost?.querySelector('[data-ac-checkall]');
+      if (master && pageIds) {
+        const checked = pageIds.filter((id) => aliSelected.has(id)).length;
+        master.checked = checked > 0 && checked === pageIds.length;
+        master.indeterminate = checked > 0 && checked < pageIds.length;
+      }
+    }
+
     function aliPagerHtml(page, pages, total, start, shown) {
       if (total === 0) return '';
       const info = `<span class="ac-page-info">Mostrando ${start + 1}–${start + shown} de ${total}</span>`;
@@ -2712,19 +2962,26 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     function renderAliCatalog() {
       if (!aliCatalogHost) return;
+      if (aliFilters) aliFilters.hidden = aliProducts.length === 0;
       if (!aliProducts.length) {
+        aliVisible = [];
         aliCatalogHost.innerHTML = '<div class="empty-dashboard">Sin productos en la caché. Pulsa «Sincronizar» para descargar el catálogo de AliExpress por primera vez.</div>';
+        aliUpdateSelectionUI([]);
         return;
       }
-      const pages = Math.max(1, Math.ceil(aliProducts.length / ALI_PAGE_SIZE));
+      const filtered = aliFilterApply();
+      const pages = Math.max(1, Math.ceil(filtered.length / ALI_PAGE_SIZE));
       if (aliPage > pages) aliPage = pages;
       const start = (aliPage - 1) * ALI_PAGE_SIZE;
-      const slice = aliProducts.slice(start, start + ALI_PAGE_SIZE);
+      const slice = filtered.slice(start, start + ALI_PAGE_SIZE);
+      aliVisible = slice;
+      const pageIds = slice.map((product) => product.externalId);
       aliCatalogHost.innerHTML = `
         <div class="aff-table-wrap">
           <table class="aff-table">
             <thead>
               <tr>
+                <th class="ac-th-check"><input type="checkbox" data-ac-checkall aria-label="Seleccionar la página actual" /></th>
                 <th>Foto</th>
                 <th>Producto</th>
                 <th>Categoría</th>
@@ -2743,12 +3000,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <tbody>
               ${slice
                 .map((product, offset) => {
-                  const index = start + offset;
+                  const index = offset;
                   const discount = aliDiscount(product);
                   const shop = aliExtra(product, 'Tienda');
                   const shippingDays = aliExtra(product, 'Días de envío');
+                  const checked = aliSelected.has(product.externalId) ? ' checked' : '';
                   return `
                 <tr class="aff-row" data-ac-row="${index}" tabindex="0" aria-expanded="false">
+                  <td class="ac-td-check"><input type="checkbox" data-ac-check="${index}" aria-label="Seleccionar producto" ${checked} /></td>
                   <td><span class="aff-thumb">${product.image ? `<img src="${escapeHtml(product.image)}" alt="" loading="lazy" />` : ''}</span></td>
                   <td class="aff-name">
                     <strong>${escapeHtml(product.title)}</strong>
@@ -2777,7 +3036,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </tbody>
           </table>
         </div>
-        ${aliPagerHtml(aliPage, pages, aliProducts.length, start, slice.length)}`;
+        ${aliPagerHtml(aliPage, pages, filtered.length, start, slice.length)}`;
+      aliUpdateSelectionUI(pageIds);
     }
 
     function setAliMeta(state) {
@@ -2800,6 +3060,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         }
         aliProducts = Array.isArray(data.products) ? data.products : [];
         aliPage = 1;
+        aliPopulateFilterOptions();
         setAliMeta(data);
         renderAliCatalog();
         if (!data.connected) showAliStatus('warning', 'AliExpress sin conectar', 'Guarda sus credenciales en «1. Redes conectadas» y pulsa «Validar» para poder sincronizar.');
@@ -2813,7 +3074,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
     }
 
-    /** POST de sincronización: consulta la TOP API y reescribe el JSON. */
+    /** POST de sincronización: valida si hace falta, consulta la TOP API y reescribe el JSON. */
     async function syncAliCatalogUI() {
       if (aliSyncing) return null;
       aliSyncing = true;
@@ -2822,12 +3083,25 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (btnAliSync) btnAliSync.disabled = true;
       if (spinner) spinner.hidden = false;
       if (text) text.textContent = 'Sincronizando...';
-      showAliStatus('loading', 'Sincronizando con AliExpress', 'Consulta por palabras clave en curso (puede tardar unos segundos)...');
       try {
+        // Auto-validación: si AliExpress no figura conectada, valida primero.
+        // (El guard aliSyncing evita el bucle validate → sync → validate.)
+        const aliNet = (networksCache || []).find((n) => n.id === 'aliexpress');
+        if (aliNet && aliNet.status !== 'connected') {
+          showAliStatus('loading', 'Validando credenciales', 'Comprobando la conexión con AliExpress antes de sincronizar...');
+          const check = await validateNetwork('aliexpress');
+          const now = (check?.networks || []).find((n) => n.id === 'aliexpress');
+          if (!now || now.status !== 'connected') {
+            showAliStatus('error', 'AliExpress sin conectar', check?.message || 'Guarda y valida sus credenciales en «1. Redes conectadas».');
+            return null;
+          }
+        }
+        showAliStatus('loading', 'Sincronizando con AliExpress', 'Consulta por palabras clave en curso (puede tardar unos segundos)...');
         const res = await fetch('/api/admin/aliexpress/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const data = await res.json();
         aliProducts = Array.isArray(data.products) ? data.products : [];
         aliPage = 1;
+        aliPopulateFilterOptions();
         setAliMeta(data);
         renderAliCatalog();
         if (data.ok) showAliStatus('success', 'Catálogo sincronizado', `${data.count} productos guardados en el servidor.`);
@@ -2846,7 +3120,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     btnAliSync?.addEventListener('click', () => syncAliCatalogUI());
 
-    // Interacción de la tabla 3: paginación, desplegable, importación y fila
+    // Interacción de la tabla 3: paginación, selección, desplegable,
+    // importación y fila
     aliCatalogHost?.addEventListener('click', async (event) => {
       const pageBtn = event.target.closest('[data-ac-page]');
       if (pageBtn) {
@@ -2855,6 +3130,34 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           aliPage = target;
           renderAliCatalog();
         }
+        return;
+      }
+
+      const checkAll = event.target.closest('[data-ac-checkall]');
+      if (checkAll) {
+        const pageIds = aliVisible.map((product) => product.externalId);
+        if (checkAll.checked) pageIds.forEach((id) => aliSelected.add(id));
+        else pageIds.forEach((id) => aliSelected.delete(id));
+        aliUpdateSelectionUI(pageIds);
+        for (const box of aliCatalogHost.querySelectorAll('[data-ac-check]')) box.checked = checkAll.checked;
+        return;
+      }
+
+      const rowCheck = event.target.closest('[data-ac-check]');
+      if (rowCheck) {
+        const product = aliVisible[Number(rowCheck.dataset.acCheck)];
+        if (product) {
+          if (rowCheck.checked) aliSelected.add(product.externalId);
+          else aliSelected.delete(product.externalId);
+        }
+        const pageIds = aliVisible.map((p) => p.externalId);
+        const master = aliCatalogHost.querySelector('[data-ac-checkall]');
+        if (master) {
+          const checked = pageIds.filter((id) => aliSelected.has(id)).length;
+          master.checked = checked > 0 && checked === pageIds.length;
+          master.indeterminate = checked > 0 && checked < pageIds.length;
+        }
+        aliUpdateSelectionUI();
         return;
       }
 
@@ -2874,7 +3177,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
       const importBtn = event.target.closest('[data-ac-import]');
       if (importBtn) {
-        const product = aliProducts[Number(importBtn.dataset.acImport)];
+        const product = aliVisible[Number(importBtn.dataset.acImport)];
         if (!product) return;
         const result = await importSingleProduct(product, importBtn);
         if (result.ok) showAliStatus('success', 'Producto importado', `"${result.product.title}" ya está en el catálogo de Tradylor.`);
@@ -2883,7 +3186,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
 
       const row = event.target.closest('[data-ac-row]');
-      if (row && !event.target.closest('a, button')) {
+      if (row && !event.target.closest('a, button, input')) {
         const index = Number(row.dataset.acRow);
         const detail = aliCatalogHost.querySelector(`[data-ac-detail="${index}"]`);
         if (detail) {
@@ -2893,6 +3196,53 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           row.setAttribute('aria-expanded', String(open));
         }
       }
+    });
+
+    // Filtros de la tabla 3: cualquier cambio reordena/refiltra y reinicia la página
+    function onAliFilterChange() {
+      aliPage = 1;
+      renderAliCatalog();
+    }
+    aliFilters?.addEventListener('input', onAliFilterChange);
+    document.getElementById('aliFReset')?.addEventListener('click', () => {
+      for (const [key, input] of Object.entries(aliFilterInputs)) {
+        if (!input) continue;
+        input.value = key === 'sort' ? 'sales_desc' : '';
+      }
+      onAliFilterChange();
+    });
+
+    // Selección masiva: todos los filtrados, limpiar e importar en bloque
+    btnAliSelAllFiltered?.addEventListener('click', () => {
+      for (const product of aliFilterApply()) aliSelected.add(product.externalId);
+      renderAliCatalog();
+    });
+    btnAliSelClear?.addEventListener('click', () => {
+      aliSelected.clear();
+      renderAliCatalog();
+    });
+    btnAliSelImport?.addEventListener('click', async () => {
+      if (aliImportingSelection) return;
+      const products = aliFilterApply().filter((product) => aliSelected.has(product.externalId));
+      if (!products.length) return;
+      aliImportingSelection = true;
+      if (btnAliSelImport) btnAliSelImport.disabled = true;
+      let ok = 0;
+      let failed = 0;
+      for (let i = 0; i < products.length; i++) {
+        const product = products[i];
+        showAliStatus('loading', 'Importando selección', `${i + 1}/${products.length}: ${String(product.title).slice(0, 70)}...`);
+        const result = await importSingleProduct(product, null);
+        if (result.ok) ok++;
+        else failed++;
+      }
+      aliImportingSelection = false;
+      if (btnAliSelImport) btnAliSelImport.disabled = false;
+      showAliStatus(
+        failed ? 'warning' : 'success',
+        'Importación de selección finalizada',
+        `${ok} producto${ok === 1 ? '' : 's'} añadido${failed ? ` · ${failed} con error` : ''} al catálogo de Tradylor.`,
+      );
     });
 
     // Primera carga: sólo lectura de la caché (sin llamadas a la API)
@@ -3157,15 +3507,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .affiliates-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 2rem; align-items: start; }
   @media (max-width: 1100px) { .affiliates-layout { grid-template-columns: 1fr; } }
 
-  .network-list { display: flex; flex-direction: column; gap: .65rem; }
-  :global(.network-item) { border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); background: rgba(255, 255, 255, .02); overflow: hidden; }
-  :global(.network-item summary) { display: flex; align-items: center; gap: .75rem; padding: .8rem 1rem; cursor: pointer; list-style: none; user-select: none; }
+  /* Lista de redes en FILA (wrap): cada una como tarjeta compacta; al abrirse
+     ocupa todo el ancho para que el formulario no quede aplastado. */
+  .network-list { display: flex; flex-wrap: wrap; gap: .55rem; align-items: flex-start; }
+  :global(.network-item) { flex: 1 1 200px; max-width: 280px; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); background: rgba(255, 255, 255, .02); overflow: hidden; }
+  :global(.network-item[open]) { flex-basis: 100%; max-width: none; }
+  :global(.network-item summary) { display: flex; align-items: center; gap: .55rem; padding: .6rem .7rem; cursor: pointer; list-style: none; user-select: none; }
   :global(.network-item summary::-webkit-details-marker) { display: none; }
   :global(.network-item summary:hover) { background: rgba(255, 255, 255, .04); }
-  :global(.network-color) { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; box-shadow: 0 0 8px currentColor; }
+  :global(.network-color) { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; box-shadow: 0 0 8px currentColor; }
   :global(.network-main) { display: flex; flex-direction: column; gap: .1rem; min-width: 0; flex: 1; }
-  :global(.network-name) { color: var(--color-text-main); font-size: .85rem; font-weight: 700; }
-  :global(.network-region) { color: var(--color-text-dim); font-size: .7rem; }
+  :global(.network-name) { color: var(--color-text-main); font-size: .78rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  :global(.network-region) { color: var(--color-text-dim); font-size: .66rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   :global(.network-body) { padding: 0 1rem 1rem; border-top: 1px solid var(--color-border); }
   :global(.network-desc) { color: var(--color-text-muted); font-size: .78rem; line-height: 1.5; margin: .85rem 0; }
   :global(.network-cred-form) { display: flex; flex-direction: column; gap: .65rem; }
@@ -3178,19 +3531,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.network-feedback) { margin: .5rem 0 0; color: var(--color-text-muted); font-size: .74rem; line-height: 1.4; }
   :global(.integration-status.is-error) { color: #fca5a5; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); }
 
-  /* Alta de afiliado: bloque propio FUERA de la lista, estilo botón CTA */
-  .network-new-host { margin-top: 1.15rem; padding-top: 1.15rem; border-top: 1px dashed var(--color-border); }
-  :global(.network-new) { border: 2px dashed rgba(56, 189, 248, .6); border-radius: 14px; background: linear-gradient(180deg, rgba(56, 189, 248, .12), rgba(56, 189, 248, .04)); box-shadow: 0 8px 24px rgba(56, 189, 248, .1); }
-  :global(.network-new summary) { justify-content: center; gap: .85rem; padding: 1.3rem 1rem; border-radius: 12px; display: flex; align-items: center; cursor: pointer; list-style: none; user-select: none; }
+  /* Alta de afiliado: tarjeta final de la fila, estilo botón CTA compacto */
+  :global(.network-new) { border: 2px dashed rgba(56, 189, 248, .6); border-radius: var(--border-radius-sm); background: linear-gradient(180deg, rgba(56, 189, 248, .12), rgba(56, 189, 248, .04)); box-shadow: 0 8px 24px rgba(56, 189, 248, .1); }
+  :global(.network-new summary) { justify-content: center; gap: .55rem; padding: .7rem .6rem; border-radius: var(--border-radius-sm); display: flex; align-items: center; cursor: pointer; list-style: none; user-select: none; }
   :global(.network-new summary::-webkit-details-marker) { display: none; }
   :global(.network-new summary:hover) { background: rgba(56, 189, 248, .16); }
-  :global(.network-add-icon) { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; color: #06121f; background: #38bdf8; border-radius: 50%; box-shadow: 0 0 18px rgba(56, 189, 248, .55); }
+  :global(.network-add-icon) { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; flex-shrink: 0; color: #06121f; background: #38bdf8; border-radius: 50%; box-shadow: 0 0 14px rgba(56, 189, 248, .55); }
+  :global(.network-add-icon svg) { width: 14px; height: 14px; }
   :global(.network-add-main) { align-items: center; text-align: center; display: flex; flex-direction: column; gap: .1rem; min-width: 0; flex: 1; }
-  :global(.network-new .network-name) { color: #7dd3fc; font-size: .98rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
-  :global(.network-new .network-region) { color: var(--color-text-dim); font-size: .72rem; }
-  :global(.network-add-chip) { padding: .3rem .8rem; color: #06121f; background: #38bdf8; border-radius: 999px; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0; }
-  :global(.network-new[open] summary) { border-bottom: 2px dashed rgba(56, 189, 248, .35); border-radius: 12px 12px 0 0; }
-  :global(.network-new .network-body) { padding-top: 1rem; background: rgba(4, 10, 18, .45); border-top: none; border-radius: 0 0 12px 12px; }
+  :global(.network-new .network-name) { color: #7dd3fc; font-size: .78rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+  :global(.network-new .network-region) { color: var(--color-text-dim); font-size: .66rem; }
+  :global(.network-add-chip) { display: none; }
+  :global(.network-new[open] summary) { border-bottom: 2px dashed rgba(56, 189, 248, .35); border-radius: var(--border-radius-sm) var(--border-radius-sm) 0 0; }
+  :global(.network-new .network-body) { padding-top: 1rem; background: rgba(4, 10, 18, .45); border-top: none; border-radius: 0 0 var(--border-radius-sm) var(--border-radius-sm); }
   :global(.new-fields) { display: flex; flex-direction: column; gap: .55rem; }
   :global(.new-fields-title) { color: var(--color-text-muted); font-size: .72rem; font-weight: 700; }
   :global(.new-field-rows) { display: flex; flex-direction: column; gap: .5rem; }
@@ -3224,28 +3577,44 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.network-chip.is-fail) { color: #fca5a5; border-color: rgba(239, 68, 68, .3); background: rgba(239, 68, 68, .08); }
 
   .unified-results { display: flex; flex-direction: column; gap: .75rem; }
-  :global(.aff-table-wrap) { max-height: 680px; overflow: auto; border: 1px solid var(--color-border); border-radius: 14px; }
-  :global(.aff-table) { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .78rem; background: rgba(255, 255, 255, .02); }
-  :global(.aff-table th) { position: sticky; top: 0; z-index: 1; padding: .65rem .75rem; text-align: left; font-size: .62rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--color-text-muted); background: #121826; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
-  :global(.aff-table td) { padding: .55rem .75rem; color: var(--color-text-main); border-bottom: 1px solid rgba(255, 255, 255, .05); vertical-align: middle; }
+  /* Tabla comprimida (14 columnas): sin scroll horizontal ni vertical; la
+     paginación (50/página) evita tablones kilométricos. */
+  :global(.aff-table-wrap) { border: 1px solid var(--color-border); border-radius: 12px; overflow: visible; }
+  :global(.aff-table) { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .7rem; background: rgba(255, 255, 255, .02); table-layout: auto; }
+  :global(.aff-table th) { position: sticky; top: 0; z-index: 1; padding: .45rem .45rem; text-align: left; font-size: .58rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-muted); background: #121826; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+  :global(.aff-table td) { padding: .4rem .45rem; color: var(--color-text-main); border-bottom: 1px solid rgba(255, 255, 255, .05); vertical-align: middle; }
   :global(.aff-num) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  :global(.aff-num small) { display: block; color: #6ee7b7; font-size: .68rem; }
+  :global(.aff-num small) { display: block; color: #6ee7b7; font-size: .62rem; }
   :global(.aff-row) { cursor: pointer; }
   :global(.aff-row:hover) { background: rgba(96, 165, 250, .06); }
   :global(.aff-row.is-open) { background: rgba(96, 165, 250, .1); }
-  :global(.aff-thumb) { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; padding: 3px; background: #fff; border-radius: 8px; }
+  :global(.aff-thumb) { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 2px; background: #fff; border-radius: 6px; }
   :global(.aff-thumb img) { max-width: 100%; max-height: 100%; object-fit: contain; }
-  :global(.aff-name) { min-width: 220px; }
-  :global(.aff-name strong) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 650; line-height: 1.35; }
-  :global(.aff-name span) { display: block; margin-top: .2rem; color: var(--color-text-dim); font-size: .68rem; }
-  :global(.aff-actions) { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; white-space: nowrap; }
-  :global(.aff-caret) { width: 28px; height: 28px; color: #93c5fd; background: rgba(96, 165, 250, .1); border: 1px solid rgba(96, 165, 250, .25); border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-body); font-weight: 700; transition: all .2s ease; }
+  :global(.aff-name) { max-width: 200px; min-width: 120px; }
+  :global(.aff-name strong) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 650; font-size: .7rem; line-height: 1.3; }
+  :global(.aff-name span) { display: block; margin-top: .1rem; color: var(--color-text-dim); font-size: .6rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  :global(.aff-actions) { display: flex; align-items: center; justify-content: flex-end; gap: .3rem; white-space: nowrap; }
+  :global(.aff-actions .btn-sm) { padding: .25rem .5rem; font-size: .64rem; }
+  :global(.aff-caret) { width: 24px; height: 24px; color: #93c5fd; background: rgba(96, 165, 250, .1); border: 1px solid rgba(96, 165, 250, .25); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-body); font-size: .7rem; font-weight: 700; transition: all .2s ease; }
   :global(.aff-row.is-open .aff-caret) { transform: rotate(90deg); }
   :global(.aff-detail td) { background: rgba(4, 10, 18, .55); }
-  :global(.aff-detail-grid) { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .65rem .9rem; margin: 0; }
-  :global(.aff-detail-item dt) { color: var(--color-text-dim); font-size: .64rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-  :global(.aff-detail-item dd) { margin: .15rem 0 0; color: var(--color-text-main); font-size: .76rem; word-break: break-word; }
+  :global(.aff-detail-grid) { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: .5rem .8rem; margin: 0; }
+  :global(.aff-detail-item dt) { color: var(--color-text-dim); font-size: .6rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  :global(.aff-detail-item dd) { margin: .1rem 0 0; color: var(--color-text-main); font-size: .7rem; word-break: break-word; }
   :global(.aff-detail-item a) { color: #93c5fd; }
+  /* Checkboxes de selección masiva de la tabla AliExpress */
+  :global(.ac-th-check), :global(.ac-td-check) { width: 28px; padding-left: .5rem !important; padding-right: .2rem !important; }
+  :global(.ac-th-check input), :global(.ac-td-check input) { accent-color: #38bdf8; cursor: pointer; width: 14px; height: 14px; margin: 0; }
+  /* Barra de filtros de la tabla AliExpress */
+  .ali-filters { display: flex; align-items: flex-end; gap: .5rem; flex-wrap: wrap; margin-bottom: .6rem; padding: .55rem .65rem; background: rgba(255, 255, 255, .02); border: 1px solid var(--color-border); border-radius: 10px; }
+  .ali-filters[hidden] { display: none; }
+  .ali-filters .filter-field { min-width: 90px; flex: 0 1 auto; }
+  .ali-filters .filter-field.ali-f-search { flex: 1 1 180px; min-width: 150px; }
+  .ali-filters .btn-secondary { flex-shrink: 0; padding: .5rem .8rem; font-size: .72rem; }
+  /* Barra de selección masiva */
+  .ali-selection { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; margin-bottom: .6rem; padding: .5rem .7rem; color: #7dd3fc; background: rgba(56, 189, 248, .08); border: 1px solid rgba(56, 189, 248, .3); border-radius: 10px; font-size: .74rem; font-weight: 700; }
+  .ali-selection[hidden] { display: none; }
+  .ali-selection .btn-sm { padding: .28rem .6rem; font-size: .68rem; }
   :global(.unified-card) { display: flex; align-items: center; gap: 1rem; padding: .85rem 1rem; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
   :global(.unified-thumb) { width: 64px; height: 64px; border-radius: 8px; background: #fff; padding: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
   :global(.unified-thumb img) { max-width: 100%; max-height: 100%; object-fit: contain; }

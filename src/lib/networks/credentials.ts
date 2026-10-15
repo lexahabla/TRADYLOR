@@ -61,16 +61,18 @@ export function saveCredentials(networkId: string, values: Record<string, string
   if (!definition) return null;
 
   const data = readFile();
+  const envMap = ENV_CREDENTIALS[networkId] ?? {};
   const cleanValues: Record<string, string> = {};
   for (const field of definition.fields) {
     const value = String(values[field.key] ?? '').trim();
+    const previous = data.networks[networkId]?.values?.[field.key];
     if (value) cleanValues[field.key] = value;
-    else if (field.required && !data.networks[networkId]?.values?.[field.key]) {
-      // Si el campo requerido queda vacío y no había valor previo, no se guarda nada.
+    else if (previous) cleanValues[field.key] = previous;
+    else if (field.required && !envCredential(envMap[field.key] ?? '')) {
+      // Requerido y ni guardado ni disponible por variable de entorno.
       return null;
-    } else if (data.networks[networkId]?.values?.[field.key]) {
-      cleanValues[field.key] = data.networks[networkId].values[field.key];
     }
+    // Opcional vacío: se omite (se podrá completar luego; el conector usa env de fallback).
   }
 
   data.networks[networkId] = {
@@ -96,6 +98,32 @@ export function getCredentialValues(networkId: string): Record<string, string> |
   return readFile().networks[networkId]?.values ?? null;
 }
 
+const ENV_CREDENTIALS: Record<string, Record<string, string>> = {
+  aliexpress: {
+    appKey: 'ALIEXPRESS_APP_KEY',
+    appSecret: 'ALIEXPRESS_APP_SECRET',
+    trackingId: 'ALIEXPRESS_TRACKING_ID',
+  },
+};
+
+function envCredential(name: string): string {
+  return String(process.env[name] ?? '').trim();
+}
+
+/**
+ * Valores disponibles para una red: los guardados en el panel + los que sólo
+ * existen como variables de entorno de EasyPanel (fallback).
+ */
+export function getMergedCredentialValues(networkId: string): Record<string, string> {
+  const stored = getCredentialValues(networkId) ?? {};
+  const fromEnv = ENV_CREDENTIALS[networkId] ?? {};
+  const merged: Record<string, string> = { ...stored };
+  for (const [key, envName] of Object.entries(fromEnv)) {
+    if (!merged[key] && envCredential(envName)) merged[key] = envCredential(envName);
+  }
+  return merged;
+}
+
 /** Actualiza el estado de conexión tras una validación. */
 export function setNetworkStatus(networkId: string, status: NetworkStatus, detail?: string): void {
   const data = readFile();
@@ -111,6 +139,7 @@ export function getNetworkView(networkId: string): NetworkView | null {
   const definition = getNetworkDefinition(networkId);
   if (!definition) return null;
   const stored = readFile().networks[networkId];
+  const available = getMergedCredentialValues(networkId);
 
   return {
     id: definition.id,
@@ -121,7 +150,7 @@ export function getNetworkView(networkId: string): NetworkView | null {
     docUrl: definition.docUrl,
     fields: definition.fields.map((field) => ({
       ...field,
-      hasValue: Boolean(stored?.values?.[field.key]),
+      hasValue: Boolean(stored?.values?.[field.key] || available[field.key]),
     })),
     status: stored?.status ?? 'pending',
     statusDetail: stored?.statusDetail,
@@ -134,27 +163,9 @@ export function getAllNetworkViews(): NetworkView[] {
   return getAllNetworks().map((network) => getNetworkView(network.id)).filter(Boolean) as NetworkView[];
 }
 
-const ENV_CREDENTIALS: Record<string, Record<string, string>> = {
-  aliexpress: {
-    appKey: 'ALIEXPRESS_APP_KEY',
-    appSecret: 'ALIEXPRESS_APP_SECRET',
-  },
-};
-
-function envCredential(name: string): string {
-  return String(process.env[name] ?? '').trim();
-}
-
 /** IDs de redes con credenciales completas (archivo o variables de entorno). */
 export function getConnectedNetworkIds(): string[] {
-  const data = readFile();
   return getAllNetworks()
-    .filter((network) => {
-      const stored = data.networks[network.id]?.values ?? {};
-      const fromEnv = ENV_CREDENTIALS[network.id] ?? {};
-      return network.fields
-        .filter((f) => f.required)
-        .every((f) => Boolean(stored[f.key] || envCredential(fromEnv[f.key] ?? '')));
-    })
+    .filter((network) => network.fields.filter((f) => f.required).every((f) => Boolean(getMergedCredentialValues(network.id)[f.key])))
     .map((network) => network.id);
 }

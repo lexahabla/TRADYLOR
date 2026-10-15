@@ -14,7 +14,7 @@
 
 import { createHmac } from 'node:crypto';
 import { ConnectorError, fetchWithTimeout, type NetworkConnector } from './base';
-import { getCredentialValues, setNetworkStatus } from '../credentials';
+import { getMergedCredentialValues, setNetworkStatus } from '../credentials';
 import type { UnifiedProduct, UnifiedSearchParams } from '../types';
 
 function gateways(): string[] {
@@ -72,15 +72,16 @@ function envValue(name: string): string {
 
 /**
  * Credenciales del panel (credentials.json) o, si faltan, las variables de
- * EasyPanel: ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET y ALIEXPRESS_SERVER_URL.
- * ALIEXPRESS_TRACKING_ID es opcional.
+ * EasyPanel: ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET, ALIEXPRESS_TRACKING_ID
+ * y ALIEXPRESS_SERVER_URL (el tracking ID es opcional pero recomendable: es el
+ * que acredita las comisiones de la cuenta de afiliados de AliExpress).
  */
 function resolveCreds(): Record<string, string> | null {
-  const stored = getCredentialValues('aliexpress') ?? {};
+  const stored = getMergedCredentialValues('aliexpress');
   const creds = {
-    appKey: stored.appKey || envValue('ALIEXPRESS_APP_KEY'),
-    appSecret: stored.appSecret || envValue('ALIEXPRESS_APP_SECRET'),
-    trackingId: stored.trackingId || envValue('ALIEXPRESS_TRACKING_ID'),
+    appKey: stored.appKey || '',
+    appSecret: stored.appSecret || '',
+    trackingId: stored.trackingId || '',
   };
   return creds.appKey && creds.appSecret ? creds : null;
 }
