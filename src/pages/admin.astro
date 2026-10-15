@@ -434,37 +434,48 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     <!-- 3. LISTADO RÁPIDO DE PRODUCTOS EXISTENTES -->
     <section id="catalogProducts" data-admin-view="products" class:list={['admin-card', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'products' }]}>
-      <div class="list-header-row">
+       <div class="list-header-row">
         <div>
           <h2 class="card-title">3. Catálogo de Productos Registrados</h2>
-          <p class="card-desc">Consulta los productos activos en <code>src/data/products.json</code>, pruébalos o elimínalos.</p>
+          <p class="card-desc">Consulta los productos activos en <code>src/data/products.json</code>, pruébalos, enríchelos con IA o elimínalos.</p>
         </div>
         <div class="list-search-wrapper">
           <input type="search" id="inputFilterList" placeholder="Filtrar por título o comercio..." />
         </div>
       </div>
 
+      <div class="product-sel-bar" id="productSelBar">
+        <span id="productSelCount">0 seleccionados</span>
+        <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll">Seleccionar todos los visibles</button>
+        <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear">Limpiar</button>
+        <button type="button" class="btn-ai btn-sm" id="btnProdEnrich">Enriquecer con IA (texto + imagen)</button>
+        <button type="button" class="btn-danger-ghost btn-sm" id="btnProdDeleteSel">Eliminar seleccionados</button>
+      </div>
+
+
       <div class="products-table-responsive">
         <table class="products-table" id="productsTable">
-          <thead>
-            <tr>
-              <th>Imagen</th>
-              <th>Producto & Categoría</th>
-              <th>Comercio</th>
-              <th>Precio</th>
-              <th>Enlace Afiliado</th>
-              <th class="text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody id="productsTableBody">
-            {initialProducts.length === 0 ? (
-              <tr class="empty-row">
-                <td colspan="6">No hay productos registrados en el catálogo aún.</td>
+            <thead>
+              <tr>
+                <th><input type="checkbox" id="prodCheckAll" aria-label="Seleccionar todos los visibles" /></th>
+                <th>Imagen</th>
+                <th>Producto & Categoría</th>
+                <th>Comercio</th>
+                <th>Precio</th>
+                <th>Enlace Afiliado</th>
+                <th class="text-right">Acciones</th>
               </tr>
-            ) : (
-              initialProducts.map((p) => (
-                <tr data-product-id={p.id} class="product-row">
-                  <td class="col-thumb">
+            </thead>
+          <tbody id="productsTableBody">
+               {initialProducts.length === 0 ? (
+                <tr class="empty-row">
+                  <td colspan="7">No hay productos registrados en el catálogo aún.</td>
+                </tr>
+              ) : (
+                initialProducts.map((p) => (
+                  <tr data-product-id={p.id} class="product-row">
+                    <td class="col-check"><input type="checkbox" data-prod-check data-id={p.id} aria-label="Seleccionar producto" /></td>
+                    <td class="col-thumb">
                     <img src={p.image} alt={p.title} class="thumb-img" loading="lazy" />
                   </td>
                   <td class="col-details">
@@ -905,6 +916,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // Listado de productos
     const productsTableBody = document.getElementById('productsTableBody');
     const inputFilterList = document.getElementById('inputFilterList');
+    const productSelBar = document.getElementById('productSelBar');
+    const productSelCount = document.getElementById('productSelCount');
+    const prodCheckAll = document.getElementById('prodCheckAll');
+    const btnProdSelAll = document.getElementById('btnProdSelAll');
+    const btnProdSelClear = document.getElementById('btnProdSelClear');
+    const btnProdEnrich = document.getElementById('btnProdEnrich');
+    const btnProdDeleteSel = document.getElementById('btnProdDeleteSel');
+    let selectedProductIds = new Set();
+    let currentProducts = [];
 
     // Helper para mostrar feedback de alerta
     function showAlert(type, title, message) {
@@ -1770,11 +1790,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // =========================================================================
     // 4. ELIMINAR Y EDITAR PRODUCTOS DE LA TABLA
     // =========================================================================
-    async function reloadProductsTable() {
+     async function reloadProductsTable() {
       try {
         const res = await fetch('/api/products/add');
         const data = await res.json();
         if (data.success && Array.isArray(data.products)) {
+          currentProducts = data.products;
           renderTableRows(data.products);
         }
       } catch (err) {
@@ -1785,10 +1806,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     function renderTableRows(products) {
       if (!productsTableBody) return;
 
-      if (products.length === 0) {
+       if (products.length === 0) {
         productsTableBody.innerHTML = `
           <tr class="empty-row">
-            <td colspan="6">No hay productos registrados en el catálogo aún.</td>
+            <td colspan="7">No hay productos registrados en el catálogo aún.</td>
           </tr>
         `;
         return;
@@ -1796,8 +1817,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
       productsTableBody.innerHTML = products
         .map(
-          (p) => `
-          <tr data-product-id="${p.id}" class="product-row">
+          (p, index) => `
+          <tr data-product-id="${p.id}" class="product-row" data-prod-row="${index}">
+            <td class="col-check"><input type="checkbox" data-prod-check data-id="${p.id}" aria-label="Seleccionar producto" /></td>
             <td class="col-thumb">
               <img src="${p.image}" alt="${p.title}" class="thumb-img" loading="lazy" onerror="this.src='https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=800&auto=format&fit=crop'" />
             </td>
@@ -1808,37 +1830,39 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 ${p.badge ? `<span class="pill-badge">${p.badge}</span>` : ''}
               </div>
             </td>
-            <td class="col-merchant">
-              <span class="merchant-badge">${p.merchant}</span>
-            </td>
+            <td class="col-merchant"><span class="merchant-badge">${p.merchant}</span></td>
             <td class="col-price">
               <span class="price-val">${Number(p.price).toFixed(2)} €</span>
               ${p.originalPrice ? `<span class="price-old">${Number(p.originalPrice).toFixed(2)} €</span>` : ''}
             </td>
             <td class="col-link">
-              <a href="${p.affiliateUrl}" target="_blank" rel="nofollow noopener noreferrer" class="test-link">
-                Probar Enlace
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                  <polyline points="15 3 21 3 21 9"></polyline>
-                  <line x1="10" y1="14" x2="21" y2="3"></line>
-                </svg>
-              </a>
+              <a href="${p.affiliateUrl}" target="_blank" rel="nofollow noopener noreferrer" class="test-link">Probar Enlace</a>
             </td>
             <td class="col-actions text-right">
               <button type="button" class="btn-icon-action btn-edit-row" data-id="${p.id}" title="Cargar en formulario">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
               </button>
               <button type="button" class="btn-icon-action btn-delete-row" data-id="${p.id}" title="Eliminar producto">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="3 6 5 6 21 6"></polyline>
-                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                </svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>
+              <button type="button" class="btn-icon-action btn-prod-detail" data-id="${p.id}" title="Ver todos los datos" data-idx="${index}">▸</button>
             </td>
+          </tr>
+          <tr class="product-detail-row" data-prod-detail="${index}" hidden>
+            <td colspan="7"><dl class="aff-detail-grid">
+              <div class="aff-detail-item"><dt>Título</dt><dd>${escapeHtml ? escapeHtml(p.title) : p.title}</dd></div>
+              <div class="aff-detail-item"><dt>Categoría</dt><dd>${p.category}</dd></div>
+              <div class="aff-detail-item"><dt>Comercio</dt><dd>${p.merchant}</dd></div>
+              <div class="aff-detail-item"><dt>Precio</dt><dd>${Number(p.price).toFixed(2)} €</dd></div>
+              ${p.originalPrice ? `<div class="aff-detail-item"><dt>Precio original</dt><dd>${Number(p.originalPrice).toFixed(2)} €</dd></div>` : ''}
+              ${p.badge ? `<div class="aff-detail-item"><dt>Badge</dt><dd>${p.badge}</dd></div>` : ''}
+              ${p.description ? `<div class="aff-detail-item"><dt>Descripción</dt><dd>${p.description}</dd></div>` : ''}
+              ${p.verdict ? `<div class="aff-detail-item"><dt>Veredicto</dt><dd>${p.verdict}</dd></div>` : ''}
+              ${p.techSheet ? `<div class="aff-detail-item"><dt>Ficha técnica</dt><dd>${p.techSheet}</dd></div>` : ''}
+              ${Array.isArray(p.pros) && p.pros.length ? `<div class="aff-detail-item"><dt>Pros</dt><dd>${p.pros.join(' · ')}</dd></div>` : ''}
+              ${Array.isArray(p.cons) && p.cons.length ? `<div class="aff-detail-item"><dt>Contras</dt><dd>${p.cons.join(' · ')}</dd></div>` : ''}
+              ${Array.isArray(p.gallery) && p.gallery.length ? `<div class="aff-detail-item"><dt>Galería (${p.gallery.length})</dt><dd style="display:flex;flex-wrap:wrap;gap:6px">${p.gallery.map((u)=>`<a href="${u}" target="_blank"><img src="${u}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--color-border)" /></a>`).join('')}</dd></div>` : ''}
+            </dl></td>
           </tr>
         `
         )
@@ -1847,7 +1871,31 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       attachRowActions();
     }
 
-    function attachRowActions() {
+     function attachRowActions() {
+      // Mostrar/ocultar la fila de detalle de un producto
+      document.querySelectorAll('.btn-prod-detail').forEach((btn) => {
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const idx = btn.getAttribute('data-idx');
+          const detail = document.querySelector(`[data-prod-detail="${idx}"]`);
+          if (detail) {
+            const open = detail.hidden;
+            detail.hidden = !open;
+            btn.textContent = open ? '▾' : '▸';
+          }
+        };
+      });
+
+      // Checkboxes
+      document.querySelectorAll('[data-prod-check]').forEach((box) => {
+        const id = box.getAttribute('data-id');
+        box.checked = selectedProductIds.has(id);
+        box.onchange = () => {
+          if (box.checked) selectedProductIds.add(id); else selectedProductIds.delete(id);
+          updateProdSelCount();
+        };
+      });
+
       // 1. Borrar producto
       document.querySelectorAll('.btn-delete-row').forEach((btn) => {
         btn.onclick = async () => {
@@ -1944,6 +1992,92 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         });
       });
     }
+
+     function updateProdSelCount() {
+      if (productSelCount) productSelCount.textContent = `${selectedProductIds.size} seleccionado${selectedProductIds.size === 1 ? '' : 's'}`;
+    }
+    updateProdSelCount();
+
+    btnProdSelAll?.addEventListener('click', () => {
+      document.querySelectorAll('[data-prod-check]').forEach((box) => {
+        box.checked = true;
+        const id = box.getAttribute('data-id');
+        if (id) selectedProductIds.add(id);
+      });
+      updateProdSelCount();
+    });
+    btnProdSelClear?.addEventListener('click', () => {
+      selectedProductIds.clear();
+      document.querySelectorAll('[data-prod-check]').forEach((box) => (box.checked = false));
+      updateProdSelCount();
+    });
+    prodCheckAll?.addEventListener('change', () => {
+      const checked = prodCheckAll.checked;
+      document.querySelectorAll('[data-prod-check]').forEach((box) => {
+        box.checked = checked;
+        const id = box.getAttribute('data-id');
+        if (id) { if (checked) selectedProductIds.add(id); else selectedProductIds.delete(id); }
+      });
+      updateProdSelCount();
+    });
+    btnProdDeleteSel?.addEventListener('click', async () => {
+      if (!selectedProductIds.size) return;
+      if (!confirm(`¿Eliminar ${selectedProductIds.size} producto(s) del catálogo?`)) return;
+      let ok = 0;
+      for (const id of Array.from(selectedProductIds)) {
+        try {
+          const res = await fetch('/api/products/add', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id })});
+          const data = await res.json();
+          if (data.success) ok++;
+        } catch {}
+      }
+      selectedProductIds.clear();
+      updateProdSelCount();
+      await reloadProductsTable();
+      showAlert('success', 'Eliminación masiva', `${ok} producto(s) eliminados del catálogo.`);
+    });
+    btnProdEnrich?.addEventListener('click', async () => {
+      const ids = Array.from(selectedProductIds);
+      if (!ids.length) return;
+      showAlert('loading', 'Enriqueciendo con IA...', `Procesando ${ids.length} producto(s).`);
+      let ok = 0, failed = 0;
+      for (const id of ids) {
+        const product = (currentProducts || []).find((p) => p.id === id);
+        if (!product) { failed++; continue; }
+        try {
+          const res = await fetch('/api/admin/add-product', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id: product.id,
+              title: product.title,
+              description: product.description,
+              category: product.category,
+              price: product.price,
+              originalPrice: product.originalPrice,
+              image: product.image,
+              gallery: product.gallery,
+              affiliateUrl: product.affiliateUrl,
+              merchant: product.merchant,
+              url: product.affiliateUrl,
+              brand: product.merchant,
+              rating: product.rating,
+              reviewsCount: product.reviewsCount,
+              pros: product.pros,
+              cons: product.cons,
+              techSheet: product.techSheet,
+              badge: product.badge,
+              options: { text: true, image: !product.image, save: true },
+            }),
+          });
+          const data = await res.json();
+          if (data && data.success) ok++; else failed++;
+        } catch { failed++; }
+      }
+      selectedProductIds.clear();
+      updateProdSelCount();
+      await reloadProductsTable();
+      showAlert(failed ? 'warning' : 'success', 'Enriquecimiento masivo finalizado', `${ok} actualizado${ok===1?'':'s'} · ${failed} con error.`);
+    });
 
     // Inicializar listeners en los rows SSR iniciales
     attachRowActions();
