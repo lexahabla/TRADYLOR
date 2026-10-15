@@ -45,7 +45,7 @@ export const NETWORKS: NetworkDefinition[] = [
     fields: [
       { key: 'appKey', label: 'App Key', secret: false, required: true },
       { key: 'appSecret', label: 'App Secret', secret: true, required: true },
-      { key: 'trackingId', label: 'Tracking ID', secret: false, required: true },
+      { key: 'trackingId', label: 'Tracking ID (opcional)', secret: false, required: false },
     ],
   },
   {

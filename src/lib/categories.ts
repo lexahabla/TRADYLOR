@@ -91,10 +91,11 @@ function readCategories(): Category[] {
   try {
     if (fs.existsSync(CATEGORIES_PATH)) {
       const parsed = JSON.parse(fs.readFileSync(CATEGORIES_PATH, 'utf-8'));
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        if (parsed[0]?.slug) return parsed as Category[];
+      const list = Array.isArray(parsed) ? parsed : parsed?.categories;
+      if (Array.isArray(list) && list.length > 0) {
+        if (list[0]?.slug) return list as Category[];
         // Esquema legado: array plano de nombres → migración perezosa en memoria.
-        return migrateLegacyNames(parsed.filter((item: unknown) => typeof item === 'string'));
+        return migrateLegacyNames(list.filter((item: unknown) => typeof item === 'string'));
       }
     }
   } catch (error) {

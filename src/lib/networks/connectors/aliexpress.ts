@@ -17,7 +17,10 @@ import { ConnectorError, fetchWithTimeout, type NetworkConnector } from './base'
 import { getCredentialValues, setNetworkStatus } from '../credentials';
 import type { UnifiedProduct, UnifiedSearchParams } from '../types';
 
-const GATEWAYS = ['https://api-sg.aliexpress.com/sync', 'https://eco.taobao.com/router/rest'];
+function gateways(): string[] {
+  const configured = envValue('ALIEXPRESS_SERVER_URL');
+  return [...new Set([configured, 'https://api-sg.aliexpress.com/sync', 'https://eco.taobao.com/router/rest'].filter(Boolean))];
+}
 
 const CATALOG_KEYWORDS = [
   'auriculares bluetooth',
@@ -69,7 +72,8 @@ function envValue(name: string): string {
 
 /**
  * Credenciales del panel (credentials.json) o, si faltan, las variables de
- * EasyPanel: ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET, ALIEXPRESS_TRACKING_ID.
+ * EasyPanel: ALIEXPRESS_APP_KEY, ALIEXPRESS_APP_SECRET y ALIEXPRESS_SERVER_URL.
+ * ALIEXPRESS_TRACKING_ID es opcional.
  */
 function resolveCreds(): Record<string, string> | null {
   const stored = getCredentialValues('aliexpress') ?? {};
@@ -121,7 +125,7 @@ async function callApi(
   const body = new URLSearchParams(params).toString();
   let lastError = 'AliExpress no respondió.';
   let raw = '';
-  for (const gateway of GATEWAYS) {
+  for (const gateway of gateways()) {
     try {
       const response = await fetchWithTimeout(
         gateway,
@@ -268,8 +272,8 @@ export class AliExpressConnector implements NetworkConnector {
 
   async validate(): Promise<{ ok: boolean; message: string }> {
     const creds = resolveCreds();
-    if (!creds?.appKey || !creds?.appSecret || !creds?.trackingId) {
-      const message = 'Faltan credenciales obligatorias (App Key, App Secret o Tracking ID).';
+    if (!creds?.appKey || !creds?.appSecret) {
+      const message = 'Faltan ALIEXPRESS_APP_KEY o ALIEXPRESS_APP_SECRET.';
       setNetworkStatus(this.networkId, 'error', message);
       return { ok: false, message };
     }

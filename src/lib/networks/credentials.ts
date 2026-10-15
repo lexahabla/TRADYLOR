@@ -138,7 +138,6 @@ const ENV_CREDENTIALS: Record<string, Record<string, string>> = {
   aliexpress: {
     appKey: 'ALIEXPRESS_APP_KEY',
     appSecret: 'ALIEXPRESS_APP_SECRET',
-    trackingId: 'ALIEXPRESS_TRACKING_ID',
   },
 };
 
