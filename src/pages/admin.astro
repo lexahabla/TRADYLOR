@@ -150,16 +150,102 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <input type="hidden" id="prodId" value="" />
 
           <!-- Zona de datos básicos + vista previa en 2 columnas -->
-          <div class="form-basic-grid">
-            <div class="form-basic-col">
-
-<div class="form-row">
+	          <div class="form-row">
             <div class="form-group full-width">
               <label for="prodTitle" class="field-label">Título del Producto <span class="required">*</span></label>
               <input type="text" id="prodTitle" required />
             </div>
           </div>
 
+
+
+            <div class="form-preview-col">
+              <div class="admin-card preview-card">
+                <div class="card-header">
+                  <div class="header-icon icon-cyan">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </div>
+                  <div>
+                    <h2 class="card-title">2. Vista Previa en Tiempo Real</h2>
+                    <p class="card-desc">Así verá el usuario la ficha en el portal tras guardar los cambios.</p>
+                  </div>
+                </div>
+
+                <div class="preview-container">
+                  <article class="preview-product-card" id="cardPreview">
+                    <div class="preview-image-wrapper">
+                      <img id="previewImg" alt="" loading="lazy" hidden />
+                      <div id="previewEmptyImage" class="preview-empty-image">
+                        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                          <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                          <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                          <path d="m21 15-5-5L5 21"></path>
+                        </svg>
+                        <span>La imagen aparecerá al analizar el enlace</span>
+                      </div>
+                      <button type="button" id="previewVideoOverlay" class="preview-video-overlay" hidden>
+                        <span class="preview-play-icon" aria-hidden="true">▶</span>
+                        <span>Vídeo del producto</span>
+                      </button>
+                      <button type="button" id="previewPrev" class="preview-nav preview-nav-prev" aria-label="Imagen anterior" hidden>‹</button>
+                      <button type="button" id="previewNext" class="preview-nav preview-nav-next" aria-label="Imagen siguiente" hidden>›</button>
+                      <span id="previewCounter" class="preview-counter" hidden></span>
+                      <div class="preview-badge-row">
+                        <span id="previewCategory" class="cat-pill"></span>
+                        <span id="previewBadge" class="badge-pill" hidden></span>
+                      </div>
+                    </div>
+
+                    <div class="preview-content">
+                      <div class="preview-merchant-row">
+                        <span id="previewMerchant" class="merchant-tag"></span>
+                        <span class="rating-stars" hidden>★★★★★ <span class="rating-num">4.8</span></span>
+                      </div>
+
+                      <h3 id="previewTitle" class="preview-title"></h3>
+
+                      <p id="previewDesc" class="preview-desc"></p>
+
+                      <div class="preview-pricing">
+                        <div class="price-wrap">
+                          <span id="previewPrice" class="price-current"></span>
+                          <span id="previewOriginalPrice" class="price-original" hidden></span>
+                        </div>
+                        <span id="previewDiscount" class="discount-pill" hidden></span>
+                      </div>
+
+                      <div class="preview-bullets" id="previewBulletsWrap">
+                        <div class="bullet-col pros-col">
+                          <strong>Puntos Fuertes:</strong>
+                          <ul id="previewProsList">
+                          </ul>
+                        </div>
+                      </div>
+
+                      <a
+                        id="previewAffiliateBtn"
+                        href="#"
+                        hidden
+                        target="_blank"
+                        rel="nofollow noopener sponsored"
+                        class="preview-buy-btn"
+                      >
+                        <span>Ver producto en</span>
+                        <strong id="previewBtnMerchant">Amazon</strong>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                          <polyline points="15 3 21 3 21 9"></polyline>
+                          <line x1="10" y1="14" x2="21" y2="3"></line>
+                        </svg>
+                      </a>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </div>
 
           <div class="form-row two-cols">
             <div class="form-group">
@@ -274,97 +360,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </div>
           </div>
 
-            </div>
-            <!-- Columna derecha: vista previa en vivo -->
-            <div class="form-preview-col">
-              <div class="admin-card preview-card">
-                <div class="card-header">
-                  <div class="header-icon icon-cyan">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
-                      <circle cx="12" cy="12" r="3"></circle>
-                    </svg>
-                  </div>
-                  <div>
-                    <h2 class="card-title">2. Vista Previa en Tiempo Real</h2>
-                    <p class="card-desc">Así verá el usuario la ficha en el portal tras guardar los cambios.</p>
-                  </div>
-                </div>
-
-                <div class="preview-container">
-                  <article class="preview-product-card" id="cardPreview">
-                    <div class="preview-image-wrapper">
-                      <img id="previewImg" alt="" loading="lazy" hidden />
-                      <div id="previewEmptyImage" class="preview-empty-image">
-                        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                          <rect x="3" y="3" width="18" height="18" rx="2"></rect>
-                          <circle cx="8.5" cy="8.5" r="1.5"></circle>
-                          <path d="m21 15-5-5L5 21"></path>
-                        </svg>
-                        <span>La imagen aparecerá al analizar el enlace</span>
-                      </div>
-                      <button type="button" id="previewVideoOverlay" class="preview-video-overlay" hidden>
-                        <span class="preview-play-icon" aria-hidden="true">▶</span>
-                        <span>Vídeo del producto</span>
-                      </button>
-                      <button type="button" id="previewPrev" class="preview-nav preview-nav-prev" aria-label="Imagen anterior" hidden>‹</button>
-                      <button type="button" id="previewNext" class="preview-nav preview-nav-next" aria-label="Imagen siguiente" hidden>›</button>
-                      <span id="previewCounter" class="preview-counter" hidden></span>
-                      <div class="preview-badge-row">
-                        <span id="previewCategory" class="cat-pill"></span>
-                        <span id="previewBadge" class="badge-pill" hidden></span>
-                      </div>
-                    </div>
-
-                    <div class="preview-content">
-                      <div class="preview-merchant-row">
-                        <span id="previewMerchant" class="merchant-tag"></span>
-                        <span class="rating-stars" hidden>★★★★★ <span class="rating-num">4.8</span></span>
-                      </div>
-
-                      <h3 id="previewTitle" class="preview-title"></h3>
-
-                      <p id="previewDesc" class="preview-desc"></p>
-
-                      <div class="preview-pricing">
-                        <div class="price-wrap">
-                          <span id="previewPrice" class="price-current"></span>
-                          <span id="previewOriginalPrice" class="price-original" hidden></span>
-                        </div>
-                        <span id="previewDiscount" class="discount-pill" hidden></span>
-                      </div>
-
-                      <div class="preview-bullets" id="previewBulletsWrap">
-                        <div class="bullet-col pros-col">
-                          <strong>Puntos Fuertes:</strong>
-                          <ul id="previewProsList">
-                          </ul>
-                        </div>
-                      </div>
-
-                      <a
-                        id="previewAffiliateBtn"
-                        href="#"
-                        hidden
-                        target="_blank"
-                        rel="nofollow noopener sponsored"
-                        class="preview-buy-btn"
-                      >
-                        <span>Ver producto en</span>
-                        <strong id="previewBtnMerchant">Amazon</strong>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                          <polyline points="15 3 21 3 21 9"></polyline>
-                          <line x1="10" y1="14" x2="21" y2="3"></line>
-                        </svg>
-                      </a>
-                    </div>
-                  </article>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div class="form-row">
+<div class="form-row">
             <div class="form-group full-width">
               <label for="prodDescription" class="field-label">Descripción Técnica Concisa</label>
               <textarea id="prodDescription" rows="3"></textarea>
