@@ -6,18 +6,20 @@
  *   { action: 'save',     networkId, values: { accessKey, ... } } → guarda
  *   { action: 'delete',   networkId }                             → desconecta (borra credenciales)
  *   { action: 'validate', networkId }                             → valida
+ *   { action: 'reveal',   networkId }                             → devuelve los valores crudos (solo admin)
  *   { action: 'create',   name, region?, color?, description?, docUrl?, fields: [{label, secret, required}] } → crea afiliado
  *   { action: 'remove',   networkId }                             → elimina el afiliado de la lista
  *   { action: 'restore' }                                         → restaura las redes predefinidas eliminadas
  *
  * Protegida por la sesión de administrador (cookie HttpOnly).
- * Los valores secretos NUNCA se devuelven en las respuestas.
+ * Los valores secretos NUNCA se devuelven en las respuestas (excepto en
+ * 'reveal', que es la única vía autenticada para verlos desde el panel).
  * ==============================================================================
  */
 
 import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../lib/adminAuth';
-import { deleteCredentials, saveCredentials } from '../../../lib/networks/credentials';
+import { deleteCredentials, getMergedCredentialValues, saveCredentials } from '../../../lib/networks/credentials';
 import { getConnector, getNetworksOverview } from '../../../lib/networks';
 import { createNetwork, getRemovedNetworks } from '../../../lib/networks/registry';
 import { clearRemovedNetworks, listCustomNetworks, markNetworkRemoved, removeCustomNetwork } from '../../../lib/networks/customNetworks';
@@ -73,6 +75,14 @@ export const POST: APIRoute = async ({ request }) => {
       }
       const result = await connector.validate();
       return json({ success: result.ok, message: result.message, ...overview() }, result.ok ? 200 : 400);
+    }
+
+    case 'reveal': {
+      const values = getMergedCredentialValues(networkId);
+      if (!values || !Object.keys(values).length) {
+        return json({ success: false, message: 'Esta red no tiene credenciales guardadas.' }, 404);
+      }
+      return json({ success: true, values });
     }
 
     case 'create': {
