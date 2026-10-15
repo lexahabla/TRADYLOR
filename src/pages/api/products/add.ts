@@ -7,6 +7,7 @@ import {
   slugify,
   type Product,
 } from '../../../lib/productStore';
+import { addDeletedId, removeDeletedId } from '../../../lib/deletedProducts';
 
 export const prerender = false;
 
@@ -527,6 +528,10 @@ export const POST: APIRoute = async ({ request }) => {
         );
       }
 
+      // Tombstone: evita que el producto reaparezca vía el catálogo curado
+      // (src/data/products.ts) o por cualquier re-sync posterior.
+      addDeletedId(targetId);
+
       return new Response(
         JSON.stringify({ success: true, message: 'Producto eliminado correctamente', id: targetId }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -629,6 +634,9 @@ export const POST: APIRoute = async ({ request }) => {
           { status: 500, headers: { 'Content-Type': 'application/json' } }
         );
       }
+
+      // Si el producto había sido borrado previamente, se revive (quito el tombstone).
+      removeDeletedId(productId);
 
       return new Response(
         JSON.stringify({
