@@ -104,6 +104,22 @@ function text(value: unknown): string {
   return value == null ? '' : String(value).trim();
 }
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+function safeParse(raw: string): Record<string, unknown> | null {
+  try {
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
 async function callApi(
   method: string,
   creds: Record<string, string>,
@@ -116,15 +132,19 @@ async function callApi(
     format: 'json',
     v: '2.0',
     sign_method: 'sha256',
-    simplify: 'true',
     ...biz,
   };
   if (creds.trackingId) params.tracking_id = creds.trackingId;
   params.sign = sign(params, creds.appSecret);
 
-  const body = new URLSearchParams(params).toString();
+  // URLSearchParams codifica el espacio como '+' pero la verificación de firma
+  // de TOP espera '%20' (los '+' literales ya salen como %2B, así que este
+  // replace sólo transforma espacios).
+  const body = new URLSearchParams(params).toString().replace(/\+/g, '%20');
   let lastError = 'AliExpress no respondió.';
-  let raw = '';
+  let firstError = '';
+  let firstErrorGateway = '';
+  let success: Record<string, unknown> | null = null;
   for (const gateway of gateways()) {
     try {
       const response = await fetchWithTimeout(
@@ -136,25 +156,34 @@ async function callApi(
         },
         14000,
       );
-      raw = await response.text();
-      if (raw) break;
+      const raw = await response.text();
+      if (!raw) continue;
+      const parsed = safeParse(raw);
+      if (!parsed) {
+        lastError = 'AliExpress devolvió una respuesta que no es JSON.';
+        continue;
+      }
+      const errorResponse = parsed.error_response as { code?: string | number; msg?: string; sub_msg?: string } | undefined;
+      if (errorResponse) {
+        // Un error en un gateway no impide probar el siguiente (así un
+        // ALIEXPRESS_SERVER_URL mal configurado no bloquea a los demás).
+        if (!firstError) {
+          firstError = errorResponse.sub_msg || errorResponse.msg || `código ${errorResponse.code ?? 'desconocido'}`;
+          firstErrorGateway = hostOf(gateway);
+        }
+        continue;
+      }
+      success = parsed;
+      break;
     } catch (error) {
       lastError = error instanceof Error ? error.message : lastError;
     }
   }
-  if (!raw) throw new ConnectorError('aliexpress', lastError);
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    throw new ConnectorError('aliexpress', 'AliExpress devolvió una respuesta que no es JSON.');
+  if (!success) {
+    if (firstError) throw new ConnectorError('aliexpress', `AliExpress: ${firstError}${firstErrorGateway ? ` [${firstErrorGateway}]` : ''}`);
+    throw new ConnectorError('aliexpress', lastError);
   }
-  const errorResponse = parsed.error_response as { code?: string | number; msg?: string; sub_msg?: string } | undefined;
-  if (errorResponse) {
-    const detail = errorResponse.sub_msg || errorResponse.msg || `código ${errorResponse.code ?? 'desconocido'}`;
-    throw new ConnectorError('aliexpress', `AliExpress: ${detail}`);
-  }
-  return parsed;
+  return success;
 }
 
 function responseNode(payload: Record<string, unknown>, method: string): Record<string, unknown> {
