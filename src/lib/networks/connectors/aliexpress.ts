@@ -282,6 +282,7 @@ async function queryProducts(
   creds: Record<string, string>,
   keywords: string,
   pageSize: number,
+  page = 1,
 ): Promise<UnifiedProduct[]> {
   const payload = await callApi('aliexpress.affiliate.product.query', creds, {
     keywords: keywords || 'best seller',
@@ -289,7 +290,7 @@ async function queryProducts(
     target_language: 'ES',
     ship_to_country: 'ES',
     page_size: String(Math.min(Math.max(pageSize, 1), 50)),
-    page_no: '1',
+    page_no: String(Math.max(1, page)),
     sort: 'LAST_VOLUME_DESC',
   });
   return extractProducts(payload)
@@ -326,7 +327,7 @@ export class AliExpressConnector implements NetworkConnector {
     }
 
     const limit = Math.min(params.limit ?? 20, 50);
-    if (params.query) return queryProducts(creds, params.query, limit);
+    if (params.query) return queryProducts(creds, params.query, limit, params.page ?? 1);
 
     const seen = new Set<string>();
     const merged: UnifiedProduct[] = [];

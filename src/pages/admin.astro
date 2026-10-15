@@ -612,6 +612,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               </div>
             </div>
             <button type="button" id="aliFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
+            <button type="button" id="btnAliMore" class="btn-secondary btn-sm" title="Descarga más páginas del catálogo de AliExpress sin borrar los productos ya guardados">+ Cargar más productos</button>
           </div>
           <!-- Barras de rango duales generadas con los datos reales del catálogo -->
           <div id="aliRangeFields" class="ali-range-fields"></div>
@@ -2072,6 +2073,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <div class="network-body">
             <p class="network-desc">${escapeHtml(network.description)}</p>
             <form class="network-cred-form" data-network-id="${escapeHtml(network.id)}">
+              <!-- Honeypot invisible: evita que el gestor de contraseñas del
+                   navegador rellene este formulario con el usuario del panel -->
+              <input type="text" name="__hp" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;" />
               ${network.fields.map((field) => `
                 <label class="cred-field">
                   <span>${escapeHtml(field.label)}${field.required ? ' *' : ''}</span>
@@ -2080,7 +2084,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                       type="${field.secret ? 'password' : 'text'}"
                       name="${escapeHtml(field.key)}"
                       placeholder="${escapeHtml(field.hasValue ? '•••••••• (guardado)' : (field.placeholder || 'Sin configurar'))}"
-                      autocomplete="off"
+                      autocomplete="${field.secret ? 'new-password' : 'off'}"
+                      data-1p-ignore="true"
+                      data-lpignore="true"
+                      data-form-type="other"
                     />
                     ${field.secret ? `
                     <button type="button" class="cred-eye" data-cred-eye title="Mostrar u ocultar el valor" aria-label="Mostrar u ocultar el valor">
@@ -2179,6 +2186,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         // Guardar valida en segundo plano: así la red queda "Conectada" sin
         // pasos extra y la sincronización del catálogo no necesita revalidar.
         await validateNetwork(networkId);
+        // Tras validar (que vuelve a re-dibujar la lista) se repone en los
+        // inputs exactamente lo que se escribió, para que el Tracking ID u
+        // otros valores guardados se vean sin tener que pulsar «Ver».
+        const savedForm = networkList.querySelector(`.network-cred-form[data-network-id="${networkId}"]`);
+        if (savedForm) {
+          savedForm.dataset.revealed = '1';
+          for (const input of savedForm.querySelectorAll('input[name]')) {
+            const written = values[input.name];
+            if (written) input.value = written;
+          }
+        }
+        const savedItem = networkList.querySelector(`details[data-network-id="${networkId}"]`);
+        if (savedItem) savedItem.open = true;
       } else {
         const feedback = networkList.querySelector(`[data-network-feedback="${networkId}"]`);
         if (feedback) feedback.textContent = data.message || 'No se pudieron guardar las credenciales.';
@@ -2664,6 +2684,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const aliCatalogStatusTitle = document.getElementById('aliCatalogStatusTitle');
     const aliCatalogStatusText = document.getElementById('aliCatalogStatusText');
     const btnAliSync = document.getElementById('btnAliSync');
+    const btnAliMore = document.getElementById('btnAliMore');
     const aliFilters = document.getElementById('aliFilters');
     const aliSelectionBar = document.getElementById('aliSelectionBar');
     const aliSelCount = document.getElementById('aliSelCount');
@@ -3058,6 +3079,38 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
 
     btnAliSync?.addEventListener('click', () => syncAliCatalogUI());
+
+    /** «Cargar más»: pide al servidor las páginas 2-3 de cada keyword y
+     *  amplía la caché (POST { append: true }); los rangos se recalculan. */
+    btnAliMore?.addEventListener('click', async () => {
+      if (aliSyncing) return;
+      aliSyncing = true;
+      if (btnAliMore) btnAliMore.disabled = true;
+      if (btnAliSync) btnAliSync.disabled = true;
+      showAliStatus('loading', 'Ampliando catálogo', 'Descargando más páginas de AliExpress (puede tardar)...');
+      try {
+        const res = await fetch('/api/admin/aliexpress/catalog', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ append: true }),
+        });
+        const data = await res.json();
+        aliProducts = Array.isArray(data.products) ? data.products : [];
+        aliPage = 1;
+        aliPopulateFilterOptions();
+        aliBuildRangeFilters();
+        setAliMeta(data);
+        renderAliCatalog();
+        if (data.ok) showAliStatus('success', 'Catálogo ampliado', data.message || `${data.count} productos en total.`);
+        else showAliStatus('error', 'No se pudo ampliar', data.message || 'AliExpress no respondió.');
+      } catch {
+        showAliStatus('error', 'Fallo de red', 'No se pudo contactar con el servidor para ampliar el catálogo.');
+      } finally {
+        aliSyncing = false;
+        if (btnAliMore) btnAliMore.disabled = false;
+        if (btnAliSync) btnAliSync.disabled = false;
+      }
+    });
 
     // Interacción de la tabla 3: paginación, selección, desplegable,
     // importación y fila
@@ -3482,11 +3535,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.loading-panel), :global(.empty-dashboard) { padding: 2rem; color: var(--color-text-muted); background: rgba(255, 255, 255, .025); border: 1px dashed var(--color-border); border-radius: var(--border-radius-md); text-align: center; }
 
   /* ============ MÓDULO AFILIADOS Y MULTI-CATÁLOGO ============ */
-  /* Sin caja admin-card: el contenido ocupa todo el ancho de main-content */
-  .admin-wrapper:has(section[data-admin-view="affiliates"].is-visible) { max-width: none; padding-left: 1.25rem; padding-right: 1.25rem; }
   /* Una sola columna: el gestor de redes ocupa todo el ancho */
   .affiliates-layout { display: flex; flex-direction: column; gap: 1.5rem; }
-  #networksCard { max-width: none; }
 
   /* Lista de redes en FILA (wrap): cada una como tarjeta compacta; al abrirse
      ocupa todo el ancho para que el formulario no quede aplastado. */
@@ -3507,7 +3557,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.cred-input-wrap) { position: relative; display: block; }
   :global(.cred-input-wrap input) { padding-right: 2.2rem !important; }
   :global(.cred-eye) { position: absolute; top: 50%; right: .45rem; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; color: var(--color-text-dim); background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
-  :global(.cred-eye:hover) { color: var(--color-text-main); background: rgba(255, 255, 255, .06); }
+  :global(.cred-eye:hover) { color: var(--color-text-dim); background: rgba(56, 189, 248, .12); }
   :global(.cred-eye svg) { width: 15px; height: 15px; pointer-events: none; }
   :global(.cred-eye .eye-open) { display: none; }
   :global(.cred-eye.is-shown .eye-open) { display: block; }
@@ -3558,10 +3608,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .filter-field label { color: var(--color-text-dim); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
   .filter-field input, .filter-field select { width: 100%; box-sizing: border-box; padding: .55rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
   .filter-field input:focus, .filter-field select:focus { border-color: #38bdf8; }
-  /* Opciones de los desplegables: texto negro sobre fondo claro (Windows
-     pinta el popup del select en blanco y con texto blanco era ilegible) */
-  .filter-field select option,
-  .import-category-field select option { background: #ffffff; color: #111827; }
+  /* Opciones de CUALQUIER desplegable: texto negro sobre fondo claro (el
+     popup del select se pinta en blanco y con texto blanco era ilegible;
+     :global porque las opciones de aliFCat/aliFShop se inyectan por JS) */
+  :global(select option) { background: #ffffff; color: #111827; }
   .filter-check { display: inline-flex; align-items: center; gap: .45rem; color: var(--color-text-muted); font-size: .8rem; font-weight: 600; padding-bottom: .55rem; cursor: pointer; }
 
   .network-status-row { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }

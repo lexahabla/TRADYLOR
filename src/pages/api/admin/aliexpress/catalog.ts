@@ -8,7 +8,9 @@
  *
  * POST /api/admin/aliexpress/catalog
  *   -> { success, ok, syncedAt, stale, count, message, products }
- *      Fuerza una sincronización contra la TOP API y reescribe la caché.
+ *      Fuerza una sincronización contra la TOP API. Body opcional
+ *      { append: true } descarga además las páginas 2-3 de cada keyword
+ *      para ampliar el catálogo sin borrar lo ya guardado.
  *
  * Ambas protegidas por sesión de administrador.
  * ==============================================================================
@@ -55,7 +57,8 @@ export const POST: APIRoute = async ({ request }) => {
   const unauthorizedResponse = requireAdminAuth(request);
   if (unauthorizedResponse) return unauthorizedResponse;
 
-  const result = await syncAliCatalog();
+  const body = (await request.json().catch(() => ({}))) as { append?: boolean };
+  const result = await syncAliCatalog({ append: body?.append === true });
 
   return new Response(
     JSON.stringify({
