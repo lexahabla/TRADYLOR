@@ -525,7 +525,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <div class="view-heading">
         <span class="admin-tag-pill">Integraciones de monetización</span>
         <h2 class="admin-title">Afiliados y Multi-Catálogo</h2>
-        <p class="admin-subtitle">Conecta redes de afiliación con sus credenciales, valida la conexión y busca productos en paralelo en todos los catálogos. Importa los mejores resultados a Tradylor con un clic: el enmascaramiento /out/[id] se aplica automáticamente.</p>
+        <p class="admin-subtitle">Conecta redes de afiliación con sus credenciales y valida la conexión. El catálogo de AliExpress se sincroniza contra la API y se filtra con barras de rango calculadas sobre los datos reales (precio, descuento, comisión, ventas, valoración y envío).</p>
       </div>
 
       <div class="affiliates-layout">
@@ -549,115 +549,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <div id="removedNetworks" class="removed-networks"></div>
         </div>
 
-        <!-- Columna 2: Buscador global unificado -->
-        <div class="search-card">
-          <div class="card-header">
-            <div class="header-icon icon-cyan">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-              </svg>
-            </div>
-            <div>
-              <h2 class="card-title">2. Buscador global multi-red</h2>
-              <p class="card-desc">Consulta en paralelo los catálogos de las redes conectadas y ordena por conversión.</p>
-            </div>
-          </div>
-
-          <div class="search-controls">
-            <div class="search-input-group">
-              <input type="search" id="unifiedQuery" placeholder="Buscar en todos los catálogos conectados (ej: auriculares, robot aspirador...)" />
-              <button type="button" id="btnUnifiedSearch" class="btn-primary">
-                <span class="btn-text">Buscar</span>
-                <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-                <div class="btn-spinner" hidden></div>
-              </button>
-              <button type="button" id="btnFullCatalog" class="btn-secondary" title="Carga el catálogo completo de las redes conectadas">
-                <span class="btn-text">Ver catálogo completo</span>
-                <div class="btn-spinner" hidden></div>
-              </button>
-            </div>
-
-            <div class="search-filters">
-              <div class="filter-field">
-                <label for="filterCategory">Categoría</label>
-                <select id="filterCategory">
-                  <option value="">Todas las categorías</option>
-                </select>
-              </div>
-              <div class="filter-field">
-                <label for="filterMinPrice">Precio mín. (€)</label>
-                <input type="number" id="filterMinPrice" min="0" step="1" placeholder="0" />
-              </div>
-              <div class="filter-field">
-                <label for="filterMaxPrice">Precio máx. (€)</label>
-                <input type="number" id="filterMaxPrice" min="0" step="1" placeholder="Sin tope" />
-              </div>
-              <div class="filter-field">
-                <label for="filterMinCommission">Comisión mín. (%)</label>
-                <input type="number" id="filterMinCommission" min="0" max="100" step="0.5" placeholder="0" />
-              </div>
-              <div class="filter-field">
-                <label for="filterSort">Ordenar por</label>
-                <select id="filterSort">
-                  <option value="commission" selected>Mayor comisión</option>
-                  <option value="popularity">Popularidad</option>
-                  <option value="rating">Mejor valoración</option>
-                  <option value="price_asc">Precio: menor a mayor</option>
-                  <option value="price_desc">Precio: mayor a menor</option>
-                </select>
-              </div>
-              <label class="filter-check">
-                <input type="checkbox" id="filterInStock" />
-                <span>Solo con stock</span>
-              </label>
-            </div>
-          </div>
-
-          <div id="searchStatus" class="status-alert" hidden>
-            <div class="alert-icon">ℹ️</div>
-            <div class="alert-content">
-              <strong id="searchStatusTitle">Estado</strong>
-              <p id="searchStatusText">Mensaje...</p>
-            </div>
-          </div>
-
-          <div id="networkStatusRow" class="network-status-row"></div>
-
-          <!-- Barra de acciones sobre los resultados: categoría de importación + importación masiva -->
-          <div id="resultsToolbar" class="results-toolbar" hidden>
-            <div class="results-toolbar-info">
-              <strong id="resultsCount">0 productos</strong>
-              <span id="resultsHint">Selecciona la categoría con la que se importarán.</span>
-            </div>
-            <div class="results-toolbar-actions">
-              <label class="import-category-field" for="importCategory">
-                <span>Categoría al importar</span>
-                <select id="importCategory">
-                  <option value="">Automática (por palabras clave)</option>
-                </select>
-              </label>
-              <button type="button" id="btnImportAll" class="btn-success btn-sm">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="7 10 12 15 17 10"></polyline>
-                  <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                <span id="btnImportAllLabel">Importar todos</span>
-              </button>
-            </div>
-            <div id="bulkProgress" class="bulk-progress" hidden>
-              <div class="bulk-progress-fill" id="bulkProgressFill"></div>
-            </div>
-          </div>
-
-          <div id="unifiedResults" class="unified-results">
-            <div class="empty-dashboard">Conecta al menos una red y lanza una búsqueda para comparar productos entre catálogos.</div>
-          </div>
-        </div>
       </div>
 
       <!-- 3. Catálogo AliExpress desde la caché del volumen (sin llamadas API en cada carga) -->
@@ -670,7 +561,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </svg>
           </div>
           <div>
-            <h2 class="card-title">3. Catálogo AliExpress (caché)</h2>
+              <h2 class="card-title">2. Catálogo AliExpress (caché)</h2>
             <p class="card-desc">Tabla amplia del último catálogo sincronizado, guardado en el servidor. Usa «Sincronizar» para refrescarlo contra la API; se avisa si la caché supera las 6 horas.</p>
           </div>
           <div class="ali-catalog-head-actions">
@@ -692,64 +583,38 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
         <!-- Filtros y ordenación del catálogo (aplican antes de paginar) -->
         <div id="aliFilters" class="ali-filters" hidden>
-          <div class="filter-field ali-f-search">
-            <label for="aliFQ">Buscar</label>
-            <input type="search" id="aliFQ" placeholder="Título, tienda o categoría..." />
+          <div class="ali-filters-row">
+            <div class="filter-field ali-f-search">
+              <label for="aliFQ">Buscar</label>
+              <input type="search" id="aliFQ" placeholder="Título, tienda o categoría..." />
+            </div>
+            <div class="filter-field">
+              <label for="aliFCat">Categoría</label>
+              <select id="aliFCat"><option value="">Todas</option></select>
+            </div>
+            <div class="filter-field">
+              <label for="aliFShop">Tienda</label>
+              <select id="aliFShop"><option value="">Todas</option></select>
+            </div>
+            <div class="filter-field ali-sort-field">
+              <label for="aliFSort">Ordenar por</label>
+              <div class="ali-sort-group">
+                <select id="aliFSort">
+                  <option value="ventas" selected>Más ventas</option>
+                  <option value="comision_eur">Mayor comisión €</option>
+                  <option value="comision_pct">Mayor comisión %</option>
+                  <option value="valoracion">Mejor valoración</option>
+                  <option value="descuento">Mayor descuento</option>
+                  <option value="precio">Precio</option>
+                  <option value="nombre">Nombre</option>
+                </select>
+                <button type="button" id="aliFSortDir" class="btn-secondary btn-sm ali-sort-dir" title="Invertir el orden (mayor a menor / menor a mayor)">↓</button>
+              </div>
+            </div>
+            <button type="button" id="aliFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
           </div>
-          <div class="filter-field">
-            <label for="aliFCat">Categoría</label>
-            <select id="aliFCat"><option value="">Todas</option></select>
-          </div>
-          <div class="filter-field">
-            <label for="aliFShop">Tienda</label>
-            <select id="aliFShop"><option value="">Todas</option></select>
-          </div>
-          <div class="filter-field">
-            <label for="aliFMinPrice">Precio mín.</label>
-            <input type="number" id="aliFMinPrice" min="0" step="0.5" placeholder="0" />
-          </div>
-          <div class="filter-field">
-            <label for="aliFMaxPrice">Precio máx.</label>
-            <input type="number" id="aliFMaxPrice" min="0" step="0.5" placeholder="∞" />
-          </div>
-          <div class="filter-field">
-            <label for="aliFMinDisc">Dto. mín. %</label>
-            <input type="number" id="aliFMinDisc" min="0" max="100" step="1" placeholder="0" />
-          </div>
-          <div class="filter-field">
-            <label for="aliFMinComm">Comisión % mín.</label>
-            <input type="number" id="aliFMinComm" min="0" max="100" step="0.5" placeholder="0" />
-          </div>
-          <div class="filter-field">
-            <label for="aliFMinCommEur">Comisión € mín.</label>
-            <input type="number" id="aliFMinCommEur" min="0" step="0.1" placeholder="0" />
-          </div>
-          <div class="filter-field">
-            <label for="aliFMinSales">Ventas mín.</label>
-            <input type="number" id="aliFMinSales" min="0" step="1" placeholder="0" />
-          </div>
-          <div class="filter-field">
-            <label for="aliFMinRating">Valoración mín.</label>
-            <input type="number" id="aliFMinRating" min="0" max="5" step="0.1" placeholder="0" />
-          </div>
-          <div class="filter-field">
-            <label for="aliFMaxShip">Envío máx. (días)</label>
-            <input type="number" id="aliFMaxShip" min="0" step="1" placeholder="∞" />
-          </div>
-          <div class="filter-field">
-            <label for="aliFSort">Ordenar por</label>
-            <select id="aliFSort">
-              <option value="sales_desc" selected>Más vendidos</option>
-              <option value="comm_eur_desc">Mayor comisión €</option>
-              <option value="comm_pct_desc">Mayor comisión %</option>
-              <option value="rating_desc">Mejor valoración</option>
-              <option value="disc_desc">Mayor descuento</option>
-              <option value="price_asc">Precio: menor a mayor</option>
-              <option value="price_desc">Precio: mayor a menor</option>
-              <option value="title_asc">Nombre A–Z</option>
-            </select>
-          </div>
-          <button type="button" id="aliFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
+          <!-- Barras de rango duales generadas con los datos reales del catálogo -->
+          <div id="aliRangeFields" class="ali-range-fields"></div>
         </div>
 
         <!-- Selección masiva: la casilla de la cabecera marca la página actual;
@@ -2819,16 +2684,28 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       q: document.getElementById('aliFQ'),
       cat: document.getElementById('aliFCat'),
       shop: document.getElementById('aliFShop'),
-      minPrice: document.getElementById('aliFMinPrice'),
-      maxPrice: document.getElementById('aliFMaxPrice'),
-      minDisc: document.getElementById('aliFMinDisc'),
-      minComm: document.getElementById('aliFMinComm'),
-      minCommEur: document.getElementById('aliFMinCommEur'),
-      minSales: document.getElementById('aliFMinSales'),
-      minRating: document.getElementById('aliFMinRating'),
-      maxShip: document.getElementById('aliFMaxShip'),
       sort: document.getElementById('aliFSort'),
     };
+    const aliSortDirBtn = document.getElementById('aliFSortDir');
+    const aliRangeFields = document.getElementById('aliRangeFields');
+    /** Dirección del orden: 'desc' (mayor→menor) o 'asc' (menor→mayor). */
+    let aliSortDir = 'desc';
+
+    /**
+     * Definiciones de las barras de rango: el min/max de cada una se calcula
+     * con los datos REALES del catálogo cargado (aliBuildRangeFilters).
+     */
+    const ALI_RANGE_DEFS = [
+      { key: 'price', label: 'Precio (€)', step: 1, get: (p) => aliNum(p.price), fmt: (v) => `${Math.round(v)} €` },
+      { key: 'disc', label: 'Descuento (%)', step: 1, get: (p) => aliDiscountPct(p), fmt: (v) => `${Math.round(v)}%` },
+      { key: 'commPct', label: 'Comisión (%)', step: 0.5, get: (p) => aliNum(p.commissionRate), fmt: (v) => `${v}%` },
+      { key: 'commEur', label: 'Comisión (€)', step: 0.1, get: (p) => aliNum(p.commissionAmount), fmt: (v) => `${v.toFixed(2)} €` },
+      { key: 'sales', label: 'Ventas', step: 1, stepFor: (min, max) => Math.max(1, Math.ceil(max / 100)), get: (p) => aliNum(p.popularity), fmt: (v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : String(Math.round(v))) },
+      { key: 'rating', label: 'Valoración', step: 0.1, get: (p) => aliNum(p.rating), fmt: (v) => `${v}★` },
+      { key: 'ship', label: 'Envío (días)', step: 1, get: (p) => aliNum(aliExtra(p, 'Días de envío')), fmt: (v) => `${Math.round(v)} d` },
+    ];
+    /** Estado de cada rango: { dataMin, dataMax, lo, hi, step, fmt } (null si no hay datos). */
+    let aliRanges = {};
 
     function showAliStatus(type, title, message) {
       if (!aliCatalogStatus) return;
@@ -2881,9 +2758,60 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       return null;
     }
 
-    /** Valor numérico de un filtro o null si está vacío. */
-    function aliFilterNum(input) {
-      return input && input.value !== '' ? aliNum(input.value) : null;
+    /**
+     * Construye las barras de rango a partir de los datos reales del catálogo:
+     * cada slider cubre del mínimo al máximo encontrado y sólo se filtra cuando
+     * el usuario lo mueve (tocado). Los campos sin datos numéricos se omiten.
+     */
+    function aliBuildRangeFilters() {
+      aliRanges = {};
+      if (!aliRangeFields) return;
+      const blocks = [];
+      for (const def of ALI_RANGE_DEFS) {
+        const values = aliProducts.map(def.get).filter((v) => v != null && Number.isFinite(v));
+        if (!values.length) continue;
+        const dataMin = Math.min(...values);
+        const dataMax = Math.max(...values);
+        if (dataMax <= dataMin) continue;
+        const step = def.stepFor ? def.stepFor(dataMin, dataMax) : def.step;
+        aliRanges[def.key] = { dataMin, dataMax, lo: dataMin, hi: dataMax, step, fmt: def.fmt, get: def.get, touched: false };
+        blocks.push(`
+          <div class="ali-range" data-range-field="${def.key}">
+            <div class="ali-range-head">
+              <label>${escapeHtml(def.label)}</label>
+              <span class="ali-range-values" data-range-values>${escapeHtml(def.fmt(dataMin))} – ${escapeHtml(def.fmt(dataMax))}</span>
+            </div>
+            <div class="ali-range-track">
+              <div class="ali-range-rail"></div>
+              <div class="ali-range-fill" data-range-fill></div>
+              <input type="range" data-range="${def.key}" data-range-side="min" min="${dataMin}" max="${dataMax}" step="${step}" value="${dataMin}" aria-label="${escapeHtml(def.label)} mínimo" />
+              <input type="range" data-range="${def.key}" data-range-side="max" min="${dataMin}" max="${dataMax}" step="${step}" value="${dataMax}" aria-label="${escapeHtml(def.label)} máximo" />
+            </div>
+          </div>`);
+      }
+      aliRangeFields.innerHTML = blocks.join('');
+      for (const key of Object.keys(aliRanges)) aliRangeSyncUi(key);
+    }
+
+    /** Redibuja los valores y la barra de relleno de un rango. */
+    function aliRangeSyncUi(key) {
+      const state = aliRanges[key];
+      const field = aliRangeFields?.querySelector(`[data-range-field="${key}"]`);
+      if (!state || !field) return;
+      const valuesEl = field.querySelector('[data-range-values]');
+      if (valuesEl) valuesEl.textContent = `${state.fmt(state.lo)} – ${state.fmt(state.hi)}`;
+      const fill = field.querySelector('[data-range-fill]');
+      if (fill) {
+        const span = state.dataMax - state.dataMin || 1;
+        const left = ((state.lo - state.dataMin) / span) * 100;
+        const right = ((state.hi - state.dataMin) / span) * 100;
+        fill.style.left = `${left}%`;
+        fill.style.width = `${Math.max(0, right - left)}%`;
+      }
+      const minInput = field.querySelector('[data-range-side="min"]');
+      const maxInput = field.querySelector('[data-range-side="max"]');
+      if (minInput) minInput.value = state.lo;
+      if (maxInput) maxInput.value = state.hi;
     }
 
     /** Aplica los filtros activos y ordena el catálogo completo. */
@@ -2891,34 +2819,17 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const q = (aliFilterInputs.q?.value || '').trim().toLowerCase();
       const cat = aliFilterInputs.cat?.value || '';
       const shop = aliFilterInputs.shop?.value || '';
-      const minPrice = aliFilterNum(aliFilterInputs.minPrice);
-      const maxPrice = aliFilterNum(aliFilterInputs.maxPrice);
-      const minDisc = aliFilterNum(aliFilterInputs.minDisc);
-      const minComm = aliFilterNum(aliFilterInputs.minComm);
-      const minCommEur = aliFilterNum(aliFilterInputs.minCommEur);
-      const minSales = aliFilterNum(aliFilterInputs.minSales);
-      const minRating = aliFilterNum(aliFilterInputs.minRating);
-      const maxShip = aliFilterNum(aliFilterInputs.maxShip);
-      const sort = aliFilterInputs.sort?.value || 'sales_desc';
+      const sortKey = aliFilterInputs.sort?.value || 'ventas';
+      const dir = aliSortDir === 'asc' ? 1 : -1;
 
       const filtered = aliProducts.filter((product) => {
         if (cat && (product.category || '') !== cat) return false;
         if (shop && (aliExtra(product, 'Tienda') || '') !== shop) return false;
-        const price = aliNum(product.price);
-        if (minPrice != null && (price == null || price < minPrice)) return false;
-        if (maxPrice != null && (price == null || price > maxPrice)) return false;
-        const disc = aliDiscountPct(product);
-        if (minDisc != null && (disc == null || disc < minDisc)) return false;
-        const rate = aliNum(product.commissionRate);
-        if (minComm != null && (rate == null || rate < minComm)) return false;
-        const amount = aliNum(product.commissionAmount);
-        if (minCommEur != null && (amount == null || amount < minCommEur)) return false;
-        const sales = aliNum(product.popularity);
-        if (minSales != null && (sales == null || sales < minSales)) return false;
-        const rating = aliNum(product.rating);
-        if (minRating != null && (rating == null || rating < minRating)) return false;
-        const ship = aliNum(aliExtra(product, 'Días de envío'));
-        if (maxShip != null && (ship == null || ship > maxShip)) return false;
+        for (const state of Object.values(aliRanges)) {
+          if (!state.touched) continue;
+          const value = state.get(product);
+          if (value == null || value < state.lo || value > state.hi) return false;
+        }
         if (q) {
           const haystack = `${product.title} ${product.category || ''} ${aliExtra(product, 'Tienda') || ''}`.toLowerCase();
           if (!haystack.includes(q)) return false;
@@ -2926,18 +2837,24 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         return true;
       });
 
-      const numOr = (value, fallback) => (value == null ? fallback : value);
-      const comparators = {
-        sales_desc: (a, b) => numOr(aliNum(b.popularity), -1) - numOr(aliNum(a.popularity), -1),
-        comm_eur_desc: (a, b) => numOr(aliNum(b.commissionAmount), -1) - numOr(aliNum(a.commissionAmount), -1),
-        comm_pct_desc: (a, b) => numOr(aliNum(b.commissionRate), -1) - numOr(aliNum(a.commissionRate), -1),
-        rating_desc: (a, b) => numOr(aliNum(b.rating), -1) - numOr(aliNum(a.rating), -1),
-        disc_desc: (a, b) => numOr(aliDiscountPct(b), -1) - numOr(aliDiscountPct(a), -1),
-        price_asc: (a, b) => numOr(aliNum(a.price), Infinity) - numOr(aliNum(b.price), Infinity),
-        price_desc: (a, b) => numOr(aliNum(b.price), -1) - numOr(aliNum(a.price), -1),
-        title_asc: (a, b) => String(a.title).localeCompare(String(b.title), 'es'),
+      const sorters = {
+        ventas: (p) => aliNum(p.popularity),
+        comision_eur: (p) => aliNum(p.commissionAmount),
+        comision_pct: (p) => aliNum(p.commissionRate),
+        valoracion: (p) => aliNum(p.rating),
+        descuento: (p) => aliDiscountPct(p),
+        precio: (p) => aliNum(p.price),
       };
-      return filtered.sort(comparators[sort] || comparators.sales_desc);
+      return filtered.sort((a, b) => {
+        if (sortKey === 'nombre') return dir * String(a.title).localeCompare(String(b.title), 'es');
+        const get = sorters[sortKey] || sorters.ventas;
+        const av = get(a);
+        const bv = get(b);
+        if (av == null && bv == null) return 0;
+        if (av == null) return 1;
+        if (bv == null) return -1;
+        return dir * (av - bv);
+      });
     }
 
     /** Rellena los selects de categoría/tienda con los datos del catálogo. */
@@ -3081,6 +2998,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         aliProducts = Array.isArray(data.products) ? data.products : [];
         aliPage = 1;
         aliPopulateFilterOptions();
+        aliBuildRangeFilters();
         setAliMeta(data);
         renderAliCatalog();
         if (!data.connected) showAliStatus('warning', 'AliExpress sin conectar', 'Guarda sus credenciales en «1. Redes conectadas» y pulsa «Validar» para poder sincronizar.');
@@ -3122,6 +3040,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         aliProducts = Array.isArray(data.products) ? data.products : [];
         aliPage = 1;
         aliPopulateFilterOptions();
+        aliBuildRangeFilters();
         setAliMeta(data);
         renderAliCatalog();
         if (data.ok) showAliStatus('success', 'Catálogo sincronizado', `${data.count} productos guardados en el servidor.`);
@@ -3224,10 +3143,49 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       renderAliCatalog();
     }
     aliFilters?.addEventListener('input', onAliFilterChange);
+
+    // Barras de rango duales: al mover un extremo se recalcula el estado
+    // (los listeners burbujean: primero se aclampa aquí y luego se refiltra)
+    aliRangeFields?.addEventListener('input', (event) => {
+      const input = event.target.closest('input[type="range"][data-range]');
+      if (!input) return;
+      const key = input.dataset.range;
+      const state = aliRanges[key];
+      if (!state) return;
+      const value = Number(input.value);
+      if (input.dataset.rangeSide === 'min') state.lo = Math.min(value, state.hi);
+      else state.hi = Math.max(value, state.lo);
+      state.touched = state.lo > state.dataMin || state.hi < state.dataMax;
+      aliRangeSyncUi(key);
+    });
+
+    // Botón de orden: alterna mayor→menor (↓) y menor→mayor (↑)
+    function aliUpdateSortDirUi() {
+      if (!aliSortDirBtn) return;
+      aliSortDirBtn.textContent = aliSortDir === 'desc' ? '↓' : '↑';
+      aliSortDirBtn.title = aliSortDir === 'desc'
+        ? 'Orden actual: mayor a menor. Pulsa para invertir.'
+        : 'Orden actual: menor a mayor. Pulsa para invertir.';
+    }
+    aliSortDirBtn?.addEventListener('click', () => {
+      aliSortDir = aliSortDir === 'desc' ? 'asc' : 'desc';
+      aliUpdateSortDirUi();
+      onAliFilterChange();
+    });
+    aliUpdateSortDirUi();
+
     document.getElementById('aliFReset')?.addEventListener('click', () => {
-      for (const [key, input] of Object.entries(aliFilterInputs)) {
-        if (!input) continue;
-        input.value = key === 'sort' ? 'sales_desc' : '';
+      if (aliFilterInputs.q) aliFilterInputs.q.value = '';
+      if (aliFilterInputs.cat) aliFilterInputs.cat.value = '';
+      if (aliFilterInputs.shop) aliFilterInputs.shop.value = '';
+      if (aliFilterInputs.sort) aliFilterInputs.sort.value = 'ventas';
+      aliSortDir = 'desc';
+      aliUpdateSortDirUi();
+      for (const [key, state] of Object.entries(aliRanges)) {
+        state.lo = state.dataMin;
+        state.hi = state.dataMax;
+        state.touched = false;
+        aliRangeSyncUi(key);
       }
       onAliFilterChange();
     });
@@ -3526,8 +3484,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   /* ============ MÓDULO AFILIADOS Y MULTI-CATÁLOGO ============ */
   /* Sin caja admin-card: el contenido ocupa todo el ancho de main-content */
   .admin-wrapper:has(section[data-admin-view="affiliates"].is-visible) { max-width: none; padding-left: 1.25rem; padding-right: 1.25rem; }
-  .affiliates-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 2rem; align-items: start; }
-  @media (max-width: 1100px) { .affiliates-layout { grid-template-columns: 1fr; } }
+  /* Una sola columna: el gestor de redes ocupa todo el ancho */
+  .affiliates-layout { display: flex; flex-direction: column; gap: 1.5rem; }
+  #networksCard { max-width: none; }
 
   /* Lista de redes en FILA (wrap): cada una como tarjeta compacta; al abrirse
      ocupa todo el ancho para que el formulario no quede aplastado. */
@@ -3640,11 +3599,31 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.ac-th-check), :global(.ac-td-check) { width: 28px; padding-left: .5rem !important; padding-right: .2rem !important; }
   :global(.ac-th-check input), :global(.ac-td-check input) { accent-color: #38bdf8; cursor: pointer; width: 14px; height: 14px; margin: 0; }
   /* Barra de filtros de la tabla AliExpress */
-  .ali-filters { display: flex; align-items: flex-end; gap: .5rem; flex-wrap: wrap; margin-bottom: .6rem; padding: .55rem .65rem; background: rgba(255, 255, 255, .02); border: 1px solid var(--color-border); border-radius: 10px; }
+  .ali-filters { display: flex; flex-direction: column; gap: .55rem; margin-bottom: .6rem; padding: .55rem .65rem; background: rgba(255, 255, 255, .02); border: 1px solid var(--color-border); border-radius: 10px; }
   .ali-filters[hidden] { display: none; }
+  .ali-filters-row { display: flex; align-items: flex-end; gap: .5rem; flex-wrap: wrap; }
   .ali-filters .filter-field { min-width: 90px; flex: 0 1 auto; }
   .ali-filters .filter-field.ali-f-search { flex: 1 1 180px; min-width: 150px; }
   .ali-filters .btn-secondary { flex-shrink: 0; padding: .5rem .8rem; font-size: .72rem; }
+  .ali-sort-group { display: flex; gap: .3rem; }
+  .ali-sort-group select { flex: 1; min-width: 130px; }
+  .ali-sort-dir { min-width: 34px; font-size: .9rem; font-weight: 800; line-height: 1; }
+  /* Barras de rango duales (precio, dto, comisiones, ventas, rating, envío) */
+  .ali-range-fields { display: flex; flex-wrap: wrap; gap: .45rem .9rem; padding-top: .35rem; border-top: 1px dashed rgba(255, 255, 255, .07); }
+  .ali-range-fields:empty { display: none; }
+  .ali-range { flex: 1 1 170px; min-width: 150px; max-width: 260px; display: grid; gap: .15rem; }
+  .ali-range-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+  .ali-range-head label { color: var(--color-text-dim); font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .ali-range-values { color: #7dd3fc; font-size: .68rem; font-weight: 700; white-space: nowrap; }
+  .ali-range-track { position: relative; height: 24px; }
+  .ali-range-rail, .ali-range-fill { position: absolute; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 999px; pointer-events: none; }
+  .ali-range-rail { left: 0; right: 0; background: rgba(255, 255, 255, .12); }
+  .ali-range-fill { background: linear-gradient(90deg, #38bdf8, #22d3ee); }
+  .ali-range-track input[type="range"] { position: absolute; inset: 0; width: 100%; height: 24px; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; outline: none; }
+  .ali-range-track input[type="range"]::-webkit-slider-runnable-track { background: transparent; height: 4px; }
+  .ali-range-track input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 14px; height: 14px; margin-top: -5px; border: 2px solid #0b1220; border-radius: 50%; background: #38bdf8; cursor: grab; box-shadow: 0 0 6px rgba(56, 189, 248, .5); }
+  .ali-range-track input[type="range"]::-moz-range-track { background: transparent; height: 4px; }
+  .ali-range-track input[type="range"]::-moz-range-thumb { pointer-events: auto; width: 14px; height: 14px; border: 2px solid #0b1220; border-radius: 50%; background: #38bdf8; cursor: grab; box-shadow: 0 0 6px rgba(56, 189, 248, .5); }
   /* Barra de selección masiva */
   .ali-selection { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; margin-bottom: .6rem; padding: .5rem .7rem; color: #7dd3fc; background: rgba(56, 189, 248, .08); border: 1px solid rgba(56, 189, 248, .3); border-radius: 10px; font-size: .74rem; font-weight: 700; }
   .ali-selection[hidden] { display: none; }
