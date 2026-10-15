@@ -1,4 +1,0 @@
-btnAddImageUrl
-galleryFileInput
-previewEmptyImage
-prodImage
