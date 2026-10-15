@@ -15,6 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Product } from '../data/products';
 import { dataFile } from './paths';
+import { readDeletedIds } from './deletedProducts';
 import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../utils/amazon';
 
 const DATA_FILE_PATH = dataFile('products.json');
@@ -101,6 +102,11 @@ export function fromN8nContract(data: N8nContractPayload): Partial<Product> {
 
 /** Inserta o actualiza (upsert por id) un producto en products.json. */
 export function upsertCatalogProduct(raw: N8nContractPayload): CatalogSaveResult {
+  // Tombstone: el administrador lo borró; no se revive por un import/upsert.
+  if (raw?.id && readDeletedIds().includes(raw.id)) {
+    return { ok: false, message: 'Producto eliminado anteriormente. Recupéralo desde el panel admin.' };
+  }
+
   const data = fromN8nContract(raw);
 
   if (!data.title || !data.affiliateUrl) {
