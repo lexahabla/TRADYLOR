@@ -601,6 +601,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <div class="ali-sort-group">
                 <select id="aliFSort">
                   <option value="ventas" selected>Más ventas</option>
+                  <option value="visitas">Visitas</option>
                   <option value="comision_eur">Mayor comisión €</option>
                   <option value="comision_pct">Mayor comisión %</option>
                   <option value="valoracion">Mejor valoración</option>
@@ -2722,6 +2723,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       { key: 'commPct', label: 'Comisión (%)', step: 0.5, get: (p) => aliNum(p.commissionRate), fmt: (v) => `${v}%` },
       { key: 'commEur', label: 'Comisión (€)', step: 0.1, get: (p) => aliNum(p.commissionAmount), fmt: (v) => `${v.toFixed(2)} €` },
       { key: 'sales', label: 'Ventas', step: 1, stepFor: (min, max) => Math.max(1, Math.ceil(max / 100)), get: (p) => aliNum(p.popularity), fmt: (v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : String(Math.round(v))) },
+      { key: 'visits', label: 'Visitas', step: 1, stepFor: (min, max) => Math.max(1, Math.ceil(max / 100)), get: (p) => aliVisits(p), fmt: (v) => (v >= 1000 ? `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k` : String(Math.round(v))) },
       { key: 'rating', label: 'Valoración', step: 0.1, get: (p) => aliNum(p.rating), fmt: (v) => `${v}★` },
       { key: 'ship', label: 'Envío (días)', step: 1, get: (p) => aliNum(aliExtra(p, 'Días de envío')), fmt: (v) => `${Math.round(v)} d` },
     ];
@@ -2777,6 +2779,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const original = Number(product.originalPrice);
       if (price > 0 && original > price) return ((original - price) / original) * 100;
       return null;
+    }
+
+    /** Visitas: campo nativo si existe o extras «Visitas»/«Visitantes»/«Visits». */
+    function aliVisits(product) {
+      return (
+        aliNum(product.visits) ??
+        aliNum(aliExtra(product, 'Visitas')) ??
+        aliNum(aliExtra(product, 'Visitantes')) ??
+        aliNum(aliExtra(product, 'Visits'))
+      );
     }
 
     /**
@@ -2860,6 +2872,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
       const sorters = {
         ventas: (p) => aliNum(p.popularity),
+        visitas: (p) => aliVisits(p),
         comision_eur: (p) => aliNum(p.commissionAmount),
         comision_pct: (p) => aliNum(p.commissionRate),
         valoracion: (p) => aliNum(p.rating),
@@ -3539,10 +3552,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .affiliates-layout { display: flex; flex-direction: column; gap: 1.5rem; }
 
   /* Lista de redes en FILA (wrap): cada una como tarjeta compacta; al abrirse
-     ocupa todo el ancho para que el formulario no quede aplastado. */
+     el cuerpo se despliega ENCIMA (popover ~280px responsive) sin empujar la
+     fila ni ocupar todo el ancho. */
   .network-list { display: flex; flex-wrap: wrap; gap: .55rem; align-items: flex-start; }
-  :global(.network-item) { flex: 1 1 200px; max-width: 280px; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); background: rgba(255, 255, 255, .02); overflow: hidden; }
-  :global(.network-item[open]) { flex-basis: 100%; max-width: none; }
+  :global(.network-item) { position: relative; flex: 1 1 200px; max-width: 280px; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); background: rgba(255, 255, 255, .02); overflow: hidden; }
+  :global(.network-item[open]) { z-index: 30; overflow: visible; }
+  :global(.network-item[open] .network-body) { position: absolute; top: calc(100% + 6px); left: 0; width: max(100%, 280px); max-width: min(92vw, 420px); max-height: min(68vh, 560px); overflow-y: auto; padding: .9rem 1rem 1rem; background: #0e1626; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); box-shadow: 0 18px 44px rgba(0, 0, 0, .5); z-index: 40; }
   :global(.network-item summary) { display: flex; align-items: center; gap: .55rem; padding: .6rem .7rem; cursor: pointer; list-style: none; user-select: none; }
   :global(.network-item summary::-webkit-details-marker) { display: none; }
   :global(.network-item summary:hover) { background: rgba(255, 255, 255, .04); }
@@ -3570,8 +3585,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.network-feedback) { margin: .5rem 0 0; color: var(--color-text-muted); font-size: .74rem; line-height: 1.4; }
   :global(.integration-status.is-error) { color: #fca5a5; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); }
 
-  /* Alta de afiliado: tarjeta final de la fila, estilo botón CTA compacto */
-  :global(.network-new) { border: 2px dashed rgba(56, 189, 248, .6); border-radius: var(--border-radius-sm); background: linear-gradient(180deg, rgba(56, 189, 248, .12), rgba(56, 189, 248, .04)); box-shadow: 0 8px 24px rgba(56, 189, 248, .1); }
+  /* Alta de afiliado: tarjeta final de la fila, MÁS ANCHA para que se lea el
+     subtítulo; al abrirla su cuerpo también se despliega de ese mismo ancho */
+  :global(.network-new) { border: 2px dashed rgba(56, 189, 248, .6); border-radius: var(--border-radius-sm); background: linear-gradient(180deg, rgba(56, 189, 248, .12), rgba(56, 189, 248, .04)); box-shadow: 0 8px 24px rgba(56, 189, 248, .1); flex: 1 1 300px; max-width: 400px; }
   :global(.network-new summary) { justify-content: center; gap: .55rem; padding: .7rem .6rem; border-radius: var(--border-radius-sm); display: flex; align-items: center; cursor: pointer; list-style: none; user-select: none; }
   :global(.network-new summary::-webkit-details-marker) { display: none; }
   :global(.network-new summary:hover) { background: rgba(56, 189, 248, .16); }
