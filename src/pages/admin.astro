@@ -2485,6 +2485,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             minCommission: document.getElementById('filterMinCommission')?.value || undefined,
             sortBy: document.getElementById('filterSort')?.value,
             inStockOnly: Boolean(document.getElementById('filterInStock')?.checked),
+            networks: options.networks,
             limit: catalogMode ? 100 : 24,
           }),
         });
@@ -2598,7 +2599,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     });
 
     if (networkNewHost) networkNewHost.innerHTML = newNetworkPanelHtml();
-    if (networkList) loadNetworks();
+    if (networkList) {
+      loadNetworks().then(() => {
+        if ((networksCache || []).some((network) => network.id === 'aliexpress')) {
+          runUnifiedSearch({ catalog: true, networks: ['aliexpress'] });
+        }
+      });
+    }
 
     // =========================================================================
     // 6. GESTIÓN DE CATEGORÍAS (CRUD + relleno de selectores del panel)
