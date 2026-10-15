@@ -1,22 +1,22 @@
-Write-Host "🚀 Iniciant desplegament de Tradylor..." -ForegroundColor Cyan
+Write-Host "🚀 Iniciando despliegue de Tradylor..." -ForegroundColor Cyan
 
-# 1. Estat dels fitxers
+# 1. Estado de los archivos
 git status
 
-# 2. Afegir tots els canvis
+# 2. Añadir todos los cambios
 git add .
 
-# 3. Demanar missatge de commit
-$commitMsg = Read-Host "Introdueix el missatge per al commit"
+# 3. Pedir mensaje de commit
+$commitMsg = Read-Host "Introduce el mensaje para el commit"
 if ([string]::IsNullOrWhitespace($commitMsg)) {
-    $commitMsg = "feat: actualitzacio automatica de tradylor"
+    $commitMsg = "feat: actualizacion automatica de tradylor"
 }
 
-# 4. Commit i Push a GitHub
+# 4. Commit y Push a GitHub
 git commit -m $commitMsg
 git push origin main
 
-# 5. Compilació de producció
+# 5. Compilación de producción
 npm run build
 
-Write-Host "✅ ¡Fet! Tot el codi s'ha pujat a Git i s'ha compilat per a producció." -ForegroundColor Green
+Write-Host "✅ ¡Hecho! Todo el código se ha subido a Git y se ha compilado para producción." -ForegroundColor Green
