@@ -343,7 +343,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </div>
         <div id="sectionsListAdmin" class="sections-list-admin"></div>
       </div>
-    </section> class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'affiliates' }]}>
+    <section data-admin-view="affiliates" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'affiliates' }]}>
       <div class="view-heading">
         <span class="admin-tag-pill">Integraciones de monetización</span>
         <h2 class="admin-title">Afiliados y Multi-Catálogo</h2>
