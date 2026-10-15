@@ -71,7 +71,12 @@ export const GET: APIRoute = async ({ request }) => {
     }
 
     const categories = getCategories();
-    const productCounts = getProductCounts();
+    let productCounts: Record<string, number> = {};
+    try {
+      productCounts = getProductCounts();
+    } catch {
+      productCounts = {};
+    }
 
     const normalize = (s: string) =>
       s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
