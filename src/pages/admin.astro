@@ -530,7 +530,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
       <div class="affiliates-layout">
         <!-- Columna 1: Gestor de credenciales multi-red -->
-        <div class="admin-card" id="networksCard">
+        <div id="networksCard">
           <div class="card-header">
             <div class="header-icon">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -550,7 +550,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </div>
 
         <!-- Columna 2: Buscador global unificado -->
-        <div class="admin-card">
+        <div class="search-card">
           <div class="card-header">
             <div class="header-icon icon-cyan">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -661,7 +661,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       </div>
 
       <!-- 3. Catálogo AliExpress desde la caché del volumen (sin llamadas API en cada carga) -->
-      <div class="admin-card" id="aliCatalogCard">
+      <div id="aliCatalogCard">
         <div class="card-header">
           <div class="header-icon icon-cyan">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2210,13 +2210,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               ${network.fields.map((field) => `
                 <label class="cred-field">
                   <span>${escapeHtml(field.label)}${field.required ? ' *' : ''}</span>
-                  <input
-                    type="${field.secret ? 'password' : 'text'}"
-                    name="${escapeHtml(field.key)}"
-                    placeholder="${escapeHtml(field.hasValue ? '•••••••• (guardado)' : (field.placeholder || 'Sin configurar'))}"
-                    autocomplete="off"
-                  />
-                  <br />
+                  <span class="cred-input-wrap">
+                    <input
+                      type="${field.secret ? 'password' : 'text'}"
+                      name="${escapeHtml(field.key)}"
+                      placeholder="${escapeHtml(field.hasValue ? '•••••••• (guardado)' : (field.placeholder || 'Sin configurar'))}"
+                      autocomplete="off"
+                    />
+                    ${field.secret ? `
+                    <button type="button" class="cred-eye" data-cred-eye title="Mostrar u ocultar el valor" aria-label="Mostrar u ocultar el valor">
+                      <svg class="eye-closed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                      <svg class="eye-open" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>` : ''}
+                  </span>
                 </label>
               `).join('')}
               <div class="network-actions">
@@ -2352,6 +2358,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           input.value = '';
           const field = (networksCache || []).find((n) => n.id === networkId)?.fields?.find((f) => f.key === input.name);
           input.type = field?.secret ? 'password' : 'text';
+          input.parentElement?.querySelector('[data-cred-eye]')?.classList.remove('is-shown');
         }
         form.dataset.revealed = '0';
         if (button) button.textContent = 'Ver';
@@ -2373,6 +2380,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           if (value != null) {
             input.value = value;
             input.type = 'text';
+            input.parentElement?.querySelector('[data-cred-eye]')?.classList.add('is-shown');
           }
         }
         form.dataset.revealed = '1';
@@ -2396,6 +2404,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const row = removeFieldBtn.closest('.new-field-row');
         if (row && rows.length > 1) row.remove();
         else if (row) row.querySelector('.nf-label')?.focus();
+        return;
+      }
+
+      // Ojo de cada campo: alterna password ↔ text en ese input
+      const eyeBtn = event.target.closest('[data-cred-eye]');
+      if (eyeBtn) {
+        const input = eyeBtn.parentElement?.querySelector('input');
+        if (input) {
+          const show = input.type === 'password';
+          input.type = show ? 'text' : 'password';
+          eyeBtn.classList.toggle('is-shown', show);
+        }
         return;
       }
 
@@ -3504,6 +3524,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.loading-panel), :global(.empty-dashboard) { padding: 2rem; color: var(--color-text-muted); background: rgba(255, 255, 255, .025); border: 1px dashed var(--color-border); border-radius: var(--border-radius-md); text-align: center; }
 
   /* ============ MÓDULO AFILIADOS Y MULTI-CATÁLOGO ============ */
+  /* Sin caja admin-card: el contenido ocupa todo el ancho de main-content */
+  .admin-wrapper:has(section[data-admin-view="affiliates"].is-visible) { max-width: none; padding-left: 1.25rem; padding-right: 1.25rem; }
   .affiliates-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 2rem; align-items: start; }
   @media (max-width: 1100px) { .affiliates-layout { grid-template-columns: 1fr; } }
 
@@ -3523,6 +3545,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.network-desc) { color: var(--color-text-muted); font-size: .78rem; line-height: 1.5; margin: .85rem 0; }
   :global(.network-cred-form) { display: flex; flex-direction: column; gap: .65rem; }
   :global(.cred-field) { display: grid; gap: .3rem; color: var(--color-text-muted); font-size: .72rem; font-weight: 700; }
+  :global(.cred-input-wrap) { position: relative; display: block; }
+  :global(.cred-input-wrap input) { padding-right: 2.2rem !important; }
+  :global(.cred-eye) { position: absolute; top: 50%; right: .45rem; transform: translateY(-50%); display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; color: var(--color-text-dim); background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
+  :global(.cred-eye:hover) { color: var(--color-text-main); background: rgba(255, 255, 255, .06); }
+  :global(.cred-eye svg) { width: 15px; height: 15px; pointer-events: none; }
+  :global(.cred-eye .eye-open) { display: none; }
+  :global(.cred-eye.is-shown .eye-open) { display: block; }
+  :global(.cred-eye.is-shown .eye-closed) { display: none; }
   :global(.cred-field input) { width: 100%; box-sizing: border-box; padding: .55rem .75rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
   :global(.cred-field input:focus) { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, .12); }
   :global(.network-actions) { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .35rem; }
@@ -3569,6 +3599,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .filter-field label { color: var(--color-text-dim); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
   .filter-field input, .filter-field select { width: 100%; box-sizing: border-box; padding: .55rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
   .filter-field input:focus, .filter-field select:focus { border-color: #38bdf8; }
+  /* Opciones de los desplegables: texto negro sobre fondo claro (Windows
+     pinta el popup del select en blanco y con texto blanco era ilegible) */
+  .filter-field select option,
+  .import-category-field select option { background: #ffffff; color: #111827; }
   .filter-check { display: inline-flex; align-items: center; gap: .45rem; color: var(--color-text-muted); font-size: .8rem; font-weight: 600; padding-bottom: .55rem; cursor: pointer; }
 
   .network-status-row { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
