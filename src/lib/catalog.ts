@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import { products as staticProducts, type Product } from '../data/products';
 import { validateProducts, validateSingleProduct } from './validateProducts';
 import { dataFile } from './paths';
+import { readDeletedIds } from './deletedProducts';
 
 const DATA_FILE_PATH = dataFile('products.json');
 
@@ -80,6 +81,8 @@ export function getCatalogProducts(): Product[] {
   const mergedRaw: unknown[] = [];
   const liveIds = new Set<string>();
 
+  const deletedIds = new Set(readDeletedIds());
+
   for (const entry of rawJson) {
     if (!entry || typeof entry !== 'object') continue;
 
@@ -94,7 +97,7 @@ export function getCatalogProducts(): Product[] {
     liveIds.add(probe.id);
   }
 
-  const curatedOnly = staticProducts.filter((sp) => !liveIds.has(sp.id));
+  const curatedOnly = staticProducts.filter((sp) => !liveIds.has(sp.id) && !deletedIds.has(sp.id));
 
   // Normalizes merged entries (flat -> schema -> flat) before handing them
   // to the components, so structured trust metrics are available everywhere.
