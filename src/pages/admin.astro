@@ -2404,6 +2404,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         .filter(([, value]) => value != null && value !== '')
         .map(([label, value]) => {
           const raw = String(value);
+          // Galería completa de imágenes de AliExpress como miniaturas.
+          if (label === 'Imágenes' && raw.includes(' | ')) {
+            const urls = raw.split(' | ').filter((u) => /^https?:\/\//i.test(u));
+            const cells = urls.map((u) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(u)}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--color-border);" /></a>`).join('');
+            return `<div class="aff-detail-item"><dt>${escapeHtml(label)} (${urls.length})</dt><dd style="display:flex;flex-wrap:wrap;gap:6px;">${cells}</dd></div>`;
+          }
           const cell = /^https?:\/\//i.test(raw)
             ? `<a href="${escapeHtml(raw)}" target="_blank" rel="noopener noreferrer">${escapeHtml(raw)}</a>`
             : escapeHtml(raw);
