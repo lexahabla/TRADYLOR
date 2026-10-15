@@ -660,6 +660,41 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
         </div>
       </div>
+
+      <!-- 3. Catálogo AliExpress desde la caché del volumen (sin llamadas API en cada carga) -->
+      <div class="admin-card" id="aliCatalogCard">
+        <div class="card-header">
+          <div class="header-icon icon-cyan">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 3v18h18"></path>
+              <path d="M7 14l4-4 4 4 5-6"></path>
+            </svg>
+          </div>
+          <div>
+            <h2 class="card-title">3. Catálogo AliExpress (caché)</h2>
+            <p class="card-desc">Tabla amplia del último catálogo sincronizado, guardado en el servidor. Usa «Sincronizar» para refrescarlo contra la API; se avisa si la caché supera las 6 horas.</p>
+          </div>
+          <div class="ali-catalog-head-actions">
+            <span id="aliCatalogMeta" class="ali-catalog-meta">Cargando…</span>
+            <button type="button" id="btnAliSync" class="btn-primary btn-sm">
+              <span class="btn-text">Sincronizar</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+          </div>
+        </div>
+
+        <div id="aliCatalogStatus" class="status-alert" hidden>
+          <div class="alert-icon" id="aliCatalogStatusIcon">ℹ️</div>
+          <div class="alert-content">
+            <strong id="aliCatalogStatusTitle">Estado</strong>
+            <p id="aliCatalogStatusText">Mensaje...</p>
+          </div>
+        </div>
+
+        <div id="aliCatalogHost">
+          <div class="loading-panel">Cargando catálogo de AliExpress...</div>
+        </div>
+      </div>
     </section>
 
     <section data-admin-view="categories" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'categories' }]}>
@@ -2240,12 +2275,17 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const newFeedback = networkList.querySelector(`[data-network-feedback="${networkId}"]`);
         if (newFeedback) newFeedback.textContent = data.message || '';
 
-        // Al conectar una red, cargamos automáticamente su catálogo completo
-        // para poder revisarlo e importarlo en bloque.
+        // Al conectar una red, cargamos su catálogo para poder revisarlo e
+        // importarlo en bloque. AliExpress refresca la caché de la tabla 3
+        // (POST manual/automático de conexión); el resto usa el buscador unificado.
         const validated = (data.networks || []).find((n) => n.id === networkId);
         if (validated && validated.status === 'connected') {
-          showSearchStatus('success', 'Red conectada', `Cargando el catálogo de ${validated.name}...`);
-          runUnifiedSearch({ catalog: true });
+          if (networkId === 'aliexpress') {
+            await syncAliCatalogUI();
+          } else {
+            showSearchStatus('success', 'Red conectada', `Cargando el catálogo de ${validated.name}...`);
+            runUnifiedSearch({ catalog: true });
+          }
         }
       }
 
@@ -2593,13 +2633,270 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     });
 
     if (networkNewHost) networkNewHost.innerHTML = newNetworkPanelHtml();
-    if (networkList) {
-      loadNetworks().then(() => {
-        if ((networksCache || []).some((network) => network.id === 'aliexpress')) {
-          runUnifiedSearch({ catalog: true, networks: ['aliexpress'] });
-        }
-      });
+    if (networkList) loadNetworks();
+
+    // =========================================================================
+    // 5b. CATÁLOGO ALIEXPRESS EN CACHÉ (/api/admin/aliexpress/catalog)
+    //    - GET: sólo lee el JSON del volumen. NUNCA consulta la TOP API en
+    //      cada carga del panel (evita rate limits y pantallas lentas).
+    //    - POST: botón «Sincronizar» (y al validar la conexión) → consulta la
+    //      API keyword a keyword y reescribe la caché.
+    //    - Si la caché supera las 6 horas se muestra un aviso, sin auto-sync.
+    // =========================================================================
+    const aliCatalogHost = document.getElementById('aliCatalogHost');
+    const aliCatalogMeta = document.getElementById('aliCatalogMeta');
+    const aliCatalogStatus = document.getElementById('aliCatalogStatus');
+    const aliCatalogStatusIcon = document.getElementById('aliCatalogStatusIcon');
+    const aliCatalogStatusTitle = document.getElementById('aliCatalogStatusTitle');
+    const aliCatalogStatusText = document.getElementById('aliCatalogStatusText');
+    const btnAliSync = document.getElementById('btnAliSync');
+
+    const ALI_PAGE_SIZE = 50;
+    const ALI_COLS = 13;
+    let aliProducts = [];
+    let aliPage = 1;
+    let aliSyncing = false;
+
+    function showAliStatus(type, title, message) {
+      if (!aliCatalogStatus) return;
+      aliCatalogStatus.hidden = false;
+      aliCatalogStatus.className = `status-alert alert-${type}`;
+      if (aliCatalogStatusIcon) {
+        aliCatalogStatusIcon.textContent = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
+      }
+      if (aliCatalogStatusTitle) aliCatalogStatusTitle.textContent = title;
+      if (aliCatalogStatusText) aliCatalogStatusText.textContent = message;
     }
+
+    function aliRelTime(iso) {
+      const then = new Date(iso).getTime();
+      if (!Number.isFinite(then)) return 'sin fecha';
+      const mins = Math.max(0, Math.round((Date.now() - then) / 60000));
+      if (mins < 1) return 'ahora mismo';
+      if (mins < 60) return `hace ${mins} min`;
+      const hours = Math.round(mins / 60);
+      if (hours < 24) return `hace ${hours} h`;
+      return `hace ${Math.round(hours / 24)} d`;
+    }
+
+    function aliExtra(product, key) {
+      const value = (product.extra || {})[key];
+      return value == null || value === '' ? null : value;
+    }
+
+    function aliDiscount(product) {
+      const raw = aliExtra(product, 'Descuento');
+      if (raw) return `${String(raw).replace('%', '')}%`;
+      const price = Number(product.price);
+      const original = Number(product.originalPrice);
+      if (price > 0 && original > price) return `${Math.round(((original - price) / original) * 100)}%`;
+      return null;
+    }
+
+    function aliPagerHtml(page, pages, total, start, shown) {
+      if (total === 0) return '';
+      const info = `<span class="ac-page-info">Mostrando ${start + 1}–${start + shown} de ${total}</span>`;
+      if (pages <= 1) return `<div class="ac-pager">${info}</div>`;
+      const btn = (label, target, opts = {}) =>
+        `<button type="button" class="ac-page-btn${opts.current ? ' is-current' : ''}" data-ac-page="${target}"${opts.disabled ? ' disabled' : ''}>${label}</button>`;
+      const wanted = [...new Set([1, pages, page - 1, page, page + 1])]
+        .filter((n) => n >= 1 && n <= pages)
+        .sort((a, b) => a - b);
+      const nums = [];
+      wanted.forEach((n, index) => {
+        if (index > 0 && n - wanted[index - 1] > 1) nums.push('<span class="ac-page-gap">…</span>');
+        nums.push(btn(String(n), n, { current: n === page }));
+      });
+      return `<div class="ac-pager">${info}<div class="ac-page-nav">${btn('‹', page - 1, { disabled: page <= 1 })}${nums.join('')}${btn('›', page + 1, { disabled: page >= pages })}</div></div>`;
+    }
+
+    function renderAliCatalog() {
+      if (!aliCatalogHost) return;
+      if (!aliProducts.length) {
+        aliCatalogHost.innerHTML = '<div class="empty-dashboard">Sin productos en la caché. Pulsa «Sincronizar» para descargar el catálogo de AliExpress por primera vez.</div>';
+        return;
+      }
+      const pages = Math.max(1, Math.ceil(aliProducts.length / ALI_PAGE_SIZE));
+      if (aliPage > pages) aliPage = pages;
+      const start = (aliPage - 1) * ALI_PAGE_SIZE;
+      const slice = aliProducts.slice(start, start + ALI_PAGE_SIZE);
+      aliCatalogHost.innerHTML = `
+        <div class="aff-table-wrap">
+          <table class="aff-table">
+            <thead>
+              <tr>
+                <th>Foto</th>
+                <th>Producto</th>
+                <th>Categoría</th>
+                <th class="aff-num">Precio</th>
+                <th class="aff-num">Precio orig.</th>
+                <th class="aff-num">Dto.</th>
+                <th class="aff-num">Comisión %</th>
+                <th class="aff-num">Comisión €</th>
+                <th class="aff-num">Ventas</th>
+                <th class="aff-num">Valoración</th>
+                <th>Tienda</th>
+                <th>Envío</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${slice
+                .map((product, offset) => {
+                  const index = start + offset;
+                  const discount = aliDiscount(product);
+                  const shop = aliExtra(product, 'Tienda');
+                  const shippingDays = aliExtra(product, 'Días de envío');
+                  return `
+                <tr class="aff-row" data-ac-row="${index}" tabindex="0" aria-expanded="false">
+                  <td><span class="aff-thumb">${product.image ? `<img src="${escapeHtml(product.image)}" alt="" loading="lazy" />` : ''}</span></td>
+                  <td class="aff-name">
+                    <strong>${escapeHtml(product.title)}</strong>
+                    <span>${escapeHtml(product.network)}${product.category ? ` · ${escapeHtml(product.category)}` : ''}</span>
+                  </td>
+                  <td>${escapeHtml(product.category || '—')}</td>
+                  <td class="aff-num">${money(product.price, product.currency)}</td>
+                  <td class="aff-num">${product.originalPrice != null ? money(product.originalPrice, product.currency) : '—'}</td>
+                  <td class="aff-num ac-discount">${discount ? escapeHtml(discount) : '—'}</td>
+                  <td class="aff-num">${product.commissionRate != null ? `${product.commissionRate}%` : '—'}</td>
+                  <td class="aff-num">${product.commissionAmount != null ? money(product.commissionAmount, product.currency) : '—'}</td>
+                  <td class="aff-num">${product.popularity != null ? product.popularity : '—'}</td>
+                  <td class="aff-num">${product.rating != null ? `${product.rating} / 5` : '—'}</td>
+                  <td>${shop ? escapeHtml(shop) : '—'}</td>
+                  <td>${shippingDays != null ? `${escapeHtml(shippingDays)} d` : product.shippingInfo ? escapeHtml(product.shippingInfo) : '—'}</td>
+                  <td class="aff-actions">
+                    <button type="button" class="btn-success btn-sm unified-import ali-import" data-ac-import="${index}">Añadir</button>
+                    <button type="button" class="aff-caret" data-ac-toggle="${index}" aria-label="Ver todos los datos">▸</button>
+                  </td>
+                </tr>
+                <tr class="aff-detail" data-ac-detail="${index}" hidden>
+                  <td colspan="${ALI_COLS}"><dl class="aff-detail-grid">${productDetailRows(product)}</dl></td>
+                </tr>`;
+                })
+                .join('')}
+            </tbody>
+          </table>
+        </div>
+        ${aliPagerHtml(aliPage, pages, aliProducts.length, start, slice.length)}`;
+    }
+
+    function setAliMeta(state) {
+      if (!aliCatalogMeta) return;
+      if (!state || !state.count) {
+        aliCatalogMeta.textContent = 'Sin sincronizar';
+        return;
+      }
+      aliCatalogMeta.textContent = `${state.count} productos · ${aliRelTime(state.syncedAt)}${state.stale ? ' · obsoleto' : ''}`;
+    }
+
+    /** GET de la caché: sólo lectura de disco en el servidor. */
+    async function loadAliCatalog() {
+      try {
+        const res = await fetch('/api/admin/aliexpress/catalog', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          if (aliCatalogHost) aliCatalogHost.innerHTML = '<div class="empty-dashboard">No se pudo leer la caché del catálogo.</div>';
+          return data;
+        }
+        aliProducts = Array.isArray(data.products) ? data.products : [];
+        aliPage = 1;
+        setAliMeta(data);
+        renderAliCatalog();
+        if (!data.connected) showAliStatus('warning', 'AliExpress sin conectar', 'Guarda sus credenciales en «1. Redes conectadas» y pulsa «Validar» para poder sincronizar.');
+        else if (!data.count) showAliStatus('warning', 'Caché vacía', 'Todavía no hay productos guardados. Pulsa «Sincronizar» para descargar el catálogo.');
+        else if (data.stale) showAliStatus('warning', 'Caché obsoleta', `El catálogo guardado tiene más de 6 horas (${aliRelTime(data.syncedAt)}). Pulsa «Sincronizar» para refrescarlo.`);
+        else showAliStatus('success', 'Caché al día', `${data.count} productos guardados, sincronizados ${aliRelTime(data.syncedAt)}.`);
+        return data;
+      } catch {
+        if (aliCatalogHost) aliCatalogHost.innerHTML = '<div class="empty-dashboard">Fallo de red al leer la caché del catálogo.</div>';
+        return null;
+      }
+    }
+
+    /** POST de sincronización: consulta la TOP API y reescribe el JSON. */
+    async function syncAliCatalogUI() {
+      if (aliSyncing) return null;
+      aliSyncing = true;
+      const spinner = btnAliSync ? btnAliSync.querySelector('.btn-spinner') : null;
+      const text = btnAliSync ? btnAliSync.querySelector('.btn-text') : null;
+      if (btnAliSync) btnAliSync.disabled = true;
+      if (spinner) spinner.hidden = false;
+      if (text) text.textContent = 'Sincronizando...';
+      showAliStatus('loading', 'Sincronizando con AliExpress', 'Consulta por palabras clave en curso (puede tardar unos segundos)...');
+      try {
+        const res = await fetch('/api/admin/aliexpress/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const data = await res.json();
+        aliProducts = Array.isArray(data.products) ? data.products : [];
+        aliPage = 1;
+        setAliMeta(data);
+        renderAliCatalog();
+        if (data.ok) showAliStatus('success', 'Catálogo sincronizado', `${data.count} productos guardados en el servidor.`);
+        else showAliStatus('error', 'No se pudo sincronizar', data.message || 'AliExpress no respondió.');
+        return data;
+      } catch {
+        showAliStatus('error', 'Fallo de red', 'No se pudo contactar con el servidor para sincronizar.');
+        return null;
+      } finally {
+        aliSyncing = false;
+        if (btnAliSync) btnAliSync.disabled = false;
+        if (spinner) spinner.hidden = true;
+        if (text) text.textContent = 'Sincronizar';
+      }
+    }
+
+    btnAliSync?.addEventListener('click', () => syncAliCatalogUI());
+
+    // Interacción de la tabla 3: paginación, desplegable, importación y fila
+    aliCatalogHost?.addEventListener('click', async (event) => {
+      const pageBtn = event.target.closest('[data-ac-page]');
+      if (pageBtn) {
+        const target = Number(pageBtn.dataset.acPage);
+        if (Number.isFinite(target) && target >= 1) {
+          aliPage = target;
+          renderAliCatalog();
+        }
+        return;
+      }
+
+      const toggle = event.target.closest('[data-ac-toggle]');
+      if (toggle) {
+        const index = Number(toggle.dataset.acToggle);
+        const row = aliCatalogHost.querySelector(`[data-ac-row="${index}"]`);
+        const detail = aliCatalogHost.querySelector(`[data-ac-detail="${index}"]`);
+        if (row && detail) {
+          const open = detail.hidden;
+          detail.hidden = !open;
+          row.classList.toggle('is-open', open);
+          row.setAttribute('aria-expanded', String(open));
+        }
+        return;
+      }
+
+      const importBtn = event.target.closest('[data-ac-import]');
+      if (importBtn) {
+        const product = aliProducts[Number(importBtn.dataset.acImport)];
+        if (!product) return;
+        const result = await importSingleProduct(product, importBtn);
+        if (result.ok) showAliStatus('success', 'Producto importado', `"${result.product.title}" ya está en el catálogo de Tradylor.`);
+        else showAliStatus('error', 'Error al importar', result.message);
+        return;
+      }
+
+      const row = event.target.closest('[data-ac-row]');
+      if (row && !event.target.closest('a, button')) {
+        const index = Number(row.dataset.acRow);
+        const detail = aliCatalogHost.querySelector(`[data-ac-detail="${index}"]`);
+        if (detail) {
+          const open = detail.hidden;
+          detail.hidden = !open;
+          row.classList.toggle('is-open', open);
+          row.setAttribute('aria-expanded', String(open));
+        }
+      }
+    });
+
+    // Primera carga: sólo lectura de la caché (sin llamadas a la API)
+    loadAliCatalog();
 
     // =========================================================================
     // 6. GESTIÓN DE CATEGORÍAS (CRUD + relleno de selectores del panel)
@@ -2854,57 +3151,58 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .filter-chip-row span { color: #93c5fd; border-color: rgba(96, 165, 250, .25); }
   .category-form { display: flex; gap: .75rem; }
   .category-form input { flex: 1; }
-  .loading-panel, .empty-dashboard { padding: 2rem; color: var(--color-text-muted); background: rgba(255, 255, 255, .025); border: 1px dashed var(--color-border); border-radius: var(--border-radius-md); text-align: center; }
+  :global(.loading-panel), :global(.empty-dashboard) { padding: 2rem; color: var(--color-text-muted); background: rgba(255, 255, 255, .025); border: 1px dashed var(--color-border); border-radius: var(--border-radius-md); text-align: center; }
 
   /* ============ MÓDULO AFILIADOS Y MULTI-CATÁLOGO ============ */
   .affiliates-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 2rem; align-items: start; }
   @media (max-width: 1100px) { .affiliates-layout { grid-template-columns: 1fr; } }
 
   .network-list { display: flex; flex-direction: column; gap: .65rem; }
-  .network-item { border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); background: rgba(255, 255, 255, .02); overflow: hidden; }
-  .network-item summary { display: flex; align-items: center; gap: .75rem; padding: .8rem 1rem; cursor: pointer; list-style: none; user-select: none; }
-  .network-item summary::-webkit-details-marker { display: none; }
-  .network-item summary:hover { background: rgba(255, 255, 255, .04); }
-  .network-color { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; box-shadow: 0 0 8px currentColor; }
-  .network-main { display: flex; flex-direction: column; gap: .1rem; min-width: 0; flex: 1; }
-  .network-name { color: var(--color-text-main); font-size: .85rem; font-weight: 700; }
-  .network-region { color: var(--color-text-dim); font-size: .7rem; }
-  .network-body { padding: 0 1rem 1rem; border-top: 1px solid var(--color-border); }
-  .network-desc { color: var(--color-text-muted); font-size: .78rem; line-height: 1.5; margin: .85rem 0; }
-  .network-cred-form { display: flex; flex-direction: column; gap: .65rem; }
-  .cred-field { display: grid; gap: .3rem; color: var(--color-text-muted); font-size: .72rem; font-weight: 700; }
-  .cred-field input { width: 100%; box-sizing: border-box; padding: .55rem .75rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
-  .cred-field input:focus { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, .12); }
-  .network-actions { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .35rem; }
-  .network-doc { margin-left: auto; color: #60a5fa; font-size: .72rem; text-decoration: none; }
-  .network-doc:hover { text-decoration: underline; }
-  .network-feedback { margin: .5rem 0 0; color: var(--color-text-muted); font-size: .74rem; line-height: 1.4; }
-  .integration-status.is-error { color: #fca5a5; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); }
+  :global(.network-item) { border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); background: rgba(255, 255, 255, .02); overflow: hidden; }
+  :global(.network-item summary) { display: flex; align-items: center; gap: .75rem; padding: .8rem 1rem; cursor: pointer; list-style: none; user-select: none; }
+  :global(.network-item summary::-webkit-details-marker) { display: none; }
+  :global(.network-item summary:hover) { background: rgba(255, 255, 255, .04); }
+  :global(.network-color) { width: 12px; height: 12px; border-radius: 4px; flex-shrink: 0; box-shadow: 0 0 8px currentColor; }
+  :global(.network-main) { display: flex; flex-direction: column; gap: .1rem; min-width: 0; flex: 1; }
+  :global(.network-name) { color: var(--color-text-main); font-size: .85rem; font-weight: 700; }
+  :global(.network-region) { color: var(--color-text-dim); font-size: .7rem; }
+  :global(.network-body) { padding: 0 1rem 1rem; border-top: 1px solid var(--color-border); }
+  :global(.network-desc) { color: var(--color-text-muted); font-size: .78rem; line-height: 1.5; margin: .85rem 0; }
+  :global(.network-cred-form) { display: flex; flex-direction: column; gap: .65rem; }
+  :global(.cred-field) { display: grid; gap: .3rem; color: var(--color-text-muted); font-size: .72rem; font-weight: 700; }
+  :global(.cred-field input) { width: 100%; box-sizing: border-box; padding: .55rem .75rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
+  :global(.cred-field input:focus) { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, .12); }
+  :global(.network-actions) { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-top: .35rem; }
+  :global(.network-doc) { margin-left: auto; color: #60a5fa; font-size: .72rem; text-decoration: none; }
+  :global(.network-doc:hover) { text-decoration: underline; }
+  :global(.network-feedback) { margin: .5rem 0 0; color: var(--color-text-muted); font-size: .74rem; line-height: 1.4; }
+  :global(.integration-status.is-error) { color: #fca5a5; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); }
 
   /* Alta de afiliado: bloque propio FUERA de la lista, estilo botón CTA */
   .network-new-host { margin-top: 1.15rem; padding-top: 1.15rem; border-top: 1px dashed var(--color-border); }
-  .network-new { border: 2px dashed rgba(56, 189, 248, .6); border-radius: 14px; background: linear-gradient(180deg, rgba(56, 189, 248, .12), rgba(56, 189, 248, .04)); box-shadow: 0 8px 24px rgba(56, 189, 248, .1); }
-  .network-new summary { justify-content: center; gap: .85rem; padding: 1.3rem 1rem; border-radius: 12px; }
-  .network-new summary:hover { background: rgba(56, 189, 248, .16); }
-  .network-add-icon { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; color: #06121f; background: #38bdf8; border-radius: 50%; box-shadow: 0 0 18px rgba(56, 189, 248, .55); }
-  .network-add-main { align-items: center; text-align: center; }
-  .network-new .network-name { color: #7dd3fc; font-size: .98rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
-  .network-new .network-region { color: var(--color-text-dim); font-size: .72rem; }
-  .network-add-chip { padding: .3rem .8rem; color: #06121f; background: #38bdf8; border-radius: 999px; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0; }
-  .network-new[open] summary { border-bottom: 2px dashed rgba(56, 189, 248, .35); border-radius: 12px 12px 0 0; }
-  .network-new .network-body { padding-top: 1rem; background: rgba(4, 10, 18, .45); border-top: none; border-radius: 0 0 12px 12px; }
-  .new-fields { display: flex; flex-direction: column; gap: .55rem; }
-  .new-fields-title { color: var(--color-text-muted); font-size: .72rem; font-weight: 700; }
-  .new-field-rows { display: flex; flex-direction: column; gap: .5rem; }
-  .new-field-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-  .new-field-row .nf-label { flex: 1; min-width: 150px; box-sizing: border-box; padding: .5rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .78rem; outline: none; }
-  .new-field-row .nf-label:focus { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, .12); }
-  .nf-check { display: inline-flex; align-items: center; gap: .3rem; color: var(--color-text-muted); font-size: .7rem; font-weight: 600; cursor: pointer; }
-  .nf-check input { accent-color: #38bdf8; }
-  .nf-remove { padding: .2rem .45rem; color: #fca5a5; background: transparent; border: 1px solid rgba(239, 68, 68, .35); border-radius: 4px; cursor: pointer; font-size: .72rem; line-height: 1.2; }
-  .nf-remove:hover { background: rgba(239, 68, 68, .12); }
-  .nf-color { width: 64px; height: 32px; padding: 2px; background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); cursor: pointer; }
-  .network-remove { color: #fca5a5; }
+  :global(.network-new) { border: 2px dashed rgba(56, 189, 248, .6); border-radius: 14px; background: linear-gradient(180deg, rgba(56, 189, 248, .12), rgba(56, 189, 248, .04)); box-shadow: 0 8px 24px rgba(56, 189, 248, .1); }
+  :global(.network-new summary) { justify-content: center; gap: .85rem; padding: 1.3rem 1rem; border-radius: 12px; display: flex; align-items: center; cursor: pointer; list-style: none; user-select: none; }
+  :global(.network-new summary::-webkit-details-marker) { display: none; }
+  :global(.network-new summary:hover) { background: rgba(56, 189, 248, .16); }
+  :global(.network-add-icon) { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex-shrink: 0; color: #06121f; background: #38bdf8; border-radius: 50%; box-shadow: 0 0 18px rgba(56, 189, 248, .55); }
+  :global(.network-add-main) { align-items: center; text-align: center; display: flex; flex-direction: column; gap: .1rem; min-width: 0; flex: 1; }
+  :global(.network-new .network-name) { color: #7dd3fc; font-size: .98rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+  :global(.network-new .network-region) { color: var(--color-text-dim); font-size: .72rem; }
+  :global(.network-add-chip) { padding: .3rem .8rem; color: #06121f; background: #38bdf8; border-radius: 999px; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0; }
+  :global(.network-new[open] summary) { border-bottom: 2px dashed rgba(56, 189, 248, .35); border-radius: 12px 12px 0 0; }
+  :global(.network-new .network-body) { padding-top: 1rem; background: rgba(4, 10, 18, .45); border-top: none; border-radius: 0 0 12px 12px; }
+  :global(.new-fields) { display: flex; flex-direction: column; gap: .55rem; }
+  :global(.new-fields-title) { color: var(--color-text-muted); font-size: .72rem; font-weight: 700; }
+  :global(.new-field-rows) { display: flex; flex-direction: column; gap: .5rem; }
+  :global(.new-field-row) { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  :global(.new-field-row .nf-label) { flex: 1; min-width: 150px; box-sizing: border-box; padding: .5rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .78rem; outline: none; }
+  :global(.new-field-row .nf-label:focus) { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, .12); }
+  :global(.nf-check) { display: inline-flex; align-items: center; gap: .3rem; color: var(--color-text-muted); font-size: .7rem; font-weight: 600; cursor: pointer; }
+  :global(.nf-check input) { accent-color: #38bdf8; }
+  :global(.nf-remove) { padding: .2rem .45rem; color: #fca5a5; background: transparent; border: 1px solid rgba(239, 68, 68, .35); border-radius: 4px; cursor: pointer; font: inherit; font-size: .72rem; line-height: 1.2; }
+  :global(.nf-remove:hover) { background: rgba(239, 68, 68, .12); }
+  :global(.nf-color) { width: 64px; height: 32px; padding: 2px; background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); cursor: pointer; }
+  :global(.network-remove) { color: #fca5a5; }
   .removed-networks { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; margin-top: .75rem; padding: .6rem .8rem; color: var(--color-text-muted); background: rgba(239, 68, 68, .06); border: 1px dashed rgba(239, 68, 68, .35); border-radius: var(--border-radius-sm); font-size: .74rem; }
   .removed-networks[hidden] { display: none; }
 
@@ -2921,52 +3219,51 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .filter-check { display: inline-flex; align-items: center; gap: .45rem; color: var(--color-text-muted); font-size: .8rem; font-weight: 600; padding-bottom: .55rem; cursor: pointer; }
 
   .network-status-row { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
-  .network-chip { padding: .25rem .6rem; border-radius: 999px; font-size: .68rem; font-weight: 700; border: 1px solid var(--color-border); color: var(--color-text-muted); background: rgba(255, 255, 255, .03); }
-  .network-chip.is-ok { color: #6ee7b7; border-color: rgba(16, 185, 129, .3); background: rgba(16, 185, 129, .08); }
-  .network-chip.is-fail { color: #fca5a5; border-color: rgba(239, 68, 68, .3); background: rgba(239, 68, 68, .08); }
+  :global(.network-chip) { padding: .25rem .6rem; border-radius: 999px; font-size: .68rem; font-weight: 700; border: 1px solid var(--color-border); color: var(--color-text-muted); background: rgba(255, 255, 255, .03); }
+  :global(.network-chip.is-ok) { color: #6ee7b7; border-color: rgba(16, 185, 129, .3); background: rgba(16, 185, 129, .08); }
+  :global(.network-chip.is-fail) { color: #fca5a5; border-color: rgba(239, 68, 68, .3); background: rgba(239, 68, 68, .08); }
 
   .unified-results { display: flex; flex-direction: column; gap: .75rem; }
-  .aff-table-wrap { max-height: 680px; overflow: auto; border: 1px solid var(--color-border); border-radius: 14px; }
-  .aff-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .78rem; background: rgba(255, 255, 255, .02); }
-  .aff-table th { position: sticky; top: 0; z-index: 1; padding: .65rem .75rem; text-align: left; font-size: .62rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--color-text-muted); background: #121826; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
-  .aff-table td { padding: .55rem .75rem; color: var(--color-text-main); border-bottom: 1px solid rgba(255, 255, 255, .05); vertical-align: middle; }
-  .aff-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .aff-num small { display: block; color: #6ee7b7; font-size: .68rem; }
-  .aff-row { cursor: pointer; }
-  .aff-row:hover { background: rgba(96, 165, 250, .06); }
-  .aff-row.is-open { background: rgba(96, 165, 250, .1); }
-  .aff-thumb { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; padding: 3px; background: #fff; border-radius: 8px; }
-  .aff-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
-  .aff-name { min-width: 220px; }
-  .aff-name strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 650; line-height: 1.35; }
-  .aff-name span { display: block; margin-top: .2rem; color: var(--color-text-dim); font-size: .68rem; }
-  .aff-actions { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; white-space: nowrap; }
-  .aff-caret { width: 28px; height: 28px; color: #93c5fd; background: rgba(96, 165, 250, .1); border: 1px solid rgba(96, 165, 250, .25); border-radius: 8px; cursor: pointer; }
-  .aff-row.is-open .aff-caret { transform: rotate(90deg); }
-  .aff-detail td { background: rgba(4, 10, 18, .55); }
-  .aff-detail-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .65rem .9rem; margin: 0; }
-  .aff-detail-item dt { color: var(--color-text-dim); font-size: .64rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-  .aff-detail-item dd { margin: .15rem 0 0; color: var(--color-text-main); font-size: .76rem; word-break: break-word; }
-  .aff-detail-item a { color: #93c5fd; }
-  .unified-card { display: flex; align-items: center; gap: 1rem; padding: .85rem 1rem; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
-  .unified-thumb { width: 64px; height: 64px; border-radius: 8px; background: #fff; padding: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-  .unified-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
-  .unified-body { flex: 1; min-width: 0; }
-  .unified-top { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-bottom: .3rem; }
-  .network-mini-tag { padding: .12rem .45rem; border-radius: 4px; background: rgba(59, 130, 246, .12); border: 1px solid rgba(59, 130, 246, .3); color: #93c5fd; font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
-  .estimated-tag { padding: .12rem .45rem; border-radius: 4px; background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .3); color: #fbbf24; font-size: .64rem; font-weight: 800; text-transform: uppercase; }
-  .stock-tag { padding: .12rem .45rem; border-radius: 4px; background: rgba(16, 185, 129, .1); border: 1px solid rgba(16, 185, 129, .3); color: #6ee7b7; font-size: .64rem; font-weight: 800; }
-  .stock-tag.is-out { background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); color: #fca5a5; }
-  .unified-title { margin: 0 0 .35rem; color: var(--color-text-main); font-size: .85rem; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .unified-metrics { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; font-size: .75rem; color: var(--color-text-muted); }
-  .unified-price { font-family: var(--font-heading); font-size: 1.05rem; font-weight: 800; color: #fff; }
-  .unified-commission { color: #6ee7b7; font-weight: 600; }
-  .unified-rating { color: #fbbf24; font-weight: 600; }
-  .unified-import { flex-shrink: 0; white-space: nowrap; }
-  .unified-import.is-done { background: rgba(16, 185, 129, .2); border-color: rgba(16, 185, 129, .4); pointer-events: none; }
-  .btn-sm { padding: .5rem .8rem; font-size: .76rem; }
-  .btn-danger-ghost { display: inline-flex; align-items: center; gap: .35rem; padding: .5rem .8rem; color: #fca5a5; background: transparent; border: 1px solid rgba(239, 68, 68, .3); border-radius: var(--border-radius-sm); cursor: pointer; font: inherit; font-size: .76rem; font-weight: 700; transition: all .2s ease; }
-  .btn-danger-ghost:hover { background: rgba(239, 68, 68, .12); }
+  :global(.aff-table-wrap) { max-height: 680px; overflow: auto; border: 1px solid var(--color-border); border-radius: 14px; }
+  :global(.aff-table) { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .78rem; background: rgba(255, 255, 255, .02); }
+  :global(.aff-table th) { position: sticky; top: 0; z-index: 1; padding: .65rem .75rem; text-align: left; font-size: .62rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--color-text-muted); background: #121826; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+  :global(.aff-table td) { padding: .55rem .75rem; color: var(--color-text-main); border-bottom: 1px solid rgba(255, 255, 255, .05); vertical-align: middle; }
+  :global(.aff-num) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  :global(.aff-num small) { display: block; color: #6ee7b7; font-size: .68rem; }
+  :global(.aff-row) { cursor: pointer; }
+  :global(.aff-row:hover) { background: rgba(96, 165, 250, .06); }
+  :global(.aff-row.is-open) { background: rgba(96, 165, 250, .1); }
+  :global(.aff-thumb) { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; padding: 3px; background: #fff; border-radius: 8px; }
+  :global(.aff-thumb img) { max-width: 100%; max-height: 100%; object-fit: contain; }
+  :global(.aff-name) { min-width: 220px; }
+  :global(.aff-name strong) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 650; line-height: 1.35; }
+  :global(.aff-name span) { display: block; margin-top: .2rem; color: var(--color-text-dim); font-size: .68rem; }
+  :global(.aff-actions) { display: flex; align-items: center; justify-content: flex-end; gap: .4rem; white-space: nowrap; }
+  :global(.aff-caret) { width: 28px; height: 28px; color: #93c5fd; background: rgba(96, 165, 250, .1); border: 1px solid rgba(96, 165, 250, .25); border-radius: 8px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-body); font-weight: 700; transition: all .2s ease; }
+  :global(.aff-row.is-open .aff-caret) { transform: rotate(90deg); }
+  :global(.aff-detail td) { background: rgba(4, 10, 18, .55); }
+  :global(.aff-detail-grid) { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .65rem .9rem; margin: 0; }
+  :global(.aff-detail-item dt) { color: var(--color-text-dim); font-size: .64rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+  :global(.aff-detail-item dd) { margin: .15rem 0 0; color: var(--color-text-main); font-size: .76rem; word-break: break-word; }
+  :global(.aff-detail-item a) { color: #93c5fd; }
+  :global(.unified-card) { display: flex; align-items: center; gap: 1rem; padding: .85rem 1rem; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
+  :global(.unified-thumb) { width: 64px; height: 64px; border-radius: 8px; background: #fff; padding: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  :global(.unified-thumb img) { max-width: 100%; max-height: 100%; object-fit: contain; }
+  :global(.unified-body) { flex: 1; min-width: 0; }
+  :global(.unified-top) { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-bottom: .3rem; }
+  :global(.network-mini-tag) { padding: .12rem .45rem; border-radius: 4px; background: rgba(59, 130, 246, .12); border: 1px solid rgba(59, 130, 246, .3); color: #93c5fd; font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+  :global(.estimated-tag) { padding: .12rem .45rem; border-radius: 4px; background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .3); color: #fbbf24; font-size: .64rem; font-weight: 800; text-transform: uppercase; }
+  :global(.stock-tag) { padding: .12rem .45rem; border-radius: 4px; background: rgba(16, 185, 129, .1); border: 1px solid rgba(16, 185, 129, .3); color: #6ee7b7; font-size: .64rem; font-weight: 800; }
+  :global(.stock-tag.is-out) { background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); color: #fca5a5; }
+  :global(.unified-title) { margin: 0 0 .35rem; color: var(--color-text-main); font-size: .85rem; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  :global(.unified-metrics) { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; font-size: .75rem; color: var(--color-text-muted); }
+  :global(.unified-price) { font-family: var(--font-heading); font-size: 1.05rem; font-weight: 800; color: #fff; }
+  :global(.unified-commission) { color: #6ee7b7; font-weight: 600; }
+  :global(.unified-rating) { color: #fbbf24; font-weight: 600; }
+  :global(.unified-import) { flex-shrink: 0; white-space: nowrap; }
+  :global(.unified-import.is-done) { background: rgba(16, 185, 129, .2); border-color: rgba(16, 185, 129, .4); pointer-events: none; }
+  :global(.btn-danger-ghost) { display: inline-flex; align-items: center; gap: .35rem; padding: .5rem .8rem; color: #fca5a5; background: transparent; border: 1px solid rgba(239, 68, 68, .3); border-radius: var(--border-radius-sm); cursor: pointer; font: inherit; font-size: .76rem; font-weight: 700; transition: all .2s ease; }
+  :global(.btn-danger-ghost:hover) { background: rgba(239, 68, 68, .12); }
 
   /* ============ BARRA DE RESULTADOS: IMPORTACIÓN MASIVA + CATEGORÍA ============ */
   .results-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem; padding: .9rem 1rem; margin-bottom: 1rem; background: rgba(59, 130, 246, .07); border: 1px solid rgba(96, 165, 250, .25); border-radius: var(--border-radius-md); }
@@ -2983,24 +3280,24 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
   /* ============ GESTIÓN DE CATEGORÍAS ============ */
   .category-list-view { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-top: .25rem; }
-  .category-card { display: flex; flex-direction: column; gap: .75rem; padding: 1rem 1.1rem; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); transition: border-color .2s ease, transform .2s ease; min-width: 0; overflow: hidden; }
-  .category-card span { max-width: 100%; }
-  .category-card:hover { border-color: rgba(96, 165, 250, .4); transform: translateY(-2px); }
-  .category-card-top { display: flex; align-items: center; gap: .7rem; }
-  .category-icon { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; flex-shrink: 0; background: rgba(59, 130, 246, .12); border: 1px solid rgba(96, 165, 250, .25); border-radius: 10px; font-size: 1.15rem; }
-  .category-card-main { display: flex; flex-direction: column; gap: .1rem; min-width: 0; flex: 1; }
-  .category-name { margin: 0; color: var(--color-text-main); font-family: var(--font-heading); font-size: .92rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .category-slug { color: var(--color-text-dim); font-size: .68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .category-count { flex-shrink: 0; padding: .2rem .5rem; color: #93c5fd; background: rgba(59, 130, 246, .1); border: 1px solid rgba(96, 165, 250, .25); border-radius: 999px; font-size: .66rem; font-weight: 800; white-space: nowrap; }
-  .category-keywords { display: flex; flex-wrap: wrap; gap: .35rem; min-width: 0; max-width: 100%; overflow: hidden; }
-  .category-keywords span { padding: .2rem .5rem; color: var(--color-text-dim); background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 4px; font-size: .66rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; }
-  .category-keywords span.is-empty { opacity: .7; font-style: italic; }
-  .category-keywords span.is-more { color: #93c5fd; border-color: rgba(96, 165, 250, .25); }
-  .category-card-actions { display: flex; gap: .5rem; margin-top: auto; padding-top: .35rem; border-top: 1px solid rgba(255, 255, 255, .05); }
-  .category-card-actions button { flex: 1; }
+  :global(.category-card) { display: flex; flex-direction: column; gap: .75rem; padding: 1rem 1.1rem; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); transition: border-color .2s ease, transform .2s ease; min-width: 0; overflow: hidden; }
+  :global(.category-card span) { max-width: 100%; }
+  :global(.category-card:hover) { border-color: rgba(96, 165, 250, .4); transform: translateY(-2px); }
+  :global(.category-card-top) { display: flex; align-items: center; gap: .7rem; }
+  :global(.category-icon) { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; flex-shrink: 0; background: rgba(59, 130, 246, .12); border: 1px solid rgba(96, 165, 250, .25); border-radius: 10px; font-size: 1.15rem; }
+  :global(.category-card-main) { display: flex; flex-direction: column; gap: .1rem; min-width: 0; flex: 1; }
+  :global(.category-name) { margin: 0; color: var(--color-text-main); font-family: var(--font-heading); font-size: .92rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :global(.category-slug) { color: var(--color-text-dim); font-size: .68rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :global(.category-count) { flex-shrink: 0; padding: .2rem .5rem; color: #93c5fd; background: rgba(59, 130, 246, .1); border: 1px solid rgba(96, 165, 250, .25); border-radius: 999px; font-size: .66rem; font-weight: 800; white-space: nowrap; }
+  :global(.category-keywords) { display: flex; flex-wrap: wrap; gap: .35rem; min-width: 0; max-width: 100%; overflow: hidden; }
+  :global(.category-keywords span) { padding: .2rem .5rem; color: var(--color-text-dim); background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 4px; font-size: .66rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-sizing: border-box; }
+  :global(.category-keywords span.is-empty) { opacity: .7; font-style: italic; }
+  :global(.category-keywords span.is-more) { color: #93c5fd; border-color: rgba(96, 165, 250, .25); }
+  :global(.category-card-actions) { display: flex; gap: .5rem; margin-top: auto; padding-top: .35rem; border-top: 1px solid rgba(255, 255, 255, .05); }
+  :global(.category-card-actions button) { flex: 1; }
 
   /* Etiqueta de categoría propia en las tarjetas de resultados de Afiliados */
-  .network-mini-tag.is-category { color: #6ee7b7; background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }
+  :global(.network-mini-tag.is-category) { color: #6ee7b7; background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }
 
   @media (max-width: 760px) {
     .results-toolbar { grid-template-columns: 1fr; }
@@ -3008,6 +3305,21 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     .import-category-field { flex: 1; }
     .import-category-field select { width: 100%; min-width: 0; }
   }
+
+  /* ============ 3. CATÁLOGO ALIEXPRESS (CACHÉ EN VOLÚMEN) ============ */
+  .ali-catalog-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; margin-left: auto; flex-wrap: wrap; }
+  .ali-catalog-meta { color: var(--color-text-dim); font-size: .72rem; white-space: nowrap; }
+  .ali-catalog-meta:empty { display: none; }
+  :global(.ac-discount) { color: #6ee7b7; font-weight: 700; }
+  :global(.ali-import) { flex-shrink: 0; }
+  :global(.ac-pager) { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; padding: .7rem .1rem 0; font-size: .76rem; color: var(--color-text-muted); }
+  :global(.ac-page-info) { color: var(--color-text-dim); font-size: .74rem; }
+  :global(.ac-page-nav) { display: flex; gap: .3rem; flex-wrap: wrap; }
+  :global(.ac-page-btn) { appearance: none; min-width: 2rem; height: 2rem; padding: 0 .6rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, .32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: .76rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+  :global(.ac-page-btn:hover:not(:disabled)) { border-color: #60a5fa; }
+  :global(.ac-page-btn:disabled) { opacity: .4; cursor: not-allowed; }
+  :global(.ac-page-btn.is-current) { background: rgba(96, 165, 250, .2); border-color: #60a5fa; color: #bfdbfe; }
+  :global(.ac-page-gap) { align-self: center; padding: 0 .2rem; }
 
   .text-right { text-align: right; }
 
@@ -3229,7 +3541,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
   }
 
-  /* Botones */
+  /* Botones: base scoped para los estáticos (HTML del template) + base global
+     para los botones inyectados por JS (networkList, resultados, categorías…). */
   button {
     cursor: pointer;
     font-family: var(--font-body);
@@ -3243,24 +3556,39 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     transition: all 0.2s ease;
   }
 
-  .btn-primary {
+  :global(.btn-primary),
+  :global(.btn-secondary),
+  :global(.btn-success) {
+    cursor: pointer;
+    font-family: var(--font-body);
+    font-weight: 600;
+    border: none;
+    border-radius: var(--border-radius-sm);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+  }
+
+  :global(.btn-primary) {
     background: var(--color-primary);
     color: #fff;
     padding: 0.75rem 1.25rem;
     white-space: nowrap;
   }
 
-  .btn-primary:hover:not(:disabled) {
+  :global(.btn-primary):hover:not(:disabled) {
     background: var(--color-primary-hover);
     transform: translateY(-1px);
   }
 
-  .btn-primary:disabled {
+  :global(.btn-primary):disabled {
     opacity: 0.6;
     cursor: not-allowed;
   }
 
-  .btn-success {
+  :global(.btn-success) {
     background: #10b981;
     color: #064e3b;
     font-weight: 700;
@@ -3268,23 +3596,26 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     color: #ffffff;
   }
 
-  .btn-success:hover {
+  :global(.btn-success):hover {
     background: #059669;
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
   }
 
-  .btn-secondary {
+  :global(.btn-secondary) {
     background: var(--color-surface-subtle);
     color: var(--color-text-muted);
     border: 1px solid var(--color-border);
     padding: 0.85rem 1.5rem;
   }
 
-  .btn-secondary:hover {
+  :global(.btn-secondary):hover {
     color: var(--color-text-main);
     background: #242f45;
   }
+
+  /* Variante pequeña: va después de los anteriores para que su padding gane */
+  :global(.btn-sm) { padding: .5rem .8rem; font-size: .76rem; }
 
   /* CTA de enriquecimiento con IA (texto + imagen) */
   .btn-ai {

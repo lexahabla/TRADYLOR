@@ -59,3 +59,6 @@ public/images/products/
 src/data/analytics.json
 src/data/analytics-months.json
 src/data/marketing-email-config.json
+
+# caché del catálogo AliExpress (se genera con el botón Sincronizar; vive en el volumen)
+src/data/aliexpress-catalog.json
