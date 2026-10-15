@@ -4,11 +4,22 @@ import ProductCard from '../components/ProductCard.astro';
 import CategoryMenu from '../components/CategoryMenu.astro';
 import TrustMetrics from '../components/common/TrustMetrics.astro';
 import { getCatalogProducts } from '../lib/catalog';
+import { readSections } from '../lib/sections';
 import { getCategoryById } from '../lib/categories';
 
 export const prerender = false;
 
 const allProducts = getCatalogProducts();
+
+// Secciones creadas dinámicamente desde el panel (publicadas)
+const publishedSections = (readSections() || [])
+  .filter((s) => s.published)
+  .sort((a, b) => a.order - b.order)
+  .map((s) => ({
+    ...s,
+    products: s.productIds.map((id) => allProducts.find((p) => p.id === id)).filter(Boolean),
+  }))
+  .filter((s) => s.products.length > 0);
 
 const categoryParam = (Astro.url.searchParams.get('category') ?? '').toLowerCase().trim();
 const activeCategory = categoryParam ? getCategoryById(categoryParam) ?? null : null;
@@ -34,9 +45,6 @@ const scoreOf = (p: typeof allProducts[0]) => {
 };
 
 const sorted = [...visibleProducts].sort((a, b) => scoreOf(b) - scoreOf(a));
-
-// ─── Top 4 for "Recomendaciones Top" ────────────────────────────────────────
-const topProducts = sorted.slice(0, 4);
 
 // ─── Pagination for "Todos los Productos" ────────────────────────────────────
 const PRODUCTS_PER_PAGE = 8;
@@ -113,33 +121,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   </section>
 
   <!-- ============================================================
-       2. SECCIÓN TOP: Recomendaciones de Alta Conversión (Top 4)
-       ============================================================ -->
-  <section class="products-section" id="destacados" hidden={sorted.length === 0}>
-    <div class="container">
-      <div class="section-header">
-        <div class="section-tag">Selecciones Editoriales</div>
-        <h2 class="section-title">Recomendaciones Top de Alta Conversión</h2>
-        <p class="section-desc">
-          Los 4 productos mejor valorados según nuestro algoritmo de puntuación combinando satisfacción, volumen de opiniones y relación calidad-precio.
-        </p>
-        {activeCategory && (
-          <p class="filter-note">
-            Filtrado por <strong>{activeCategory.name}</strong> · <a href="/">Ver todo el catálogo</a>
-          </p>
-        )}
-      </div>
-
-      <div class="products-grid">
-        {topProducts.map((item) => (
-          <ProductCard product={item} />
-        ))}
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================
-       3. SECCIÓN CATÁLOGO COMPLETO: Todos los Productos (paginado)
+       2. SECCIÓN CATÁLOGO COMPLETO: Todos los Productos (paginado)
        ============================================================ -->
   <section class="catalog-section" id="catalogo">
     <div class="container">
@@ -368,6 +350,21 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   </section>
 
   <CategoryMenu activeSlug={activeCategory?.slug} />
+
+  {publishedSections.map((section) => (
+    <section class="products-section" data-dynamic-section={section.id}>
+      <div class="container">
+        <div class="section-header">
+          <div class="section-tag">{section.title}</div>
+          <h2 class="section-title">{section.title}</h2>
+          {section.description && <p class="section-desc">{section.description}</p>}
+        </div>
+        <div class="products-grid">
+          {section.products.map((item) => <ProductCard product={item} />)}
+        </div>
+      </div>
+    </section>
+  ))}
 </Layout>
 
 <style>

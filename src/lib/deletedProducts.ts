@@ -18,15 +18,26 @@ function ensureDir(): void {
   }
 }
 
+// IDs de productos eliminados previamente (curados del catálogo inicial).
+const BUILTIN_DELETED = [
+  'sony-wh-1000xm5',
+  'apple-macbook-air-m3',
+  'kindle-paperwhite-signature',
+  'roborock-q-revo',
+];
+
 export function readDeletedIds(): string[] {
   try {
-    if (!fs.existsSync(DELETED_FILE)) return [];
+    if (!fs.existsSync(DELETED_FILE)) {
+      return BUILTIN_DELETED.slice();
+    }
     const raw = fs.readFileSync(DELETED_FILE, 'utf-8');
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
+    const list = Array.isArray(parsed) ? parsed.filter((x) => typeof x === 'string') : [];
+    return Array.from(new Set([...BUILTIN_DELETED, ...list]));
   } catch (error) {
     console.error('[DeletedProducts] Error al leer deleted-product-ids.json:', error);
-    return [];
+    return BUILTIN_DELETED.slice();
   }
 }
 
