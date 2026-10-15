@@ -62,6 +62,7 @@ export const GET: APIRoute = () => {
     flux: Boolean((process.env.FLUX_API_KEY ?? '').trim()),
     textAiProvider: (process.env.TEXT_AI_PROVIDER ?? 'openai').trim(),
     imageAiProvider: (process.env.IMAGE_AI_PROVIDER ?? 'openai').trim(),
+    aliexpress: Boolean((process.env.ALIEXPRESS_APP_KEY ?? '').trim() && (process.env.ALIEXPRESS_APP_SECRET ?? '').trim() && (process.env.ALIEXPRESS_TRACKING_ID ?? '').trim()),
   };
 
   return new Response(
