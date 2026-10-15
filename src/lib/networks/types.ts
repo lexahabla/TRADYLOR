@@ -77,6 +77,8 @@ export interface UnifiedSearchParams {
   networks?: string[];
   sortBy?: 'commission' | 'price_asc' | 'price_desc' | 'rating' | 'popularity';
   limit?: number;
+  /** Página de resultados (AliExpress TOP admite page_no; las demás redes lo ignoran). */
+  page?: number;
 }
 
 /** Resultado por red (incluye errores parciales) */

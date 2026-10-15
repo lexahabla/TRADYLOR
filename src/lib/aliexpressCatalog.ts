@@ -23,8 +23,9 @@ import { CATALOG_KEYWORDS } from './networks/connectors/aliexpress';
 import type { UnifiedProduct } from './networks/types';
 
 export const ALI_CATALOG_STALE_MS = 6 * 60 * 60 * 1000; // 6 horas
-export const ALI_CATALOG_TARGET = 150; // productos por sync
-const KEYWORD_PAGE_SIZE = 20; // por keyword (50 peticido = 8 keywords x 20)
+export const ALI_CATALOG_TARGET = 150; // productos por sync inicial
+const KEYWORD_PAGE_SIZE = 20; // por keyword y página
+const APPEND_MAX_PAGE = 3; // «Cargar más» recorre hasta la página 3 de cada keyword
 
 const CATALOG_FILE = dataFile('aliexpress-catalog.json');
 
@@ -99,39 +100,43 @@ export interface AliCatalogSyncResult {
 /**
  * Consulta la TOP API con cada keyword de catálogo, deduplica por externalId,
  * ordena por popularidad y persiste el snapshot en el volumen.
+ *  - sync normal: refresca la página 1 de cada keyword y la mezcla con la
+ *    caché actual (no borra productos ya descargados).
+ *  - append («Cargar más»): además descarga las páginas 2 y 3 de cada keyword
+ *    para ampliar el catálogo con productos nuevos.
  */
-export function syncAliCatalog(target = ALI_CATALOG_TARGET): Promise<AliCatalogSyncResult> {
+export function syncAliCatalog(options: { append?: boolean } = {}): Promise<AliCatalogSyncResult> {
   if (syncInFlight) return syncInFlight;
-  syncInFlight = runSync(target).finally(() => {
+  syncInFlight = runSync(Boolean(options.append)).finally(() => {
     syncInFlight = null;
   });
   return syncInFlight;
 }
 
-async function runSync(target: number): Promise<AliCatalogSyncResult> {
+async function runSync(append: boolean): Promise<AliCatalogSyncResult> {
   const connector = getConnector('aliexpress');
   if (!connector) {
     return { ok: false, syncedAt: null, count: 0, message: 'El conector de AliExpress no está disponible.', stale: getAliCatalogState().stale };
   }
 
-  const seen = new Set<string>();
-  const merged: UnifiedProduct[] = [];
+  const existing = readAliCatalog()?.products ?? [];
+  const mergedById = new Map<string, UnifiedProduct>();
+  for (const product of existing) mergedById.set(product.externalId, product);
+  const baseCount = mergedById.size;
+
   const errors: string[] = [];
   let queries = 0;
+  const pages = append && existing.length ? [1, 2, APPEND_MAX_PAGE] : [1];
 
-  for (const keyword of CATALOG_KEYWORDS) {
-    if (merged.length >= target) break;
-    try {
-      const batch = await connector.search({ query: keyword, limit: KEYWORD_PAGE_SIZE });
-      queries += 1;
-      for (const product of batch) {
-        if (seen.has(product.externalId)) continue;
-        seen.add(product.externalId);
-        merged.push(product);
-        if (merged.length >= target) break;
+  for (const page of pages) {
+    for (const keyword of CATALOG_KEYWORDS) {
+      try {
+        const batch = await connector.search({ query: keyword, limit: KEYWORD_PAGE_SIZE, page });
+        queries += 1;
+        for (const product of batch) mergedById.set(product.externalId, product);
+      } catch (error) {
+        errors.push(error instanceof Error ? error.message : `Fallo con "${keyword}" (página ${page}).`);
       }
-    } catch (error) {
-      errors.push(error instanceof Error ? error.message : `Fallo con "${keyword}".`);
     }
   }
 
@@ -141,18 +146,21 @@ async function runSync(target: number): Promise<AliCatalogSyncResult> {
     return { ok: false, syncedAt: null, count: getAliCatalogState().count, message, stale: getAliCatalogState().stale };
   }
 
+  const merged = [...mergedById.values()].sort(byPopularity);
   if (!merged.length) {
     const message = errors[0] || 'AliExpress no devolvió productos (¿sin credenciales o sin resultados?).';
     log('sync sin resultados:', message);
     return { ok: false, syncedAt: null, count: 0, message, stale: getAliCatalogState().stale };
   }
 
-  const snapshot: AliCatalogSnapshot = { syncedAt: new Date().toISOString(), products: merged.sort(byPopularity) };
+  const snapshot: AliCatalogSnapshot = { syncedAt: new Date().toISOString(), products: merged };
   const saved = writeAliCatalog(snapshot);
   const partial = errors.length > 0;
+  const added = merged.length - baseCount;
 
   let message: string;
   if (!saved) message = 'No se pudo escribir la caché en el volumen.';
+  else if (append) message = `Catálogo ampliado: ${merged.length} productos en total (+${added} nuevos).`;
   else if (partial) message = `Catálogo actualizado con ${merged.length} productos (parcial: ${errors[0]}).`;
   else message = `Catálogo sincronizado: ${merged.length} productos de AliExpress.`;
   log(message);
