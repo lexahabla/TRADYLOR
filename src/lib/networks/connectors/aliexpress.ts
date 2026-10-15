@@ -17,7 +17,7 @@ import { ConnectorError, fetchWithTimeout, type NetworkConnector } from './base'
 import { getCredentialValues, setNetworkStatus } from '../credentials';
 import type { UnifiedProduct, UnifiedSearchParams } from '../types';
 
-const GATEWAY = 'https://api-sg.aliexpress.com/sync';
+const GATEWAYS = ['https://api-sg.aliexpress.com/sync', 'https://eco.taobao.com/router/rest'];
 
 const CATALOG_KEYWORDS = [
   'auriculares bluetooth',
@@ -83,6 +83,7 @@ function resolveCreds(): Record<string, string> | null {
 
 function sign(params: Record<string, string>, secret: string): string {
   const base = Object.keys(params)
+    .filter((key) => key !== 'sign')
     .sort()
     .map((key) => `${key}${params[key]}`)
     .join('');
@@ -111,27 +112,38 @@ async function callApi(
     format: 'json',
     v: '2.0',
     sign_method: 'sha256',
+    simplify: 'true',
     ...biz,
   };
   if (creds.trackingId) params.tracking_id = creds.trackingId;
   params.sign = sign(params, creds.appSecret);
 
-  const body = new URLSearchParams(params);
-  const response = await fetchWithTimeout(
-    GATEWAY,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
-      body: body.toString(),
-    },
-    14000,
-  );
-  const raw = await response.text();
+  const body = new URLSearchParams(params).toString();
+  let lastError = 'AliExpress no respondió.';
+  let raw = '';
+  for (const gateway of GATEWAYS) {
+    try {
+      const response = await fetchWithTimeout(
+        gateway,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=utf-8' },
+          body,
+        },
+        14000,
+      );
+      raw = await response.text();
+      if (raw) break;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : lastError;
+    }
+  }
+  if (!raw) throw new ConnectorError('aliexpress', lastError);
   let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(raw) as Record<string, unknown>;
   } catch {
-    throw new ConnectorError('aliexpress', `AliExpress devolvió una respuesta no válida (HTTP ${response.status}).`);
+    throw new ConnectorError('aliexpress', 'AliExpress devolvió una respuesta que no es JSON.');
   }
   const errorResponse = parsed.error_response as { code?: string | number; msg?: string; sub_msg?: string } | undefined;
   if (errorResponse) {
@@ -153,9 +165,12 @@ function responseNode(payload: Record<string, unknown>, method: string): Record<
 
 function extractProducts(payload: Record<string, unknown>): AliProduct[] {
   const result = responseNode(payload, 'aliexpress.affiliate.product.query');
-  const products = result.products as { product?: AliProduct[] } | AliProduct[] | undefined;
-  if (Array.isArray(products)) return products;
-  if (products && Array.isArray(products.product)) return products.product;
+  const buckets = [result.products, result];
+  for (const bucket of buckets) {
+    if (Array.isArray(bucket)) return bucket as AliProduct[];
+    const nested = bucket as { product?: AliProduct[] } | undefined;
+    if (nested && Array.isArray(nested.product)) return nested.product;
+  }
   return [];
 }
 
