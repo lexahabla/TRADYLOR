@@ -445,7 +445,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll">Seleccionar todos los visibles</button>
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear">Limpiar</button>
         <button type="button" class="btn-ai btn-sm" id="btnProdEnrich">Enriquecer con IA (texto + imagen)</button>
-        <button type="button" class="btn-danger-ghost btn-sm" id="btnProdDeleteSel">Eliminar seleccionados</button>
+        <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
       </div>
 
 
@@ -535,9 +535,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </tbody>
         </table>
       </div>
-    </section>
-
-    <section data-admin-view="affiliates" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'affiliates' }]}>
+      <div class="sections-admin">
+        <div class="list-header-row">
+          <div>
+            <h3 class="card-title">Secciones de la web</h3>
+            <p class="card-desc">Crea secciones que se mostrarán en la portada con los productos que elijas (arrastra desde el catálogo con la selección).</p>
+          </div>
+        </div>
+        <div id="sectionsListAdmin" class="sections-list-admin"></div>
+      </div>
+    </section> class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'affiliates' }]}>
       <div class="view-heading">
         <span class="admin-tag-pill">Integraciones de monetización</span>
         <h2 class="admin-title">Afiliados y Multi-Catálogo</h2>
@@ -2076,7 +2083,94 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       showAlert(failed ? 'warning' : 'success', 'Enriquecimiento masivo finalizado', `${ok} actualizado${ok===1?'':'s'} · ${failed} con error.`);
     });
 
-    // Inicializar listeners en los rows SSR iniciales
+    btnProdMakeSection?.addEventListener('click', async () => {
+      const ids = Array.from(selectedProductIds);
+      if (!ids.length) return;
+      const title = window.prompt('Título de la nueva sección:');
+      if (!title || !title.trim()) return;
+      const description = window.prompt('Descripción opcional (vacío para omitir):') || '';
+      const published = window.confirm('¿Publicar en la web ahora?');
+      try {
+        const res = await fetch('/api/admin/sections', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create', title: title.trim(), description: description.trim(), productIds: ids, published }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          selectedProductIds.clear();
+          updateProdSelCount();
+          await loadSectionsAdmin();
+          showAlert('success', 'Sección creada', `"${title.trim()}" añadida a las secciones de la web.`);
+        } else {
+          showAlert('error', 'Error', data.message || 'No se pudo crear la sección.');
+        }
+      } catch {
+        showAlert('error', 'Error de red', 'No se pudo crear la sección.');
+      }
+    });
+
+    async function loadSectionsAdmin() {
+      const host = document.getElementById('sectionsListAdmin');
+      if (!host) return;
+      try {
+        const res = await fetch('/api/admin/sections', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || !data.success) { host.innerHTML = '<p class="text-muted">No se pudieron cargar las secciones.</p>'; return; }
+        const sections = Array.isArray(data.sections) ? data.sections : [];
+        if (!sections.length) { host.innerHTML = '<p class="text-muted">Aún no hay secciones creadas.</p>'; return; }
+        host.innerHTML = sections.map((s) => `
+          <div class="section-admin-row">
+            <strong>${escapeHtml ? escapeHtml(s.title) : s.title}</strong> <span class="admin-tag-pill">${s.published ? 'publicada' : 'oculta'}</span>
+            <span class="muted">${(s.productIds || []).length} producto(s)</span>
+            <button type="button" class="btn-secondary btn-sm" data-section-toggle="${s.id}" data-published="${!s.published}">${s.published ? 'Ocultar' : 'Publicar'}</button>
+            <button type="button" class="btn-danger-ghost btn-sm" data-section-delete="${s.id}">Eliminar</button>
+          </div>
+        `).join('');
+        host.querySelectorAll('[data-section-delete]').forEach((btn) => {
+          btn.onclick = async () => {
+            if (!confirm('¿Eliminar esta sección?')) return;
+            await fetch('/api/admin/sections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'delete', id: btn.getAttribute('data-section-delete') }) });
+            await loadSectionsAdmin();
+          };
+        });
+        host.querySelectorAll('[data-section-toggle]').forEach((btn) => {
+          btn.onclick = async () => {
+            const id = btn.getAttribute('data-section-toggle');
+            const published = btn.getAttribute('data-published') === 'true';
+            await fetch('/api/admin/sections', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'update', id, published }) });
+            await loadSectionsAdmin();
+          };
+        });
+      } catch {
+        host.innerHTML = '<p class="text-muted">Error de red.</p>';
+      }
+    }
+    btnProdMakeSection?.addEventListener('click', async () => {
+      const ids = Array.from(selectedProductIds);
+      if (!ids.length) { showAlert('warning', 'Sin seleccion', 'Selecciona al menos un producto del catalogo.'); return; }
+      const title = window.prompt('Titulo de la nueva seccion:');
+      if (!title || !title.trim()) return;
+      const description = window.prompt('Descripcion opcional (vacio para omitir):') || '';
+      const published = window.confirm('Publicar en la web ahora?');
+      try {
+        const res = await fetch('/api/admin/sections', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'create', title: title.trim(), description: description.trim(), productIds: ids, published }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          selectedProductIds.clear();
+          updateProdSelCount();
+          await loadSectionsAdmin();
+          showAlert('success', 'Seccion creada', title.trim() + ' anadida a las secciones de la web.');
+        } else {
+          showAlert('error', 'Error', data.message || 'No se pudo crear la seccion.');
+        }
+      } catch {
+        showAlert('error', 'Error de red', 'No se pudo crear la seccion.');
+      }
+    });
+    if (typeof loadSectionsAdmin === 'function') loadSectionsAdmin();
     attachRowActions();
     if (typeof reloadProductsTable === 'function') reloadProductsTable();
 
