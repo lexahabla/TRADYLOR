@@ -85,10 +85,10 @@ export function getCatalogProducts(): Product[] {
 
   for (const entry of rawJson) {
     if (!entry || typeof entry !== 'object') continue;
-
-    // Probe first: an invalid live entry must not swallow the curated one.
     const probe = validateSingleProduct(entry);
     if (!probe) continue;
+    // Respetar tombstones: un producto borrado desde el admin no debe reaparecer.
+    if (deletedIds.has(probe.id)) continue;
 
     const live = entry as Product;
     const curated = staticProducts.find((sp) => sp.id === probe.id);

@@ -51,6 +51,8 @@ export interface UnifiedProduct {
   originalPrice?: number;
   currency: string;
   image: string;
+  /** Galería completa de imágenes del producto (todas las fotos disponibles de la red). */
+  gallery?: string[];
   category: string;
   productUrl: string;
   commissionRate?: number;
