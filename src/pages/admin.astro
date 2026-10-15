@@ -1664,7 +1664,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <button type="button" class="btn-icon-action btn-prod-detail" data-id="${p.id}" title="Ver todos los datos" data-idx="${index}">▸</button>
             </td>
           </tr>
-          <tr class="product-detail-row" data-prod-detail="${index}" hidden>
+          <tr class="product-detail-row" data-prod-detail="${index}">
             <td colspan="10"><dl class="aff-detail-grid">
               <div class="aff-detail-item"><dt>Título</dt><dd>${escapeHtml ? escapeHtml(p.title) : p.title}</dd></div>
               <div class="aff-detail-item"><dt>Categoría</dt><dd>${p.category}</dd></div>
@@ -1690,6 +1690,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
      function attachRowActions() {
       // Mostrar/ocultar la fila de detalle de un producto
       document.querySelectorAll('.btn-prod-detail').forEach((btn) => {
+        const idx = btn.getAttribute('data-idx');
+        const detail = document.querySelector(`[data-prod-detail="${idx}"]`);
+        if (detail && !detail.hidden) btn.classList.add('is-open');
+
         btn.onclick = (e) => {
           e.stopPropagation();
           const idx = btn.getAttribute('data-idx');
@@ -1697,7 +1701,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           if (detail) {
             const open = detail.hidden;
             detail.hidden = !open;
-            btn.textContent = open ? '▾' : '▸';
+            btn.classList.toggle('is-open', open);
           }
         };
       });
