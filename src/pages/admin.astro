@@ -244,7 +244,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll">Seleccionar todos los visibles</button>
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear">Limpiar</button>
         <button type="button" class="btn-ai btn-sm" id="btnProdEnrich">Enriquecer con IA (texto + imagen)</button>
-        <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
+        <button type="button" class="btn-danger-ghost btn-sm" id="btnProdDeleteMass2">Eliminar los productos seleccionados</button>
+        <button type="button" class="btn-secondary btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>>
       </div>
 
 
@@ -739,6 +740,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const btnProdSelClear = document.getElementById('btnProdSelClear');
     const btnProdEnrich = document.getElementById('btnProdEnrich');
     const btnProdDeleteSel = document.getElementById('btnProdDeleteSel');
+    const btnProdDeleteMass2 = document.getElementById('btnProdDeleteMass2');
+    btnProdDeleteMass2?.addEventListener('click', () => btnProdDeleteSel?.click());
     let selectedProductIds = new Set();
     let currentProducts = [];
 
@@ -2491,10 +2494,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                   <td class="aff-num">${product.commissionAmount != null ? money(product.commissionAmount, product.currency) : '—'}<small>${product.commissionRate != null ? `${product.commissionRate}%` : ''}</small></td>
                   <td class="aff-num">${product.rating != null ? product.rating : '—'}</td>
                   <td class="aff-num">${product.popularity != null ? product.popularity : '—'}</td>
-                  <td class="aff-actions">
-                    <button type="button" class="btn-success btn-sm unified-import" data-index="${index}">Añadir</button>
-                    <button type="button" class="aff-caret" data-aff-toggle="${index}" aria-label="Ver todos los datos">▸</button>
-                  </td>
+                    <td class="aff-actions">
+                      <button type="button" class="btn-success btn-sm unified-import ali-import" data-ac-import="${index}">Añadir</button>
+                      <button type="button" class="btn-danger-ghost btn-sm" data-ac-remove="${index}" title="Quitar de la tabla">✕</button>
+                      <button type="button" class="aff-caret" data-ac-toggle="${index}" aria-label="Ver todos los datos">▸</button>
+                    </td>
                 </tr>
                 <tr class="aff-detail" data-aff-detail="${index}" hidden>
                   <td colspan="7"><dl class="aff-detail-grid">${productDetailRows(product)}</dl></td>
