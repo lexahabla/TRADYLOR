@@ -2292,12 +2292,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (btnImportAll) btnImportAll.disabled = total <= 0 || isBulkImporting;
     }
 
-    const escapeHtml = (value) => String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
-
     const money = (value, currency = 'EUR') => (value == null || value === '' ? '—' : `${Number(value).toFixed(2)} ${currency === 'EUR' ? '€' : currency}`);
 
     function productDetailRows(product) {
@@ -2639,15 +2633,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
       if (categoryStatusTitle) categoryStatusTitle.textContent = title;
       if (categoryStatusText) categoryStatusText.textContent = message;
-    }
-
-    function escapeHtml(value) {
-      return String(value ?? '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
     }
 
     /** Vuelca las categorías en datalist + selects de Afiliados. */
