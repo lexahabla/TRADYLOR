@@ -244,8 +244,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll">Seleccionar todos los visibles</button>
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear">Limpiar</button>
         <button type="button" class="btn-ai btn-sm" id="btnProdEnrich">Enriquecer con IA (texto + imagen)</button>
-        <button type="button" class="btn-danger-ghost btn-sm" id="btnProdDeleteMass2">Eliminar los productos seleccionados</button>
-        <button type="button" class="btn-secondary btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>>
+        <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>>
       </div>
 
 
@@ -740,8 +739,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const btnProdSelClear = document.getElementById('btnProdSelClear');
     const btnProdEnrich = document.getElementById('btnProdEnrich');
     const btnProdDeleteSel = document.getElementById('btnProdDeleteSel');
-    const btnProdDeleteMass2 = document.getElementById('btnProdDeleteMass2');
-    btnProdDeleteMass2?.addEventListener('click', () => btnProdDeleteSel?.click());
     let selectedProductIds = new Set();
     let currentProducts = [];
 
