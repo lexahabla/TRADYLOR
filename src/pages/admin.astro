@@ -225,7 +225,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
         </form>
       </div>
-    </section>>
+    </section>
 
     <!-- 3. LISTADO RÁPIDO DE PRODUCTOS EXISTENTES -->
     <section id="catalogProducts" data-admin-view="products" class:list={['admin-card', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'products' }]}>
@@ -244,7 +244,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll">Seleccionar todos los visibles</button>
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear">Limpiar</button>
         <button type="button" class="btn-ai btn-sm" id="btnProdEnrich">Enriquecer con IA (texto + imagen)</button>
-        <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>>
+        <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
       </div>
 
 
@@ -690,7 +690,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const formCardHeader = document.querySelector('.form-card .card-header-toggle');
     if (formCardHeader) {
       formCardHeader.style.cursor = 'pointer';
-      let formExpanded = true;
+      let formExpanded = false;
+      document.querySelectorAll('.form-card .form-toggle-body').forEach((body) => {
+        body.style.display = 'none';
+      });
       formCardHeader.addEventListener('click', () => {
         formExpanded = !formExpanded;
         document.querySelectorAll('.form-card .form-toggle-body').forEach((body) => {
@@ -4507,6 +4510,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     padding-top: 1.25rem;
     border-top: 1px solid var(--color-border);
   }
+
 
   /* 3. Live Preview Card */
   .preview-container {
