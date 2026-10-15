@@ -2188,7 +2188,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     async function loadNetworks() {
       try {
-        const res = await fetch('/api/admin/data');
+        const res = await fetch('/api/admin/data', { credentials: 'include' });
         const data = await res.json();
         if (data.success && Array.isArray(data.networks)) applyNetworks(data);
       } catch {
@@ -4587,6 +4587,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     position: absolute;
     inset: 0;
     z-index: 1;
+    pointer-events: none;
     display: flex;
     flex-direction: column;
     align-items: center;
