@@ -114,6 +114,11 @@ const productSchema = z.object({
 
   // ─── Compra delegada (Delegated Checkout) ──────────────────────────────────
   fulfillmentProvider: z.string().optional(), // distribuidor que cobra, envía y gestiona la garantía
+
+  // ─── Envío (datos del comerciante; los usa ficha y checkout) ───────────────
+  shippingInfo: z.string().optional(), // texto visible: "Envío en 15 días"
+  shippingDays: z.number().optional(),  // días estimados (entero)
+  freeShipping: z.boolean().optional(), // envío estándar gratuito confirmado
 });
 
 export type Product = z.infer<typeof productSchema>;
