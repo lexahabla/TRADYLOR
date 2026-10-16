@@ -23,6 +23,7 @@ import ComparisonTable from '../../components/ComparisonTable.astro';
 import PriceHistoryChart from '../../components/PriceHistoryChart.astro';
 import { getCatalogProducts, findCatalogProduct, productKey } from '../../lib/catalog';
 import { isVideoUrl, videoThumbUrl } from '../../lib/media';
+import { resolveProductShipping } from '../../lib/shipping';
 
 const allProducts = getCatalogProducts();
 const cleanMarketplaceSuffix = (text: string) => text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
@@ -45,6 +46,9 @@ const checkoutUrl = `/checkout/${productKey(product)}`;
 const specs = product.specs && Object.keys(product.specs).length > 0 ? product.specs : null;
 const techSheet = (product.techSheet ?? '').trim();
 const fulfillmentProvider = product.fulfillmentProvider ?? product.merchant;
+// Envío: campos propios del producto o, si no existen (importaciones antiguas),
+// los del snapshot del catálogo AliExpress (ver lib/shipping.ts).
+const shipping = resolveProductShipping(product);
 
 // Galería completa del carrusel: imagen principal + vistas adicionales (sin duplicados).
 const galleryImages = [
@@ -306,7 +310,7 @@ const productSchema = {
         </div>
 
         <!-- Bloque de envío (datos del comerciante cuando están disponibles) -->
-        {(product.shippingInfo || product.shippingDays != null || product.freeShipping) && (
+        {(shipping.shippingInfo || shipping.shippingDays != null || shipping.freeShipping) && (
           <div class="shipping-block">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <rect x="1" y="3" width="15" height="13" />
@@ -315,11 +319,11 @@ const productSchema = {
               <circle cx="18.5" cy="18.5" r="2.5" />
             </svg>
             <div class="shipping-block-body">
-              <strong>{product.freeShipping ? 'Envío gratis' : (product.shippingDays != null ? `Envío en ${product.shippingDays} días` : 'Envío')}</strong>
-              {product.shippingInfo && !product.freeShipping && (
-                <span>{product.shippingInfo}. Las tarifas y opciones definitivas las elige {fulfillmentProvider} en su pasarela.</span>
+              <strong>{shipping.freeShipping ? 'Envío gratis' : (shipping.shippingDays != null ? `Envío en ${shipping.shippingDays} días` : 'Envío')}</strong>
+              {shipping.shippingInfo && !shipping.freeShipping && (
+                <span>{shipping.shippingInfo}. Las tarifas y opciones definitivas las elige {fulfillmentProvider} en su pasarela.</span>
               )}
-              {product.freeShipping && (
+              {shipping.freeShipping && (
                 <span>El envío estándar es gratuito. Otras opciones (urgente, recogida…) las elige {fulfillmentProvider} en su pasarela.</span>
               )}
             </div>

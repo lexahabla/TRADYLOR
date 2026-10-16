@@ -19,6 +19,7 @@ export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
 import { findCatalogProduct, productKey } from '../../lib/catalog';
+import { resolveProductShipping } from '../../lib/shipping';
 
 // ---------------------------------------------------------------------------
 // Resolución del producto (slug canónico o id legado)
@@ -32,11 +33,15 @@ if (!product || !product.affiliateUrl) {
 const pricing = product.pricing;
 const hooks = product.conversionHooks;
 const stockStatus = pricing?.stockStatus ?? 'En stock';
-const freeShipping = product.freeShipping ?? pricing?.freeShipping ?? false;
+// Envío: campos propios o snapshot del catálogo AliExpress (lib/shipping.ts),
+// para que los productos importados antes de existir estos campos también
+// muestren plazo/tarifa reales en la pantalla puente.
+const shippingResolved = resolveProductShipping(product);
+const freeShipping = shippingResolved.freeShipping ?? product.freeShipping ?? pricing?.freeShipping ?? false;
 const provider = product.fulfillmentProvider ?? product.merchant;
 const returnDays = hooks?.returnPolicyDays ?? 30;
-const shippingDays = product.shippingDays;
-const shippingInfo = product.shippingInfo;
+const shippingDays = shippingResolved.shippingDays ?? product.shippingDays;
+const shippingInfo = shippingResolved.shippingInfo ?? product.shippingInfo;
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('es-ES', {
