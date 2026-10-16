@@ -27,11 +27,11 @@ startMarketingScheduler();
 const PRODUCT_PATH = /^\/(productos?)\/([^/]+?)\/?$/i;
 
 export const onRequest: MiddlewareHandler = async (context, next) => {
-  // Rutas /admin/<...>: sesión de backend obligatoria. La raíz /admin queda
-  // fuera para que el formulario de acceso siga funcionando (el login POST y
-  // el GET con el formulario se resuelven en la propia página).
-  if (context.url.pathname.startsWith('/admin/') && !getSessionUser(context.request)) {
-    return context.redirect('/admin');
+  // Rutas /upayp1b4/<...>: sesión de backend obligatoria. La raíz /upayp1b4
+  // queda fuera para que el formulario de acceso siga funcionando (el login
+  // POST y el GET con el formulario se resuelven en la propia página).
+  if (context.url.pathname.startsWith('/upayp1b4/') && !getSessionUser(context.request)) {
+    return context.redirect('/upayp1b4');
   }
 
   const response = await next();

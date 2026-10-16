@@ -539,6 +539,42 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     // --------------------------------------------------------------------------
+    // CASO A2: ASIGNAR CATEGORÍA EN MASA ({ action: 'set-category', ids, category })
+    // --------------------------------------------------------------------------
+    if (action === 'set-category') {
+      const ids = Array.isArray(body.ids) ? body.ids.map((v: unknown) => String(v)) : [];
+      const category = String(body.category || '').trim();
+      if (!ids.length || !category) {
+        return new Response(
+          JSON.stringify({ success: false, message: 'Se requiere al menos un ID y una categoría.' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const currentProducts = readProductsFromFile();
+      const wanted = new Set(ids);
+      let updated = 0;
+      for (const p of currentProducts) {
+        if (wanted.has(p.id) && p.category !== category) {
+          p.category = category;
+          updated++;
+        }
+      }
+
+      if (updated > 0 && !writeProductsToFile(currentProducts)) {
+        return new Response(
+          JSON.stringify({ success: false, message: 'Error al escribir los cambios en el disco' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, updated, total: ids.length, category }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // --------------------------------------------------------------------------
     // CASO B: GUARDAR PRODUCTO ({ action: 'save', product } o payload directo)
     // --------------------------------------------------------------------------
     if (action === 'save' || product || (body.title && body.affiliateUrl && !url)) {
@@ -605,8 +641,19 @@ export const POST: APIRoute = async ({ request }) => {
           ? (dataToSave.cons as string).split('\n').map((s) => s.trim()).filter(Boolean)
           : [],
         badge: dataToSave.badge ? String(dataToSave.badge).trim() : undefined,
-        rating: dataToSave.rating ? Number(dataToSave.rating) : 4.8,
-        reviewsCount: dataToSave.reviewsCount ? Number(dataToSave.reviewsCount) : 100,
+        rating:
+          dataToSave.rating != null && Number.isFinite(Number(dataToSave.rating))
+            ? Math.min(5, Math.max(0, Number(dataToSave.rating)))
+            : existingProduct?.rating ?? 4.8,
+        reviewsCount:
+          dataToSave.reviewsCount != null && Number.isFinite(Number(dataToSave.reviewsCount))
+            ? Math.max(0, Math.round(Number(dataToSave.reviewsCount)))
+            : existingProduct?.reviewsCount ?? 100,
+        // Marca y distribuidor: se conservan los ya guardados si no llegan.
+        brand: dataToSave.brand ? String(dataToSave.brand).trim() : existingProduct?.brand,
+        fulfillmentProvider: dataToSave.fulfillmentProvider
+          ? String(dataToSave.fulfillmentProvider).trim()
+          : existingProduct?.fulfillmentProvider,
         verdict: dataToSave.verdict ? String(dataToSave.verdict).trim() : undefined,
         // Ficha técnica (texto libre): se conserva la ya guardada si el cliente no la envía.
         techSheet: dataToSave.techSheet

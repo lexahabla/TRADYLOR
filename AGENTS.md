@@ -65,8 +65,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `producto/[slug].astro` - Ficha de producto / análisis técnico (acepta también el id legado)
   - `checkout/[id].astro` - Pantalla puente nativa de Compra Delegada (previa a la salida)
   - `out/[id].astro` - Redirecciones de afiliación (salida/out, legado)
-  - `admin.astro` y `admin/curation.astro` - Panel de administración de curación
-  - `admin/perfil.astro` y `admin/usuarios.astro` - Perfil del usuario y gestión de usuarios del backend
+  - `upayp1b4.astro` y `upayp1b4/curation.astro` - Panel de administración (ruta `/upayp1b4`) y curación
+  - `upayp1b4/perfil.astro` y `upayp1b4/usuarios.astro` - Perfil del usuario y gestión de usuarios del backend
   - `mi-radar.astro` - Panel personal del usuario final (anónimo LocalStorage + nube con sesión)
   - `api/` - Endpoints internos y la API pública `v1` (`docs/api-v1.md`)
   - `api/redirect.ts` - Salida registrada (302) al enlace de afiliado del checkout

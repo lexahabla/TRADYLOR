@@ -22,7 +22,7 @@ if (Astro.request.method === 'POST') {
   if (action === 'logout' && isAuthenticated) {
     return new Response(null, {
       status: 303,
-      headers: { Location: '/admin', 'Set-Cookie': clearAdminSession() },
+      headers: { Location: '/upayp1b4', 'Set-Cookie': clearAdminSession() },
     });
   }
 
@@ -34,7 +34,7 @@ if (Astro.request.method === 'POST') {
     // Los usuarios sin rol admin sólo acceden a su perfil
     return new Response(null, {
       status: 303,
-      headers: { Location: login.role === 'admin' ? '/admin' : '/admin/perfil', 'Set-Cookie': createAdminSession(login) },
+      headers: { Location: login.role === 'admin' ? '/upayp1b4' : '/upayp1b4/perfil', 'Set-Cookie': createAdminSession(login) },
     });
   }
 
@@ -43,7 +43,7 @@ if (Astro.request.method === 'POST') {
 
 // Un usuario sin rol admin no puede ver el catálogo: va a su perfil
 if (sessionUser && sessionUser.role !== 'admin') {
-  return new Response(null, { status: 303, headers: { Location: '/admin/perfil' } });
+  return new Response(null, { status: 303, headers: { Location: '/upayp1b4/perfil' } });
 }
 
 // El panel nunca se cachea: un deploy nuevo tiene que verse a la primera.
@@ -149,6 +149,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <form id="productForm" class="product-edit-form form-toggle-body">
           <input type="hidden" id="prodId" value="" />
 
+          <div class="form-basic-grid">
+            <div class="form-fields">
           <!-- Zona de datos básicos + vista previa en 2 columnas -->
 	          <div class="form-row">
             <div class="form-group full-width">
@@ -183,6 +185,20 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 id="prodTechSheet"
                 rows="5"
                 placeholder="Datos técnicos objetivos: materiales, medidas, peso, conectividad, compatibilidades, garantía, contenido de la caja..."
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group full-width">
+              <label for="prodSpecs" class="field-label">
+                <span>Especificaciones (specs clave/valor)</span>
+                <span class="label-hint">Una por línea como «Clave: Valor» · se muestran en la ficha pública</span>
+              </label>
+              <textarea
+                id="prodSpecs"
+                rows="4"
+                placeholder="Marca: Samsung&#10;Pantalla: 6.7&quot; AMOLED&#10;Batería: 5000 mAh&#10;Garantía: 3 años"
               ></textarea>
             </div>
           </div>
@@ -225,6 +241,40 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <option value="Fnac">Fnac</option>
                 <option value="Otro">Otro Comercio</option>
               </select>
+            </div>
+          </div>
+
+          <div class="form-row two-cols">
+            <div class="form-group">
+              <label for="prodBrand" class="field-label">
+                <span>Marca</span>
+                <span class="label-hint">Se rellena al analizar el enlace</span>
+              </label>
+              <input type="text" id="prodBrand" placeholder="Ej: Samsung, Xiaomi, Anker..." />
+            </div>
+            <div class="form-group">
+              <label for="prodFulfillment" class="field-label">
+                <span>Distribuidor (envío y pago)</span>
+                <span class="label-hint">Si está vacío se usa el comercio</span>
+              </label>
+              <input type="text" id="prodFulfillment" placeholder="Ej: Amazon, Marketplace del vendedor..." />
+            </div>
+          </div>
+
+          <div class="form-row two-cols">
+            <div class="form-group">
+              <label for="prodRating" class="field-label">
+                <span>Valoración (0–5)</span>
+                <span class="label-hint">Se muestra en la ficha y en las cards</span>
+              </label>
+              <input type="number" id="prodRating" step="0.1" min="0" max="5" placeholder="Ej: 4.7" />
+            </div>
+            <div class="form-group">
+              <label for="prodReviews" class="field-label">
+                <span>Nº de opiniones</span>
+                <span class="label-hint">Total de reseñas del producto</span>
+              </label>
+              <input type="number" id="prodReviews" step="1" min="0" placeholder="Ej: 1234" />
             </div>
           </div>
 
@@ -336,14 +386,76 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               </svg>
               <span>Guardar producto</span>
             </button>
-            <button type="button" id="btnResetForm" class="btn-secondary">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                <path d="M3 3v5h5"></path>
-              </svg>
-              <span>Limpiar Campos</span>
-            </button>
           </div>
+            </div><!-- /.form-fields -->
+
+            <!-- Columna derecha: vista previa en vivo (carrusel) + galería -->
+            <div class="form-preview-col">
+              <div class="preview-product-card">
+                <div class="preview-image-wrapper">
+                  <span class="preview-badge-row">
+                    <span id="previewCategory" class="cat-pill" hidden></span>
+                    <span id="previewBadge" class="badge-pill" hidden></span>
+                  </span>
+                  <span id="previewEmptyImage" class="preview-empty-image">
+                    <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                      <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                      <path d="M21 15l-5-5L5 21"></path>
+                    </svg>
+                    Vista previa del carrusel
+                  </span>
+                  <img id="previewImg" alt="Vista previa del producto" />
+                  <button type="button" id="previewVideoOverlay" class="preview-video-overlay" hidden>
+                    <span class="preview-play-icon">▶</span>
+                    Ver vídeo
+                  </button>
+                  <button type="button" id="previewPrev" class="preview-nav preview-nav-prev" aria-label="Imagen anterior" hidden>‹</button>
+                  <button type="button" id="previewNext" class="preview-nav preview-nav-next" aria-label="Imagen siguiente" hidden>›</button>
+                  <span id="previewCounter" class="preview-counter" hidden>1 / 1</span>
+                </div>
+                <div class="preview-content">
+                  <div class="preview-merchant-row">
+                    <span id="previewMerchant" class="merchant-tag" hidden></span>
+                    <span class="rating-stars" aria-hidden="true">★★★★★</span>
+                  </div>
+                  <h4 id="previewTitle" class="preview-title"></h4>
+                  <div class="preview-pricing">
+                    <span><span id="previewPrice" class="price-current"></span></span>
+                    <s id="previewOriginalPrice" class="price-original" hidden></s>
+                    <span id="previewDiscount" class="discount-pill" hidden></span>
+                  </div>
+                  <p id="previewDesc" class="preview-desc" hidden></p>
+                  <div id="previewBulletsWrap" class="preview-bullets bullet-col" hidden>
+                    <strong>Puntos fuertes</strong>
+                    <ul id="previewProsList"></ul>
+                  </div>
+                  <a id="previewAffiliateBtn" class="preview-buy-btn" href="#" target="_blank" rel="nofollow noopener noreferrer" hidden>
+                    Ir a la tienda <span id="previewBtnMerchant"></span>
+                  </a>
+                </div>
+              </div>
+
+              <!-- Galería de imágenes/vídeos del producto -->
+              <div class="gallery-editor">
+                <label class="field-label">
+                  <span>Galería de Imágenes y Vídeos</span>
+                  <span class="label-hint">Clic = imagen principal · × = quitar</span>
+                </label>
+                <div class="gallery-thumbs" id="galleryThumbs"></div>
+                <div class="gallery-add-row">
+                  <div class="gallery-url-add">
+                    <input type="text" id="galleryUrlInput" placeholder="Añadir por URL: imagen o vídeo (YouTube/Vimeo/mp4), separadas por comas" />
+                    <button type="button" id="btnAddImageUrl" class="btn-secondary btn-sm">Añadir</button>
+                  </div>
+                  <label class="btn-secondary btn-sm gallery-file-label">
+                    Subir archivo(s)
+                    <input type="file" id="galleryFileInput" accept="image/*,video/*" multiple hidden />
+                  </label>
+                </div>
+              </div>
+            </div><!-- /.form-preview-col -->
+          </div><!-- /.form-basic-grid -->
         </form>
       </div>
     </section>
@@ -355,9 +467,41 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <h2 class="card-title">3. Catálogo de Productos Registrados</h2>
           <p class="card-desc">Consulta los productos activos en <code>src/data/products.json</code>, pruébalos, enríchelos con IA o elimínalos.</p>
         </div>
-        <div class="list-search-wrapper">
-          <input type="search" id="inputFilterList" placeholder="Filtrar por título o comercio..." />
+      </div>
+
+      <!-- Filtros, ordenación y barras de rango de la tabla -->
+      <div id="prodFilters" class="ali-filters prod-filters">
+        <div class="ali-filters-row">
+          <div class="filter-field ali-f-search">
+            <label for="inputFilterList">Buscar</label>
+            <input type="search" id="inputFilterList" placeholder="Filtrar por título o comercio..." />
+          </div>
+          <div class="filter-field">
+            <label for="prodFCat">Categoría</label>
+            <select id="prodFCat"><option value="">Todas</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="prodFMerchant">Comercio</label>
+            <select id="prodFMerchant"><option value="">Todos</option></select>
+          </div>
+          <div class="filter-field ali-sort-field">
+            <label for="prodFSort">Ordenar por</label>
+            <div class="ali-sort-group">
+              <select id="prodFSort">
+                <option value="default" selected>Por defecto</option>
+                <option value="precio">Precio</option>
+                <option value="nombre">Nombre</option>
+                <option value="categoria">Categoría</option>
+                <option value="comercio">Comercio</option>
+                <option value="descuento">Mayor descuento</option>
+                <option value="valoracion">Mejor valoración</option>
+              </select>
+              <button type="button" id="prodFSortDir" class="btn-secondary btn-sm ali-sort-dir" title="Invertir el orden (mayor a menor / menor a mayor)">↓</button>
+            </div>
+          </div>
+          <button type="button" id="prodFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
         </div>
+        <div id="prodRangeFields" class="ali-range-fields"></div>
       </div>
 
       <div class="product-sel-bar" id="productSelBar">
@@ -365,6 +509,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll">Seleccionar todos los visibles</button>
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear">Limpiar</button>
         <button type="button" class="btn-ai btn-sm" id="btnProdEnrich">Enriquecer con IA (texto + imagen)</button>
+        <select id="prodCatAssign" class="sel-cat-assign" aria-label="Categoría destino">
+          <option value="">Categoría destino…</option>
+        </select>
+        <button type="button" class="btn-secondary btn-sm" id="btnProdAssignCat">Asignar categoría</button>
         <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
       </div>
 
@@ -687,7 +835,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <p class="admin-subtitle">Resumen global, ranking por producto y recomendaciones de IA. Pasa el cursor sobre el <strong>?</strong> de cada métrica para ver su definición.</p>
         <div class="view-heading-actions">
           <span class="data-example-pill">Datos de ejemplo</span>
-          <a class="guide-link" href="/admin/trafico-ventas/guia">Guía y Glosario <span aria-hidden="true">→</span></a>
+          <a class="guide-link" href="/upayp1b4/trafico-ventas/guia">Guía y Glosario <span aria-hidden="true">→</span></a>
         </div>
       </div>
       <TrafficSalesDashboard />
@@ -810,9 +958,38 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const prodTechSheet = document.getElementById('prodTechSheet');
     const prodPros = document.getElementById('prodPros');
     const prodCons = document.getElementById('prodCons');
-    const btnResetForm = document.getElementById('btnResetForm');
+    const prodBrand = document.getElementById('prodBrand');
+    const prodFulfillment = document.getElementById('prodFulfillment');
+    const prodRating = document.getElementById('prodRating');
+    const prodReviews = document.getElementById('prodReviews');
+    const prodSpecs = document.getElementById('prodSpecs');
     const btnSaveProduct = document.getElementById('btnSaveProduct');
     const btnAiEnrich = document.getElementById('btnAiEnrich');
+
+    // Specs (clave/valor): conversión entre objeto y texto «Clave: Valor» por línea.
+    function specsToText(specs) {
+      if (!specs || typeof specs !== 'object' || Array.isArray(specs)) return '';
+      return Object.entries(specs)
+        .filter(([k, v]) => k && v != null && String(v).trim())
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('\n');
+    }
+    function textToSpecs(text) {
+      const specs = {};
+      String(text || '')
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .forEach((line) => {
+          const idx = line.indexOf(':');
+          if (idx > 0) {
+            const key = line.slice(0, idx).trim();
+            const value = line.slice(idx + 1).trim();
+            if (key && value) specs[key] = value;
+          }
+        });
+      return Object.keys(specs).length ? specs : undefined;
+    }
 
     // Plegar/desplegar el formulario de alta desde su card-header.
     const formCardHeader = document.querySelector('.form-card .card-header-toggle');
@@ -863,6 +1040,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // Listado de productos
     const productsTableBody = document.getElementById('productsTableBody');
     const inputFilterList = document.getElementById('inputFilterList');
+    const prodFCat = document.getElementById('prodFCat');
+    const prodFMerchant = document.getElementById('prodFMerchant');
+    const prodFSort = document.getElementById('prodFSort');
+    const prodFSortDir = document.getElementById('prodFSortDir');
+    const prodFReset = document.getElementById('prodFReset');
+    const prodRangeFields = document.getElementById('prodRangeFields');
     const productSelBar = document.getElementById('productSelBar');
     const productSelCount = document.getElementById('productSelCount');
     const prodCheckAll = document.getElementById('prodCheckAll');
@@ -870,6 +1053,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const btnProdSelClear = document.getElementById('btnProdSelClear');
     const btnProdEnrich = document.getElementById('btnProdEnrich');
     const btnProdDeleteSel = document.getElementById('btnProdDeleteSel');
+    const prodCatAssign = document.getElementById('prodCatAssign');
+    const btnProdAssignCat = document.getElementById('btnProdAssignCat');
     let selectedProductIds = new Set();
     let currentProducts = [];
 
@@ -1360,6 +1545,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           fillIfEmpty(prodPros, Array.isArray(data.pros) ? data.pros.join('\n') : '');
           fillIfEmpty(prodCons, Array.isArray(data.cons) ? data.cons.join('\n') : '');
           fillIfEmpty(prodAffiliateUrl, data.affiliateUrl || urlToScrape);
+          fillIfEmpty(prodBrand, data.brand || '');
+          fillIfEmpty(prodFulfillment, data.fulfillmentProvider || '');
+          fillIfEmpty(prodRating, data.rating ?? '');
+          fillIfEmpty(prodReviews, data.reviewsCount ?? '');
+          fillIfEmpty(prodShippingInfo, data.shippingInfo || '');
+          if (data.shippingDays != null && data.shippingDays !== '' && prodShippingDays && !prodShippingDays.value) {
+            prodShippingDays.value = String(data.shippingDays);
+          }
+          fillIfEmpty(prodSpecs, specsToText(data.specs));
 
           // Guardar extras del scrape (specs, marca, valoración, reseñas) para
           // que el enriquecimiento local use datos reales.
@@ -1456,6 +1650,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           description: prodDescription.value.trim(),
           verdict: prodVerdict.value.trim() || undefined,
           techSheet: prodTechSheet.value.trim() || undefined,
+          specs: textToSpecs(prodSpecs?.value),
+          brand: prodBrand?.value.trim() || undefined,
+          fulfillmentProvider: prodFulfillment?.value.trim() || undefined,
+          rating: prodRating?.value !== '' && prodRating?.value != null
+            ? Math.min(5, Math.max(0, Number(prodRating.value)))
+            : undefined,
+          reviewsCount: prodReviews?.value !== '' && prodReviews?.value != null
+            ? Math.max(0, Math.round(Number(prodReviews.value)))
+            : undefined,
           shippingInfo: prodShippingInfo?.value.trim() || undefined,
           shippingDays: prodShippingDays?.value !== '' && prodShippingDays?.value != null
             ? Math.max(0, Math.round(Number(prodShippingDays.value)))
@@ -1508,6 +1711,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             prodTechSheet.value = '';
             prodPros.value = '';
             prodCons.value = '';
+            if (prodBrand) prodBrand.value = '';
+            if (prodFulfillment) prodFulfillment.value = '';
+            if (prodRating) prodRating.value = '';
+            if (prodReviews) prodReviews.value = '';
+            if (prodSpecs) prodSpecs.value = '';
             if (prodShippingInfo) prodShippingInfo.value = '';
             if (prodShippingDays) prodShippingDays.value = '';
             if (prodFreeShipping) prodFreeShipping.checked = false;
@@ -1714,38 +1922,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
 
     // =========================================================================
-    // 3. LIMPIAR FORMULARIO
-    // =========================================================================
-    if (btnResetForm) {
-      btnResetForm.addEventListener('click', () => {
-        prodId.value = '';
-        prodTitle.value = '';
-        prodPrice.value = '';
-        prodOriginalPrice.value = '';
-        prodCategory.value = '';
-        prodMerchant.value = '';
-        prodAffiliateUrl.value = '';
-        prodBuyNowUrl.value = '';
-        prodImage.value = '';
-        prodBadge.value = '';
-        prodDescription.value = '';
-        prodVerdict.value = '';
-        prodTechSheet.value = '';
-        prodPros.value = '';
-        prodCons.value = '';
-        if (prodShippingInfo) prodShippingInfo.value = '';
-        if (prodShippingDays) prodShippingDays.value = '';
-        if (prodFreeShipping) prodFreeShipping.checked = false;
-        if (inputScrapeUrl) inputScrapeUrl.value = '';
-        scrapedGallery = [];
-        scrapeExtras = { brand: '', rating: null, reviewsCount: null, specs: null };
-        renderGallery();
-        hideAlert();
-        updatePreview();
-      });
-    }
-
-    // =========================================================================
     // 4. ELIMINAR Y EDITAR PRODUCTOS DE LA TABLA
     // =========================================================================
      async function reloadProductsTable() {
@@ -1754,7 +1930,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const data = await res.json();
         if (data.success && Array.isArray(data.products)) {
           currentProducts = data.products;
-          renderTableRows(data.products);
+          prodPopulateFilterOptions();
+          prodBuildRanges();
+          prodFilterApply();
         }
       } catch (err) {
         console.error('Error al recargar productos:', err);
@@ -1813,12 +1991,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <div class="aff-detail-item"><dt>Título</dt><dd>${escapeHtml ? escapeHtml(p.title) : p.title}</dd></div>
               <div class="aff-detail-item"><dt>Categoría</dt><dd>${p.category}</dd></div>
               <div class="aff-detail-item"><dt>Comercio</dt><dd>${p.merchant}</dd></div>
+              ${p.brand ? `<div class="aff-detail-item"><dt>Marca</dt><dd>${escapeHtml ? escapeHtml(p.brand) : p.brand}</dd></div>` : ''}
+              ${p.fulfillmentProvider && p.fulfillmentProvider !== p.merchant ? `<div class="aff-detail-item"><dt>Distribuidor</dt><dd>${escapeHtml ? escapeHtml(p.fulfillmentProvider) : p.fulfillmentProvider}</dd></div>` : ''}
               <div class="aff-detail-item"><dt>Precio</dt><dd>${Number(p.price).toFixed(2)} €</dd></div>
               ${p.originalPrice ? `<div class="aff-detail-item"><dt>Precio original</dt><dd>${Number(p.originalPrice).toFixed(2)} €</dd></div>` : ''}
+              ${p.rating != null ? `<div class="aff-detail-item"><dt>Valoración</dt><dd>${Number(p.rating).toFixed(1)} ★ ${p.reviewsCount != null ? `(${p.reviewsCount} opiniones)` : ''}</dd></div>` : ''}
               ${p.badge ? `<div class="aff-detail-item"><dt>Badge</dt><dd>${p.badge}</dd></div>` : ''}
-              ${p.description ? `<div class="aff-detail-item"><dt>Descripción</dt><dd>${p.description}</dd></div>` : ''}
-              ${p.verdict ? `<div class="aff-detail-item"><dt>Veredicto</dt><dd>${p.verdict}</dd></div>` : ''}
-              ${p.techSheet ? `<div class="aff-detail-item"><dt>Ficha técnica</dt><dd>${p.techSheet}</dd></div>` : ''}
+              ${p.description ? `<div class="aff-detail-item"><dt>Descripción</dt><dd>${escapeHtml ? escapeHtml(p.description) : p.description}</dd></div>` : ''}
+              ${p.verdict ? `<div class="aff-detail-item"><dt>Veredicto</dt><dd>${escapeHtml ? escapeHtml(p.verdict) : p.verdict}</dd></div>` : ''}
+              ${p.techSheet ? `<div class="aff-detail-item"><dt>Ficha técnica</dt><dd>${escapeHtml ? escapeHtml(p.techSheet) : p.techSheet}</dd></div>` : ''}
+              ${p.shippingInfo ? `<div class="aff-detail-item"><dt>Envío</dt><dd>${p.shippingInfo}${p.shippingDays != null ? ` (${p.shippingDays} d)` : ''}${p.freeShipping ? ' · gratis' : ''}</dd></div>` : ''}
+              ${p.buyNowUrl ? `<div class="aff-detail-item"><dt>Compra directa</dt><dd><a href="${p.buyNowUrl}" target="_blank" rel="nofollow noopener" class="test-link">Abrir Buy Now</a></dd></div>` : ''}
+              ${p.specs && Object.keys(p.specs).length ? `<div class="aff-detail-item"><dt>Especificaciones</dt><dd>${Object.entries(p.specs).map(([k, v]) => `${escapeHtml ? escapeHtml(k) : k}: ${escapeHtml ? escapeHtml(String(v)) : v}`).join(' · ')}</dd></div>` : ''}
               ${Array.isArray(p.pros) && p.pros.length ? `<div class="aff-detail-item"><dt>Pros</dt><dd>${p.pros.join(' · ')}</dd></div>` : ''}
               ${Array.isArray(p.cons) && p.cons.length ? `<div class="aff-detail-item"><dt>Contras</dt><dd>${p.cons.join(' · ')}</dd></div>` : ''}
               ${Array.isArray(p.gallery) && p.gallery.length ? `<div class="aff-detail-item"><dt>Galería (${p.gallery.length})</dt><dd style="display:flex;flex-wrap:wrap;gap:6px">${p.gallery.map((u)=>`<a href="${u}" target="_blank"><img src="${u}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--color-border)" /></a>`).join('')}</dd></div>` : ''}
@@ -1932,6 +2116,17 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               if (prodShippingInfo) prodShippingInfo.value = product.shippingInfo || '';
               if (prodShippingDays) prodShippingDays.value = product.shippingDays != null ? String(product.shippingDays) : '';
               if (prodFreeShipping) prodFreeShipping.checked = product.freeShipping === true;
+              if (prodBrand) prodBrand.value = product.brand || '';
+              if (prodFulfillment) prodFulfillment.value = product.fulfillmentProvider || '';
+              if (prodRating) prodRating.value = product.rating != null ? String(product.rating) : '';
+              if (prodReviews) prodReviews.value = product.reviewsCount != null ? String(product.reviewsCount) : '';
+              if (prodSpecs) prodSpecs.value = specsToText(product.specs);
+              scrapeExtras = {
+                brand: product.brand || '',
+                rating: product.rating ?? null,
+                reviewsCount: product.reviewsCount ?? null,
+                specs: product.specs && typeof product.specs === 'object' ? product.specs : null,
+              };
 
               // Restaurar la galería guardada del producto (evita perderla al volver a guardar).
               scrapedGallery = Array.isArray(product.gallery) && product.gallery.length
@@ -1952,16 +2147,162 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       });
     }
 
-    // Filtro buscador en la tabla
-    if (inputFilterList) {
-      inputFilterList.addEventListener('input', () => {
-        const query = inputFilterList.value.toLowerCase().trim();
-        const rows = document.querySelectorAll('#productsTableBody tr.product-row');
-        rows.forEach((row) => {
-          const text = row.textContent ? row.textContent.toLowerCase() : '';
-          row.style.display = text.includes(query) ? '' : 'none';
-        });
+    // Filtros de la tabla «Catálogo de Productos Registrados»: búsqueda,
+    // categoría/comercio, orden y barras de rango duales (precio, descuento,
+    // valoración) con el mismo diseño fino que el catálogo de AliExpress.
+    let prodSortDir = 'desc';
+    const PROD_RANGE_DEFS = [
+      { key: 'price', label: 'Precio (€)', step: 1, get: (p) => Number(p.price) || 0, fmt: (v) => `${Math.round(v)} €` },
+      { key: 'disc', label: 'Descuento (%)', step: 1, get: (p) => prodDiscountPct(p), fmt: (v) => `${Math.round(v)}%` },
+      { key: 'rating', label: 'Valoración', step: 0.1, get: (p) => (p.rating != null ? Number(p.rating) : null), fmt: (v) => `${v}★` },
+    ];
+    let prodRanges = {};
+
+    function prodDiscountPct(p) {
+      const original = Number(p.originalPrice) || 0;
+      const price = Number(p.price) || 0;
+      return original > price && price > 0 ? Math.round(((original - price) / original) * 100) : 0;
+    }
+
+    function prodRangeSyncUi(key) {
+      const state = prodRanges[key];
+      const field = prodRangeFields?.querySelector(`[data-range-field="${key}"]`);
+      if (!state || !field) return;
+      const valuesEl = field.querySelector('[data-range-values]');
+      if (valuesEl) valuesEl.textContent = `${state.fmt(state.lo)} – ${state.fmt(state.hi)}`;
+      const fill = field.querySelector('[data-range-fill]');
+      if (fill) {
+        const span = state.dataMax - state.dataMin || 1;
+        const left = ((state.lo - state.dataMin) / span) * 100;
+        const right = ((state.hi - state.dataMin) / span) * 100;
+        fill.style.left = `${left}%`;
+        fill.style.width = `${Math.max(0, right - left)}%`;
+      }
+      const minInput = field.querySelector('[data-range-side="min"]');
+      const maxInput = field.querySelector('[data-range-side="max"]');
+      if (minInput) minInput.value = state.lo;
+      if (maxInput) maxInput.value = state.hi;
+    }
+
+    function prodBuildRanges() {
+      prodRanges = {};
+      if (!prodRangeFields) return;
+      const blocks = [];
+      for (const def of PROD_RANGE_DEFS) {
+        const values = currentProducts.map(def.get).filter((v) => v != null && Number.isFinite(v));
+        if (!values.length) continue;
+        const dataMin = Math.min(...values);
+        const dataMax = Math.max(...values);
+        if (dataMax <= dataMin) continue;
+        prodRanges[def.key] = { dataMin, dataMax, lo: dataMin, hi: dataMax, step: def.step, fmt: def.fmt, get: def.get, touched: false };
+        blocks.push(`
+          <div class="ali-range" data-range-field="${def.key}">
+            <div class="ali-range-head">
+              <label>${escapeHtml(def.label)}</label>
+              <span class="ali-range-values" data-range-values>${escapeHtml(def.fmt(dataMin))} – ${escapeHtml(def.fmt(dataMax))}</span>
+            </div>
+            <div class="ali-range-track">
+              <div class="ali-range-rail"></div>
+              <div class="ali-range-fill" data-range-fill></div>
+              <input type="range" data-range="${def.key}" data-range-side="min" min="${dataMin}" max="${dataMax}" step="${def.step}" value="${dataMin}" aria-label="${escapeHtml(def.label)} mínimo" />
+              <input type="range" data-range="${def.key}" data-range-side="max" min="${dataMin}" max="${dataMax}" step="${def.step}" value="${dataMax}" aria-label="${escapeHtml(def.label)} máximo" />
+            </div>
+          </div>`);
+      }
+      prodRangeFields.innerHTML = blocks.join('');
+      for (const key of Object.keys(prodRanges)) prodRangeSyncUi(key);
+    }
+
+    function prodPopulateFilterOptions() {
+      const fill = (select, values, anyLabel) => {
+        if (!select) return;
+        const current = select.value;
+        select.innerHTML = `<option value="">${anyLabel}</option>` + values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+        if (values.includes(current)) select.value = current;
+      };
+      fill(prodFMerchant, [...new Set(currentProducts.map((p) => p.merchant).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')), 'Todos');
+    }
+
+    function prodFilterApply() {
+      const q = (inputFilterList?.value || '').trim().toLowerCase();
+      const cat = prodFCat?.value || '';
+      const merchant = prodFMerchant?.value || '';
+      const sortKey = prodFSort?.value || 'default';
+      const dir = prodSortDir === 'asc' ? 1 : -1;
+
+      const filtered = currentProducts.filter((product) => {
+        if (cat && (product.category || '') !== cat) return false;
+        if (merchant && (product.merchant || '') !== merchant) return false;
+        for (const state of Object.values(prodRanges)) {
+          if (!state.touched) continue;
+          const value = state.get(product);
+          if (value == null || value < state.lo || value > state.hi) return false;
+        }
+        if (q) {
+          const haystack = `${product.title} ${product.merchant || ''} ${product.category || ''} ${(product.brand || '')}`.toLowerCase();
+          if (!haystack.includes(q)) return false;
+        }
+        return true;
       });
+
+      if (sortKey !== 'default') {
+        const sorters = {
+          precio: (p) => Number(p.price) || 0,
+          descuento: (p) => prodDiscountPct(p),
+          valoracion: (p) => (p.rating != null ? Number(p.rating) : -1),
+          categoria: (p) => String(p.category || ''),
+          comercio: (p) => String(p.merchant || ''),
+        };
+        filtered.sort((a, b) => {
+          if (sortKey === 'nombre') return dir * String(a.title).localeCompare(String(b.title), 'es');
+          const get = sorters[sortKey] || sorters.precio;
+          const av = get(a);
+          const bv = get(b);
+          if (typeof av === 'string' || typeof bv === 'string') return dir * String(av).localeCompare(String(bv), 'es');
+          return dir * (av - bv);
+        });
+      }
+      renderTableRows(filtered);
+    }
+
+    if (inputFilterList) inputFilterList.addEventListener('input', prodFilterApply);
+    prodFCat?.addEventListener('change', prodFilterApply);
+    prodFMerchant?.addEventListener('change', prodFilterApply);
+    prodFSort?.addEventListener('change', prodFilterApply);
+    prodFSortDir?.addEventListener('click', () => {
+      prodSortDir = prodSortDir === 'desc' ? 'asc' : 'desc';
+      prodFSortDir.textContent = prodSortDir === 'desc' ? '↓' : '↑';
+      prodFilterApply();
+    });
+    prodFReset?.addEventListener('click', () => {
+      if (inputFilterList) inputFilterList.value = '';
+      if (prodFCat) prodFCat.value = '';
+      if (prodFMerchant) prodFMerchant.value = '';
+      if (prodFSort) prodFSort.value = 'default';
+      prodSortDir = 'desc';
+      if (prodFSortDir) prodFSortDir.textContent = '↓';
+      prodBuildRanges();
+      prodFilterApply();
+    });
+    prodRangeFields?.addEventListener('input', (event) => {
+      const input = event.target;
+      if (!(input instanceof HTMLInputElement) || !input.dataset.range) return;
+      const key = input.dataset.range;
+      const state = prodRanges[key];
+      if (!state) return;
+      const side = input.dataset.rangeSide;
+      let lo = Number(fieldValue(prodRangeFields, key, 'min'));
+      let hi = Number(fieldValue(prodRangeFields, key, 'max'));
+      if (lo > hi) [lo, hi] = [hi, lo];
+      state.lo = lo;
+      state.hi = hi;
+      state.touched = true;
+      prodRangeSyncUi(key);
+      prodFilterApply();
+    });
+
+    function fieldValue(host, key, side) {
+      return host?.querySelector(`[data-range="${key}"][data-range-side="${side}"]`)?.value ?? 0;
     }
 
      function updateProdSelCount() {
@@ -1981,6 +2322,38 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       selectedProductIds.clear();
       document.querySelectorAll('[data-prod-check]').forEach((box) => (box.checked = false));
       updateProdSelCount();
+    });
+
+    // Asignar una categoría a todos los productos seleccionados de la tabla.
+    btnProdAssignCat?.addEventListener('click', async () => {
+      const category = prodCatAssign && 'value' in prodCatAssign ? String(prodCatAssign.value || '').trim() : '';
+      const ids = [...selectedProductIds];
+      if (!ids.length) {
+        showAlert('warning', 'Sin selección', 'Marca primero los productos en la tabla que quieres mover.');
+        return;
+      }
+      if (!category) {
+        showAlert('warning', 'Falta la categoría', 'Elige la categoría destino en la barra de selección.');
+        return;
+      }
+      showAlert('loading', 'Asignando categoría...', `${ids.length} producto(s) → «${category}».`);
+      try {
+        const res = await fetch('/api/products/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'set-category', ids, category }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert('success', 'Categoría asignada', `${ids.length} producto(s) en «${category}» (${data.updated} cambiados).`);
+          await reloadProductsTable();
+        } else {
+          showAlert('error', 'Error al asignar', data.message || 'No se pudo actualizar la categoría.');
+        }
+      } catch (err) {
+        console.error(err);
+        showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');
+      }
     });
     prodCheckAll?.addEventListener('change', () => {
       const checked = prodCheckAll.checked;
@@ -2973,27 +3346,40 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     // Importación rápida al catálogo (el cloaking /out/[id] ya está activo en frontend)
     unifiedResults?.addEventListener('click', async (event) => {
-      const toggle = event.target.closest('[data-aff-toggle]');
+      const toggle = event.target.closest('[data-ac-toggle]');
       if (toggle) {
         event.stopPropagation();
-        toggleAffiliateRow(toggle.dataset.affToggle);
+        toggleAffiliateRow(Number(toggle.dataset.acToggle));
         return;
       }
-      if (event.target.closest('a, button')) return;
+
+      const removeBtn = event.target.closest('[data-ac-remove]');
+      if (removeBtn) {
+        event.stopPropagation();
+        const index = Number(removeBtn.dataset.acRemove);
+        if (currentResults[index]) {
+          currentResults.splice(index, 1);
+          renderResults(currentResults);
+        }
+        return;
+      }
+
+      const importBtn = event.target.closest('[data-ac-import]');
+      if (importBtn) {
+        event.stopPropagation();
+        if (isBulkImporting || importBtn.disabled) return;
+        const product = currentResults[Number(importBtn.dataset.acImport)];
+        if (!product) return;
+        importBtn.disabled = true;
+        importBtn.textContent = 'Adaptando...';
+        await stageImportedProduct(product);
+        importBtn.textContent = 'En Tradylor ✓';
+        importBtn.classList.add('is-done');
+        return;
+      }
+
       const row = event.target.closest('[data-aff-row]');
-      if (row) toggleAffiliateRow(row.dataset.affRow);
-
-      const btn = event.target.closest('.unified-import');
-      if (!btn || isBulkImporting) return;
-      const index = Number(btn.dataset.index);
-      const product = currentResults[index];
-      if (!product) return;
-
-      btn.disabled = true;
-      btn.textContent = 'Adaptando...';
-      await stageImportedProduct(product);
-      btn.textContent = 'En Tradylor ✓';
-      btn.classList.add('is-done');
+      if (row && !event.target.closest('a, button, input')) toggleAffiliateRow(Number(row.dataset.affRow));
     });
 
     // Importación masiva de todos los resultados en pantalla
@@ -3017,7 +3403,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
       for (let i = 0; i < total; i += 1) {
         const product = currentResults[i];
-        const btn = unifiedResults?.querySelector(`.unified-import[data-index="${i}"]`);
+        const btn = unifiedResults?.querySelector(`[data-ac-import="${i}"]`);
         const result = await importSingleProduct(product, btn);
         if (result.ok) imported += 1;
         else failed += 1;
@@ -3079,6 +3465,27 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     let aliSyncing = false;
     let aliImportingSelection = false;
     const aliSelected = new Set();
+
+    // ✕ de la tabla: el producto se oculta localmente hasta el próximo
+    // «Sincronizar» (que limpia esta lista; vive en localStorage para que el
+    // descarte sobreviva a recargas del panel).
+    const AC_REMOVED_KEY = 'tradylor_ac_removed';
+    function acRemovedGet() {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(AC_REMOVED_KEY) || '[]'));
+      } catch {
+        return new Set();
+      }
+    }
+    function acRemovedSave(set) {
+      try {
+        localStorage.setItem(AC_REMOVED_KEY, JSON.stringify([...set]));
+      } catch { /* almacenamiento no disponible */ }
+    }
+    function acRemovedFilter(products) {
+      const removed = acRemovedGet();
+      return removed.size ? products.filter((p) => !removed.has(p.externalId)) : products;
+    }
 
     const aliFilterInputs = {
       q: document.getElementById('aliFQ'),
@@ -3408,7 +3815,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           if (aliCatalogHost) aliCatalogHost.innerHTML = '<div class="empty-dashboard">No se pudo leer la caché del catálogo.</div>';
           return data;
         }
-        aliProducts = Array.isArray(data.products) ? data.products : [];
+        aliProducts = acRemovedFilter(Array.isArray(data.products) ? data.products : []);
         aliPage = 1;
         aliPopulateFilterOptions();
         aliBuildRangeFilters();
@@ -3450,7 +3857,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         showAliStatus('loading', 'Sincronizando con AliExpress', 'Consulta por palabras clave en curso (puede tardar unos segundos)...');
         const res = await fetch('/api/admin/aliexpress/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
         const data = await res.json();
-        aliProducts = Array.isArray(data.products) ? data.products : [];
+        // El sync re-trae el catálogo completo: se levantan los descartes locales.
+        if (data.ok) acRemovedSave(new Set());
+        aliProducts = acRemovedFilter(Array.isArray(data.products) ? data.products : []);
         aliPage = 1;
         aliPopulateFilterOptions();
         aliBuildRangeFilters();
@@ -3564,6 +3973,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const index = Number(removeBtn.dataset.acRemove);
         const product = aliVisible[index];
         if (!product) return;
+        const removed = acRemovedGet();
+        removed.add(product.externalId);
+        acRemovedSave(removed);
         aliProducts = aliProducts.filter((p) => p.externalId !== product.externalId);
         aliSelected.delete(product.externalId);
         renderAliCatalog();
@@ -3724,6 +4136,28 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         categoryListDatalist.innerHTML = categories
           .map((category) => `<option value="${escapeHtml(category.name)}"></option>`)
           .join('');
+      }
+
+      // Select de la barra de selección de la tabla: asignar categoría en masa.
+      const catAssign = document.getElementById('prodCatAssign');
+      if (catAssign) {
+        const current = catAssign.value;
+        catAssign.innerHTML =
+          '<option value="">Categoría destino…</option>' +
+          categories
+            .map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.icon || '')} ${escapeHtml(category.name)}</option>`)
+            .join('');
+        if (current) catAssign.value = current;
+      }
+
+      // Filtro de categoría de la tabla del catálogo.
+      const prodFCatSel = document.getElementById('prodFCat');
+      if (prodFCatSel) {
+        const current = prodFCatSel.value;
+        prodFCatSel.innerHTML =
+          '<option value="">Todas</option>' +
+          categories.map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.name)}</option>`).join('');
+        if (current) prodFCatSel.value = current;
       }
 
       const optionsHtml = categories
@@ -4067,26 +4501,55 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .ali-sort-group { display: flex; gap: .3rem; }
   .ali-sort-group select { flex: 1; min-width: 130px; }
   .ali-sort-dir { min-width: 34px; font-size: .9rem; font-weight: 800; line-height: 1; }
-  /* Barras de rango duales (precio, dto, comisiones, ventas, rating, envío) */
-  .ali-range-fields { display: flex; flex-wrap: wrap; gap: .45rem .9rem; padding-top: .35rem; border-top: 1px dashed rgba(255, 255, 255, .07); }
+  /* Barras de rango duales (precio, dto, comisiones, ventas, rating, envío)
+     Versión compacta: rail fino de 3px y thumb de 11px. */
+  .ali-range-fields { display: flex; flex-wrap: wrap; gap: .3rem .7rem; padding-top: .3rem; border-top: 1px dashed rgba(255, 255, 255, .07); }
   .ali-range-fields:empty { display: none; }
-  .ali-range { flex: 1 1 170px; min-width: 150px; max-width: 260px; display: grid; gap: .15rem; }
-  .ali-range-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
-  .ali-range-head label { color: var(--color-text-dim); font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-  .ali-range-values { color: #7dd3fc; font-size: .68rem; font-weight: 700; white-space: nowrap; }
-  .ali-range-track { position: relative; height: 24px; }
-  .ali-range-rail, .ali-range-fill { position: absolute; top: 50%; height: 4px; transform: translateY(-50%); border-radius: 999px; pointer-events: none; }
+  .ali-range { flex: 1 1 145px; min-width: 128px; max-width: 210px; display: grid; gap: .1rem; }
+  .ali-range-head { display: flex; align-items: baseline; justify-content: space-between; gap: .4rem; }
+  .ali-range-head label { color: var(--color-text-dim); font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+  .ali-range-values { color: #7dd3fc; font-size: .62rem; font-weight: 700; white-space: nowrap; }
+  .ali-range-track { position: relative; height: 18px; }
+  .ali-range-rail, .ali-range-fill { position: absolute; top: 50%; height: 3px; transform: translateY(-50%); border-radius: 999px; pointer-events: none; }
   .ali-range-rail { left: 0; right: 0; background: rgba(255, 255, 255, .12); }
   .ali-range-fill { background: linear-gradient(90deg, #38bdf8, #22d3ee); }
-  .ali-range-track input[type="range"] { position: absolute; inset: 0; width: 100%; height: 24px; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; outline: none; }
-  .ali-range-track input[type="range"]::-webkit-slider-runnable-track { background: transparent; height: 4px; }
-  .ali-range-track input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 14px; height: 14px; margin-top: -5px; border: 2px solid #0b1220; border-radius: 50%; background: #38bdf8; cursor: grab; box-shadow: 0 0 6px rgba(56, 189, 248, .5); }
-  .ali-range-track input[type="range"]::-moz-range-track { background: transparent; height: 4px; }
-  .ali-range-track input[type="range"]::-moz-range-thumb { pointer-events: auto; width: 14px; height: 14px; border: 2px solid #0b1220; border-radius: 50%; background: #38bdf8; cursor: grab; box-shadow: 0 0 6px rgba(56, 189, 248, .5); }
+  .ali-range-track input[type="range"] { position: absolute; inset: 0; width: 100%; height: 18px; margin: 0; background: none; pointer-events: none; -webkit-appearance: none; appearance: none; outline: none; }
+  .ali-range-track input[type="range"]::-webkit-slider-runnable-track { background: transparent; height: 3px; }
+  .ali-range-track input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; pointer-events: auto; width: 11px; height: 11px; margin-top: -4px; border: 2px solid #0b1220; border-radius: 50%; background: #38bdf8; cursor: grab; box-shadow: 0 0 5px rgba(56, 189, 248, .5); }
+  .ali-range-track input[type="range"]::-moz-range-track { background: transparent; height: 3px; }
+  .ali-range-track input[type="range"]::-moz-range-thumb { pointer-events: auto; width: 11px; height: 11px; border: 2px solid #0b1220; border-radius: 50%; background: #38bdf8; cursor: grab; box-shadow: 0 0 5px rgba(56, 189, 248, .5); }
+  /* Barra de filtros del Catálogo de Productos Registrados (misma estética) */
+  .prod-filters { margin-top: 1.1rem; }
+  :global(.btn-danger-ghost.btn-sm) { padding: .3rem .55rem; font-size: .68rem; gap: .25rem; }
   /* Barra de selección masiva */
   .ali-selection { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; margin-bottom: .6rem; padding: .5rem .7rem; color: #7dd3fc; background: rgba(56, 189, 248, .08); border: 1px solid rgba(56, 189, 248, .3); border-radius: 10px; font-size: .74rem; font-weight: 700; }
   .ali-selection[hidden] { display: none; }
   .ali-selection .btn-sm { padding: .28rem .6rem; font-size: .68rem; }
+
+  /* Barra de selección de la tabla «Catálogo de Productos Registrados» */
+  .product-sel-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .55rem;
+    margin-bottom: .8rem;
+    padding: .5rem .7rem;
+    background: rgba(59, 130, 246, .07);
+    border: 1px solid rgba(96, 165, 250, .22);
+    border-radius: 10px;
+    font-size: .74rem;
+    color: var(--color-text-dim);
+  }
+  .product-sel-bar .btn-sm { padding: .3rem .6rem; font-size: .68rem; }
+  .sel-cat-assign {
+    padding: .32rem .5rem;
+    font-size: .7rem;
+    color: var(--color-text-main);
+    background: #0b1220;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    max-width: 230px;
+  }
   :global(.unified-card) { display: flex; align-items: center; gap: 1rem; padding: .85rem 1rem; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
   :global(.unified-thumb) { width: 64px; height: 64px; border-radius: 8px; background: #fff; padding: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
   :global(.unified-thumb img) { max-width: 100%; max-height: 100%; object-fit: contain; }
@@ -4551,6 +5014,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     gap: 1.25rem;
   }
 
+  /* Columna izquierda del formulario (campos) dentro del grid con la preview */
+  .form-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+    min-width: 0;
+  }
+
+  .form-preview-col { min-width: 0; }
+
   .form-row {
     display: flex;
     gap: 1rem;
@@ -4710,6 +5183,26 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     margin-top: 0.6rem;
   }
 
+  .gallery-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin-top: 0.9rem;
+    padding: 0.9rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed var(--color-border);
+    border-radius: var(--border-radius-sm);
+  }
+
+  label.btn-secondary.gallery-file-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    align-self: flex-start;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
   .gallery-url-add {
     display: flex;
     gap: 0.5rem;
@@ -4719,7 +5212,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     flex: 1;
   }
 
-  .gallery-empty {
+  :global(.gallery-empty) {
     font-size: 0.78rem;
     color: var(--color-text-dim);
     font-style: italic;

@@ -29,7 +29,7 @@
       ¿Deseas buscar más productos o utilizar nuestro comparador de IA?
     </p>
     <div class="return-banner-actions">
-      <a href="/" class="return-banner-action">Seguir explorando</a>
+      <button type="button" class="return-banner-action">Seguir explorando</button>
       <button type="button" class="return-banner-close" aria-label="Cerrar">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
           <line x1="18" y1="6" x2="6" y2="18" />
@@ -205,6 +205,8 @@
       window.setTimeout(show, SHOW_DELAY_MS);
     });
 
+    // Cerrar el banner sin salir de la página (no redirige).
     banner.querySelector('.return-banner-close')?.addEventListener('click', hide);
+    banner.querySelector('.return-banner-action')?.addEventListener('click', hide);
   }
 </script>

@@ -1,6 +1,7 @@
 ---
 /**
- * TRADYLOR — /admin/marketing/market-action (sección Market Action del módulo Marketing)
+ * TRADYLOR — /admin/marketing (menú del módulo de Marketing)
+ * Mantiene la cabecera y el admin-section-nav del resto del backend.
  */
 export const prerender = false;
 
@@ -11,15 +12,15 @@ import MarketingMenu from '../../../components/admin/MarketingMenu.astro';
 import { getSessionUser } from '../../../lib/adminAuth';
 
 const sessionUser = getSessionUser(Astro.request);
-if (!sessionUser) return Astro.redirect('/admin');
-if (sessionUser.role !== 'admin') return Astro.redirect('/admin/perfil');
+if (!sessionUser) return Astro.redirect('/upayp1b4');
+if (sessionUser.role !== 'admin') return Astro.redirect('/upayp1b4/perfil');
 
 Astro.response.headers.set('Cache-Control', 'no-store');
 ---
 
 <Layout
-  title="Market Action | Marketing | Admin Tradylor"
-  description="Playbooks de conversión y calculadora de ROI/ROAS del módulo de Marketing."
+  title="Marketing | Admin Tradylor"
+  description="Backend de Marketing de Tradylor: usuarios, Market Map, calendario, Market Action y tendencias."
 >
   <Fragment slot="header-end">
     <AdminUserMenu user={sessionUser} active="marketing" />
@@ -27,29 +28,26 @@ Astro.response.headers.set('Cache-Control', 'no-store');
   <div class="admin-module-wrapper">
     <header class="admin-header">
       <div class="admin-tag-row">
-        <a class="admin-tag-link" href="/admin">Panel de administración</a>
+        <a class="admin-tag-link" href="/upayp1b4">Panel de administración</a>
         <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <a class="admin-tag-link" href="/admin/marketing">Marketing</a>
-        <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <div class="admin-tag-pill">Market Action</div>
+        <div class="admin-tag-pill">Marketing</div>
       </div>
-      <h1 class="admin-title">Market Action</h1>
+      <h1 class="admin-title">Marketing</h1>
       <p class="admin-subtitle">
-        Operativa de conversión: manuales con pasos y KPIs para up-selling, cross-selling y
-        fidelización, más la calculadora de rentabilidad antes de ejecutar presupuesto.
+        Módulo central para maximizar ventas globales: audiencias, inteligencia geográfica,
+        planificación comercial, acciones de conversión y escucha activa. Elige una sección del menú.
       </p>
     </header>
 
     <AdminNav context="catalogo" active="marketing" user={sessionUser} />
 
-    <MarketingMenu active="market-action" />
+    <MarketingMenu />
 
-    <section class="marketing-placeholder">
-      <span class="marketing-placeholder-pill">En preparación</span>
+    <section class="marketing-empty">
       <p>
-        Aquí se mostrará la biblioteca de playbooks (pasos, KPIs y lift estimado por manual) y la
-        calculadora interactiva de ROI/ROAS para validar la rentabilidad de cada acción antes de
-        lanzarla.
+        Selecciona <strong>Usuarios</strong>, <strong>Market Map</strong>,
+        <strong>Calendario</strong>, <strong>Market Action</strong> o
+        <strong>Tendencias</strong> en el menú superior para entrar en cada sección.
       </p>
     </section>
   </div>
@@ -66,6 +64,6 @@ Astro.response.headers.set('Cache-Control', 'no-store');
   .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
   .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
   .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
-  .marketing-placeholder { display: flex; flex-direction: column; align-items: flex-start; gap: 0.9rem; padding: 1.6rem 1.4rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; color: var(--color-text-muted); font-size: 0.92rem; line-height: 1.65; }
-  .marketing-placeholder-pill { padding: 0.35rem 0.85rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+  .marketing-empty { padding: 1.6rem 1.4rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; color: var(--color-text-muted); font-size: 0.92rem; line-height: 1.65; }
+  .marketing-empty strong { color: var(--color-text-main); }
 </style>

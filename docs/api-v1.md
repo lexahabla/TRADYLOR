@@ -259,4 +259,4 @@ por Slack/Telegram o actualizar una hoja de cálculo de comisiones.
 - Máximo **50 productos** por petición de importación.
 - Las escrituras son atómicas sobre `src/data/products.json` (persistencia inmediata).
 - Los errores por producto no abortan el lote: cada entrada de `results` indica `ok`/`message`.
-- Combinar con el panel interno: **Afiliados** (`/admin?section=afiliados`) para credenciales de redes y búsqueda multi-catálogo, y **Tráfico y ventas** (`/admin?section=analytics`) para el Índice de Oportunidad calculado sobre lo importado.
+- Combinar con el panel interno: **Afiliados** (`/upayp1b4?section=afiliados`) para credenciales de redes y búsqueda multi-catálogo, y **Tráfico y ventas** (`/upayp1b4?section=analytics`) para el Índice de Oportunidad calculado sobre lo importado.

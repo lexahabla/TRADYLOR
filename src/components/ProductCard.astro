@@ -251,6 +251,8 @@ const radarPayload = {
       class="image-link"
       aria-label={`Ver ficha de ${product.title}`}
       title={`Ver ficha de ${product.title}`}
+      target="_blank"
+      rel="noopener"
     >
       <img
         src={product.image}
@@ -290,6 +292,8 @@ const radarPayload = {
       <a
         href={`/producto/${product.slug ?? product.id}`}
         title={`Análisis completo de ${product.title}`}
+        target="_blank"
+        rel="noopener"
       >
         {catalogTitle}
       </a>
