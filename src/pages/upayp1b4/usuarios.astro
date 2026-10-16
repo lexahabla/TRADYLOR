@@ -8,8 +8,8 @@ import { getSessionUser } from '../../lib/adminAuth';
 import { listUsers } from '../../lib/userStore';
 
 const sessionUser = getSessionUser(Astro.request);
-if (!sessionUser) return Astro.redirect('/admin');
-if (sessionUser.role !== 'admin') return Astro.redirect('/admin/perfil');
+if (!sessionUser) return Astro.redirect('/upayp1b4');
+if (sessionUser.role !== 'admin') return Astro.redirect('/upayp1b4/perfil');
 
 // El panel nunca se cachea: un deploy nuevo tiene que verse a la primera.
 Astro.response.headers.set('Cache-Control', 'no-store');
@@ -27,7 +27,7 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { 
     <header class="admin-header">
       <div class="admin-header-main">
         <div class="admin-tag-row">
-          <a class="admin-tag-link" href="/admin">Panel de control</a>
+          <a class="admin-tag-link" href="/upayp1b4">Panel de control</a>
           <span class="admin-tag-sep" aria-hidden="true">/</span>
           <div class="admin-tag-pill">Administración de usuarios</div>
         </div>
@@ -216,7 +216,7 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { 
     }
 
     async function handle(res) {
-      if (res.status === 401) { window.location.href = '/admin'; return { ok: false, stop: true }; }
+      if (res.status === 401) { window.location.href = '/upayp1b4'; return { ok: false, stop: true }; }
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { showAlert('error', data.message || 'La operación ha fallado.'); return { ok: false, stop: false, data }; }
       return { ok: true, data };

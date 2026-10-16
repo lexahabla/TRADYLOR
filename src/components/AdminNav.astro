@@ -13,13 +13,13 @@ const catalogItems = [
   { id: 'products', label: 'Añadir productos' },
   { id: 'affiliates', label: 'Afiliados' },
   { id: 'categories', label: 'Categorías' },
-  { id: 'analytics', label: 'Tráfico y ventas', href: '/admin?section=analytics' },
-  { id: 'marketing', label: 'Marketing', href: 'https://tradylor.com/admin/marketing/usuarios' },
+  { id: 'analytics', label: 'Tráfico y ventas', href: '/upayp1b4?section=analytics' },
+  { id: 'marketing', label: 'Marketing', href: 'https://tradylor.com/upayp1b4/marketing/usuarios' },
 ];
 
 const userItems = [
-  { id: 'perfil', label: 'Mi perfil', href: '/admin/perfil' },
-  ...(user.role === 'admin' ? [{ id: 'usuarios', label: 'Crear usuarios', href: '/admin/usuarios' }] : []),
+  { id: 'perfil', label: 'Mi perfil', href: '/upayp1b4/perfil' },
+  ...(user.role === 'admin' ? [{ id: 'usuarios', label: 'Crear usuarios', href: '/upayp1b4/usuarios' }] : []),
 ];
 
 const items = context === 'catalogo' ? catalogItems : userItems;
@@ -29,7 +29,7 @@ const items = context === 'catalogo' ? catalogItems : userItems;
 
 <nav class="admin-section-nav" aria-label="Navegación del backend">
   {context === 'usuario' && (
-    <a class="admin-back-btn" href="/admin" title="Volver al panel">
+    <a class="admin-back-btn" href="/upayp1b4" title="Volver al panel">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <line x1="19" y1="12" x2="5" y2="12"></line>
         <polyline points="12 19 5 12 12 5"></polyline>
@@ -51,7 +51,7 @@ const items = context === 'catalogo' ? catalogItems : userItems;
     {items.map((item) => (
       <a
         class:list={['admin-nav-item', { 'is-active': active === item.id }]}
-        href={'href' in item ? item.href : `/admin?section=${item.id}`}
+        href={'href' in item ? item.href : `/upayp1b4?section=${item.id}`}
         data-admin-tab={item.id}
       >{item.label}</a>
     ))}

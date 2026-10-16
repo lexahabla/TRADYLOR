@@ -2,7 +2,6 @@ import { createHash, timingSafeEqual } from 'node:crypto';
 import { findUserById, findValidCredentials, toPublicUser, type AdminUser, type PublicUser } from './userStore';
 
 const SESSION_COOKIE_NAME = 'tradylor_admin_session';
-const SESSION_TTL_SECONDS = 28800; // 8 horas
 
 /**
  * Sesión multiusuario del backend. La cookie vale `userId.token` y el token es
@@ -51,7 +50,9 @@ export function areValidCredentials(username: string, password: string): boolean
 }
 
 export function createAdminSession(user: AdminUser): string {
-  return `${SESSION_COOKIE_NAME}=${user.id}.${getSessionToken(user)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`;
+  // Cookie de sesión (sin Max-Age): el navegador la elimina al cerrarse.
+  // Además, el panel envía un beacon de logout al cerrar la pestaña.
+  return `${SESSION_COOKIE_NAME}=${user.id}.${getSessionToken(user)}; Path=/; HttpOnly; SameSite=Lax`;
 }
 
 export function clearAdminSession(): string {

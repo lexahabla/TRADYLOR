@@ -83,7 +83,7 @@ Notas:
 
 ```bash
 curl -I https://tradylor.com/api/health     # 200 + {"status":"ok",...}
-open https://tradylor.com/admin             # login con ADMIN_USERNAME/PASSWORD
+open https://tradylor.com/upayp1b4             # login con ADMIN_USERNAME/PASSWORD
 ```
 
 Comprobar también: portada con productos, ficha `/producto/<slug>`, salida `/out/<id>`

@@ -23,8 +23,8 @@ import { getSmtpConfig } from '../../../lib/mailer';
 import { getCategories } from '../../../lib/categories';
 
 const sessionUser = getSessionUser(Astro.request);
-if (!sessionUser) return Astro.redirect('/admin');
-if (sessionUser.role !== 'admin') return Astro.redirect('/admin/perfil');
+if (!sessionUser) return Astro.redirect('/upayp1b4');
+if (sessionUser.role !== 'admin') return Astro.redirect('/upayp1b4/perfil');
 
 Astro.response.headers.set('Cache-Control', 'no-store');
 
@@ -76,9 +76,9 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
   <div class="admin-module-wrapper">
     <header class="admin-header">
       <div class="admin-tag-row">
-        <a class="admin-tag-link" href="/admin">Panel de administración</a>
+        <a class="admin-tag-link" href="/upayp1b4">Panel de administración</a>
         <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <a class="admin-tag-link" href="/admin/marketing">Marketing</a>
+        <a class="admin-tag-link" href="/upayp1b4/marketing">Marketing</a>
         <span class="admin-tag-sep" aria-hidden="true">/</span>
         <div class="admin-tag-pill">Usuarios</div>
       </div>

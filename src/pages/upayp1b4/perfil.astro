@@ -8,13 +8,13 @@ import { getSessionUser } from '../../lib/adminAuth';
 import { findUserById, toPublicUser } from '../../lib/userStore';
 
 const sessionUser = getSessionUser(Astro.request);
-if (!sessionUser) return Astro.redirect('/admin');
+if (!sessionUser) return Astro.redirect('/upayp1b4');
 
 // El panel nunca se cachea: un deploy nuevo tiene que verse a la primera.
 Astro.response.headers.set('Cache-Control', 'no-store');
 
 const profile = findUserById(sessionUser.id);
-if (!profile) return Astro.redirect('/admin');
+if (!profile) return Astro.redirect('/upayp1b4');
 const user = toPublicUser(profile);
 
 const avatarUrl = user.avatar ? `/api/admin/users/${user.id}/avatar?v=${encodeURIComponent(user.updatedAt)}` : null;
@@ -31,7 +31,7 @@ const memberSince = new Date(user.createdAt).toLocaleDateString('es-ES', { day: 
     <header class="admin-header">
       <div class="admin-header-main">
         <div class="admin-tag-row">
-          <a class="admin-tag-link" href="/admin">Panel de control</a>
+          <a class="admin-tag-link" href="/upayp1b4">Panel de control</a>
           <span class="admin-tag-sep" aria-hidden="true">/</span>
           <div class="admin-tag-pill">Administración de usuarios</div>
         </div>
@@ -159,7 +159,7 @@ const memberSince = new Date(user.createdAt).toLocaleDateString('es-ES', { day: 
 
     function handleAuth(res) {
       if (res.status === 401) {
-        window.location.href = '/admin';
+        window.location.href = '/upayp1b4';
         return true;
       }
       return false;

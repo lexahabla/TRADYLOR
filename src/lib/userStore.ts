@@ -13,7 +13,7 @@ import { AVATARS_DIR, dataFile } from './paths';
  *   master (master: true)  -> lexahabla. No se borra, rol siempre admin, es el
  *                             único que puede crear/editar/borrar otros admins.
  *   admin                  -> ve catálogo y gestiona usuarios con rol "user".
- *   user                   -> solo su perfil (/admin/perfil).
+ *   user                   -> solo su perfil (/upayp1b4/perfil).
  *
  * Las reglas de jerarquía se aplican aquí (no sólo en la UI) para que ningún
  * endpoint pueda saltárselas.

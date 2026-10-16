@@ -23,6 +23,8 @@ export interface Product {
   badge?: string;
   rating?: number;
   reviewsCount?: number;
+  /** Marca del producto (ej: Samsung); se muestra en la ficha y en JSON-LD. */
+  brand?: string;
   verdict?: string;
   specs?: Record<string, string>;
   /** Texto de ficha técnica (consulta en la página del producto). */
