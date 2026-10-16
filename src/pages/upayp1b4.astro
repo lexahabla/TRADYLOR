@@ -620,7 +620,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <div class="view-heading">
         <span class="admin-tag-pill">Integraciones de monetización</span>
         <h2 class="admin-title">Afiliados y Multi-Catálogo</h2>
-        <p class="admin-subtitle">Conecta redes de afiliación con sus credenciales, valida la conexión y busca productos en paralelo en todos los catálogos. Importa los mejores resultados a Tradylor con un clic: el enmascaramiento /out/[id] se aplica automáticamente. El catálogo de AliExpress se sincroniza contra la API y se filtra con barras de rango calculadas sobre los datos reales.</p>
+        <p class="admin-subtitle">Conecta redes de afiliación con sus credenciales y valida la conexión. El catálogo de AliExpress se sincroniza contra la API y se filtra con barras de rango calculadas sobre los datos reales (precio, descuento, comisión, ventas, valoración y envío).</p>
       </div>
 
       <div class="affiliates-layout">
@@ -641,77 +641,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <div id="networkList" class="network-list">
             <div class="loading-panel">Cargando redes...</div>
           </div>
-          <div id="removedNetworks" class="removed-networks"></div>
-        </div>
-
-        <!-- Columna 2: Buscador global unificado -->
-        <div class="search-card">
-          <div class="card-header">
-            <div class="header-icon icon-cyan">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"></circle>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-              </svg>
-            </div>
-            <div>
-              <h2 class="card-title">2. Buscador global multi-red</h2>
-              <p class="card-desc">Consulta en paralelo los catálogos de las redes conectadas y ordena por conversión.</p>
-            </div>
-          </div>
-
-          <div class="search-controls">
-            <div class="search-input-group">
-              <input type="search" id="unifiedQuery" placeholder="Buscar en todos los catálogos conectados (ej: auriculares, robot aspirador...)" />
-              <button type="button" id="btnUnifiedSearch" class="btn-primary">
-                <span class="btn-text">Buscar</span>
-                <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="11" cy="11" r="8"></circle>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                </svg>
-                <div class="btn-spinner" hidden></div>
-              </button>
-              <button type="button" id="btnFullCatalog" class="btn-secondary" title="Carga el catálogo completo de las redes conectadas">
-                <span class="btn-text">Ver catálogo completo</span>
-                <div class="btn-spinner" hidden></div>
-              </button>
-            </div>
-
-            <div class="search-filters">
-              <div class="filter-field">
-                <label for="filterCategory">Categoría</label>
-                <select id="filterCategory">
-                  <option value="">Todas las categorías</option>
-                </select>
-              </div>
-              <div class="filter-field">
-                <label for="filterMinPrice">Precio mín. (€)</label>
-                <input type="number" id="filterMinPrice" min="0" step="1" placeholder="0" />
-              </div>
-              <div class="filter-field">
-                <label for="filterMaxPrice">Precio máx. (€)</label>
-                <input type="number" id="filterMaxPrice" min="0" step="1" placeholder="Sin tope" />
-              </div>
-              <div class="filter-field">
-                <label for="filterMinCommission">Comisión mín. (%)</label>
-                <input type="number" id="filterMinCommission" min="0" max="100" step="0.5" placeholder="0" />
-              </div>
-              <div class="filter-field">
-                <label for="filterSort">Ordenar por</label>
-                <select id="filterSort">
-                  <option value="commission" selected>Mayor comisión</option>
-                  <option value="popularity">Popularidad</option>
-                  <option value="rating">Mejor valoración</option>
-                  <option value="price_asc">Precio: menor a mayor</option>
-                  <option value="price_desc">Precio: mayor a menor</option>
-                </select>
-              </div>
-              <label class="filter-check">
-                <input type="checkbox" id="filterInStock" />
-                <span>Solo con stock</span>
-              </label>
-            </div>
-          </div>
-
           <div id="searchStatus" class="status-alert" hidden>
             <div class="alert-icon">ℹ️</div>
             <div class="alert-content">
@@ -719,39 +648,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <p id="searchStatusText">Mensaje...</p>
             </div>
           </div>
-
-          <div id="networkStatusRow" class="network-status-row"></div>
-
-          <!-- Barra de acciones sobre los resultados: categoría de importación + importación masiva -->
-          <div id="resultsToolbar" class="results-toolbar" hidden>
-            <div class="results-toolbar-info">
-              <strong id="resultsCount">0 productos</strong>
-              <span id="resultsHint">Selecciona la categoría con la que se importarán.</span>
-            </div>
-            <div class="results-toolbar-actions">
-              <label class="import-category-field" for="importCategory">
-                <span>Categoría al importar</span>
-                <select id="importCategory">
-                  <option value="">Automática (por palabras clave)</option>
-                </select>
-              </label>
-              <button type="button" id="btnImportAll" class="btn-success btn-sm">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                  <polyline points="7 10 12 15 17 10"></polyline>
-                  <line x1="12" y1="15" x2="12" y2="3"></line>
-                </svg>
-                <span id="btnImportAllLabel">Importar todos</span>
-              </button>
-            </div>
-            <div id="bulkProgress" class="bulk-progress" hidden>
-              <div class="bulk-progress-fill" id="bulkProgressFill"></div>
-            </div>
-          </div>
-
-          <div id="unifiedResults" class="unified-results">
-            <div class="empty-dashboard">Conecta al menos una red y lanza una búsqueda para comparar productos entre catálogos.</div>
-          </div>
+          <div id="removedNetworks" class="removed-networks"></div>
         </div>
 
       </div>
@@ -766,7 +663,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </svg>
           </div>
           <div>
-              <h2 class="card-title">3. Catálogo AliExpress (caché)</h2>
+              <h2 class="card-title">2. Catálogo AliExpress (caché)</h2>
             <p class="card-desc">Tabla amplia del último catálogo sincronizado, guardado en el servidor. Usa «Sincronizar» para refrescarlo contra la API; se avisa si la caché supera las 6 horas.</p>
           </div>
           <div class="ali-catalog-head-actions">
@@ -2668,25 +2565,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const networkList = document.getElementById('networkList');
     const networksCard = document.getElementById('networksCard');
     const removedNetworks = document.getElementById('removedNetworks');
-    const unifiedQuery = document.getElementById('unifiedQuery');
-    const btnUnifiedSearch = document.getElementById('btnUnifiedSearch');
-    const btnFullCatalog = document.getElementById('btnFullCatalog');
-    const unifiedResults = document.getElementById('unifiedResults');
-    const networkStatusRow = document.getElementById('networkStatusRow');
     const searchStatus = document.getElementById('searchStatus');
     const searchStatusTitle = document.getElementById('searchStatusTitle');
     const searchStatusText = document.getElementById('searchStatusText');
-    const filterCategory = document.getElementById('filterCategory');
-    const importCategory = document.getElementById('importCategory');
-    const resultsToolbar = document.getElementById('resultsToolbar');
-    const resultsCount = document.getElementById('resultsCount');
-    const btnImportAll = document.getElementById('btnImportAll');
-    const btnImportAllLabel = document.getElementById('btnImportAllLabel');
-    const bulkProgress = document.getElementById('bulkProgress');
-    const bulkProgressFill = document.getElementById('bulkProgressFill');
     let networksCache = [];
-    let currentResults = [];
-    let isBulkImporting = false;
 
     function showSearchStatus(type, title, message) {
       if (!searchStatus) return;
@@ -2942,16 +2824,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const newFeedback = networkList?.querySelector(`[data-network-feedback="${networkId}"]`);
       if (newFeedback) newFeedback.textContent = data.message || '';
 
-      // Al conectar una red, cargamos su catálogo para poder revisarlo e
-      // importarlo en bloque. AliExpress refresca la caché de la tabla 3
-      // (POST manual/automático de conexión); el resto usa el buscador unificado.
+      // Al conectar una red, refrescamos lo que corresponda: AliExpress
+      // recarga la caché de su tabla; el resto sólo confirma la conexión.
       const validated = (data.networks || []).find((n) => n.id === networkId);
       if (validated && validated.status === 'connected') {
         if (networkId === 'aliexpress') {
           await syncAliCatalogUI();
         } else {
-          showSearchStatus('success', 'Red conectada', `Cargando el catálogo de ${validated.name}...`);
-          runUnifiedSearch({ catalog: true });
+          showSearchStatus('success', 'Red conectada', `${validated.name} se ha conectado correctamente.`);
         }
       }
       return data;
@@ -3072,23 +2952,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (data.success) applyNetworks(data);
     });
 
-    function renderNetworkStatuses(byNetwork) {
-      if (!networkStatusRow) return;
-      networkStatusRow.innerHTML = byNetwork.map((entry) =>
-        `<span class="network-chip ${entry.ok ? 'is-ok' : 'is-fail'}" title="${entry.message || `${entry.products.length} resultados`}">${entry.network}: ${entry.ok ? entry.products.length : 'error'}</span>`
-      ).join('');
-    }
-
-    /** Categoría elegida en la barra de importación ('' = automática por keywords). */
+    /** Categoría asignada al importar ('' = automática por keywords). */
     function getImportCategory() {
-      return importCategory ? String(importCategory.value || '').trim() : '';
-    }
-
-    function updateResultsToolbar(total) {
-      if (!resultsToolbar || !resultsCount) return;
-      resultsToolbar.hidden = total <= 0;
-      resultsCount.textContent = `${total} producto${total === 1 ? '' : 's'} en pantalla`;
-      if (btnImportAll) btnImportAll.disabled = total <= 0 || isBulkImporting;
+      return '';
     }
 
     const money = (value, currency = 'EUR') => (value == null || value === '' ? '—' : `${Number(value).toFixed(2)} ${currency === 'EUR' ? '€' : currency}`);
@@ -3146,65 +3012,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           return `<div class="aff-detail-item"><dt>${escapeHtml(label)}</dt><dd>${cell}</dd></div>`;
         })
         .join('');
-    }
-
-    function renderResults(products) {
-      if (!unifiedResults) return;
-      currentResults = products;
-      updateResultsToolbar(products.length);
-      if (!products.length) {
-        unifiedResults.innerHTML = '<div class="empty-dashboard">Sin resultados con estos filtros. Prueba a ampliar el rango de precio, quitar el filtro de stock o pulsa "Ver catálogo completo".</div>';
-        return;
-      }
-      unifiedResults.innerHTML = `
-        <div class="aff-table-wrap">
-          <table class="aff-table">
-            <thead>
-              <tr>
-                <th>Foto</th>
-                <th>Producto</th>
-                <th class="aff-num">Precio</th>
-                <th class="aff-num">Comisión</th>
-                <th class="aff-num">% venta</th>
-                <th class="aff-num">Alcance</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              ${products.map((product, index) => `
-                <tr class="aff-row" data-aff-row="${index}" tabindex="0" aria-expanded="false">
-                  <td><span class="aff-thumb">${product.image ? `<img src="${escapeHtml(product.image)}" alt="" loading="lazy" />` : ''}</span></td>
-                  <td class="aff-name">
-                    <strong>${escapeHtml(product.title)}</strong>
-                    <span>${escapeHtml(product.network)}${product.category ? ` · ${escapeHtml(product.category)}` : ''}${product.estimated ? ' · estimado' : ''}</span>
-                  </td>
-                  <td class="aff-num">${money(product.price, product.currency)}</td>
-                  <td class="aff-num">${product.commissionAmount != null ? money(product.commissionAmount, product.currency) : '—'}<small>${product.commissionRate != null ? `${product.commissionRate}%` : ''}</small></td>
-                  <td class="aff-num">${product.rating != null ? product.rating : '—'}</td>
-                  <td class="aff-num">${product.popularity != null ? product.popularity : '—'}</td>
-                    <td class="aff-actions">
-                      <button type="button" class="btn-success btn-sm unified-import ali-import" data-ac-import="${index}">Añadir</button>
-                      <button type="button" class="btn-danger-ghost btn-sm" data-ac-remove="${index}" title="Quitar de la tabla">✕</button>
-                      <button type="button" class="aff-caret" data-ac-toggle="${index}" aria-label="Ver todos los datos">▸</button>
-                    </td>
-                </tr>
-                <tr class="aff-detail" data-aff-detail="${index}" hidden>
-                  <td colspan="7"><dl class="aff-detail-grid">${productDetailRows(product)}</dl></td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>`;
-    }
-
-    function toggleAffiliateRow(index) {
-      const row = unifiedResults?.querySelector(`[data-aff-row="${index}"]`);
-      const detail = unifiedResults?.querySelector(`[data-aff-detail="${index}"]`);
-      if (!row || !detail) return;
-      const open = detail.hidden;
-      detail.hidden = !open;
-      row.classList.toggle('is-open', open);
-      row.setAttribute('aria-expanded', String(open));
     }
 
     /** Construye el payload de guardado compartido por importación simple y masiva. */
@@ -3384,163 +3191,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } catch (e) {}
     }
-
-    /**
-     * Búsqueda unificada.
-     * @param {{catalog?: boolean}} options catalog=true → recorre el catálogo
-     * completo (sin texto de búsqueda, hasta 100 referencias por red).
-     */
-    async function runUnifiedSearch(options = {}) {
-      const catalogMode = Boolean(options.catalog);
-      if (!btnUnifiedSearch || !unifiedQuery) return;
-      const spinner = btnUnifiedSearch.querySelector('.btn-spinner');
-      const text = btnUnifiedSearch.querySelector('.btn-text');
-      const catalogSpinner = btnFullCatalog ? btnFullCatalog.querySelector('.btn-spinner') : null;
-      btnUnifiedSearch.disabled = true;
-      if (btnFullCatalog) btnFullCatalog.disabled = true;
-      if (spinner && !catalogMode) spinner.hidden = false;
-      if (text && !catalogMode) text.textContent = 'Buscando...';
-      if (catalogSpinner) catalogSpinner.hidden = false;
-      showSearchStatus(
-        'loading',
-        catalogMode ? 'Cargando catálogo completo...' : 'Consultando redes...',
-        catalogMode
-          ? 'Descargando el catálogo de todas las redes conectadas.'
-          : 'Búsqueda paralela en curso en los catálogos conectados.',
-      );
-
-      try {
-        const res = await fetch('/api/admin/search', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            query: catalogMode ? '' : unifiedQuery.value.trim(),
-            category: filterCategory && filterCategory.value ? filterCategory.value : undefined,
-            minPrice: document.getElementById('filterMinPrice')?.value || undefined,
-            maxPrice: document.getElementById('filterMaxPrice')?.value || undefined,
-            minCommission: document.getElementById('filterMinCommission')?.value || undefined,
-            sortBy: document.getElementById('filterSort')?.value,
-            inStockOnly: Boolean(document.getElementById('filterInStock')?.checked),
-            networks: options.networks,
-            limit: catalogMode ? 100 : 24,
-          }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          renderResults(data.results || []);
-          renderNetworkStatuses(data.byNetwork || []);
-          showSearchStatus(
-            'success',
-            catalogMode ? 'Catálogo cargado' : 'Búsqueda completada',
-            `${data.total} resultados en ${(data.byNetwork || []).filter((n) => n.ok).length} redes.`,
-          );
-        } else {
-          showSearchStatus('error', 'Error en la búsqueda', data.message || 'No se pudo completar la consulta.');
-        }
-      } catch {
-        showSearchStatus('error', 'Error de red', 'Fallo al comunicar con el servidor.');
-      } finally {
-        btnUnifiedSearch.disabled = false;
-        if (btnFullCatalog) btnFullCatalog.disabled = false;
-        if (spinner) spinner.hidden = true;
-        if (text) text.textContent = 'Buscar';
-        if (catalogSpinner) catalogSpinner.hidden = true;
-      }
-    }
-
-    btnUnifiedSearch?.addEventListener('click', () => runUnifiedSearch());
-    btnFullCatalog?.addEventListener('click', () => runUnifiedSearch({ catalog: true }));
-    unifiedQuery?.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') runUnifiedSearch();
-    });
-
-    // Importación rápida al catálogo (el cloaking /out/[id] ya está activo en frontend)
-    unifiedResults?.addEventListener('click', async (event) => {
-      const toggle = event.target.closest('[data-ac-toggle]');
-      if (toggle) {
-        event.stopPropagation();
-        toggleAffiliateRow(Number(toggle.dataset.acToggle));
-        return;
-      }
-
-      const removeBtn = event.target.closest('[data-ac-remove]');
-      if (removeBtn) {
-        event.stopPropagation();
-        const index = Number(removeBtn.dataset.acRemove);
-        if (currentResults[index]) {
-          currentResults.splice(index, 1);
-          renderResults(currentResults);
-        }
-        return;
-      }
-
-      const importBtn = event.target.closest('[data-ac-import]');
-      if (importBtn) {
-        event.stopPropagation();
-        if (isBulkImporting || importBtn.disabled) return;
-        const product = currentResults[Number(importBtn.dataset.acImport)];
-        if (!product) return;
-        importBtn.disabled = true;
-        importBtn.textContent = 'Adaptando...';
-        await stageImportedProduct(product);
-        importBtn.textContent = 'En Tradylor ✓';
-        importBtn.classList.add('is-done');
-        return;
-      }
-
-      const row = event.target.closest('[data-aff-row]');
-      if (row && !event.target.closest('a, button, input')) toggleAffiliateRow(Number(row.dataset.affRow));
-    });
-
-    // Importación masiva de todos los resultados en pantalla
-    btnImportAll?.addEventListener('click', async () => {
-      if (isBulkImporting || !currentResults.length) return;
-      const total = currentResults.length;
-      const assigned = getImportCategory();
-      const confirmed = window.confirm(
-        `¿Importar ${total} producto${total === 1 ? '' : 's'} al catálogo?` +
-          (assigned ? `\n\nCategoría asignada: ${assigned}` : '\n\nCategoría: automática (por palabras clave).'),
-      );
-      if (!confirmed) return;
-
-      isBulkImporting = true;
-      btnImportAll.disabled = true;
-      if (btnImportAllLabel) btnImportAllLabel.textContent = 'Importando...';
-      if (bulkProgress) bulkProgress.hidden = false;
-
-      let imported = 0;
-      let failed = 0;
-
-      for (let i = 0; i < total; i += 1) {
-        const product = currentResults[i];
-        const btn = unifiedResults?.querySelector(`[data-ac-import="${i}"]`);
-        const result = await importSingleProduct(product, btn);
-        if (result.ok) imported += 1;
-        else failed += 1;
-
-        if (bulkProgressFill) bulkProgressFill.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
-        showSearchStatus(
-          'loading',
-          `Importando ${i + 1} de ${total}...`,
-          `Completados: ${imported} · Fallidos: ${failed}`,
-        );
-        // Pequeña pausa para no saturar la escritura en products.json
-        await new Promise((resolve) => setTimeout(resolve, 60));
-      }
-
-      isBulkImporting = false;
-      if (btnImportAllLabel) btnImportAllLabel.textContent = 'Importar todos';
-      if (bulkProgress) bulkProgress.hidden = true;
-      if (bulkProgressFill) bulkProgressFill.style.width = '0%';
-      updateResultsToolbar(currentResults.length);
-
-      showSearchStatus(
-        failed === 0 ? 'success' : 'warning',
-        'Importación masiva finalizada',
-        `${imported} producto${imported === 1 ? '' : 's'} añadido${failed ? ` · ${failed} fallidos` : ''} al catálogo de Tradylor.`,
-      );
-      await reloadProductsTable();
-    });
 
     if (networkList) loadNetworks();
 
@@ -4269,21 +3919,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           categories.map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.name)}</option>`).join('');
         if (current) prodFCatSel.value = current;
       }
-
-      const optionsHtml = categories
-        .map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.icon || '')} ${escapeHtml(category.name)}</option>`)
-        .join('');
-
-      [filterCategory, importCategory].forEach((select) => {
-        if (!select) return;
-        const current = select.value;
-        const placeholder = select === filterCategory
-          ? '<option value="">Todas las categorías</option>'
-          : '<option value="">Automática (por palabras clave)</option>';
-        select.innerHTML = placeholder + optionsHtml;
-        // Conserva la selección previa si la categoría sigue existiendo
-        if (current && categories.some((c) => c.name === current)) select.value = current;
-      });
     }
 
     function renderCategoryList(categories) {
@@ -4551,12 +4186,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .removed-networks { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; margin-top: .75rem; padding: .6rem .8rem; color: var(--color-text-muted); background: rgba(239, 68, 68, .06); border: 1px dashed rgba(239, 68, 68, .35); border-radius: var(--border-radius-sm); font-size: .74rem; }
   .removed-networks[hidden] { display: none; }
 
-  .search-controls { display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.25rem; }
-  .search-input-group { display: flex; gap: .6rem; }
-  .search-input-group input { flex: 1; min-width: 0; padding: .75rem 1rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .88rem; outline: none; }
-  .search-input-group input:focus { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, .12); }
-  .search-input-group .btn-secondary { align-self: stretch; padding: .75rem 1rem; white-space: nowrap; }
-  .search-filters { display: flex; align-items: flex-end; gap: .75rem; flex-wrap: wrap; }
   .filter-field { display: grid; gap: .3rem; flex: 1; min-width: 110px; }
   .filter-field label { color: var(--color-text-dim); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
   .filter-field input, .filter-field select { width: 100%; box-sizing: border-box; padding: .55rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
@@ -4567,12 +4196,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(select option) { background: #ffffff; color: #111827; }
   .filter-check { display: inline-flex; align-items: center; gap: .45rem; color: var(--color-text-muted); font-size: .8rem; font-weight: 600; padding-bottom: .55rem; cursor: pointer; }
 
-  .network-status-row { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: 1rem; }
-  :global(.network-chip) { padding: .25rem .6rem; border-radius: 999px; font-size: .68rem; font-weight: 700; border: 1px solid var(--color-border); color: var(--color-text-muted); background: rgba(255, 255, 255, .03); }
-  :global(.network-chip.is-ok) { color: #6ee7b7; border-color: rgba(16, 185, 129, .3); background: rgba(16, 185, 129, .08); }
-  :global(.network-chip.is-fail) { color: #fca5a5; border-color: rgba(239, 68, 68, .3); background: rgba(239, 68, 68, .08); }
-
-  .unified-results { display: flex; flex-direction: column; gap: .75rem; }
   /* Tabla comprimida (14 columnas): sin scroll horizontal ni vertical; la
      paginación (50/página) evita tablones kilométricos. */
   :global(.aff-table-wrap) { border: 1px solid var(--color-border); border-radius: 12px; overflow: visible; }
@@ -4660,37 +4283,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     border-radius: 6px;
     max-width: 230px;
   }
-  :global(.unified-card) { display: flex; align-items: center; gap: 1rem; padding: .85rem 1rem; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
-  :global(.unified-thumb) { width: 64px; height: 64px; border-radius: 8px; background: #fff; padding: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
-  :global(.unified-thumb img) { max-width: 100%; max-height: 100%; object-fit: contain; }
-  :global(.unified-body) { flex: 1; min-width: 0; }
-  :global(.unified-top) { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; margin-bottom: .3rem; }
-  :global(.network-mini-tag) { padding: .12rem .45rem; border-radius: 4px; background: rgba(59, 130, 246, .12); border: 1px solid rgba(59, 130, 246, .3); color: #93c5fd; font-size: .64rem; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
-  :global(.estimated-tag) { padding: .12rem .45rem; border-radius: 4px; background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .3); color: #fbbf24; font-size: .64rem; font-weight: 800; text-transform: uppercase; }
-  :global(.stock-tag) { padding: .12rem .45rem; border-radius: 4px; background: rgba(16, 185, 129, .1); border: 1px solid rgba(16, 185, 129, .3); color: #6ee7b7; font-size: .64rem; font-weight: 800; }
-  :global(.stock-tag.is-out) { background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); color: #fca5a5; }
-  :global(.unified-title) { margin: 0 0 .35rem; color: var(--color-text-main); font-size: .85rem; font-weight: 600; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  :global(.unified-metrics) { display: flex; align-items: baseline; gap: .9rem; flex-wrap: wrap; font-size: .75rem; color: var(--color-text-muted); }
-  :global(.unified-price) { font-family: var(--font-heading); font-size: 1.05rem; font-weight: 800; color: #fff; }
-  :global(.unified-commission) { color: #6ee7b7; font-weight: 600; }
-  :global(.unified-rating) { color: #fbbf24; font-weight: 600; }
   :global(.unified-import) { flex-shrink: 0; white-space: nowrap; }
   :global(.unified-import.is-done) { background: rgba(16, 185, 129, .2); border-color: rgba(16, 185, 129, .4); pointer-events: none; }
   :global(.btn-danger-ghost) { display: inline-flex; align-items: center; gap: .35rem; padding: .5rem .8rem; color: #fca5a5; background: transparent; border: 1px solid rgba(239, 68, 68, .3); border-radius: var(--border-radius-sm); cursor: pointer; font: inherit; font-size: .76rem; font-weight: 700; transition: all .2s ease; }
   :global(.btn-danger-ghost:hover) { background: rgba(239, 68, 68, .12); }
-
-  /* ============ BARRA DE RESULTADOS: IMPORTACIÓN MASIVA + CATEGORÍA ============ */
-  .results-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 1rem; padding: .9rem 1rem; margin-bottom: 1rem; background: rgba(59, 130, 246, .07); border: 1px solid rgba(96, 165, 250, .25); border-radius: var(--border-radius-md); }
-  .results-toolbar-info { display: flex; flex-direction: column; gap: .2rem; min-width: 0; }
-  .results-toolbar-info strong { color: var(--color-text-main); font-family: var(--font-heading); font-size: .95rem; }
-  .results-toolbar-info span { color: var(--color-text-dim); font-size: .74rem; line-height: 1.4; }
-  .results-toolbar-actions { display: flex; align-items: flex-end; gap: .75rem; flex-wrap: wrap; }
-  .import-category-field { display: grid; gap: .3rem; }
-  .import-category-field span { color: var(--color-text-dim); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-  .import-category-field select { min-width: 210px; padding: .55rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
-  .import-category-field select:focus { border-color: #38bdf8; }
-  .bulk-progress { grid-column: 1 / -1; height: 6px; background: rgba(255, 255, 255, .06); border-radius: 999px; overflow: hidden; }
-  .bulk-progress-fill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #3b82f6, #10b981); border-radius: 999px; transition: width .25s ease; }
 
   /* ============ GESTIÓN DE CATEGORÍAS ============ */
   .category-list-view { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; margin-top: .25rem; }
@@ -4710,17 +4306,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.category-card-actions) { display: flex; gap: .5rem; margin-top: auto; padding-top: .35rem; border-top: 1px solid rgba(255, 255, 255, .05); }
   :global(.category-card-actions button) { flex: 1; }
 
-  /* Etiqueta de categoría propia en las tarjetas de resultados de Afiliados */
-  :global(.network-mini-tag.is-category) { color: #6ee7b7; background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }
-
-  @media (max-width: 760px) {
-    .results-toolbar { grid-template-columns: 1fr; }
-    .results-toolbar-actions { width: 100%; }
-    .import-category-field { flex: 1; }
-    .import-category-field select { width: 100%; min-width: 0; }
-  }
-
-  /* ============ 3. CATÁLOGO ALIEXPRESS (CACHÉ EN VOLÚMEN) ============ */
+  /* ============ 2. CATÁLOGO ALIEXPRESS (CACHÉ EN VOLÚMEN) ============ */
   .ali-catalog-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; margin-left: auto; flex-wrap: wrap; }
   .ali-catalog-meta { color: var(--color-text-dim); font-size: .72rem; white-space: nowrap; }
   .ali-catalog-meta:empty { display: none; }
