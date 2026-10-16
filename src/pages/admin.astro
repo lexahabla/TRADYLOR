@@ -326,7 +326,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                        </svg>
                      </button>
-                     <button type="button" class="btn-icon-action btn-prod-detail" data-id={p.id} title="Ver todos los datos" data-idx="0">▸</button>
+                      <button type="button" class="btn-icon-action btn-prod-detail" data-id={p.id} title="Ver todos los datos" data-idx="0" aria-expanded="false" aria-label="Ver todos los datos">
+                        <svg class="prod-detail-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                      </button>
                    </td>
                  </tr>
               ))
@@ -1666,10 +1668,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <button type="button" class="btn-icon-action btn-delete-row" data-id="${p.id}" title="Eliminar producto">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
               </button>
-              <button type="button" class="btn-icon-action btn-prod-detail" data-id="${p.id}" title="Ver todos los datos" data-idx="${index}">▸</button>
+              <button type="button" class="btn-icon-action btn-prod-detail" data-id="${p.id}" title="Ver todos los datos" data-idx="${index}" aria-expanded="false" aria-label="Ver todos los datos">
+                <svg class="prod-detail-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
             </td>
           </tr>
-          <tr class="product-detail-row" data-prod-detail="${index}">
+          <tr class="product-detail-row" data-prod-detail="${index}" hidden>
             <td colspan="10"><dl class="aff-detail-grid">
               <div class="aff-detail-item"><dt>Título</dt><dd>${escapeHtml ? escapeHtml(p.title) : p.title}</dd></div>
               <div class="aff-detail-item"><dt>Categoría</dt><dd>${p.category}</dd></div>
@@ -1697,7 +1701,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       document.querySelectorAll('.btn-prod-detail').forEach((btn) => {
         const idx = btn.getAttribute('data-idx');
         const detail = document.querySelector(`[data-prod-detail="${idx}"]`);
-        if (detail && !detail.hidden) btn.classList.add('is-open');
+        if (detail && !detail.hidden) {
+          btn.classList.add('is-open');
+          btn.setAttribute('aria-expanded', 'true');
+        }
 
         btn.onclick = (e) => {
           e.stopPropagation();
@@ -1707,6 +1714,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             const open = detail.hidden;
             detail.hidden = !open;
             btn.classList.toggle('is-open', open);
+            btn.setAttribute('aria-expanded', String(open));
           }
         };
       });
@@ -1994,6 +2002,44 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     if (typeof loadSectionsAdmin === 'function') loadSectionsAdmin();
     attachRowActions();
     if (typeof reloadProductsTable === 'function') reloadProductsTable();
+
+    // Chips de URL en los detalles: copiar al portapapeles y desplegar/ocultar.
+    document.addEventListener('click', async (event) => {
+      const copyBtn = event.target.closest?.('.url-chip-copy');
+      if (copyBtn) {
+        event.stopPropagation();
+        const url = copyBtn.getAttribute('data-url') || '';
+        try {
+          await navigator.clipboard.writeText(url);
+          copyBtn.classList.add('is-copied');
+          copyBtn.setAttribute('title', '¡Copiado!');
+          setTimeout(() => {
+            copyBtn.classList.remove('is-copied');
+            copyBtn.setAttribute('title', 'Copiar enlace');
+          }, 1400);
+        } catch {
+          const ta = document.createElement('textarea');
+          ta.value = url;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); } catch {}
+          ta.remove();
+        }
+        return;
+      }
+      const toggleBtn = event.target.closest?.('.url-chip-toggle');
+      if (toggleBtn) {
+        event.stopPropagation();
+        const chip = toggleBtn.closest('.url-chip');
+        if (chip) {
+          const open = chip.classList.toggle('is-open');
+          toggleBtn.setAttribute('aria-expanded', String(open));
+          toggleBtn.setAttribute('title', open ? 'Ocultar la URL completa' : 'Mostrar u ocultar la URL completa');
+        }
+      }
+    });
 
     // =========================================================================
     // 5. MÓDULO DE AFILIADOS Y MULTI-CATÁLOGO
@@ -2426,6 +2472,21 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     const money = (value, currency = 'EUR') => (value == null || value === '' ? '—' : `${Number(value).toFixed(2)} ${currency === 'EUR' ? '€' : currency}`);
 
+    /** Chip compacto de URL: una sola línea con ellipsis + copiar + desplegar. */
+    function renderUrlChip(raw) {
+      const url = escapeHtml(raw);
+      return `
+        <span class="url-chip">
+          <a href="${url}" target="_blank" rel="noopener noreferrer" class="url-chip-text" title="${url}">${url}</a>
+          <button type="button" class="url-chip-btn url-chip-copy" data-url="${url}" title="Copiar enlace" aria-label="Copiar enlace">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <button type="button" class="url-chip-btn url-chip-toggle" title="Mostrar u ocultar la URL completa" aria-label="Desplegar URL">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </span>`;
+    }
+
     function productDetailRows(product) {
       const rows = [
         ['Red', product.network],
@@ -2459,7 +2520,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             return `<div class="aff-detail-item"><dt>${escapeHtml(label)} (${urls.length})</dt><dd style="display:flex;flex-wrap:wrap;gap:6px;">${cells}</dd></div>`;
           }
           const cell = /^https?:\/\//i.test(raw)
-            ? `<a href="${escapeHtml(raw)}" target="_blank" rel="noopener noreferrer">${escapeHtml(raw)}</a>`
+            ? renderUrlChip(raw)
             : escapeHtml(raw);
           return `<div class="aff-detail-item"><dt>${escapeHtml(label)}</dt><dd>${cell}</dd></div>`;
         })
@@ -5105,6 +5166,120 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     background: rgba(239, 68, 68, 0.15);
     border-color: rgba(239, 68, 68, 0.4);
     color: #ef4444;
+  }
+
+  :global(.btn-edit-row:hover) {
+    background: rgba(59, 130, 246, 0.15);
+    border-color: rgba(59, 130, 246, 0.4);
+    color: #3b82f6;
+  }
+
+  :global(.btn-prod-detail) {
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.35);
+    background: rgba(251, 191, 36, 0.06);
+  }
+
+  :global(.btn-prod-detail:hover) {
+    background: rgba(251, 191, 36, 0.16);
+    border-color: rgba(251, 191, 36, 0.5);
+    color: #fcd34d;
+  }
+
+  :global(.btn-prod-detail .prod-detail-chevron) {
+    transition: transform 0.2s ease;
+  }
+
+  :global(.btn-prod-detail.is-open) {
+    background: rgba(251, 191, 36, 0.2);
+    border-color: rgba(251, 191, 36, 0.55);
+    color: #fcd34d;
+  }
+
+  :global(.btn-prod-detail.is-open .prod-detail-chevron) {
+    transform: rotate(90deg);
+  }
+
+  /* Fila de detalle del catálogo de productos (plegada por defecto) */
+  :global(.product-detail-row > td) {
+    background: rgba(4, 10, 18, 0.55);
+    padding: 0.6rem 0.75rem;
+  }
+
+  /* ===== Chips de URL compactos (una línea + copiar + desplegar) ===== */
+  :global(.url-chip) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0.15rem 0.35rem;
+    background: rgba(59, 130, 246, 0.07);
+    border: 1px solid rgba(96, 165, 250, 0.22);
+    border-radius: 6px;
+    vertical-align: middle;
+  }
+
+  :global(.url-chip-text) {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #93c5fd;
+    font-size: 0.66rem;
+    text-decoration: none;
+    line-height: 1.3;
+  }
+
+  :global(.url-chip-text:hover) {
+    color: #bfdbfe;
+    text-decoration: underline;
+  }
+
+  :global(.url-chip.is-open) {
+    display: flex;
+  }
+
+  :global(.url-chip.is-open .url-chip-text) {
+    white-space: normal;
+    word-break: break-all;
+    overflow: visible;
+  }
+
+  :global(.url-chip-btn) {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-dim);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+
+  :global(.url-chip-btn:hover) {
+    color: #93c5fd;
+    background: rgba(96, 165, 250, 0.12);
+    border-color: rgba(96, 165, 250, 0.3);
+  }
+
+  :global(.url-chip-copy.is-copied) {
+    color: #6ee7b7;
+    background: rgba(16, 185, 129, 0.14);
+    border-color: rgba(16, 185, 129, 0.35);
+  }
+
+  :global(.url-chip-toggle svg) {
+    transition: transform 0.2s ease;
+  }
+
+  :global(.url-chip.is-open .url-chip-toggle svg) {
+    transform: rotate(180deg);
   }
 
   :global(.empty-row td) {
