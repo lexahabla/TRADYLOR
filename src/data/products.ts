@@ -46,10 +46,16 @@ export interface Product {
   reviewsCount?: number;
   verdict?: string;
   specs?: Record<string, string>;
-  /** Texto de ficha tÃ©cnica (consulta en la pÃ¡gina del producto). */
+  /** Texto de ficha técnica (consulta en la página del producto). */
   techSheet?: string;
   fulfillmentProvider?: string;
-  /** HistÃ³rico de precio (1 punto por dÃ­a; se completa con cada visita). */
+  /** Texto de envío mostrado en checkout y ficha (ej: "Envío en 15 días"). */
+  shippingInfo?: string;
+  /** Días estimados de envío (entero; se usa para filtros y estimaciones). */
+  shippingDays?: number;
+  /** Envío gratis confirmado en la ficha del comerciante. */
+  freeShipping?: boolean;
+  /** Histórico de precio (1 punto por día; se completa con cada visita). */
   priceHistory?: { date: string; price: number }[];
 
   // â”€â”€â”€ New structured fields (optional for backward compat) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

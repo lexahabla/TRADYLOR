@@ -189,10 +189,131 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
           <div class="form-row two-cols">
             <div class="form-group">
+              <label for="prodPrice" class="field-label">Precio Oferta (€) <span class="required">*</span></label>
+              <input type="number" step="0.01" min="0" id="prodPrice" required />
+            </div>
+            <div class="form-group">
+              <label for="prodOriginalPrice" class="field-label">Precio Original (€) <span class="label-hint">(Tachado opcional)</span></label>
+              <input type="number" step="0.01" min="0" id="prodOriginalPrice" />
+            </div>
+          </div>
+
+          <div class="form-row two-cols">
+            <div class="form-group">
+              <label for="prodCategory" class="field-label">
+                <span>Categoría <span class="required">*</span></span>
+                <span class="label-hint">Se cargan desde Categorías</span>
+              </label>
+              <input
+                type="text"
+                id="prodCategory"
+                list="categoryList"
+                placeholder="Selecciona o escribe una categoría"
+                required
+              />
+              <datalist id="categoryList"></datalist>
+            </div>
+            <div class="form-group">
+              <label for="prodMerchant" class="field-label">Comercio / Tienda <span class="required">*</span></label>
+              <select id="prodMerchant" required>
+                <option value="" selected disabled>Selecciona un comercio</option>
+                <option value="Amazon">Amazon</option>
+                <option value="PcComponentes">PcComponentes</option>
+                <option value="El Corte Inglés">El Corte Inglés</option>
+                <option value="MediaMarkt">MediaMarkt</option>
+                <option value="AliExpress">AliExpress</option>
+                <option value="Fnac">Fnac</option>
+                <option value="Otro">Otro Comercio</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group full-width">
+              <label for="prodAffiliateUrl" class="field-label">Enlace de Afiliado Final <span class="required">*</span></label>
+              <input type="url" id="prodAffiliateUrl" required />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group full-width">
+              <label for="prodBuyNowUrl" class="field-label">
+                <span>Enlace de Compra Directa (Buy Now)</span>
+                <span class="label-hint">Opcional: URL de pago inmediato (p. ej. checkout de Amazon). Tiene prioridad sobre el enlace de afiliado en «Comprar ya».</span>
+              </label>
+              <input type="url" id="prodBuyNowUrl" placeholder="https://www.amazon.es/checkout/... o https://www.amazon.es/dp/ASIN" />
+            </div>
+          </div>
+
+          <div class="form-row two-cols">
+            <div class="form-group">
+              <label for="prodShippingInfo" class="field-label">
+                <span>Texto de envío</span>
+                <span class="label-hint">Se muestra en checkout (ej: «Envío en 15 días»)</span>
+              </label>
+              <input type="text" id="prodShippingInfo" placeholder="Envío en X días / Envío estándar" />
+            </div>
+            <div class="form-group">
+              <label for="prodShippingDays" class="field-label">
+                <span>Días de envío</span>
+                <span class="label-hint">Entero; alimenta el filtro de Afiliados</span>
+              </label>
+              <input type="number" step="1" min="0" id="prodShippingDays" placeholder="Ej: 15" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label class="filter-check">
+              <input type="checkbox" id="prodFreeShipping" />
+              Envío gratis
+            </label>
+          </div>
+
+          <div class="form-row two-cols">
+            <div class="form-group">
+              <label for="prodImage" class="field-label">
+                <span>Imagen del Producto</span>
+                <span class="label-hint">URL o ruta local (opcional si la galería ya tiene imagen; la IA puede generarla)</span>
+              </label>
+              <input type="text" id="prodImage" placeholder="https://... o /images/products/..." />
+            </div>
+            <div class="form-group">
+              <label for="prodBadge" class="field-label">Etiqueta Destacada (Badge)</label>
+              <select id="prodBadge">
+                <option value="">(ninguna)</option>
+                <optgroup label="Atractivo de precio / Oferta">
+                  <option value="Oferta -20%">Oferta -20%</option>
+                  <option value="Chollo">Chollo</option>
+                  <option value="Mínimo Histórico">Mínimo Histórico</option>
+                </optgroup>
+                <optgroup label="Prueba social / Popularidad">
+                  <option value="Más Vendido">Más Vendido</option>
+                  <option value="Recomendado">Recomendado</option>
+                  <option value="Top Elección">Top Elección</option>
+                </optgroup>
+                <optgroup label="Novedad o Disponibilidad">
+                  <option value="Nuevo">Nuevo</option>
+                  <option value="Edición Limitada">Edición Limitada</option>
+                  <option value="Últimas Unidades">Últimas Unidades</option>
+                </optgroup>
+                <optgroup label="Criterios técnicos o de valor">
+                  <option value="Mejor Calidad/Precio">Mejor Calidad/Precio</option>
+                  <option value="Calidad Premium">Calidad Premium</option>
+                  <option value="Sostenible">Sostenible</option>
+                </optgroup>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group full-width">
               <label for="prodPros" class="field-label">Puntos Fuertes (Pros) <span class="label-hint">(Uno por línea)</span></label>
               <textarea id="prodPros" rows="3"></textarea>
             </div>
-            <div class="form-group">
+          </div>
+
+          <div class="form-row">
+            <div class="form-group full-width">
               <label for="prodCons" class="field-label">Puntos a Considerar (Contras) <span class="label-hint">(Uno por línea)</span></label>
               <textarea id="prodCons" rows="3"></textarea>
             </div>
@@ -681,6 +802,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
     const prodImage = document.getElementById('prodImage');
     const prodBadge = document.getElementById('prodBadge');
+    const prodShippingInfo = document.getElementById('prodShippingInfo');
+    const prodShippingDays = document.getElementById('prodShippingDays');
+    const prodFreeShipping = document.getElementById('prodFreeShipping');
     const prodDescription = document.getElementById('prodDescription');
     const prodVerdict = document.getElementById('prodVerdict');
     const prodTechSheet = document.getElementById('prodTechSheet');
@@ -1332,6 +1456,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           description: prodDescription.value.trim(),
           verdict: prodVerdict.value.trim() || undefined,
           techSheet: prodTechSheet.value.trim() || undefined,
+          shippingInfo: prodShippingInfo?.value.trim() || undefined,
+          shippingDays: prodShippingDays?.value !== '' && prodShippingDays?.value != null
+            ? Math.max(0, Math.round(Number(prodShippingDays.value)))
+            : undefined,
+          freeShipping: prodFreeShipping?.checked || undefined,
           pros: prodPros.value
             .split('\n')
             .map((s) => s.trim())
@@ -1379,6 +1508,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             prodTechSheet.value = '';
             prodPros.value = '';
             prodCons.value = '';
+            if (prodShippingInfo) prodShippingInfo.value = '';
+            if (prodShippingDays) prodShippingDays.value = '';
+            if (prodFreeShipping) prodFreeShipping.checked = false;
             if (inputScrapeUrl) inputScrapeUrl.value = '';
             scrapedGallery = [];
             scrapeExtras = { brand: '', rating: null, reviewsCount: null, specs: null };
@@ -1601,6 +1733,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         prodTechSheet.value = '';
         prodPros.value = '';
         prodCons.value = '';
+        if (prodShippingInfo) prodShippingInfo.value = '';
+        if (prodShippingDays) prodShippingDays.value = '';
+        if (prodFreeShipping) prodFreeShipping.checked = false;
         if (inputScrapeUrl) inputScrapeUrl.value = '';
         scrapedGallery = [];
         scrapeExtras = { brand: '', rating: null, reviewsCount: null, specs: null };
@@ -1794,6 +1929,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               prodTechSheet.value = product.techSheet || '';
               prodPros.value = Array.isArray(product.pros) ? product.pros.join('\n') : '';
               prodCons.value = Array.isArray(product.cons) ? product.cons.join('\n') : '';
+              if (prodShippingInfo) prodShippingInfo.value = product.shippingInfo || '';
+              if (prodShippingDays) prodShippingDays.value = product.shippingDays != null ? String(product.shippingDays) : '';
+              if (prodFreeShipping) prodFreeShipping.checked = product.freeShipping === true;
 
               // Restaurar la galería guardada del producto (evita perderla al volver a guardar).
               scrapedGallery = Array.isArray(product.gallery) && product.gallery.length
@@ -2599,6 +2737,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           : product.image
             ? [product.image]
             : [];
+      // Datos de envío del catálogo del comerciante (AliExpress: "Días de envío").
+      const rawDays = product.extra?.['Días de envío'] ?? product.shippingDays;
+      const shippingDays = rawDays != null && rawDays !== '' && Number.isFinite(Number(rawDays))
+        ? Math.max(0, Math.round(Number(rawDays)))
+        : undefined;
+      const shippingInfo =
+        (product.shippingInfo && String(product.shippingInfo).trim()) ||
+        (shippingDays != null ? `Envío en ${shippingDays} días` : undefined);
+      const freeShipping =
+        typeof product.freeShipping === 'boolean'
+          ? product.freeShipping
+          : shippingDays != null && shippingDays <= 3;
       return {
         action: 'save',
         product: {
@@ -2616,6 +2766,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           badge: product.network,
           pros: [`Comisión estimada: ${product.commissionRate ?? 0}% en ${product.network}`],
           cons: [],
+          shippingInfo,
+          shippingDays,
+          freeShipping,
         },
       };
     }
@@ -2683,6 +2836,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             cons: basic.cons,
             techSheet: basic.techSheet,
             badge: basic.badge,
+            shippingInfo: basic.shippingInfo,
+            shippingDays: basic.shippingDays,
+            freeShipping: basic.freeShipping,
             options: { text: true, image: false, save: false },
           }),
         });
@@ -2720,6 +2876,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (prodTechSheet) prodTechSheet.value = enriched.techSheet || basic.techSheet || '';
       if (prodPros) prodPros.value = Array.isArray(enriched.pros) ? enriched.pros.join('\n') : '';
       if (prodCons) prodCons.value = Array.isArray(enriched.cons) ? enriched.cons.join('\n') : '';
+      if (prodShippingInfo) prodShippingInfo.value = enriched.shippingInfo || basic.shippingInfo || '';
+      if (prodShippingDays) prodShippingDays.value = enriched.shippingDays != null ? String(enriched.shippingDays) : (basic.shippingDays != null ? String(basic.shippingDays) : '');
+      if (prodFreeShipping) prodFreeShipping.checked = enriched.freeShipping === true || basic.freeShipping === true;
 
       scrapedGallery = Array.isArray(enriched.gallery) && enriched.gallery.length
         ? enriched.gallery.slice(0, 10)
@@ -5239,6 +5398,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
   :global(.url-chip.is-open) {
     display: flex;
+    align-items: flex-start;
+  }
+
+  :global(.url-chip.is-open .url-chip-btn) {
+    margin-top: 1px;
   }
 
   :global(.url-chip.is-open .url-chip-text) {

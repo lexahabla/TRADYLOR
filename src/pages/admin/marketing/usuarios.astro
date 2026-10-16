@@ -498,8 +498,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
           </dl>
           <div><span class="mu-k">Comprados</span><ul class="mu-mini-list">${listItems(b.purchases)}</ul></div>
           <div><span class="mu-k">Carrito pendiente</span><ul class="mu-mini-list">${listItems(b.cartItems)}</ul></div>
-          <button type="button" class="mu-btn mu-btn-small" data-remind title="${esc(remindHint)}"${remindDisabled ? ' disabled' : ''}>Enviar aviso de carrito</button>
-          <button type="button" class="mu-btn mu-btn-small mu-btn-danger" data-delete-user>Eliminar usuario</button>
+          <button type="button" class="mu-btn mu-btn-small" data-remind title="${esc(remindHint)}"${remindDisabled ? ' disabled' : ''}>Envía ahora el aviso de carrito</button>
         </section>
         <section class="mu-dcol">
           <h3 class="mu-dtitle">Lead score</h3>
@@ -509,6 +508,9 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
           </div>
           <ul class="mu-factors-list">${factors || '<li class="mu-empty-inline">Sin factores: perfil frío sin actividad.</li>'}</ul>
         </section>
+        <div class="mu-detail-footer">
+          <button type="button" class="mu-btn mu-btn-small mu-btn-danger" data-delete-user>Eliminar usuario</button>
+        </div>
       </div>`;
   }
 
@@ -840,12 +842,12 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
       } else {
         toast(body?.message ?? 'No se pudo enviar el aviso.', true);
         button.disabled = false;
-        button.textContent = 'Enviar aviso de carrito';
+        button.textContent = 'Envía ahora el aviso de carrito';
       }
     } catch {
       toast('Error de red al enviar el aviso.', true);
       button.disabled = false;
-      button.textContent = 'Enviar aviso de carrito';
+      button.textContent = 'Envía ahora el aviso de carrito';
     }
   }
 
@@ -1047,6 +1049,7 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
   .mu-detail-row > td { padding: 0 !important; background: rgba(6, 10, 20, 0.6); border-bottom: 1px solid var(--color-border) !important; }
   .mu-detail-row[hidden] { display: none; }
   .mu-detail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1.2rem 1.6rem; padding: 1.1rem 1.2rem 1.3rem; }
+  .mu-detail-footer { grid-column: 1 / -1; display: flex; justify-content: flex-end; padding-top: .6rem; border-top: 1px solid rgba(255,255,255,.06); }
   .mu-dcol { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
   .mu-dtitle { margin: 0; padding-bottom: 0.45rem; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #93c5fd; border-bottom: 1px solid rgba(96, 165, 250, 0.2); }
   .mu-dl { display: grid; grid-template-columns: minmax(0, auto) minmax(0, 1fr); gap: 0.35rem 0.9rem; margin: 0; font-size: 0.76rem; }

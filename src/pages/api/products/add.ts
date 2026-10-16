@@ -617,6 +617,18 @@ export const POST: APIRoute = async ({ request }) => {
           dataToSave.specs && typeof dataToSave.specs === 'object' && !Array.isArray(dataToSave.specs)
             ? (dataToSave.specs as Record<string, string>)
             : existingProduct?.specs,
+        // Datos de envío: se conservan los ya guardados si el cliente no los envía.
+        shippingInfo: dataToSave.shippingInfo
+          ? String(dataToSave.shippingInfo).trim()
+          : existingProduct?.shippingInfo,
+        shippingDays:
+          dataToSave.shippingDays != null && Number.isFinite(Number(dataToSave.shippingDays))
+            ? Math.max(0, Math.round(Number(dataToSave.shippingDays)))
+            : existingProduct?.shippingDays,
+        freeShipping:
+          typeof dataToSave.freeShipping === 'boolean'
+            ? dataToSave.freeShipping
+            : existingProduct?.freeShipping,
       };
 
       // Si ya existe un producto con el mismo ID, se actualiza; si no, se añade al principio
