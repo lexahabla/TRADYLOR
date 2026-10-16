@@ -32,9 +32,11 @@ if (!product || !product.affiliateUrl) {
 const pricing = product.pricing;
 const hooks = product.conversionHooks;
 const stockStatus = pricing?.stockStatus ?? 'En stock';
-const freeShipping = pricing?.freeShipping ?? false;
+const freeShipping = product.freeShipping ?? pricing?.freeShipping ?? false;
 const provider = product.fulfillmentProvider ?? product.merchant;
 const returnDays = hooks?.returnPolicyDays ?? 30;
+const shippingDays = product.shippingDays;
+const shippingInfo = product.shippingInfo;
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('es-ES', {
@@ -50,11 +52,21 @@ const discountPercent = product.originalPrice
 const deliveryEstimate =
   stockStatus === 'Agotado'
     ? 'Sin previsión de entrega'
-    : stockStatus === 'Pocas unidades'
-      ? '3 – 5 días laborables'
-      : freeShipping
-        ? '24 – 48 h'
-        : '2 – 4 días laborables';
+    : shippingDays != null
+      ? shippingDays <= 1
+        ? '24 h'
+        : `${shippingDays} días`
+      : stockStatus === 'Pocas unidades'
+        ? '3 – 5 días laborables'
+        : freeShipping
+          ? '24 – 48 h'
+          : '2 – 4 días laborables';
+
+const shippingFeeLabel = freeShipping
+  ? 'Gratis'
+  : shippingInfo
+    ? shippingInfo
+    : 'Se calcula en la pasarela';
 
 const specsPreview = product.specs
   ? Object.entries(product.specs).slice(0, 4)
@@ -182,7 +194,7 @@ const isSoldOut = stockStatus === 'Agotado';
             <div class="order-line">
               <dt>Envío estimado</dt>
               <dd class:list={['order-value', { 'is-free': freeShipping }]}>
-                {freeShipping ? 'Gratis' : 'Se calcula en la pasarela'}
+                {shippingFeeLabel}
               </dd>
             </div>
             <div class="order-line order-line--delivery">
@@ -197,6 +209,12 @@ const isSoldOut = stockStatus === 'Agotado';
               </dt>
               <dd class="order-value">{deliveryEstimate}</dd>
             </div>
+            {shippingInfo && !freeShipping && (
+              <div class="order-line order-line--shipping-note">
+                <dt>Tarifas de envío</dt>
+                <dd class="order-value order-value--note">{shippingInfo}. Las opciones y tarifas definitivas (urgente, estándar, recogida…) las elige {provider} en su pasarela.</dd>
+              </div>
+            )}
             <div class="order-line order-line--total">
               <dt>Total orientativo</dt>
               <dd>
@@ -652,6 +670,19 @@ const isSoldOut = stockStatus === 'Agotado';
   }
   .order-value.is-free {
     color: #10b981;
+  }
+  .order-line--shipping-note {
+    align-items: flex-start;
+  }
+  .order-line--shipping-note dt {
+    flex-shrink: 0;
+    max-width: 42%;
+  }
+  .order-value--note {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    line-height: 1.5;
   }
   .order-line--delivery {
     padding: 0.65rem 0;

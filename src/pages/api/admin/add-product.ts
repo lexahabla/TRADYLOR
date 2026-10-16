@@ -252,6 +252,12 @@ export const POST: APIRoute = async ({ request }) => {
       fulfillmentProvider: body?.fulfillmentProvider
         ? String(body.fulfillmentProvider).trim()
         : undefined,
+      shippingInfo: body?.shippingInfo ? String(body.shippingInfo).trim() : undefined,
+      shippingDays:
+        body?.shippingDays != null && Number.isFinite(Number(body.shippingDays))
+          ? Math.max(0, Math.round(Number(body.shippingDays)))
+          : undefined,
+      freeShipping: typeof body?.freeShipping === 'boolean' ? body.freeShipping : undefined,
     };
 
     if (enrichment) {

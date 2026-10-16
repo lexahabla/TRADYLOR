@@ -20,6 +20,7 @@ import { dataFile } from './paths';
 import { getSmtpConfig, sendGenericMailSmtp } from './mailer';
 import { getAllRadarUsers, markBirthdayGreetingSent, markCartReminderSent } from './radarAuth';
 import { getRadar } from './radarStore';
+import { findCatalogProduct, productKey } from './catalog';
 import type { PublicRadarUser } from './radarAuth';
 import type { PendingExit } from '../types/radar';
 
@@ -177,15 +178,29 @@ export function buildCartRecoveryHtml(name: string, exits: PendingExit[]): strin
   const origin = siteOrigin();
   const rows = exits
     .map((exit) => {
-      const url = `${origin}/p/${encodeURIComponent(exit.productId)}`;
+      const product = findCatalogProduct(exit.productId);
+      const productUrl = product ? `${origin}/p/${encodeURIComponent(productKey(product))}` : `${origin}/p/${encodeURIComponent(exit.productId)}`;
+      // Salida al carrito/pasarela del comerciante: buildPurchaseUrl prioriza
+      // buyNowUrl (checkout directo) y para Amazon genera la cesta con el tag.
+      const merchantUrl = product
+        ? `${origin}/api/redirect?id=${encodeURIComponent(productKey(product))}&src=cart-reminder`
+        : productUrl;
+      const image = product?.image || '';
+      const price = product?.price;
+      const merchant = product?.merchant || '';
+      const money = typeof price === 'number' && price > 0
+        ? `${price.toFixed(2)} €`
+        : '';
       return `
         <div style="display:flex;gap:1rem;align-items:center;background:rgba(17,24,39,.7);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:.9rem 1rem;margin:0 0 .6rem">
-          <div style="min-width:0">
+          ${image ? `<img src="${escapeHtml(image)}" alt="" width="72" height="72" style="width:72px;height:72px;object-fit:cover;border-radius:10px;flex:0 0 auto;background:#fff" />` : ''}
+          <div style="min-width:0;flex:1">
             <p style="margin:0 0 .25rem;font-size:.92rem;font-weight:700;color:#f3f4f6;line-height:1.35">${escapeHtml(exit.title)}</p>
-            <p style="margin:0;font-size:.75rem;color:#9ca3af">Lo dejaste en la salida de compra el ${escapeHtml(formatDate(new Date(exit.timestamp).toISOString()))}</p>
+            <p style="margin:0;font-size:.75rem;color:#9ca3af">${money ? `<span style="color:#6ee7b7;font-weight:700">${money}</span> · ` : ''}${merchant ? escapeHtml(merchant) + ' · ' : ''}Lo dejaste en la salida de compra el ${escapeHtml(formatDate(new Date(exit.timestamp).toISOString()))}</p>
           </div>
-          <div style="margin-left:auto;flex:0 0 auto">
-            <a href="${url}" style="display:inline-block;background:rgba(255,255,255,.06);color:#e5e7eb;text-decoration:none;font-weight:700;padding:.5rem .9rem;border-radius:10px;font-size:.78rem;border:1px solid rgba(255,255,255,.14)">Ver producto</a>
+          <div style="margin-left:auto;flex:0 0 auto;display:flex;flex-direction:column;gap:.4rem;align-items:stretch">
+            <a href="${merchantUrl}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;font-weight:700;padding:.5rem .9rem;border-radius:10px;font-size:.78rem;text-align:center">Ir al carrito de la tienda</a>
+            <a href="${productUrl}" style="display:inline-block;background:rgba(255,255,255,.06);color:#e5e7eb;text-decoration:none;font-weight:700;padding:.5rem .9rem;border-radius:10px;font-size:.78rem;border:1px solid rgba(255,255,255,.14);text-align:center">Ver en Tradylor</a>
           </div>
         </div>`;
     })

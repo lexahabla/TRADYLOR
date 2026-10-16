@@ -305,6 +305,27 @@ const productSchema = {
           </p>
         </div>
 
+        <!-- Bloque de envío (datos del comerciante cuando están disponibles) -->
+        {(product.shippingInfo || product.shippingDays != null || product.freeShipping) && (
+          <div class="shipping-block">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <rect x="1" y="3" width="15" height="13" />
+              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8" />
+              <circle cx="5.5" cy="18.5" r="2.5" />
+              <circle cx="18.5" cy="18.5" r="2.5" />
+            </svg>
+            <div class="shipping-block-body">
+              <strong>{product.freeShipping ? 'Envío gratis' : (product.shippingDays != null ? `Envío en ${product.shippingDays} días` : 'Envío')}</strong>
+              {product.shippingInfo && !product.freeShipping && (
+                <span>{product.shippingInfo}. Las tarifas y opciones definitivas las elige {fulfillmentProvider} en su pasarela.</span>
+              )}
+              {product.freeShipping && (
+                <span>El envío estándar es gratuito. Otras opciones (urgente, recogida…) las elige {fulfillmentProvider} en su pasarela.</span>
+              )}
+            </div>
+          </div>
+        )}
+
         <!-- CTA principal: Comprar ya → pantalla puente nativa /checkout/[id] -->
         <a href={checkoutUrl} class="cta-primary-btn" id={`order-cta-${product.id}`}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
@@ -1508,6 +1529,37 @@ const productSchema = {
     font-size: 0.75rem;
     color: var(--color-text-dim);
     margin: 0;
+  }
+
+  /* ---- Bloque de envío (datos del comerciante) ---- */
+  .shipping-block {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    padding: 0.75rem 0.9rem;
+    background: rgba(16, 185, 129, 0.06);
+    border: 1px solid rgba(16, 185, 129, 0.22);
+    border-radius: 10px;
+    color: #6ee7b7;
+  }
+  .shipping-block svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .shipping-block-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+  }
+  .shipping-block-body strong {
+    font-size: 0.84rem;
+    font-weight: 700;
+  }
+  .shipping-block-body span {
+    font-size: 0.76rem;
+    color: var(--color-text-muted);
+    line-height: 1.5;
   }
 
   /* ---- Botón CTA Principal ---- */
