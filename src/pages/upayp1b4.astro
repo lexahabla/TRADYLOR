@@ -620,7 +620,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <div class="view-heading">
         <span class="admin-tag-pill">Integraciones de monetización</span>
         <h2 class="admin-title">Afiliados y Multi-Catálogo</h2>
-        <p class="admin-subtitle">Conecta redes de afiliación con sus credenciales y valida la conexión. El catálogo de AliExpress se sincroniza contra la API y se filtra con barras de rango calculadas sobre los datos reales (precio, descuento, comisión, ventas, valoración y envío).</p>
+        <p class="admin-subtitle">Conecta redes de afiliación con sus credenciales, valida la conexión y busca productos en paralelo en todos los catálogos. Importa los mejores resultados a Tradylor con un clic: el enmascaramiento /out/[id] se aplica automáticamente. El catálogo de AliExpress se sincroniza contra la API y se filtra con barras de rango calculadas sobre los datos reales.</p>
       </div>
 
       <div class="affiliates-layout">
@@ -644,6 +644,116 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <div id="removedNetworks" class="removed-networks"></div>
         </div>
 
+        <!-- Columna 2: Buscador global unificado -->
+        <div class="search-card">
+          <div class="card-header">
+            <div class="header-icon icon-cyan">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </div>
+            <div>
+              <h2 class="card-title">2. Buscador global multi-red</h2>
+              <p class="card-desc">Consulta en paralelo los catálogos de las redes conectadas y ordena por conversión.</p>
+            </div>
+          </div>
+
+          <div class="search-controls">
+            <div class="search-input-group">
+              <input type="search" id="unifiedQuery" placeholder="Buscar en todos los catálogos conectados (ej: auriculares, robot aspirador...)" />
+              <button type="button" id="btnUnifiedSearch" class="btn-primary">
+                <span class="btn-text">Buscar</span>
+                <svg class="btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+                <div class="btn-spinner" hidden></div>
+              </button>
+              <button type="button" id="btnFullCatalog" class="btn-secondary" title="Carga el catálogo completo de las redes conectadas">
+                <span class="btn-text">Ver catálogo completo</span>
+                <div class="btn-spinner" hidden></div>
+              </button>
+            </div>
+
+            <div class="search-filters">
+              <div class="filter-field">
+                <label for="filterCategory">Categoría</label>
+                <select id="filterCategory">
+                  <option value="">Todas las categorías</option>
+                </select>
+              </div>
+              <div class="filter-field">
+                <label for="filterMinPrice">Precio mín. (€)</label>
+                <input type="number" id="filterMinPrice" min="0" step="1" placeholder="0" />
+              </div>
+              <div class="filter-field">
+                <label for="filterMaxPrice">Precio máx. (€)</label>
+                <input type="number" id="filterMaxPrice" min="0" step="1" placeholder="Sin tope" />
+              </div>
+              <div class="filter-field">
+                <label for="filterMinCommission">Comisión mín. (%)</label>
+                <input type="number" id="filterMinCommission" min="0" max="100" step="0.5" placeholder="0" />
+              </div>
+              <div class="filter-field">
+                <label for="filterSort">Ordenar por</label>
+                <select id="filterSort">
+                  <option value="commission" selected>Mayor comisión</option>
+                  <option value="popularity">Popularidad</option>
+                  <option value="rating">Mejor valoración</option>
+                  <option value="price_asc">Precio: menor a mayor</option>
+                  <option value="price_desc">Precio: mayor a menor</option>
+                </select>
+              </div>
+              <label class="filter-check">
+                <input type="checkbox" id="filterInStock" />
+                <span>Solo con stock</span>
+              </label>
+            </div>
+          </div>
+
+          <div id="searchStatus" class="status-alert" hidden>
+            <div class="alert-icon">ℹ️</div>
+            <div class="alert-content">
+              <strong id="searchStatusTitle">Estado</strong>
+              <p id="searchStatusText">Mensaje...</p>
+            </div>
+          </div>
+
+          <div id="networkStatusRow" class="network-status-row"></div>
+
+          <!-- Barra de acciones sobre los resultados: categoría de importación + importación masiva -->
+          <div id="resultsToolbar" class="results-toolbar" hidden>
+            <div class="results-toolbar-info">
+              <strong id="resultsCount">0 productos</strong>
+              <span id="resultsHint">Selecciona la categoría con la que se importarán.</span>
+            </div>
+            <div class="results-toolbar-actions">
+              <label class="import-category-field" for="importCategory">
+                <span>Categoría al importar</span>
+                <select id="importCategory">
+                  <option value="">Automática (por palabras clave)</option>
+                </select>
+              </label>
+              <button type="button" id="btnImportAll" class="btn-success btn-sm">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="7 10 12 15 17 10"></polyline>
+                  <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                <span id="btnImportAllLabel">Importar todos</span>
+              </button>
+            </div>
+            <div id="bulkProgress" class="bulk-progress" hidden>
+              <div class="bulk-progress-fill" id="bulkProgressFill"></div>
+            </div>
+          </div>
+
+          <div id="unifiedResults" class="unified-results">
+            <div class="empty-dashboard">Conecta al menos una red y lanza una búsqueda para comparar productos entre catálogos.</div>
+          </div>
+        </div>
+
       </div>
 
       <!-- 3. Catálogo AliExpress desde la caché del volumen (sin llamadas API en cada carga) -->
@@ -656,7 +766,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </svg>
           </div>
           <div>
-              <h2 class="card-title">2. Catálogo AliExpress (caché)</h2>
+              <h2 class="card-title">3. Catálogo AliExpress (caché)</h2>
             <p class="card-desc">Tabla amplia del último catálogo sincronizado, guardado en el servidor. Usa «Sincronizar» para refrescarlo contra la API; se avisa si la caché supera las 6 horas.</p>
           </div>
           <div class="ali-catalog-head-actions">
