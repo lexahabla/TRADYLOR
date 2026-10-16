@@ -28,6 +28,12 @@ export interface Product {
   /** Texto de ficha técnica (consulta en la página del producto). */
   techSheet?: string;
   fulfillmentProvider?: string;
+  /** Texto de envío mostrado en checkout y ficha (ej: "Envío en 15 días"). */
+  shippingInfo?: string;
+  /** Días estimados de envío (entero; filtros y estimaciones). */
+  shippingDays?: number;
+  /** Envío estándar gratuito confirmado en la ficha del comerciante. */
+  freeShipping?: boolean;
   /** Histórico de precio (1 punto por día; lo completa lib/priceHistory.ts). */
   priceHistory?: { date: string; price: number }[];
 }

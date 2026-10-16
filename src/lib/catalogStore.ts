@@ -147,6 +147,14 @@ export function upsertCatalogProduct(raw: N8nContractPayload): CatalogSaveResult
     techSheet: data.techSheet ? String(data.techSheet).trim() : existing?.techSheet,
     specs: data.specs ?? existing?.specs,
     fulfillmentProvider: data.fulfillmentProvider ?? existing?.fulfillmentProvider,
+    // Envío: si el contrato no los trae, se conservan los ya guardados.
+    shippingInfo: data.shippingInfo ? String(data.shippingInfo).trim() : existing?.shippingInfo,
+    shippingDays:
+      data.shippingDays != null && Number.isFinite(Number(data.shippingDays))
+        ? Math.max(0, Math.round(Number(data.shippingDays)))
+        : existing?.shippingDays,
+    freeShipping:
+      typeof data.freeShipping === 'boolean' ? data.freeShipping : existing?.freeShipping,
     priceHistory: existing?.priceHistory,
   };
 
