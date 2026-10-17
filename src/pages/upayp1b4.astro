@@ -718,11 +718,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <select id="aliFCat2" disabled><option value="">Todas</option></select>
             </div>
             <div class="filter-field ali-f-state">
-              <label for="aliFState">Estado</label>
-              <select id="aliFState">
+              <label for="aliFState">En catálogo</label>
+              <select id="aliFState" title="Filtra por si el producto ya está añadido al catálogo de Tradylor o no">
                 <option value="ALL">Todos</option>
-                <option value="PENDING">Pendientes</option>
-                <option value="IMPORTED">Importados</option>
+                <option value="PENDING">No añadidos</option>
+                <option value="IMPORTED">Añadidos al catálogo</option>
                 <option value="DISCARDED">Descartados</option>
               </select>
             </div>
@@ -3183,6 +3183,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           body: JSON.stringify(buildImportPayload(product)),
         });
         const data = await res.json();
+        // El servidor detecta duplicados (misma URL/título): se contabiliza como
+        // «ya estaba», nunca como error ni como alta nueva.
+        if (data && data.duplicate) {
+          if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Añadido';
+            btn.classList.add('is-added');
+          }
+          return { ok: true, duplicate: true, message: data.message, product: data.product };
+        }
         if (data.success) {
           if (btn) {
             btn.textContent = 'Importado ✓';
@@ -3224,6 +3234,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
 
     /**
+     * Marca el botón «Añadir» de una fila como YA AÑADIDO: texto «Añadido»,
+     * color propio y estado inactivo (imposible repetir la alta).
+     */
+    function markAliImported(btn) {
+      if (!btn) return;
+      btn.disabled = true;
+      btn.textContent = 'Añadido';
+      btn.title = 'Ya está en el catálogo';
+      btn.classList.remove('is-done');
+      btn.classList.add('is-added');
+    }
+
+    /**
      * Botón «Añadir» de la tabla de productos de afiliados.
      * Guarda directamente en el catálogo de Tradylor (IA de texto + persistencia)
      * y sólo muestra un letrero sobre el botón: NO cambia de sección ni carga
@@ -3231,6 +3254,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
      */
     async function importAliProductToCatalog(product, btn) {
       const alreadyImported = aliEstadoIndex().get(product.externalId) === 'IMPORTED';
+      // Guardia local: el botón ya sale desactivado, pero la caché de estados
+      // podría estar desactualizada; en ningún caso se da de alta un duplicado.
+      if (alreadyImported) {
+        markAliImported(btn);
+        showAliImportFlag(btn, 'Ya estaba en el catálogo', 'warn');
+        return { ok: true, duplicate: true, product: null };
+      }
       const basic = buildImportPayload(product).product;
       if (btn) {
         btn.disabled = true;
@@ -3268,14 +3298,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         });
         const data = await res.json();
         if (data && data.success) {
-          if (btn) {
-            btn.textContent = 'Añadido ✓';
-            btn.classList.add('is-done');
-          }
+          // El servidor contesta `duplicate: true` si el producto ya existía
+          // (misma URL o mismo título): no se crea una segunda fila.
+          const duplicate = Boolean(alreadyImported || data.duplicate);
+          markAliImported(btn);
           showAliImportFlag(
             btn,
-            alreadyImported ? 'Ya estaba en el catálogo' : 'Añadido al catálogo',
-            alreadyImported ? 'warn' : 'ok',
+            duplicate ? 'Ya estaba en el catálogo' : 'Añadido al catálogo',
+            duplicate ? 'warn' : 'ok',
           );
           aliInvalidateEstado();
           // Espera a recargar el catálogo registrado para que el índice de
@@ -3284,11 +3314,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           // La API devuelve los avisos en `enrichment.warnings` (`warnings` suelto sólo existe en el 502).
           const warnings = Array.isArray(data.enrichment?.warnings) ? data.enrichment.warnings : [];
           if (warnings.length) showAliStatus('warning', 'Añadido con avisos', warnings.join(' | '));
-          // Con «Estado: Pendientes» la fila deja de cumplir el filtro, así que
-          // la tabla se repinta (y el letrero del botón con ella, irrelevante).
+          // Con «En catálogo: No añadidos» la fila deja de cumplir el filtro,
+          // así que la tabla se repinta (y el letrero del botón con ella).
           const estado = (aliFilterPanel && aliFilterPanel.getParams().estado) || 'ALL';
           if (estado === 'PENDING') renderAliCatalog();
-          return { ok: true, product: data.product };
+          return { ok: true, duplicate, product: data.product };
         }
         const message = (data && data.message) || 'No se pudo añadir al catálogo.';
         showAliImportFlag(btn, message, 'error');
@@ -3569,11 +3599,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                   const shippingDays = aliExtra(product, 'Días de envío');
                   const checked = aliSelected.has(product.externalId) ? ' checked' : '';
                   const estado = aliEstadoIndex().get(product.externalId);
+                  const yaAnadido = estado === 'IMPORTED';
                   const estadoPill = estado === 'IMPORTED'
                     ? '<span class="ac-state is-imported">✓ en catálogo</span>'
                     : estado === 'DISCARDED'
                       ? '<span class="ac-state is-discarded">descartado</span>'
                       : '';
+                  const addBtnClass = `btn-success btn-sm unified-import ali-import${yaAnadido ? ' is-added' : ''}`;
                   return `
                 <tr class="aff-row" data-ac-row="${index}" tabindex="0" aria-expanded="false">
                   <td class="ac-td-check"><input type="checkbox" data-ac-check="${index}" aria-label="Seleccionar producto" ${checked} /></td>
@@ -3593,7 +3625,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                   <td>${shop ? escapeHtml(shop) : '—'}</td>
                   <td>${shippingDays != null ? `${escapeHtml(shippingDays)} d` : product.shippingInfo ? escapeHtml(product.shippingInfo) : '—'}</td>
                     <td class="aff-actions">
-                      <button type="button" class="btn-success btn-sm unified-import ali-import" data-ac-import="${index}">Añadir</button>
+                      <button type="button" class="${addBtnClass}" data-ac-import="${index}"${yaAnadido ? ' disabled title="Ya está en el catálogo"' : ''}>${yaAnadido ? 'Añadido' : 'Añadir'}</button>
                       <button type="button" class="btn-danger-ghost btn-sm" data-ac-remove="${index}" title="Quitar de la tabla">✕</button>
                       <button type="button" class="aff-caret" data-ac-toggle="${index}" aria-label="Ver todos los datos">▸</button>
                     </td>
@@ -3849,31 +3881,52 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     });
     btnAliSelImport?.addEventListener('click', async () => {
       if (aliImportingSelection) return;
-      const products = aliFilterApply().filter((product) => aliSelected.has(product.externalId));
-      if (!products.length) return;
+      const selected = aliFilterApply().filter((product) => aliSelected.has(product.externalId));
+      if (!selected.length) return;
+      // Los que ya están en el catálogo se saltan: nunca se repiten altas.
+      const states = aliEstadoIndex();
+      const products = selected.filter((product) => states.get(product.externalId) !== 'IMPORTED');
+      const skipped = selected.length - products.length;
+      if (!products.length) {
+        showAliStatus(
+          'warning',
+          'Ya están en el catálogo',
+          `${skipped} producto${skipped === 1 ? '' : 's'} seleccionado${skipped === 1 ? '' : 's'} ya estaba${skipped === 1 ? '' : 'n'} añadido${skipped === 1 ? '' : 's'} al catálogo.`,
+        );
+        return;
+      }
       aliImportingSelection = true;
       if (btnAliSelImport) btnAliSelImport.disabled = true;
       let ok = 0;
       let failed = 0;
+      let duplicates = 0;
       for (let i = 0; i < products.length; i++) {
         const product = products[i];
         showAliStatus('loading', 'Importando selección', `${i + 1}/${products.length}: ${String(product.title).slice(0, 70)}...`);
         const result = await importSingleProduct(product, null);
-        if (result.ok) ok++;
-        else failed++;
+        if (result.ok) {
+          if (result.duplicate) duplicates++;
+          else ok++;
+        } else failed++;
       }
       aliImportingSelection = false;
       if (btnAliSelImport) btnAliSelImport.disabled = false;
       // El estado «IMPORTED» sale del catálogo registrado: se recarga y se
-      // repinta la tabla para que las filas nuevas muestren «✓ en catálogo».
-      if (ok) {
+      // repinta la tabla para que las filas nuevas muestren «✓ en catálogo»
+      // y su botón quede en «Añadido» (inactivo).
+      if (ok || duplicates) {
         await reloadProductsTable();
+        aliInvalidateEstado();
         renderAliCatalog();
       }
+      const parts = [];
+      if (ok) parts.push(`${ok} producto${ok === 1 ? '' : 's'} añadido${ok === 1 ? '' : 's'}`);
+      if (duplicates) parts.push(`${duplicates} ya estaba${duplicates === 1 ? '' : 'n'} en el catálogo`);
+      if (failed) parts.push(`${failed} con error`);
       showAliStatus(
-        failed ? 'warning' : 'success',
+        failed || duplicates ? 'warning' : 'success',
         'Importación de selección finalizada',
-        `${ok} producto${ok === 1 ? '' : 's'} añadido${failed ? ` · ${failed} con error` : ''} al catálogo de Tradylor.`,
+        `${parts.join(' · ')}${skipped ? ` · ${skipped} omitido${skipped === 1 ? '' : 's'} por ya estar añadido${skipped === 1 ? '' : 's'}` : ''}.`,
       );
     });
 
@@ -4405,6 +4458,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .ali-catalog-meta:empty { display: none; }
   :global(.ac-discount) { color: #6ee7b7; font-weight: 700; }
   :global(.ali-import) { flex-shrink: 0; }
+  /* Estado «ya en el catálogo»: botón inactivo con texto y color propios */
+  :global(.ali-import.is-added) { background: rgba(16, 185, 129, .14); color: #34d399; cursor: not-allowed; box-shadow: none; }
+  :global(.ali-import.is-added):hover { background: rgba(16, 185, 129, .14); color: #34d399; transform: none; box-shadow: none; }
   :global(.ac-pager) { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; padding: .7rem .1rem 0; font-size: .76rem; color: var(--color-text-muted); }
   :global(.ac-page-info) { color: var(--color-text-dim); font-size: .74rem; }
   :global(.ac-page-nav) { display: flex; gap: .3rem; flex-wrap: wrap; }
