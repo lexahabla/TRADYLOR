@@ -20,6 +20,7 @@ import path from 'node:path';
 import { dataFile } from './paths';
 import { getConnector } from './networks';
 import { CATALOG_KEYWORDS } from './networks/connectors/aliexpress';
+import { stampFirstSeen } from './aliCatalogMerge';
 import type { UnifiedProduct } from './networks/types';
 
 export const ALI_CATALOG_STALE_MS = 6 * 60 * 60 * 1000; // 6 horas
@@ -119,7 +120,8 @@ async function runSync(append: boolean): Promise<AliCatalogSyncResult> {
     return { ok: false, syncedAt: null, count: 0, message: 'El conector de AliExpress no está disponible.', stale: getAliCatalogState().stale };
   }
 
-  const existing = readAliCatalog()?.products ?? [];
+  const previous = readAliCatalog();
+  const existing = previous?.products ?? [];
   const mergedById = new Map<string, UnifiedProduct>();
   for (const product of existing) mergedById.set(product.externalId, product);
   const baseCount = mergedById.size;
@@ -146,14 +148,17 @@ async function runSync(append: boolean): Promise<AliCatalogSyncResult> {
     return { ok: false, syncedAt: null, count: getAliCatalogState().count, message, stale: getAliCatalogState().stale };
   }
 
-  const merged = [...mergedById.values()].sort(byPopularity);
+  // Los productos frescos de la API reemplazan a los cacheados: `firstSeenAt` hay que
+  // arrastrarlo (o fijarlo si es nuevo). El mismo instante va en `syncedAt` y en las altas.
+  const syncedAt = new Date().toISOString();
+  const merged = stampFirstSeen([...mergedById.values()], existing, previous?.syncedAt, syncedAt).sort(byPopularity);
   if (!merged.length) {
     const message = errors[0] || 'AliExpress no devolvió productos (¿sin credenciales o sin resultados?).';
     log('sync sin resultados:', message);
     return { ok: false, syncedAt: null, count: 0, message, stale: getAliCatalogState().stale };
   }
 
-  const snapshot: AliCatalogSnapshot = { syncedAt: new Date().toISOString(), products: merged };
+  const snapshot: AliCatalogSnapshot = { syncedAt, products: merged };
   const saved = writeAliCatalog(snapshot);
   const partial = errors.length > 0;
   const added = merged.length - baseCount;

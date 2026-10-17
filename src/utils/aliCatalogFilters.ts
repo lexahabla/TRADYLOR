@@ -34,7 +34,9 @@
  *        AND (comision_estimada >= :eur OR comision_pct >= :pct)
  *        AND ventas_30d >= :salesMin AND valoracion_score >= :ratingMin
  *        AND envio_gratis IS TRUE ... AND total_imagenes >= :imagesMin
- *     ORDER BY <sortBy> <sortDir>
+ *     ORDER BY <sortBy> <sortDir>          -- nulos siempre al final
+ *       sortBy ∈ ventas | visitas | comision_eur | comision_pct | valoracion |
+ *                descuento | precio | nombre | fecha (fecha_alta = `firstSeenAt`)
  *     LIMIT :limit OFFSET :offset
  * ==============================================================================
  */
@@ -75,7 +77,9 @@ export type AliSortKey =
   | 'valoracion'
   | 'descuento'
   | 'precio'
-  | 'nombre';
+  | 'nombre'
+  /** Fecha de alta en la caché (`firstSeenAt`): desc = más recientes primero. */
+  | 'fecha';
 
 /** Unidad del filtro de comisión mínima (€ de comisión estimada o % de tasa). */
 export type AliCommissionUnit = 'eur' | 'pct';
@@ -289,6 +293,18 @@ export function discountPct(product: UnifiedProduct): number | null {
   return null;
 }
 
+/**
+ * Fecha de alta del producto en la caché (`firstSeenAt`) como marca de tiempo (ms),
+ * o `null` si no hay fecha o es ilegible (cachés anteriores a la primera sincronización
+ * con este campo). Los `null` se ordenan siempre al final, igual que el resto de claves.
+ */
+export function firstSeenTime(product: UnifiedProduct): number | null {
+  const raw = product.firstSeenAt;
+  if (typeof raw !== 'string' || !raw.trim()) return null;
+  const time = Date.parse(raw);
+  return Number.isNaN(time) ? null : time;
+}
+
 /** Días de envío declarados por la red. */
 export function shippingDays(product: UnifiedProduct): number | null {
   return toNumber(extra(product, 'Días de envío')) ?? toNumber((product as LooseProduct).shippingDays);
@@ -395,6 +411,7 @@ const SORTERS: Record<Exclude<AliSortKey, 'nombre'>, (product: UnifiedProduct) =
   valoracion: (product) => toNumber(product.rating),
   descuento: discountPct,
   precio: (product) => toNumber(product.price),
+  fecha: firstSeenTime,
 };
 
 /**
