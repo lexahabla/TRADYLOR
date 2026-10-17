@@ -47,7 +47,7 @@ const scoreOf = (p: typeof allProducts[0]) => {
 const sorted = [...visibleProducts].sort((a, b) => scoreOf(b) - scoreOf(a));
 
 // ─── Pagination for "Todos los Productos" ────────────────────────────────────
-const PRODUCTS_PER_PAGE = 8;
+const PRODUCTS_PER_PAGE = 12;
 const pageParam = Astro.url.searchParams.get('page');
 const totalPages = Math.max(1, Math.ceil(sorted.length / PRODUCTS_PER_PAGE));
 const requestedPage = parseInt(pageParam ?? '1', 10) || 1;
