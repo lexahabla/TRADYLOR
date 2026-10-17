@@ -171,5 +171,13 @@ function normalizeToProduct(schema: Product): FlatProduct {
       alternativeUrl: schema.affiliate.alternativeUrl,
     },
     alternatives: schema.alternatives,
+    sourceId: schema.sourceId,
+    category_id: schema.category_id,
+    subcategory_id: schema.subcategory_id,
+    ia_status: schema.ia_status,
+    link_status: schema.link_status,
+    normalized_tags: schema.normalized_tags,
+    alternative_product_ids: schema.alternative_product_ids,
+    conversion_score: schema.conversion_score,
   };
 }

@@ -156,6 +156,19 @@ export function upsertCatalogProduct(raw: N8nContractPayload): CatalogSaveResult
     freeShipping:
       typeof data.freeShipping === 'boolean' ? data.freeShipping : existing?.freeShipping,
     priceHistory: existing?.priceHistory,
+    // Curación: los campos de catálogo jerárquico/score/alternativas sobreviven
+    // a los re-imports del contrato n8n (sólo se actualizan los campos vivos).
+    sourceId: existing?.sourceId,
+    category_id: existing?.category_id,
+    subcategory_id: existing?.subcategory_id,
+    ia_status: existing?.ia_status,
+    link_status: existing?.link_status,
+    normalized_tags: existing?.normalized_tags,
+    alternative_product_ids: existing?.alternative_product_ids,
+    alternatives: existing?.alternatives,
+    conversion_score: existing?.conversion_score,
+    commissionEstimate: existing?.commissionEstimate,
+    sales30d: existing?.sales30d,
   };
 
   const existingIndex = products.findIndex((p) => p.id === productId);

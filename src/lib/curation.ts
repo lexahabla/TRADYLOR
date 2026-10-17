@@ -1,0 +1,452 @@
+/**
+ * ==============================================================================
+ * TRADYLOR — CURATION ENGINE (Backend)
+ * ==============================================================================
+ * Módulo puro (sin I/O de red) con la lógica de curación avanzada del catálogo:
+ *  - Detección de duplicados por jerarquía (sourceId → URL canónica → título).
+ *  - Score de conversión / rentabilidad interna (0-100).
+ *  - Eliminación masiva con tombstones (bulk delete).
+ *  - Extracción de tags técnicos normalizados (matriz de atributos).
+ *  - Similaridad de títulos para sugerir alternativas (cross-matching).
+ * ==============================================================================
+ */
+
+import {
+  readProductsFromFile,
+  writeProductsToFile,
+  type Product,
+} from './productStore';
+import { addDeletedId } from './deletedProducts';
+
+// ─── Parámetros de tracking/afiliación que se ignoran al comparar URLs ───────
+const TRACKING_PARAMS = new Set([
+  // Amazon
+  'tag', 'linkcode', 'linkid', 'ascsubtag', 'asc_campaign', 'asc_source', 'asc_refurl',
+  'pf_rd_p', 'pf_rd_r', 'pd_rd_r', 'pd_rd_w', 'pd_rd_wg', 'th', 'psc', 'crid', 'dib',
+  'dib_tag', 'keywords', 'qid', 's', 'sprefix', 'cv_ct_pvb', 'content-id', 'camp',
+  'creative', 'creativeASIN', 'subscriptionId', 'amzn', 'mgb', 'gmerchant', 'gproduct',
+  'gad_source', 'gclid', 'gbraid', 'wbraid',
+  // AliExpress
+  'aff_fcid', 'aff_fsk', 'aff_platform', 'aff_trace_key', 'algorithm', 'apt',
+  'channel', 'cvosrc', 'pcnt', 'ping', 'scm', 'sku', 'sparkmnt', 'terminal_id',
+  'utm_pid', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+  'pvid', 'spm', 'pp', 'ap', 'exe', 'exp', 'gp', 'irgwc', 'mall_affr', 'aff_request_id',
+  'scene', 'search_p4p_id', 'sort', 'SearchId', 'sk', 'u_id', 'yaml', 'yos',
+  'tripped', 'trace', 'ws_ab_test', 'btsid', 'bucket', 'rn', 'rn_id',
+  // Genéricos de tracking
+  'mc_cid', 'mc_eid', '_hsenc', '_hsmi', 'vero_id', 'vero_conv', 'oly_enc_id',
+  'oly_anon_id', 'fbclid', 'igshid', 'igsh', 'yclid', 'msclkid', 'twclid',
+  'trk', 'trkcampaign', 'sr_share', 'share_id', 'mkt_tok', 'mkcid', 'mkeid',
+  'spm_aenc', 'spm_sj', 'spm_uid', 'nl_pid', 'nl_k', 'ncid', 'cmpid', 'cid',
+  'wt.mc_id', 'wt.mc_c', 'srsltid', 'ved', 'ei', 'u_aemd', 'u_sig', 'u_it',
+]);
+
+/**
+ * URL canónica del producto: mismo host+path, sin esquema, sin `www`, sin
+ * parámetros de afiliación/tracking y sin barra final. Dos enlaces de afiliado
+ * distintos del mismo producto producen la MISMA clave.
+ */
+export function canonicalProductUrl(value: string | null | undefined): string {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw.startsWith('http') ? raw : `https://${raw}`);
+    const params = new URLSearchParams(url.search);
+    for (const key of [...params.keys()]) {
+      const lower = key.toLowerCase();
+      if (TRACKING_PARAMS.has(lower) || lower.startsWith('utm_') || lower.startsWith('pk_') || lower.startsWith('mtm_')) {
+        params.delete(key);
+      }
+    }
+    const query = params.toString();
+    return `${url.hostname.toLowerCase().replace(/^www\./, '')}${url.pathname.replace(/\/+$/, '')}${query ? `?${query}` : ''}`;
+  } catch {
+    return raw.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/[?#].*$/, '').replace(/\/+$/, '');
+  }
+}
+
+/** Clave limpia de título para comparación (minúsculas, sin acentos ni puntuación). */
+export function cleanTitleKey(title: string | null | undefined): string {
+  return String(title || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Extrae el ASIN (Amazon) o el Item ID (AliExpress) del enlace/título. */
+export function extractSourceId(product: Product): string {
+  if (String(product.sourceId || '').trim()) return String(product.sourceId).trim();
+  if (String(product.asin || '').trim()) return String(product.asin).trim();
+  const haystack = `${product.affiliateUrl || ''} ${product.buyNowUrl || ''}`;
+  const asin = haystack.match(/\b(B[0-9A-Z]{9}|[0-9]{9}[0-9A-Z])\b/);
+  if (asin) return asin[1];
+  const ali = haystack.match(/\/(?:item|goods)\/(?:.*?\/)?(?:ae01|item)?(?:_)?(\d{6,20})\.html/i)
+    ?? haystack.match(/[?&](?:itemId|productId|productIds)=(\d{6,20})/i);
+  if (ali) return `AE-${ali[1]}`;
+  return '';
+}
+
+export type DuplicateReason = 'sourceId' | 'canonicalUrl' | 'cleanTitle';
+
+export interface DuplicateFlag {
+  is_duplicate: boolean;
+  duplicate_reason?: DuplicateReason;
+  duplicate_group?: string;
+  duplicate_of?: string;
+  possible_duplicate?: boolean;
+}
+
+/**
+ * Jerarquía de detección de duplicados (la más fuerte gana):
+ *  1. sourceId idéntico (ASIN / Item ID de AliExpress).
+ *  2. URL canónica idéntica (sin parámetros de afiliación/tracking).
+ *  3. Título limpio idéntico dentro de la MISMA categoría/subcategoría
+ *     (marcado como POSIBLE duplicado).
+ */
+export function detectDuplicates(products: Product[]): Map<string, DuplicateFlag> {
+  const flags = new Map<string, DuplicateFlag>();
+  const firstOfGroup = new Map<string, string>();
+
+  const register = (id: string, key: string, reason: DuplicateReason, possible: boolean) => {
+    const existing = firstOfGroup.get(key);
+    if (existing === undefined) {
+      firstOfGroup.set(key, id);
+      return;
+    }
+    const base: DuplicateFlag = {
+      is_duplicate: true,
+      duplicate_reason: reason,
+      duplicate_group: key,
+      duplicate_of: existing,
+    };
+    if (possible) base.possible_duplicate = true;
+    // Conserva el motivo más fuerte ya asignado a este producto.
+    const current = flags.get(id);
+    if (!current || reasonRank(reason) < reasonRank(current.duplicate_reason)) {
+      flags.set(id, base);
+    }
+  };
+
+  const reasonRank = (reason?: DuplicateReason): number => {
+    if (reason === 'sourceId') return 0;
+    if (reason === 'canonicalUrl') return 1;
+    return 2;
+  };
+
+  // 1) sourceId
+  const bySource = new Map<string, string>();
+  for (const product of products) {
+    const source = extractSourceId(product);
+    if (!source) continue;
+    const previous = bySource.get(source);
+    if (previous === undefined) {
+      bySource.set(source, product.id);
+    } else {
+      register(product.id, `src:${source}`, 'sourceId', false);
+      if (!flags.has(previous)) {
+        flags.set(previous, { is_duplicate: true, duplicate_reason: 'sourceId', duplicate_group: `src:${source}`, duplicate_of: product.id });
+      }
+    }
+  }
+
+  // 2) URL canónica
+  const byUrl = new Map<string, string>();
+  for (const product of products) {
+    const canonical = canonicalProductUrl(product.affiliateUrl) || canonicalProductUrl(product.buyNowUrl);
+    if (!canonical) continue;
+    const previous = byUrl.get(canonical);
+    if (previous === undefined) {
+      byUrl.set(canonical, product.id);
+    } else if (!flags.has(product.id) || flags.get(product.id)?.duplicate_reason !== 'sourceId') {
+      register(product.id, `url:${canonical}`, 'canonicalUrl', false);
+      if (!flags.has(previous)) {
+        flags.set(previous, { is_duplicate: true, duplicate_reason: 'canonicalUrl', duplicate_group: `url:${canonical}`, duplicate_of: product.id });
+      }
+    }
+  }
+
+  // 3) Título limpio dentro de la misma categoría/subcategoría (posible duplicado)
+  const byTitle = new Map<string, string>();
+  for (const product of products) {
+    const titleKey = cleanTitleKey(product.title);
+    if (!titleKey || titleKey.length < 8) continue;
+    const scope = `${String(product.category || '').trim().toLowerCase()}|${String(product.subcategory_id || '').trim().toLowerCase()}`;
+    const key = `title:${scope}:${titleKey}`;
+    const previous = byTitle.get(key);
+    if (previous === undefined) {
+      byTitle.set(key, product.id);
+    } else if (!flags.has(product.id)) {
+      register(product.id, key, 'cleanTitle', true);
+      if (!flags.has(previous)) {
+        flags.set(previous, {
+          is_duplicate: true,
+          duplicate_reason: 'cleanTitle',
+          duplicate_group: key,
+          duplicate_of: product.id,
+          possible_duplicate: true,
+        });
+      }
+    }
+  }
+
+  return flags;
+}
+
+/**
+ * Score de conversión potencial (0-100):
+ *   Score = min(100, round(((comision_estimada * ventas_30d) / max(precio,1)) * factor_valoracion * ESCALA))
+ * - comision_estimada: `commissionEstimate` o 5% del precio (media de afiliación).
+ * - ventas_30d: `sales30d` o 1 (sin datos de ventas el score queda bajo a propósito).
+ * - factor_valoracion: (rating/5) con leve boost por volumen de opiniones (≤1.25).
+ * - ESCALA=5 traduce la ratio a la escala 0-100 (ratio 20 → 100 pts).
+ */
+export const CONVERSION_SCORE_SCALE = 5;
+
+export function computeConversionScore(product: Product): number {
+  const price = Math.max(Number(product.price) || 0, 1);
+  const storedCommission = Number(product.commissionEstimate);
+  const commission = Number.isFinite(storedCommission) && storedCommission > 0
+    ? storedCommission
+    : price * 0.05;
+  const storedSales = Number(product.sales30d);
+  const sales = Number.isFinite(storedSales) && storedSales > 0 ? storedSales : 1;
+  const rating = Number(product.rating);
+  const validRating = Number.isFinite(rating) && rating > 0 ? Math.min(5, rating) : 3.5;
+  const reviews = Number(product.reviewsCount);
+  const reviewBoost = Number.isFinite(reviews) && reviews > 0
+    ? Math.min(1.25, 1 + Math.log10(1 + reviews) * 0.05)
+    : 1;
+  const factorValoracion = (validRating / 5) * reviewBoost;
+  const raw = ((commission * sales) / price) * factorValoracion;
+  return Math.max(0, Math.min(100, Math.round(raw * CONVERSION_SCORE_SCALE)));
+}
+
+/** Nivel visual del score: high (>75) / mid (40-75) / low (<40). */
+export function conversionScoreLevel(score: number): 'high' | 'mid' | 'low' {
+  if (score > 75) return 'high';
+  if (score >= 40) return 'mid';
+  return 'low';
+}
+
+/** Defaults de estado editorial calculados (sin persistir) para el panel. */
+export function computeEditorialStatus(product: Product): { ia_status: string; link_status: string } {
+  const ia = String(product.ia_status || '').trim()
+    || ((product.description || '').trim().length >= 60 ? 'completed' : 'pending');
+  const link = String(product.link_status || '').trim()
+    || ((product.affiliateUrl || '').trim() ? 'active' : 'pending');
+  return { ia_status: ia, link_status: link };
+}
+
+/**
+ * Enriquece una copia de los productos con los campos de curación que usa el
+ * panel admin: conversion_score, is_duplicate (+motivo), ia_status y link_status.
+ */
+export function enrichProductsForAdmin(products: Product[]): Array<Product & DuplicateFlag & { ia_status: string; link_status: string; conversion_score: number }> {
+  const duplicates = detectDuplicates(products);
+  return products.map((product) => {
+    const status = computeEditorialStatus(product);
+    const flag = duplicates.get(product.id);
+    const score = Number.isFinite(Number(product.conversion_score)) && Number(product.conversion_score) > 0
+      ? Number(product.conversion_score)
+      : computeConversionScore(product);
+    return {
+      ...product,
+      ...status,
+      conversion_score: score,
+      is_duplicate: Boolean(flag?.is_duplicate),
+      duplicate_reason: flag?.duplicate_reason,
+      duplicate_group: flag?.duplicate_group,
+      duplicate_of: flag?.duplicate_of,
+      possible_duplicate: flag?.possible_duplicate,
+    };
+  });
+}
+
+/** Recalcula y PERSISTE conversion_score en products.json. */
+export function recalcConversionScores(): { updated: number; total: number } {
+  const products = readProductsFromFile();
+  let updated = 0;
+  for (const product of products) {
+    const score = computeConversionScore(product);
+    if (product.conversion_score !== score) {
+      product.conversion_score = score;
+      updated += 1;
+    }
+  }
+  if (updated > 0) writeProductsToFile(products);
+  return { updated, total: products.length };
+}
+
+/**
+ * Eliminación masiva: filtra los IDs indicados de products.json y deja tombstone
+ * para que el catálogo público tampoco los muestre. Devuelve borrados y ausentes.
+ */
+export function bulkDeleteProducts(ids: string[]): { deleted: string[]; missing: string[] } {
+  const wanted = new Set(ids.map((id) => String(id || '').trim()).filter(Boolean));
+  const products = readProductsFromFile();
+  const existing = new Set(products.map((p) => p.id));
+  const missing = [...wanted].filter((id) => !existing.has(id));
+  const remaining = products.filter((p) => !wanted.has(p.id));
+  const deleted = products.filter((p) => wanted.has(p.id)).map((p) => p.id);
+  if (deleted.length) {
+    writeProductsToFile(remaining);
+    for (const id of deleted) addDeletedId(id);
+  }
+  return { deleted, missing };
+}
+
+// ─── Tags técnicos normalizados (matriz de atributos) ────────────────────────
+
+const TAG_PATTERNS: Array<{ re: RegExp; tag: string | ((m: RegExpMatchArray) => string) }> = [
+  { re: /\busb[\s-]?3\.?2\b/i, tag: 'USB 3.2' },
+  { re: /\busb[\s-]?3\.?1\b/i, tag: 'USB 3.1' },
+  { re: /\busb[\s-]?3\.?0\b/i, tag: 'USB 3.0' },
+  { re: /\busb[\s-]?2\.?0\b/i, tag: 'USB 2.0' },
+  { re: /\busb[\s-]?type[\s-]?c\b|\btype[\s-]?c\b|\busb-c\b/i, tag: 'USB Type-C' },
+  { re: /\bmicro[\s-]?usb\b/i, tag: 'Micro-USB' },
+  { re: /\blightning\b/i, tag: 'Conector Lightning' },
+  { re: /\bsata\s*(iii?)?\b|\bsata[\s-]?6gbps\b/i, tag: 'SATA' },
+  { re: /sata\s*2\.?5|2\.5["″]?/i, tag: 'SATA 2.5"' },
+  { re: /\bnvme\b/i, tag: 'NVMe' },
+  { re: /\bm\.?2\b/i, tag: 'M.2' },
+  { re: /\bssd\b/i, tag: 'SSD' },
+  { re: /\bhdd\b|disco duro/i, tag: 'HDD' },
+  { re: /\bbluetooth\s*5\.?[34]\b/i, tag: (m) => `Bluetooth ${m[0].replace(/[^0-9.]/g, '')}` },
+  { re: /\bbluetooth\s*5\.?[012]\b/i, tag: (m) => `Bluetooth ${m[0].replace(/[^0-9.]/g, '')}` },
+  { re: /\bbluetooth\b/i, tag: 'Bluetooth' },
+  { re: /\bwi-?fi\s*6e?\b/i, tag: (m) => /e/i.test(m[0]) ? 'Wi-Fi 6E' : 'Wi-Fi 6' },
+  { re: /\bwi-?fi\s*5\b|\b802\.11ac\b/i, tag: 'Wi-Fi 5' },
+  { re: /\bwi-?fi\b/i, tag: 'Wi-Fi' },
+  { re: /\bplug\s*&?\s*play\b|plug and play/i, tag: 'Plug & Play' },
+  { re: /sin alimentaci[óo]n externa|bus.?powered|alimentaci[óo]n por usb/i, tag: 'Sin Alimentación Externa' },
+  { re: /\bip6[78]\b/i, tag: (m) => m[0].toUpperCase() },
+  { re: /\bip5[45]\b/i, tag: (m) => m[0].toUpperCase() },
+  { re: /\bnoise cancelling|cancelaci[óo]n de ruido|anc\b/i, tag: 'Cancelación de Ruido' },
+  { re: /\binal[áa]mbric[oa]\b|\bwireless\b/i, tag: 'Inalámbrico' },
+  { re: /\bbater[íi]a\b|acumulador/i, tag: 'Batería Integrada' },
+  { re: /\b4k\b|uhd\b/i, tag: '4K UHD' },
+  { re: /\bfull hd\b|1080p\b/i, tag: 'Full HD 1080p' },
+  { re: /\brecarga r[áa]pida|\bfast charging\b|\bquick charge\b/i, tag: 'Recarga Rápida' },
+  { re: /\brgb\b/i, tag: 'RGB' },
+  { re: /\bajustable\b|regulable/i, tag: 'Ajustable' },
+  { re: /\bplegable\b|foldable/i, tag: 'Plegable' },
+  { re: /\bcompatible con (alexa|google (home|assistant))\b/i, tag: (m) => `Compatible con ${/alexa/i.test(m[0]) ? 'Alexa' : 'Google Assistant'}` },
+];
+
+/** Extrae tags técnicos estándar desde título + specs + ficha (heurística local, instantánea y offline). */
+export function extractNormalizedTags(product: Product): string[] {
+  const parts = [
+    product.title || '',
+    product.techSheet || '',
+    product.description || '',
+    ...Object.entries(product.specs || {}).map(([k, v]) => `${k}: ${v}`),
+  ].join(' · ');
+  const tags = new Set<string>();
+  for (const { re, tag } of TAG_PATTERNS) {
+    const match = parts.match(re);
+    if (match) tags.add(typeof tag === 'function' ? tag(match) : tag);
+  }
+  // Capacidades / pesos / potencias citados en specs (valores cortos y estandarizables).
+  for (const value of Object.values(product.specs || {})) {
+    const text = String(value).trim();
+    if (/^\d{2,4}\s?(gb|tb|mb)\b/i.test(text)) tags.add(text.toUpperCase().replace(/\s+/g, ''));
+    if (/^\d{2,3}\s?(w|watts?)\b/i.test(text)) tags.add(`${text.replace(/[^0-9]/g, '')}W`);
+  }
+  return [...tags].slice(0, 24);
+}
+
+/** Aplica tags normalizados a los productos indicados y persiste. */
+export function normalizeTagsForProducts(ids: string[]): { updated: number; products: Product[] } {
+  const wanted = new Set(ids.map((id) => String(id || '').trim()).filter(Boolean));
+  const products = readProductsFromFile();
+  let updated = 0;
+  for (const product of products) {
+    if (!wanted.has(product.id)) continue;
+    product.normalized_tags = extractNormalizedTags(product);
+    updated += 1;
+  }
+  if (updated > 0) writeProductsToFile(products);
+  return { updated, products };
+}
+
+// ─── Cross-matching de alternativas ──────────────────────────────────────────
+
+/** Similitud de Jaccard sobre tokens de título (0-1). */
+export function titleSimilarity(a: string, b: string): number {
+  const tokensA = new Set(cleanTitleKey(a).split(' ').filter((t) => t.length > 2));
+  const tokensB = new Set(cleanTitleKey(b).split(' ').filter((t) => t.length > 2));
+  if (!tokensA.size || !tokensB.size) return 0;
+  let intersection = 0;
+  for (const token of tokensA) if (tokensB.has(token)) intersection += 1;
+  return intersection / (tokensA.size + tokensB.size - intersection);
+}
+
+/** Sugiere alternativas por coincidencia de título/categoría (top N). */
+export function suggestAlternatives(products: Product[], productId: string, limit = 8): Array<{ product: Product; score: number }> {
+  const base = products.find((p) => p.id === productId);
+  if (!base) return [];
+  return products
+    .filter((p) => p.id !== productId)
+    .map((p) => {
+      const sameCategory = String(p.category || '').trim().toLowerCase() === String(base.category || '').trim().toLowerCase();
+      const score = Math.min(1, titleSimilarity(base.title, p.title) + (sameCategory ? 0.25 : 0));
+      return { product: p, score };
+    })
+    .filter((item) => item.score >= 0.25)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, limit);
+}
+
+/**
+ * Vincula alternativas de forma BIDIRECCIONAL: el array alternative_product_ids
+ * se actualiza en el producto base y en cada alternativa. Los slots de rol
+ * (premium / económica / similar) se escriben en `alternatives` del producto base.
+ */
+export function linkAlternatives(input: {
+  productId: string;
+  alternativeProductIds: string[];
+  premiumOptionId?: string | null;
+  cheaperOptionId?: string | null;
+  similarOptionId?: string | null;
+}): { ok: boolean; message: string; product?: Product } {
+  const products = readProductsFromFile();
+  const base = products.find((p) => p.id === input.productId);
+  if (!base) return { ok: false, message: `No existe el producto "${input.productId}".` };
+
+  const linked = [...new Set(input.alternativeProductIds.map((id) => String(id || '').trim()).filter(Boolean))]
+    .filter((id) => id !== base.id && products.some((p) => p.id === id));
+
+  base.alternative_product_ids = linked;
+
+  const roles = {
+    premiumOptionId: String(input.premiumOptionId ?? '').trim() || undefined,
+    cheaperOptionId: String(input.cheaperOptionId ?? '').trim() || undefined,
+    similarOptionId: String(input.similarOptionId ?? '').trim() || undefined,
+  };
+  base.alternatives = {
+    ...base.alternatives,
+    premiumOptionId: roles.premiumOptionId,
+    cheaperOptionId: roles.cheaperOptionId,
+    similarOptionId: roles.similarOptionId,
+  };
+
+  // Sincronía bidireccional del array en cada alternativa.
+  for (const product of products) {
+    if (!linked.includes(product.id)) continue;
+    const peers = new Set([...(product.alternative_product_ids || []), base.id]);
+    product.alternative_product_ids = [...peers].filter((id) => id !== product.id);
+  }
+  // Limpieza inversa: productos que referencian al base pero ya no están en la lista.
+  for (const product of products) {
+    if (product.id === base.id || linked.includes(product.id)) continue;
+    if (Array.isArray(product.alternative_product_ids) && product.alternative_product_ids.includes(base.id)) {
+      product.alternative_product_ids = product.alternative_product_ids.filter((id) => id !== base.id);
+    }
+  }
+
+  writeProductsToFile(products);
+  return { ok: true, message: `${linked.length} alternativa(s) vinculada(s) a "${base.title}".`, product: base };
+}

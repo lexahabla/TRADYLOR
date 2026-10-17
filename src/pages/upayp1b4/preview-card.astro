@@ -1,0 +1,54 @@
+---
+/**
+ * ==============================================================================
+ * TRADYLOR — PREVIEW DE PRODUCT CARD (admin)
+ * ==============================================================================
+ * Página ligera (SSR, requiere sesión admin) que renderiza el MISMO componente
+ * <ProductCard /> del frontend público para el producto indicado (?id=).
+ * El panel de curación la embebe en un iframe del modal "👁️ Preview Card",
+ * garantizando estética idéntica a la web sin duplicar CSS.
+ * ==============================================================================
+ */
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import ProductCard from '../../components/ProductCard.astro';
+import { getSessionUser } from '../../lib/adminAuth';
+import { readProductsFromFile, type Product } from '../../lib/productStore';
+import type { Product as FlatProduct } from '../../data/products';
+
+const sessionUser = getSessionUser(Astro.request);
+if (!sessionUser || sessionUser.role !== 'admin') {
+  return Astro.redirect('/upayp1b4', 302);
+}
+
+const id = Astro.url.searchParams.get('id') || '';
+const raw = readProductsFromFile().find((p) => p.id === id) as Product & Partial<FlatProduct> | undefined;
+
+if (!raw) {
+  return new Response(
+    '<!doctype html><html><body style="font-family:system-ui;color:#94a3b8;background:#0b1220;display:grid;place-items:center;height:100vh;margin:0"><p>Producto no encontrado.</p></body></html>',
+    { status: 404, headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } }
+  );
+}
+
+// ProductCard consume el shape flat del catálogo público (src/data/products.ts).
+const product = raw as unknown as FlatProduct;
+Astro.response.headers.set('Cache-Control', 'no-store');
+---
+
+<Layout title={`Preview: ${product.title}`} description="Vista previa de la tarjeta pública del producto.">
+  <main class="preview-card-shell">
+    <p class="preview-card-note">Vista previa con la estética exacta de la web pública de Tradylor.</p>
+    <div class="preview-card-stage">
+      <ProductCard product={product} />
+    </div>
+  </main>
+</Layout>
+
+<style is:global>
+  .preview-card-shell { min-height: 100vh; padding: 1.25rem; background: #0b1220; }
+  .preview-card-note { margin: 0 0 .9rem; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; color: #64748b; text-align: center; }
+  .preview-card-stage { display: grid; place-items: center; }
+  .preview-card-stage :global(.product-card) { width: min(340px, 100%); }
+</style>

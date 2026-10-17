@@ -154,6 +154,7 @@ export const POST: APIRoute = async ({ request }) => {
         icon: formData.get('icon'),
         description: formData.get('description'),
         keywords: formData.get('keywords'),
+        parentId: formData.get('parentId'),
       };
     } else {
       body = await request.json().catch(() => ({}));
@@ -183,6 +184,11 @@ export const POST: APIRoute = async ({ request }) => {
       name,
       icon: body.icon ? String(body.icon) : undefined,
       keywords,
+      // Subcategoría on-the-fly: si viene parentId, la categoría se guarda como
+      // hija en categories.json (persistente y visible para toda la web).
+      parentId: body.parentId !== undefined && body.parentId !== null && String(body.parentId).trim() !== ''
+        ? String(body.parentId).trim()
+        : null,
     });
 
     if (!result.ok) {

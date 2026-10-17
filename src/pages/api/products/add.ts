@@ -9,6 +9,7 @@ import {
   type Product,
 } from '../../../lib/productStore';
 import { addDeletedId, removeDeletedId } from '../../../lib/deletedProducts';
+import { enrichProductsForAdmin } from '../../../lib/curation';
 
 export const prerender = false;
 
@@ -467,7 +468,10 @@ export const GET: APIRoute = async ({ request }) => {
 
   try {
     const products = readProductsFromFile();
-    return new Response(JSON.stringify({ success: true, count: products.length, products }), {
+    // Enriquecimiento adicional de curación (sólo en la respuesta, no persiste):
+    // conversion_score, is_duplicate (+motivo) y defaults de ia_status/link_status.
+    const enriched = enrichProductsForAdmin(products);
+    return new Response(JSON.stringify({ success: true, count: enriched.length, products: enriched }), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -545,6 +549,10 @@ export const POST: APIRoute = async ({ request }) => {
     if (action === 'set-category') {
       const ids = Array.isArray(body.ids) ? body.ids.map((v: unknown) => String(v)) : [];
       const category = String(body.category || '').trim();
+      // Categorización bidireccional: además del nombre legado (category),
+      // se persisten los IDs jerárquicos (category_id / subcategory_id).
+      const categoryId = String(body.category_id ?? '').trim();
+      const subcategoryId = String(body.subcategory_id ?? '').trim();
       if (!ids.length || !category) {
         return new Response(
           JSON.stringify({ success: false, message: 'Se requiere al menos un ID y una categoría.' }),
@@ -556,10 +564,25 @@ export const POST: APIRoute = async ({ request }) => {
       const wanted = new Set(ids);
       let updated = 0;
       for (const p of currentProducts) {
-        if (wanted.has(p.id) && p.category !== category) {
+        if (!wanted.has(p.id)) continue;
+        let changed = false;
+        if (p.category !== category) {
           p.category = category;
-          updated++;
+          changed = true;
         }
+        if (categoryId && p.category_id !== categoryId) {
+          p.category_id = categoryId;
+          changed = true;
+        }
+        if (subcategoryId && p.subcategory_id !== subcategoryId) {
+          p.subcategory_id = subcategoryId;
+          changed = true;
+        } else if (!subcategoryId && p.subcategory_id && categoryId) {
+          // Cambiar de categoría raíz invalida la subcategoría anterior.
+          delete p.subcategory_id;
+          changed = true;
+        }
+        if (changed) updated++;
       }
 
       if (updated > 0 && !writeProductsToFile(currentProducts)) {
@@ -570,7 +593,7 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       return new Response(
-        JSON.stringify({ success: true, updated, total: ids.length, category }),
+        JSON.stringify({ success: true, updated, total: ids.length, category, category_id: categoryId, subcategory_id: subcategoryId }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }

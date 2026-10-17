@@ -38,6 +38,28 @@ export interface Product {
   freeShipping?: boolean;
   /** Histórico de precio (1 punto por día; lo completa lib/priceHistory.ts). */
   priceHistory?: { date: string; price: number }[];
+
+  // ─── Curación avanzada (campos opcionales; retrocompatibles) ───────────────
+  /** ID externo del producto (ASIN de Amazon, Item ID de AliExpress, etc.). */
+  sourceId?: string;
+  /** ID de la categoría padre en categories.json (catálogo jerárquico). */
+  category_id?: string;
+  /** ID de la subcategoría (categoría-hija con parentId) en categories.json. */
+  subcategory_id?: string;
+  /** Estado del enriquecimiento con IA: pending | completed | error. */
+  ia_status?: string;
+  /** Estado del enlace de afiliación: active | pending | broken. */
+  link_status?: string;
+  /** Tags técnicos normalizados (extraídos en lote; filtros públicos futuros). */
+  normalized_tags?: string[];
+  /** IDs de productos alternativos vinculados (cross-matching bidireccional). */
+  alternative_product_ids?: string[];
+  /** Puntuación de rentabilidad/conversión 0-100 (calculada; ver lib/curation.ts). */
+  conversion_score?: number;
+  /** Comisión estimada en € por venta (opcional; alimenta el conversion_score). */
+  commissionEstimate?: number;
+  /** Ventas estimadas en los últimos 30 días (opcional; alimenta el score). */
+  sales30d?: number;
 }
 
 // Ruta al archivo de persistencia JSON
