@@ -637,6 +637,18 @@ const recommendations: Record<string, Recommendation> = {
           .join('');
       }
 
+      // El hero (HeroSearchRadar) escucha este evento para guardar el perfil en
+      // LocalStorage y abrir el modal de registro con contexto 'quiz-complete'.
+      document.dispatchEvent(
+        new CustomEvent('quiz:complete', {
+          detail: {
+            answers: { ...answers },
+            buyerProfile: key,
+            recommendation: rec?.badge ?? null,
+          },
+        }),
+      );
+
       if (resultEl) resultEl.hidden = false;
     };
 

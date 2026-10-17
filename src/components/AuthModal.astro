@@ -30,6 +30,14 @@
       <button type="button" class="auth-tab" role="tab" aria-selected="false" data-auth-tab="register">Crear cuenta</button>
     </div>
 
+    <!-- Copy contextual: sólo se muestra cuando el origen define un trigger
+         (Añadir a Mi Radar, Comprar Ya o fin del Quiz). -->
+    <div class="auth-context" data-auth-context hidden>
+      <h2 class="auth-context-title" data-auth-headline></h2>
+      <p class="auth-context-body" data-auth-body></p>
+      <button type="button" class="auth-continue-link" data-auth-continue hidden>Continuar sin registrarme</button>
+    </div>
+
     <p class="auth-error" data-auth-error role="alert" hidden></p>
 
     <!-- Login -->
@@ -53,6 +61,7 @@
         </label>
       </div>
       <button type="submit" class="auth-submit">Entrar</button>
+      <button type="button" class="auth-link-btn" data-auth-view="magic">Entrar con enlace mágico (sin contraseña)</button>
       <button type="button" class="auth-link-btn" data-auth-view="forgot">¿Olvidaste tu contraseña?</button>
     </form>
 
@@ -81,6 +90,17 @@
         <input type="email" name="email" autocomplete="email" required />
       </label>
       <button type="submit" class="auth-submit">Enviar enlace</button>
+      <button type="button" class="auth-link-btn" data-auth-view="login">Volver a iniciar sesión</button>
+    </form>
+
+    <!-- Login sin contraseña (magic link) -->
+    <form class="auth-form" data-auth-form="magic" novalidate hidden>
+      <p class="auth-form-hint">Escribe tu email y te enviaremos un enlace de un solo uso para entrar en Mi Radar, sin contraseña.</p>
+      <label class="auth-field">
+        <span>Email</span>
+        <input type="email" name="email" autocomplete="email" required />
+      </label>
+      <button type="submit" class="auth-submit">Enviar enlace mágico</button>
       <button type="button" class="auth-link-btn" data-auth-view="login">Volver a iniciar sesión</button>
     </form>
 
@@ -156,6 +176,11 @@
       <span data-auth-google-label>Continuar con Google</span>
     </button>
     <p class="auth-google-hint" data-auth-google-hint hidden>Próximamente: configura GOOGLE_CLIENT_ID en el servidor para activarlo.</p>
+
+    <p class="auth-privacy">
+      🔒 0% Spam. Solo notificaciones cuando de verdad baje el precio.
+      <a href="#aviso-legal">Más información</a>
+    </p>
   </div>
 </div>
 
@@ -257,6 +282,70 @@
     background: rgba(239, 68, 68, 0.12);
     border: 1px solid rgba(239, 68, 68, 0.3);
     border-radius: 10px;
+  }
+
+  .auth-context {
+    display: grid;
+    gap: 0.4rem;
+    margin: 0 0 1rem;
+    padding: 0.9rem 1rem;
+    background: rgba(59, 130, 246, 0.08);
+    border: 1px solid rgba(96, 165, 250, 0.22);
+    border-radius: 12px;
+  }
+
+  .auth-context[hidden] {
+    display: none;
+  }
+
+  .auth-context-title {
+    margin: 0;
+    font-family: var(--font-heading);
+    font-size: 1.02rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+  }
+
+  .auth-context-body {
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.55;
+    color: var(--color-text-muted);
+  }
+
+  .auth-continue-link {
+    justify-self: start;
+    margin-top: 0.35rem;
+    padding: 0;
+    font: inherit;
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: #93c5fd;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  .auth-continue-link[hidden] {
+    display: none;
+  }
+
+  .auth-privacy {
+    margin: 1rem 0 0;
+    font-size: 0.72rem;
+    line-height: 1.5;
+    text-align: center;
+    color: var(--color-text-dim);
+  }
+
+  .auth-privacy a {
+    color: #60a5fa;
+    text-decoration: none;
+  }
+
+  .auth-privacy a:hover {
+    text-decoration: underline;
   }
 
   .auth-form {
@@ -472,7 +561,18 @@
 </style>
 
 <script>
-  import { getSession, login, register, requestPasswordReset, resetPassword, loginWithGoogle, verifyAccount, resendVerification } from '../utils/auth';
+  import {
+    getSession,
+    login,
+    register,
+    requestPasswordReset,
+    resetPassword,
+    loginWithGoogle,
+    verifyAccount,
+    resendVerification,
+    requestMagicLink,
+    verifyMagicLink,
+  } from '../utils/auth';
 
   const modal = document.getElementById('authModal');
   if (modal) {
@@ -481,6 +581,7 @@
       login: modal.querySelector<HTMLFormElement>('[data-auth-form="login"]'),
       register: modal.querySelector<HTMLFormElement>('[data-auth-form="register"]'),
       forgot: modal.querySelector<HTMLFormElement>('[data-auth-form="forgot"]'),
+      magic: modal.querySelector<HTMLFormElement>('[data-auth-form="magic"]'),
       reset: modal.querySelector<HTMLFormElement>('[data-auth-form="reset"]'),
       verify: modal.querySelector<HTMLElement>('[data-auth-form="verify"]'),
       locked: modal.querySelector<HTMLElement>('[data-auth-form="locked"]'),
@@ -488,19 +589,56 @@
     } as const;
     type View = keyof typeof forms;
 
+    // Copy contextual por origen de apertura (Growth: misma UI, mensaje específico).
+    const AUTH_CONTEXTS = {
+      'radar-add': {
+        headline: '📡 Activa tu Radar Tradylor',
+        body: 'Crea tu cuenta gratis en 1 clic para guardar este producto en tu Radar y recibir una notificación cuando baje de precio o entre en stock.',
+        view: 'register',
+      },
+      'buy-now': {
+        headline: '🛒 Comprueba la mejor oferta disponible',
+        body: 'Inicia sesión para activar el seguimiento de garantía de Tradylor y comprobar disponibilidad en tiempo real.',
+        view: 'login',
+      },
+      'quiz-complete': {
+        headline: '🎯 Guarda tu Perfil de Comprador',
+        body: 'Regístrate para guardar tus recomendaciones personalizadas y tus categorías favoritas.',
+        view: 'register',
+      },
+    } as const;
+    type ContextKey = keyof typeof AUTH_CONTEXTS;
+
     const tabs = modal.querySelectorAll<HTMLButtonElement>('[data-auth-tab]');
     const googleBtn = modal.querySelector<HTMLButtonElement>('[data-auth-google]');
     const googleWrap = modal.querySelector<HTMLElement>('[data-auth-google-wrap]');
     const googleHint = modal.querySelector<HTMLElement>('[data-auth-google-hint]');
+    const contextBox = modal.querySelector<HTMLElement>('[data-auth-context]');
+    const contextHeadline = modal.querySelector<HTMLElement>('[data-auth-headline]');
+    const contextBody = modal.querySelector<HTMLElement>('[data-auth-body]');
+    const continueBtn = modal.querySelector<HTMLButtonElement>('[data-auth-continue]');
 
     let lastFocus: HTMLElement | null = null;
     let currentView: View = 'login';
     let pendingEmail = '';
+    let pendingContinueHref = '';
 
     const showError = (message: string) => {
       if (!errorEl) return;
       errorEl.textContent = message;
       errorEl.hidden = !message;
+    };
+
+    const showContext = (context?: string) => {
+      const copy = context && context in AUTH_CONTEXTS ? AUTH_CONTEXTS[context as ContextKey] : null;
+      if (!copy || !contextBox) {
+        contextBox?.setAttribute('hidden', '');
+        return;
+      }
+      if (contextHeadline) contextHeadline.textContent = copy.headline;
+      if (contextBody) contextBody.textContent = copy.body;
+      contextBox.removeAttribute('hidden');
+      if (continueBtn) continueBtn.hidden = !pendingContinueHref;
     };
 
     const showView = (view: View) => {
@@ -521,15 +659,21 @@
       showError('');
     };
 
-    const open = (view: View = 'login') => {
+    const open = (view: View = 'login', context?: string, href?: string) => {
       lastFocus = document.activeElement as HTMLElement | null;
+      pendingContinueHref = href ?? '';
       modal.hidden = false;
       document.body.classList.add('auth-modal-is-open');
       for (const form of Object.values(forms)) {
         if (form instanceof HTMLFormElement) form.reset();
       }
-      showView(view);
-      const firstInput = forms[view]?.querySelector<HTMLInputElement>('input');
+      // Con contexto, la vista por defecto es la del trigger (p. ej. registro
+      // al guardar en el radar; login al comprar).
+      const copy = context && context in AUTH_CONTEXTS ? AUTH_CONTEXTS[context as ContextKey] : null;
+      const targetView: View = copy ? (copy.view as View) : view;
+      showContext(context);
+      showView(targetView in forms ? targetView : view);
+      const firstInput = forms[targetView in forms ? targetView : view]?.querySelector<HTMLInputElement>('input');
       firstInput?.focus();
     };
 
@@ -543,7 +687,8 @@
     (window as unknown as Record<string, unknown>).TradylorAuth = { open, close };
 
     // Delegación global: cualquier [data-open-auth] (cabecera, banner, etc.)
-    // abre el modal en la vista indicada (login | register | forgot | reset).
+    // abre el modal en la vista indicada (login | register | forgot | reset | magic).
+    // [data-open-auth-context] añade el copy específico del trigger.
     document.addEventListener('click', (event) => {
       const t = event.target;
       if (!(t instanceof Element)) return;
@@ -551,12 +696,19 @@
       if (!trigger) return;
       event.preventDefault();
       const view = (trigger.dataset.openAuth ?? 'login') as View;
-      open(view in forms ? view : 'login');
+      const context = trigger.dataset.openAuthContext;
+      open(view in forms ? view : 'login', context);
     });
 
     modal.querySelectorAll('[data-auth-close]').forEach((el) => el.addEventListener('click', close));
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape' && !modal.hidden) close();
+    });
+
+    // "Continuar sin registrarme" (sólo con contexto y href pendiente, p. ej. Comprar Ya).
+    continueBtn?.addEventListener('click', () => {
+      if (pendingContinueHref) window.location.href = pendingContinueHref;
+      else close();
     });
 
     tabs.forEach((tab) => {
@@ -580,6 +732,20 @@
           open('activated');
         } else {
           open('locked');
+        }
+      });
+    }
+
+    // Enlace mágico del email: ?magic=<token> → canjea el token por sesión.
+    const magicToken = new URLSearchParams(window.location.search).get('magic');
+    if (magicToken) {
+      void verifyMagicLink(magicToken).then((result) => {
+        if (result.success) {
+          window.history.replaceState(null, '', window.location.pathname);
+          window.location.reload();
+        } else {
+          showError(result.message ?? 'El enlace no es válido o ha caducado.');
+          open('magic');
         }
       });
     }
@@ -616,6 +782,29 @@
         showView('locked');
       } else {
         showError(result.message ?? 'Error al iniciar sesión.');
+      }
+    });
+
+    // Login sin contraseña: pide el enlace mágico y lo muestra en dev si no hay SMTP.
+    forms.magic?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const data = new FormData(forms.magic!);
+      setBusy(true);
+      const result = await requestMagicLink(String(data.get('email') ?? ''));
+      setBusy(false);
+      if (result.success) {
+        showError('');
+        let message = result.message || 'Revisa tu email: te hemos enviado un enlace para entrar.';
+        if (result.devMagicUrl) {
+          message += ` (dev: ${result.devMagicUrl})`;
+        }
+        const hint = forms.magic?.querySelector('.auth-form-hint');
+        if (hint) {
+          hint.textContent = message;
+          hint.style.color = '#6ee7b7';
+        }
+      } else {
+        showError(result.message ?? 'No se pudo enviar el enlace.');
       }
     });
 

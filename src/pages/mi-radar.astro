@@ -134,6 +134,31 @@ if (!sessionUser) {
     </div>
   </div>
 
+  <!-- Modal de precio objetivo (alerta de bajada de precio + vuelta a stock) -->
+  <div class="radar-modal" data-alert-modal hidden>
+    <div class="radar-modal-backdrop" data-alert-close></div>
+    <div class="radar-modal-panel" role="dialog" aria-modal="true" aria-labelledby="alertModalTitle">
+      <h3 id="alertModalTitle">🎯 Precio objetivo</h3>
+      <p class="radar-modal-hint" data-alert-product>—</p>
+      <form data-alert-form>
+        <label class="radar-modal-field">
+          <span>Avisarme si baja de (€)</span>
+          <input type="number" name="target" min="0.01" step="0.01" required inputmode="decimal" placeholder="Ej: 249,99" />
+        </label>
+        <label class="radar-modal-check">
+          <input type="checkbox" name="stock" />
+          <span>Avisarme también cuando vuelva a stock</span>
+        </label>
+        <p class="radar-modal-error" data-alert-error hidden></p>
+        <div class="radar-modal-actions">
+          <button type="button" class="radar-btn radar-btn-ghost" data-alert-close>Cancelar</button>
+          <button type="button" class="radar-btn radar-btn-danger" data-alert-remove hidden>Quitar alerta</button>
+          <button type="submit" class="radar-btn radar-btn-primary">Activar alerta</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Toast de confirmación (avisos / compartir) -->
   <div class="radar-toast" data-radar-toast role="status" aria-live="polite" hidden></div>
 </Layout>
@@ -876,6 +901,52 @@ if (!sessionUser) {
     background: rgba(251, 191, 36, 0.2);
   }
 
+  /* Alerta de precio objetivo (🎯): verde cuando está activa; sólido al dispararse. */
+  :global(.radar-card-action.is-alert) {
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.12);
+    border-color: rgba(52, 211, 153, 0.45);
+  }
+
+  :global(.radar-card-alert-pill) {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    margin-top: 0.4rem;
+    padding: 0.16rem 0.5rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.1);
+    border: 1px solid rgba(52, 211, 153, 0.35);
+    border-radius: 999px;
+  }
+
+  :global(.radar-card-alert-pill.is-triggered) {
+    color: #052e1b;
+    background: #34d399;
+    border-color: #34d399;
+  }
+
+  .radar-modal-check {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    user-select: none;
+  }
+
+  .radar-modal-check input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: #60a5fa;
+    cursor: pointer;
+  }
+
   /* ================================================================
      ARRASTRAR Y SOLTAR: productos sobre las listas para clasificarlos
      ================================================================ */
@@ -1106,6 +1177,7 @@ if (!sessionUser) {
     onRadarChange,
     removeProduct,
     resolveExit,
+    setProductAlert,
     setProductNote,
   } from '../utils/radarStore';
   import { openSharePanel } from '../utils/shareUi';
@@ -1133,6 +1205,11 @@ if (!sessionUser) {
     reminderProduct: $('[data-reminder-product]'),
     reminderCancel: $('[data-reminder-cancel]'),
     reminderError: $('[data-reminder-error]'),
+    alertModal: $('[data-alert-modal]'),
+    alertForm: $('[data-alert-form]') as HTMLFormElement | null,
+    alertProduct: $('[data-alert-product]'),
+    alertRemove: $('[data-alert-remove]'),
+    alertError: $('[data-alert-error]'),
     toast: $('[data-radar-toast]'),
   };
 
@@ -1164,6 +1241,30 @@ if (!sessionUser) {
         title="${has ? 'Aviso programado. Pulsa para editar o eliminar.' : 'Avisarme cuando toque comprar'}"
         aria-label="${has ? 'Editar aviso de compra' : 'Crear aviso de compra'} para ${escapeHtml(product.title)}">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.7 21a2 2 0 0 1-3.4 0"></path></svg>
+        <span>${escapeHtml(label)}</span>
+      </button>`;
+  }
+
+  /** Botón 🎯 de la tarjeta: precio objetivo / estado de la alerta de bajada. */
+  function renderAlertBtn(product: SavedProduct): string {
+    const alert = product.priceAlert;
+    const hasTarget = typeof product.targetPrice === 'number' && product.targetPrice > 0;
+    const triggered = alert?.status === 'triggered';
+    const label = triggered
+      ? `¡Bajó! ${euro.format(product.targetPrice ?? 0)}`
+      : hasTarget
+        ? `Objetivo ${euro.format(product.targetPrice!)}`
+        : 'Precio objetivo';
+    const title = triggered
+      ? 'El precio alcanzó tu objetivo. Pulsa para cambiarlo o quitar la alerta.'
+      : hasTarget
+        ? `Te avisamos si baja de ${euro.format(product.targetPrice!)}. Pulsa para editar.`
+        : 'Avisarme cuando este producto baje de precio';
+    return `
+      <button type="button" class="radar-card-action${hasTarget ? ' is-on' : ''}${triggered ? ' is-alert' : ''}" data-alert-open="${escapeHtml(product.id)}"
+        title="${escapeHtml(title)}"
+        aria-label="${escapeHtml(title)}">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 17 13.5 8.5 8.5 13.5 2 7"></polyline><polyline points="16 17 22 17 22 11"></polyline></svg>
         <span>${escapeHtml(label)}</span>
       </button>`;
   }
@@ -1263,9 +1364,17 @@ if (!sessionUser) {
             <h3 class="radar-card-title">
               <a href="/producto/${encodeURIComponent(product.id)}" draggable="false" title="Ver ficha de ${escapeHtml(product.title)}">${escapeHtml(product.title)}</a>
             </h3>
+            ${
+              product.priceAlert?.status === 'triggered'
+                ? `<span class="radar-card-alert-pill is-triggered" title="El precio bajó hasta tu objetivo">📉 ¡Bajó!</span>`
+                : typeof product.targetPrice === 'number' && product.targetPrice > 0
+                  ? `<span class="radar-card-alert-pill" title="Alerta de precio activa">🎯 ${escapeHtml(euro.format(product.targetPrice))}</span>`
+                  : ''
+            }
             <span class="radar-card-price">${escapeHtml(product.price)}</span>
             <div class="radar-card-actions">
               ${renderReminderBtn(product)}
+              ${renderAlertBtn(product)}
               <button type="button" class="radar-card-action" data-share-open="${escapeHtml(product.id)}" title="Compartir producto" aria-label="Compartir ${escapeHtml(product.title)}">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"></line><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"></line></svg>
                 <span>Compartir</span>
@@ -1496,6 +1605,83 @@ if (!sessionUser) {
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && els.reminderModal && !els.reminderModal.hidden) closeReminderModal();
+    if (event.key === 'Escape' && els.alertModal && !els.alertModal.hidden) closeAlertModal();
+  });
+
+  /* ------------------------------------------------- alertas de precio objetivo */
+
+  let alertProductId: string | null = null;
+
+  const closeAlertModal = (): void => {
+    if (els.alertModal) els.alertModal.hidden = true;
+    if (els.alertError) els.alertError.hidden = true;
+    alertProductId = null;
+  };
+
+  function setAlertError(message: string): void {
+    if (!els.alertError) return;
+    els.alertError.textContent = message;
+    els.alertError.hidden = false;
+  }
+
+  function openAlertModal(productId: string): void {
+    const product = getRadarProducts().find((p) => p.id === productId);
+    if (!product || !els.alertModal || !els.alertForm) return;
+    alertProductId = productId;
+    const targetInput = els.alertForm.querySelector<HTMLInputElement>('input[name="target"]');
+    const stockInput = els.alertForm.querySelector<HTMLInputElement>('input[name="stock"]');
+    if (els.alertProduct) {
+      const current = typeof product.priceValue === 'number' ? euro.format(product.priceValue) : product.price;
+      els.alertProduct.textContent = `${product.title} · ahora ${current}`;
+    }
+    if (els.alertError) els.alertError.hidden = true;
+    if (targetInput) targetInput.value = product.targetPrice ? String(product.targetPrice) : '';
+    if (stockInput) stockInput.checked = product.notifyStock === true;
+    if (els.alertRemove) els.alertRemove.hidden = product.priceAlert?.status !== 'triggered' && !(product.targetPrice && product.targetPrice > 0);
+    els.alertModal.hidden = false;
+    targetInput?.focus();
+  }
+
+  els.alertForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!alertProductId) return;
+    const targetRaw = els.alertForm?.querySelector<HTMLInputElement>('input[name="target"]')?.value ?? '';
+    const stock = els.alertForm?.querySelector<HTMLInputElement>('input[name="stock"]')?.checked ?? false;
+    const targetPrice = Number(String(targetRaw).replace(',', '.'));
+    if (!Number.isFinite(targetPrice) || targetPrice <= 0) {
+      setAlertError('Escribe un precio objetivo válido en euros.');
+      return;
+    }
+    const result = await setProductAlert({
+      productId: alertProductId,
+      targetPrice,
+      notifyPriceDrop: true,
+      notifyStock: stock,
+    });
+    if (result.ok) {
+      closeAlertModal();
+      showToast(`Alerta activa: te avisamos si baja de ${euro.format(targetPrice)}.`);
+      renderAll();
+    } else {
+      setAlertError(result.message ?? 'No se pudo activar la alerta.');
+    }
+  });
+
+  els.alertRemove?.addEventListener('click', async () => {
+    if (!alertProductId) return;
+    // Quitar la alerta: sin objetivo el worker deja de vigilar este producto.
+    const result = await setProductAlert({ productId: alertProductId, clear: true });
+    closeAlertModal();
+    if (result.ok) {
+      showToast('Alerta de precio eliminada.');
+      renderAll();
+    } else {
+      showToast(result.message ?? 'No se pudo quitar la alerta.', true);
+    }
+  });
+
+  document.querySelectorAll<HTMLElement>('[data-alert-close]').forEach((el) => {
+    el.addEventListener('click', closeAlertModal);
   });
 
   /* ------------------------------------------------------------ eventos */
@@ -1532,6 +1718,12 @@ if (!sessionUser) {
     const reminderBtn = target.closest<HTMLElement>('[data-reminder-open]');
     if (reminderBtn?.dataset.reminderOpen) {
       openReminderModal(reminderBtn.dataset.reminderOpen);
+      return;
+    }
+
+    const alertBtn = target.closest<HTMLElement>('[data-alert-open]');
+    if (alertBtn?.dataset.alertOpen) {
+      openAlertModal(alertBtn.dataset.alertOpen);
       return;
     }
 

@@ -53,6 +53,26 @@ export interface SavedProduct {
    * el producto: gana el cambio más reciente.
    */
   movedAt?: string;
+  /** Precio registrado al guardar (base de comparación de las alertas de bajada). */
+  initialPrice?: number;
+  /** Precio objetivo: se avisa por email cuando el precio actual llega o baja de él. */
+  targetPrice?: number;
+  /** Aviso de bajada de precio activo (por defecto true si hay targetPrice). */
+  notifyPriceDrop?: boolean;
+  /** Aviso de vuelta a stock activo (sólo productos con estado de stock conocido). */
+  notifyStock?: boolean;
+  /**
+   * Estado de la alerta de precio del worker: 'triggered' es definitivo (un solo
+   * email por producto); `lastPrice` es el último precio observado.
+   */
+  priceAlert?: {
+    status: 'armed' | 'triggered';
+    triggeredAt?: string;
+    lastPrice?: number;
+    lastCheckedAt?: string;
+    /** Último estado de stock observado por el worker (para avisar de "vuelta a stock"). */
+    lastInStock?: boolean;
+  };
 }
 
 /** Carpeta/lista de proyectos con sus productos. */

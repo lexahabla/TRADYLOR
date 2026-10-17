@@ -1,0 +1,633 @@
+---
+/**
+ * HeroSearchRadar — buscador híbrido gamificado del hero.
+ *
+ * 3 pestañas:
+ *   1. 🔍 Buscar  → búsqueda en vivo sobre el catálogo (/api/search) con
+ *                   guardado directo en Mi Radar.
+ *   2. 🔥 Ofertas → top de descuentos reales (deals=1).
+ *   3. 🎯 Mi perfil → quiz de perfilador (MethodologyQuiz compacto); al
+ *                   completarlo se abre el modal de registro contextual
+ *                   ('quiz-complete') y las respuestas quedan en LocalStorage
+ *                   para el sync posterior (/api/user-profile/sync).
+ */
+import MethodologyQuiz from './metodologia/MethodologyQuiz.astro';
+---
+
+<section class="hsr" data-hsr aria-label="Buscador inteligente de Tradylor">
+  <div class="hsr-tabs" role="tablist" aria-label="Modos del buscador">
+    <button type="button" class="hsr-tab is-active" role="tab" aria-selected="true" data-hsr-tab="buscar">
+      <span class="hsr-tab-icon" aria-hidden="true">🔍</span> Buscar
+    </button>
+    <button type="button" class="hsr-tab" role="tab" aria-selected="false" data-hsr-tab="ofertas">
+      <span class="hsr-tab-icon" aria-hidden="true">🔥</span> Ofertas
+    </button>
+    <button type="button" class="hsr-tab" role="tab" aria-selected="false" data-hsr-tab="perfil">
+      <span class="hsr-tab-icon" aria-hidden="true">🎯</span> Mi perfil
+    </button>
+  </div>
+
+  <!-- ── Pestaña 1: búsqueda en vivo ─────────────────────────────────── -->
+  <div class="hsr-panel" role="tabpanel" data-hsr-panel="buscar">
+    <form class="hsr-form" data-hsr-form autocomplete="off">
+      <svg class="hsr-form-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input
+        type="search"
+        class="hsr-input"
+        data-hsr-input
+        placeholder="¿Qué estás buscando? Ej.: auriculares, robot aspirador…"
+        aria-label="Buscar productos"
+        minlength="2"
+      />
+      <button type="submit" class="hsr-submit">Buscar</button>
+    </form>
+    <p class="hsr-status" data-hsr-status hidden></p>
+    <div class="hsr-results" data-hsr-results hidden></div>
+  </div>
+
+  <!-- ── Pestaña 2: ofertas reales ───────────────────────────────────── -->
+  <div class="hsr-panel" role="tabpanel" data-hsr-panel="ofertas" hidden>
+    <p class="hsr-lead">Descuentos verificados sobre el PVP de nuestro catálogo analizado.</p>
+    <p class="hsr-status" data-hsr-deals-status hidden></p>
+    <div class="hsr-results" data-hsr-deals hidden></div>
+  </div>
+
+  <!-- ── Pestaña 3: perfilador (quiz) ────────────────────────────────── -->
+  <div class="hsr-panel" role="tabpanel" data-hsr-panel="perfil" hidden>
+    <p class="hsr-lead">Responde 3 preguntas y te recomendamos el producto que encaja contigo.</p>
+    <MethodologyQuiz compact />
+  </div>
+</section>
+
+<script>
+  interface SearchHit {
+    id: string;
+    slug: string;
+    title: string;
+    price: string;
+    priceValue: number;
+    originalPrice: string | null;
+    discountPct: number | null;
+    image: string;
+    rating: number | null;
+    reviewsCount: number | null;
+    category: string;
+    merchant: string;
+    url: string;
+    buyUrl: string;
+    store: 'amazon' | 'aliexpress';
+  }
+
+  const SEARCH_TERMS_KEY = 'tradylor-search-terms';
+  const QUIZ_ANSWERS_KEY = 'tradylor-quiz-answers';
+  const SEARCH_TERMS_MAX = 20;
+
+  const escapeHtml = (value: string): string =>
+    value.replace(/[&<>"']/g, (ch) => {
+      switch (ch) {
+        case '&': return '&amp;';
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '"': return '&quot;';
+        default: return '&#39;';
+      }
+    });
+
+  const rememberSearchTerm = (term: string): void => {
+    try {
+      const raw = localStorage.getItem(SEARCH_TERMS_KEY);
+      const list: string[] = raw ? JSON.parse(raw) : [];
+      const next = [term, ...list.filter((t) => t !== term)].slice(0, SEARCH_TERMS_MAX);
+      localStorage.setItem(SEARCH_TERMS_KEY, JSON.stringify(next));
+    } catch { /* LocalStorage lleno o en modo privado: se ignora. */ }
+  };
+
+  const initHsr = (): void => {
+    const root = document.querySelector<HTMLElement>('[data-hsr]');
+    if (!root) return;
+
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-hsr-tab]'));
+    const panels = Array.from(root.querySelectorAll<HTMLElement>('[data-hsr-panel]'));
+    const form = root.querySelector<HTMLFormElement>('[data-hsr-form]');
+    const input = root.querySelector<HTMLInputElement>('[data-hsr-input]');
+    const status = root.querySelector<HTMLElement>('[data-hsr-status]');
+    const results = root.querySelector<HTMLElement>('[data-hsr-results]');
+    const dealsStatus = root.querySelector<HTMLElement>('[data-hsr-deals-status]');
+    const dealsResults = root.querySelector<HTMLElement>('[data-hsr-deals]');
+
+    let dealsLoaded = false;
+    let debounceTimer: number | undefined;
+
+    const activateTab = (name: string): void => {
+      tabs.forEach((tab) => {
+        const active = tab.dataset.hsrTab === name;
+        tab.classList.toggle('is-active', active);
+        tab.setAttribute('aria-selected', active ? 'true' : 'false');
+      });
+      panels.forEach((panel) => {
+        panel.hidden = panel.dataset.hsrPanel !== name;
+      });
+      if (name === 'ofertas' && !dealsLoaded) {
+        dealsLoaded = true;
+        void loadDeals();
+      }
+    };
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => activateTab(tab.dataset.hsrTab ?? 'buscar'));
+    });
+
+    const setStatus = (el: HTMLElement | null, message: string): void => {
+      if (!el) return;
+      el.textContent = message;
+      el.hidden = !message;
+    };
+
+    const renderCard = (hit: SearchHit): string => `
+      <article class="hsr-card">
+        <a class="hsr-card-media" href="${escapeHtml(hit.url)}" tabindex="-1" aria-hidden="true">
+          <img src="${escapeHtml(hit.image)}" alt="" loading="lazy" width="320" height="320" />
+          ${hit.discountPct ? `<span class="hsr-card-discount">-${hit.discountPct}%</span>` : ''}
+        </a>
+        <div class="hsr-card-body">
+          <h3 class="hsr-card-title"><a href="${escapeHtml(hit.url)}">${escapeHtml(hit.title)}</a></h3>
+          <div class="hsr-card-meta">
+            ${hit.category ? `<span class="hsr-card-cat">${escapeHtml(hit.category)}</span>` : ''}
+            ${hit.rating ? `<span class="hsr-card-rating" aria-label="Valoración ${hit.rating} de 5">★ ${hit.rating.toFixed(1)}</span>` : ''}
+          </div>
+          <div class="hsr-card-prices">
+            <span class="hsr-card-price">${escapeHtml(hit.price)}</span>
+            ${hit.originalPrice ? `<span class="hsr-card-old">${escapeHtml(hit.originalPrice)}</span>` : ''}
+          </div>
+          <div class="hsr-card-actions">
+            <a class="hsr-card-buy" href="${escapeHtml(hit.buyUrl)}">Ver oferta</a>
+            <button
+              type="button"
+              class="radar-save-btn hsr-card-save"
+              data-radar-toggle
+              data-radar-id="${escapeHtml(hit.slug)}"
+              data-radar-title="${escapeHtml(hit.title)}"
+              data-radar-price="${escapeHtml(hit.price)}"
+              data-radar-price-value="${hit.priceValue}"
+              data-radar-image="${escapeHtml(hit.image)}"
+              data-radar-url="${escapeHtml(hit.buyUrl)}"
+              data-radar-store="${escapeHtml(hit.store)}"
+              aria-pressed="false"
+              aria-label="Guardar ${escapeHtml(hit.title)} en Mi Radar"
+              title="Guardar en Mi Radar"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="9" opacity="0.45"></circle>
+                <circle cx="12" cy="12" r="5" opacity="0.7"></circle>
+                <line x1="12" y1="12" x2="12" y2="4"></line>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </article>`;
+
+    const renderHits = (container: HTMLElement | null, hits: SearchHit[]): void => {
+      if (!container) return;
+      container.innerHTML = hits.map(renderCard).join('');
+      container.hidden = hits.length === 0;
+      // El script global de Layout escucha clicks delegados en [data-radar-toggle];
+      // si el botón está marcado como guardado, reflejar el estado visual.
+      try {
+        const raw = localStorage.getItem('tradylor-radar-v1');
+        const radar = raw ? JSON.parse(raw) : null;
+        const savedIds = new Set<string>();
+        for (const project of radar?.projects ?? []) {
+          for (const product of project?.products ?? []) {
+            if (product?.id) savedIds.add(String(product.id));
+          }
+        }
+        container.querySelectorAll<HTMLElement>('[data-radar-toggle]').forEach((btn) => {
+          if (btn.dataset.radarId && savedIds.has(btn.dataset.radarId)) {
+            btn.classList.add('is-saved');
+            btn.setAttribute('aria-pressed', 'true');
+          }
+        });
+      } catch { /* sin datos de radar: se pintan como no guardados. */ }
+    };
+
+    const runSearch = async (query: string): Promise<void> => {
+      const q = query.trim();
+      if (q.length < 2) {
+        setStatus(status, 'Escribe al menos 2 letras y te enseñamos lo mejor del catálogo.');
+        if (results) { results.innerHTML = ''; results.hidden = true; }
+        return;
+      }
+      setStatus(status, 'Buscando…');
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=8`);
+        const data = await res.json();
+        if (!data?.success) throw new Error('search failed');
+        const hits: SearchHit[] = data.products ?? [];
+        if (hits.length === 0) {
+          setStatus(status, `Sin resultados para «${q}». Prueba con otra palabra (ej.: “auriculares”).`);
+          if (results) { results.innerHTML = ''; results.hidden = true; }
+          return;
+        }
+        setStatus(status, `${hits.length} resultado${hits.length === 1 ? '' : 's'} para «${q}»`);
+        renderHits(results, hits);
+        rememberSearchTerm(q);
+      } catch {
+        setStatus(status, 'El buscador no está disponible ahora mismo. Inténtalo en unos segundos.');
+      }
+    };
+
+    const loadDeals = async (): Promise<void> => {
+      setStatus(dealsStatus, 'Cargando ofertas…');
+      try {
+        const res = await fetch('/api/search?deals=1&limit=6');
+        const data = await res.json();
+        if (!data?.success) throw new Error('deals failed');
+        const hits: SearchHit[] = data.products ?? [];
+        if (hits.length === 0) {
+          setStatus(dealsStatus, 'No hay ofertas activas ahora mismo. Vuelve pronto 🍀');
+          return;
+        }
+        setStatus(dealsStatus, 'Ofertas activas ahora mismo:');
+        renderHits(dealsResults, hits);
+      } catch {
+        setStatus(dealsStatus, 'No pudimos cargar las ofertas. Recarga la página en unos segundos.');
+      }
+    };
+
+    form?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      void runSearch(input?.value ?? '');
+    });
+
+    input?.addEventListener('input', () => {
+      window.clearTimeout(debounceTimer);
+      debounceTimer = window.setTimeout(() => void runSearch(input.value), 300);
+    });
+
+    // ── Quiz del hero: guardar respuestas + modal contextual ────────────
+    document.addEventListener('quiz:complete', (event) => {
+      const detail = (event as CustomEvent<{ answers?: Record<string, string>; buyerProfile?: string }>).detail ?? {};
+      try {
+        localStorage.setItem(
+          QUIZ_ANSWERS_KEY,
+          JSON.stringify({ ...detail.answers, buyerProfile: detail.buyerProfile, updatedAt: Date.now() }),
+        );
+      } catch { /* sin LocalStorage: el quiz sigue mostrando su resultado. */ }
+      const w = window as unknown as {
+        TradylorAuth?: { open?: (view?: string, context?: string) => void };
+        getCachedSession?: unknown;
+      };
+      // Soft gate: si no hay sesión, pedimos registro con el contexto 'quiz-complete'.
+      // getSession en vivo para no depender del caché inicial del Layout.
+      void fetch('/api/radar/auth/session', { credentials: 'same-origin' })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data?.user) {
+            // Con sesión: el quiz es el dato más valioso del perfil → sync inmediato
+            // (el throttle de 24h del Layout no debe frenar este envío).
+            const terms: string[] = (() => {
+              try {
+                const raw = localStorage.getItem(SEARCH_TERMS_KEY);
+                const list = raw ? JSON.parse(raw) : [];
+                return Array.isArray(list) ? list : [];
+              } catch { return []; }
+            })();
+            void fetch('/api/user-profile/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({
+                lastSearchTerms: terms,
+                quizAnswers: { perfil: detail.answers?.perfil, objetivo: detail.answers?.objetivo, presupuesto: detail.answers?.presupuesto },
+                buyerProfile: detail.buyerProfile,
+                budgetRange: detail.answers?.presupuesto,
+              }),
+            }).catch(() => { /* el sync del quiz es best-effort. */ });
+            return;
+          }
+          w.TradylorAuth?.open?.('register', 'quiz-complete');
+        })
+        .catch(() => {
+          // Sin red o sesión dudosa: mejor preguntar que perder el lead.
+          w.TradylorAuth?.open?.('register', 'quiz-complete');
+        });
+    });
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initHsr);
+  } else {
+    initHsr();
+  }
+</script>
+
+<style>
+  .hsr {
+    width: min(720px, 100%);
+    margin: 1.6rem auto 0;
+    padding: 0.9rem;
+    background: rgba(15, 23, 42, 0.72);
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 16px;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    text-align: left;
+  }
+
+  .hsr-tabs {
+    display: flex;
+    gap: 0.4rem;
+    margin-bottom: 0.75rem;
+    padding: 0.25rem;
+    background: rgba(2, 6, 23, 0.6);
+    border-radius: 12px;
+  }
+
+  .hsr-tab {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.6rem;
+    font-family: var(--font-body, inherit);
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #94a3b8;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .hsr-tab:hover {
+    color: #e2e8f0;
+  }
+
+  .hsr-tab.is-active {
+    color: #ffffff;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9));
+    border-color: rgba(96, 165, 250, 0.45);
+    box-shadow: 0 6px 18px rgba(59, 130, 246, 0.35);
+  }
+
+  .hsr-tab-icon {
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+
+  .hsr-panel[hidden] {
+    display: none;
+  }
+
+  .hsr-lead {
+    margin: 0 0 0.7rem;
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: #94a3b8;
+  }
+
+  .hsr-form {
+    position: relative;
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .hsr-form-icon {
+    position: absolute;
+    left: 0.85rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #64748b;
+    pointer-events: none;
+  }
+
+  .hsr-input {
+    flex: 1;
+    min-width: 0;
+    padding: 0.72rem 0.9rem 0.72rem 2.4rem;
+    font-family: var(--font-body, inherit);
+    font-size: 0.92rem;
+    color: #f1f5f9;
+    background: rgba(2, 6, 23, 0.75);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    border-radius: 10px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .hsr-input::placeholder {
+    color: #64748b;
+  }
+
+  .hsr-input:focus {
+    border-color: rgba(96, 165, 250, 0.6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+  }
+
+  .hsr-submit {
+    padding: 0.72rem 1.15rem;
+    font-family: var(--font-heading, inherit);
+    font-size: 0.85rem;
+    font-weight: 800;
+    color: #ffffff;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.35);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .hsr-submit:hover {
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    transform: translateY(-1px);
+  }
+
+  .hsr-status {
+    margin: 0.55rem 0 0;
+    font-size: 0.76rem;
+    font-weight: 600;
+    color: #93c5fd;
+  }
+
+  .hsr-status[hidden] {
+    display: none;
+  }
+
+  .hsr-results {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+    gap: 0.6rem;
+    margin-top: 0.7rem;
+  }
+
+  .hsr-results[hidden] {
+    display: none;
+  }
+
+  .hsr-card {
+    display: flex;
+    flex-direction: column;
+    background: rgba(15, 23, 42, 0.85);
+    border: 1px solid rgba(148, 163, 184, 0.16);
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .hsr-card:hover {
+    border-color: rgba(96, 165, 250, 0.4);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+  }
+
+  .hsr-card-media {
+    position: relative;
+    display: block;
+    aspect-ratio: 1;
+    background: #f8fafc;
+  }
+
+  .hsr-card-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .hsr-card-discount {
+    position: absolute;
+    top: 0.45rem;
+    left: 0.45rem;
+    padding: 0.14rem 0.45rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    color: #ffffff;
+    background: #ef4444;
+    border-radius: 999px;
+    box-shadow: 0 4px 10px rgba(239, 68, 68, 0.4);
+  }
+
+  .hsr-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.55rem 0.6rem 0.6rem;
+  }
+
+  .hsr-card-title {
+    margin: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.3;
+  }
+
+  .hsr-card-title a {
+    color: #e2e8f0;
+    text-decoration: none;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .hsr-card-title a:hover {
+    color: #60a5fa;
+  }
+
+  .hsr-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.68rem;
+    color: #94a3b8;
+  }
+
+  .hsr-card-rating {
+    color: #fbbf24;
+    font-weight: 700;
+  }
+
+  .hsr-card-prices {
+    display: flex;
+    align-items: baseline;
+    gap: 0.4rem;
+  }
+
+  .hsr-card-price {
+    font-family: var(--font-heading, inherit);
+    font-size: 0.88rem;
+    font-weight: 800;
+    color: #60a5fa;
+  }
+
+  .hsr-card-old {
+    font-size: 0.7rem;
+    color: #64748b;
+    text-decoration: line-through;
+  }
+
+  .hsr-card-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.25rem;
+  }
+
+  .hsr-card-buy {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.38rem 0.5rem;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #ffffff;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-radius: 8px;
+    text-decoration: none;
+    transition: background 0.2s ease;
+  }
+
+  .hsr-card-buy:hover {
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  }
+
+  /* Botón radar del hero: reutiliza la clase global .radar-save-btn de
+     ProductCard con un tamaño compacto (el handler delegado de Layout funciona
+     igual porque se emiten los mismos data-radar-*). */
+  .hsr-card-save {
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 560px) {
+    .hsr {
+      padding: 0.7rem;
+    }
+
+    .hsr-tab {
+      font-size: 0.74rem;
+      padding: 0.45rem 0.35rem;
+    }
+
+    .hsr-tab-icon {
+      display: none;
+    }
+
+    .hsr-submit {
+      padding: 0.72rem 0.8rem;
+    }
+
+    .hsr-results {
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    }
+  }
+</style>

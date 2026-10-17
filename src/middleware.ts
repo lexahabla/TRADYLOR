@@ -15,6 +15,7 @@ import { recordPricePoint } from './lib/priceHistory';
 import { startReminderScheduler } from './lib/reminders';
 import { getRadarSessionUser, recordRadarUserVisit, SESSION_COOKIE_NAME } from './lib/radarAuth';
 import { startMarketingScheduler } from './lib/marketingEmail';
+import { startPriceAlertScheduler } from './lib/priceAlerts';
 
 // Los avisos diferidos de Mi Radar se envían desde el propio proceso SSR
 // (setInterval + unref): no hay cron externo. Se arranca una sola vez aquí.
@@ -22,6 +23,9 @@ startReminderScheduler();
 // Scheduler de Marketing: avisos de carrito abandonado (cada 24 h) y
 // felicitaciones de cumpleaños (una vez al año por usuario).
 startMarketingScheduler();
+// Alertas de bajada de precio de Mi Radar (comparación cada 6 h contra el
+// catálogo interno y la caché de AliExpress; email + badge en el panel).
+startPriceAlertScheduler();
 
 /** /producto/<slug> o /productos/<slug>, con o sin barra final. */
 const PRODUCT_PATH = /^\/(productos?)\/([^/]+?)\/?$/i;
