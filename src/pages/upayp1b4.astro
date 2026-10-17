@@ -2119,7 +2119,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               ${p.specs && Object.keys(p.specs).length ? `<div class="aff-detail-item"><dt>Especificaciones</dt><dd>${Object.entries(p.specs).map(([k, v]) => `${escapeHtml ? escapeHtml(k) : k}: ${escapeHtml ? escapeHtml(String(v)) : v}`).join(' · ')}</dd></div>` : ''}
               ${Array.isArray(p.pros) && p.pros.length ? `<div class="aff-detail-item"><dt>Pros</dt><dd>${p.pros.join(' · ')}</dd></div>` : ''}
               ${Array.isArray(p.cons) && p.cons.length ? `<div class="aff-detail-item"><dt>Contras</dt><dd>${p.cons.join(' · ')}</dd></div>` : ''}
-              ${Array.isArray(p.gallery) && p.gallery.length ? `<div class="aff-detail-item"><dt>Galería (${p.gallery.length})</dt><dd style="display:flex;flex-wrap:wrap;gap:6px">${p.gallery.map((u)=>`<a href="${u}" target="_blank"><img src="${u}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--color-border)" /></a>`).join('')}</dd></div>` : ''}
+              ${Array.isArray(p.gallery) && p.gallery.length ? `<div class="aff-detail-item is-images"><dt>Galería (${p.gallery.length})</dt><dd class="aff-detail-thumbs">${p.gallery.map((u)=>`<a href="${u}" target="_blank" rel="noopener noreferrer"><img src="${u}" alt="" loading="lazy" /></a>`).join('')}</dd></div>` : ''}
             </dl></td>
           </tr>
         `
@@ -3081,6 +3081,20 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </span>`;
     }
 
+    /** URLs de imagen del detalle (extras «Imágenes», galería e imagen principal), sin repetir. */
+    function detailImageUrls(product) {
+      const urls = [];
+      const push = (value) => {
+        const url = String(value || '').trim();
+        if (/^https?:\/\//i.test(url) && !urls.includes(url)) urls.push(url);
+      };
+      const rawImages = product.extra && product.extra['Imágenes'];
+      if (rawImages) String(rawImages).split('|').forEach(push);
+      if (Array.isArray(product.gallery)) product.gallery.forEach(push);
+      push(product.image);
+      return urls;
+    }
+
     function productDetailRows(product) {
       const rows = [
         ['Red', product.network],
@@ -3102,24 +3116,30 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         ['URL del producto', product.productUrl],
       ];
       for (const [label, value] of Object.entries(product.extra || {})) {
-        if (value != null && value !== '') rows.push([label, value]);
+        if (value == null || value === '') continue;
+        // Las imágenes NO se pintan en su posición natural del extra:
+        // van en el ÚLTIMO aff-detail-item del desplegable.
+        if (label === 'Imágenes') continue;
+        rows.push([label, value]);
       }
-      return rows
+      const fields = rows
         .filter(([, value]) => value != null && value !== '')
         .map(([label, value]) => {
           const raw = String(value);
-          // Galería completa de imágenes de AliExpress como miniaturas.
-          if (label === 'Imágenes' && raw.includes(' | ')) {
-            const urls = raw.split(' | ').filter((u) => /^https?:\/\//i.test(u));
-            const cells = urls.map((u) => `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(u)}" alt="" loading="lazy" style="width:56px;height:56px;object-fit:cover;border-radius:6px;border:1px solid var(--color-border);" /></a>`).join('');
-            return `<div class="aff-detail-item"><dt>${escapeHtml(label)} (${urls.length})</dt><dd style="display:flex;flex-wrap:wrap;gap:6px;">${cells}</dd></div>`;
-          }
           const cell = /^https?:\/\//i.test(raw)
             ? renderUrlChip(raw)
             : escapeHtml(raw);
           return `<div class="aff-detail-item"><dt>${escapeHtml(label)}</dt><dd>${cell}</dd></div>`;
         })
         .join('');
+      // Miniaturas SIEMPRE al final, en una única fila horizontal
+      // (scroll horizontal si no caben todas a la vez).
+      const images = detailImageUrls(product);
+      if (!images.length) return fields;
+      const cells = images
+        .map((url) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(url)}" alt="" loading="lazy" /></a>`)
+        .join('');
+      return `${fields}<div class="aff-detail-item is-images"><dt>Imágenes (${images.length})</dt><dd class="aff-detail-thumbs">${cells}</dd></div>`;
     }
 
     /** Construye el payload de guardado compartido por importación simple y masiva. */
@@ -4298,6 +4318,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.aff-detail-item dt) { color: var(--color-text-dim); font-size: .6rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
   :global(.aff-detail-item dd) { margin: .1rem 0 0; color: var(--color-text-main); font-size: .7rem; word-break: break-word; }
   :global(.aff-detail-item a) { color: #93c5fd; }
+  /* Miniaturas de imágenes: SIEMPRE el último aff-detail-item, a todo lo
+     ancho del desplegable y en una sola fila horizontal (scroll si hay muchas). */
+  :global(.aff-detail-item.is-images) { grid-column: 1 / -1; }
+  :global(.aff-detail-thumbs) { display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+  :global(.aff-detail-thumbs a) { flex: 0 0 auto; line-height: 0; }
+  :global(.aff-detail-thumbs img) { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--color-border); }
   /* Checkboxes de selección masiva de la tabla AliExpress */
   :global(.ac-th-check), :global(.ac-td-check) { width: 28px; padding-left: .5rem !important; padding-right: .2rem !important; }
   :global(.ac-th-check input), :global(.ac-td-check input) { accent-color: #38bdf8; cursor: pointer; width: 14px; height: 14px; margin: 0; }
