@@ -23,6 +23,12 @@ export interface Category {
   slug: string;
   icon: string;
   keywords: string[];
+  /**
+   * ID de la categoría padre (null/ausente = categoría raíz). Las entradas con
+   * parentId actúan como SUBCATEGORÍAS y se guardan en el mismo categories.json,
+   * por lo que quedan disponibles para toda la web sin recarga.
+   */
+  parentId?: string | null;
 }
 
 const CATEGORIES_PATH = dataFile('categories.json');
@@ -162,10 +168,29 @@ export function getCategoryNames(): string[] {
   return getCategories().map((category) => category.name);
 }
 
+/** Devuelve las subcategorías hijas de una categoría raíz (por id o slug). */
+export function getSubcategories(parentId: string): Category[] {
+  const parent = getCategoryById(parentId);
+  const parentIdValue = parent?.id ?? parentId;
+  if (!parentIdValue) return [];
+  return getCategories().filter((category) => category.parentId === parentIdValue);
+}
+
+/** Separa raíces y subcategorías para los selectores en cascada del panel. */
+export function splitCategoriesByLevel(categories?: Category[]): { roots: Category[]; subcategories: Category[] } {
+  const list = categories ?? getCategories();
+  return {
+    roots: list.filter((c) => !c.parentId),
+    subcategories: list.filter((c) => Boolean(c.parentId)),
+  };
+}
+
 export interface CategoryInput {
   name: string;
   icon?: string;
   keywords?: string[];
+  /** ID de la categoría padre; si se envía, la categoría se crea como subcategoría. */
+  parentId?: string | null;
 }
 
 export interface CategoryResult {
@@ -180,9 +205,25 @@ export function createCategory(input: CategoryInput): CategoryResult {
   if (!name) return { ok: false, message: 'El nombre de la categoría es obligatorio.', categories: getCategories() };
 
   const categories = getCategories();
-  const slug = slugifyCategory(name);
-  if (categories.some((c) => c.slug === slug || c.name.toLowerCase() === name.toLowerCase())) {
-    return { ok: false, message: `Ya existe una categoría con el nombre "${name}".`, categories };
+
+  // Subcategoría: validar el padre y usar un slug único dentro de su rama.
+  let parentId: string | null = null;
+  const rawParentId = String(input.parentId ?? '').trim();
+  if (rawParentId) {
+    const parent = getCategoryById(rawParentId);
+    if (!parent) {
+      return { ok: false, message: `No existe la categoría padre "${rawParentId}".`, categories };
+    }
+    if (parent.parentId) {
+      return { ok: false, message: `"${parent.name}" ya es una subcategoría: sólo se permite un nivel.`, categories };
+    }
+    parentId = parent.id;
+  }
+
+  const slugBase = slugifyCategory(name);
+  const slug = parentId ? `${parentId}--${slugBase}` : slugBase;
+  if (categories.some((c) => c.slug === slug || (c.name.toLowerCase() === name.toLowerCase() && (c.parentId ?? null) === parentId))) {
+    return { ok: false, message: `Ya existe una categoría con el nombre "${name}"${parentId ? ' en esa rama' : ''}.`, categories };
   }
 
   const category: Category = {
@@ -191,10 +232,18 @@ export function createCategory(input: CategoryInput): CategoryResult {
     slug,
     icon: String(input.icon ?? '').trim() || '📦',
     keywords: (input.keywords ?? []).map((k) => String(k).trim().toLowerCase()).filter(Boolean),
+    parentId,
   };
   categories.push(category);
   writeCategories(categories);
-  return { ok: true, message: `Categoría "${name}" creada correctamente.`, categories, category };
+  return {
+    ok: true,
+    message: parentId
+      ? `Subcategoría "${name}" creada y vinculada.`
+      : `Categoría "${name}" creada correctamente.`,
+    categories,
+    category,
+  };
 }
 
 export function updateCategory(slug: string, input: CategoryInput): CategoryResult {
@@ -205,17 +254,41 @@ export function updateCategory(slug: string, input: CategoryInput): CategoryResu
   const name = String(input.name ?? '').trim();
   if (!name) return { ok: false, message: 'El nombre de la categoría es obligatorio.', categories };
 
-  const newSlug = slugifyCategory(name);
-  const duplicate = categories.some((c) => c.slug !== slug && (c.slug === newSlug || c.name.toLowerCase() === name.toLowerCase()));
+  const previous = categories[index];
+  const newSlugBase = slugifyCategory(name);
+  // Conserva el parentId existente salvo que se envíe explícitamente otro valor.
+  let parentId = previous.parentId ?? null;
+  if (input.parentId !== undefined) {
+    const rawParentId = String(input.parentId ?? '').trim();
+    if (rawParentId) {
+      const parent = getCategoryById(rawParentId);
+      if (!parent) return { ok: false, message: `No existe la categoría padre "${rawParentId}".`, categories };
+      if (parent.parentId) return { ok: false, message: `"${parent.name}" ya es una subcategoría.`, categories };
+      parentId = parent.id;
+    } else {
+      parentId = null;
+    }
+  }
+  const newSlug = parentId ? `${parentId}--${newSlugBase}` : newSlugBase;
+  const duplicate = categories.some((c) => c.slug !== slug && (c.slug === newSlug || (c.name.toLowerCase() === name.toLowerCase() && (c.parentId ?? null) === parentId)));
   if (duplicate) return { ok: false, message: `Ya existe otra categoría con el nombre "${name}".`, categories };
 
   categories[index] = {
+    ...previous,
     id: newSlug,
     name,
     slug: newSlug,
-    icon: String(input.icon ?? '').trim() || categories[index].icon,
-    keywords: (input.keywords ?? categories[index].keywords).map((k) => String(k).trim().toLowerCase()).filter(Boolean),
+    icon: String(input.icon ?? '').trim() || previous.icon,
+    keywords: (input.keywords ?? previous.keywords).map((k) => String(k).trim().toLowerCase()).filter(Boolean),
+    parentId,
   };
+
+  // Si cambió el id (slug) de una categoría padre, re-apunta sus subcategorías.
+  if (parentId === null && previous.id !== newSlug) {
+    for (const category of categories) {
+      if (category.parentId === previous.id) category.parentId = newSlug;
+    }
+  }
   writeCategories(categories);
   return { ok: true, message: `Categoría actualizada a "${name}".`, categories, category: categories[index] };
 }
@@ -225,9 +298,18 @@ export function removeCategory(slug: string): CategoryResult {
   const target = categories.find((c) => c.slug === slug);
   if (!target) return { ok: false, message: `No existe la categoría "${slug}".`, categories };
 
-  const remaining = categories.filter((c) => c.slug !== slug);
+  // Borrado en cascada: al eliminar una raíz se eliminan también sus subcategorías
+  // para no dejar registros huérfanos en categories.json.
+  const childIds = new Set(categories.filter((c) => c.parentId === target.id).map((c) => c.id));
+  const remaining = categories.filter((c) => c.slug !== slug && !(c.parentId && c.parentId === target.id));
   writeCategories(remaining);
-  return { ok: true, message: `Categoría "${target.name}" eliminada.`, categories: remaining };
+  return {
+    ok: true,
+    message: childIds.size
+      ? `Categoría "${target.name}" eliminada (junto con ${childIds.size} subcategoría(s)).`
+      : `Categoría "${target.name}" eliminada.`,
+    categories: remaining,
+  };
 }
 
 /**

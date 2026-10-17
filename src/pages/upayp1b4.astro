@@ -10,6 +10,7 @@ import { dataFile } from '../lib/paths';
 import type { Product } from './api/products/add';
 import { authenticateUser, clearAdminSession, createAdminSession, getSessionUser } from '../lib/adminAuth';
 import { getAmazonAssociateTag } from '../utils/amazon';
+import { enrichProductsForAdmin } from '../lib/curation';
 
 const sessionUser = getSessionUser(Astro.request);
 const isAuthenticated = sessionUser !== null;
@@ -61,6 +62,9 @@ try {
 } catch (error) {
   console.error('Error cargando products.json en admin:', error);
 }
+// Enriquecimiento SSR de curación (score de conversión + duplicados) para la
+// primera pintura de la tabla; el cliente recalcula con cada recarga vía API.
+initialProducts = enrichProductsForAdmin(initialProducts as Product[]);
 
 const pageTitle = "Panel de Administración | Tradylor";
 const pageDescription = "Gestión, scraping de metadatos y alta de productos con enlaces de afiliación en Tradylor.";
@@ -495,6 +499,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <option value="comercio">Comercio</option>
                 <option value="descuento">Mayor descuento</option>
                 <option value="valoracion">Mejor valoración</option>
+                <option value="score">Conversión (score)</option>
               </select>
               <button type="button" id="prodFSortDir" class="btn-secondary btn-sm ali-sort-dir" title="Invertir el orden (mayor a menor / menor a mayor)">↓</button>
             </div>
@@ -502,6 +507,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <button type="button" id="prodFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
         </div>
         <div id="prodRangeFields" class="ali-range-fields"></div>
+      </div>
+
+      <!-- Presets editoriales (filtros de 1 clic) -->
+      <div id="prodPresets" class="prod-presets" role="group" aria-label="Presets editoriales">
+        <span class="prod-presets-label">Presets:</span>
+        <button type="button" class="preset-chip" data-prod-preset="sin-subcategoria" title="Productos sin subcategoría asignada">📂 Sin Subcategoría</button>
+        <button type="button" class="preset-chip" data-prod-preset="sin-ia" title="Productos cuya ficha no está completada con IA">⚠️ Sin Enriquecer IA</button>
+        <button type="button" class="preset-chip" data-prod-preset="duplicados" title="Duplicados por sourceId, URL canónica o título limpio">♻️ Duplicados</button>
+        <button type="button" class="preset-chip" data-prod-preset="alta-rentabilidad" title="conversion_score ≥ 75">🔥 Alta Rentabilidad</button>
+        <button type="button" class="preset-chip" data-prod-preset="listos" title="Categoría + subcategoría + IA completada + enlace activo">⭐ Listos para Publicar</button>
+        <button type="button" id="btnProdRecalcScores" class="preset-chip preset-chip-action" title="Recalcula y guarda el conversion_score de todo el catálogo">⇅ Recalcular scores</button>
+        <button type="button" id="btnProdPresetClear" class="preset-chip preset-chip-clear" hidden>✕ Quitar preset</button>
       </div>
 
       <div class="product-sel-bar" id="productSelBar">
@@ -512,7 +529,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <select id="prodCatAssign" class="sel-cat-assign" aria-label="Categoría destino">
           <option value="">Categoría destino…</option>
         </select>
+        <select id="prodSubcatAssign" class="sel-cat-assign" aria-label="Subcategoría destino">
+          <option value="">Subcategoría destino…</option>
+        </select>
+        <button type="button" class="btn-secondary btn-sm" id="btnProdCreateSubcat" title="Crear una subcategoría vinculada a la categoría destino">➕ Subcat</button>
         <button type="button" class="btn-secondary btn-sm" id="btnProdAssignCat">Asignar categoría</button>
+        <button type="button" class="btn-ai btn-sm" id="btnProdNormalizeTags" title="Extraer tags técnicos normalizados (normalized_tags)">🏷️ Normalizar Tags</button>
+        <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
         <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
       </div>
 
@@ -526,6 +549,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <th>Producto & Categoría</th>
                 <th>Comercio</th>
                 <th>Precio</th>
+                <th title="Margen de conversión potencial (score 0-100)">Score</th>
                 <th>Enlace Afiliado</th>
                 <th class="text-right">Acciones</th>
               </tr>
@@ -533,7 +557,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <tbody id="productsTableBody">
                {initialProducts.length === 0 ? (
                 <tr class="empty-row">
-                  <td colspan="7">No hay productos registrados en el catálogo aún.</td>
+                  <td colspan="8">No hay productos registrados en el catálogo aún.</td>
                 </tr>
               ) : (
                 initialProducts.map((p) => (
@@ -555,6 +579,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                   <td class="col-price">
                     <span class="price-val">{p.price.toFixed(2)} €</span>
                     {p.originalPrice && <span class="price-old">{p.originalPrice.toFixed(2)} €</span>}
+                  </td>
+                  <td class="col-score">
+                    {(() => {
+                      const score = Number(p.conversion_score) || 0;
+                      const level = score > 75 ? 'high' : score >= 40 ? 'mid' : 'low';
+                      return (
+                        <span class={`score-badge score-${level}`} title={`Score de conversión: ${score}/100`}>
+                          <span class="score-badge-value">{level === 'high' ? '🔥' : level === 'mid' ? '⚡' : '❄️'} {score}</span>
+                          <span class="score-bar"><span class="score-bar-fill" style={`width:${Math.max(0, Math.min(100, score))}%`} /></span>
+                        </span>
+                      );
+                    })()}
+                    {(p as any).is_duplicate && <span class="dup-pill" title={`Duplicado (${(p as any).duplicate_reason || 'detectado'})`}>♻️ Dup</span>}
                   </td>
                   <td class="col-link">
                     <a
@@ -940,6 +977,101 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     <div class="video-modal-dialog" role="dialog" aria-modal="true" aria-label="Reproductor de vídeo">
       <button type="button" class="video-modal-close" data-video-modal-close aria-label="Cerrar vídeo">×</button>
       <div id="videoModalBody" class="video-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- Modal de confirmación de eliminación masiva (bulk delete) -->
+  <div id="bulkDeleteModal" class="admin-modal" hidden>
+    <div class="admin-modal-backdrop" data-admin-modal-close></div>
+    <div class="admin-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="bulkDeleteTitle">
+      <button type="button" class="admin-modal-close" data-admin-modal-close aria-label="Cerrar">×</button>
+      <h3 id="bulkDeleteTitle" class="admin-modal-title">🗑️ Eliminar productos del catálogo</h3>
+      <p class="admin-modal-text">¿Estás seguro de eliminar <strong id="bulkDeleteCount">0</strong> productos seleccionados de Tradylor?</p>
+      <p class="admin-modal-warning">⚠️ Esta acción retira los productos de products.json y deja un tombstone para que no reaparezcan en la web pública. No se puede deshacer desde el panel.</p>
+      <div class="admin-modal-actions">
+        <button type="button" class="btn-secondary" data-admin-modal-close>Cancelar</button>
+        <button type="button" class="btn-danger-ghost" id="btnBulkDeleteConfirm">Sí, eliminar definitivamente</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de creación de subcategoría on-the-fly -->
+  <div id="createSubcategoryModal" class="admin-modal" hidden>
+    <div class="admin-modal-backdrop" data-admin-modal-close></div>
+    <form class="admin-modal-dialog" id="createSubcategoryForm" role="dialog" aria-modal="true" aria-labelledby="createSubcatTitle">
+      <button type="button" class="admin-modal-close" data-admin-modal-close aria-label="Cerrar">×</button>
+      <h3 id="createSubcatTitle" class="admin-modal-title">➕ Nueva subcategoría</h3>
+      <p class="admin-modal-text">Se guardará como registro permanente en <code>categories.json</code> vinculado a <strong id="createSubcatParent">—</strong> (se sincroniza al instante con el módulo de Categorías de la web).</p>
+      <label class="admin-modal-field">
+        <span>Nombre *</span>
+        <input type="text" id="createSubcatName" name="name" required placeholder="Ej: SSD Internos" maxlength="80" />
+      </label>
+      <label class="admin-modal-field">
+        <span>Icono (emoji)</span>
+        <input type="text" id="createSubcatIcon" name="icon" placeholder="Ej: 💾" maxlength="8" />
+      </label>
+      <label class="admin-modal-field">
+        <span>Palabras clave (separadas por comas)</span>
+        <input type="text" id="createSubcatKeywords" name="keywords" placeholder="Ej: ssd, disco solido, nvme" />
+      </label>
+      <p id="createSubcatStatus" class="admin-modal-status" hidden></p>
+      <div class="admin-modal-actions">
+        <button type="button" class="btn-secondary" data-admin-modal-close>Cancelar</button>
+        <button type="submit" class="btn-success" id="btnCreateSubcatSubmit">Crear subcategoría</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Modal de vista previa: renderiza <ProductCard /> del frontend público vía iframe -->
+  <div id="previewCardModal" class="admin-modal admin-modal-wide" hidden>
+    <div class="admin-modal-backdrop" data-admin-modal-close></div>
+    <div class="admin-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="previewCardTitle">
+      <button type="button" class="admin-modal-close" data-admin-modal-close aria-label="Cerrar">×</button>
+      <h3 id="previewCardTitle" class="admin-modal-title">👁️ Preview Card <span class="admin-modal-subtitle">así se verá en la web pública</span></h3>
+      <iframe id="previewCardFrame" class="preview-card-frame" title="Vista previa de la tarjeta del producto" loading="lazy"></iframe>
+    </div>
+  </div>
+
+  <!-- Modal de vinculación de alternativas (cross-matching) -->
+  <div id="linkAlternativesModal" class="admin-modal admin-modal-wide" hidden>
+    <div class="admin-modal-backdrop" data-admin-modal-close></div>
+    <div class="admin-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="linkAltTitle">
+      <button type="button" class="admin-modal-close" data-admin-modal-close aria-label="Cerrar">×</button>
+      <h3 id="linkAltTitle" class="admin-modal-title">🔗 Vincular Alternativas <span class="admin-modal-subtitle" id="linkAltProductName"></span></h3>
+      <p class="admin-modal-text">Busca y marca productos del catálogo (o sugeridos por coincidencia de título) para enlazarlos como alternativas. La vinculación es <strong>bidireccional</strong> y actualiza el contador «Comparar con alternativas (N)» de la PDP.</p>
+      <label class="admin-modal-field">
+        <span>Buscar en el catálogo</span>
+        <input type="search" id="linkAltSearch" placeholder="Filtrar por título, categoría o ID..." />
+      </label>
+      <div class="link-alt-columns">
+        <div>
+          <h4 class="link-alt-heading">Vinculadas actualmente</h4>
+          <div id="linkAltLinked" class="link-alt-list"></div>
+        </div>
+        <div>
+          <h4 class="link-alt-heading">Sugerencias y catálogo <span id="linkAltCount" class="link-alt-count"></span></h4>
+          <div id="linkAltSuggestions" class="link-alt-list"></div>
+        </div>
+      </div>
+      <div class="link-alt-roles">
+        <label class="admin-modal-field">
+          <span>⭐ Opción Principal / Mejor Valorada</span>
+          <select id="linkAltRolePremium"><option value="">— Ninguna —</option></select>
+        </label>
+        <label class="admin-modal-field">
+          <span>💰 Alternativa Económica</span>
+          <select id="linkAltRoleCheap"><option value="">— Ninguna —</option></select>
+        </label>
+        <label class="admin-modal-field">
+          <span>🎯 Competidor directo</span>
+          <select id="linkAltRoleSimilar"><option value="">— Ninguna —</option></select>
+        </label>
+      </div>
+      <p id="linkAltStatus" class="admin-modal-status" hidden></p>
+      <div class="admin-modal-actions">
+        <button type="button" class="btn-secondary" data-admin-modal-close>Cancelar</button>
+        <button type="button" class="btn-success" id="btnLinkAltSave">Guardar vínculos</button>
+      </div>
     </div>
   </div>
   ) : (
@@ -2059,11 +2191,26 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
        if (products.length === 0) {
         productsTableBody.innerHTML = `
           <tr class="empty-row">
-            <td colspan="7">No hay productos registrados en el catálogo aún.</td>
+            <td colspan="8">No hay productos registrados en el catálogo aún.</td>
           </tr>
         `;
         return;
       }
+
+      // Categorías para los selects en cascada de la fila expandida.
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      const rootCats = allCats.filter((c) => !c.parentId);
+      const subcatOptionsFor = (categoryId, categoryName, selectedSubId) => {
+        const parent = allCats.find((c) => c.id === categoryId)
+          || rootCats.find((c) => c.name === categoryName);
+        const subs = parent ? allCats.filter((c) => c.parentId === parent.id) : [];
+        return '<option value="">— Sin subcategoría —</option>' + subs.map((c) =>
+          `<option value="${escapeHtml(c.id)}"${c.id === selectedSubId ? ' selected' : ''}>${escapeHtml(c.name)}</option>`
+        ).join('');
+      };
+      const catSelectOptionsFor = (categoryId, categoryName) => rootCats.map((c) =>
+        `<option value="${escapeHtml(c.id)}"${(categoryId ? c.id === categoryId : c.name === categoryName) ? ' selected' : ''}>${escapeHtml(c.name)}</option>`
+      ).join('');
 
       productsTableBody.innerHTML = products
         .map(
@@ -2077,7 +2224,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <a href="/producto/${p.slug || p.id}" class="row-title" target="_blank" rel="noopener" title="Ver ficha pública del producto">${p.title}</a>
               <div class="row-meta">
                 <span class="pill-category">${p.category}</span>
+                ${p.subcategory_id ? `<span class="pill-subcategory">${escapeHtml((allCats.find((c) => c.id === p.subcategory_id) || {}).name || p.subcategory_id)}</span>` : ''}
                 ${p.badge ? `<span class="pill-badge">${p.badge}</span>` : ''}
+                ${p.is_duplicate ? `<span class="dup-pill" title="Duplicado ${p.duplicate_reason ? `(${p.duplicate_reason})` : ''}${p.duplicate_of ? ` de ${p.duplicate_of}` : ''}">${p.possible_duplicate ? '♻️ ¿Dup?' : '♻️ Dup'}</span>` : ''}
               </div>
             </td>
             <td class="col-merchant"><span class="merchant-badge">${p.merchant}</span></td>
@@ -2085,10 +2234,28 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <span class="price-val">${Number(p.price).toFixed(2)} €</span>
               ${p.originalPrice ? `<span class="price-old">${Number(p.originalPrice).toFixed(2)} €</span>` : ''}
             </td>
+            <td class="col-score">
+              ${(() => {
+                const score = Number(p.conversion_score) || 0;
+                const level = score > 75 ? 'high' : score >= 40 ? 'mid' : 'low';
+                const icon = level === 'high' ? '🔥' : level === 'mid' ? '⚡' : '❄️';
+                const label = level === 'high' ? 'Alta rentabilidad' : level === 'mid' ? 'Rentabilidad media' : 'Bajo';
+                return `<span class="score-badge score-${level}" title="${label} — score ${score}/100">
+                  <span class="score-badge-value">${icon} ${score}</span>
+                  <span class="score-bar"><span class="score-bar-fill" style="width:${Math.max(0, Math.min(100, score))}%"></span></span>
+                </span>`;
+              })()}
+            </td>
             <td class="col-link">
               <a href="${p.affiliateUrl}" target="_blank" rel="nofollow noopener noreferrer" class="test-link">Probar Enlace</a>
             </td>
             <td class="col-actions text-right">
+              <button type="button" class="btn-icon-action btn-preview-card" data-id="${p.id}" title="👁️ Preview Card (así se ve en la web)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+              </button>
+              <button type="button" class="btn-icon-action btn-link-alternatives" data-id="${p.id}" title="🔗 Vincular Alternativas">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+              </button>
               <button type="button" class="btn-icon-action btn-edit-row" data-id="${p.id}" title="Cargar en formulario">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
               </button>
@@ -2104,11 +2271,28 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <td colspan="10"><dl class="aff-detail-grid">
               <div class="aff-detail-item"><dt>Título</dt><dd>${escapeHtml ? escapeHtml(p.title) : p.title}</dd></div>
               <div class="aff-detail-item"><dt>Categoría</dt><dd>${p.category}</dd></div>
+              <div class="aff-detail-item aff-detail-curate"><dt>Categorización (edición rápida)</dt><dd class="aff-curate-controls">
+                <select class="row-cat-select" data-id="${p.id}" aria-label="Categoría del producto">${catSelectOptionsFor(p.category_id, p.category)}</select>
+                <select class="row-subcat-select" data-id="${p.id}" aria-label="Subcategoría del producto">${subcatOptionsFor(p.category_id, p.category, p.subcategory_id)}</select>
+              </dd></div>
               <div class="aff-detail-item"><dt>Comercio</dt><dd>${p.merchant}</dd></div>
               ${p.brand ? `<div class="aff-detail-item"><dt>Marca</dt><dd>${escapeHtml ? escapeHtml(p.brand) : p.brand}</dd></div>` : ''}
               ${p.fulfillmentProvider && p.fulfillmentProvider !== p.merchant ? `<div class="aff-detail-item"><dt>Distribuidor</dt><dd>${escapeHtml ? escapeHtml(p.fulfillmentProvider) : p.fulfillmentProvider}</dd></div>` : ''}
               <div class="aff-detail-item"><dt>Precio</dt><dd>${Number(p.price).toFixed(2)} €</dd></div>
               ${p.originalPrice ? `<div class="aff-detail-item"><dt>Precio original</dt><dd>${Number(p.originalPrice).toFixed(2)} €</dd></div>` : ''}
+              <div class="aff-detail-item"><dt>Score de conversión</dt><dd>${Number(p.conversion_score) || 0}/100 ${p.commissionEstimate != null ? `· comisión est. ${Number(p.commissionEstimate).toFixed(2)} €` : ''}${p.sales30d != null ? ` · ${Number(p.sales30d)} ventas/30d` : ''}</dd></div>
+              <div class="aff-detail-item"><dt>Estados editoriales</dt><dd>
+                <span class="state-pill state-${escapeHtml ? escapeHtml(p.ia_status || 'pending') : (p.ia_status || 'pending')}">IA: ${p.ia_status || 'pending'}</span>
+                <span class="state-pill state-${escapeHtml ? escapeHtml(p.link_status || 'pending') : (p.link_status || 'pending')}">Enlace: ${p.link_status || 'pending'}</span>
+                ${p.is_duplicate ? `<span class="state-pill state-dup">♻️ ${p.possible_duplicate ? 'posible duplicado' : 'duplicado'}${p.duplicate_of ? ` de ${p.duplicate_of}` : ''}</span>` : ''}
+              </dd></div>
+              ${Array.isArray(p.normalized_tags) && p.normalized_tags.length ? `<div class="aff-detail-item"><dt>Tags normalizados (${p.normalized_tags.length})</dt><dd class="tag-chip-list">${p.normalized_tags.map((t) => `<span class="tag-chip">${escapeHtml ? escapeHtml(t) : t}</span>`).join('')}</dd></div>` : ''}
+              <div class="aff-detail-item"><dt>Alternativas vinculadas</dt><dd>
+                ${Array.isArray(p.alternative_product_ids) && p.alternative_product_ids.length ? `${p.alternative_product_ids.length} vínculo(s)` : 'Ninguna'}
+                ${p.alternatives && p.alternatives.premiumOptionId ? ' · ⭐ principal' : ''}
+                ${p.alternatives && p.alternatives.cheaperOptionId ? ' · 💰 económica' : ''}
+                <button type="button" class="btn-secondary btn-sm btn-link-alternatives" data-id="${p.id}">🔗 Vincular Alternativas</button>
+              </dd></div>
               ${p.rating != null ? `<div class="aff-detail-item"><dt>Valoración</dt><dd>${Number(p.rating).toFixed(1)} ★ ${p.reviewsCount != null ? `(${p.reviewsCount} opiniones)` : ''}</dd></div>` : ''}
               ${p.badge ? `<div class="aff-detail-item"><dt>Badge</dt><dd>${p.badge}</dd></div>` : ''}
               ${p.description ? `<div class="aff-detail-item"><dt>Descripción</dt><dd>${escapeHtml ? escapeHtml(p.description) : p.description}</dd></div>` : ''}
@@ -2347,6 +2531,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const filtered = currentProducts.filter((product) => {
         if (cat && (product.category || '') !== cat) return false;
         if (merchant && (product.merchant || '') !== merchant) return false;
+        // Preset editorial activo (1 clic): filtro complementario.
+        if (typeof activeProdPreset !== 'undefined' && activeProdPreset && !prodMatchesPreset(product, activeProdPreset)) return false;
         for (const state of Object.values(prodRanges)) {
           if (!state.touched) continue;
           const value = state.get(product);
@@ -2366,6 +2552,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           valoracion: (p) => (p.rating != null ? Number(p.rating) : -1),
           categoria: (p) => String(p.category || ''),
           comercio: (p) => String(p.merchant || ''),
+          score: (p) => Number(p.conversion_score) || 0,
         };
         filtered.sort((a, b) => {
           if (sortKey === 'nombre') return dir * String(a.title).localeCompare(String(b.title), 'es');
@@ -2441,6 +2628,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // Asignar una categoría a todos los productos seleccionados de la tabla.
     btnProdAssignCat?.addEventListener('click', async () => {
       const category = prodCatAssign && 'value' in prodCatAssign ? String(prodCatAssign.value || '').trim() : '';
+      const subcategoryName = (() => {
+        const el = document.getElementById('prodSubcatAssign');
+        return el && 'value' in el ? String(el.value || '').trim() : '';
+      })();
       const ids = [...selectedProductIds];
       if (!ids.length) {
         showAlert('warning', 'Sin selección', 'Marca primero los productos en la tabla que quieres mover.');
@@ -2450,12 +2641,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         showAlert('warning', 'Falta la categoría', 'Elige la categoría destino en la barra de selección.');
         return;
       }
-      showAlert('loading', 'Asignando categoría...', `${ids.length} producto(s) → «${category}».`);
+      // Categorización bidireccional: se envían también los IDs jerárquicos
+      // (category_id / subcategory_id) resueltos desde el caché de categorías.
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      const catObj = allCats.find((c) => c.name === category);
+      const subObj = catObj ? allCats.find((c) => c.name === subcategoryName && c.parentId === catObj.id) : undefined;
+      const categoryId = catObj?.id || '';
+      const subcategoryId = subObj?.id || '';
+      showAlert('loading', 'Asignando categoría...', `${ids.length} producto(s) → «${category}»${subcategoryName ? ` › «${subcategoryName}»` : ''}.`);
       try {
         const res = await fetch('/api/products/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'set-category', ids, category }),
+          body: JSON.stringify({ action: 'set-category', ids, category, category_id: categoryId, subcategory_id: subcategoryId }),
         });
         const data = await res.json();
         if (data.success) {
@@ -4179,6 +4377,439 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
     });
 
+    // =========================================================================
+    // CURACIÓN AVANZADA — presets, bulk delete, subcategorías, score,
+    // normalización de tags, vinculación de alternativas y preview card.
+    // (Bloque aditivo: no toca los handlers existentes de productSelBar.)
+    // =========================================================================
+    let activeProdPreset = '';
+
+    function prodMatchesPreset(product, preset) {
+      switch (preset) {
+        case 'sin-subcategoria':
+          return !product.subcategory_id;
+        case 'sin-ia':
+          return (product.ia_status || ((product.description || '').trim().length >= 60 ? 'completed' : 'pending')) !== 'completed';
+        case 'duplicados':
+          return product.is_duplicate === true;
+        case 'alta-rentabilidad':
+          return (Number(product.conversion_score) || 0) >= 75;
+        case 'listos':
+          return Boolean(product.category)
+            && Boolean(product.subcategory_id)
+            && (product.ia_status || ((product.description || '').trim().length >= 60 ? 'completed' : 'pending')) === 'completed'
+            && (product.link_status || ((product.affiliateUrl || '').trim() ? 'active' : 'pending')) === 'active';
+        default:
+          return true;
+      }
+    }
+
+    function setProdPreset(preset) {
+      activeProdPreset = preset || '';
+      document.querySelectorAll('.preset-chip[data-prod-preset]').forEach((chip) => {
+        chip.classList.toggle('is-active', Boolean(activeProdPreset) && chip.getAttribute('data-prod-preset') === activeProdPreset);
+      });
+      const clearBtn = document.getElementById('btnProdPresetClear');
+      if (clearBtn) clearBtn.hidden = !activeProdPreset;
+      prodFilterApply();
+    }
+
+    document.querySelectorAll('.preset-chip[data-prod-preset]').forEach((chip) => {
+      chip.addEventListener('click', () => {
+        const preset = chip.getAttribute('data-prod-preset') || '';
+        setProdPreset(activeProdPreset === preset ? '' : preset);
+      });
+    });
+    document.getElementById('btnProdPresetClear')?.addEventListener('click', () => setProdPreset(''));
+
+    // Recalcular y persistir conversion_score de todo el catálogo.
+    document.getElementById('btnProdRecalcScores')?.addEventListener('click', async () => {
+      showAlert('loading', 'Recalculando scores', 'Aplicando la fórmula de rentabilidad a todo el catálogo...');
+      try {
+        const res = await fetch('/api/products/curation', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'recalc' }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          await reloadProductsTable();
+          showAlert('success', 'Scores actualizados', data.message || `${data.updated} producto(s) recalculados.`);
+        } else {
+          showAlert('error', 'Error al recalcular', data.message || 'No se pudo recalcular el score.');
+        }
+      } catch {
+        showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');
+      }
+    });
+
+    // ── Helpers de modales (patrón video-modal: backdrop + Escape) ───────────
+    function openAdminModal(modal) {
+      if (!modal) return;
+      modal.hidden = false;
+      document.body.style.overflow = 'hidden';
+    }
+    function closeAdminModal(modal) {
+      if (!modal) return;
+      modal.hidden = true;
+      if (!document.querySelector('.admin-modal:not([hidden]), .video-modal:not([hidden])')) {
+        document.body.style.overflow = '';
+      }
+    }
+    document.addEventListener('click', (event) => {
+      const closer = event.target.closest?.('[data-admin-modal-close]');
+      if (closer) {
+        event.stopPropagation();
+        closeAdminModal(closer.closest('.admin-modal'));
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      document.querySelectorAll('.admin-modal:not([hidden])').forEach((modal) => closeAdminModal(modal));
+    });
+
+    // ── Selector en cascada: subcategoría destino en productSelBar ───────────
+    function syncSubcatAssign() {
+      const catSelect = document.getElementById('prodCatAssign');
+      const subSelect = document.getElementById('prodSubcatAssign');
+      if (!catSelect || !subSelect) return;
+      const categoryName = String(catSelect.value || '').trim();
+      const current = String(subSelect.value || '');
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      const parent = allCats.find((c) => !c.parentId && c.name === categoryName);
+      const subs = parent ? allCats.filter((c) => c.parentId === parent.id) : [];
+      subSelect.innerHTML = '<option value="">Subcategoría destino…</option>' + subs.map((c) =>
+        `<option value="${escapeHtml(c.name)}">${escapeHtml(c.icon || '')} ${escapeHtml(c.name)}</option>`
+      ).join('');
+      if (current && Array.from(subSelect.options).some((o) => o.value === current)) subSelect.value = current;
+    }
+    document.getElementById('prodCatAssign')?.addEventListener('change', syncSubcatAssign);
+
+    // ── Modal: creación on-the-fly de subcategorías ──────────────────────────
+    const createSubcategoryModal = document.getElementById('createSubcategoryModal');
+    const createSubcategoryForm = document.getElementById('createSubcategoryForm');
+    document.getElementById('btnProdCreateSubcat')?.addEventListener('click', () => {
+      const catSelect = document.getElementById('prodCatAssign');
+      const categoryName = catSelect && 'value' in catSelect ? String(catSelect.value || '').trim() : '';
+      if (!categoryName) {
+        showAlert('warning', 'Elige primero la categoría', 'La subcategoría se creará vinculada a la «Categoría destino…» seleccionada.');
+        catSelect?.focus();
+        return;
+      }
+      const status = document.getElementById('createSubcatStatus');
+      if (status) { status.hidden = true; status.textContent = ''; status.className = 'admin-modal-status'; }
+      const parentLabel = document.getElementById('createSubcatParent');
+      if (parentLabel) parentLabel.textContent = categoryName;
+      const nameInput = document.getElementById('createSubcatName');
+      if (nameInput) nameInput.value = '';
+      const iconInput = document.getElementById('createSubcatIcon');
+      if (iconInput) iconInput.value = '';
+      const kwInput = document.getElementById('createSubcatKeywords');
+      if (kwInput) kwInput.value = '';
+      openAdminModal(createSubcategoryModal);
+      nameInput?.focus();
+    });
+
+    createSubcategoryForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const status = document.getElementById('createSubcatStatus');
+      const catSelect = document.getElementById('prodCatAssign');
+      const categoryName = catSelect && 'value' in catSelect ? String(catSelect.value || '').trim() : '';
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      const parent = allCats.find((c) => !c.parentId && c.name === categoryName);
+      if (!parent) {
+        if (status) { status.hidden = false; status.className = 'admin-modal-status is-error'; status.textContent = 'No se encontró la categoría padre. Recarga el panel.'; }
+        return;
+      }
+      const name = String(document.getElementById('createSubcatName')?.value || '').trim();
+      const icon = String(document.getElementById('createSubcatIcon')?.value || '').trim();
+      const keywords = String(document.getElementById('createSubcatKeywords')?.value || '').trim();
+      if (!name) {
+        if (status) { status.hidden = false; status.className = 'admin-modal-status is-error'; status.textContent = 'El nombre es obligatorio.'; }
+        return;
+      }
+      try {
+        const res = await fetch('/api/categories', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, icon, keywords, parentId: parent.id }),
+        });
+        const data = await res.json();
+        if (!data.success) {
+          if (status) { status.hidden = false; status.className = 'admin-modal-status is-error'; status.textContent = data.message || 'No se pudo crear la subcategoría.'; }
+          return;
+        }
+        // Invalida y refresca el estado global de categorías SIN recargar la
+        // página (datalist, selects del panel y módulo de Categorías).
+        await loadCategories();
+        syncSubcatAssign();
+        const subSelect = document.getElementById('prodSubcatAssign');
+        const created = data.category;
+        if (subSelect && created) {
+          const option = Array.from(subSelect.options).find((o) => o.textContent?.includes(name));
+          if (option) subSelect.value = option.value;
+        }
+        if (status) { status.hidden = false; status.className = 'admin-modal-status is-ok'; status.textContent = data.message || 'Subcategoría creada.'; }
+        setTimeout(() => closeAdminModal(createSubcategoryModal), 700);
+      } catch {
+        if (status) { status.hidden = false; status.className = 'admin-modal-status is-error'; status.textContent = 'Error de red al crear la subcategoría.'; }
+      }
+    });
+
+    // ── Bulk delete con modal de confirmación (endpoint dedicado) ────────────
+    const bulkDeleteModal = document.getElementById('bulkDeleteModal');
+    document.getElementById('btnProdBulkDelete')?.addEventListener('click', () => {
+      if (!selectedProductIds.size) {
+        showAlert('warning', 'Sin selección', 'Marca los productos que quieres eliminar en la tabla.');
+        return;
+      }
+      const countEl = document.getElementById('bulkDeleteCount');
+      if (countEl) countEl.textContent = String(selectedProductIds.size);
+      openAdminModal(bulkDeleteModal);
+    });
+    document.getElementById('btnBulkDeleteConfirm')?.addEventListener('click', async () => {
+      const ids = Array.from(selectedProductIds);
+      if (!ids.length) { closeAdminModal(bulkDeleteModal); return; }
+      closeAdminModal(bulkDeleteModal);
+      showAlert('loading', 'Eliminando productos...', `Borrado masivo de ${ids.length} producto(s).`);
+      try {
+        const res = await fetch('/api/products/bulk-delete', {
+          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        });
+        const data = await res.json();
+        selectedProductIds.clear();
+        updateProdSelCount();
+        await reloadProductsTable();
+        if (data.success) {
+          showAlert('success', 'Eliminación masiva', `${data.deleted} producto(s) eliminados · ${data.remaining} restantes en el catálogo.`);
+        } else {
+          showAlert('warning', 'Eliminación masiva', data.message || 'No se eliminó ningún producto.');
+        }
+      } catch {
+        showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');
+      }
+    });
+
+    // ── Normalización de tags en lote (matriz de atributos) ──────────────────
+    document.getElementById('btnProdNormalizeTags')?.addEventListener('click', async () => {
+      const ids = Array.from(selectedProductIds);
+      if (!ids.length) {
+        showAlert('warning', 'Sin selección', 'Marca los productos a los que extraer sus tags técnicos.');
+        return;
+      }
+      if (!confirm(`¿Extraer y normalizar tags de especificaciones de ${ids.length} producto(s)?`)) return;
+      showAlert('loading', 'Normalizando tags...', `Procesando ${ids.length} producto(s).`);
+      try {
+        const res = await fetch('/api/admin/normalize-tags', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          await reloadProductsTable();
+          showAlert('success', 'Tags normalizados', `${data.updated} producto(s) actualizados con normalized_tags.`);
+        } else {
+          showAlert('error', 'Error al normalizar', data.message || 'No se pudieron extraer los tags.');
+        }
+      } catch {
+        showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');
+      }
+    });
+
+    // ── Vista previa (👁️ Preview Card): iframe con <ProductCard /> público ──
+    const previewCardModal = document.getElementById('previewCardModal');
+    const previewCardFrame = document.getElementById('previewCardFrame');
+    document.addEventListener('click', (event) => {
+      const btn = event.target.closest?.('.btn-preview-card');
+      if (!btn) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const id = btn.getAttribute('data-id');
+      if (!id || !previewCardFrame) return;
+      previewCardFrame.src = `/upayp1b4/preview-card?id=${encodeURIComponent(id)}`;
+      openAdminModal(previewCardModal);
+    });
+
+    // ── Edición rápida de categoría/subcategoría en la fila expandida ────────
+    async function quickAssignCategory(id, categoryId, categoryName, subcategoryId) {
+      try {
+        const res = await fetch('/api/products/add', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'set-category',
+            ids: [id],
+            category: categoryName,
+            category_id: categoryId,
+            subcategory_id: subcategoryId || '',
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAlert('success', 'Categoría actualizada', `«${categoryName}»${subcategoryId ? ` › subcategoría asignada` : ''} (${id}).`);
+          await reloadProductsTable();
+        } else {
+          showAlert('error', 'Error al guardar', data.message || 'No se pudo actualizar la categoría.');
+        }
+      } catch {
+        showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');
+      }
+    }
+    document.addEventListener('change', (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLSelectElement)) return;
+      const id = target.getAttribute('data-id');
+      if (!id) return;
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      if (target.classList.contains('row-cat-select')) {
+        const catObj = allCats.find((c) => c.id === target.value);
+        if (catObj) quickAssignCategory(id, catObj.id, catObj.name, '');
+      } else if (target.classList.contains('row-subcat-select')) {
+        const row = target.closest('[data-product-id]');
+        const catId = row?.querySelector('.row-cat-select')?.value || '';
+        const catObj = allCats.find((c) => c.id === catId);
+        if (catObj) quickAssignCategory(id, catObj.id, catObj.name, target.value);
+      }
+    });
+
+    // ── Vinculación de alternativas (cross-matching bidireccional) ───────────
+    const linkAlternativesModal = document.getElementById('linkAlternativesModal');
+    const linkAltLinked = document.getElementById('linkAltLinked');
+    const linkAltSuggestions = document.getElementById('linkAltSuggestions');
+    const linkAltSearch = document.getElementById('linkAltSearch');
+    const linkAltStatus = document.getElementById('linkAltStatus');
+    let linkAltProductId = null;
+    let linkAltLinkedIds = new Set();
+    let linkAltCatalog = [];
+
+    function linkAltRenderRoles() {
+      for (const [selectId, roleKey] of [['linkAltRolePremium', 'premiumOptionId'], ['linkAltRoleCheap', 'cheaperOptionId'], ['linkAltRoleSimilar', 'similarOptionId']]) {
+        const select = document.getElementById(selectId);
+        if (!select) continue;
+        const current = select.value;
+        select.innerHTML = '<option value="">— Ninguna —</option>' + linkAltCatalog
+          .filter((p) => linkAltLinkedIds.has(p.id))
+          .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.title).slice(0, 60)}</option>`)
+          .join('');
+        if (current && Array.from(select.options).some((o) => o.value === current)) select.value = current;
+      }
+    }
+
+    function linkAltRenderList() {
+      if (!linkAltLinked || !linkAltSuggestions) return;
+      const q = String(linkAltSearch?.value || '').trim().toLowerCase();
+      const matches = (p) => !q || `${p.title} ${p.category || ''} ${p.id}`.toLowerCase().includes(q);
+      const byId = new Map(linkAltCatalog.map((p) => [p.id, p]));
+
+      linkAltLinked.innerHTML = linkAltLinkedIds.size
+        ? Array.from(linkAltLinkedIds).map((id) => byId.get(id)).filter(Boolean).map((p) => `
+            <label class="link-alt-item is-linked">
+              <input type="checkbox" checked data-link-alt-check="${escapeHtml(p.id)}" />
+              <img src="${escapeHtml(p.image || '')}" alt="" loading="lazy" />
+              <span class="link-alt-item-title">${escapeHtml(p.title).slice(0, 70)}</span>
+              <span class="link-alt-item-price">${Number(p.price || 0).toFixed(2)} €</span>
+            </label>`).join('')
+        : '<p class="text-muted">Sin alternativas vinculadas todavía.</p>';
+
+      const suggestions = linkAltCatalog.filter((p) => !linkAltLinkedIds.has(p.id) && matches(p));
+      document.getElementById('linkAltCount').textContent = `(${suggestions.length})`;
+      linkAltSuggestions.innerHTML = suggestions.length
+        ? suggestions.map((p) => `
+            <label class="link-alt-item">
+              <input type="checkbox" data-link-alt-check="${escapeHtml(p.id)}" />
+              <img src="${escapeHtml(p.image || '')}" alt="" loading="lazy" />
+              <span class="link-alt-item-title">${escapeHtml(p.title).slice(0, 70)}</span>
+              <span class="link-alt-item-price">${Number(p.price || 0).toFixed(2)} €</span>
+            </label>`).join('')
+        : '<p class="text-muted">Sin coincidencias.</p>';
+
+      linkAltRenderRoles();
+    }
+
+    document.addEventListener('change', (event) => {
+      const checkbox = event.target.closest?.('[data-link-alt-check]');
+      if (!checkbox) return;
+      const id = checkbox.getAttribute('data-link-alt-check');
+      if (!id) return;
+      if (checkbox.checked) linkAltLinkedIds.add(id); else linkAltLinkedIds.delete(id);
+      linkAltRenderList();
+    });
+    linkAltSearch?.addEventListener('input', linkAltRenderList);
+
+    document.addEventListener('click', (event) => {
+      const btn = event.target.closest?.('.btn-link-alternatives');
+      if (!btn) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openLinkAlternativesModal(btn.getAttribute('data-id'));
+    });
+
+    async function openLinkAlternativesModal(id) {
+      if (!id) return;
+      linkAltProductId = id;
+      linkAltLinkedIds = new Set();
+      if (linkAltStatus) { linkAltStatus.hidden = true; }
+      if (linkAltSearch) linkAltSearch.value = '';
+      const nameEl = document.getElementById('linkAltProductName');
+      if (nameEl) nameEl.textContent = '';
+      openAdminModal(linkAlternativesModal);
+      try {
+        const res = await fetch(`/api/admin/alternatives?id=${encodeURIComponent(id)}`, { cache: 'no-store' });
+        const data = await res.json();
+        if (!data.success) {
+          if (linkAltSuggestions) linkAltSuggestions.innerHTML = `<p class="text-muted">${escapeHtml(data.message || 'Error cargando alternativas.')}</p>`;
+          return;
+        }
+        if (nameEl) nameEl.textContent = data.product?.title || id;
+        linkAltLinkedIds = new Set([
+          ...(data.product?.alternative_product_ids || []),
+          ...(data.linked || []).map((p) => p.id),
+        ]);
+        // Catálogo para el modal: sugerencias primero, después el resto de productos.
+        const suggestedIds = new Set((data.suggestions || []).map((s) => s.id));
+        linkAltCatalog = [
+          ...(data.suggestions || []),
+          ...(currentProducts || []).filter((p) => !suggestedIds.has(p.id)).map((p) => ({
+            id: p.id, title: p.title, price: p.price, image: p.image, category: p.category,
+          })),
+        ];
+        const roles = data.product?.alternatives || {};
+        const setRole = (selectId, value) => { const el = document.getElementById(selectId); if (el) el.value = value || ''; };
+        // Los roles se re-pintan en linkAltRenderList; se guardan para el restore.
+        linkAltRenderList();
+        setRole('linkAltRolePremium', roles.premiumOptionId);
+        setRole('linkAltRoleCheap', roles.cheaperOptionId);
+        setRole('linkAltRoleSimilar', roles.similarOptionId);
+      } catch {
+        if (linkAltSuggestions) linkAltSuggestions.innerHTML = '<p class="text-muted">Error de red cargando el catálogo.</p>';
+      }
+    }
+
+    document.getElementById('btnLinkAltSave')?.addEventListener('click', async () => {
+      if (!linkAltProductId) return;
+      const ids = Array.from(linkAltLinkedIds);
+      try {
+        const res = await fetch('/api/admin/alternatives', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            productId: linkAltProductId,
+            alternativeProductIds: ids,
+            premiumOptionId: document.getElementById('linkAltRolePremium')?.value || null,
+            cheaperOptionId: document.getElementById('linkAltRoleCheap')?.value || null,
+            similarOptionId: document.getElementById('linkAltRoleSimilar')?.value || null,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (linkAltStatus) { linkAltStatus.hidden = false; linkAltStatus.className = 'admin-modal-status is-ok'; linkAltStatus.textContent = data.message || 'Vínculos guardados.'; }
+          await reloadProductsTable();
+          setTimeout(() => closeAdminModal(linkAlternativesModal), 600);
+        } else {
+          if (linkAltStatus) { linkAltStatus.hidden = false; linkAltStatus.className = 'admin-modal-status is-error'; linkAltStatus.textContent = data.message || 'No se pudieron guardar los vínculos.'; }
+        }
+      } catch {
+        if (linkAltStatus) { linkAltStatus.hidden = false; linkAltStatus.className = 'admin-modal-status is-error'; linkAltStatus.textContent = 'Error de red al guardar.'; }
+      }
+    });
+
     loadCategories();
   });
 </script>
@@ -5815,4 +6446,245 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     padding: 3rem;
     color: var(--color-text-dim);
   }
+
+  /* ============ CURACIÓN AVANZADA (presets, score, duplicados, modales) ==== */
+  .prod-presets {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .45rem;
+    margin-bottom: .6rem;
+  }
+  .prod-presets-label {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--color-text-dim);
+    margin-right: .15rem;
+  }
+  :global(.preset-chip) {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: .32rem .65rem;
+    font-size: .72rem;
+    font-weight: 700;
+    color: var(--color-text-dim);
+    background: rgba(148, 163, 184, .08);
+    border: 1px solid rgba(148, 163, 184, .25);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: all .18s ease;
+  }
+  :global(.preset-chip:hover) { color: var(--color-text-main); border-color: rgba(96, 165, 250, .45); }
+  :global(.preset-chip.is-active) {
+    color: #93c5fd;
+    background: rgba(59, 130, 246, .16);
+    border-color: rgba(96, 165, 250, .55);
+  }
+  :global(.preset-chip-clear) { color: #fca5a5; border-color: rgba(239, 68, 68, .3); }
+  :global(.preset-chip-action) { color: #86efac; border-color: rgba(34, 197, 94, .3); }
+
+  :global(.score-badge) {
+    display: inline-flex;
+    flex-direction: column;
+    gap: .2rem;
+    min-width: 64px;
+  }
+  :global(.score-badge-value) { font-size: .74rem; font-weight: 800; letter-spacing: .01em; }
+  :global(.score-high .score-badge-value) { color: #4ade80; }
+  :global(.score-mid .score-badge-value) { color: #facc15; }
+  :global(.score-low .score-badge-value) { color: #94a3b8; }
+  :global(.score-bar) {
+    display: block;
+    width: 64px;
+    height: 4px;
+    background: rgba(148, 163, 184, .18);
+    border-radius: 999px;
+    overflow: hidden;
+  }
+  :global(.score-bar-fill) { display: block; height: 100%; border-radius: 999px; }
+  :global(.score-high .score-bar-fill) { background: #22c55e; }
+  :global(.score-mid .score-bar-fill) { background: #eab308; }
+  :global(.score-low .score-bar-fill) { background: #64748b; }
+
+  :global(.dup-pill) {
+    display: inline-flex;
+    align-items: center;
+    padding: .12rem .45rem;
+    font-size: .66rem;
+    font-weight: 800;
+    color: #fca5a5;
+    background: rgba(239, 68, 68, .12);
+    border: 1px solid rgba(239, 68, 68, .35);
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+  :global(.pill-subcategory) {
+    display: inline-flex;
+    align-items: center;
+    padding: .12rem .5rem;
+    font-size: .66rem;
+    font-weight: 700;
+    color: #a5b4fc;
+    background: rgba(99, 102, 241, .12);
+    border: 1px solid rgba(129, 140, 248, .3);
+    border-radius: 999px;
+  }
+  :global(.state-pill) {
+    display: inline-flex;
+    align-items: center;
+    margin-right: .35rem;
+    padding: .12rem .5rem;
+    font-size: .66rem;
+    font-weight: 700;
+    border-radius: 999px;
+    border: 1px solid rgba(148, 163, 184, .3);
+    color: var(--color-text-dim);
+  }
+  :global(.state-pill.state-completed), :global(.state-pill.state-active) {
+    color: #86efac; background: rgba(34, 197, 94, .1); border-color: rgba(34, 197, 94, .35);
+  }
+  :global(.state-pill.state-error), :global(.state-pill.state-broken), :global(.state-pill.state-dup) {
+    color: #fca5a5; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .35);
+  }
+  :global(.tag-chip-list) { display: flex; flex-wrap: wrap; gap: .3rem; }
+  :global(.tag-chip) {
+    display: inline-flex;
+    padding: .12rem .5rem;
+    font-size: .66rem;
+    font-weight: 700;
+    color: #7dd3fc;
+    background: rgba(14, 165, 233, .1);
+    border: 1px solid rgba(56, 189, 248, .3);
+    border-radius: 6px;
+  }
+  :global(.aff-curate-controls) { display: flex; flex-wrap: wrap; gap: .5rem; }
+  :global(.row-cat-select), :global(.row-subcat-select) {
+    padding: .3rem .5rem;
+    font-size: .72rem;
+    color: var(--color-text-main);
+    background: #0b1220;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    max-width: 220px;
+  }
+
+  /* Modales admin (mismo patrón visual que el modal de vídeo) */
+  :global(.admin-modal) {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    display: grid;
+    place-items: center;
+    padding: 1rem;
+  }
+  :global(.admin-modal[hidden]) { display: none; }
+  :global(.admin-modal-backdrop) {
+    position: absolute;
+    inset: 0;
+    background: rgba(2, 6, 23, .78);
+    backdrop-filter: blur(3px);
+  }
+  :global(.admin-modal-dialog) {
+    position: relative;
+    width: min(460px, 100%);
+    max-height: min(86vh, 900px);
+    overflow: auto;
+    padding: 1.25rem 1.35rem;
+    background: var(--color-bg-card, #0f172a);
+    border: 1px solid var(--color-border, rgba(96, 165, 250, .25));
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .5);
+  }
+  :global(.admin-modal-wide .admin-modal-dialog) { width: min(880px, 100%); }
+  :global(.admin-modal-close) {
+    position: absolute;
+    top: .65rem;
+    right: .75rem;
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+    color: var(--color-text-dim);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 1.2rem;
+    line-height: 1;
+    cursor: pointer;
+  }
+  :global(.admin-modal-close:hover) { color: var(--color-text-main); background: rgba(148, 163, 184, .12); }
+  :global(.admin-modal-title) { margin: 0 0 .5rem; font-size: 1.02rem; color: var(--color-text-main); }
+  :global(.admin-modal-subtitle) { display: block; margin-top: .15rem; font-size: .72rem; font-weight: 600; color: var(--color-text-dim); }
+  :global(.admin-modal-text) { margin: 0 0 .7rem; font-size: .82rem; color: var(--color-text-dim); line-height: 1.5; }
+  :global(.admin-modal-warning) {
+    margin: 0 0 .9rem;
+    padding: .55rem .7rem;
+    font-size: .76rem;
+    color: #fcd34d;
+    background: rgba(245, 158, 11, .08);
+    border: 1px solid rgba(245, 158, 11, .3);
+    border-radius: 8px;
+    line-height: 1.45;
+  }
+  :global(.admin-modal-field) { display: flex; flex-direction: column; gap: .3rem; margin-bottom: .7rem; }
+  :global(.admin-modal-field span) { font-size: .72rem; font-weight: 700; color: var(--color-text-dim); }
+  :global(.admin-modal-field input), :global(.admin-modal-field select) {
+    padding: .45rem .6rem;
+    font-size: .82rem;
+    color: var(--color-text-main);
+    background: #0b1220;
+    border: 1px solid var(--color-border, rgba(96, 165, 250, .25));
+    border-radius: 8px;
+  }
+  :global(.admin-modal-actions) { display: flex; justify-content: flex-end; gap: .6rem; margin-top: .9rem; }
+  :global(.admin-modal-status) {
+    margin: .5rem 0 0;
+    padding: .45rem .65rem;
+    font-size: .76rem;
+    border-radius: 8px;
+  }
+  :global(.admin-modal-status.is-ok) { color: #86efac; background: rgba(34, 197, 94, .1); border: 1px solid rgba(34, 197, 94, .3); }
+  :global(.admin-modal-status.is-error) { color: #fca5a5; background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); }
+  :global(.preview-card-frame) {
+    display: block;
+    width: 100%;
+    height: min(70vh, 640px);
+    border: 1px solid var(--color-border, rgba(96, 165, 250, .2));
+    border-radius: 10px;
+    background: #0b1220;
+  }
+  :global(.link-alt-columns) { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  @media (max-width: 720px) { :global(.link-alt-columns) { grid-template-columns: 1fr; } }
+  :global(.link-alt-heading) { margin: 0 0 .45rem; font-size: .76rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-dim); }
+  :global(.link-alt-count) { font-weight: 600; color: #64748b; text-transform: none; }
+  :global(.link-alt-list) {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+    max-height: 280px;
+    overflow: auto;
+    padding: .35rem;
+    background: rgba(2, 6, 23, .35);
+    border: 1px solid var(--color-border, rgba(96, 165, 250, .18));
+    border-radius: 10px;
+  }
+  :global(.link-alt-item) {
+    display: grid;
+    grid-template-columns: auto 36px 1fr auto;
+    align-items: center;
+    gap: .5rem;
+    padding: .3rem .4rem;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  :global(.link-alt-item:hover) { background: rgba(59, 130, 246, .08); }
+  :global(.link-alt-item.is-linked) { background: rgba(34, 197, 94, .07); }
+  :global(.link-alt-item img) { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; background: #0b1220; }
+  :global(.link-alt-item-title) { font-size: .74rem; color: var(--color-text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  :global(.link-alt-item-price) { font-size: .7rem; font-weight: 700; color: #7dd3fc; white-space: nowrap; }
+  :global(.link-alt-roles) { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; margin-top: .6rem; }
+  @media (max-width: 720px) { :global(.link-alt-roles) { grid-template-columns: 1fr; } }
 </style>

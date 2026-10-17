@@ -335,10 +335,28 @@ export const POST: APIRoute = async ({ request }) => {
     // ------------------------------------------------------------------
     let saved = false;
     if (options.save) {
-      const exists = readProductsFromFile().some((item) => item.id === base.id);
+      const existing = readProductsFromFile().find((item) => item.id === base.id);
+      if (existing) {
+        // Curación: el upsert conserva los campos de catálogo jerárquico y
+        // cross-matching que el formulario de enriquecimiento no conoce.
+        const CURATION_FIELDS = [
+          'sourceId', 'category_id', 'subcategory_id', 'link_status',
+          'normalized_tags', 'alternative_product_ids', 'alternatives',
+          'conversion_score', 'commissionEstimate', 'sales30d',
+        ] as const;
+        for (const field of CURATION_FIELDS) {
+          if ((existing as any)[field] !== undefined) {
+            (base as any)[field] = (existing as any)[field];
+          }
+        }
+      }
+      // Estado editorial: el enriquecimiento de texto completado marca ia_status.
+      if (textStatus === 'ok' || textStatus === 'local') base.ia_status = 'completed';
+      else if (textStatus === 'error') base.ia_status = 'error';
+      if (base.affiliateUrl && !base.link_status) base.link_status = 'active';
       upsertProduct(base);
       saved = true;
-      if (exists) warnings.push('Producto existente actualizado (upsert por id).');
+      if (existing) warnings.push('Producto existente actualizado (upsert por id).');
     }
 
     const failed = options.text && options.image && textStatus === 'error' && imageStatus === 'error';

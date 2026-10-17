@@ -101,6 +101,24 @@ export interface Product {
     premiumOptionId?: string;
     similarOptionId?: string;
   };
+
+  // ─── Curación avanzada (opcionales; retrocompatibles con products.json) ────
+  /** ID externo del producto (ASIN / Item ID de AliExpress). */
+  sourceId?: string;
+  /** ID de la categoría padre (catálogo jerárquico). */
+  category_id?: string;
+  /** ID de la subcategoría (categoría-hija con parentId). */
+  subcategory_id?: string;
+  /** Estado del enriquecimiento con IA: pending | completed | error. */
+  ia_status?: string;
+  /** Estado del enlace de afiliación: active | pending | broken. */
+  link_status?: string;
+  /** Tags técnicos normalizados (matriz de atributos). */
+  normalized_tags?: string[];
+  /** Alternativas vinculadas (cross-matching bidireccional). */
+  alternative_product_ids?: string[];
+  /** Puntuación de conversión/rentabilidad 0-100. */
+  conversion_score?: number;
 }
 
 // â”€â”€â”€ Type guard: checks if a Product has the new structured fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -167,6 +185,14 @@ export function toStructuredProduct(flat: Product): ProductSchema {
       alternativeUrl: undefined,
     },
     alternatives: flat.alternatives,
+    sourceId: flat.sourceId,
+    category_id: flat.category_id,
+    subcategory_id: flat.subcategory_id,
+    ia_status: flat.ia_status,
+    link_status: flat.link_status,
+    normalized_tags: flat.normalized_tags,
+    alternative_product_ids: flat.alternative_product_ids,
+    conversion_score: flat.conversion_score,
     image: flat.image,
     gallery: flat.gallery,
     badge: flat.badge,

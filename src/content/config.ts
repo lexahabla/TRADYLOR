@@ -103,6 +103,24 @@ const productSchema = z.object({
     similarOptionId: z.string().optional(),
   }).optional(),
 
+  // ─── Curación avanzada (opcionales; se gestionan desde el panel admin) ─────
+  /** ID externo del producto (ASIN / Item ID de AliExpress). */
+  sourceId: z.string().optional(),
+  /** ID de la categoría padre (catálogo jerárquico de categories.json). */
+  category_id: z.string().optional(),
+  /** ID de la subcategoría (categoría-hija con parentId). */
+  subcategory_id: z.string().optional(),
+  /** Estado del enriquecimiento con IA: pending | completed | error. */
+  ia_status: z.string().optional(),
+  /** Estado del enlace de afiliación: active | pending | broken. */
+  link_status: z.string().optional(),
+  /** Tags técnicos normalizados (matriz de atributos; filtros públicos). */
+  normalized_tags: z.array(z.string()).optional(),
+  /** Alternativas vinculadas (cross-matching bidireccional). */
+  alternative_product_ids: z.array(z.string()).optional(),
+  /** Puntuación de conversión/rentabilidad 0-100 (calculada en el panel). */
+  conversion_score: z.number().optional(),
+
   // ─── Media & Visual ────────────────────────────────────────────────────────
   image: z.string().default('/images/placeholder-product.jpg'),
   /** Galería completa del producto (vistas adicionales para el carrusel). */
