@@ -95,9 +95,6 @@ const compactText = (text: string, maxLength: number) => {
 const cleanMarketplaceSuffix = (text: string) => text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
 const catalogDescription = product ? compactText(cleanMarketplaceSuffix(product.description), 118) : '';
 
-// Top 3 features (compact bullet list)
-const topFeatures = product ? product.pros.slice(0, 3).map((pro) => compactText(pro, 60)) : [];
-
 // Build structured title: "{productType} {brand} {model}" or fallback to raw title
 const productTypeLabel: Record<string, string> = {
   Laptop: 'Laptop',
@@ -130,17 +127,58 @@ const catalogDirectExitHref = product
   ? (product.buyNowUrl?.trim() || getAmazonAddToCartUrl(product.asin || ''))
   : '';
 
-// Satisfaction score: derivado de los datos reales de pros/contras.
-// (Antes se leía conversionHooks.satisfactionScore, que el esquema siempre
-// rellena con 85/15, así que la barra nunca reflejaba la ficha del producto.)
-// Sólo se usa como respaldo cuando el producto no tiene pros ni contras.
-const satisfaction = product?.conversionHooks?.satisfactionScore;
+// Barra de satisfacción: proporción calculada con 4 factores reales del
+// producto (sólo se ponderan los factores con datos disponibles):
+//   1) pros/contras de la ficha, 2) valoraciones (estrellas y nº de opiniones),
+//   3) relación calidad-precio (descuento real sobre el PVP) y
+//   4) volumen de ventas/opiniones (escala logarítmica).
+// Si el producto no tiene ningún dato, se usa conversionHooks como respaldo.
+const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
+
 const prosCount = Array.isArray(product?.pros) ? product.pros.length : 0;
 const consCount = Array.isArray(product?.cons) ? product.cons.length : 0;
-const hasVerdictData = prosCount + consCount > 0;
-const positivePercent = hasVerdictData
-  ? Math.round((prosCount / (prosCount + consCount)) * 100)
-  : Math.round(satisfaction?.positivePercentage ?? 85);
+
+const factors: { weight: number; score: number }[] = [];
+
+// 1) Pros vs contras
+if (prosCount + consCount > 0) {
+  factors.push({ weight: 0.4, score: prosCount / (prosCount + consCount) });
+}
+
+// 2) Valoraciones: estrellas (70%) + volumen de opiniones (30%)
+const ratingValue = Number(product?.rating) || 0;
+const reviewsValue = Number(product?.reviewsCount) || 0;
+if (ratingValue > 0 || reviewsValue > 0) {
+  const starsScore = ratingValue > 0 ? clamp01(ratingValue / 5) : 0.75;
+  const reviewScore = reviewsValue > 0 ? clamp01(Math.log10(reviewsValue + 1) / 4) : 0.5;
+  factors.push({ weight: 0.25, score: starsScore * 0.7 + reviewScore * 0.3 });
+}
+
+// 3) Relación calidad-precio: descuento real sobre el precio original.
+// Sin descuento conocido se asume un valor neutro (0.6).
+const productPrice = Number(product?.price) || 0;
+const productOriginalPrice = Number(product?.originalPrice) || 0;
+if (productPrice > 0) {
+  const discountRatio =
+    productOriginalPrice > productPrice
+      ? clamp01((productOriginalPrice - productPrice) / productOriginalPrice)
+      : 0;
+  factors.push({ weight: 0.2, score: 0.6 + discountRatio * 0.4 });
+}
+
+// 4) Ventas / popularidad: nº de opiniones como proxy de volumen (escala log).
+if (reviewsValue > 0) {
+  factors.push({ weight: 0.15, score: clamp01(Math.log10(reviewsValue + 1) / 4) });
+}
+
+const totalWeight = factors.reduce((acc, f) => acc + f.weight, 0);
+const satisfaction = product?.conversionHooks?.satisfactionScore;
+const positivePercent =
+  totalWeight > 0
+    ? Math.round(
+        (factors.reduce((acc, f) => acc + f.weight * f.score, 0) / totalWeight) * 100,
+      )
+    : Math.round(satisfaction?.positivePercentage ?? 85);
 const negativePercent = 100 - positivePercent;
 
 // Formateo de precio en formato moneda EUR
@@ -243,6 +281,15 @@ const radarPayload = {
   </article>
 ) : (
 <article class="product-card" id={`product-${product?.id}`}>
+  <!-- Enlace de tarjeta completa: al pasar el cursor toda la tarjeta lleva a
+       la ficha. Los elementos con enlace propio (título, categoría, imagen,
+       "Comprar ya", "Mi Radar" y salida directa) quedan por encima (z-index). -->
+  <a
+    class="card-link-overlay"
+    href={`/producto/${product.slug ?? product.id}`}
+    aria-label={`Ver ficha de ${product.title}`}
+    tabindex="-1"
+  ></a>
   <!-- Contenedor Visual del Producto
        Tailwind: contenedor cuadrado con fondo neutro (#F8F9FA) y la imagen
        contenida (object-contain) para que las fotos generadas con IA no se
@@ -280,7 +327,7 @@ const radarPayload = {
   <div class="card-main">
   <!-- Contenido Editorial & Especificaciones -->
   <div class="card-content">
-    <span class="category-label">{product.category}</span>
+    <a class="category-label" href={`/?category=${encodeURIComponent(String(product.category ?? '').toLowerCase().trim())}`}>{product.category}</a>
 
     {product.rating && (
       <div class="rating-box" aria-label={`Puntuación: ${product.rating} sobre 5`}>
@@ -305,19 +352,6 @@ const radarPayload = {
 
     <p class="product-summary">{catalogDescription}</p>
 
-    {topFeatures.length > 0 && (
-      <ul class="features-list">
-        {topFeatures.map((feat) => (
-          <li class="feature-item">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="3" aria-hidden="true">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            <span>{feat}</span>
-          </li>
-        ))}
-      </ul>
-    )}
-
     <!-- Satisfaction Bar -->
     <div class="satisfaction-bar">
       <div class="satisfaction-header">
@@ -327,6 +361,7 @@ const radarPayload = {
       <div class="satisfaction-track">
         <div class="satisfaction-fill" style={`width: ${positivePercent}%`} />
       </div>
+      <p class="satisfaction-note">Proporción calculada con pros y contras, valoraciones, precio (relación calidad-precio) y ventas.</p>
     </div>
   </div>
 
@@ -544,6 +579,12 @@ const radarPayload = {
     border-radius: 6px;
     border: 1px solid rgba(96, 165, 250, 0.2);
     text-align: center;
+    text-decoration: none;
+  }
+
+  a.category-label:hover {
+    background: rgba(96, 165, 250, 0.2);
+    border-color: rgba(96, 165, 250, 0.45);
   }
 
   .rating-box {
@@ -604,28 +645,26 @@ const radarPayload = {
     margin: 0;
   }
 
-  /* ============ FEATURES LIST ============ */
-  .features-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-    margin: 0;
-    padding: 0;
+  /* ============ ENLACE DE TARJETA COMPLETA ============
+     Overlay transparente a toda la tarjeta (sólo modo catálogo). Los elementos
+     con enlace propio (imagen, título, categoría, botones) tienen z-index
+     superior y siguen siendo los targets reales del clic. */
+  .card-link-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: 24px;
+    cursor: pointer;
   }
 
-  .feature-item {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.45rem;
-    font-size: 0.75rem;
-    line-height: 1.4;
-    color: rgba(255, 255, 255, 0.75);
-  }
-
-  .feature-item svg {
-    flex-shrink: 0;
-    margin-top: 2px;
+  /* Sólo los elementos interactivos se elevan por encima del overlay. */
+  .image-wrapper .image-link,
+  .product-title a,
+  a.category-label,
+  .buy-actions,
+  .quick-buy-cta {
+    position: relative;
+    z-index: 3;
   }
 
   /* ============ SATISFACTION BAR ============ */
@@ -664,12 +703,19 @@ const radarPayload = {
     transition: width 0.6s ease;
   }
 
+  .satisfaction-note {
+    margin: 0.35rem 0 0;
+    font-size: 0.65rem;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.45);
+    text-align: center;
+  }
+
   /* Móvil (<768px, disposición horizontal): se omite el texto editorial
      largo para agrupar a la derecha sólo título, precio, badges y botones
      (estilo lista de Amazon). En escritorio se restaura (ver min-width). */
   @media (max-width: 767px) {
     .product-summary,
-    .features-list,
     .satisfaction-bar {
       display: none;
     }
@@ -1009,10 +1055,6 @@ const radarPayload = {
 
     .product-summary {
       display: -webkit-box;
-    }
-
-    .features-list {
-      display: flex;
     }
 
     .satisfaction-bar {
