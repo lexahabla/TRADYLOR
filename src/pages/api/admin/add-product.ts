@@ -12,7 +12,7 @@ import {
   type EnrichedText,
 } from '../../../lib/ai';
 import { enrichProductLocally } from '../../../lib/localEnrich';
-import { readProductsFromFile, slugify, upsertProduct, type Product } from '../../../lib/productStore';
+import { findDuplicateProduct, readProductsFromFile, slugify, upsertProduct, type Product } from '../../../lib/productStore';
 import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../../../utils/amazon';
 
 export const prerender = false;
@@ -100,6 +100,37 @@ export const POST: APIRoute = async ({ request }) => {
       image: body?.options?.image !== false,
       save: body?.options?.save !== false,
     };
+
+    // ------------------------------------------------------------------
+    // DUPLICADOS: si el producto ya está en el catálogo (misma URL de
+    // afiliado/tienda o mismo título normalizados) NO se vuelve a dar de
+    // alta ni se gastan llamadas de IA. El id propio nunca cuenta.
+    // ------------------------------------------------------------------
+    if (options.save) {
+      const requestedId = String(body?.id ?? '').trim();
+      const duplicate = findDuplicateProduct(readProductsFromFile(), {
+        id: requestedId,
+        title,
+        urls: [body?.affiliateUrl, body?.url, body?.buyNowUrl],
+      });
+      if (duplicate) {
+        return jsonResponse(
+          {
+            success: true,
+            saved: false,
+            duplicate: true,
+            message: `Ya está en el catálogo («${duplicate.title}»): no se ha añadido un duplicado.`,
+            product: duplicate,
+            enrichment: {
+              text: 'skipped',
+              image: 'skipped',
+              warnings: ['Duplicado evitado: el producto ya existía en el catálogo.'],
+            },
+          },
+          200
+        );
+      }
+    }
 
     const warnings: string[] = [];
     let textStatus: 'ok' | 'local' | 'skipped' | 'error' = 'skipped';

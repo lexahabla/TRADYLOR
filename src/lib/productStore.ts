@@ -106,3 +106,51 @@ export function upsertProduct(product: Product): { product: Product; updated: bo
   writeProductsToFile(products);
   return { product, updated };
 }
+
+/**
+ * Clave normalizada para comparar productos (misma regla que el panel admin
+ * usa con el catálogo AliExpress): minúsculas, sin esquema, sin `www`, sin
+ * query/hash y sin barra final. Así un enlace de afiliado con parámetros de
+ * tracking se considera IGUAL que la URL limpia del producto.
+ */
+export function normalizeProductKey(value: string | null | undefined): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\/(www\.)?/, '')
+    .replace(/[?#].*$/, '')
+    .replace(/\/+$/, '');
+}
+
+/**
+ * Busca en el catálogo un producto que YA exista y coincida con el candidato
+ * por URL de afiliado/tienda o por título (normalizados). Sirve para no crear
+ * filas repetidas en products.json.
+ *
+ * @param ignoreId  id del producto que se está actualizando (no cuenta como duplicado).
+ */
+export function findDuplicateProduct(
+  products: Product[],
+  candidate: { id?: string | null; title?: string | null; urls?: Array<string | null | undefined> },
+  ignoreId?: string | null,
+): Product | undefined {
+  const ignored = new Set(
+    [candidate.id, ignoreId]
+      .map((value) => String(value || '').trim())
+      .filter(Boolean),
+  );
+  const urls = new Set(
+    (candidate.urls ?? [])
+      .map((value) => normalizeProductKey(value))
+      .filter(Boolean),
+  );
+  const titleKey = normalizeProductKey(candidate.title);
+  if (!urls.size && !titleKey) return undefined;
+
+  return products.find((item) => {
+    if (ignored.has(item.id)) return false;
+    if (item.affiliateUrl && urls.has(normalizeProductKey(item.affiliateUrl))) return true;
+    if (item.buyNowUrl && urls.has(normalizeProductKey(item.buyNowUrl))) return true;
+    return Boolean(titleKey) && titleKey === normalizeProductKey(item.title);
+  });
+}

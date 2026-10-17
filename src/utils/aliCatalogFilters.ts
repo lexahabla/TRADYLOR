@@ -601,8 +601,8 @@ interface AliChip {
 
 const ESTADO_LABELS: Record<AliEstadoFilter, string> = {
   ALL: 'Todos',
-  PENDING: 'Pendientes',
-  IMPORTED: 'Importados',
+  PENDING: 'No añadidos',
+  IMPORTED: 'Añadidos al catálogo',
   DISCARDED: 'Descartados',
 };
 

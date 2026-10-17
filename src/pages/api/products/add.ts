@@ -5,6 +5,7 @@ import {
   readProductsFromFile,
   writeProductsToFile,
   slugify,
+  findDuplicateProduct,
   type Product,
 } from '../../../lib/productStore';
 import { addDeletedId, removeDeletedId } from '../../../lib/deletedProducts';
@@ -593,6 +594,30 @@ export const POST: APIRoute = async ({ request }) => {
       const currentProducts = readProductsFromFile();
       const productId = dataToSave.id || slugify(dataToSave.title);
       const existingProduct = currentProducts.find((p) => p.id === productId);
+
+      // Duplicados: si OTRA fila del catálogo ya comparte URL de afiliado o
+      // título (normalizados), no se crea una segunda copia. El propio id del
+      // producto se ignora para no bloquear sus actualizaciones.
+      const duplicate = findDuplicateProduct(
+        currentProducts,
+        {
+          id: productId,
+          title: dataToSave.title,
+          urls: [dataToSave.affiliateUrl, dataToSave.buyNowUrl, (dataToSave as { url?: string }).url],
+        },
+        productId,
+      );
+      if (duplicate) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            duplicate: true,
+            message: `Ya existe en el catálogo («${duplicate.title}»): no se ha añadido un duplicado.`,
+            product: duplicate,
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
 
       // Galería: si el cliente no envía ninguna, se conserva la ya guardada
       // (así editar un producto sin re-scrapear no borra sus imágenes).
