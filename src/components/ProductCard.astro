@@ -130,14 +130,18 @@ const catalogDirectExitHref = product
   ? (product.buyNowUrl?.trim() || getAmazonAddToCartUrl(product.asin || ''))
   : '';
 
-// Satisfaction score: use structured field or fallback to pros/cons ratio
+// Satisfaction score: derivado de los datos reales de pros/contras.
+// (Antes se leía conversionHooks.satisfactionScore, que el esquema siempre
+// rellena con 85/15, así que la barra nunca reflejaba la ficha del producto.)
+// Sólo se usa como respaldo cuando el producto no tiene pros ni contras.
 const satisfaction = product?.conversionHooks?.satisfactionScore;
-const positivePercent = satisfaction?.positivePercentage
-  ?? (product && (product.pros.length + product.cons.length > 0)
-    ? Math.round((product.pros.length / (product.pros.length + product.cons.length)) * 100)
-    : 85);
-const negativePercent = satisfaction?.negativePercentage
-  ?? (100 - positivePercent);
+const prosCount = Array.isArray(product?.pros) ? product.pros.length : 0;
+const consCount = Array.isArray(product?.cons) ? product.cons.length : 0;
+const hasVerdictData = prosCount + consCount > 0;
+const positivePercent = hasVerdictData
+  ? Math.round((prosCount / (prosCount + consCount)) * 100)
+  : Math.round(satisfaction?.positivePercentage ?? 85);
+const negativePercent = 100 - positivePercent;
 
 // Formateo de precio en formato moneda EUR
 const formatCurrency = (amount: number) => {
