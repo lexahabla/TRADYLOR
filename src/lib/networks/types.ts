@@ -64,6 +64,12 @@ export interface UnifiedProduct {
   visits?: number;
   inStock: boolean;
   shippingInfo?: string;
+  /**
+   * Fecha ISO en que el producto entró por primera vez en la caché del catálogo.
+   * La fija `syncAliCatalog` (ver `lib/aliCatalogMerge.ts`); los conectores no la
+   * rellenan. Permite ordenar el catálogo por novedad («Fecha de alta»).
+   */
+  firstSeenAt?: string;
   estimated: boolean;
   /** Datos extra de la red (tienda, ventas, alcance, descuento, enlace de afiliado…). */
   extra?: Record<string, string | number | boolean | null>;
