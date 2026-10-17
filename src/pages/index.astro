@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import ProductCard from '../components/ProductCard.astro';
 import CategoryMenu from '../components/CategoryMenu.astro';
+import HeroSearchRadar from '../components/HeroSearchRadar.astro';
 import TrustMetrics from '../components/common/TrustMetrics.astro';
 import { getCatalogProducts } from '../lib/catalog';
 import { readSections } from '../lib/sections';
@@ -95,6 +96,9 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       <p class="hero-subtitle">
         En Tradylor desarmamos las campañas de marketing engañosas. Analizamos a fondo especificaciones, fiabilidad y relación calidad-precio para que ahorres tiempo, dinero y tomes decisiones de compra 100% acertadas.
       </p>
+
+      <!-- Buscador híbrido: buscar / ofertas / perfilador de comprador -->
+      <HeroSearchRadar />
 
       <!-- Badges de Autoridad E-E-A-T -->
       <div class="hero-trust-metrics">

@@ -66,6 +66,8 @@ export interface AuthResult {
   user?: UserProfile;
   /** Link de reset en dev (sólo local, flujo de recuperación). */
   devResetUrl?: string;
+  /** Link de acceso del magic link en dev (sólo local). */
+  devMagicUrl?: string;
   /** true si el registro quedó pendiente de activación por email. */
   verificationPending?: boolean;
   /** Link de activación en dev (sólo local, flujo de verificación). */
@@ -78,8 +80,10 @@ async function afterAuthSuccess(): Promise<void> {
   cachedSession = null;
   const session = await getSession(true);
   if (session.authenticated) {
-    localStorage.removeItem(RADAR_STORAGE_KEY);
-    await pullFromCloud();
+    // Soft gate: el radar anónimo (LocalStorage) se migra a la nube con merge
+    // (POST /api/radar) en vez de borrarse, para no perder productos guardados
+    // antes de registrarse.
+    await syncLocalToCloud();
     loadRadar();
     emitAuth(session.user);
   }
@@ -148,6 +152,41 @@ export async function requestPasswordReset(email: string): Promise<AuthResult> {
     success: res.ok && Boolean(data.success),
     message: String(data.message ?? ''),
     devResetUrl: data.devResetUrl ? String(data.devResetUrl) : undefined,
+  };
+}
+
+/** Pide un enlace mágico (login sin contraseña) por email. */
+export async function requestMagicLink(email: string): Promise<AuthResult> {
+  const res = await fetch('/api/radar/auth/magic', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  });
+  const data = await parseJson(res);
+  return {
+    success: res.ok && Boolean(data.success),
+    message: String(data.message ?? ''),
+    devMagicUrl: data.devMagicUrl ? String(data.devMagicUrl) : undefined,
+    code: data.code ? String(data.code) : undefined,
+  };
+}
+
+/** Canjea el token del enlace mágico (?magic=…) por una sesión. */
+export async function verifyMagicLink(token: string): Promise<AuthResult> {
+  const res = await fetch('/api/radar/auth/magic/verify', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token }),
+  });
+  const data = await parseJson(res);
+  if (res.ok && data.success) {
+    await afterAuthSuccess();
+    return { success: true, user: data.user as UserProfile };
+  }
+  return {
+    success: false,
+    message: String(data.message ?? 'El enlace no es válido o ha caducado.'),
+    code: data.code ? String(data.code) : undefined,
   };
 }
 

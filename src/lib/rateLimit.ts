@@ -17,6 +17,12 @@ export const radarPasswordAttempts: RateLimiter = createRateLimiter(10, 60 * 60 
 /** Correos de confirmación de cambio de email: 5 por hora y cuenta. */
 export const radarEmailChanges: RateLimiter = createRateLimiter(5, 60 * 60 * 1000);
 
+/** Enlaces mágicos pedidos por IP: 8 por hora (evita bombardeo de bandejas ajenas). */
+export const magicLinkRequestsPerIp: RateLimiter = createRateLimiter(8, 60 * 60 * 1000);
+
+/** Sync de perfil de marketing por usuario: 30 por hora (el cliente throttle a 1/día). */
+export const profileSyncPerUser: RateLimiter = createRateLimiter(30, 60 * 60 * 1000);
+
 /** Tarjetas "A mi correo" enviadas por usuario: 12 por hora (sólo van a su propia cuenta). */
 export const shareEmailsPerUser: RateLimiter = createRateLimiter(12, 60 * 60 * 1000);
 

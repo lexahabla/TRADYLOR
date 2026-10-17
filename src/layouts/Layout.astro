@@ -1910,6 +1910,46 @@ const resolvedImage = toAbsolute(image);
 
         // ---------------------------------------------------------- helpers UI
         const $ = <T extends Element = HTMLElement>(sel: string) => document.querySelector<T>(sel);
+        // true cuando initAuth() ya resolvió (evita falsos positivos del gate
+        // de sesión mientras la petición de /session está en vuelo).
+        let authReady = false;
+
+        // ------------------- perfil de marketing (sync throttled ~1/día) ----
+        // Envía al servidor las búsquedas y el quiz guardados en LocalStorage
+        // para nutrir user_profiles.json / marketing_leads.json.
+        const PROFILE_SYNC_KEY = 'tradylor-profile-sync-at';
+        const PROFILE_SYNC_MIN_GAP_MS = 24 * 60 * 60 * 1000;
+
+        async function syncMarketingProfile(force = false): Promise<void> {
+          try {
+            if (!force) {
+              const last = Number(localStorage.getItem(PROFILE_SYNC_KEY) ?? 0);
+              if (Number.isFinite(last) && Date.now() - last < PROFILE_SYNC_MIN_GAP_MS) return;
+            }
+            const rawTerms = localStorage.getItem('tradylor-search-terms');
+            const rawQuiz = localStorage.getItem('tradylor-quiz-answers');
+            const lastSearchTerms: string[] = rawTerms ? JSON.parse(rawTerms) : [];
+            const quiz = rawQuiz ? JSON.parse(rawQuiz) : null;
+            const payload: Record<string, unknown> = {
+              lastSearchTerms: Array.isArray(lastSearchTerms) ? lastSearchTerms : [],
+            };
+            if (quiz && typeof quiz === 'object') {
+              const { perfil, objetivo, presupuesto } = quiz as Record<string, unknown>;
+              if (perfil || objetivo || presupuesto) {
+                payload.quizAnswers = { perfil, objetivo, presupuesto };
+              }
+              if (typeof quiz.buyerProfile === 'string') payload.buyerProfile = quiz.buyerProfile;
+              if (typeof presupuesto === 'string') payload.budgetRange = presupuesto;
+            }
+            const res = await fetch('/api/user-profile/sync', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify(payload),
+            });
+            if (res.ok) localStorage.setItem(PROFILE_SYNC_KEY, String(Date.now()));
+          } catch { /* el sync de marketing nunca interrumpe la navegación. */ }
+        }
 
         // ------------------------------------------------- cabecera: auth vs user
         const headerAnon = $('[data-header-anon]');
@@ -1941,7 +1981,9 @@ const resolvedImage = toAbsolute(image);
           } else {
             headerAnon.hidden = false;
             headerUserArea.hidden = true;
-            if (headerRadarBtn) headerRadarBtn.hidden = true;
+            // El radar también funciona sin sesión (LocalStorage + soft gate):
+            // el botón/contador se queda visible para anónimos.
+            if (headerRadarBtn) headerRadarBtn.hidden = false;
             closeUserMenu();
             closeRadarDrawer();
           }
@@ -2123,14 +2165,14 @@ const resolvedImage = toAbsolute(image);
           }
         });
 
-        // Enlace del pie del drawer: si no hay sesión, abre modal de login
+        // Enlace del pie del drawer: si no hay sesión, abre modal de login (contexto radar)
         radarDrawerFullLink?.addEventListener('click', (e) => {
           const session = getCachedSession();
           if (!session?.user) {
             e.preventDefault();
             closeRadarDrawer();
-            const w = window as unknown as Record<string, { open?: (mode?: string) => void } | undefined>;
-            w.TradylorAuth?.open?.('login');
+            const w = window as unknown as Record<string, { open?: (view?: string, context?: string) => void } | undefined>;
+            w.TradylorAuth?.open?.('login', 'radar-add');
           }
         });
 
@@ -2210,6 +2252,9 @@ const resolvedImage = toAbsolute(image);
         };
 
         // Delegación de clics en cualquier botón "Guardar" (tarjetas, etc.).
+        // Soft gate: sin sesión el producto se guarda igual en LocalStorage y,
+        // además, se abre el modal contextual "Activa tu Radar" para ofrecer la
+        // sincronización a la nube (se completa tras el login con merge).
         document.addEventListener('click', (event) => {
           const target = event.target;
           if (!(target instanceof Element)) return;
@@ -2232,8 +2277,28 @@ const resolvedImage = toAbsolute(image);
               dateAdded: new Date().toISOString(),
             };
             saveToRadar(payload);
+            // Modal contextual sólo la primera vez (evita repetir el modal en cada guardado).
+            if (authReady && !getCachedSession()?.user && !sessionStorage.getItem('tradylor-radar-gate')) {
+              sessionStorage.setItem('tradylor-radar-gate', '1');
+              const w = window as unknown as Record<string, { open?: (view?: string, context?: string) => void } | undefined>;
+              w.TradylorAuth?.open?.('register', 'radar-add');
+            }
           }
           syncButtons();
+        });
+
+        // Gate de conversión del CTA principal "Comprar Ya" (ficha de producto):
+        // sin sesión se ofrece el modal de seguimiento de garantía; el enlace
+        // pendiente se conserva en el botón "Continuar sin registrarme".
+        document.addEventListener('click', (event) => {
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          const cta = target.closest<HTMLAnchorElement>('a.cta-primary-btn[href*="/checkout/"]');
+          if (!cta) return;
+          if (!authReady || getCachedSession()?.user) return; // logueado o sesión aún sin resolver: pasa
+          event.preventDefault();
+          const w = window as unknown as Record<string, { open?: (view?: string, context?: string, href?: string) => void } | undefined>;
+          w.TradylorAuth?.open?.('login', 'buy-now', cta.getAttribute('href') ?? '');
         });
 
         // Return Flow: registra salidas directas (.exit-cta) en el radar.
@@ -2258,10 +2323,13 @@ const resolvedImage = toAbsolute(image);
         onAuthChange((user) => {
           renderHeaderAuth(user);
           syncButtons();
+          if (user) void syncMarketingProfile();
         });
         void initAuth().then((session) => {
+          authReady = true;
           renderHeaderAuth(session.user ?? null);
           syncButtons();
+          if (session.user) void syncMarketingProfile();
         });
         // Si no hay sesión aún, muestra el bloque anónimo ya (evita flash).
         renderHeaderAuth(getCachedSession()?.user ?? null);

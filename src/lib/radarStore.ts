@@ -215,6 +215,42 @@ function mergeProductFields(current: SavedProduct, incoming: SavedProduct): Save
   };
 }
 
+function clampPrice(value: unknown): number | undefined {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return Math.round(Math.min(n, 1_000_000) * 100) / 100;
+}
+
+/** Normaliza los campos sensibles de un producto antes de persistirlo (sync o alta puntual). */
+function sanitizeRadarProduct(product: SavedProduct): SavedProduct {
+  const clean: SavedProduct = {
+    ...product,
+    id: String(product.id ?? '').slice(0, 200),
+    title: String(product.title ?? '').slice(0, 300),
+    price: String(product.price ?? '').slice(0, 40),
+    image: String(product.image ?? '').slice(0, 1000),
+    buyUrl: String(product.buyUrl ?? '').slice(0, 1000),
+    store: product.store === 'aliexpress' ? 'aliexpress' : 'amazon',
+  };
+  const initial = clampPrice(product.initialPrice);
+  const target = clampPrice(product.targetPrice);
+  const lastPrice = clampPrice(product.priceAlert?.lastPrice);
+  if (initial !== undefined) clean.initialPrice = initial;
+  if (target !== undefined) clean.targetPrice = target;
+  if (product.priceAlert) {
+    clean.priceAlert = {
+      status: product.priceAlert.status === 'triggered' ? 'triggered' : 'armed',
+      triggeredAt: product.priceAlert.triggeredAt ? String(product.priceAlert.triggeredAt).slice(0, 40) : undefined,
+      lastPrice,
+      lastCheckedAt: product.priceAlert.lastCheckedAt
+        ? String(product.priceAlert.lastCheckedAt).slice(0, 40)
+        : undefined,
+      lastInStock: typeof product.priceAlert.lastInStock === 'boolean' ? product.priceAlert.lastInStock : undefined,
+    };
+  }
+  return clean;
+}
+
 /**
  * Sync LocalStorage → nube. Fusión por unión con marcas de tiempo:
  *  - Altas: lo que sólo existe en un lado se conserva (otro dispositivo, otra sesión).
@@ -298,13 +334,13 @@ export function syncRadar(userId: string, incoming: Partial<RadarData>): RadarDa
     let product: SavedProduct;
     if (client && cloud) {
       const winner = client.touched >= cloud.touched ? client : cloud;
-      product = mergeProductFields(cloud.product, client.product);
+      product = sanitizeRadarProduct(mergeProductFields(cloud.product, client.product));
       if (winner.product.movedAt) product.movedAt = winner.product.movedAt;
       else delete product.movedAt;
       folderId = winner.folderId;
     } else {
       const only = (client ?? cloud) as Entry;
-      product = only.product;
+      product = sanitizeRadarProduct(only.product);
       folderId = only.folderId;
     }
     const removedAt = removedProducts[id];
@@ -361,16 +397,17 @@ export function syncRadar(userId: string, incoming: Partial<RadarData>): RadarDa
 export function addProduct(userId: string, product: SavedProduct, projectId = DEFAULT_PROJECT.id): RadarData {
   const all = readAll();
   const radar = all[userId] ?? emptyRadar();
+  const clean = sanitizeRadarProduct(product);
   let project = radar.projects.find((p) => p.id === projectId);
   if (!project) {
     project = { id: projectId, name: 'General', products: [] };
     radar.projects.push(project);
   }
-  project.products = mergeProducts([product], project.products);
+  project.products = mergeProducts([clean], project.products);
   // Evita duplicados en otras carpetas.
   for (const other of radar.projects) {
     if (other.id === project.id) continue;
-    other.products = other.products.filter((p) => p.id !== product.id);
+    other.products = other.products.filter((p) => p.id !== clean.id);
   }
   all[userId] = radar;
   writeAll(all);
@@ -399,6 +436,140 @@ export function removeProduct(userId: string, productId: string): RadarData {
   all[userId] = radar;
   writeAll(all);
   return radar;
+}
+
+export interface ProductAlertPatch {
+  targetPrice?: number;
+  notifyPriceDrop?: boolean;
+  notifyStock?: boolean;
+  /** true → elimina la alerta (precio objetivo y avisos). */
+  clear?: boolean;
+}
+
+/**
+ * Configura la alerta de precio de un producto del radar (precio objetivo +
+ * avisos). Al fijar objetivo por primera vez se captura `initialPrice` como
+ * base de comparación; cambiar el objetivo rearma la alerta si estaba
+ * disparada. Devuelve el radar actualizado, o null si el producto no existe.
+ */
+export function updateProductAlert(userId: string, productId: string, patch: ProductAlertPatch): RadarData | null {
+  const all = readAll();
+  const radar = all[userId] ?? emptyRadar();
+  let target: SavedProduct | null = null;
+  for (const project of radar.projects) {
+    const found = project.products.find((p) => p.id === productId);
+    if (found) {
+      target = found;
+      break;
+    }
+  }
+  if (!target) return null;
+
+  if (patch.clear) {
+    delete target.targetPrice;
+    delete target.priceAlert;
+    target.notifyPriceDrop = false;
+    target.notifyStock = false;
+    all[userId] = radar;
+    writeAll(all);
+    return radar;
+  }
+
+  if (patch.targetPrice !== undefined) {
+    const value = Number(patch.targetPrice);
+    if (!Number.isFinite(value) || value <= 0) {
+      throw new Error('El precio objetivo no es válido.');
+    }
+    const rounded = Math.round(value * 100) / 100;
+    if (target.targetPrice !== rounded) {
+      target.targetPrice = rounded;
+      // Rearma si estaba disparada con otro objetivo.
+      if (target.priceAlert?.status === 'triggered') {
+        target.priceAlert = { status: 'armed' };
+      }
+    }
+    if (target.initialPrice === undefined) {
+      target.initialPrice =
+        typeof target.priceValue === 'number' && Number.isFinite(target.priceValue)
+          ? target.priceValue
+          : rounded;
+    }
+    target.notifyPriceDrop = patch.notifyPriceDrop !== false;
+    if (!target.priceAlert) target.priceAlert = { status: 'armed' };
+  }
+  if (patch.targetPrice === undefined) {
+    if (patch.notifyPriceDrop !== undefined) target.notifyPriceDrop = patch.notifyPriceDrop;
+  }
+  if (patch.notifyStock !== undefined) target.notifyStock = patch.notifyStock;
+
+  all[userId] = radar;
+  writeAll(all);
+  return radar;
+}
+
+/* --------------------------------------------- vigilancia de precios (worker) */
+
+export interface PriceWatchItem {
+  userId: string;
+  product: SavedProduct;
+}
+
+/**
+ * Recorre todos los radares y devuelve los productos vigilados: con precio
+ * objetivo activo (sin disparar aún) o con aviso de stock. Usa el fichero en
+ * crudo para no normalizar todo el dataset en cada tick.
+ */
+export function collectPriceWatchItems(): PriceWatchItem[] {
+  const all = readAll();
+  const items: PriceWatchItem[] = [];
+  for (const [userId, radar] of Object.entries(all)) {
+    if (!radar || !Array.isArray(radar.projects)) continue;
+    for (const project of radar.projects) {
+      for (const product of Array.isArray(project.products) ? project.products : []) {
+        if (!product || typeof product.id !== 'string' || !product.id) continue;
+        const hasPriceAlert =
+          typeof product.targetPrice === 'number' &&
+          product.targetPrice > 0 &&
+          product.notifyPriceDrop !== false &&
+          product.priceAlert?.status !== 'triggered';
+        const hasStockAlert = product.notifyStock === true;
+        if (hasPriceAlert || hasStockAlert) items.push({ userId, product });
+      }
+    }
+  }
+  return items;
+}
+
+/** Actualiza el estado observado por el worker (último precio/stock, disparo). */
+export function markPriceCheck(
+  userId: string,
+  productId: string,
+  check: {
+    lastPrice?: number;
+    lastInStock?: boolean;
+    triggered?: boolean;
+  },
+): void {
+  const all = readAll();
+  const radar = all[userId];
+  if (!radar || !Array.isArray(radar.projects)) return;
+  const nowIso = new Date().toISOString();
+  for (const project of radar.projects) {
+    const product = project.products.find((p) => p.id === productId);
+    if (!product) continue;
+    const alert = product.priceAlert ?? { status: 'armed' as const };
+    if (check.lastPrice !== undefined) alert.lastPrice = check.lastPrice;
+    if (check.lastInStock !== undefined) alert.lastInStock = check.lastInStock;
+    alert.lastCheckedAt = nowIso;
+    if (check.triggered) {
+      alert.status = 'triggered';
+      alert.triggeredAt = nowIso;
+    }
+    product.priceAlert = alert;
+    all[userId] = radar;
+    writeAll(all);
+    return;
+  }
 }
 
 /** Crea una carpeta nueva; id = slug corto aleatorio. */

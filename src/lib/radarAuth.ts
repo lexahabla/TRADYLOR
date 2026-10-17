@@ -29,6 +29,7 @@ export const SESSION_COOKIE_NAME = 'tradylor_radar_session';
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 días (sólo con "Recordarme")
 const RESET_TTL_MS = 60 * 60 * 1000; // 1 hora
 const ACTIVATION_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
+const MAGIC_TTL_MS = 15 * 60 * 1000; // 15 minutos para entrar con el enlace mágico
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const EMAIL_CHANGE_TTL_MS = 24 * 60 * 60 * 1000; // 24 horas para confirmar un email nuevo
 const NAME_MAX = 80;
@@ -69,6 +70,9 @@ export interface RadarUser {
   /** Token de reset pendiente (borrado al usarse o caducar). */
   resetToken?: string;
   resetTokenExpires?: number;
+  /** Token de login sin contraseña (magic link; un solo uso, caduca en 15 min). */
+  magicToken?: string;
+  magicTokenExpires?: number;
   /** Nombre del fichero de avatar dentro de RADAR_AVATARS_DIR (opcional). */
   avatar?: string | null;
   /** true si el usuario editó su nombre (el login con Google ya no lo pisa). */
@@ -115,6 +119,8 @@ export type PublicRadarUser = Omit<
   | 'passwordHash'
   | 'resetToken'
   | 'resetTokenExpires'
+  | 'magicToken'
+  | 'magicTokenExpires'
   | 'activationToken'
   | 'activationTokenExpires'
   | 'pendingEmailToken'
@@ -224,6 +230,8 @@ export function toPublicRadarUser(user: RadarUser): PublicRadarUser {
     passwordHash: _h,
     resetToken: _r,
     resetTokenExpires: _re,
+    magicToken: _mt,
+    magicTokenExpires: _mte,
     activationToken: _a,
     activationTokenExpires: _ae,
     pendingEmailToken: _p,
@@ -638,6 +646,90 @@ export function resetPassword(token: string, newPassword: string): PublicRadarUs
   user.updatedAt = new Date().toISOString();
   writeUsers(users);
   return toPublicRadarUser(user);
+}
+
+/* ------------------------------------------------ login sin contraseña (magic link) */
+
+export interface MagicLoginResult {
+  /** Link de acceso (sólo se devuelve fuera de producción, para pruebas). */
+  devMagicUrl?: string;
+  /** true si el correo salió por SMTP o por el webhook de n8n. */
+  notified: boolean;
+}
+
+/**
+ * Genera un enlace mágico de un solo uso (15 min) para entrar sin contraseña.
+ * La respuesta es idéntica exista o no la cuenta (no se filtra registrados);
+ * el correo sólo se envía si la cuenta existe.
+ */
+export async function requestMagicLogin(email: string, origin: string): Promise<MagicLoginResult> {
+  const users = readUsers();
+  const user = users.find((u) => u.email === email.trim().toLowerCase());
+  if (!user) return { notified: false };
+
+  const token = randomBytes(24).toString('hex');
+  user.magicToken = token;
+  user.magicTokenExpires = Date.now() + MAGIC_TTL_MS;
+  user.updatedAt = new Date().toISOString();
+  writeUsers(users);
+
+  const magicUrl = `${origin.replace(/\/$/, '')}/?magic=${token}`;
+  const name = escapeHtml(user.name || user.email.split('@')[0]);
+  const html = `
+    <div style="max-width:560px;margin:0 auto;font-family:Inter,Arial,sans-serif;background:#0d1422;color:#f3f4f6;padding:2rem;border-radius:16px">
+      <h1 style="font-size:1.4rem;margin:0 0 .5rem">Entra en Mi Radar, ${name}</h1>
+      <p style="color:#9ca3af;font-size:.9rem;line-height:1.6;margin:0 0 1.25rem">
+        Pulsa el botón siguiente para iniciar sesión en <strong>Tradylor</strong> sin contraseña.
+        El enlace es de un solo uso y caduca en 15 minutos:
+      </p>
+      <a href="${magicUrl}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;font-weight:700;padding:.85rem 1.5rem;border-radius:11px;font-size:.9rem">
+        Entrar en Mi Radar
+      </a>
+      <p style="color:#6b7280;font-size:.75rem;margin-top:1.5rem">
+        Si no has pedido este acceso, ignora este email: nadie puede entrar en tu cuenta sin este enlace.
+      </p>
+    </div>
+  `;
+  const text = `Entra en Mi Radar sin contraseña: ${magicUrl}\n\nEl enlace caduca en 15 minutos. Si no lo has pedido tú, ignora este mensaje.`;
+
+  const smtpSent = await sendGenericMailSmtp({ to: user.email, subject: 'Tu enlace de acceso a Mi Radar', html, text });
+  if (smtpSent) {
+    const isProd = (process.env.NODE_ENV ?? '') === 'production';
+    return { notified: true, devMagicUrl: isProd ? undefined : magicUrl };
+  }
+
+  const webhook = (process.env.N8N_MAGIC_WEBHOOK_URL ?? import.meta.env.N8N_MAGIC_WEBHOOK_URL ?? '').trim();
+  if (webhook) {
+    fetch(webhook, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to: user.email, name: user.name, magicUrl, product: 'tradylor-mi-radar' }),
+    }).catch((error) => console.error('[RadarAuth] Webhook de magic link falló:', error));
+    const isProd = (process.env.NODE_ENV ?? '') === 'production';
+    return { notified: true, devMagicUrl: isProd ? undefined : magicUrl };
+  }
+
+  const isProd = (process.env.NODE_ENV ?? '') === 'production';
+  return { notified: false, devMagicUrl: isProd ? undefined : magicUrl };
+}
+
+/**
+ * Valida el token del enlace mágico y lo consume (un solo uso). Devuelve la
+ * cuenta para que el endpoint cree la sesión.
+ */
+export function consumeMagicToken(token: string): RadarUser {
+  const needle = String(token ?? '').trim();
+  const users = readUsers();
+  const user = needle ? users.find((u) => u.magicToken && u.magicToken === needle) : undefined;
+  if (!user || !user.magicTokenExpires || user.magicTokenExpires < Date.now()) {
+    throw new RadarAuthError('El enlace de acceso no es válido o ha caducado. Pide uno nuevo.', 400);
+  }
+  delete user.magicToken;
+  delete user.magicTokenExpires;
+  user.verified = true; // ha demostrado que controla esa bandeja
+  user.updatedAt = new Date().toISOString();
+  writeUsers(users);
+  return user;
 }
 
 /* ------------------------------------------------------- perfil de la cuenta */

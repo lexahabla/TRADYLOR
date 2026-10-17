@@ -60,6 +60,33 @@ const categories = getCategories();
         </svg>
       </button>
   </div>
+
+  <!-- Buscador en cascada (sugerencias en vivo vía /api/search) -->
+  <form class="category-search" data-cm-search role="search" autocomplete="off">
+    <svg class="cm-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="8"></circle>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+    <input type="search" class="cm-search-input" data-cm-search-input placeholder="Buscar…" aria-label="Buscar productos" />
+    <div class="cm-search-drop" data-cm-search-drop hidden></div>
+  </form>
+
+  <!-- Accesos rápidos: perfil de comprador + Mi Radar con contador -->
+  <div class="category-actions">
+    <a class="category-pill" data-cm-perfil href="/metodologia" title="Tu perfil de comprador">
+      <span aria-hidden="true">🎯</span>
+      <span class="category-pill-label">Mi perfil</span>
+    </a>
+    <a class="category-pill" href="/mi-radar" title="Abrir Mi Radar">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" opacity="0.45"></circle>
+        <circle cx="12" cy="12" r="5" opacity="0.7"></circle>
+        <line x1="12" y1="12" x2="12" y2="4"></line>
+      </svg>
+      <span class="category-pill-label">Mi Radar</span>
+      <span class="cm-radar-count" data-cm-radar-count hidden>0</span>
+    </a>
+  </div>
 </nav>
 
 <style>
@@ -220,6 +247,170 @@ const categories = getCategories();
     line-height: 1;
   }
 
+  /* ── Buscador en cascada ───────────────────────────────────────────── */
+  .category-search {
+    position: relative;
+    flex-shrink: 0;
+    width: 190px;
+  }
+
+  .cm-search-icon {
+    position: absolute;
+    left: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: rgba(255, 255, 255, 0.45);
+    pointer-events: none;
+  }
+
+  .cm-search-input {
+    width: 100%;
+    padding: 0.48rem 0.7rem 0.48rem 1.9rem;
+    font-family: var(--font-body, inherit);
+    font-size: 0.8rem;
+    color: #e5e7eb;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  }
+
+  .cm-search-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .cm-search-input:focus {
+    background: rgba(2, 6, 23, 0.9);
+    border-color: rgba(96, 165, 250, 0.55);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
+  }
+
+  .cm-search-drop {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 5;
+    background: rgba(12, 16, 26, 0.99);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 20px 44px rgba(0, 0, 0, 0.5);
+    overflow: hidden;
+    padding: 0.3rem;
+  }
+
+  .cm-search-drop[hidden] {
+    display: none;
+  }
+
+  .cm-drop-status {
+    margin: 0;
+    padding: 0.5rem 0.6rem;
+    font-size: 0.74rem;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .cm-drop-item {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 9px;
+    text-decoration: none;
+    color: #e5e7eb;
+    transition: background 0.15s ease;
+  }
+
+  .cm-drop-item:hover {
+    background: rgba(59, 130, 246, 0.18);
+  }
+
+  .cm-drop-item img {
+    width: 38px;
+    height: 38px;
+    border-radius: 7px;
+    object-fit: cover;
+    background: #f8fafc;
+    flex-shrink: 0;
+  }
+
+  .cm-drop-body {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .cm-drop-title {
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 700;
+    line-height: 1.25;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cm-drop-meta {
+    display: block;
+    font-size: 0.7rem;
+    color: #93c5fd;
+    font-weight: 700;
+  }
+
+  .cm-drop-discount {
+    color: #34d399;
+    font-size: 0.68rem;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  /* ── Pills de perfil y Mi Radar ────────────────────────────────────── */
+  .category-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    flex-shrink: 0;
+  }
+
+  .category-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-family: var(--font-body, inherit);
+    color: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+  }
+
+  .category-pill:hover {
+    background: rgba(59, 130, 246, 0.2);
+    color: #ffffff;
+    border-color: rgba(96, 165, 250, 0.4);
+  }
+
+  .cm-radar-count {
+    min-width: 1.15rem;
+    padding: 0.02rem 0.32rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-align: center;
+    color: #ffffff;
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border-radius: 999px;
+    line-height: 1.35;
+  }
+
+  .cm-radar-count[hidden] {
+    display: none;
+  }
+
   @media (max-width: 640px) {
     .category-bar {
       background: transparent;
@@ -293,6 +484,29 @@ const categories = getCategories();
 
     .category-icon {
       font-size: 1.1rem;
+    }
+
+    .category-search {
+      width: 100%;
+      order: -1;
+      margin-bottom: 0.35rem;
+    }
+
+    .cm-search-drop {
+      left: 0;
+      right: 0;
+    }
+
+    .category-actions {
+      width: 100%;
+      margin-top: 0.4rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .category-pill {
+      flex: 1;
+      justify-content: center;
     }
   }
 
@@ -442,8 +656,163 @@ const categories = getCategories();
     });
 
     document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') closePanel();
+      if (event.key === 'Escape') {
+        closePanel();
+        closeDrop();
+      }
     });
+
+    /* ── Buscador en cascada + pills de perfil y Mi Radar ──────────────── */
+
+    const searchForm = bar.querySelector<HTMLFormElement>('[data-cm-search]');
+    const searchInput = bar.querySelector<HTMLInputElement>('[data-cm-search-input]');
+    const searchDrop = bar.querySelector<HTMLElement>('[data-cm-search-drop]');
+    const perfilLink = bar.querySelector<HTMLAnchorElement>('[data-cm-perfil]');
+    const radarCount = bar.querySelector<HTMLElement>('[data-cm-radar-count]');
+
+    const escapeHtml = (value: string): string =>
+      value.replace(/[&<>"']/g, (ch) => {
+        switch (ch) {
+          case '&': return '&amp;';
+          case '<': return '&lt;';
+          case '>': return '&gt;';
+          case '"': return '&quot;';
+          default: return '&#39;';
+        }
+      });
+
+    const closeDrop = () => {
+      if (searchDrop) searchDrop.hidden = true;
+    };
+
+    let dropTimer: number | undefined;
+    let lastQuery = '';
+
+    const renderDropStatus = (message: string) => {
+      if (!searchDrop) return;
+      searchDrop.innerHTML = `<p class="cm-drop-status">${escapeHtml(message)}</p>`;
+      searchDrop.hidden = false;
+    };
+
+    const runCascade = async (raw: string) => {
+      const q = raw.trim();
+      if (q.length < 2) {
+        closeDrop();
+        return;
+      }
+      if (q === lastQuery && searchDrop && !searchDrop.hidden) return;
+      lastQuery = q;
+      renderDropStatus('Buscando…');
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=5`);
+        const data = await res.json();
+        if (!data?.success) throw new Error('search failed');
+        const hits: {
+          slug: string; title: string; price: string; image: string;
+          discountPct: number | null; url: string;
+        }[] = data.products ?? [];
+        if (!searchDrop) return;
+        if (hits.length === 0) {
+          renderDropStatus(`Sin resultados para «${q}»`);
+          return;
+        }
+        searchDrop.innerHTML = hits
+          .map(
+            (hit) => `
+              <a class="cm-drop-item" href="${escapeHtml(hit.url)}">
+                <img src="${escapeHtml(hit.image)}" alt="" loading="lazy" width="38" height="38" />
+                <span class="cm-drop-body">
+                  <span class="cm-drop-title">${escapeHtml(hit.title)}</span>
+                  <span class="cm-drop-meta">${escapeHtml(hit.price)}</span>
+                </span>
+                ${hit.discountPct ? `<span class="cm-drop-discount">-${hit.discountPct}%</span>` : ''}
+              </a>`,
+          )
+          .join('');
+        searchDrop.hidden = false;
+      } catch {
+        renderDropStatus('El buscador no está disponible ahora mismo.');
+      }
+    };
+
+    searchInput?.addEventListener('input', () => {
+      window.clearTimeout(dropTimer);
+      const value = searchInput.value;
+      dropTimer = window.setTimeout(() => void runCascade(value), 280);
+    });
+
+    searchForm?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      const first = searchDrop?.querySelector<HTMLAnchorElement>('.cm-drop-item');
+      if (first) {
+        window.location.href = first.href;
+        return;
+      }
+      void runCascade(searchInput?.value ?? '');
+    });
+
+    // Cerrar la cascada al pulsar fuera o al cambiar de pestaña.
+    document.addEventListener('click', (event) => {
+      if (!searchDrop || searchDrop.hidden) return;
+      if (!event.target.closest('.category-search')) closeDrop();
+    });
+    document.addEventListener('visibilitychange', closeDrop);
+
+    // Contador de Mi Radar: se actualiza con los cambios del store (LocalStorage
+    // y sync con la nube comparten onRadarChange).
+    const updateRadarCount = (products?: number) => {
+      if (!radarCount) return;
+      if (typeof products === 'number') {
+        radarCount.textContent = String(products);
+        radarCount.hidden = products === 0;
+        return;
+      }
+      void import('../utils/radarStore')
+        .then(({ getRadarProducts }) => {
+          const count = getRadarProducts().length;
+          radarCount.textContent = String(count);
+          radarCount.hidden = count === 0;
+        })
+        .catch(() => { radarCount.hidden = true; });
+    };
+
+    // Badge de perfil: con sesión → /perfil (cuenta Mi Radar); sin sesión →
+    // el perfilador de la metodología.
+    const updatePerfilBadge = (hasSession?: boolean) => {
+      if (!perfilLink) return;
+      if (typeof hasSession === 'boolean') {
+        perfilLink.href = hasSession ? '/perfil' : '/metodologia';
+        return;
+      }
+      void import('../utils/auth')
+        .then(async ({ getSession }) => {
+          const session = await getSession();
+          perfilLink.href = session?.user ? '/perfil' : '/metodologia';
+        })
+        .catch(() => { perfilLink.href = '/metodologia'; });
+    };
+
+    updateRadarCount();
+    updatePerfilBadge();
+
+    void import('../utils/radarStore')
+      .then(({ onRadarChange, getRadarProducts }) => {
+        onRadarChange(() => updateRadarCount(getRadarProducts().length));
+      })
+      .catch(() => {
+        // Sin bundling del store (no debería pasar): refrescar en cambios destorage.
+        window.addEventListener('storage', (event) => {
+          if (event.key === 'tradylor-radar-v1') updateRadarCount();
+        });
+      });
+
+    void import('../utils/auth')
+      .then(({ onAuthChange, getCachedSession }) => {
+        onAuthChange((user) => updatePerfilBadge(Boolean(user)));
+        // Si initAuth ya resolvió, reflejar el estado actual.
+        updatePerfilBadge(Boolean(getCachedSession()?.user));
+      })
+      .catch(() => { /* badge queda con el valor inicial. */ });
 
     applyLayout();
 

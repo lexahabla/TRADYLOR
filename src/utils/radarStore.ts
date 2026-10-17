@@ -327,6 +327,39 @@ export async function cancelReminder(reminderId: string): Promise<ReminderAction
   }
 }
 
+/* ------------------------------------------------------- alertas de precio */
+
+export type AlertActionResult = { ok: boolean; message?: string; radar?: RadarData };
+
+/**
+ * Fija (o quita) el precio objetivo de un producto del radar. Requiere sesión:
+ * la alerta vive en el servidor y el worker la vigila cada 6 h.
+ */
+export async function setProductAlert(input: {
+  productId: string;
+  targetPrice?: number;
+  notifyPriceDrop?: boolean;
+  notifyStock?: boolean;
+  clear?: boolean;
+}): Promise<AlertActionResult> {
+  try {
+    const res = await fetch('/api/radar/alert', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    const payload = (await res.json().catch(() => ({}))) as { success?: boolean; message?: string; radar?: RadarData };
+    if (res.ok && payload.success && payload.radar) {
+      localStorage.setItem(RADAR_STORAGE_KEY, JSON.stringify(payload.radar));
+      for (const listener of listeners) listener(payload.radar);
+      return { ok: true, radar: payload.radar };
+    }
+    return { ok: false, message: payload.message ?? 'No se pudo guardar la alerta.' };
+  } catch {
+    return { ok: false, message: 'Sin conexión. Inténtalo de nuevo.' };
+  }
+}
+
 /* -------------------------------------------------------------------- sync */
 
 /** Los envíos van uno tras otro: así el servidor los procesa en el orden de los cambios. */
