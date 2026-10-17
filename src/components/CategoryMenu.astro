@@ -1,5 +1,6 @@
 ---
 import { getCategories } from '../lib/categories';
+import type { Category } from '../lib/categories';
 
 export interface Props {
   activeSlug?: string;
@@ -7,85 +8,141 @@ export interface Props {
 
 const { activeSlug } = Astro.props;
 const categories = getCategories();
+
+// Raíces + subcategorías agrupadas (el panel las muestra anidadas).
+const roots = categories.filter((cat) => !cat.parentId);
+const subsByParent = new Map<string, Category[]>();
+for (const cat of categories) {
+  if (!cat.parentId) continue;
+  const list = subsByParent.get(cat.parentId) ?? [];
+  list.push(cat);
+  subsByParent.set(cat.parentId, list);
+}
+
+const activeCategory = activeSlug ? categories.find((cat) => cat.slug === activeSlug) : undefined;
+const activeParentId = activeCategory?.parentId ?? null;
+const isRootActive = (cat: Category) => activeSlug === cat.slug || activeParentId === cat.id;
+// Tono de color distinto por categoría para los iconos del panel.
+const hueOf = (index: number) => (index * 43) % 360;
 ---
 
-<nav id="categoryBar" class="category-bar" aria-label="Menú de categorías">
-  <button
-    type="button"
-    class="category-toggle"
-    aria-label="Categorías"
-    aria-expanded="false"
-    aria-controls="categoryFrame"
-  >
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
-      <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
-      <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
-      <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
-    </svg>
-    <span class="category-toggle-label">Categorías</span>
-  </button>
-
+<nav id="categoryBar" class="category-bar" aria-label="Categorías y accesos rápidos">
   <div class="category-frame" id="categoryFrame">
-      <button type="button" class="category-arrow arrow-left" aria-label="Ver categorías anteriores">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="15 18 9 12 15 6"></polyline>
+    <!-- Desplegable de categorías (con subcategorías anidadas) -->
+    <div class="category-menu" data-cm-menu>
+      <button
+        type="button"
+        class:list={['category-menu-btn', { 'has-active': Boolean(activeCategory) }]}
+        data-cm-menu-btn
+        aria-label="Explorar categorías"
+        aria-expanded="false"
+        aria-controls="categoryPanel"
+      >
+        {activeCategory ? (
+          <span class="cm-btn-icon" aria-hidden="true">{activeCategory.icon}</span>
+        ) : (
+          <svg class="cm-btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+          </svg>
+        )}
+        <span class="cm-btn-label">{activeCategory ? activeCategory.name : 'Categorías'}</span>
+        <svg class="cm-btn-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
       </button>
 
-      <div class="category-track" id="categoryTrack">
-        <a
-          href="/#catalogo"
-          class:list={['category-item', { 'is-active': !activeSlug }]}
-          aria-current={!activeSlug ? 'true' : undefined}
-        >
-          <span class="category-icon" aria-hidden="true">🎯</span>
-          <span class="category-label">Todos</span>
-        </a>
-        {categories.map((cat) => (
+      <div class="category-panel" id="categoryPanel" data-cm-panel hidden>
+        <div class="cat-panel-head">
+          <span class="cat-panel-title">Explora por categoría</span>
+          <a class:list={['cat-panel-all', { 'is-active': !activeSlug }]} href="/#catalogo">Ver todo</a>
+        </div>
+
+        <div class="cat-panel-grid">
           <a
-            href={`/?category=${encodeURIComponent(cat.slug)}#catalogo`}
-            class:list={['category-item', { 'is-active': activeSlug === cat.slug }]}
-            aria-current={activeSlug === cat.slug ? 'true' : undefined}
+            class:list={['cat-card', 'is-todos', { 'is-active': !activeSlug }]}
+            href="/#catalogo"
+            aria-current={!activeSlug ? 'true' : undefined}
           >
-            <span class="category-icon" aria-hidden="true">{cat.icon}</span>
-            <span class="category-label">{cat.name}</span>
+            <span class="cat-card-icon" aria-hidden="true">🛍️</span>
+            <span class="cat-card-text">
+              <span class="cat-card-name">Todos</span>
+              <span class="cat-card-meta">Catálogo completo</span>
+            </span>
           </a>
-        ))}
+
+          {roots.map((cat, index) => {
+            const subs = subsByParent.get(cat.id) ?? [];
+            return (
+              <div class="cat-group">
+                <a
+                  class:list={['cat-card', { 'is-active': isRootActive(cat) }]}
+                  href={`/?category=${encodeURIComponent(cat.slug)}#catalogo`}
+                  aria-current={activeSlug === cat.slug ? 'true' : undefined}
+                  style={`--h: ${hueOf(index)}`}
+                >
+                  <span class="cat-card-icon" aria-hidden="true">{cat.icon}</span>
+                  <span class="cat-card-text">
+                    <span class="cat-card-name">{cat.name}</span>
+                    <span class="cat-card-meta">
+                      {subs.length > 0 ? `${subs.length} subcategoría${subs.length > 1 ? 's' : ''}` : 'Ver productos'}
+                    </span>
+                  </span>
+                  <svg class="cat-card-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </a>
+
+                {subs.length > 0 && (
+                  <div class="cat-subs">
+                    {subs.map((sub) => (
+                      <a
+                        class:list={['cat-sub', { 'is-active': activeSlug === sub.slug }]}
+                        href={`/?category=${encodeURIComponent(sub.slug)}#catalogo`}
+                        aria-current={activeSlug === sub.slug ? 'true' : undefined}
+                        style={`--h: ${hueOf(index)}`}
+                      >
+                        <span class="cat-sub-icon" aria-hidden="true">{sub.icon}</span>
+                        <span>{sub.name}</span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
+    </div>
 
-      <button type="button" class="category-arrow arrow-right" aria-label="Ver categorías siguientes">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="9 18 15 12 9 6"></polyline>
+    <!-- Elementos principales: Buscar, Mi perfil y Mi Radar -->
+    <div class="category-actions">
+      <!-- Buscador en cascada (sugerencias en vivo vía /api/search) -->
+      <form class="category-search" data-cm-search role="search" autocomplete="off">
+        <svg class="cm-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
-      </button>
-  </div>
+        <input type="search" class="cm-search-input" data-cm-search-input placeholder="Buscar…" aria-label="Buscar productos" />
+        <div class="cm-search-drop" data-cm-search-drop hidden></div>
+      </form>
 
-  <!-- Buscador en cascada (sugerencias en vivo vía /api/search) -->
-  <form class="category-search" data-cm-search role="search" autocomplete="off">
-    <svg class="cm-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <circle cx="11" cy="11" r="8"></circle>
-      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-    </svg>
-    <input type="search" class="cm-search-input" data-cm-search-input placeholder="Buscar…" aria-label="Buscar productos" />
-    <div class="cm-search-drop" data-cm-search-drop hidden></div>
-  </form>
-
-  <!-- Accesos rápidos: perfil de comprador + Mi Radar con contador -->
-  <div class="category-actions">
-    <a class="category-pill" data-cm-perfil href="/metodologia" title="Tu perfil de comprador">
-      <span aria-hidden="true">🎯</span>
-      <span class="category-pill-label">Mi perfil</span>
-    </a>
-    <a class="category-pill" href="/mi-radar" title="Abrir Mi Radar">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-        <circle cx="12" cy="12" r="9" opacity="0.45"></circle>
-        <circle cx="12" cy="12" r="5" opacity="0.7"></circle>
-        <line x1="12" y1="12" x2="12" y2="4"></line>
-      </svg>
-      <span class="category-pill-label">Mi Radar</span>
-      <span class="cm-radar-count" data-cm-radar-count hidden>0</span>
-    </a>
+      <a class="category-pill" data-cm-perfil href="/metodologia" title="Tu perfil de comprador" aria-label="Mi perfil">
+        <span aria-hidden="true">👤</span>
+        <span class="category-pill-label">Mi perfil</span>
+      </a>
+      <a class="category-pill" href="/mi-radar" title="Abrir Mi Radar" aria-label="Mi Radar">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" opacity="0.45"></circle>
+          <circle cx="12" cy="12" r="5" opacity="0.7"></circle>
+          <line x1="12" y1="12" x2="12" y2="4"></line>
+        </svg>
+        <span class="category-pill-label">Mi Radar</span>
+        <span class="cm-radar-count" data-cm-radar-count hidden>0</span>
+      </a>
+    </div>
   </div>
 </nav>
 
@@ -115,110 +172,351 @@ const categories = getCategories();
     pointer-events: auto;
   }
 
-  .category-toggle {
-    display: none;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.95rem;
-    background: #0c101a;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 999px;
-    color: #e5e7eb;
-    font-family: var(--font-body, inherit);
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition:
-      background 0.2s ease,
-      border-color 0.2s ease,
-      color 0.2s ease;
-    flex-shrink: 0;
-  }
-
-  .category-toggle:hover,
-  .category-toggle[aria-expanded='true'] {
-    background: #3b82f6;
-    border-color: rgba(59, 130, 246, 0.4);
-    color: #ffffff;
-  }
-
   .category-frame {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: 0.6rem;
     max-width: var(--max-width);
     margin: 0 auto;
     padding: 0.5rem 1.5rem;
   }
 
-  .category-track {
+  /* ── Desplegable de categorías ─────────────────────────────────────── */
+  .category-menu {
     position: relative;
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scroll-behavior: smooth;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    overscroll-behavior-x: contain;
-    padding: 0.15rem 0;
-  }
-
-  .category-track::-webkit-scrollbar {
-    display: none;
-  }
-
-  .category-arrow {
-    display: none;
-    align-items: center;
-    justify-content: center;
-    width: 34px;
-    height: 34px;
-    padding: 0;
     flex-shrink: 0;
+  }
+
+  .category-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.9rem;
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 50%;
-    color: rgba(255, 255, 255, 0.75);
+    border-radius: 999px;
+    color: rgba(255, 255, 255, 0.85);
+    font-family: var(--font-body, inherit);
+    font-size: 0.82rem;
+    font-weight: 700;
     cursor: pointer;
+    white-space: nowrap;
     transition:
       background 0.2s ease,
       border-color 0.2s ease,
       color 0.2s ease,
-      opacity 0.2s ease;
+      box-shadow 0.2s ease;
   }
 
-  .category-frame.has-arrows .category-arrow {
-    display: inline-flex;
-  }
-
-  .category-arrow:hover {
+  .category-menu-btn:hover,
+  .category-menu-btn[aria-expanded='true'],
+  .category-menu-btn.has-active {
     background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-    border-color: transparent;
+    border-color: rgba(96, 165, 250, 0.6);
     color: #ffffff;
-    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.5);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
   }
 
-  .category-arrow.is-disabled {
-    opacity: 0.3;
-    pointer-events: none;
-  }
-
-  .category-item {
+  .cm-btn-icon {
     display: inline-flex;
     align-items: center;
-    gap: 0.45rem;
-    padding: 0.5rem 0.85rem;
-    border-radius: 999px;
-    font-size: 0.82rem;
-    font-weight: 600;
+    justify-content: center;
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+
+  .cm-btn-label {
+    max-width: 11rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cm-btn-caret {
+    opacity: 0.75;
+    flex-shrink: 0;
+    transition: transform 0.2s ease;
+  }
+
+  .category-menu-btn[aria-expanded='true'] .cm-btn-caret {
+    transform: rotate(180deg);
+  }
+
+  .category-panel {
+    position: absolute;
+    top: calc(100% + 0.6rem);
+    left: 0;
+    z-index: 20;
+    width: min(38rem, calc(100vw - 3rem));
+    padding: 0.8rem;
+    background: rgba(12, 16, 26, 0.99);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  .category-panel[hidden] {
+    display: none;
+  }
+
+  .category-panel:not([hidden]) {
+    animation: cm-panel-in 0.18s ease;
+  }
+
+  @keyframes cm-panel-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .cat-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.1rem 0.25rem 0.6rem;
+    margin-bottom: 0.6rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .cat-panel-title {
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  .cat-panel-all {
     font-family: var(--font-body, inherit);
-    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.74rem;
+    font-weight: 700;
+    color: #93c5fd;
+    text-decoration: none;
+    padding: 0.22rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  }
+
+  .cat-panel-all:hover {
+    background: rgba(59, 130, 246, 0.18);
+    color: #ffffff;
+  }
+
+  .cat-panel-all.is-active {
+    background: rgba(59, 130, 246, 0.25);
+    border-color: rgba(96, 165, 250, 0.45);
+    color: #ffffff;
+  }
+
+  .cat-panel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+    max-height: min(66vh, 30rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 0.2rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+  }
+
+  .cat-panel-grid::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .cat-panel-grid::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.22);
+    border-radius: 999px;
+  }
+
+  .cat-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .cat-card {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.55rem 0.6rem;
+    border-radius: 14px;
+    text-decoration: none;
+    color: #e5e7eb;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
+    transition:
+      transform 0.18s ease,
+      background 0.18s ease,
+      border-color 0.18s ease,
+      box-shadow 0.18s ease;
+  }
+
+  .cat-card:hover {
+    transform: translateY(-2px);
+    background: rgba(59, 130, 246, 0.14);
+    border-color: rgba(96, 165, 250, 0.45);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .cat-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.4rem;
+    height: 2.4rem;
+    flex-shrink: 0;
+    border-radius: 12px;
+    font-size: 1.2rem;
+    line-height: 1;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--h, 215) 80% 60% / 0.28),
+      hsl(var(--h, 215) 80% 55% / 0.08)
+    );
+    border: 1px solid hsl(var(--h, 215) 80% 60% / 0.32);
+  }
+
+  .cat-card-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.12rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .cat-card-name {
+    font-family: var(--font-body, inherit);
+    font-size: 0.84rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cat-card-meta {
+    font-family: var(--font-body, inherit);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.45);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .cat-card-arrow {
+    flex-shrink: 0;
+    opacity: 0.35;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+  }
+
+  .cat-card:hover .cat-card-arrow {
+    opacity: 0.95;
+    transform: translateX(2px);
+  }
+
+  .cat-card.is-active {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    border-color: rgba(147, 197, 253, 0.6);
+    color: #ffffff;
+    box-shadow: 0 8px 22px rgba(37, 99, 235, 0.45);
+  }
+
+  .cat-card.is-active .cat-card-meta {
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  .cat-card.is-active .cat-card-icon {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.35);
+  }
+
+  .cat-card.is-active .cat-card-arrow {
+    opacity: 0.9;
+  }
+
+  /* Subcategorías anidadas bajo su categoría raíz */
+  .cat-subs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    margin-left: 0.85rem;
+    padding-left: 0.55rem;
+    border-left: 2px solid hsl(var(--h, 215) 80% 60% / 0.45);
+  }
+
+  .cat-sub {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.55rem;
+    border-radius: 9px;
+    font-family: var(--font-body, inherit);
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.62);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-decoration: none;
+    transition:
+      background 0.18s ease,
+      color 0.18s ease,
+      border-color 0.18s ease,
+      transform 0.18s ease;
+  }
+
+  .cat-sub:hover {
+    background: rgba(59, 130, 246, 0.22);
+    border-color: rgba(96, 165, 250, 0.45);
+    color: #ffffff;
+    transform: translateY(-1px);
+  }
+
+  .cat-sub.is-active {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-color: rgba(147, 197, 253, 0.6);
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+  }
+
+  .cat-sub-icon {
+    font-size: 0.85rem;
+    line-height: 1;
+  }
+
+  /* ── Elementos principales ─────────────────────────────────────────── */
+  .category-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex: 0 1 auto;
+    min-width: 0;
+    margin-left: auto;
+  }
+
+  .category-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    font-family: var(--font-body, inherit);
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     text-decoration: none;
     white-space: nowrap;
     flex-shrink: 0;
@@ -229,29 +527,34 @@ const categories = getCategories();
       box-shadow 0.2s ease;
   }
 
-  .category-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-    border-color: rgba(96, 165, 250, 0.35);
-  }
-
-  .category-item.is-active {
+  .category-pill:hover {
     background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     border-color: rgba(96, 165, 250, 0.6);
     color: #ffffff;
-    box-shadow: 0 4px 16px rgba(37, 99, 235, 0.5);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
   }
 
-  .category-icon {
-    font-size: 1rem;
-    line-height: 1;
+  .cm-radar-count {
+    min-width: 1.15rem;
+    padding: 0.02rem 0.32rem;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-align: center;
+    color: #ffffff;
+    background: linear-gradient(135deg, #f59e0b, #ea580c);
+    border-radius: 999px;
+    line-height: 1.35;
+  }
+
+  .cm-radar-count[hidden] {
+    display: none;
   }
 
   /* ── Buscador en cascada ───────────────────────────────────────────── */
   .category-search {
     position: relative;
-    flex-shrink: 0;
-    width: 190px;
+    flex: 0 1 13.5rem;
+    min-width: 7.5rem;
   }
 
   .cm-search-icon {
@@ -265,19 +568,19 @@ const categories = getCategories();
 
   .cm-search-input {
     width: 100%;
-    padding: 0.48rem 0.7rem 0.48rem 1.9rem;
+    padding: 0.5rem 0.75rem 0.5rem 1.9rem;
     font-family: var(--font-body, inherit);
     font-size: 0.8rem;
     color: #e5e7eb;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 999px;
     outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   }
 
   .cm-search-input::placeholder {
-    color: rgba(255, 255, 255, 0.4);
+    color: rgba(255, 255, 255, 0.45);
   }
 
   .cm-search-input:focus {
@@ -364,51 +667,19 @@ const categories = getCategories();
     flex-shrink: 0;
   }
 
-  /* ── Pills de perfil y Mi Radar ────────────────────────────────────── */
-  .category-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    flex-shrink: 0;
-  }
+  /* Etiquetas de los accesos: se ocultan cuando la barra queda muy justa */
+  @media (max-width: 700px) {
+    .category-pill-label {
+      display: none;
+    }
 
-  .category-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.5rem 0.8rem;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    font-family: var(--font-body, inherit);
-    color: rgba(255, 255, 255, 0.75);
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    text-decoration: none;
-    white-space: nowrap;
-    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-  }
+    .category-pill {
+      padding: 0.5rem 0.7rem;
+    }
 
-  .category-pill:hover {
-    background: rgba(59, 130, 246, 0.2);
-    color: #ffffff;
-    border-color: rgba(96, 165, 250, 0.4);
-  }
-
-  .cm-radar-count {
-    min-width: 1.15rem;
-    padding: 0.02rem 0.32rem;
-    font-size: 0.68rem;
-    font-weight: 800;
-    text-align: center;
-    color: #ffffff;
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    border-radius: 999px;
-    line-height: 1.35;
-  }
-
-  .cm-radar-count[hidden] {
-    display: none;
+    .category-search {
+      flex: 0 1 11rem;
+    }
   }
 
   @media (max-width: 640px) {
@@ -418,7 +689,7 @@ const categories = getCategories();
       box-shadow: none;
       backdrop-filter: none;
       -webkit-backdrop-filter: none;
-      padding: 0.55rem 0 0 0.6rem;
+      padding: 0.55rem 0.6rem 0 0.6rem;
       pointer-events: none;
     }
 
@@ -426,97 +697,85 @@ const categories = getCategories();
       pointer-events: none;
     }
 
-    .category-bar.is-visible .category-toggle,
-    .category-bar.is-visible .category-frame {
-      pointer-events: auto;
-    }
-
-    .category-toggle {
-      display: inline-flex;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-    }
-
     .category-frame {
-      display: none;
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
       max-width: none;
       margin: 0;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.2rem;
-      background: rgba(12, 16, 26, 0.99);
-      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-      box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
-      padding: 0.5rem 1rem 0.85rem;
-      max-height: min(62vh, 440px);
-      overflow-y: auto;
-    }
-
-    .category-bar.is-open .category-frame {
-      display: flex;
-    }
-
-    .category-arrow {
-      display: none !important;
-    }
-
-    .category-track {
-      position: static;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 0.2rem;
-      overflow-x: visible;
-      overflow-y: visible;
       padding: 0;
-      scroll-behavior: auto;
+      gap: 0.4rem;
+      flex-wrap: wrap;
     }
 
-    .category-item {
-      justify-content: flex-start;
-      padding: 0.7rem 0.85rem;
-      border-radius: 10px;
-      font-size: 0.9rem;
-      flex-shrink: auto;
+    .category-menu {
+      pointer-events: auto;
+      flex-shrink: 0;
     }
 
-    .category-icon {
-      font-size: 1.1rem;
+    .category-menu-btn {
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      background: rgba(12, 16, 26, 0.92);
     }
 
-    .category-search {
-      width: 100%;
-      order: -1;
-      margin-bottom: 0.35rem;
+    .category-menu-btn[aria-expanded='true'] {
+      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     }
 
-    .cm-search-drop {
-      left: 0;
-      right: 0;
+    .cm-btn-label {
+      max-width: 7.5rem;
     }
 
     .category-actions {
-      width: 100%;
-      margin-top: 0.4rem;
-      padding-top: 0.5rem;
-      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      pointer-events: auto;
+      flex: 1 1 12rem;
+      min-width: 0;
+      margin-left: 0;
+      justify-content: flex-end;
     }
 
-    .category-pill {
-      flex: 1;
-      justify-content: center;
+    .category-search {
+      flex: 1 1 7rem;
+      min-width: 5.5rem;
+    }
+
+    .category-panel {
+      top: calc(100% + 0.5rem);
+      left: 0;
+      width: min(30rem, calc(100vw - 1.2rem));
+      max-height: min(70vh, 32rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 0.75rem;
+      border-radius: 16px;
+    }
+
+    .cat-panel-grid {
+      grid-template-columns: 1fr;
+      max-height: none;
+      overflow-y: visible;
+      padding-right: 0;
+    }
+
+    .cat-card {
+      padding: 0.65rem 0.7rem;
+    }
+
+    .cat-card-name {
+      font-size: 0.88rem;
     }
   }
 
   @media (max-width: 380px) {
-    .category-toggle {
-      padding: 0.5rem 0.65rem;
+    .category-menu-btn {
+      padding: 0.5rem 0.7rem;
     }
 
-    .category-toggle-label {
+    .cm-btn-label {
       display: none;
+    }
+
+    .category-actions {
+      flex: 1 1 9rem;
     }
   }
 </style>
@@ -526,10 +785,8 @@ const categories = getCategories();
 
   if (bar) {
     const frame = document.getElementById('categoryFrame');
-    const track = document.getElementById('categoryTrack');
-    const toggle = bar.querySelector<HTMLButtonElement>('.category-toggle');
-    const leftArrow = bar.querySelector<HTMLButtonElement>('.arrow-left');
-    const rightArrow = bar.querySelector<HTMLButtonElement>('.arrow-right');
+    const menuBtn = bar.querySelector<HTMLButtonElement>('[data-cm-menu-btn]');
+    const menuPanel = bar.querySelector<HTMLElement>('[data-cm-panel]');
 
     const headerEl = document.querySelector('.site-header');
     const mainNavEl = document.getElementById('mainNav');
@@ -553,10 +810,13 @@ const categories = getCategories();
       }
     };
 
-    const closePanel = () => {
-      bar.classList.remove('is-open');
-      toggle?.setAttribute('aria-expanded', 'false');
+    const setMenuOpen = (open: boolean) => {
+      if (!menuPanel || !menuBtn) return;
+      menuPanel.hidden = !open;
+      menuBtn.setAttribute('aria-expanded', String(open));
     };
+
+    const closePanel = () => setMenuOpen(false);
 
     const targets = ['destacados', 'catalogo']
       .map((id) => document.getElementById(id))
@@ -581,78 +841,30 @@ const categories = getCategories();
       targets.forEach((target) => observer.observe(target));
     }
 
-    if (frame && track && leftArrow && rightArrow) {
-      const STEP = 110;
+    window.addEventListener('resize', applyLayout);
 
-      const updateEdges = () => {
-        const max = track.scrollWidth - track.clientWidth;
-        const hasArrows = frame.classList.contains('has-arrows');
-        leftArrow.classList.toggle('is-disabled', !hasArrows || track.scrollLeft <= 2);
-        rightArrow.classList.toggle('is-disabled', !hasArrows || track.scrollLeft >= max - 2);
-      };
-
-      const updateOverflow = () => {
-        const has = track.scrollWidth - track.clientWidth > 4;
-        frame.classList.toggle('has-arrows', has);
-        updateEdges();
-      };
-
-      let hoverTimer: number | undefined;
-      const startSlide = (dir: number) => {
-        const slide = () => track.scrollBy({ left: dir * STEP, behavior: 'smooth' });
-        slide();
-        if (hoverTimer === undefined) hoverTimer = window.setInterval(slide, 260);
-      };
-      const stopSlide = () => {
-        if (hoverTimer !== undefined) {
-          clearInterval(hoverTimer);
-          hoverTimer = undefined;
-        }
-      };
-
-      leftArrow.addEventListener('mouseenter', () => startSlide(-1));
-      leftArrow.addEventListener('mouseleave', stopSlide);
-      leftArrow.addEventListener('click', () => track.scrollBy({ left: -track.clientWidth * 0.6, behavior: 'smooth' }));
-
-      rightArrow.addEventListener('mouseenter', () => startSlide(1));
-      rightArrow.addEventListener('mouseleave', stopSlide);
-      rightArrow.addEventListener('click', () => track.scrollBy({ left: track.clientWidth * 0.6, behavior: 'smooth' }));
-
-      track.addEventListener('scroll', updateEdges, { passive: true });
-      window.addEventListener('resize', () => {
-        stopSlide();
-        updateOverflow();
-        applyLayout();
-      });
-
-      if ('ResizeObserver' in window) {
-        new ResizeObserver(updateOverflow).observe(track);
-        new ResizeObserver(() => {
-          if (isVisible) applyOffset();
-        }).observe(bar);
-      }
-
-      updateOverflow();
-
-      const activeItem = track.querySelector<HTMLElement>('.category-item.is-active');
-      if (activeItem && track.scrollWidth > track.clientWidth) {
-        track.style.scrollBehavior = 'auto';
-        track.scrollLeft = Math.max(0, activeItem.offsetLeft - track.clientWidth / 2 + activeItem.clientWidth / 2);
-        track.style.scrollBehavior = '';
-        updateEdges();
-      }
+    if ('ResizeObserver' in window) {
+      new ResizeObserver(() => {
+        if (isVisible) applyOffset();
+      }).observe(bar);
     }
 
-    toggle?.addEventListener('click', (event) => {
-      event.stopPropagation();
-      const open = bar.classList.toggle('is-open');
-      toggle.setAttribute('aria-expanded', String(open));
+    /* ── Desplegable de categorías ───────────────────────────────────── */
+
+    menuBtn?.addEventListener('click', () => {
+      setMenuOpen(Boolean(menuPanel?.hidden));
     });
 
     document.addEventListener('click', (event) => {
-      if (!bar.classList.contains('is-open')) return;
-      const target = event.target;
-      if (target.closest('a') || !target.closest('#categoryBar')) closePanel();
+      if (!menuPanel || menuPanel.hidden) return;
+      const target = event.target as Element | null;
+      if (!target || typeof target.closest !== 'function') return;
+      // Un enlace del panel navega y cierra; fuera del desplegable también cierra.
+      if (target.closest('.category-panel a')) {
+        closePanel();
+        return;
+      }
+      if (!target.closest('.category-menu')) closePanel();
     });
 
     document.addEventListener('keydown', (event) => {
@@ -754,7 +966,9 @@ const categories = getCategories();
     // Cerrar la cascada al pulsar fuera o al cambiar de pestaña.
     document.addEventListener('click', (event) => {
       if (!searchDrop || searchDrop.hidden) return;
-      if (!event.target.closest('.category-search')) closeDrop();
+      const target = event.target as Element | null;
+      if (!target || typeof target.closest !== 'function') return;
+      if (!target.closest('.category-search')) closeDrop();
     });
     document.addEventListener('visibilitychange', closeDrop);
 
@@ -816,6 +1030,9 @@ const categories = getCategories();
 
     applyLayout();
 
-    mq.addEventListener('change', () => applyLayout());
+    mq.addEventListener('change', () => {
+      closePanel();
+      applyLayout();
+    });
   }
 </script>

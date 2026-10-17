@@ -1795,7 +1795,7 @@ const resolvedImage = toAbsolute(image);
           });
           document.addEventListener('click', (event) => {
             const target = event.target;
-            if (target.closest('.category-toggle')) closeNav();
+            if (target.closest('.category-menu-btn')) closeNav();
             else if (!target.closest('.site-header') && !target.closest('#categoryBar')) closeNav();
           });
         }
