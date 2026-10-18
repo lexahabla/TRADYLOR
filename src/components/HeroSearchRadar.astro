@@ -149,10 +149,11 @@ import MethodologyQuiz from './metodologia/MethodologyQuiz.astro';
     tabs.forEach((tab) => {
       tab.addEventListener('click', () => {
         const name = tab.dataset.hsrTab ?? 'buscar';
-        // Gate: el perfilador (pestaña "Mi perfil") exige usuario registrado.
-        // Sin sesión se abre el modal de registro y no se muestra el quiz.
-        if (name === 'perfil' && !getCachedSession()?.user) {
-          // getSession en vivo para no depender del caché inicial del Layout.
+        // Gate: "Mi perfil" siempre redirige al registro si no hay sesión.
+        // getSession en vivo (sin fiarse del caché del Layout): sin usuario
+        // se abre el modal de registro contextual y no se muestra el quiz.
+        if (name === 'perfil') {
+          tab.classList.add('is-loading');
           void getSession(true)
             .then((session) => {
               if (session.user) {
@@ -163,6 +164,9 @@ import MethodologyQuiz from './metodologia/MethodologyQuiz.astro';
             })
             .catch(() => {
               openAuthRegister('quiz-complete');
+            })
+            .finally(() => {
+              tab.classList.remove('is-loading');
             });
           return;
         }
@@ -406,6 +410,12 @@ import MethodologyQuiz from './metodologia/MethodologyQuiz.astro';
     background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9));
     border-color: rgba(96, 165, 250, 0.45);
     box-shadow: 0 6px 18px rgba(59, 130, 246, 0.35);
+  }
+
+  .hsr-tab.is-loading {
+    opacity: 0.65;
+    cursor: progress;
+    pointer-events: none;
   }
 
   .hsr-tab-icon {

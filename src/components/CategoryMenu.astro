@@ -130,7 +130,10 @@ const hueOf = (index: number) => (index * 43) % 360;
       </form>
 
       <a class="category-pill" data-cm-perfil href="/metodologia" title="Tu perfil de comprador" aria-label="Mi perfil">
-        <span aria-hidden="true">👤</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+          <circle cx="12" cy="7" r="4"></circle>
+        </svg>
         <span class="category-pill-label">Mi perfil</span>
       </a>
       <a class="category-pill" href="/mi-radar" title="Abrir Mi Radar" aria-label="Mi Radar">
@@ -591,16 +594,35 @@ const hueOf = (index: number) => (index * 43) % 360;
 
   .cm-search-drop {
     position: absolute;
-    top: calc(100% + 6px);
+    top: calc(100% + 8px);
     left: 0;
-    right: 0;
+    right: auto;
     z-index: 5;
-    background: rgba(12, 16, 26, 0.99);
+    width: min(21rem, calc(100vw - 1.5rem));
+    background: rgba(12, 16, 26, 0.97);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    box-shadow: 0 20px 44px rgba(0, 0, 0, 0.5);
+    border-radius: 14px;
+    box-shadow:
+      0 24px 48px rgba(0, 0, 0, 0.55),
+      0 0 0 1px rgba(59, 130, 246, 0.08),
+      0 0 24px rgba(59, 130, 246, 0.12);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     overflow: hidden;
-    padding: 0.3rem;
+    padding: 0.35rem;
+    transform-origin: top center;
+    animation: cm-drop-in 0.16s ease;
+  }
+
+  @keyframes cm-drop-in {
+    from {
+      opacity: 0;
+      transform: translateY(-4px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
   .cm-search-drop[hidden] {
@@ -609,32 +631,36 @@ const hueOf = (index: number) => (index * 43) % 360;
 
   .cm-drop-status {
     margin: 0;
-    padding: 0.5rem 0.6rem;
+    padding: 0.6rem 0.65rem;
     font-size: 0.74rem;
+    font-weight: 600;
     color: rgba(255, 255, 255, 0.55);
   }
 
   .cm-drop-item {
     display: flex;
     align-items: center;
-    gap: 0.55rem;
-    padding: 0.4rem 0.5rem;
-    border-radius: 9px;
+    gap: 0.65rem;
+    padding: 0.45rem 0.55rem;
+    border-radius: 10px;
+    border: 1px solid transparent;
     text-decoration: none;
     color: #e5e7eb;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease;
   }
 
   .cm-drop-item:hover {
-    background: rgba(59, 130, 246, 0.18);
+    background: rgba(59, 130, 246, 0.14);
+    border-color: rgba(96, 165, 250, 0.28);
   }
 
   .cm-drop-item img {
-    width: 38px;
-    height: 38px;
-    border-radius: 7px;
+    width: 42px;
+    height: 42px;
+    border-radius: 9px;
     object-fit: cover;
     background: #f8fafc;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     flex-shrink: 0;
   }
 
@@ -645,25 +671,54 @@ const hueOf = (index: number) => (index * 43) % 360;
 
   .cm-drop-title {
     display: block;
-    font-size: 0.76rem;
+    font-size: 0.78rem;
     font-weight: 700;
-    line-height: 1.25;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color 0.15s ease;
+  }
+
+  .cm-drop-item:hover .cm-drop-title {
+    color: #60a5fa;
+  }
+
+  .cm-drop-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.12rem;
+    font-size: 0.7rem;
+    line-height: 1.3;
+  }
+
+  .cm-drop-price {
+    font-family: var(--font-heading, inherit);
+    font-weight: 800;
+    color: #60a5fa;
+  }
+
+  .cm-drop-sep {
+    color: rgba(255, 255, 255, 0.25);
+  }
+
+  .cm-drop-merchant {
+    color: #94a3b8;
+    font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .cm-drop-meta {
-    display: block;
-    font-size: 0.7rem;
-    color: #93c5fd;
-    font-weight: 700;
-  }
-
   .cm-drop-discount {
-    color: #34d399;
-    font-size: 0.68rem;
+    padding: 0.12rem 0.5rem;
+    font-size: 0.66rem;
     font-weight: 800;
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.14);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+    border-radius: 999px;
     flex-shrink: 0;
   }
 
@@ -736,6 +791,11 @@ const hueOf = (index: number) => (index * 43) % 360;
     .category-search {
       flex: 1 1 7rem;
       min-width: 5.5rem;
+    }
+
+    .cm-search-drop {
+      width: auto;
+      right: 0;
     }
 
     .category-panel {
@@ -921,7 +981,7 @@ const hueOf = (index: number) => (index * 43) % 360;
         if (!data?.success) throw new Error('search failed');
         const hits: {
           slug: string; title: string; price: string; image: string;
-          discountPct: number | null; url: string;
+          discountPct: number | null; url: string; merchant?: string;
         }[] = data.products ?? [];
         if (!searchDrop) return;
         if (hits.length === 0) {
@@ -932,10 +992,13 @@ const hueOf = (index: number) => (index * 43) % 360;
           .map(
             (hit) => `
               <a class="cm-drop-item" href="${escapeHtml(hit.url)}">
-                <img src="${escapeHtml(hit.image)}" alt="" loading="lazy" width="38" height="38" />
+                <img src="${escapeHtml(hit.image)}" alt="" loading="lazy" width="42" height="42" />
                 <span class="cm-drop-body">
                   <span class="cm-drop-title">${escapeHtml(hit.title)}</span>
-                  <span class="cm-drop-meta">${escapeHtml(hit.price)}</span>
+                  <span class="cm-drop-meta">
+                    <span class="cm-drop-price">${escapeHtml(hit.price)}</span>
+                    ${hit.merchant ? `<span class="cm-drop-sep" aria-hidden="true">·</span><span class="cm-drop-merchant">${escapeHtml(hit.merchant)}</span>` : ''}
+                  </span>
                 </span>
                 ${hit.discountPct ? `<span class="cm-drop-discount">-${hit.discountPct}%</span>` : ''}
               </a>`,

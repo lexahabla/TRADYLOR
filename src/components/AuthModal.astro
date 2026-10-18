@@ -270,8 +270,9 @@
   }
 
   .auth-tab.is-active {
-    color: #07111f;
-    background: #60a5fa;
+    color: #ffffff;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.9), rgba(37, 99, 235, 0.9));
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
   }
 
   .auth-error {
@@ -464,21 +465,26 @@
     font: inherit;
     font-size: 0.9rem;
     font-weight: 800;
-    color: #07111f;
-    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    color: #ffffff;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     border: 0;
     border-radius: 11px;
     cursor: pointer;
-    transition: filter 0.2s ease;
+    box-shadow: 0 8px 24px rgba(59, 130, 246, 0.4);
+    transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
   }
 
   .auth-submit:hover {
-    filter: brightness(1.1);
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 10px 28px rgba(59, 130, 246, 0.5);
   }
 
   .auth-submit:disabled {
     opacity: 0.55;
     cursor: wait;
+    transform: none;
+    box-shadow: none;
   }
 
   .auth-link-btn {
