@@ -121,8 +121,10 @@ const discountPercent = product?.originalPrice
   ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
   : null;
 
-// Salida directa del catálogo (.exit-cta): prioriza el enlace de compra directa
-// generado en el admin (cesta de Amazon con tag); si no, se construye desde el ASIN.
+// Enlace de compra directa del catálogo (cesta de Amazon con tag si la generó
+// el admin; si no, construida desde el ASIN). Se conserva como destino de compra
+// de "Mi Radar"; la tarjeta ya no muestra salida directa (el nombre del
+// comerciante se indica en la ficha /producto/[slug]).
 const catalogDirectExitHref = product
   ? (product.buyNowUrl?.trim() || getAmazonAddToCartUrl(product.asin || ''))
   : '';
@@ -283,7 +285,7 @@ const radarPayload = {
 <article class="product-card" id={`product-${product?.id}`}>
   <!-- Enlace de tarjeta completa: al pasar el cursor toda la tarjeta lleva a
        la ficha. Los elementos con enlace propio (título, categoría, imagen,
-       "Comprar ya", "Mi Radar" y salida directa) quedan por encima (z-index). -->
+       "Comprar ya" y "Mi Radar") quedan por encima (z-index). -->
   <a
     class="card-link-overlay"
     href={`/producto/${product.slug ?? product.id}`}
@@ -416,28 +418,6 @@ const radarPayload = {
       </svg>
     </button>
   </div>
-
-  <!-- Salida directa: enlace de compra directa (cesta de Amazon con tag → tramitación).
-       A ancho completo de la tarjeta, bajo "Comprar ya". -->
-  {catalogDirectExitHref && (product.asin || product.buyNowUrl) && (
-    <a
-      href={catalogDirectExitHref}
-      class="quick-buy-cta exit-cta"
-      target="_blank"
-      rel="nofollow sponsored noopener noreferrer"
-      data-network="amazon"
-      data-asin={product.asin || undefined}
-      data-title={product.title}
-      aria-label={`Comprar ahora en ${product.merchant} (salida directa)`}
-    >
-      Comprar ahora en {product.merchant}
-      <svg class="external-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
-        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-        <polyline points="15 3 21 3 21 9" />
-        <line x1="10" y1="14" x2="21" y2="3" />
-      </svg>
-    </a>
-  )}
 
   <!-- Microcopia de confianza: a ancho completo de la tarjeta (fuera de la
        columna de imagen, en la fila inferior en móvil). -->
@@ -661,8 +641,7 @@ const radarPayload = {
   .image-wrapper .image-link,
   .product-title a,
   a.category-label,
-  .buy-actions,
-  .quick-buy-cta {
+  .buy-actions {
     position: relative;
     z-index: 3;
   }
@@ -951,44 +930,6 @@ const radarPayload = {
     }
   }
 
-  /* ============ SALIDA DIRECTA POR ASIN (exit-cta) ============
-     A ancho completo de la tarjeta; márgenes laterales para alinearse
-     con el contenido (mismo criterio que .buy-actions). */
-  .quick-buy-cta {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.45rem;
-    width: calc(100% - 1.8rem);
-    margin: 0 0.9rem;
-    min-height: 44px;
-    padding: 0.65rem 1rem;
-    background: rgba(251, 191, 36, 0.08);
-    color: #fbbf24;
-    font-weight: 700;
-    font-size: 0.8rem;
-    font-family: inherit;
-    border: 1px solid rgba(251, 191, 36, 0.35);
-    border-radius: 12px;
-    cursor: pointer;
-    text-decoration: none;
-    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
-  }
-
-  .quick-buy-cta:hover {
-    background: rgba(251, 191, 36, 0.16);
-    transform: translateY(-1px);
-    box-shadow: 0 6px 18px rgba(251, 191, 36, 0.2);
-  }
-
-  .quick-buy-cta .external-icon {
-    transition: transform 0.3s ease;
-  }
-
-  .quick-buy-cta:hover .external-icon {
-    transform: translate(2px, -2px);
-  }
-
   /* ============ RESPONSIVE (tarjeta de catálogo) ============
      Escritorio/tablet (≥768px): disposición vertical clásica + rejilla. */
   @media (min-width: 768px) {
@@ -1040,11 +981,6 @@ const radarPayload = {
       padding: 0 1.25rem;
     }
 
-    .quick-buy-cta {
-      margin: 0.6rem 1.25rem 0;
-      width: calc(100% - 2.5rem);
-    }
-
     .trust-guarantee {
       margin-top: auto;
     }
@@ -1073,11 +1009,6 @@ const radarPayload = {
 
     .buy-actions {
       padding: 0 1.1rem;
-    }
-
-    .quick-buy-cta {
-      margin: 0.6rem 1.1rem 0;
-      width: calc(100% - 2.2rem);
     }
 
     .product-title {
@@ -1114,11 +1045,6 @@ const radarPayload = {
 
     .buy-actions {
       padding: 0 0.75rem;
-    }
-
-    .quick-buy-cta {
-      margin: 0.6rem 0.75rem 0;
-      width: calc(100% - 1.5rem);
     }
 
     .main-price {

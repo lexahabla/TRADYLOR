@@ -46,6 +46,8 @@ const checkoutUrl = `/checkout/${productKey(product)}`;
 const specs = product.specs && Object.keys(product.specs).length > 0 ? product.specs : null;
 const techSheet = (product.techSheet ?? '').trim();
 const fulfillmentProvider = product.fulfillmentProvider ?? product.merchant;
+// Clave normalizada del comerciante (para colorear el sello según la tienda).
+const merchantSlug = String(product.merchant ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 // Envío: campos propios del producto o, si no existen (importaciones antiguas),
 // los del snapshot del catálogo AliExpress (ver lib/shipping.ts).
 const shipping = resolveProductShipping(product);
@@ -322,6 +324,15 @@ const productSchema = {
           <p class="price-disclaimer">
             Puede variar en el momento de la compra.
           </p>
+        </div>
+
+        <!-- Comerciante: nombre del comercio que vende el producto -->
+        <div class="merchant-row">
+          <span class="vendor-label">Comercio</span>
+          <span class="vendor-name" data-merchant={merchantSlug}>{product.merchant}</span>
+          {fulfillmentProvider && fulfillmentProvider !== product.merchant && (
+            <span class="vendor-label">Envía y factura {fulfillmentProvider}</span>
+          )}
         </div>
 
         <!-- Bloque de envío (datos del comerciante cuando están disponibles) -->
