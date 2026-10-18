@@ -101,6 +101,8 @@ export interface ProductFilterParams {
   estado?: AliEstadoFilter;
   /** Tienda / merchant (`extra.Tienda`). */
   shop?: string;
+  /** Red / comerciante de origen (id de red conectada, p. ej. `aliexpress`). */
+  network?: string;
   /** Precio de venta mínimo en €. */
   priceMin?: number;
   /** Precio de venta máximo en €. */
@@ -444,6 +446,12 @@ export function filterAliCatalog(
     if (params.catL1 && categoryL1(product) !== params.catL1) return false;
     if (params.catL2 && categoryL2(product) !== params.catL2) return false;
     if (params.shop && String(extra(product, 'Tienda') ?? '') !== params.shop) return false;
+    if (params.network) {
+      // El id de red (p. ej. `aliexpress`) se compara en minúsculas con el
+      // `network` normalizado del conector (`aliexpress`, `amazon`, `AliExpress`…).
+      const productNetwork = String(product.network ?? '').trim().toLowerCase();
+      if (productNetwork !== params.network.trim().toLowerCase()) return false;
+    }
 
     // Rango de precio
     const price = toNumber(product.price);
@@ -619,6 +627,7 @@ function buildChips(params: ProductFilterParams): AliChip[] {
     chips.push({ key: 'estado', label: ESTADO_LABELS[params.estado], clear: (p) => { p.estado = 'ALL'; } });
   }
   if (params.shop) chips.push({ key: 'shop', label: params.shop, clear: (p) => { p.shop = ''; } });
+  if (params.network) chips.push({ key: 'network', label: params.network, clear: (p) => { p.network = ''; } });
   if (params.priceMin != null || params.priceMax != null) {
     const from = params.priceMin != null ? `${fmtNum(params.priceMin)} €` : '';
     const to = params.priceMax != null ? `${fmtNum(params.priceMax)} €` : '';
@@ -650,6 +659,7 @@ function advancedCount(params: ProductFilterParams): number {
     params.imagesMin != null,
     params.discountMin != null,
     params.shop,
+    params.network,
   ].filter(Boolean).length;
 }
 
@@ -686,6 +696,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     'aliFImages',
     'aliFDiscMin',
     'aliFShop',
+    'aliFNetwork',
     'aliFChips',
   );
   const root = el.aliFilters;
@@ -734,6 +745,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     next.estado = estado && ESTADO_LABELS[estado] ? estado : 'ALL';
 
     next.shop = (el.aliFShop as HTMLSelectElement | null)?.value ?? '';
+    next.network = (el.aliFNetwork as HTMLSelectElement | null)?.value ?? '';
 
     next.priceMin = numValue(el.aliFPriceMin);
     next.priceMax = numValue(el.aliFPriceMax);
@@ -862,6 +874,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     (el.aliFChoice as HTMLInputElement | null)!.checked = Boolean(params.choiceOnly);
     (el.aliFHot as HTMLInputElement | null)!.checked = Boolean(params.hotCommissionOnly);
     (el.aliFShop as HTMLSelectElement | null)!.value = params.shop ?? '';
+    (el.aliFNetwork as HTMLSelectElement | null)!.value = params.network ?? '';
 
     const sortSelect = el.aliFSort as HTMLSelectElement | null;
     if (sortSelect) sortSelect.value = params.sortBy ?? 'ventas';
@@ -957,7 +970,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
   for (const id of [
     'aliFQ', 'aliFCat2', 'aliFState', 'aliFPriceMin', 'aliFPriceMax', 'aliFCommMin', 'aliFCommUnit',
     'aliFSalesMin', 'aliFRatingMin', 'aliFDiscMin', 'aliFImages', 'aliFFreeShip', 'aliFChoice',
-    'aliFHot', 'aliFShop', 'aliFSort',
+    'aliFHot', 'aliFShop', 'aliFNetwork', 'aliFSort',
   ] as const) {
     const node = el[id];
     if (!node) continue;

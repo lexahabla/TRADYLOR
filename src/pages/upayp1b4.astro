@@ -553,6 +553,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </select>
         <button type="button" class="btn-secondary btn-sm" id="btnProdCreateSubcat" title="Crear una subcategoría vinculada a la categoría destino">➕ Subcat</button>
         <button type="button" class="btn-secondary btn-sm" id="btnProdAssignCat">Asignar categoría</button>
+        <select id="prodBadgeAssign" class="sel-cat-assign" aria-label="Etiqueta destacada destino">
+          <option value="">Etiqueta destacada…</option>
+        </select>
+        <button type="button" class="btn-secondary btn-sm" id="btnProdBulkBadge" title="Aplica la etiqueta destacada (badge) a todos los productos seleccionados">🏷️ Asignar Badge</button>
         <button type="button" class="btn-ai btn-sm" id="btnProdNormalizeTags" title="Extraer tags técnicos normalizados (normalized_tags)">🏷️ Normalizar Tags</button>
         <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
         <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
@@ -774,6 +778,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <option value="IMPORTED">Añadidos al catálogo</option>
                 <option value="DISCARDED">Descartados</option>
               </select>
+            </div>
+            <div class="filter-field ali-f-network">
+              <label for="aliFNetwork">Comerciante / Red</label>
+              <select id="aliFNetwork" title="Filtra por la red de afiliación (comerciante) de origen"><option value="">Todas</option></select>
             </div>
             <div class="filter-field ali-f-pair">
               <label for="aliFPriceMin">Precio (€)</label>
@@ -1017,6 +1025,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <TrafficSalesDashboard />
     </section>
   </div>
+
+  <!-- Botón flotante: sube directamente al menú de secciones del backend -->
+  <button type="button" id="adminBackToTop" class="admin-back-to-top" title="Volver al menú de secciones" aria-label="Volver al menú de secciones">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <line x1="12" y1="19" x2="12" y2="5"></line>
+      <polyline points="5 12 12 5 19 12"></polyline>
+    </svg>
+    <span>Secciones</span>
+  </button>
 
   <!-- Modal de vídeo: se abre centrado desde la galería o la vista previa -->
   <div id="videoModal" class="video-modal" hidden>
@@ -2638,16 +2655,21 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       });
     }
 
-    // Filtros de la tabla «Catálogo de Productos Registrados»: búsqueda,
-    // categoría/comercio, orden y barras de rango duales (precio, descuento,
-    // valoración) con el mismo diseño fino que el catálogo de AliExpress.
+    // Filtros de rango del «Catálogo de Productos Registrados» (mismo diseño
+    // que la tabla de Afiliados): precio con par mínimo/máximo, descuento con
+    // select de rangos y valoración con select de umbral.
     let prodSortDir = 'desc';
-    const PROD_RANGE_DEFS = [
-      { key: 'price', label: 'Precio (€)', step: 1, get: (p) => Number(p.price) || 0, fmt: (v) => `${Math.round(v)} €` },
-      { key: 'disc', label: 'Descuento (%)', step: 1, get: (p) => prodDiscountPct(p), fmt: (v) => `${Math.round(v)}%` },
-      { key: 'rating', label: 'Valoración', step: 0.1, get: (p) => (p.rating != null ? Number(p.rating) : null), fmt: (v) => `${v}★` },
+    const PROD_DISCOUNT_RANGES = [
+      { value: '0-10', label: '0% – 10%', min: 0, max: 10 },
+      { value: '10-20', label: '10% – 20%', min: 10, max: 20 },
+      { value: '20-30', label: '20% – 30%', min: 20, max: 30 },
     ];
-    let prodRanges = {};
+    const PROD_RATING_OPTIONS = [
+      { value: '4', label: '≥ 4,0 ★' },
+      { value: '4.5', label: '≥ 4,5 ★' },
+      { value: '4.6', label: '≥ 4,6 ★' },
+      { value: '4.8', label: '≥ 4,8 ★' },
+    ];
 
     function prodDiscountPct(p) {
       const original = Number(p.originalPrice) || 0;
@@ -2655,53 +2677,54 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       return original > price && price > 0 ? Math.round(((original - price) / original) * 100) : 0;
     }
 
-    function prodRangeSyncUi(key) {
-      const state = prodRanges[key];
-      const field = prodRangeFields?.querySelector(`[data-range-field="${key}"]`);
-      if (!state || !field) return;
-      const valuesEl = field.querySelector('[data-range-values]');
-      if (valuesEl) valuesEl.textContent = `${state.fmt(state.lo)} – ${state.fmt(state.hi)}`;
-      const fill = field.querySelector('[data-range-fill]');
-      if (fill) {
-        const span = state.dataMax - state.dataMin || 1;
-        const left = ((state.lo - state.dataMin) / span) * 100;
-        const right = ((state.hi - state.dataMin) / span) * 100;
-        fill.style.left = `${left}%`;
-        fill.style.width = `${Math.max(0, right - left)}%`;
-      }
-      const minInput = field.querySelector('[data-range-side="min"]');
-      const maxInput = field.querySelector('[data-range-side="max"]');
-      if (minInput) minInput.value = state.lo;
-      if (maxInput) maxInput.value = state.hi;
+    /** Construye los controles de rango: precio min/máx, descuento y valoración. */
+    function prodBuildRanges() {
+      if (!prodRangeFields) return;
+      // Conserva los valores ya escritos por el usuario al repintar la tabla.
+      const keepPriceMin = document.getElementById('prodFPriceMin')?.value || '';
+      const keepPriceMax = document.getElementById('prodFPriceMax')?.value || '';
+      const keepDisc = document.getElementById('prodFDiscRange')?.value || '';
+      const keepRating = document.getElementById('prodFRatingMin')?.value || '';
+      const prices = currentProducts.map((p) => Number(p.price)).filter((v) => Number.isFinite(v) && v > 0);
+      const dataMin = prices.length ? Math.floor(Math.min(...prices)) : 0;
+      const dataMax = prices.length ? Math.ceil(Math.max(...prices)) : 0;
+      prodRangeFields.innerHTML = `
+        <div class="filter-field ali-f-pair" data-range-field="price">
+          <label for="prodFPriceMin">Precio (€)</label>
+          <div class="ali-pair">
+            <input type="number" id="prodFPriceMin" min="${dataMin}" step="0.01" placeholder="Mín." inputmode="decimal" value="${escapeHtml(keepPriceMin)}" />
+            <span class="ali-pair-sep" aria-hidden="true">–</span>
+            <input type="number" id="prodFPriceMax" max="${dataMax}" step="0.01" placeholder="Máx." inputmode="decimal" value="${escapeHtml(keepPriceMax)}" />
+          </div>
+        </div>
+        <div class="filter-field" data-range-field="disc">
+          <label for="prodFDiscRange">Descuento</label>
+          <select id="prodFDiscRange">
+            <option value="">Cualquiera</option>
+            ${PROD_DISCOUNT_RANGES.map((r) => `<option value="${r.value}"${r.value === keepDisc ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
+          </select>
+        </div>
+        <div class="filter-field" data-range-field="rating">
+          <label for="prodFRatingMin">Valoración</label>
+          <select id="prodFRatingMin">
+            <option value="">Cualquiera</option>
+            ${PROD_RATING_OPTIONS.map((r) => `<option value="${r.value}"${r.value === keepRating ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
+          </select>
+        </div>`;
     }
 
-    function prodBuildRanges() {
-      prodRanges = {};
-      if (!prodRangeFields) return;
-      const blocks = [];
-      for (const def of PROD_RANGE_DEFS) {
-        const values = currentProducts.map(def.get).filter((v) => v != null && Number.isFinite(v));
-        if (!values.length) continue;
-        const dataMin = Math.min(...values);
-        const dataMax = Math.max(...values);
-        if (dataMax <= dataMin) continue;
-        prodRanges[def.key] = { dataMin, dataMax, lo: dataMin, hi: dataMax, step: def.step, fmt: def.fmt, get: def.get, touched: false };
-        blocks.push(`
-          <div class="ali-range" data-range-field="${def.key}">
-            <div class="ali-range-head">
-              <label>${escapeHtml(def.label)}</label>
-              <span class="ali-range-values" data-range-values>${escapeHtml(def.fmt(dataMin))} – ${escapeHtml(def.fmt(dataMax))}</span>
-            </div>
-            <div class="ali-range-track">
-              <div class="ali-range-rail"></div>
-              <div class="ali-range-fill" data-range-fill></div>
-              <input type="range" data-range="${def.key}" data-range-side="min" min="${dataMin}" max="${dataMax}" step="${def.step}" value="${dataMin}" aria-label="${escapeHtml(def.label)} mínimo" />
-              <input type="range" data-range="${def.key}" data-range-side="max" min="${dataMin}" max="${dataMax}" step="${def.step}" value="${dataMax}" aria-label="${escapeHtml(def.label)} máximo" />
-            </div>
-          </div>`);
-      }
-      prodRangeFields.innerHTML = blocks.join('');
-      for (const key of Object.keys(prodRanges)) prodRangeSyncUi(key);
+    /** Lee los tres controles de rango tal y como están ahora en el DOM. */
+    function prodReadRangeFilters() {
+      const priceMin = parseFloat(document.getElementById('prodFPriceMin')?.value);
+      const priceMax = parseFloat(document.getElementById('prodFPriceMax')?.value);
+      const discValue = document.getElementById('prodFDiscRange')?.value || '';
+      const rating = parseFloat(document.getElementById('prodFRatingMin')?.value);
+      return {
+        priceMin: Number.isFinite(priceMin) ? priceMin : null,
+        priceMax: Number.isFinite(priceMax) ? priceMax : null,
+        discRange: PROD_DISCOUNT_RANGES.find((r) => r.value === discValue) || null,
+        ratingMin: Number.isFinite(rating) ? rating : null,
+      };
     }
 
     function prodPopulateFilterOptions() {
@@ -2721,6 +2744,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const merchant = prodFMerchant?.value || '';
       const sortKey = prodFSort?.value || 'default';
       const dir = prodSortDir === 'asc' ? 1 : -1;
+      const prodRange = prodReadRangeFilters();
       const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
 
       const filtered = currentProducts.filter((product) => {
@@ -2749,10 +2773,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         if (merchant && (product.merchant || '') !== merchant) return false;
         // Preset editorial activo (1 clic): filtro complementario.
         if (typeof activeProdPreset !== 'undefined' && activeProdPreset && !prodMatchesPreset(product, activeProdPreset)) return false;
-        for (const state of Object.values(prodRanges)) {
-          if (!state.touched) continue;
-          const value = state.get(product);
-          if (value == null || value < state.lo || value > state.hi) return false;
+        const price = Number(product.price) || 0;
+        if (prodRange.priceMin != null && price < prodRange.priceMin) return false;
+        if (prodRange.priceMax != null && price > prodRange.priceMax) return false;
+        if (prodRange.discRange) {
+          const discount = prodDiscountPct(product);
+          if (discount < prodRange.discRange.min || discount > prodRange.discRange.max) return false;
+        }
+        if (prodRange.ratingMin != null) {
+          const rating = product.rating != null ? Number(product.rating) : null;
+          if (rating == null || rating < prodRange.ratingMin) return false;
         }
         if (q) {
           const haystack = `${product.title} ${product.merchant || ''} ${product.category || ''} ${(product.brand || '')}`.toLowerCase();
@@ -2804,29 +2834,20 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (prodFSort) prodFSort.value = 'default';
       prodSortDir = 'desc';
       if (prodFSortDir) prodFSortDir.textContent = '↓';
-      prodBuildRanges();
+      const priceMin = document.getElementById('prodFPriceMin');
+      const priceMax = document.getElementById('prodFPriceMax');
+      const discRange = document.getElementById('prodFDiscRange');
+      const ratingMin = document.getElementById('prodFRatingMin');
+      if (priceMin) priceMin.value = '';
+      if (priceMax) priceMax.value = '';
+      if (discRange) discRange.value = '';
+      if (ratingMin) ratingMin.value = '';
       prodFilterApply();
     });
-    prodRangeFields?.addEventListener('input', (event) => {
-      const input = event.target;
-      if (!(input instanceof HTMLInputElement) || !input.dataset.range) return;
-      const key = input.dataset.range;
-      const state = prodRanges[key];
-      if (!state) return;
-      const side = input.dataset.rangeSide;
-      let lo = Number(fieldValue(prodRangeFields, key, 'min'));
-      let hi = Number(fieldValue(prodRangeFields, key, 'max'));
-      if (lo > hi) [lo, hi] = [hi, lo];
-      state.lo = lo;
-      state.hi = hi;
-      state.touched = true;
-      prodRangeSyncUi(key);
-      prodFilterApply();
-    });
-
-    function fieldValue(host, key, side) {
-      return host?.querySelector(`[data-range="${key}"][data-range-side="${side}"]`)?.value ?? 0;
-    }
+    // Los controles de rango se reconstruyen en cada repintado (prodBuildRanges),
+    // así que se escuchan de forma delegada sobre el contenedor.
+    prodRangeFields?.addEventListener('input', prodFilterApply);
+    prodRangeFields?.addEventListener('change', prodFilterApply);
 
      function updateProdSelCount() {
       if (productSelCount) productSelCount.textContent = `${selectedProductIds.size} seleccionado${selectedProductIds.size === 1 ? '' : 's'}`;
@@ -2889,6 +2910,51 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');
       }
     });
+    // Asignar una Etiqueta Destacada (Badge) a todos los productos seleccionados.
+    const prodBadgeAssign = document.getElementById('prodBadgeAssign');
+    if (prodBadgeAssign && prodBadge) {
+      // Se clonan las opciones del desplegable del formulario (mismos valores).
+      for (const option of Array.from(prodBadge.options)) {
+        if (!option.value) continue;
+        const clone = document.createElement('option');
+        clone.value = option.value;
+        clone.textContent = option.textContent;
+        prodBadgeAssign.appendChild(clone);
+      }
+      const btnProdBulkBadge = document.getElementById('btnProdBulkBadge');
+      btnProdBulkBadge?.addEventListener('click', async () => {
+        const ids = Array.from(selectedProductIds);
+        if (!ids.length) {
+          showAlert('warning', 'Sin selección', 'Marca primero los productos en la tabla a los que quieres asignar la etiqueta.');
+          return;
+        }
+        const badge = String(prodBadgeAssign.value || '').trim();
+        if (!badge) {
+          showAlert('warning', 'Falta la etiqueta', 'Elige la etiqueta destacada en el desplegable «Etiqueta destacada…».');
+          prodBadgeAssign.focus();
+          return;
+        }
+        showAlert('loading', 'Asignando etiqueta...', `Aplicando «${badge}» a ${ids.length} producto(s).`);
+        try {
+          const res = await fetch('/api/products/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'set-badge', ids, badge }),
+          });
+          const data = await res.json();
+          if (data.success) {
+            showAlert('success', 'Etiqueta asignada', `«${badge}» aplicada a ${data.updated} producto(s).`);
+            await reloadProductsTable();
+          } else {
+            showAlert('error', 'Error al asignar', data.message || 'No se pudo actualizar la etiqueta.');
+          }
+        } catch (err) {
+          console.error(err);
+          showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');
+        }
+      });
+    }
+
     prodCheckAll?.addEventListener('change', () => {
       const checked = prodCheckAll.checked;
       document.querySelectorAll('[data-prod-check]').forEach((box) => {
@@ -3047,6 +3113,26 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     if (typeof loadSectionsAdmin === 'function') loadSectionsAdmin();
     attachRowActions();
     if (typeof reloadProductsTable === 'function') reloadProductsTable();
+
+    // Botón flotante: sube al menú de secciones (admin-section-nav).
+    const adminBackToTop = document.getElementById('adminBackToTop');
+    if (adminBackToTop) {
+      adminBackToTop.addEventListener('click', () => {
+        const nav = document.querySelector('.admin-section-nav');
+        if (nav) {
+          nav.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          // En pantallas estrechas, despliega también el menú de secciones.
+          const links = document.getElementById('adminNavLinks');
+          const toggle = document.getElementById('adminNavToggle');
+          if (links && toggle && window.getComputedStyle(toggle).display !== 'none' && !links.classList.contains('is-open')) {
+            links.classList.add('is-open');
+            toggle.setAttribute('aria-expanded', 'true');
+          }
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      });
+    }
 
     // Chips de URL en los detalles: copiar al portapapeles y desplegar/ocultar.
     document.addEventListener('click', async (event) => {
@@ -3249,6 +3335,35 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     function applyNetworks(data) {
       if (Array.isArray(data.networks)) renderNetworks(data.networks);
       renderRemoved(Array.isArray(data.removed) ? data.removed : []);
+      populateAliNetworkFilter();
+    }
+
+    /**
+     * Rellena el select «Comerciante / Red» de #aliFilters con TODAS las redes
+     * del panel «Redes conectadas». Conectadas: texto negro subrayado con el
+     * color de la red (como el span.network-color, un punto más opaco). No
+     * conectadas: gris.
+     */
+    function populateAliNetworkFilter() {
+      const select = document.getElementById('aliFNetwork');
+      if (!select) return;
+      const current = select.value;
+      select.innerHTML = '<option value="">Todas</option>';
+      for (const network of networksCache || []) {
+        const option = document.createElement('option');
+        option.value = network.id;
+        option.textContent = network.name;
+        if (network.status === 'connected') {
+          option.style.color = '#0b1220';
+          option.style.textDecoration = 'underline';
+          option.style.textDecorationColor = network.color;
+          option.style.fontWeight = '700';
+        } else {
+          option.style.color = '#9ca3af';
+        }
+        select.appendChild(option);
+      }
+      if (current && Array.from(select.options).some((o) => o.value === current)) select.value = current;
     }
 
     function renderRemoved(removed) {
@@ -3516,30 +3631,52 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
 
     function productDetailRows(product) {
+      const extraOf = (key) => {
+        const raw = product.extra && product.extra[key];
+        return raw == null || raw === '' ? null : raw;
+      };
+      const affiliateLink = extraOf('Enlace de afiliado') || extraOf('Enlace de afiliado final') || product.promotionUrl || product.productUrl || null;
+      const buyNow = extraOf('Enlace de compra directa') || extraOf('Buy Now') || extraOf('Buy Now URL') || null;
+      const specs = extraOf('Especificaciones') || extraOf('Specs') || null;
       const rows = [
         ['Red', product.network],
         ['ID externo', product.externalId],
         ['Categoría', product.category],
+        ['Marca', product.brand || extraOf('Marca') || extraOf('Brand')],
+        ['Distribuidor (envío y pago)', product.fulfillmentProvider || extraOf('Distribuidor') || extraOf('Fulfillment') || extraOf('Vendedor')],
         ['Descripción', product.description],
         ['Precio', money(product.price, product.currency)],
         ['Precio original', product.originalPrice != null ? money(product.originalPrice, product.currency) : null],
         ['Moneda', product.currency],
         ['Comisión (%)', product.commissionRate != null ? `${product.commissionRate}%` : null],
         ['Comisión estimada', product.commissionAmount != null ? money(product.commissionAmount, product.currency) : null],
-        ['Valoración', product.rating != null ? `${product.rating} / 5` : null],
-        ['Reseñas', product.reviewsCount],
+        ['Valoración (0–5)', product.rating != null ? `${product.rating} / 5` : null],
+        ['Nº de opiniones', product.reviewsCount],
         ['Ventas / alcance', product.popularity],
         ['Stock', product.inStock ? 'En stock' : 'Sin stock'],
-        ['Envío', product.shippingInfo],
+        ['Enlace de Afiliado Final', affiliateLink],
+        ['Enlace de Compra Directa (Buy Now)', buyNow],
+        ['Texto de envío', product.shippingInfo || extraOf('Texto de envío') || extraOf('Envío')],
+        ['Días de envío', product.shippingDays ?? extraOf('Días de envío')],
         ['Origen de datos', product.estimated ? 'Estimado (API no cableada)' : 'API oficial'],
         ['Alta en catálogo', aliFmtDate(product.firstSeenAt)],
         ['URL del producto', product.productUrl],
       ];
+      if (specs) rows.push(['Especificaciones (specs clave/valor)', specs]);
+      // Etiquetas ya cubiertas arriba: no se repiten desde los extras.
+      const handled = new Set([
+        'Red', 'ID externo', 'Categoría', 'Marca', 'Brand', 'Distribuidor', 'Fulfillment', 'Vendedor',
+        'Descripción', 'Precio', 'Moneda', 'Valoración', 'Reseñas', 'Ventas / alcance', 'Stock',
+        'Enlace de afiliado', 'Enlace de afiliado final', 'Enlace de compra directa', 'Buy Now', 'Buy Now URL',
+        'Envío', 'Texto de envío', 'Días de envío', 'Origen de datos', 'Alta en catálogo', 'URL del producto',
+        'Especificaciones', 'Specs',
+      ]);
       for (const [label, value] of Object.entries(product.extra || {})) {
         if (value == null || value === '') continue;
         // Las imágenes NO se pintan en su posición natural del extra:
         // van en el ÚLTIMO aff-detail-item del desplegable.
         if (label === 'Imágenes') continue;
+        if (handled.has(label)) continue;
         rows.push([label, value]);
       }
       const fields = rows
@@ -3590,6 +3727,31 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         typeof product.freeShipping === 'boolean'
           ? product.freeShipping
           : shippingDays != null && shippingDays <= 3;
+      // Campos que la ficha del producto (formulario) espera recibir: Marca,
+      // Especificaciones, Distribuidor, Enlace de afiliado final y Buy Now.
+      const extraOf = (key) => {
+        const raw = product.extra && product.extra[key];
+        return raw == null || raw === '' ? null : String(raw);
+      };
+      const brand = product.brand || extraOf('Marca') || extraOf('Brand')
+        || (product.network === 'aliexpress' ? 'AliExpress' : product.network);
+      const rawSpecs = extraOf('Especificaciones') || extraOf('Specs');
+      const specs = (() => {
+        if (!rawSpecs) return undefined;
+        const parsed = {};
+        rawSpecs.split(/\s*(?:·|;|\|)\s*/).map((part) => part.trim()).filter(Boolean).forEach((part) => {
+          const idx = part.indexOf(':');
+          if (idx > 0) {
+            const k = part.slice(0, idx).trim();
+            const v = part.slice(idx + 1).trim();
+            if (k && v) parsed[k] = v;
+          }
+        });
+        return Object.keys(parsed).length ? parsed : undefined;
+      })();
+      const fulfillmentProvider =
+        product.fulfillmentProvider || extraOf('Distribuidor') || extraOf('Fulfillment') || extraOf('Vendedor') || undefined;
+      const buyNowUrl = extraOf('Enlace de compra directa') || extraOf('Buy Now') || extraOf('Buy Now URL') || undefined;
       return {
         action: 'save',
         product: {
@@ -3605,6 +3767,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           rating: product.rating,
           reviewsCount: product.reviewsCount,
           badge: product.network,
+          brand,
+          specs,
+          fulfillmentProvider,
+          buyNowUrl,
           pros: [`Comisión estimada: ${product.commissionRate ?? 0}% en ${product.network}`],
           cons: [],
           shippingInfo,
@@ -3766,10 +3932,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             affiliateUrl: basic.affiliateUrl,
             merchant: product.network,
             url: product.productUrl,
-            brand: product.network === 'aliexpress' ? 'AliExpress' : product.network,
+            brand: basic.brand || (product.network === 'aliexpress' ? 'AliExpress' : product.network),
             rating: product.rating,
             reviewsCount: product.reviewsCount,
             specs: basic.specs,
+            fulfillmentProvider: basic.fulfillmentProvider,
+            buyNowUrl: basic.buyNowUrl,
             pros: basic.pros,
             cons: basic.cons,
             techSheet: basic.techSheet,
@@ -5578,6 +5746,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   /* CAPA 2 · Controles principales + ordenación */
   .ali-filters .filter-field.ali-f-cat { flex: 1 1 125px; min-width: 115px; }
   .ali-filters .filter-field.ali-f-state { flex: 0 1 108px; min-width: 104px; }
+  .ali-filters .filter-field.ali-f-network { flex: 1 1 150px; min-width: 130px; }
   .ali-filters .filter-field.ali-f-short { flex: 0 1 116px; min-width: 112px; }
   .ali-filters .filter-field.ali-sort-field { flex: 0 1 215px; }
   .ali-f-btns { display: flex; align-items: flex-end; gap: .35rem; }
@@ -5589,6 +5758,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   /* El select de unidad hereda `.filter-field select` (width:100% + padding .7rem): con 40px sólo cabía la flecha.
      Selector más específico para fijar un ancho que deje ver «€» / «%». */
   .ali-filters .ali-pair .ali-pair-unit { flex: 0 0 62px; width: 62px; padding-left: .55rem; padding-right: .3rem; }
+  /* Controles de rango del Catálogo de Productos Registrados (precio min/máx,
+     descuento por rangos y valoración por umbral). */
+  .ali-filters .filter-field.ali-f-pair { flex: 0 1 170px; min-width: 152px; }
+  .ali-filters .filter-field[data-range-field="disc"],
+  .ali-filters .filter-field[data-range-field="rating"] { flex: 0 1 132px; min-width: 120px; }
 
   /* CAPA 3 · Panel desplegable «Más filtros» */
   .ali-advanced { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem .7rem; padding: .55rem .6rem; background: rgba(255, 255, 255, .025); border: 1px dashed rgba(148, 163, 184, .22); border-radius: 8px; }
@@ -5662,6 +5836,30 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     color: var(--color-text-dim);
   }
   .product-sel-bar .btn-sm { padding: .3rem .6rem; font-size: .68rem; }
+  /* Botón flotante: volver al menú de secciones (esquina inferior derecha) */
+  .admin-back-to-top {
+    position: fixed;
+    right: 1.1rem;
+    bottom: 1.1rem;
+    z-index: 70;
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .65rem .95rem;
+    color: #04121f;
+    background: linear-gradient(135deg, #38bdf8, #22d3ee);
+    border: 0;
+    border-radius: 999px;
+    box-shadow: 0 10px 26px rgba(56, 189, 248, .35);
+    cursor: pointer;
+    font: inherit;
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: .02em;
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .admin-back-to-top:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(56, 189, 248, .5); }
+  .admin-back-to-top svg { display: block; }
   /* El título ocupa una fila entera: actúa como cabecera del div y el resto
      de controles bajan a la línea siguiente. */
   .product-sel-title { flex: 1 0 100%; margin-right: 0; color: #93c5fd; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }

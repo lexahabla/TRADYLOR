@@ -259,41 +259,102 @@ function extractMetadata(html: string, targetUrl: string) {
   }
 
   // Fallbacks específicos para la plantilla dinámica de Amazon.
+  // IMPORTANTE: la recolección de la galería se hace SIEMPRE, no solo cuando
+  // falta `og:image`. En Amazon casi siempre hay og:image, así que antes la
+  // galería de `colorImages` nunca se leía y el análisis dejaba una sola foto.
+  const dynamicImageMatch = html.match(/id=["']landingImage["'][^>]+data-a-dynamic-image=["']([^"']+)["']/i);
+  if (dynamicImageMatch?.[1]) {
+    try {
+      const imageMap = JSON.parse(decodeHtmlEntities(dynamicImageMatch[1])) as Record<string, number[]>;
+      const largestImage = Object.entries(imageMap).sort(([, firstSize], [, secondSize]) =>
+        (secondSize[0] * secondSize[1]) - (firstSize[0] * firstSize[1])
+      )[0];
+      if (largestImage?.[0]) image = image || largestImage[0];
+      // La galería se lleva las URLs de mayor resolución de cada imagen.
+      for (const [url, size] of Object.entries(imageMap)) {
+        if (Array.isArray(size) && size[0] >= 500) addGallery(url);
+      }
+    } catch {        // Amazon puede entregar el atributo incompleto; se usa el fallback siguiente.
+    }
+  }
+
   if (!image) {
-    const dynamicImageMatch = html.match(/id=["']landingImage["'][^>]+data-a-dynamic-image=["']([^"']+)["']/i);
-    if (dynamicImageMatch?.[1]) {
-      try {
-        const imageMap = JSON.parse(decodeHtmlEntities(dynamicImageMatch[1])) as Record<string, number[]>;
-        const largestImage = Object.entries(imageMap).sort(([, firstSize], [, secondSize]) =>
-          (secondSize[0] * secondSize[1]) - (firstSize[0] * firstSize[1])
-        )[0];
-        if (largestImage?.[0]) image = largestImage[0];
-        // La galería se lleva las URLs de mayor resolución de cada imagen.
-        for (const [url, size] of Object.entries(imageMap)) {
-          if (Array.isArray(size) && size[0] >= 500) addGallery(url);
-        }
-      } catch {        // Amazon puede entregar el atributo incompleto; se usa el fallback siguiente.
-      }
-    }
+    const amazonImageMatch = html.match(/data-old-hires=["']([^"']+)["']/i);
+    if (amazonImageMatch?.[1]) image = decodeHtmlEntities(amazonImageMatch[1]);
+  }
 
-    if (!image) {
-      const amazonImageMatch = html.match(/data-old-hires=["']([^"']+)["']/i);
-      if (amazonImageMatch?.[1]) image = decodeHtmlEntities(amazonImageMatch[1]);
-    }
-
-    // Vistas distintas del producto: Amazon las guarda en ImageBlockAtlas/colorImages
-    // (cada objeto tiene "large"/"initial" con una foto diferente: frente, dorso, laterales…).
-    const colorImagesMatch = html.match(/"colorImages"\s*:\s*\[([\s\S]*?)\]\s*(?:,|\})/i);
-    if (colorImagesMatch?.[1]) {
-      const largeUrls = colorImagesMatch[1].match(/"large"\s*:\s*"([^"]+)"/gi) || [];
-      for (const raw of largeUrls) {
-        const urlMatch = raw.match(/"large"\s*:\s*"([^"]+)"/i);
-        if (urlMatch?.[1]) addGallery(urlMatch[1].replace(/\\u002F/g, '/').replace(/\\\//g, '/'));
-      }
+  // Vistas distintas del producto: Amazon las guarda en ImageBlockAtlas/colorImages
+  // (cada objeto tiene "large"/"initial" con una foto diferente: frente, dorso, laterales…).
+  const colorImagesMatch = html.match(/"colorImages"\s*:\s*\[([\s\S]*?)\]\s*(?:,|\})/i);
+  if (colorImagesMatch?.[1]) {
+    const largeUrls = colorImagesMatch[1].match(/"large"\s*:\s*"([^"]+)"/gi) || [];
+    for (const raw of largeUrls) {
+      const urlMatch = raw.match(/"large"\s*:\s*"([^"]+)"/i);
+      if (urlMatch?.[1]) addGallery(urlMatch[1].replace(/\\u002F/g, '/').replace(/\\\//g, '/'));
     }
   }
 
   if (image && !/^https?:\/\//i.test(image)) image = '';
+
+  // Galería genérica: recoge TODAS las imágenes grandes del HTML (también en
+  // comercios que no publican JSON-LD, como MediaMarkt, PcComponentes, Fnac…).
+  // Se prefieren los atributos de alta resolución (data-zoom-image, data-original,
+  // data-src, srcset) y se descartan logos, iconos, avatares y miniaturas.
+  // Sólo se aplica si aún no hay una galería decente (Amazon ya trae `colorImages`).
+  const imgSkipRe = /logo|icon|sprite|pixel|transparent|placeholder|avatar|badge|payment|flag|banner|tracking|1x1|spacer|blank|emoji|favicon|loading|sprite|\bthumb|\bmini\b|miniatura|small|\bcrop\b|avatar|_100x100|100x100|s150|s300|x150|x300|star-rating|related|recommend|also|suggest/i;
+  const htmlGalleryUrls: string[] = [];
+  const htmlGallerySeen = new Set<string>();
+  const pushHtmlGallery = (raw?: string | null) => {
+    if (!raw) return;
+    const u = decodeHtmlEntities(raw).trim();
+    if (!/^https?:\/\//i.test(u)) return;
+    if (imgSkipRe.test(u)) return;
+    if (htmlGallerySeen.has(u)) return;
+    htmlGallerySeen.add(u);
+    htmlGalleryUrls.push(u);
+  };
+  if (gallerySet.size < 3) {
+    const imgTagRe = /<img\b[^>]*>/gi;
+    let imgTagMatch: RegExpExecArray | null;
+    while ((imgTagMatch = imgTagRe.exec(html)) !== null) {
+      const tag = imgTagMatch[0];
+      const attr = (name: string): string => {
+        const m = tag.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`, 'i'));
+        return m ? m[1] : '';
+      };
+      // Descarta por tamaño declarado: las miniaturas de navegación ensucian la galería.
+      const width = parseInt(attr('width').replace(/\D/g, ''), 10);
+      const height = parseInt(attr('height').replace(/\D/g, ''), 10);
+      if (Number.isFinite(width) && width > 0 && width < 120) continue;
+      if (Number.isFinite(height) && height > 0 && height < 120) continue;
+
+      const zoom = attr('data-zoom-image');
+      const original = attr('data-original');
+      const lazy = attr('data-lazy-src');
+      const src = attr('data-src') || attr('data-image') || attr('src');
+      const srcset = attr('srcset') || attr('data-srcset');
+
+      // srcset: se queda con la URL de mayor ancho declarado.
+      let bestSrcset = '';
+      if (srcset) {
+        let bestWidth = -1;
+        for (const part of srcset.split(',')) {
+          const [url, descriptor] = part.trim().split(/\s+/);
+          const w = descriptor ? parseInt(descriptor.replace(/\D/g, ''), 10) : 0;
+          if (url && Number.isFinite(w) && w >= bestWidth) {
+            bestSrcset = url;
+            bestWidth = w;
+          } else if (url && !descriptor && !bestSrcset) {
+            bestSrcset = url;
+          }
+        }
+      }
+
+      // Orden de prioridad: zoom > original > lazy > srcset > src.
+      for (const candidate of [zoom, original, lazy, bestSrcset, src]) pushHtmlGallery(candidate);
+    }
+    for (const url of htmlGalleryUrls) addGallery(url);
+  }
 
   if (price === null) {
     const amazonOffscreenPrice = html.match(/<span[^>]+class=["'][^"']*a-offscreen[^"']*["'][^>]*>\s*([\d.,]+)\s*€?/i);
@@ -403,6 +464,100 @@ function extractMetadata(html: string, targetUrl: string) {
     }
   }
 
+  // ── ESPECIFICACIONES (specs clave/valor) ────────────────────────────────
+  // 1ª fuente: meta de marca (comercios que no publican JSON-LD).
+  if (!brand) {
+    const brandMeta = findMetaContent('brand', 'product:brand', 'twitter:data1');
+    if (brandMeta) brand = cleanExtractedText(brandMeta);
+  }
+
+  // 2ª fuente: Amazon usa tablas técnicas y listas de detalle.
+  const specs: Record<string, string> = {};
+  const addSpec = (key: unknown, value: unknown) => {
+    const k = cleanExtractedText(key);
+    const v = cleanExtractedText(value);
+    if (k && v && v.toLowerCase() !== k.toLowerCase() && !specs[k]) specs[k] = v;
+  };
+
+  // Tabla "Especificaciones técnicas" (#productDetails_techSpec_section_1) y
+  // tabla de detalles (#productDetails_detailBullets_sections1): <tr><th>k</th><td>v</td></tr>.
+  for (const tableId of ['productDetails_techSpec_section_1', 'productDetails_detailBullets_sections1']) {
+    const idx = html.search(new RegExp(`id=["']${tableId}["']`, 'i'));
+    if (idx === -1) continue;
+    const tableStart = html.indexOf('<table', idx);
+    const tableEnd = tableStart !== -1 ? html.indexOf('</table>', tableStart) : -1;
+    if (tableStart === -1 || tableEnd === -1 || tableEnd - tableStart > 40000) continue;
+    const rows = html.slice(tableStart, tableEnd).match(/<tr[\s\S]*?<\/tr>/gi) || [];
+    for (const row of rows) {
+      const cells = [...row.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)].map((m) => m[1]);
+      if (cells.length >= 2) addSpec(cells[0], cells[1]);
+    }
+  }
+
+  // 3ª fuente: #detailBullets_feature_div (lista dt/dd de especificaciones).
+  const detailBulletsIdx = html.search(/id=["']detailBullets_feature_div["']/i);
+  if (detailBulletsIdx !== -1) {
+    const bulletsHtml = html.slice(detailBulletsIdx, detailBulletsIdx + 30000);
+    const bulletItems = bulletsHtml.match(/<li[^>]*>([\s\S]*?)<\/li>/gi) || [];
+    for (const item of bulletItems) {
+      const text = cleanExtractedText(item.replace(/<[^>]+>/g, ' '));
+      const pair = text.split(/\s*:\s*/);
+      if (pair.length >= 2 && pair[0].length <= 60) addSpec(pair[0], pair.slice(1).join(': '));
+    }
+  }
+
+  // 4ª fuente genérica: tablas/atributos con aspecto de ficha técnica y <dl>.
+  const specTableRe = /<(?:table|dl)[^>]+(?:id|class)=["'][^"']*(?:spec|technical|caracter|attribute|ficha|product-detail|product-detail)[^"']*["'][^>]*>([\s\S]*?)<\/(?:table|dl)>/gi;
+  let specBlockMatch: RegExpExecArray | null;
+  while ((specBlockMatch = specTableRe.exec(html)) !== null) {
+    const block = specBlockMatch[1];
+    const rowRe = /<(?:tr|div)[^>]*>\s*<(?:th|dt)[^>]*>([\s\S]*?)<\/(?:th|dt)>\s*<(?:td|dd)[^>]*>([\s\S]*?)<\/(?:td|dd)>/gi;
+    let rowMatch: RegExpExecArray | null;
+    while ((rowMatch = rowRe.exec(block)) !== null) addSpec(rowMatch[1], rowMatch[2]);
+    // Pares clave/valor separados por «:» dentro del bloque.
+    for (const line of block.split(/(?:<br\s*\/?>|<\/li>|<\/p>)/i)) {
+      const text = cleanExtractedText(line);
+      const pair = text.split(/\s*:\s*/);
+      if (pair.length === 2 && pair[0].length <= 60 && pair[1].length >= 2) addSpec(pair[0], pair[1]);
+    }
+  }
+
+  // ── DISTRIBUIDOR (envío y pago) ──────────────────────────────────────────
+  // Amazon: "Vendido por X" / "Ships from Y" en el buybox y el bloque de vendedor.
+  let fulfillmentProvider = '';
+  const sellerMatch =
+    html.match(/id=["']merchantInfoFeature_feature_div["'][\s\S]{0,1500}?>\s*([^<]{2,80})\s*<\/span>/i) ||
+    html.match(/(?:Sold by|Vendido por|Enviado por)\s*(?:&nbsp;|\s)*<\/span>\s*<span[^>]*>\s*([^<]{2,80})/i) ||
+    html.match(/id=["']sellerProfileTriggerId["'][^>]*>\s*([^<]{2,80})/i);
+  if (sellerMatch?.[1]) {
+    fulfillmentProvider = cleanExtractedText(sellerMatch[1]);
+  }
+
+  // ── ENVÍO: texto + días ───────────────────────────────────────────────────
+  let shippingInfo = '';
+  let shippingDays: number | undefined;
+  const deliveryMatch =
+    html.match(/id=["']deliveryBlockMessage["'][\s\S]{0,400}?<\/span>/i) ||
+    html.match(/id=["']mirageDeliveryBlock["'][\s\S]{0,600}?<\/span>/i) ||
+    html.match(/class=["'][^"']*(?:delivery|shipping)[^"']*["'][^>]*>([\s\S]{5,160}?)<\/(?:div|span|p)>/i);
+  if (deliveryMatch) {
+    const rawDelivery = (deliveryMatch[1] ?? deliveryMatch[0]).replace(/<[^>]+>/g, ' ');
+    const cleanDelivery = cleanExtractedText(rawDelivery);
+    if (cleanDelivery && cleanDelivery.length <= 160) shippingInfo = cleanDelivery;
+    const daysMatch = cleanDelivery.match(/(\d+)\s*(?:-|–|a|y)?\s*(\d+)?\s*(?:días|día|days|day)\b/i);
+    if (daysMatch) {
+      const last = daysMatch[2] ? parseInt(daysMatch[2], 10) : parseInt(daysMatch[1], 10);
+      if (Number.isFinite(last)) shippingDays = last;
+    }
+  }
+  if (!shippingInfo && merchant === 'AliExpress') {
+    const aliDays = html.match(/(\d{1,3})\s*(?:días|días de|days)\s*(?:de\s*)?(?:envío|entrega)/i);
+    if (aliDays?.[1]) {
+      shippingDays = parseInt(aliDays[1], 10);
+      shippingInfo = `Envío en ${shippingDays} días`;
+    }
+  }
+
   // Galería final: la imagen principal la encabeza, sin duplicados y limitada.
   // En Amazon, la misma foto aparece a varios tamaños (mismo ID antes de "._AC_",
   // "_SX", etc.), así que se deduplica por ID de imagen para quedarse con vistas distintas.
@@ -413,7 +568,7 @@ function extractMetadata(html: string, targetUrl: string) {
   const seenIds = new Set<string>();
   const finalGallery: string[] = [];
   const pushUnique = (url: string) => {
-    if (!url || finalGallery.length >= 10) return;
+    if (!url || finalGallery.length >= 15) return;
     const id = imageIdOf(url);
     if (seenIds.has(id)) return;
     seenIds.add(id);
@@ -439,6 +594,10 @@ function extractMetadata(html: string, targetUrl: string) {
     brand,
     rating: rating ?? undefined,
     reviewsCount: reviewsCount ?? undefined,
+    specs: Object.keys(specs).length ? specs : undefined,
+    fulfillmentProvider,
+    shippingInfo: shippingInfo || undefined,
+    shippingDays,
   };
 }
 
@@ -594,6 +753,44 @@ export const POST: APIRoute = async ({ request }) => {
 
       return new Response(
         JSON.stringify({ success: true, updated, total: ids.length, category, category_id: categoryId, subcategory_id: subcategoryId }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // --------------------------------------------------------------------------
+    // CASO A3: ASIGNAR ETIQUETA DESTACADA (BADGE) EN MASA
+    //         ({ action: 'set-badge', ids, badge })
+    // --------------------------------------------------------------------------
+    if (action === 'set-badge') {
+      const ids = Array.isArray(body.ids) ? body.ids.map((v: unknown) => String(v)) : [];
+      const badge = String(body.badge ?? '').trim();
+      if (!ids.length) {
+        return new Response(
+          JSON.stringify({ success: false, message: 'Se requiere al menos un ID.' }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const currentProducts = readProductsFromFile();
+      const wanted = new Set(ids);
+      let updated = 0;
+      for (const p of currentProducts) {
+        if (!wanted.has(p.id)) continue;
+        const next = badge || undefined;
+        if ((p.badge || undefined) === next) continue;
+        if (next) p.badge = next; else delete p.badge;
+        updated++;
+      }
+
+      if (updated > 0 && !writeProductsToFile(currentProducts)) {
+        return new Response(
+          JSON.stringify({ success: false, message: 'Error al escribir los cambios en el disco' }),
+          { status: 500, headers: { 'Content-Type': 'application/json' } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({ success: true, updated, total: ids.length, badge }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
     }
@@ -959,6 +1156,10 @@ export const POST: APIRoute = async ({ request }) => {
           brand: extracted.brand,
           rating: extracted.rating ?? null,
           reviewsCount: extracted.reviewsCount ?? null,
+          specs: extracted.specs ?? null,
+          fulfillmentProvider: extracted.fulfillmentProvider ?? '',
+          shippingInfo: extracted.shippingInfo ?? '',
+          shippingDays: extracted.shippingDays ?? null,
         },
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }
