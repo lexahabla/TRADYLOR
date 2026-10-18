@@ -113,10 +113,24 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
         <!-- Barra de Scraping Rápido -->
         <div class="scrape-box form-toggle-body">
-          <label for="inputScrapeUrl" class="field-label">
-            <span>URL del Producto (Amazon, PcComponentes, etc.)</span>
-            <span class="label-hint">Detección automática de OpenGraph</span>
-          </label>
+          <div class="scrape-head-row">
+            <label for="inputScrapeUrl" class="field-label">
+              <span>URL del Producto (Amazon, PcComponentes, etc.)</span>
+              <span class="label-hint">Detección automática de OpenGraph</span>
+            </label>
+            <button
+              type="button"
+              id="btnNewProduct"
+              class="btn-secondary btn-sm"
+              title="Vacía todos los campos para dar de alta un producto individual"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Nuevo Producto
+            </button>
+          </div>
           <div class="scrape-input-group">
             <div class="input-icon-wrapper">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -444,7 +458,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <div class="gallery-editor">
                 <label class="field-label">
                   <span>Galería de Imágenes y Vídeos</span>
-                  <span class="label-hint">Clic = imagen principal · × = quitar</span>
+                  <span class="label-hint">Clic = imagen principal · Arrastra = reordenar · × = quitar</span>
                 </label>
                 <div class="gallery-thumbs" id="galleryThumbs"></div>
                 <div class="gallery-add-row">
@@ -1282,6 +1296,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const galleryFileInput = document.getElementById('galleryFileInput');
     const galleryUrlInput = document.getElementById('galleryUrlInput');
     const btnAddImageUrl = document.getElementById('btnAddImageUrl');
+    let galleryDragFrom = null;
+    let galleryDragEndedAt = 0;
 
     // Preview
     const previewImg = document.getElementById('previewImg');
@@ -1445,7 +1461,28 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     // Renderiza la galería de imágenes/vídeos como miniaturas seleccionables.
     // La imagen principal (prodImage) se marca con un borde destacado;
-    // los vídeos se reproducen en el modal centrado.
+    // los vídeos se reproducen en el modal centrado. Arrastrable para reordenar.
+    function moveGalleryItem(fromIndex, toIndex, insertAfter) {
+      if (fromIndex == null || toIndex == null || fromIndex === toIndex) return;
+      const list = scrapedGallery.slice();
+      const [moved] = list.splice(fromIndex, 1);
+      if (moved === undefined) return;
+      let target = toIndex;
+      if (fromIndex < toIndex) target -= 1;
+      let insertAt = insertAfter ? target + 1 : target;
+      if (insertAt < 0) insertAt = 0;
+      if (insertAt > list.length) insertAt = list.length;
+      list.splice(insertAt, 0, moved);
+      scrapedGallery = list;
+    }
+
+    function clearGalleryDropMarks() {
+      if (!galleryThumbs) return;
+      galleryThumbs.querySelectorAll('.gallery-item').forEach((el) => {
+        el.classList.remove('drag-before', 'drag-after');
+      });
+    }
+
     function renderGallery() {
       if (!galleryThumbs) return;
       galleryThumbs.innerHTML = '';
@@ -1454,10 +1491,62 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         galleryThumbs.innerHTML = '<span class="gallery-empty">Sin galería. Analiza un enlace o añade imágenes/vídeos.</span>';
         return;
       }
-      scrapedGallery.forEach((url) => {
+      scrapedGallery.forEach((url, index) => {
         const isVideo = isVideoUrl(url);
         const wrap = document.createElement('div');
         wrap.className = 'gallery-item' + (!isVideo && url === current ? ' is-main' : '');
+        wrap.draggable = true;
+
+        wrap.addEventListener('dragstart', (e) => {
+          galleryDragFrom = index;
+          wrap.classList.add('is-dragging');
+          if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', url);
+          }
+        });
+
+        wrap.addEventListener('dragover', (e) => {
+          if (galleryDragFrom === null || galleryDragFrom === index) return;
+          e.preventDefault();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+          const rect = wrap.getBoundingClientRect();
+          const after = e.clientX - rect.left >= rect.width / 2;
+          galleryThumbs.querySelectorAll('.gallery-item').forEach((el) => {
+            if (el !== wrap) el.classList.remove('drag-before', 'drag-after');
+          });
+          wrap.classList.toggle('drag-after', after);
+          wrap.classList.toggle('drag-before', !after);
+        });
+
+        wrap.addEventListener('dragleave', (e) => {
+          if (e.relatedTarget && wrap.contains(e.relatedTarget)) return;
+          wrap.classList.remove('drag-before', 'drag-after');
+        });
+
+        wrap.addEventListener('drop', (e) => {
+          e.preventDefault();
+          clearGalleryDropMarks();
+          const from = galleryDragFrom;
+          galleryDragFrom = null;
+          galleryDragEndedAt = Date.now();
+          if (from === null || from === index) return;
+          const rect = wrap.getBoundingClientRect();
+          moveGalleryItem(from, index, e.clientX - rect.left >= rect.width / 2);
+          const firstImage = scrapedGallery.find((u) => !isVideoUrl(u)) || '';
+          setProductField(prodImage, firstImage);
+          previewIndex = firstImage ? scrapedGallery.indexOf(firstImage) : 0;
+          renderGallery();
+          updatePreview();
+          showAlert('success', 'Orden actualizado', 'La primera imagen de la galería pasa a ser la imagen principal.');
+        });
+
+        wrap.addEventListener('dragend', () => {
+          wrap.classList.remove('is-dragging');
+          clearGalleryDropMarks();
+          galleryDragFrom = null;
+          galleryDragEndedAt = Date.now();
+        });
 
         const thumb = document.createElement('button');
         thumb.type = 'button';
@@ -1487,15 +1576,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           badge.className = 'gallery-play-badge';
           badge.textContent = '▶';
           wrap.appendChild(badge);
-          thumb.addEventListener('click', () => openVideoModal(url));
+          thumb.addEventListener('click', () => {
+            if (Date.now() - galleryDragEndedAt < 300) return;
+            openVideoModal(url);
+          });
         } else {
-          thumb.title = 'Fijar como imagen principal';
+          thumb.title = 'Clic: imagen principal · Arrastra: reordenar';
           const img = document.createElement('img');
           img.src = url;
           img.alt = 'Imagen del producto';
           img.loading = 'lazy';
           thumb.appendChild(img);
           thumb.addEventListener('click', () => {
+            if (Date.now() - galleryDragEndedAt < 300) return;
             setProductField(prodImage, url);
             previewIndex = scrapedGallery.indexOf(url);
             if (previewIndex < 0) previewIndex = 0;
@@ -1509,7 +1602,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         removeBtn.className = 'gallery-remove';
         removeBtn.title = 'Quitar de la galería';
         removeBtn.textContent = '×';
-        removeBtn.addEventListener('click', () => {
+        removeBtn.draggable = false;
+        removeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (Date.now() - galleryDragEndedAt < 300) return;
           scrapedGallery = scrapedGallery.filter((u) => u !== url);
           if ((prodImage.value || '').trim() === url) {
             const firstImage = scrapedGallery.find((u) => !isVideoUrl(u)) || '';
@@ -1933,10 +2029,29 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (prodShippingDays) prodShippingDays.value = '';
       if (prodFreeShipping) prodFreeShipping.checked = false;
       if (inputScrapeUrl) inputScrapeUrl.value = '';
+      if (galleryUrlInput) galleryUrlInput.value = '';
+      if (galleryFileInput) galleryFileInput.value = '';
       scrapedGallery = [];
       scrapeExtras = { brand: '', rating: null, reviewsCount: null, specs: null };
+      previewIndex = 0;
       renderGallery();
       updatePreview();
+    }
+
+    // Botón «Nuevo Producto»: deja el formulario vacío (modo alta individual)
+    // para que «Analizar Enlace» rellene todos los campos desde cero.
+    const btnNewProduct = document.getElementById('btnNewProduct');
+    if (btnNewProduct) {
+      btnNewProduct.addEventListener('click', () => {
+        resetProductForm();
+        if (btnSaveProductLabel) btnSaveProductLabel.textContent = 'Guardar cambios';
+        if (inputScrapeUrl) inputScrapeUrl.focus();
+        showAlert(
+          'success',
+          'Alta de producto nueva',
+          'Formulario vacío. Pega la URL del producto y pulsa «Analizar Enlace» para rellenar todos los campos.'
+        );
+      });
     }
     if (productForm) {
       productForm.addEventListener('submit', async (e) => {
@@ -5790,6 +5905,23 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     margin-bottom: 1.75rem;
   }
 
+  .scrape-head-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .scrape-head-row .field-label {
+    flex: 1;
+    min-width: 220px;
+  }
+
+  .scrape-head-row #btnNewProduct {
+    flex-shrink: 0;
+  }
+
   .scrape-input-group {
     display: flex;
     gap: 0.5rem;
@@ -6068,6 +6200,31 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     height: 72px;
   }
 
+  :global(.gallery-item.is-dragging) {
+    opacity: 0.35;
+  }
+
+  :global(.gallery-item.drag-before)::before,
+  :global(.gallery-item.drag-after)::after {
+    content: '';
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 3px;
+    border-radius: 3px;
+    background: var(--color-accent, #f59e0b);
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.7);
+    z-index: 3;
+  }
+
+  :global(.gallery-item.drag-before)::before {
+    left: -6px;
+  }
+
+  :global(.gallery-item.drag-after)::after {
+    right: -6px;
+  }
+
   :global(.gallery-item.is-main .gallery-thumb) {
     border-color: var(--color-accent, #f59e0b);
     box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
@@ -6080,9 +6237,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     border: 2px solid var(--color-border, #333);
     border-radius: 8px;
     overflow: hidden;
-    cursor: pointer;
+    cursor: grab;
     background: linear-gradient(160deg, #f8fafc, #eef2f7);
     transition: border-color 0.15s, transform 0.15s;
+  }
+
+  :global(.gallery-thumb:active) {
+    cursor: grabbing;
   }
 
   :global(.gallery-thumb:hover) {
@@ -6477,6 +6638,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     justify-content: space-between;
     align-items: center;
     pointer-events: none;
+    /* Por encima de #previewImg (z-index auto) y del placeholder vacío. */
+    z-index: 3;
   }
 
   .cat-pill {
