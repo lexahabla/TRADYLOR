@@ -708,13 +708,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <h2 class="card-title">2. Catálogo AliExpress (caché)</h2>
             <p class="card-desc">Tabla amplia del último catálogo sincronizado, guardado en el servidor. Usa «Sincronizar» para refrescarlo contra la API; se avisa si la caché supera las 6 horas.</p>
           </div>
-          <div class="ali-catalog-head-actions">
-            <span id="aliCatalogMeta" class="ali-catalog-meta">Cargando…</span>
-            <button type="button" id="btnAliSync" class="btn-primary btn-sm">
-              <span class="btn-text">Sincronizar</span>
-              <div class="btn-spinner" hidden></div>
-            </button>
-          </div>
         </div>
 
         <div id="aliCatalogStatus" class="status-alert" hidden>
@@ -821,7 +814,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <button type="button" id="aliFMoreBtn" class="btn-secondary btn-sm" aria-expanded="false" aria-controls="aliAdvanced" title="Filtros avanzados: envío, Choice, comisión Hot, imágenes, tienda...">
                 ⚙ Más filtros <span class="ali-f-badge" id="aliFAdvBadge" hidden>0</span>
               </button>
-              <button type="button" id="btnAliMore" class="btn-secondary btn-sm" title="Descarga más páginas del catálogo de AliExpress sin borrar los productos ya guardados">+ Cargar más productos</button>
             </div>
           </div>
 
@@ -846,6 +838,30 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
           <!-- Chips: filtros activos, quítalos de uno en uno -->
           <div id="aliFChips" class="ali-chips" hidden></div>
+        </div>
+
+        <!-- Acciones del catálogo: alta directa en categorías/subcategorías
+             existentes + sincronización (derecha). -->
+        <div id="aliImportActions" class="ali-import-actions">
+          <div id="aliImportTools" class="ali-import-tools" hidden>
+            <span class="ali-import-title">Añadir al catálogo</span>
+            <select id="aliCatAssign" class="sel-cat-assign" aria-label="Categoría destino">
+              <option value="">Categoría destino…</option>
+            </select>
+            <select id="aliSubcatAssign" class="sel-cat-assign" aria-label="Subcategoría destino">
+              <option value="">Subcategoría destino…</option>
+            </select>
+            <button type="button" id="btnAliImportCat" class="btn-success btn-sm" title="Importa los productos marcados en la tabla dentro de la categoría y subcategoría elegidas">📥 Añadir seleccionados a categoría</button>
+            <button type="button" id="btnAliHideSel" class="btn-danger-ghost btn-sm" title="Oculta los productos marcados: no se verán en la tabla ni se añadirán al catálogo. Recupéralos con «En catálogo › Descartados»">🙈 Ocultar seleccionados</button>
+          </div>
+          <div class="ali-catalog-head-actions">
+            <span id="aliCatalogMeta" class="ali-catalog-meta">Cargando…</span>
+            <button type="button" id="btnAliSync" class="btn-primary btn-sm">
+              <span class="btn-text">Sincronizar</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <button type="button" id="btnAliMore" class="btn-secondary btn-sm" hidden title="Descarga más páginas del catálogo de AliExpress sin borrar los productos ya guardados">+ Cargar más productos</button>
+          </div>
         </div>
 
         <!-- Selección masiva: la casilla de la cabecera marca la página actual;
@@ -3387,9 +3403,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       return `${fields}<div class="aff-detail-item is-images"><dt>Imágenes (${images.length})</dt><dd class="aff-detail-thumbs">${cells}</dd></div>`;
     }
 
-    /** Construye el payload de guardado compartido por importación simple y masiva. */
-    function buildImportPayload(product) {
-      const assignedCategory = getImportCategory();
+    /** Construye el payload de guardado compartido por importación simple y masiva.
+     *  `categoryOverride` (opcional) fuerza la categoría destino elegida en la
+     *  barra de acciones; sin él se mantiene la automática por keywords. */
+    function buildImportPayload(product, categoryOverride) {
+      const assignedCategory =
+        categoryOverride != null ? categoryOverride : getImportCategory();
       const affiliateLink =
         (product.extra && (product.extra['Enlace de afiliado'] || product.extra['Enlace de afiliado '] )) ||
         product.promotionUrl ||
@@ -3436,7 +3455,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       };
     }
 
-    async function importSingleProduct(product, btn) {
+    async function importSingleProduct(product, btn, categoryOverride) {
       if (btn) {
         btn.disabled = true;
         btn.textContent = 'Importando...';
@@ -3445,7 +3464,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const res = await fetch('/api/products/add', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildImportPayload(product)),
+          body: JSON.stringify(buildImportPayload(product, categoryOverride)),
         });
         const data = await res.json();
         // El servidor detecta duplicados (misma URL/título): se contabiliza como
@@ -3512,10 +3531,50 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
 
     /**
+     * Categoría + subcategoría elegidas en la barra de acciones (#aliImportActions).
+     * Devuelve `null` si no se ha elegido categoría (alta automática por keywords).
+     */
+    function aliChosenCategory() {
+      const name = String((aliCatAssign && 'value' in aliCatAssign ? aliCatAssign.value : '') || '').trim();
+      if (!name) return null;
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      const catObj = allCats.find((c) => !c.parentId && c.name === name);
+      const subName = String((aliSubcatAssign && 'value' in aliSubcatAssign ? aliSubcatAssign.value : '') || '').trim();
+      const subObj = catObj ? allCats.find((c) => c.name === subName && c.parentId === catObj.id) : undefined;
+      return { name, categoryId: catObj?.id || '', subcategoryId: subObj?.id || '', subName };
+    }
+
+    /**
+     * Fija los IDs jerárquicos (category_id / subcategory_id) de productos ya
+     * guardados: los endpoints de alta sólo persisten el nombre de categoría.
+     */
+    async function assignAliCategory(ids, chosen) {
+      if (!ids.length || !chosen || !chosen.categoryId) return false;
+      try {
+        const res = await fetch('/api/products/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'set-category',
+            ids,
+            category: chosen.name,
+            category_id: chosen.categoryId,
+            subcategory_id: chosen.subcategoryId || '',
+          }),
+        });
+        const data = await res.json();
+        return Boolean(data && data.success);
+      } catch {
+        return false;
+      }
+    }
+
+    /**
      * Botón «Añadir» de la tabla de productos de afiliados.
      * Guarda directamente en el catálogo de Tradylor (IA de texto + persistencia)
      * y sólo muestra un letrero sobre el botón: NO cambia de sección ni carga
-     * el formulario de edición.
+     * el formulario de edición. Si hay categoría elegida en la barra de
+     * acciones, el producto aterriza directamente en ella.
      */
     async function importAliProductToCatalog(product, btn) {
       const alreadyImported = aliEstadoIndex().get(product.externalId) === 'IMPORTED';
@@ -3526,7 +3585,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         showAliImportFlag(btn, 'Ya estaba en el catálogo', 'warn');
         return { ok: true, duplicate: true, product: null };
       }
-      const basic = buildImportPayload(product).product;
+      const chosen = aliChosenCategory();
+      const basic = buildImportPayload(product, chosen ? chosen.name : undefined).product;
       if (btn) {
         btn.disabled = true;
         btn.textContent = 'Guardando…';
@@ -3573,6 +3633,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             duplicate ? 'warn' : 'ok',
           );
           aliInvalidateEstado();
+          // Categoría/subcategoría elegidas en la barra de acciones: además del
+          // nombre, se fijan los IDs jerárquicos sobre el producto recién dado
+          // de alta (los duplicados conservan la categoría que ya tenían).
+          if (!duplicate && chosen && chosen.categoryId) {
+            await assignAliCategory([data.product?.id || basic.id], chosen);
+          }
           // Espera a recargar el catálogo registrado para que el índice de
           // estados ya incluya este producto (y el contador sea correcto).
           await reloadProductsTable();
@@ -3626,6 +3692,28 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const btnAliSelAllFiltered = document.getElementById('aliSelAllFiltered');
     const btnAliSelClear = document.getElementById('aliSelClear');
     const btnAliSelImport = document.getElementById('aliSelImport');
+    // Barra de acciones (#aliImportActions): alta directa en categorías
+    // existentes, ocultado masivo y sincronización del caché.
+    const aliImportTools = document.getElementById('aliImportTools');
+    const aliCatAssign = document.getElementById('aliCatAssign');
+    const aliSubcatAssign = document.getElementById('aliSubcatAssign');
+    const btnAliImportCat = document.getElementById('btnAliImportCat');
+    const btnAliHideSel = document.getElementById('btnAliHideSel');
+
+    /** Cascada subcategoría → categoría en la barra de acciones de Afiliados. */
+    function syncAliSubcatAssign() {
+      if (!aliCatAssign || !aliSubcatAssign) return;
+      const categoryName = String(('value' in aliCatAssign ? aliCatAssign.value : '') || '').trim();
+      const current = String(('value' in aliSubcatAssign ? aliSubcatAssign.value : '') || '');
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      const parent = allCats.find((c) => !c.parentId && c.name === categoryName);
+      const subs = parent ? allCats.filter((c) => c.parentId === parent.id) : [];
+      aliSubcatAssign.innerHTML = '<option value="">Subcategoría destino…</option>' + subs.map((c) =>
+        `<option value="${escapeHtml(c.name)}">${escapeHtml(c.icon || '')} ${escapeHtml(c.name)}</option>`
+      ).join('');
+      if (current && Array.from(aliSubcatAssign.options).some((o) => o.value === current)) aliSubcatAssign.value = current;
+    }
+    aliCatAssign?.addEventListener('change', syncAliSubcatAssign);
 
     const ALI_PAGE_SIZE = 50;
     const ALI_COLS = 14;
@@ -3811,6 +3899,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     function renderAliCatalog() {
       if (!aliCatalogHost) return;
       if (aliFilters) aliFilters.hidden = aliProducts.length === 0;
+      // La barra de acciones sólo oculta su bloque de alta: la derecha
+      // (meta + Sincronizar) debe estar siempre accesible, también con
+      // la caché vacía, para poder lanzar la primera sincronización.
+      if (aliImportTools) aliImportTools.hidden = aliProducts.length === 0;
+      if (btnAliMore) btnAliMore.hidden = aliProducts.length === 0;
       if (!aliProducts.length) {
         aliVisible = [];
         aliCatalogHost.innerHTML = '<div class="empty-dashboard">Sin productos en la caché. Pulsa «Sincronizar» para descargar el catálogo de AliExpress por primera vez.</div>';
@@ -4144,6 +4237,51 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       aliSelected.clear();
       renderAliCatalog();
     });
+    /**
+     * Importación masiva compartida por «Importar seleccionados» (barra de
+     * selección) y «Añadir seleccionados a categoría» (barra de acciones).
+     * Cada alta lleva el nombre de la categoría elegida y, al terminar, los
+     * IDs jerárquicos de los productos creados se fijan en una sola llamada.
+     */
+    async function aliImportProductsList(products, chosen) {
+      let ok = 0;
+      let failed = 0;
+      let duplicates = 0;
+      const createdIds = [];
+      for (let i = 0; i < products.length; i++) {
+        const product = products[i];
+        showAliStatus('loading', 'Importando selección', `${i + 1}/${products.length}: ${String(product.title).slice(0, 70)}...`);
+        const result = await importSingleProduct(product, null, chosen ? chosen.name : undefined);
+        if (result.ok) {
+          if (result.duplicate) duplicates++;
+          else {
+            ok++;
+            const id = result.product && result.product.id;
+            if (id) createdIds.push(id);
+          }
+        } else failed++;
+      }
+      let categorized = 0;
+      if (chosen && chosen.categoryId && createdIds.length) {
+        categorized = (await assignAliCategory(createdIds, chosen)) ? createdIds.length : 0;
+      }
+      return { ok, failed, duplicates, categorized };
+    }
+
+    /** Resultado de una importación masiva en el panel de estado. */
+    function reportAliImport(result, title, notes = []) {
+      const parts = [];
+      if (result.ok) parts.push(`${result.ok} producto${result.ok === 1 ? '' : 's'} añadido${result.ok === 1 ? '' : 's'}`);
+      if (result.duplicates) parts.push(`${result.duplicates} ya estaba${result.duplicates === 1 ? '' : 'n'} en el catálogo`);
+      if (result.failed) parts.push(`${result.failed} con error`);
+      const all = [...parts, ...notes.filter(Boolean)];
+      showAliStatus(
+        result.failed || result.duplicates ? 'warning' : 'success',
+        title,
+        `${all.join(' · ')}.`,
+      );
+    }
+
     btnAliSelImport?.addEventListener('click', async () => {
       if (aliImportingSelection) return;
       const selected = aliFilterApply().filter((product) => aliSelected.has(product.externalId));
@@ -4160,38 +4298,96 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         );
         return;
       }
+      const chosen = aliChosenCategory();
       aliImportingSelection = true;
       if (btnAliSelImport) btnAliSelImport.disabled = true;
-      let ok = 0;
-      let failed = 0;
-      let duplicates = 0;
-      for (let i = 0; i < products.length; i++) {
-        const product = products[i];
-        showAliStatus('loading', 'Importando selección', `${i + 1}/${products.length}: ${String(product.title).slice(0, 70)}...`);
-        const result = await importSingleProduct(product, null);
-        if (result.ok) {
-          if (result.duplicate) duplicates++;
-          else ok++;
-        } else failed++;
-      }
+      const result = await aliImportProductsList(products, chosen);
       aliImportingSelection = false;
       if (btnAliSelImport) btnAliSelImport.disabled = false;
       // El estado «IMPORTED» sale del catálogo registrado: se recarga y se
       // repinta la tabla para que las filas nuevas muestren «✓ en catálogo»
       // y su botón quede en «Añadido» (inactivo).
-      if (ok || duplicates) {
+      if (result.ok || result.duplicates) {
         await reloadProductsTable();
         aliInvalidateEstado();
         renderAliCatalog();
       }
-      const parts = [];
-      if (ok) parts.push(`${ok} producto${ok === 1 ? '' : 's'} añadido${ok === 1 ? '' : 's'}`);
-      if (duplicates) parts.push(`${duplicates} ya estaba${duplicates === 1 ? '' : 'n'} en el catálogo`);
-      if (failed) parts.push(`${failed} con error`);
+      reportAliImport(result, 'Importación de selección finalizada', [
+        skipped ? `${skipped} omitido${skipped === 1 ? '' : 's'} por ya estar añadido${skipped === 1 ? '' : 's'}` : '',
+        result.categorized && chosen ? `en «${chosen.name}»` : '',
+      ]);
+    });
+
+    // ── Barra de acciones: alta directa en categorías/subcategorías existentes ─
+    btnAliImportCat?.addEventListener('click', async () => {
+      if (aliImportingSelection) return;
+      const selected = aliFilterApply().filter((product) => aliSelected.has(product.externalId));
+      if (!selected.length) {
+        showAliStatus('warning', 'Sin selección', 'Marca en la tabla los productos que quieres añadir al catálogo.');
+        return;
+      }
+      const chosen = aliChosenCategory();
+      if (!chosen || !chosen.name) {
+        showAliStatus('warning', 'Falta la categoría', 'Elige la categoría destino donde se añadirán los productos seleccionados.');
+        if (aliCatAssign) aliCatAssign.focus();
+        return;
+      }
+      if (!chosen.categoryId) {
+        showAliStatus('warning', 'Categoría no encontrada', `No se encontró «${chosen.name}» en el catálogo: recarga el panel e inténtalo de nuevo.`);
+        return;
+      }
+      // Los que ya están en el catálogo se saltan: nunca se repiten altas.
+      const states = aliEstadoIndex();
+      const products = selected.filter((product) => states.get(product.externalId) !== 'IMPORTED');
+      const skipped = selected.length - products.length;
+      if (!products.length) {
+        showAliStatus(
+          'warning',
+          'Ya están en el catálogo',
+          `${skipped} producto${skipped === 1 ? '' : 's'} seleccionado${skipped === 1 ? '' : 's'} ya estaba${skipped === 1 ? '' : 'n'} añadido${skipped === 1 ? '' : 's'} al catálogo.`,
+        );
+        return;
+      }
+      aliImportingSelection = true;
+      if (btnAliImportCat) btnAliImportCat.disabled = true;
+      if (btnAliSelImport) btnAliSelImport.disabled = true;
+      const result = await aliImportProductsList(products, chosen);
+      aliImportingSelection = false;
+      if (btnAliImportCat) btnAliImportCat.disabled = false;
+      if (btnAliSelImport) btnAliSelImport.disabled = false;
+      if (result.ok || result.duplicates) {
+        await reloadProductsTable();
+        aliInvalidateEstado();
+        aliSelected.clear();
+        renderAliCatalog();
+      }
+      reportAliImport(result, 'Añadidos al catálogo', [
+        `«${chosen.name}»${chosen.subName ? ` › «${chosen.subName}»` : ''}`,
+        result.categorized ? `${result.categorized} con categoría asignada` : '',
+        skipped ? `${skipped} omitido${skipped === 1 ? '' : 's'} por ya estar añadido${skipped === 1 ? '' : 's'}` : '',
+      ]);
+    });
+
+    // ── Ocultar masivo: pasa a DESCARTADO (conservado en la caché) ────────────
+    // No se borra nada: se recuperan con «En catálogo › Descartados» o con un
+    // «Sincronizar», que levanta los descartos locales.
+    btnAliHideSel?.addEventListener('click', () => {
+      const ids = [...aliSelected];
+      if (!ids.length) {
+        showAliStatus('warning', 'Sin selección', 'Marca en la tabla los productos que quieres ocultar.');
+        return;
+      }
+      const removed = acRemovedGet();
+      for (const id of ids) removed.add(id);
+      acRemovedSave(removed);
+      aliSelected.clear();
+      aliInvalidateEstado();
+      aliFilterPanel?.refresh();
+      renderAliCatalog();
       showAliStatus(
-        failed || duplicates ? 'warning' : 'success',
-        'Importación de selección finalizada',
-        `${parts.join(' · ')}${skipped ? ` · ${skipped} omitido${skipped === 1 ? '' : 's'} por ya estar añadido${skipped === 1 ? '' : 's'}` : ''}.`,
+        'success',
+        'Productos ocultos',
+        `${ids.length} producto${ids.length === 1 ? '' : 's'} oculto${ids.length === 1 ? '' : 's'}: no se verán en la tabla ni se añadirán al catálogo. Recupéralos con «En catálogo › Descartados».`,
       );
     });
 
@@ -4201,7 +4397,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // =========================================================================
     // 6. GESTIÓN DE CATEGORÍAS (CRUD + relleno de selectores del panel)
     //    - Rellena el datalist del formulario de productos.
-    //    - Rellena el filtro y el selector "Categoría al importar" de Afiliados.
+    //    - Rellena el filtro y los selectores «Categoría destino» (tabla de
+    //      productos y barra de acciones de Afiliados #aliCatAssign).
     //    - Alta / edición / borrado contra /api/categories.
     // =========================================================================
     const categoryForm = document.getElementById('categoryForm');
@@ -4283,9 +4480,22 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         if (current) catParentSel.value = current;
       }
 
+      // Categoría destino del bloque de acciones de Afiliados (#aliCatAssign).
+      const aliCatSel = document.getElementById('aliCatAssign');
+      if (aliCatSel) {
+        const current = aliCatSel.value;
+        aliCatSel.innerHTML =
+          '<option value="">Categoría destino…</option>' +
+          roots
+            .map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.icon || '')} ${escapeHtml(category.name)}</option>`)
+            .join('');
+        if (current) aliCatSel.value = current;
+      }
+
       // Refresca el filtro de subcategorías de la tabla y la cascada de destino.
       syncSubcatFilter();
       syncSubcatAssign();
+      syncAliSubcatAssign();
       if (currentProducts.length) prodFilterApply();
     }
 
@@ -5092,6 +5302,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
   .filter-field { display: grid; gap: .3rem; flex: 1; min-width: 110px; }
   .filter-field label { color: var(--color-text-dim); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  /* Mismo estilo (color y tipografía) que .product-sel-title */
+  .filter-field label[for="inputFilterList"] { color: #93c5fd; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
   .filter-field input, .filter-field select { width: 100%; box-sizing: border-box; padding: .55rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
   .filter-field input:focus, .filter-field select:focus { border-color: #38bdf8; }
   /* Opciones de CUALQUIER desplegable: texto negro sobre fondo claro (el
@@ -5253,7 +5465,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     color: var(--color-text-dim);
   }
   .product-sel-bar .btn-sm { padding: .3rem .6rem; font-size: .68rem; }
-  .product-sel-title { flex-shrink: 0; margin-right: .1rem; color: #93c5fd; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  /* El título ocupa una fila entera: actúa como cabecera del div y el resto
+     de controles bajan a la línea siguiente. */
+  .product-sel-title { flex: 1 0 100%; margin-right: 0; color: #93c5fd; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
   .sel-cat-assign {
     padding: .32rem .5rem;
     font-size: .7rem;
@@ -5292,6 +5506,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.category-add-sub) { white-space: nowrap; }
 
   /* ============ 2. CATÁLOGO ALIEXPRESS (CACHÉ EN VOLÚMEN) ============ */
+  /* Barra de acciones bajo #aliFilters: alta en categorías + meta/sync/cargar más */
+  .ali-import-actions { display: flex; align-items: center; justify-content: space-between; gap: .75rem; flex-wrap: wrap; margin-bottom: .6rem; padding: .5rem .7rem; background: rgba(16, 185, 129, .05); border: 1px solid rgba(52, 211, 153, .25); border-radius: 10px; }
+  .ali-import-tools { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
+  .ali-import-tools[hidden] { display: none; }
+  .ali-import-title { color: #93c5fd; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  .ali-import-actions .btn-sm { padding: .32rem .6rem; font-size: .68rem; }
   .ali-catalog-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; margin-left: auto; flex-wrap: wrap; }
   .ali-catalog-meta { color: var(--color-text-dim); font-size: .72rem; white-space: nowrap; }
   .ali-catalog-meta:empty { display: none; }
