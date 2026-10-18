@@ -664,20 +664,32 @@ export const POST: APIRoute = async ({ request }) => {
         gallery.unshift(resolvedImage);
       }
 
+      // Semántica de los campos opcionales al EDITAR:
+      //  - `undefined` (no enviado) → se conserva el valor ya guardado.
+      //  - `null` / cadena vacía (envío explícito del panel) → se limpia el campo.
+      const strField = (sent: unknown, existing?: string): string | undefined => {
+        if (sent === undefined) return existing;
+        const value = String(sent ?? '').trim();
+        return value || undefined;
+      };
+      const numField = (sent: unknown, existing?: number): number | undefined => {
+        if (sent === undefined) return existing;
+        if (sent == null || sent === '' || !Number.isFinite(Number(sent))) return undefined;
+        return Number(sent);
+      };
+
       const newProduct: Product = {
         id: productId,
         title: String(dataToSave.title).trim(),
         description: String(dataToSave.description || '').trim(),
         price: Number(dataToSave.price) || 0,
-        originalPrice: dataToSave.originalPrice ? Number(dataToSave.originalPrice) : undefined,
+        originalPrice: numField(dataToSave.originalPrice, existingProduct?.originalPrice),
         image: resolvedImage,
         gallery: gallery.slice(0, 10),
         category: resolveCategory(dataToSave.category, `${dataToSave.title} ${dataToSave.description || ''}`),
         merchant: String(dataToSave.merchant || detectMerchantFromUrl(dataToSave.affiliateUrl)).trim(),
         affiliateUrl: String(dataToSave.affiliateUrl).trim(),
-        buyNowUrl: dataToSave.buyNowUrl
-          ? String(dataToSave.buyNowUrl).trim()
-          : existingProduct?.buyNowUrl,
+        buyNowUrl: strField(dataToSave.buyNowUrl, existingProduct?.buyNowUrl),
         pros: Array.isArray(dataToSave.pros)
           ? dataToSave.pros.filter(Boolean)
           : typeof dataToSave.pros === 'string'
@@ -688,50 +700,61 @@ export const POST: APIRoute = async ({ request }) => {
           : typeof dataToSave.cons === 'string'
           ? (dataToSave.cons as string).split('\n').map((s) => s.trim()).filter(Boolean)
           : [],
-        badge: dataToSave.badge ? String(dataToSave.badge).trim() : undefined,
-        rating:
-          dataToSave.rating != null && Number.isFinite(Number(dataToSave.rating))
-            ? Math.min(5, Math.max(0, Number(dataToSave.rating)))
-            : existingProduct?.rating ?? 4.8,
-        reviewsCount:
-          dataToSave.reviewsCount != null && Number.isFinite(Number(dataToSave.reviewsCount))
-            ? Math.max(0, Math.round(Number(dataToSave.reviewsCount)))
-            : existingProduct?.reviewsCount ?? 100,
-        // Marca y distribuidor: se conservan los ya guardados si no llegan.
-        brand: dataToSave.brand ? String(dataToSave.brand).trim() : existingProduct?.brand,
-        fulfillmentProvider: dataToSave.fulfillmentProvider
-          ? String(dataToSave.fulfillmentProvider).trim()
-          : existingProduct?.fulfillmentProvider,
-        verdict: dataToSave.verdict ? String(dataToSave.verdict).trim() : undefined,
-        // Ficha técnica (texto libre): se conserva la ya guardada si el cliente no la envía.
-        techSheet: dataToSave.techSheet
-          ? String(dataToSave.techSheet).trim()
-          : existingProduct?.techSheet,
-        // Specs clave/valor del contrato: mismo criterio de conservación.
+        badge: strField(dataToSave.badge, existingProduct?.badge),
+        // Rating y reseñas: no enviado → conserva (o default en altas nuevas);
+        // enviado vacío/null → se limpian; número → se guarda acotado.
+        rating: (() => {
+          if (dataToSave.rating === undefined) return existingProduct?.rating ?? 4.8;
+          const n = numField(dataToSave.rating);
+          return n != null ? Math.min(5, Math.max(0, n)) : undefined;
+        })(),
+        reviewsCount: (() => {
+          if (dataToSave.reviewsCount === undefined) return existingProduct?.reviewsCount ?? 100;
+          const n = numField(dataToSave.reviewsCount);
+          return n != null ? Math.max(0, Math.round(n)) : undefined;
+        })(),
+        brand: strField(dataToSave.brand, existingProduct?.brand),
+        fulfillmentProvider: strField(dataToSave.fulfillmentProvider, existingProduct?.fulfillmentProvider),
+        verdict: strField(dataToSave.verdict, existingProduct?.verdict),
+        techSheet: strField(dataToSave.techSheet, existingProduct?.techSheet),
+        // Specs clave/valor: objeto válido → se guarda; null → se limpia;
+        // undefined → se conserva el existente.
         specs:
-          dataToSave.specs && typeof dataToSave.specs === 'object' && !Array.isArray(dataToSave.specs)
-            ? (dataToSave.specs as Record<string, string>)
-            : existingProduct?.specs,
-        // Datos de envío: se conservan los ya guardados si el cliente no los envía.
-        shippingInfo: dataToSave.shippingInfo
-          ? String(dataToSave.shippingInfo).trim()
-          : existingProduct?.shippingInfo,
-        shippingDays:
-          dataToSave.shippingDays != null && Number.isFinite(Number(dataToSave.shippingDays))
-            ? Math.max(0, Math.round(Number(dataToSave.shippingDays)))
-            : existingProduct?.shippingDays,
+          dataToSave.specs === undefined
+            ? existingProduct?.specs
+            : dataToSave.specs && typeof dataToSave.specs === 'object' && !Array.isArray(dataToSave.specs)
+              ? (dataToSave.specs as Record<string, string>)
+              : undefined,
+        shippingInfo: strField(dataToSave.shippingInfo, existingProduct?.shippingInfo),
+        shippingDays: (() => {
+          const n = numField(dataToSave.shippingDays, existingProduct?.shippingDays);
+          return n != null ? Math.max(0, Math.round(n)) : undefined;
+        })(),
         freeShipping:
-          typeof dataToSave.freeShipping === 'boolean'
-            ? dataToSave.freeShipping
-            : existingProduct?.freeShipping,
+          dataToSave.freeShipping === undefined
+            ? existingProduct?.freeShipping
+            : typeof dataToSave.freeShipping === 'boolean'
+              ? dataToSave.freeShipping
+              : undefined,
       };
 
-      // Si ya existe un producto con el mismo ID, se actualiza; si no, se añade al principio
+      // Si ya existe un producto con el mismo ID, se actualiza; si no, se añade al principio.
+      // Al actualizar se conservan los campos de curación que el formulario no
+      // edita (IDs jerárquicos, historial de precio, score, alternativas...).
       const existingIndex = currentProducts.findIndex((p) => p.id === productId);
-      if (existingIndex >= 0) {
-        currentProducts[existingIndex] = newProduct;
+      let productToSave: Product = newProduct;
+      if (existingIndex >= 0 && existingProduct) {
+        const categoryChanged = newProduct.category !== existingProduct.category;
+        productToSave = {
+          ...existingProduct,
+          ...newProduct,
+          // Un cambio de categoría invalida los IDs jerárquicos asignados antes.
+          category_id: categoryChanged ? undefined : existingProduct.category_id,
+          subcategory_id: categoryChanged ? undefined : existingProduct.subcategory_id,
+        };
+        currentProducts[existingIndex] = productToSave;
       } else {
-        currentProducts.unshift(newProduct);
+        currentProducts.unshift(productToSave);
       }
 
       const saved = writeProductsToFile(currentProducts);
@@ -749,7 +772,7 @@ export const POST: APIRoute = async ({ request }) => {
         JSON.stringify({
           success: true,
           message: existingIndex >= 0 ? 'Producto actualizado con éxito' : 'Producto guardado con éxito',
-          product: newProduct,
+          product: productToSave,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );

@@ -388,7 +388,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <polyline points="17 21 17 13 7 13 7 21"></polyline>
                 <polyline points="7 3 7 8 15 8"></polyline>
               </svg>
-              <span>Guardar producto</span>
+              <span id="btnSaveProductLabel">Guardar cambios</span>
             </button>
           </div>
             </div><!-- /.form-fields -->
@@ -1892,10 +1892,61 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     // =========================================================================
     // 2. GUARDAR PRODUCTO (POST al Endpoint)
+    //    - Si el formulario tiene un id (edición) se ACTUALIZA el producto y el
+    //      formulario se conserva relleno para seguir ajustando.
+    //    - Si no tiene id (alta nueva) se crea y el formulario se limpia.
+    //    - Los campos opcionales vacíos se envían como `null` en modo edición
+    //      para que el backend los limpie (no conserve el valor anterior).
     // =========================================================================
+    const btnSaveProductLabel = document.getElementById('btnSaveProductLabel');
+    let saveBtnFlashTimer = null;
+    function flashSaveButton(text) {
+      if (!btnSaveProductLabel) return;
+      btnSaveProductLabel.textContent = text;
+      if (saveBtnFlashTimer) clearTimeout(saveBtnFlashTimer);
+      saveBtnFlashTimer = setTimeout(() => {
+        btnSaveProductLabel.textContent = 'Guardar cambios';
+      }, 2600);
+    }
+    function resetProductForm() {
+      prodId.value = '';
+      prodTitle.value = '';
+      prodPrice.value = '';
+      prodOriginalPrice.value = '';
+      prodCategory.value = '';
+      prodMerchant.value = '';
+      prodAffiliateUrl.value = '';
+      prodBuyNowUrl.value = '';
+      prodImage.value = '';
+      prodBadge.value = '';
+      prodDescription.value = '';
+      prodVerdict.value = '';
+      prodTechSheet.value = '';
+      prodPros.value = '';
+      prodCons.value = '';
+      if (prodBrand) prodBrand.value = '';
+      if (prodFulfillment) prodFulfillment.value = '';
+      if (prodRating) prodRating.value = '';
+      if (prodReviews) prodReviews.value = '';
+      if (prodSpecs) prodSpecs.value = '';
+      if (prodShippingInfo) prodShippingInfo.value = '';
+      if (prodShippingDays) prodShippingDays.value = '';
+      if (prodFreeShipping) prodFreeShipping.checked = false;
+      if (inputScrapeUrl) inputScrapeUrl.value = '';
+      scrapedGallery = [];
+      scrapeExtras = { brand: '', rating: null, reviewsCount: null, specs: null };
+      renderGallery();
+      updatePreview();
+    }
     if (productForm) {
       productForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+
+        const editingId = prodId.value.trim();
+        const isEditing = Boolean(editingId);
+        // En edición, vaciar un campo opcional envía `null` (limpia el valor);
+        // en alta se envía `undefined` para que el backend aplique sus defaults.
+        const optional = (value) => (isEditing ? (value || null) : (value || undefined));
 
         // La imagen principal debe viajar siempre dentro de la galería.
         // Si no hay imagen principal, se toma la primera imagen de la galería
@@ -1912,34 +1963,34 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         if (mainImage && !galleryToSend.includes(mainImage)) galleryToSend.unshift(mainImage);
 
         const productPayload = {
-          id: prodId.value.trim() || undefined,
+          id: editingId || undefined,
           title: prodTitle.value.trim(),
           price: parseFloat(prodPrice.value) || 0,
-          originalPrice: prodOriginalPrice.value ? parseFloat(prodOriginalPrice.value) : undefined,
+          originalPrice: prodOriginalPrice.value ? parseFloat(prodOriginalPrice.value) : optional(''),
           category: prodCategory.value.trim() || 'Tecnología',
           merchant: prodMerchant.value || 'Amazon',
           affiliateUrl: prodAffiliateUrl.value.trim(),
-          buyNowUrl: prodBuyNowUrl.value.trim() || undefined,
+          buyNowUrl: optional(prodBuyNowUrl.value.trim()),
           image: mainImage,
           gallery: galleryToSend.length ? galleryToSend : undefined,
-          badge: prodBadge.value.trim() || undefined,
+          badge: prodBadge.value.trim() || optional(''),
           description: prodDescription.value.trim(),
-          verdict: prodVerdict.value.trim() || undefined,
-          techSheet: prodTechSheet.value.trim() || undefined,
-          specs: textToSpecs(prodSpecs?.value),
-          brand: prodBrand?.value.trim() || undefined,
-          fulfillmentProvider: prodFulfillment?.value.trim() || undefined,
+          verdict: optional(prodVerdict.value.trim()),
+          techSheet: optional(prodTechSheet.value.trim()),
+          specs: optional(textToSpecs(prodSpecs?.value)),
+          brand: optional(prodBrand?.value.trim()),
+          fulfillmentProvider: optional(prodFulfillment?.value.trim()),
           rating: prodRating?.value !== '' && prodRating?.value != null
             ? Math.min(5, Math.max(0, Number(prodRating.value)))
-            : undefined,
+            : optional(''),
           reviewsCount: prodReviews?.value !== '' && prodReviews?.value != null
             ? Math.max(0, Math.round(Number(prodReviews.value)))
-            : undefined,
-          shippingInfo: prodShippingInfo?.value.trim() || undefined,
+            : optional(''),
+          shippingInfo: optional(prodShippingInfo?.value.trim()),
           shippingDays: prodShippingDays?.value !== '' && prodShippingDays?.value != null
             ? Math.max(0, Math.round(Number(prodShippingDays.value)))
-            : undefined,
-          freeShipping: prodFreeShipping?.checked || undefined,
+            : optional(''),
+          freeShipping: prodFreeShipping ? prodFreeShipping.checked : optional(''),
           pros: prodPros.value
             .split('\n')
             .map((s) => s.trim())
@@ -1954,8 +2005,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           btnSaveProduct.disabled = true;
           btnSaveProduct.classList.add('loading');
         }
+        if (btnSaveProductLabel) btnSaveProductLabel.textContent = 'Guardando...';
 
-        showAlert('loading', 'Guardando producto...', 'Escribiendo en src/data/products.json...');
+        showAlert(
+          'loading',
+          isEditing ? 'Guardando cambios...' : 'Guardando producto...',
+          'Escribiendo en src/data/products.json...'
+        );
 
         try {
           const response = await fetch('/api/products/add', {
@@ -1969,43 +2025,31 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           if (result.success) {
             // Recargar lista de productos inmediatamente
             await reloadProductsTable();
-            document.getElementById('catalogProducts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-            // Dejar el formulario preparado para un producto nuevo.
-            prodId.value = '';
-            prodTitle.value = '';
-            prodPrice.value = '';
-            prodOriginalPrice.value = '';
-            prodCategory.value = '';
-            prodMerchant.value = '';
-            prodAffiliateUrl.value = '';
-            prodBuyNowUrl.value = '';
-            prodImage.value = '';
-            prodBadge.value = '';
-            prodDescription.value = '';
-            prodVerdict.value = '';
-            prodTechSheet.value = '';
-            prodPros.value = '';
-            prodCons.value = '';
-            if (prodBrand) prodBrand.value = '';
-            if (prodFulfillment) prodFulfillment.value = '';
-            if (prodRating) prodRating.value = '';
-            if (prodReviews) prodReviews.value = '';
-            if (prodSpecs) prodSpecs.value = '';
-            if (prodShippingInfo) prodShippingInfo.value = '';
-            if (prodShippingDays) prodShippingDays.value = '';
-            if (prodFreeShipping) prodFreeShipping.checked = false;
-            if (inputScrapeUrl) inputScrapeUrl.value = '';
-            scrapedGallery = [];
-            scrapeExtras = { brand: '', rating: null, reviewsCount: null, specs: null };
-            renderGallery();
-            updatePreview();
-            showAlert('success', '¡Producto guardado!', result.message || 'El producto ha sido añadido al catálogo.');
+            if (isEditing) {
+              // Modo edición: se conserva el id y el formulario relleno para
+              // seguir ajustando; sólo se avisa del guardado en el botón.
+              if (result.product && result.product.id) prodId.value = result.product.id;
+              flashSaveButton('Cambios guardados ✓');
+              showAlert(
+                'success',
+                'Cambios guardados',
+                result.message || 'Los cambios del producto se han guardado en el catálogo.'
+              );
+            } else {
+              document.getElementById('catalogProducts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              // Dejar el formulario preparado para un producto nuevo.
+              resetProductForm();
+              flashSaveButton('Guardado ✓');
+              showAlert('success', '¡Producto guardado!', result.message || 'El producto ha sido añadido al catálogo.');
+            }
           } else {
+            if (btnSaveProductLabel) btnSaveProductLabel.textContent = 'Guardar cambios';
             showAlert('error', 'Error al guardar', result.message || 'No se pudo guardar el producto.');
           }
         } catch (err) {
           console.error(err);
+          if (btnSaveProductLabel) btnSaveProductLabel.textContent = 'Guardar cambios';
           showAlert('error', 'Error de red', 'No se pudo enviar la solicitud al servidor.');
         } finally {
           if (btnSaveProduct) {
@@ -2076,7 +2120,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         } catch {
           // Respuesta no-JSON (p. ej. 504 de proxy en HTML por timeout).
           if (response.ok) {
-            showAlert('success', 'Contenido generado con IA', 'Revisa los campos y pulsa «Guardar producto» para publicarlo.');
+            showAlert('success', 'Contenido generado con IA', 'Revisa los campos y pulsa «Guardar cambios» para publicarlo.');
           } else {
             showAlert(
               'error',
@@ -2133,7 +2177,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           showAlert(
             'success',
             'Ficha de producto generada',
-            `${summary}. Revisa los campos y pulsa «Guardar producto» para publicarlo.${warnings}`
+            `${summary}. Revisa los campos y pulsa «Guardar cambios» para publicarlo.${warnings}`
           );
         } else {
           showAlert('error', 'No se pudo generar la ficha', result.message || 'Revisa la configuración del servidor.');
@@ -2469,7 +2513,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               if (inputScrapeUrl) inputScrapeUrl.value = product.affiliateUrl || '';
 
               updatePreview();
-              showAlert('success', 'Producto Cargado en Formulario', `Editando "${product.title}". Modifica los campos y pulsa Guardar.`);
+              showAlert('success', 'Producto Cargado en Formulario', `Editando "${product.title}". Modifica los campos y pulsa "Guardar cambios".`);
               window.scrollTo({ top: productForm.offsetTop - 80, behavior: 'smooth' });
             }
           } catch (err) {
