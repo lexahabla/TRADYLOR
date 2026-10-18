@@ -6,10 +6,11 @@
  *   1. 🔍 Buscar  → búsqueda en vivo sobre el catálogo (/api/search) con
  *                   guardado directo en Mi Radar.
  *   2. 🔥 Ofertas → top de descuentos reales (deals=1).
- *   3. 🎯 Mi perfil → quiz de perfilador (MethodologyQuiz compacto); al
- *                   completarlo se abre el modal de registro contextual
- *                   ('quiz-complete') y las respuestas quedan en LocalStorage
- *                   para el sync posterior (/api/user-profile/sync).
+ *   3. 🎯 Mi perfil → quiz de perfilador (MethodologyQuiz compacto); sólo
+ *                   para usuarios registrados (sin sesión el click abre el
+ *                   modal de registro). Al completarlo se guarda el sync
+ *                   inmediato (/api/user-profile/sync) o el modal de registro
+ *                   contextual ('quiz-complete'), con respuestas en LocalStorage.
  */
 import MethodologyQuiz from './metodologia/MethodologyQuiz.astro';
 ---
@@ -63,7 +64,7 @@ import MethodologyQuiz from './metodologia/MethodologyQuiz.astro';
 </section>
 
 <script>
-  import { getCachedSession } from '../utils/auth';
+  import { getCachedSession, getSession } from '../utils/auth';
 
   interface SearchHit {
     id: string;
@@ -138,8 +139,35 @@ import MethodologyQuiz from './metodologia/MethodologyQuiz.astro';
       }
     };
 
+    const openAuthRegister = (context?: string): void => {
+      const w = window as unknown as {
+        TradylorAuth?: { open?: (view?: string, context?: string) => void };
+      };
+      w.TradylorAuth?.open?.('register', context);
+    };
+
     tabs.forEach((tab) => {
-      tab.addEventListener('click', () => activateTab(tab.dataset.hsrTab ?? 'buscar'));
+      tab.addEventListener('click', () => {
+        const name = tab.dataset.hsrTab ?? 'buscar';
+        // Gate: el perfilador (pestaña "Mi perfil") exige usuario registrado.
+        // Sin sesión se abre el modal de registro y no se muestra el quiz.
+        if (name === 'perfil' && !getCachedSession()?.user) {
+          // getSession en vivo para no depender del caché inicial del Layout.
+          void getSession(true)
+            .then((session) => {
+              if (session.user) {
+                activateTab(name);
+                return;
+              }
+              openAuthRegister('quiz-complete');
+            })
+            .catch(() => {
+              openAuthRegister('quiz-complete');
+            });
+          return;
+        }
+        activateTab(name);
+      });
     });
 
     const setStatus = (el: HTMLElement | null, message: string): void => {
