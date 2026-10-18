@@ -3700,20 +3700,65 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const btnAliImportCat = document.getElementById('btnAliImportCat');
     const btnAliHideSel = document.getElementById('btnAliHideSel');
 
+    /**
+     * Rellena un select de subcategoría destino en cascada (#prodSubcatDest y
+     * #aliSubcatAssign). Compartido por ambos selectores:
+     *  - Con categoría padre elegida: sólo sus subcategorías.
+     *  - Sin categoría elegida: TODAS las subcategorías del catálogo, con la
+     *    etiqueta «Padre › Hija», para que las creadas en el apartado
+     *    Categorías siempre se vean reflejadas en el desplegable.
+     * El `value` de cada opción es el nombre de la subcategoría (así lo
+     * consumen aliChosenCategory() y la asignación masiva de productos).
+     */
+    function fillSubcatDestOptions(subSelect, categoryName) {
+      if (!subSelect) return;
+      const current = String(subSelect.value || '');
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      const parent = categoryName
+        ? allCats.find((c) => !c.parentId && c.name === categoryName) || null
+        : null;
+      const subs = allCats.filter((c) => c.parentId && (!parent || c.parentId === parent.id));
+      const optionLabel = (c) => {
+        if (parent) return `${c.icon ? `${c.icon} ` : ''}${c.name}`;
+        const owner = allCats.find((candidate) => candidate.id === c.parentId);
+        return owner ? `${owner.name} › ${c.name}` : c.name;
+      };
+      subSelect.innerHTML = '<option value="">Subcategoría destino…</option>' + subs.map((c) =>
+        `<option value="${escapeHtml(c.name)}">${escapeHtml(optionLabel(c))}</option>`
+      ).join('');
+      if (current && Array.from(subSelect.options).some((o) => o.value === current)) subSelect.value = current;
+    }
+
+    /**
+     * Si se elige una subcategoría que no pertenece a la categoría padre
+     * marcada (o no hay ninguna marcada), se selecciona automáticamente su
+     * categoría raíz: la cascada se repinta y categoría + subcategoría
+     * quedan coherentes para guardar los IDs jerárquicos del producto.
+     */
+    function bindSubcatDestCascade(catSelect, subSelect) {
+      if (!catSelect || !subSelect) return;
+      subSelect.addEventListener('change', () => {
+        const subName = String(('value' in subSelect ? subSelect.value : '') || '').trim();
+        if (!subName) return;
+        const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+        const parentName = String(('value' in catSelect ? catSelect.value : '') || '').trim();
+        const parent = parentName ? allCats.find((c) => !c.parentId && c.name === parentName) : null;
+        if (parent && allCats.some((c) => c.parentId === parent.id && c.name === subName)) return;
+        const owner = allCats.find((c) => c.parentId && c.name === subName);
+        const root = owner ? allCats.find((c) => c.id === owner.parentId) : null;
+        if (!root || !('value' in catSelect)) return;
+        catSelect.value = root.name;
+        catSelect.dispatchEvent(new Event('change'));
+      });
+    }
+
     /** Cascada subcategoría → categoría en la barra de acciones de Afiliados. */
     function syncAliSubcatAssign() {
       if (!aliCatAssign || !aliSubcatAssign) return;
-      const categoryName = String(('value' in aliCatAssign ? aliCatAssign.value : '') || '').trim();
-      const current = String(('value' in aliSubcatAssign ? aliSubcatAssign.value : '') || '');
-      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
-      const parent = allCats.find((c) => !c.parentId && c.name === categoryName);
-      const subs = parent ? allCats.filter((c) => c.parentId === parent.id) : [];
-      aliSubcatAssign.innerHTML = '<option value="">Subcategoría destino…</option>' + subs.map((c) =>
-        `<option value="${escapeHtml(c.name)}">${escapeHtml(c.icon || '')} ${escapeHtml(c.name)}</option>`
-      ).join('');
-      if (current && Array.from(aliSubcatAssign.options).some((o) => o.value === current)) aliSubcatAssign.value = current;
+      fillSubcatDestOptions(aliSubcatAssign, String(('value' in aliCatAssign ? aliCatAssign.value : '') || '').trim());
     }
     aliCatAssign?.addEventListener('change', syncAliSubcatAssign);
+    bindSubcatDestCascade(aliCatAssign, aliSubcatAssign);
 
     const ALI_PAGE_SIZE = 50;
     const ALI_COLS = 14;
@@ -4858,17 +4903,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const catSelect = document.getElementById('prodCatAssign');
       const subSelect = document.getElementById('prodSubcatDest');
       if (!catSelect || !subSelect) return;
-      const categoryName = String(catSelect.value || '').trim();
-      const current = String(subSelect.value || '');
-      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
-      const parent = allCats.find((c) => !c.parentId && c.name === categoryName);
-      const subs = parent ? allCats.filter((c) => c.parentId === parent.id) : [];
-      subSelect.innerHTML = '<option value="">Subcategoría destino…</option>' + subs.map((c) =>
-        `<option value="${escapeHtml(c.name)}">${escapeHtml(c.icon || '')} ${escapeHtml(c.name)}</option>`
-      ).join('');
-      if (current && Array.from(subSelect.options).some((o) => o.value === current)) subSelect.value = current;
+      fillSubcatDestOptions(subSelect, String(catSelect.value || '').trim());
     }
     document.getElementById('prodCatAssign')?.addEventListener('change', syncSubcatAssign);
+    bindSubcatDestCascade(document.getElementById('prodCatAssign'), document.getElementById('prodSubcatDest'));
 
     // ── Modal: creación on-the-fly de subcategorías ──────────────────────────
     const createSubcategoryModal = document.getElementById('createSubcategoryModal');

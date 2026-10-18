@@ -63,6 +63,8 @@ import MethodologyQuiz from './metodologia/MethodologyQuiz.astro';
 </section>
 
 <script>
+  import { getCachedSession } from '../utils/auth';
+
   interface SearchHit {
     id: string;
     slug: string;
@@ -195,6 +197,8 @@ import MethodologyQuiz from './metodologia/MethodologyQuiz.astro';
       container.hidden = hits.length === 0;
       // El script global de Layout escucha clicks delegados en [data-radar-toggle];
       // si el botón está marcado como guardado, reflejar el estado visual.
+      // Sin usuario registrado no se marca nada (el radar exige cuenta).
+      if (!getCachedSession()?.user) return;
       try {
         const raw = localStorage.getItem('tradylor-radar-v1');
         const radar = raw ? JSON.parse(raw) : null;

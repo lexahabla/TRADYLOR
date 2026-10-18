@@ -1981,9 +1981,9 @@ const resolvedImage = toAbsolute(image);
           } else {
             headerAnon.hidden = false;
             headerUserArea.hidden = true;
-            // El radar también funciona sin sesión (LocalStorage + soft gate):
-            // el botón/contador se queda visible para anónimos.
-            if (headerRadarBtn) headerRadarBtn.hidden = false;
+            // Botón radar del header (svg.radar-anim): sólo se muestra con
+            // sesión iniciada; sin usuario registrado queda oculto.
+            if (headerRadarBtn) headerRadarBtn.hidden = true;
             closeUserMenu();
             closeRadarDrawer();
           }
@@ -2238,9 +2238,13 @@ const resolvedImage = toAbsolute(image);
 
         // ------------------------------------------------------- botones radar
         const syncButtons = () => {
+          // Sin usuario registrado no hay radar: los botones nunca se marcan
+          // como guardados (los productos anónimos de LocalStorage sólo se
+          // muestran/migran tras iniciar sesión).
+          const canUseRadar = !authReady || Boolean(getCachedSession()?.user);
           document.querySelectorAll<HTMLElement>('[data-radar-toggle]').forEach((btn) => {
             const id = btn.dataset.radarId ?? '';
-            const saved = id ? isSaved(id) : false;
+            const saved = id && canUseRadar ? isSaved(id) : false;
             btn.classList.toggle('is-saved', saved);
             btn.setAttribute('aria-pressed', String(saved));
             btn.title = saved ? 'Quitar de Mi Radar' : 'Guardar en Mi Radar';
@@ -2252,10 +2256,33 @@ const resolvedImage = toAbsolute(image);
         };
 
         // Delegación de clics en cualquier botón "Guardar" (tarjetas, etc.).
-        // Soft gate: sin sesión el producto se guarda igual en LocalStorage y,
-        // además, se abre el modal contextual "Activa tu Radar" para ofrecer la
-        // sincronización a la nube (se completa tras el login con merge).
-        document.addEventListener('click', (event) => {
+        // Gate duro de registro: sin usuario NO se guarda nada en el radar
+        // (ni en LocalStorage); el clic abre el modal de registro contextual
+        // "Activa tu Radar" y el producto queda pendiente para guardarse
+        // en cuanto exista la cuenta.
+        const RADAR_PENDING_KEY = 'tradylor-radar-pending';
+
+        function stagePendingRadarSave(payload: SavedProduct): void {
+          try {
+            sessionStorage.setItem(RADAR_PENDING_KEY, JSON.stringify(payload));
+          } catch { /* sin sessionStorage: el usuario volverá a pulsar el botón. */ }
+        }
+
+        function flushPendingRadarSave(): void {
+          if (!getCachedSession()?.user) return;
+          let raw: string | null = null;
+          try {
+            raw = sessionStorage.getItem(RADAR_PENDING_KEY);
+            if (raw) sessionStorage.removeItem(RADAR_PENDING_KEY);
+          } catch { return; }
+          if (!raw) return;
+          try {
+            const payload = JSON.parse(raw) as SavedProduct;
+            if (payload?.id && !isSaved(payload.id)) saveToRadar(payload);
+          } catch { /* payload inválido: se descarta. */ }
+        }
+
+        document.addEventListener('click', async (event) => {
           const target = event.target;
           if (!(target instanceof Element)) return;
           const btn = target.closest<HTMLElement>('[data-radar-toggle]');
@@ -2263,6 +2290,31 @@ const resolvedImage = toAbsolute(image);
           event.preventDefault();
           const { radarId, radarTitle, radarPrice, radarPriceValue, radarImage, radarUrl, radarStore } = btn.dataset;
           if (!radarId) return;
+          // Si la sesión sigue en vuelo, se espera antes de decidir (evita
+          // tratar como anónimo a un usuario que ya tiene cuenta).
+          if (!authReady) {
+            try { await getSession(); } catch { /* sin red: se asume anónimo */ }
+          }
+          const sessionUser = getCachedSession()?.user;
+          if (!sessionUser) {
+            stagePendingRadarSave({
+              id: radarId,
+              title: radarTitle ?? '',
+              price: radarPrice ?? '',
+              priceValue: radarPriceValue ? Number(radarPriceValue) : undefined,
+              image: radarImage ?? '',
+              buyUrl: radarUrl ?? '',
+              store: radarStore === 'aliexpress' ? 'aliexpress' : 'amazon',
+              dateAdded: new Date().toISOString(),
+            });
+            const w = window as unknown as Record<string, { open?: (view?: string, context?: string) => void } | undefined>;
+            if (w.TradylorAuth?.open) {
+              w.TradylorAuth.open('register', 'radar-add');
+            } else {
+              window.location.href = '/perfil';
+            }
+            return;
+          }
           if (isSaved(radarId)) {
             removeProduct(radarId);
           } else {
@@ -2277,12 +2329,6 @@ const resolvedImage = toAbsolute(image);
               dateAdded: new Date().toISOString(),
             };
             saveToRadar(payload);
-            // Modal contextual sólo la primera vez (evita repetir el modal en cada guardado).
-            if (authReady && !getCachedSession()?.user && !sessionStorage.getItem('tradylor-radar-gate')) {
-              sessionStorage.setItem('tradylor-radar-gate', '1');
-              const w = window as unknown as Record<string, { open?: (view?: string, context?: string) => void } | undefined>;
-              w.TradylorAuth?.open?.('register', 'radar-add');
-            }
           }
           syncButtons();
         });
@@ -2321,12 +2367,16 @@ const resolvedImage = toAbsolute(image);
 
         onRadarChange(syncButtons);
         onAuthChange((user) => {
+          // Con cuenta activa se completa el guardado que quedó pendiente
+          // en el gate de registro (clic en «Guardar» de una tarjeta).
+          if (user) flushPendingRadarSave();
           renderHeaderAuth(user);
           syncButtons();
           if (user) void syncMarketingProfile();
         });
         void initAuth().then((session) => {
           authReady = true;
+          if (session.user) flushPendingRadarSave();
           renderHeaderAuth(session.user ?? null);
           syncButtons();
           if (session.user) void syncMarketingProfile();
