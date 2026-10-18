@@ -14,25 +14,17 @@ export const prerender = false;
 // Ruta a products.json para calcular conteo de productos por categor�a
 const PRODUCTS_PATH = dataFile('products.json');
 
-function getProductCounts(): Record<string, number> {
-  const counts: Record<string, number> = {};
+function readProductsForCounts(): any[] {
   try {
     if (fs.existsSync(PRODUCTS_PATH)) {
       const raw = fs.readFileSync(PRODUCTS_PATH, 'utf-8');
       const products = JSON.parse(raw);
-      if (Array.isArray(products)) {
-        for (const p of products) {
-          const cat = String(p.category || '').trim().toLowerCase();
-          if (cat) {
-            counts[cat] = (counts[cat] || 0) + 1;
-          }
-        }
-      }
+      if (Array.isArray(products)) return products;
     }
   } catch (err) {
     console.error('[API Categories] Error leyendo products.json para conteo:', err);
   }
-  return counts;
+  return [];
 }
 
 /**
@@ -71,30 +63,53 @@ export const GET: APIRoute = async ({ request }) => {
     }
 
     const categories = getCategories();
-    let productCounts: Record<string, number> = {};
+    let products: any[] = [];
     try {
-      productCounts = getProductCounts();
+      products = readProductsForCounts();
     } catch {
-      productCounts = {};
+      products = [];
     }
 
     const normalize = (s: string) =>
       s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 
-    const enrichedCategories = categories.map((cat) => {
+    // Emparejamiento legado por texto (nombre, slug o keyword de la categoría).
+    const textMatchesCategory = (productCatNorm: string, cat: Category) => {
       const nameNorm = normalize(cat.name);
       const slugNorm = normalize(cat.slug);
       const keywordsNorm = (cat.keywords || []).map(normalize);
+      const nameMatch = productCatNorm === nameNorm || productCatNorm === slugNorm;
+      const keywordMatch = keywordsNorm.some((k) => k && (productCatNorm.includes(k) || k.includes(productCatNorm)));
+      const rootMatch = nameNorm.split(' ')[0].length > 3 && productCatNorm.includes(nameNorm.split(' ')[0]);
+      return nameMatch || keywordMatch || rootMatch;
+    };
 
+    const categoriesById = new Map(categories.map((cat) => [cat.id, cat]));
+
+    const enrichedCategories = categories.map((cat) => {
       let count = 0;
-      for (const [productCat, qty] of Object.entries(productCounts)) {
-        const productCatNorm = normalize(productCat);
-        // Coincidencia: nombre exacto, slug, o si el nombre del producto contiene
-        // una keyword de la categor�a (o viceversa), o comparten la ra�z principal
-        const nameMatch = productCatNorm === nameNorm || productCatNorm === slugNorm;
-        const keywordMatch = keywordsNorm.some((k) => k && (productCatNorm.includes(k) || k.includes(productCatNorm)));
-        const rootMatch = nameNorm.split(' ')[0].length > 3 && productCatNorm.includes(nameNorm.split(' ')[0]);
-        if (nameMatch || keywordMatch || rootMatch) count += qty;
+      for (const product of products) {
+        // Subcategoría: se cuenta por subcategory_id (jerarquía real del producto).
+        if (cat.parentId) {
+          const subId = String(product.subcategory_id || '').trim();
+          if (subId && (subId === cat.id || subId === cat.slug || subId === cat.name)) count++;
+          continue;
+        }
+
+        // Raíz: si el producto tiene category_id se confía en la jerarquía…
+        const categoryId = String(product.category_id || '').trim();
+        if (categoryId) {
+          const linked = categoriesById.get(categoryId);
+          if (categoryId === cat.id || categoryId === cat.slug || (linked && linked.parentId === cat.id)) {
+            count++;
+            continue;
+          }
+          if (linked) continue; // pertenece claramente a otra rama
+          // id huérfano (p. ej. categoría renombrada): se cae al emparejamiento por texto.
+        }
+
+        const productCatNorm = normalize(String(product.category || ''));
+        if (productCatNorm && textMatchesCategory(productCatNorm, cat)) count++;
       }
 
       return {

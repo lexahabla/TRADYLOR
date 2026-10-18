@@ -66,6 +66,8 @@ export const PUT: APIRoute = async ({ params, request }) => {
         icon: formData.get('icon'),
         description: formData.get('description'),
         keywords: formData.get('keywords'),
+        // ?? undefined: si el campo no viene, se conserva el parentId actual.
+        parentId: formData.get('parentId') ?? undefined,
       };
     } else {
       body = await request.json().catch(() => ({}));
@@ -90,6 +92,12 @@ export const PUT: APIRoute = async ({ params, request }) => {
       name: body.name !== undefined ? String(body.name) : current?.name ?? '',
       icon: body.icon !== undefined ? String(body.icon) : undefined,
       keywords,
+      // Re-parentado opcional: vacío/null = convertir en raíz; ausente = conservar.
+      parentId: body.parentId === undefined
+        ? undefined
+        : body.parentId === null || String(body.parentId).trim() === ''
+          ? null
+          : String(body.parentId).trim(),
     });
 
     if (!result.ok) {

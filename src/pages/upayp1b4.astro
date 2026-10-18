@@ -477,12 +477,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <div id="prodFilters" class="ali-filters prod-filters">
         <div class="ali-filters-row">
           <div class="filter-field ali-f-search">
-            <label for="inputFilterList">Buscar</label>
+            <label for="inputFilterList">BUSCAR PRODUCTOS</label>
             <input type="search" id="inputFilterList" placeholder="Filtrar por título o comercio..." />
           </div>
           <div class="filter-field">
             <label for="prodFCat">Categoría</label>
             <select id="prodFCat"><option value="">Todas</option></select>
+          </div>
+          <div class="filter-field">
+            <label for="prodSubcatAssign">Subcategoría</label>
+            <select id="prodSubcatAssign"><option value="">Todas las subcategorías</option></select>
           </div>
           <div class="filter-field">
             <label for="prodFMerchant">Comercio</label>
@@ -522,6 +526,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       </div>
 
       <div class="product-sel-bar" id="productSelBar">
+        <label class="product-sel-title">ADMINISTRAR PRODUCTOS</label>
         <span id="productSelCount">0 seleccionados</span>
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll">Seleccionar todos los visibles</button>
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear">Limpiar</button>
@@ -529,7 +534,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <select id="prodCatAssign" class="sel-cat-assign" aria-label="Categoría destino">
           <option value="">Categoría destino…</option>
         </select>
-        <select id="prodSubcatAssign" class="sel-cat-assign" aria-label="Subcategoría destino">
+        <select id="prodSubcatDest" class="sel-cat-assign" aria-label="Subcategoría destino">
           <option value="">Subcategoría destino…</option>
         </select>
         <button type="button" class="btn-secondary btn-sm" id="btnProdCreateSubcat" title="Crear una subcategoría vinculada a la categoría destino">➕ Subcat</button>
@@ -891,6 +896,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <div class="form-group">
               <label for="catIcon" class="field-label">Icono (emoji) <span class="label-hint">(opcional)</span></label>
               <input type="text" id="catIcon" placeholder="Ej: 🍳" maxlength="8" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group full-width">
+              <label for="catParent" class="field-label">
+                <span>Categoría padre</span>
+                <span class="label-hint">Vacío = categoría raíz · elige una raíz para crear una SUBCATEGORÍA</span>
+              </label>
+              <select id="catParent">
+                <option value="">Ninguna (categoría raíz)</option>
+              </select>
             </div>
           </div>
 
@@ -1275,6 +1292,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const productsTableBody = document.getElementById('productsTableBody');
     const inputFilterList = document.getElementById('inputFilterList');
     const prodFCat = document.getElementById('prodFCat');
+    const prodSubcatFilter = document.getElementById('prodSubcatAssign');
     const prodFMerchant = document.getElementById('prodFMerchant');
     const prodFSort = document.getElementById('prodFSort');
     const prodFSortDir = document.getElementById('prodFSortDir');
@@ -2524,12 +2542,35 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     function prodFilterApply() {
       const q = (inputFilterList?.value || '').trim().toLowerCase();
       const cat = prodFCat?.value || '';
+      const subcatId = prodSubcatFilter?.value || '';
       const merchant = prodFMerchant?.value || '';
       const sortKey = prodFSort?.value || 'default';
       const dir = prodSortDir === 'asc' ? 1 : -1;
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
 
       const filtered = currentProducts.filter((product) => {
-        if (cat && (product.category || '') !== cat) return false;
+        if (cat) {
+          // Filtro de categoría: casa el texto legado (product.category) o la
+          // jerarquía real (category_id / subcategoría hija de la raíz elegida).
+          const root = allCats.find((c) => !c.parentId && (c.name === cat || c.id === cat));
+          const productCat = String(product.category || '');
+          const productSub = product.subcategory_id ? allCats.find((c) => c.id === product.subcategory_id) : null;
+          const matchCat = productCat === cat
+            || Boolean(root && (product.category_id === root.id || (productSub && productSub.parentId === root.id)));
+          if (!matchCat) return false;
+        }
+        if (subcatId) {
+          // Filtro de subcategoría (id del categories.json, con fallback por nombre).
+          const target = allCats.find((c) => c.id === subcatId);
+          const pid = String(product.subcategory_id || '');
+          let matchSub = pid === subcatId;
+          if (!matchSub && target) {
+            const psub = pid ? allCats.find((c) => c.id === pid) : null;
+            const pname = String(psub ? psub.name : pid || '').toLowerCase();
+            matchSub = Boolean(pname) && pname === target.name.toLowerCase();
+          }
+          if (!matchSub) return false;
+        }
         if (merchant && (product.merchant || '') !== merchant) return false;
         // Preset editorial activo (1 clic): filtro complementario.
         if (typeof activeProdPreset !== 'undefined' && activeProdPreset && !prodMatchesPreset(product, activeProdPreset)) return false;
@@ -2567,7 +2608,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
 
     if (inputFilterList) inputFilterList.addEventListener('input', prodFilterApply);
-    prodFCat?.addEventListener('change', prodFilterApply);
+    prodFCat?.addEventListener('change', () => {
+      // El filtro de subcategoría se repliega sobre la categoría elegida.
+      syncSubcatFilter();
+      prodFilterApply();
+    });
+    prodSubcatFilter?.addEventListener('change', prodFilterApply);
     prodFMerchant?.addEventListener('change', prodFilterApply);
     prodFSort?.addEventListener('change', prodFilterApply);
     prodFSortDir?.addEventListener('click', () => {
@@ -2578,6 +2624,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     prodFReset?.addEventListener('click', () => {
       if (inputFilterList) inputFilterList.value = '';
       if (prodFCat) prodFCat.value = '';
+      syncSubcatFilter();
       if (prodFMerchant) prodFMerchant.value = '';
       if (prodFSort) prodFSort.value = 'default';
       prodSortDir = 'desc';
@@ -2629,7 +2676,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     btnProdAssignCat?.addEventListener('click', async () => {
       const category = prodCatAssign && 'value' in prodCatAssign ? String(prodCatAssign.value || '').trim() : '';
       const subcategoryName = (() => {
-        const el = document.getElementById('prodSubcatAssign');
+        const el = document.getElementById('prodSubcatDest');
         return el && 'value' in el ? String(el.value || '').trim() : '';
       })();
       const ids = [...selectedProductIds];
@@ -2644,7 +2691,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       // Categorización bidireccional: se envían también los IDs jerárquicos
       // (category_id / subcategory_id) resueltos desde el caché de categorías.
       const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
-      const catObj = allCats.find((c) => c.name === category);
+      const catObj = allCats.find((c) => !c.parentId && c.name === category);
       const subObj = catObj ? allCats.find((c) => c.name === subcategoryName && c.parentId === catObj.id) : undefined;
       const categoryId = catObj?.id || '';
       const subcategoryId = subObj?.id || '';
@@ -4163,6 +4210,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const catName = document.getElementById('catName');
     const catIcon = document.getElementById('catIcon');
     const catKeywords = document.getElementById('catKeywords');
+    const catParent = document.getElementById('catParent');
     const btnSaveCategory = document.getElementById('btnSaveCategory');
     const btnSaveCategoryLabel = document.getElementById('btnSaveCategoryLabel');
     const btnCancelCategory = document.getElementById('btnCancelCategory');
@@ -4193,27 +4241,78 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           .join('');
       }
 
+      // Sólo raíces: las subcategorías se eligen en los selectores en cascada.
+      const roots = categories.filter((category) => !category.parentId);
+
       // Select de la barra de selección de la tabla: asignar categoría en masa.
       const catAssign = document.getElementById('prodCatAssign');
       if (catAssign) {
         const current = catAssign.value;
         catAssign.innerHTML =
           '<option value="">Categoría destino…</option>' +
-          categories
+          roots
             .map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.icon || '')} ${escapeHtml(category.name)}</option>`)
             .join('');
         if (current) catAssign.value = current;
       }
 
-      // Filtro de categoría de la tabla del catálogo.
+      // Filtro de categoría de la tabla del catálogo (raíces; las hijas van en
+      // el filtro de subcategorías, id: prodSubcatAssign, justo al lado).
       const prodFCatSel = document.getElementById('prodFCat');
       if (prodFCatSel) {
         const current = prodFCatSel.value;
         prodFCatSel.innerHTML =
           '<option value="">Todas</option>' +
-          categories.map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.name)}</option>`).join('');
+          roots.map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.name)}</option>`).join('');
         if (current) prodFCatSel.value = current;
       }
+
+      // Selector de categoría padre del formulario de Categorías: permite crear
+      // subcategorías desde el apartado Categorías (vacío = categoría raíz).
+      const catParentSel = document.getElementById('catParent');
+      if (catParentSel) {
+        const current = catParentSel.value;
+        const editingSlug = catEditingSlug ? catEditingSlug.value.trim() : '';
+        const editingId = editingSlug ? (categories.find((category) => category.slug === editingSlug)?.id || '') : '';
+        catParentSel.innerHTML =
+          '<option value="">Ninguna (categoría raíz)</option>' +
+          roots
+            .filter((category) => category.id !== editingId)
+            .map((category) => `<option value="${escapeHtml(category.id)}">${escapeHtml(category.icon || '')} ${escapeHtml(category.name)}</option>`)
+            .join('');
+        if (current) catParentSel.value = current;
+      }
+
+      // Refresca el filtro de subcategorías de la tabla y la cascada de destino.
+      syncSubcatFilter();
+      syncSubcatAssign();
+      if (currentProducts.length) prodFilterApply();
+    }
+
+    /**
+     * Filtro de subcategorías de la tabla (id: prodSubcatAssign, en #prodFilters).
+     * En cascada con el filtro de categoría: si hay una raíz elegida sólo muestra
+     * sus hijas; si no, muestra todas las subcategorías etiquetadas «Padre › Hija».
+     * Cada opción guarda el id real de categories.json como value.
+     */
+    function syncSubcatFilter() {
+      const sel = document.getElementById('prodSubcatAssign');
+      if (!sel) return;
+      const current = sel.value;
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      const catFilter = document.getElementById('prodFCat');
+      const parentName = catFilter && 'value' in catFilter ? String(catFilter.value || '').trim() : '';
+      const parent = parentName ? allCats.find((category) => !category.parentId && category.name === parentName) : null;
+      const subs = allCats.filter((category) => category.parentId && (!parent || category.parentId === parent.id));
+      const optionLabel = (category) => {
+        if (parent) return `${category.icon ? `${category.icon} ` : ''}${category.name}`;
+        const owner = allCats.find((candidate) => candidate.id === category.parentId);
+        return owner ? `${owner.name} › ${category.name}` : category.name;
+      };
+      sel.innerHTML =
+        '<option value="">Todas las subcategorías</option>' +
+        subs.map((category) => `<option value="${escapeHtml(category.id)}">${escapeHtml(optionLabel(category))}</option>`).join('');
+      if (current && Array.from(sel.options).some((option) => option.value === current)) sel.value = current;
     }
 
     function renderCategoryList(categories) {
@@ -4223,21 +4322,26 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         return;
       }
 
-      categoryListView.innerHTML = categories
-        .map((category) => {
-          const keywords = Array.isArray(category.keywords) ? category.keywords : [];
-          return `
-          <article class="category-card" data-category-slug="${escapeHtml(category.slug)}">
+      const card = (category) => {
+        const keywords = Array.isArray(category.keywords) ? category.keywords : [];
+        const isSub = Boolean(category.parentId);
+        const parent = isSub ? categories.find((candidate) => candidate.id === category.parentId) : null;
+        const addSubBtn = isSub
+          ? ''
+          : `<button type="button" class="btn-secondary btn-sm category-add-sub" data-slug="${escapeHtml(category.slug)}" data-name="${escapeHtml(category.name)}" title="Crear una subcategoría dentro de «${escapeHtml(category.name)}»">➕ Subcategoría</button>`;
+        return `
+          <article class="category-card${isSub ? ' is-subcategory' : ''}" data-category-slug="${escapeHtml(category.slug)}">
             <div class="category-card-top">
               <span class="category-icon">${escapeHtml(category.icon || '📦')}</span>
               <div class="category-card-main">
                 <h3 class="category-name">${escapeHtml(category.name)}</h3>
-                <span class="category-slug">/${escapeHtml(category.slug)}</span>
+                <span class="category-slug">${isSub ? `${escapeHtml(parent ? `${parent.name} › ` : '')}` : '/'}${escapeHtml(category.slug)}</span>
               </div>
               <span class="category-count" title="Productos clasificados en esta categoría">
                 ${Number(category.productCount ?? 0)} prod.
               </span>
             </div>
+            ${isSub ? '<span class="category-parent-chip">Subcategoría</span>' : ''}
             <div class="category-keywords">
               ${
                 keywords.length
@@ -4247,12 +4351,27 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               ${keywords.length > 3 ? `<span class="is-more">+${keywords.length - 3}</span>` : ''}
             </div>
             <div class="category-card-actions">
+              ${addSubBtn}
               <button type="button" class="btn-secondary btn-sm category-edit" data-slug="${escapeHtml(category.slug)}">Editar</button>
               <button type="button" class="btn-danger-ghost btn-sm category-delete" data-slug="${escapeHtml(category.slug)}" data-name="${escapeHtml(category.name)}">Eliminar</button>
             </div>
           </article>`;
-        })
-        .join('');
+      };
+
+      // Render jerárquico: cada raíz seguida de sus subcategorías (1 nivel).
+      const roots = categories.filter((category) => !category.parentId);
+      const subcategoriesOf = (parentId) => categories.filter((category) => category.parentId === parentId);
+      const ordered = [];
+      for (const root of roots) {
+        ordered.push(card(root));
+        for (const sub of subcategoriesOf(root.id)) ordered.push(card(sub));
+      }
+      // Subcategorías huérfanas (padre eliminado fuera del panel): al final.
+      for (const sub of categories.filter((category) => category.parentId && !roots.some((root) => root.id === category.parentId))) {
+        ordered.push(card(sub));
+      }
+
+      categoryListView.innerHTML = ordered.join('');
     }
 
     async function loadCategories() {
@@ -4278,6 +4397,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (catName) catName.value = '';
       if (catIcon) catIcon.value = '';
       if (catKeywords) catKeywords.value = '';
+      if (catParent) catParent.value = '';
       if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Crear categoría';
       if (categoryFormTitle) categoryFormTitle.textContent = '1. Crear nueva categoría';
       if (btnCancelCategory) btnCancelCategory.hidden = true;
@@ -4292,12 +4412,22 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
 
       const editingSlug = catEditingSlug ? catEditingSlug.value.trim() : '';
+      // Categoría padre seleccionada → la categoría se guarda como SUBCATEGORÍA.
+      const parentId = catParent && 'value' in catParent ? String(catParent.value || '').trim() : '';
+      if (editingSlug && parentId) {
+        const self = Array.isArray(categoriesCache) ? categoriesCache.find((category) => category.slug === editingSlug) : undefined;
+        if (self && self.id === parentId) {
+          showCategoryStatus('warning', 'Padre no válido', 'Una categoría no puede ser padre de sí misma.');
+          return;
+        }
+      }
       const payload = {
         name,
         icon: catIcon ? catIcon.value.trim() : '',
         keywords: catKeywords
           ? catKeywords.value.split(',').map((k) => k.trim()).filter(Boolean)
           : [],
+        parentId: parentId || null,
       };
 
       if (btnSaveCategory) btnSaveCategory.disabled = true;
@@ -4313,7 +4443,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const data = await res.json();
 
         if (data.success) {
-          showCategoryStatus('success', isEdit ? 'Categoría actualizada' : 'Categoría creada', data.message);
+          const successTitle = isEdit ? 'Categoría actualizada' : parentId ? 'Subcategoría creada' : 'Categoría creada';
+          showCategoryStatus('success', successTitle, data.message);
           resetCategoryForm();
           await loadCategories();
         } else {
@@ -4331,9 +4462,47 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (categoryStatus) categoryStatus.hidden = true;
     });
 
+    // Al elegir categoría padre en el formulario, el modo pasa a subcategoría.
+    catParent?.addEventListener('change', () => {
+      if (catEditingSlug && catEditingSlug.value) return;
+      const parentId = catParent && 'value' in catParent ? String(catParent.value || '').trim() : '';
+      const parent = parentId && Array.isArray(categoriesCache)
+        ? categoriesCache.find((category) => category.id === parentId)
+        : undefined;
+      if (parent) {
+        if (categoryFormTitle) categoryFormTitle.textContent = `1. Nueva subcategoría de «${parent.name}»`;
+        if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Crear subcategoría';
+        if (btnCancelCategory) btnCancelCategory.hidden = false;
+      } else {
+        if (categoryFormTitle) categoryFormTitle.textContent = '1. Crear nueva categoría';
+        if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Crear categoría';
+        if (btnCancelCategory) btnCancelCategory.hidden = true;
+      }
+    });
+
     categoryListView?.addEventListener('click', async (event) => {
+      const addSubBtn = event.target.closest('.category-add-sub');
       const editBtn = event.target.closest('.category-edit');
       const deleteBtn = event.target.closest('.category-delete');
+
+      // «➕ Subcategoría»: prepara el formulario en modo subcategoría de la raíz.
+      if (addSubBtn) {
+        const slug = addSubBtn.dataset.slug;
+        const root = Array.isArray(categoriesCache) ? categoriesCache.find((category) => category.slug === slug) : undefined;
+        if (!root) return;
+        if (catEditingSlug) catEditingSlug.value = '';
+        if (catName) catName.value = '';
+        if (catIcon) catIcon.value = '';
+        if (catKeywords) catKeywords.value = '';
+        if (catParent) catParent.value = root.id;
+        if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Crear subcategoría';
+        if (categoryFormTitle) categoryFormTitle.textContent = `1. Nueva subcategoría de «${root.name}»`;
+        if (btnCancelCategory) btnCancelCategory.hidden = false;
+        showCategoryStatus('loading', 'Modo subcategoría', `Se guardará vinculada a «${root.name}» en categories.json.`);
+        categoryForm?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        catName?.focus();
+        return;
+      }
 
       if (editBtn) {
         const slug = editBtn.dataset.slug;
@@ -4343,8 +4512,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         if (catName) catName.value = category.name;
         if (catIcon) catIcon.value = category.icon || '';
         if (catKeywords) catKeywords.value = (category.keywords || []).join(', ');
+        if (catParent) catParent.value = category.parentId || '';
         if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Guardar cambios';
-        if (categoryFormTitle) categoryFormTitle.textContent = `1. Editando "${category.name}"`;
+        if (categoryFormTitle) categoryFormTitle.textContent = `1. Editando "${category.name}"${category.parentId ? ' (subcategoría)' : ''}`;
         if (btnCancelCategory) btnCancelCategory.hidden = false;
         showCategoryStatus('loading', 'Modo edición', 'Ajusta los campos y pulsa "Guardar cambios".');
         categoryForm?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -4355,7 +4525,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const slug = deleteBtn.dataset.slug;
         const name = deleteBtn.dataset.name;
         if (!slug) return;
-        const confirmed = window.confirm(`¿Eliminar la categoría "${name}"? Los productos existentes conservan su texto de categoría.`);
+        const target = Array.isArray(categoriesCache) ? categoriesCache.find((category) => category.slug === slug) : undefined;
+        const childCount = target && !target.parentId
+          ? categoriesCache.filter((category) => category.parentId === target.id).length
+          : 0;
+        const confirmed = window.confirm(
+          `¿Eliminar la categoría "${name}"?${childCount ? ` Se eliminarán también sus ${childCount} subcategoría(s).` : ''} Los productos existentes conservan su texto de categoría.`
+        );
         if (!confirmed) return;
 
         deleteBtn.disabled = true;
@@ -4470,7 +4646,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // ── Selector en cascada: subcategoría destino en productSelBar ───────────
     function syncSubcatAssign() {
       const catSelect = document.getElementById('prodCatAssign');
-      const subSelect = document.getElementById('prodSubcatAssign');
+      const subSelect = document.getElementById('prodSubcatDest');
       if (!catSelect || !subSelect) return;
       const categoryName = String(catSelect.value || '').trim();
       const current = String(subSelect.value || '');
@@ -4541,7 +4717,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         // página (datalist, selects del panel y módulo de Categorías).
         await loadCategories();
         syncSubcatAssign();
-        const subSelect = document.getElementById('prodSubcatAssign');
+        const subSelect = document.getElementById('prodSubcatDest');
         const created = data.category;
         if (subSelect && created) {
           const option = Array.from(subSelect.options).find((o) => o.textContent?.includes(name));
@@ -5077,6 +5253,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     color: var(--color-text-dim);
   }
   .product-sel-bar .btn-sm { padding: .3rem .6rem; font-size: .68rem; }
+  .product-sel-title { flex-shrink: 0; margin-right: .1rem; color: #93c5fd; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
   .sel-cat-assign {
     padding: .32rem .5rem;
     font-size: .7rem;
@@ -5108,6 +5285,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   :global(.category-keywords span.is-more) { color: #93c5fd; border-color: rgba(96, 165, 250, .25); }
   :global(.category-card-actions) { display: flex; gap: .5rem; margin-top: auto; padding-top: .35rem; border-top: 1px solid rgba(255, 255, 255, .05); }
   :global(.category-card-actions button) { flex: 1; }
+  /* Subcategorías: visualmente subordinadas a su categoría raíz */
+  :global(.category-card.is-subcategory) { border-left: 3px solid rgba(52, 211, 153, .55); background: linear-gradient(rgba(52, 211, 153, .05), rgba(52, 211, 153, .05)), var(--color-bg-card); }
+  :global(.category-card.is-subcategory .category-icon) { background: rgba(52, 211, 153, .1); border-color: rgba(52, 211, 153, .3); }
+  :global(.category-parent-chip) { align-self: flex-start; padding: .15rem .5rem; color: #6ee7b7; background: rgba(16, 185, 129, .1); border: 1px solid rgba(52, 211, 153, .3); border-radius: 999px; font-size: .62rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; }
+  :global(.category-add-sub) { white-space: nowrap; }
 
   /* ============ 2. CATÁLOGO ALIEXPRESS (CACHÉ EN VOLÚMEN) ============ */
   .ali-catalog-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; margin-left: auto; flex-wrap: wrap; }
