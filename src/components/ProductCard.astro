@@ -45,6 +45,12 @@ export interface Props {
   badge?: string;
   /** Puntuación opcional del modo plano (p. ej. 4.8). */
   rating?: number | string;
+  /**
+   * 'compact' fuerza la disposición horizontal de móvil (<768px, estilo lista
+   * Amazon) sin depender del ancho del viewport: usado por el carrusel de
+   * ofertas del hero para que cada tarjeta ocupe mucho menos alto en escritorio.
+   */
+  layout?: 'grid' | 'compact';
 }
 
 const {
@@ -58,6 +64,7 @@ const {
   badge,
   amazonInput,
   rating,
+  layout = 'grid',
 } = Astro.props;
 
 // Modo híbrido: amazonInput (URL de Amazon o ASIN) habilita la salida directa.
@@ -282,7 +289,7 @@ const radarPayload = {
     </div>
   </article>
 ) : (
-<article class="product-card" id={`product-${product?.id}`}>
+<article class="product-card" id={`product-${product?.id}`} data-layout={layout}>
   <!-- Enlace de tarjeta completa: al pasar el cursor toda la tarjeta lleva a
        la ficha. Los elementos con enlace propio (título, categoría, imagen,
        "Comprar ya" y "Mi Radar") quedan por encima (z-index). -->
@@ -1088,6 +1095,74 @@ const radarPayload = {
       padding: 0.7rem 1rem;
       font-size: 0.85rem;
       gap: 0.45rem;
+    }
+  }
+
+  /* ============ VARIANTE COMPACTA (carrusel de ofertas del hero) ============
+     Sólo ≥768px: fuerza la disposición horizontal de móvil (imagen fija 158px a
+     la izquierda, resumen/barra de satisfacción ocultos) aunque el viewport sea
+     de escritorio, para que las tarjetas del carrusel ocupen mucho menos alto.
+     En móviles reales ya se aplica el layout nativo de <768px, así que aquí no
+     hace falta nada (deja pasar las reglas ≤640/≤480 del propio móvil). */
+  @media (min-width: 768px) {
+    .product-card[data-layout="compact"] {
+      flex-direction: row;
+      flex-wrap: wrap;
+      align-items: flex-start;
+      gap: 0.75rem;
+    }
+
+    .product-card[data-layout="compact"] .image-col {
+      width: 158px;
+      flex: 0 0 158px;
+    }
+
+    .product-card[data-layout="compact"] .image-wrapper {
+      height: 158px;
+      aspect-ratio: auto;
+      padding: 4px;
+      border-radius: 12px;
+    }
+
+    .product-card[data-layout="compact"] .product-image {
+      padding: 0.5rem;
+      border-radius: 0.5rem;
+    }
+
+    .product-card[data-layout="compact"] .discount-pill {
+      top: 0.35rem;
+      right: 0.35rem;
+      font-size: 0.68rem;
+      padding: 0.2rem 0.45rem;
+      border-radius: 6px;
+    }
+
+    .product-card[data-layout="compact"] .card-content {
+      padding: 0.85rem 0.9rem 0.4rem;
+      gap: 0.45rem;
+    }
+
+    .product-card[data-layout="compact"] .product-title {
+      font-size: 0.9rem;
+    }
+
+    .product-card[data-layout="compact"] .product-summary,
+    .product-card[data-layout="compact"] .satisfaction-bar {
+      display: none;
+    }
+
+    .product-card[data-layout="compact"] .card-footer {
+      padding: 0.6rem 0.9rem 0;
+      gap: 0.6rem;
+    }
+
+    .product-card[data-layout="compact"] .buy-actions {
+      margin-top: 0;
+      padding: 0 0.9rem;
+    }
+
+    .product-card[data-layout="compact"] .trust-guarantee {
+      margin-top: 0.5rem;
     }
   }
 

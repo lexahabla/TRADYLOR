@@ -47,6 +47,17 @@ const scoreOf = (p: typeof allProducts[0]) => {
 
 const sorted = [...visibleProducts].sort((a, b) => scoreOf(b) - scoreOf(a));
 
+// ─── Top ofertas: mayor descuento real (para el carrusel del hero) ──────────
+const discountRatioOf = (p: typeof allProducts[0]) =>
+  p.originalPrice && p.originalPrice > p.price
+    ? (p.originalPrice - p.price) / p.originalPrice
+    : 0;
+
+const dealProducts = allProducts
+  .filter((p) => discountRatioOf(p) > 0)
+  .sort((a, b) => discountRatioOf(b) - discountRatioOf(a) || scoreOf(b) - scoreOf(a))
+  .slice(0, 10);
+
 // ─── Pagination for "Todos los Productos" ────────────────────────────────────
 const PRODUCTS_PER_PAGE = 12;
 const pageParam = Astro.url.searchParams.get('page');
@@ -79,53 +90,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
 
 <Layout title={pageTitle} description={pageDescription}>
   <!-- ============================================================
-       1. HERO SECTION: Propuesta de Valor Estratégica
-       ============================================================ -->
-  <section class="hero-section">
-    <div class="container hero-container">
-      <div class="hero-badge">
-        <span class="badge-dot"></span>
-        <span>Curación de Productos & Análisis Independientes</span>
-      </div>
-
-      <h1 class="hero-title">
-        Filtramos el ruido del mercado.<br />
-        <span class="gradient-text">Solo recomendamos lo que vale la pena comprar.</span>
-      </h1>
-
-      <p class="hero-subtitle">
-        En Tradylor desarmamos las campañas de marketing engañosas. Analizamos a fondo especificaciones, fiabilidad y relación calidad-precio para que ahorres tiempo, dinero y tomes decisiones de compra 100% acertadas.
-      </p>
-
-      <!-- Buscador híbrido: buscar / ofertas / perfilador de comprador -->
-      <HeroSearchRadar />
-
-      <!-- Badges de Autoridad E-E-A-T -->
-      <div class="hero-trust-metrics">
-        <div class="metric-item">
-          <span class="metric-number">+500h</span>
-          <span class="metric-label">De análisis y pruebas de producto</span>
-        </div>
-        {showSavingsMetric && (
-          <>
-            <div class="metric-divider"></div>
-            <div class="metric-item">
-              <span class="metric-number">{savingsDisplay}</span>
-              <span class="metric-label">Ahorrado a nuestros usuarios</span>
-            </div>
-          </>
-        )}
-        <div class="metric-divider"></div>
-        <div class="metric-item">
-          <span class="metric-number">24/7</span>
-          <span class="metric-label">Monitoreo activo de bajadas de precio</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================
-       2. SECCIÓN CATÁLOGO COMPLETO: Todos los Productos (paginado)
+       1. SECCIÓN CATÁLOGO COMPLETO: Todos los Productos (paginado)
        ============================================================ -->
   <section class="catalog-section" id="catalogo">
     <div class="container">
@@ -189,6 +154,54 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
           )}
         </nav>
       )}
+    </div>
+  </section>
+
+  <!-- ============================================================
+       2. HERO SECTION: Propuesta de Valor Estratégica (bajo el catálogo)
+       ============================================================ -->
+  <section class="hero-section">
+    <div class="container hero-container">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        <span>Curación de Productos & Análisis Independientes</span>
+      </div>
+
+      <h1 class="hero-title">
+        Filtramos el ruido del mercado.<br />
+        <span class="gradient-text">Solo recomendamos lo que vale la pena comprar.</span>
+      </h1>
+
+      <p class="hero-subtitle">
+        En Tradylor desarmamos las campañas de marketing engañosas. Analizamos a fondo especificaciones, fiabilidad y relación calidad-precio para que ahorres tiempo, dinero y tomas decisiones de compra 100% acertadas.
+      </p>
+    </div>
+
+    <!-- Panel de ofertas/asistente: a ancho completo de la página (fuera del container) -->
+    <HeroSearchRadar deals={dealProducts} />
+
+    <div class="container hero-container">
+      <!-- Badges de Autoridad E-E-A-T -->
+      <div class="hero-trust-metrics">
+        <div class="metric-item">
+          <span class="metric-number">+500h</span>
+          <span class="metric-label">De análisis y pruebas de producto</span>
+        </div>
+        {showSavingsMetric && (
+          <>
+            <div class="metric-divider"></div>
+            <div class="metric-item">
+              <span class="metric-number">{savingsDisplay}</span>
+              <span class="metric-label">Ahorrado a nuestros usuarios</span>
+            </div>
+          </>
+        )}
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-number">24/7</span>
+          <span class="metric-label">Monitoreo activo de bajadas de precio</span>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -543,8 +556,8 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   }
 
   .catalog-section {
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding-top: 0;
+    /* Es la primera sección de la página: respiración superior propia. */
+    padding-top: 6rem;
   }
 
   .section-header {
@@ -1006,7 +1019,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     }
 
     .catalog-section {
-      padding-top: 0;
+      padding-top: 4rem;
     }
 
     .section-title {
