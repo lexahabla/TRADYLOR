@@ -104,6 +104,11 @@ const ENV_CREDENTIALS: Record<string, Record<string, string>> = {
     appSecret: 'ALIEXPRESS_APP_SECRET',
     trackingId: 'ALIEXPRESS_TRACKING_ID',
   },
+  ebay: {
+    clientId: 'EBAY_CLIENT_ID',
+    clientSecret: 'EBAY_CLIENT_SECRET',
+    campaignId: 'EBAY_CAMPAIGN_ID',
+  },
 };
 
 function envCredential(name: string): string {
