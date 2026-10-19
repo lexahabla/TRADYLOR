@@ -20,6 +20,9 @@ pnpm-debug.log*
 .env
 .env.production
 
+# configuración local de opencode (contiene claves de proveedores IA)
+opencode.json
+
 # credenciales de redes de afiliación (panel admin)
 src/data/credentials.json
 
