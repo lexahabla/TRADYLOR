@@ -1282,17 +1282,36 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     // Plegar/desplegar el formulario de alta desde su card-header.
     const formCardHeader = document.querySelector('.form-card .card-header-toggle');
+    let formExpanded = false;
+    function setFormPanelExpanded(expanded) {
+      formExpanded = Boolean(expanded);
+      document.querySelectorAll('.form-card .form-toggle-body').forEach((body) => {
+        body.style.display = formExpanded ? '' : 'none';
+      });
+      if (formCardHeader) formCardHeader.setAttribute('aria-expanded', String(formExpanded));
+    }
     if (formCardHeader) {
       formCardHeader.style.cursor = 'pointer';
-      let formExpanded = false;
-      document.querySelectorAll('.form-card .form-toggle-body').forEach((body) => {
-        body.style.display = 'none';
+      formCardHeader.setAttribute('role', 'button');
+      formCardHeader.setAttribute('tabindex', '0');
+      setFormPanelExpanded(false);
+      formCardHeader.addEventListener('click', () => setFormPanelExpanded(!formExpanded));
+      formCardHeader.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setFormPanelExpanded(!formExpanded);
+        }
       });
-      formCardHeader.addEventListener('click', () => {
-        formExpanded = !formExpanded;
-        document.querySelectorAll('.form-card .form-toggle-body').forEach((body) => {
-          body.style.display = formExpanded ? '' : 'none';
-        });
+    }
+
+    // Lleva el scroll al inicio del panel «Extracción & Alta de Producto».
+    // Se calcula tras el repintado (rAF) porque desplegar el panel cambia el layout.
+    function scrollToFormPanel() {
+      const card = document.querySelector('.form-card');
+      if (!card) return;
+      requestAnimationFrame(() => {
+        const top = window.scrollY + card.getBoundingClientRect().top - 80;
+        window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
       });
     }
 
@@ -2596,6 +2615,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           const id = btn.getAttribute('data-id');
           if (!id) return;
 
+          // Despliega el panel «Extracción & Alta de Producto» y sube a su
+          // inicio para poder editar sin tener que abrirlo a mano.
+          setFormPanelExpanded(true);
+          scrollToFormPanel();
+
           try {
             const res = await fetch('/api/products/add');
             const data = await res.json();
@@ -2649,7 +2673,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
               updatePreview();
               showAlert('success', 'Producto Cargado en Formulario', `Editando "${product.title}". Modifica los campos y pulsa "Guardar cambios".`);
-              window.scrollTo({ top: productForm.offsetTop - 80, behavior: 'smooth' });
+              // Despliega el panel de edición y nos coloca en su inicio.
+              setFormPanelExpanded(true);
+              scrollToFormPanel();
             }
           } catch (err) {
             console.error(err);
