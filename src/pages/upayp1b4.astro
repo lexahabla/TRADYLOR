@@ -482,7 +482,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     <section id="catalogProducts" data-admin-view="products" class:list={['admin-card', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'products' }]}>
        <div class="list-header-row">
         <div>
-          <h2 class="card-title">3. Catálogo de Productos Registrados</h2>
+          <h2 class="card-title">2. Catálogo de Productos Registrados</h2>
           <p class="card-desc">Consulta los productos activos en <code>src/data/products.json</code>, pruébalos, enríchelos con IA o elimínalos.</p>
         </div>
       </div>
@@ -522,9 +522,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <button type="button" id="prodFSortDir" class="btn-secondary btn-sm ali-sort-dir" title="Invertir el orden (mayor a menor / menor a mayor)">↓</button>
             </div>
           </div>
+          <!-- Precio (€), Descuento y Valoración: MISMA FILA que el resto de filtros -->
+          <div id="prodRangeFields" class="ali-range-fields"></div>
           <button type="button" id="prodFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
         </div>
-        <div id="prodRangeFields" class="ali-range-fields"></div>
       </div>
 
       <!-- Presets editoriales (filtros de 1 clic) -->
@@ -558,8 +559,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </select>
         <button type="button" class="btn-secondary btn-sm" id="btnProdBulkBadge" title="Aplica la etiqueta destacada (badge) a todos los productos seleccionados">🏷️ Asignar Badge</button>
         <button type="button" class="btn-ai btn-sm" id="btnProdNormalizeTags" title="Extraer tags técnicos normalizados (normalized_tags)">🏷️ Normalizar Tags</button>
-        <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
         <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
+        <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
       </div>
 
 
@@ -1084,16 +1085,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="submit" class="btn-success" id="btnCreateSubcatSubmit">Crear subcategoría</button>
       </div>
     </form>
-  </div>
-
-  <!-- Modal de vista previa: renderiza <ProductCard /> del frontend público vía iframe -->
-  <div id="previewCardModal" class="admin-modal admin-modal-wide" hidden>
-    <div class="admin-modal-backdrop" data-admin-modal-close></div>
-    <div class="admin-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="previewCardTitle">
-      <button type="button" class="admin-modal-close" data-admin-modal-close aria-label="Cerrar">×</button>
-      <h3 id="previewCardTitle" class="admin-modal-title">👁️ Preview Card <span class="admin-modal-subtitle">así se verá en la web pública</span></h3>
-      <iframe id="previewCardFrame" class="preview-card-frame" title="Vista previa de la tarjeta del producto" loading="lazy"></iframe>
-    </div>
   </div>
 
   <!-- Modal de vinculación de alternativas (cross-matching) -->
@@ -1934,6 +1925,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           fillIfEmpty(prodPros, Array.isArray(data.pros) ? data.pros.join('\n') : '');
           fillIfEmpty(prodCons, Array.isArray(data.cons) ? data.cons.join('\n') : '');
           fillIfEmpty(prodAffiliateUrl, data.affiliateUrl || urlToScrape);
+          fillIfEmpty(prodBuyNowUrl, data.buyNowUrl || '');
           fillIfEmpty(prodBrand, data.brand || '');
           fillIfEmpty(prodFulfillment, data.fulfillmentProvider || '');
           fillIfEmpty(prodRating, data.rating ?? '');
@@ -2460,7 +2452,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <a href="${p.affiliateUrl}" target="_blank" rel="nofollow noopener noreferrer" class="test-link">Probar Enlace</a>
             </td>
             <td class="col-actions text-right">
-              <button type="button" class="btn-icon-action btn-preview-card" data-id="${p.id}" title="👁️ Preview Card (así se ve en la web)">
+              <button type="button" class="btn-icon-action btn-preview-card" data-id="${p.id}" data-slug="${p.slug || ''}" title="👁️ Ver ficha del producto (abre en pestaña nueva)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
               </button>
               <button type="button" class="btn-icon-action btn-link-alternatives" data-id="${p.id}" title="🔗 Vincular Alternativas">
@@ -3764,6 +3756,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           category: assignedCategory,
           merchant: product.network,
           affiliateUrl: affiliateLink,
+          // URL de la ficha real (no el enlace corto de afiliado): el servidor
+          // la lee para complementar marca, specs, opiniones, envío y Buy Now.
+          url: product.productUrl || affiliateLink,
           rating: product.rating,
           reviewsCount: product.reviewsCount,
           badge: product.network,
@@ -5366,18 +5361,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
     });
 
-    // ── Vista previa (👁️ Preview Card): iframe con <ProductCard /> público ──
-    const previewCardModal = document.getElementById('previewCardModal');
-    const previewCardFrame = document.getElementById('previewCardFrame');
+    // ── Vista previa (👁️ Preview Card): abre la ficha PÚBLICA en target=_blank ──
     document.addEventListener('click', (event) => {
       const btn = event.target.closest?.('.btn-preview-card');
       if (!btn) return;
       event.preventDefault();
       event.stopPropagation();
       const id = btn.getAttribute('data-id');
-      if (!id || !previewCardFrame) return;
-      previewCardFrame.src = `/upayp1b4/preview-card?id=${encodeURIComponent(id)}`;
-      openAdminModal(previewCardModal);
+      const slug = btn.getAttribute('data-slug');
+      if (!id && !slug) return;
+      window.open(`/producto/${encodeURIComponent(slug || id)}`, '_blank', 'noopener');
     });
 
     // ── Edición rápida de categoría/subcategoría en la fila expandida ────────
@@ -5800,6 +5793,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
      Versión compacta: rail fino de 3px y thumb de 11px. */
   .ali-range-fields { display: flex; flex-wrap: wrap; gap: .3rem .7rem; padding-top: .3rem; border-top: 1px dashed rgba(255, 255, 255, .07); }
   .ali-range-fields:empty { display: none; }
+  /* En el Catálogo de Productos Registrados los rangos (Precio €, Descuento,
+     Valoración) viven DENTRO de .ali-filters-row: display:contents los hace
+     items de la MISMA FILA que el resto de filtros, con su misma estética. */
+  .prod-filters .ali-range-fields { display: contents; }
   .ali-range { flex: 1 1 145px; min-width: 128px; max-width: 210px; display: grid; gap: .1rem; }
   .ali-range-head { display: flex; align-items: baseline; justify-content: space-between; gap: .4rem; }
   .ali-range-head label { color: var(--color-text-dim); font-size: .58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
@@ -7493,14 +7490,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   }
   :global(.admin-modal-status.is-ok) { color: #86efac; background: rgba(34, 197, 94, .1); border: 1px solid rgba(34, 197, 94, .3); }
   :global(.admin-modal-status.is-error) { color: #fca5a5; background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); }
-  :global(.preview-card-frame) {
-    display: block;
-    width: 100%;
-    height: min(70vh, 640px);
-    border: 1px solid var(--color-border, rgba(96, 165, 250, .2));
-    border-radius: 10px;
-    background: #0b1220;
-  }
   :global(.link-alt-columns) { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   @media (max-width: 720px) { :global(.link-alt-columns) { grid-template-columns: 1fr; } }
   :global(.link-alt-heading) { margin: 0 0 .45rem; font-size: .76rem; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--color-text-dim); }

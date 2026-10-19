@@ -14,6 +14,7 @@ import {
 import { enrichProductLocally } from '../../../lib/localEnrich';
 import { findDuplicateProduct, readProductsFromFile, slugify, upsertProduct, type Product } from '../../../lib/productStore';
 import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../../../utils/amazon';
+import { complementProductFromPage } from '../products/add';
 
 export const prerender = false;
 
@@ -137,6 +138,17 @@ export const POST: APIRoute = async ({ request }) => {
     let imageStatus: 'ok' | 'skipped' | 'error' = 'skipped';
     let enrichment: EnrichedText | null = null;
     let generatedImageUrl: string | null = null;
+
+    // ------------------------------------------------------------------
+    // PASO 0 — Complemento desde la página del producto (best-effort)
+    //   Cuando faltan datos de la ficha (marca, specs, valoración, opiniones,
+    //   distribuidor, envío, compra directa, galería…) se lee la URL en el
+    //   servidor (scrape por regex + fallback de IA) y se rellenan los huecos.
+    //   Si la tienda bloquea, el alta continúa igualmente con lo recibido.
+    // ------------------------------------------------------------------
+    const complementNotes: string[] = [];
+    await complementProductFromPage(body as Record<string, any>, complementNotes, { title });
+    warnings.push(...complementNotes);
 
     // ------------------------------------------------------------------
     // PASO 1 — Enriquecimiento de texto

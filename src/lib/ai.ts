@@ -344,6 +344,225 @@ function normalizePricing(raw: any): EnrichedPricing | undefined {
   return { price: offer, originalPrice: original, discountPercentage };
 }
 
+// ─── Extracción de ficha desde el HTML de una página de producto ─────────────
+
+export interface ProductPageAiFields {
+  brand?: string;
+  rating?: number;
+  reviewsCount?: number;
+  specs?: Record<string, string>;
+  fulfillmentProvider?: string;
+  shippingInfo?: string;
+  shippingDays?: number;
+  buyNowUrl?: string;
+  /** Índices (1-based) de las imágenes candidatas que son fotos del producto. */
+  galleryIndices?: number[];
+}
+
+const PAGE_EXTRACT_SYSTEM_PROMPT = [
+  'Eres un extractor de datos de fichas de producto de tiendas online (Amazon, PcComponentes, MediaMarkt, El Corte Inglés, AliExpress...).',
+  'Recibirás: la URL del producto, texto visible de la página (ya sin etiquetas HTML) y una lista numerada de URLs de imágenes candidatas.',
+  'Devuelve SOLO JSON válido con estas claves (usa null cuando no haya dato fiable en el texto):',
+  '- brand: marca del producto (string corto, p.ej. "Samsung").',
+  '- rating: valoración media 0-5 (número; si el texto trae porcentaje súbelo a escala 0-5).',
+  '- reviewsCount: nº entero de opiniones/resenas.',
+  '- specs: objeto con 3-8 pares clave/valor cortos (p.ej. {"Pantalla":"6.7\\" AMOLED"}).',
+  '- fulfillmentProvider: vendedor/distribuidor responsable del envío y pago (p.ej. "Vendido por TechStore", nombre del marketplace seller).',
+  '- shippingInfo: texto tal cual del plazo/condiciones de envío (p.ej. "Llega gratis el martes").',
+  '- shippingDays: días enteros de entrega estimados (si pone "2-4 días" devuelve 4).',
+  '- buyNowUrl: URL absoluta de compra directa/checkout si aparece en el texto; si no, null.',
+  '- galleryIndices: array de índices (empezando en 1) de la lista de imágenes que sean FOTOS DEL PRODUCTO (frente, dorso, laterales, detalles); excluye logos, iconos, banners, personas y placeholders.',
+  'Nunca inventes datos que no estén en el texto. Responde SOLO el JSON.',
+].join('\n');
+
+/** Quita etiquetas HTML y colapsa espacios para mandar sólo texto legible a la IA. */
+function htmlToDigestText(html: string, maxChars: number): string {
+  // Las tiendas SPA (MediaMarkt, PcComponentes, AliExpress…) guardan los datos
+  // del producto dentro de <script> como JSON embebido. Antes de descartar esos
+  // scripts se arrancan los pares clave/valor relevantes para que la IA los vea.
+  const scriptSnippets: string[] = [];
+  const scripts = html.match(/<script\b[^>]*>[\s\S]*?<\/script>/gi) ?? [];
+  const keyRe =
+    /"?\b(?:brand|marca|brandName|seller|vendor|vendorName|soldBy|soldByInfo|merchant|rating|ratingValue|averageRating|starRating|reviewCount|reviewsCount|reviewNum|reviews|evaluateRate|evaluateSummary|price|salePrice|originalPrice|listPrice|discount|shipping|shippingFee|shippingInfo|shippingMethod|delivery|deliveryInfo|shipToDays|checkoutUrl|buyNowUrl|addToCartUrl|cartUrl|orderUrl|imageUrl|imageUrls|imageList|mainImage|images|gallery|videoUrl)"?\s*:\s*("(?:[^"\\]|\\.){1,300}"|\d+(?:\.\d+)?|true|false)/gi;
+  for (const script of scripts) {
+    let match: RegExpExecArray | null;
+    while ((match = keyRe.exec(script)) !== null) {
+      if (scriptSnippets.length >= 60) break;
+      scriptSnippets.push(`${match[1]}: ${match[2]}`);
+    }
+  }
+
+  const text = html
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const digest = text.slice(0, maxChars);
+  if (!scriptSnippets.length) return digest;
+  return `${digest}\n\nDATOS EMBEBIDOS EN SCRIPTS:\n${scriptSnippets.join('\n')}`.slice(0, maxChars + 3_000);
+}
+
+/**
+ * Paso 2 (fallback) — Extracción de ficha con IA a partir del HTML de la página.
+ *
+ * Se usa cuando el scraping por regex no consiguió marca, specs, distribuidor,
+ * valoración, opiniones, envío o la galería completa: la IA lee el texto de la
+ * página (y una lista de imágenes candidatas) y devuelve los campos faltantes.
+ */
+export async function extractProductPageFields(input: {
+  url: string;
+  merchant?: string;
+  knownTitle?: string;
+  html: string;
+  candidateImages?: string[];
+  missing?: string[];
+}): Promise<ProductPageAiFields> {
+  if (!hasTextCredentials()) {
+    throw new Error('Falta la clave de la IA de texto para complementar el análisis de la página');
+  }
+
+  const digest = htmlToDigestText(input.html, 14_000);
+  const images = (input.candidateImages ?? []).slice(0, 40);
+  const userContext = [
+    `URL del producto: ${input.url}`,
+    input.merchant ? `Comercio: ${input.merchant}` : '',
+    input.knownTitle ? `Título ya detectado: ${input.knownTitle}` : '',
+    input.missing?.length ? `Completar preferentemente: ${input.missing.join(', ')}` : '',
+    '',
+    'TEXTO DE LA PÁGINA:',
+    digest || '(sin texto)',
+    '',
+    images.length
+      ? 'IMÁGENES CANDIDATAS (numéralas desde 1):\n' + images.map((u, i) => `${i + 1}. ${u}`).join('\n')
+      : '(sin imágenes candidatas)',
+  ]
+    .filter((line) => line !== undefined)
+    .join('\n');
+
+  const messages = [
+    { role: 'system', content: PAGE_EXTRACT_SYSTEM_PROMPT },
+    { role: 'user', content: userContext },
+  ];
+
+  const provider = textProvider();
+  let raw: any;
+
+  if (provider === 'anthropic') {
+    const model = env('ANTHROPIC_MODEL') || 'claude-3-5-sonnet-latest';
+    const response = await fetchWithTimeout(
+      'https://api.anthropic.com/v1/messages',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': env('ANTHROPIC_API_KEY'),
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({ model, max_tokens: 1000, temperature: 0.2, system: PAGE_EXTRACT_SYSTEM_PROMPT, messages: [{ role: 'user', content: userContext }] }),
+      },
+      55_000
+    );
+    if (!response.ok) {
+      throw new Error(`Anthropic respondió ${response.status}`);
+    }
+    const payload = await response.json();
+    raw = parseLooseJson((payload?.content ?? []).map((block: any) => block?.text ?? '').join(''));
+  } else if (provider === 'groq') {
+    const response = await fetchWithTimeout(
+      'https://api.groq.com/openai/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env('GROQ_API_KEY')}` },
+        body: JSON.stringify({
+          model: 'openai/gpt-oss-120b',
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages,
+        }),
+      },
+      55_000
+    );
+    if (!response.ok) {
+      throw new Error(`Groq respondió ${response.status}`);
+    }
+    const payload = await response.json();
+    raw = parseLooseJson(payload?.choices?.[0]?.message?.content ?? '');
+  } else {
+    const model = env('OPENAI_MODEL') || 'gpt-4o-mini';
+    const response = await fetchWithTimeout(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env('OPENAI_API_KEY')}` },
+        body: JSON.stringify({
+          model,
+          temperature: 0.2,
+          response_format: { type: 'json_object' },
+          messages,
+        }),
+      },
+      55_000
+    );
+    if (!response.ok) {
+      throw new Error(`OpenAI respondió ${response.status}`);
+    }
+    const payload = await response.json();
+    raw = parseLooseJson(payload?.choices?.[0]?.message?.content ?? '');
+  }
+
+  return normalizePageFields(raw, images);
+}
+
+/** Sanea la respuesta del extractor de página (tipos, rangos y límites). */
+function normalizePageFields(raw: any, candidateImages: string[]): ProductPageAiFields {
+  const str = (value: unknown, max: number): string | undefined => {
+    const text = String(value ?? '').replace(/\s+/g, ' ').trim();
+    return text ? text.slice(0, max) : undefined;
+  };
+  const numIn = (value: unknown, min: number, max: number): number | undefined => {
+    if (value == null || value === '') return undefined;
+    const parsed = Number(String(value).replace(/[^\d.,-]/g, '').replace(',', '.'));
+    if (!Number.isFinite(parsed)) return undefined;
+    return Math.min(max, Math.max(min, parsed));
+  };
+
+  const specs: Record<string, string> = {};
+  if (raw?.specs && typeof raw.specs === 'object' && !Array.isArray(raw.specs)) {
+    for (const [key, value] of Object.entries(raw.specs as Record<string, unknown>)) {
+      const label = str(key, 60);
+      const text = str(value, 120);
+      if (label && text) specs[label] = text;
+      if (Object.keys(specs).length >= 8) break;
+    }
+  }
+
+  const galleryIndices = Array.isArray(raw?.galleryIndices)
+    ? (raw.galleryIndices as unknown[])
+        .map((n) => Number(n))
+        .filter((n) => Number.isInteger(n) && n >= 1 && n <= candidateImages.length)
+    : [];
+
+  return {
+    brand: str(raw?.brand, 60),
+    rating: numIn(raw?.rating, 0, 5) != null ? Math.round(numIn(raw!.rating, 0, 5)! * 10) / 10 : undefined,
+    reviewsCount: numIn(raw?.reviewsCount, 0, 1_000_000) != null ? Math.round(numIn(raw!.reviewsCount, 0, 1_000_000)!) : undefined,
+    specs: Object.keys(specs).length ? specs : undefined,
+    fulfillmentProvider: str(raw?.fulfillmentProvider, 80),
+    shippingInfo: str(raw?.shippingInfo, 160),
+    shippingDays: numIn(raw?.shippingDays, 0, 365) != null ? Math.round(numIn(raw!.shippingDays, 0, 365)!) : undefined,
+    buyNowUrl: str(raw?.buyNowUrl, 500) && /^https?:\/\//i.test(String(raw.buyNowUrl)) ? String(raw.buyNowUrl).trim() : undefined,
+    galleryIndices: galleryIndices.length ? galleryIndices : undefined,
+  };
+}
+
 // ─── Sintetización de títulos ────────────────────────────────────────────────
 
 /** Sufijos de marketplace que ensucian el título de una product-card. */

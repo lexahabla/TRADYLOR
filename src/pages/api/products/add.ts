@@ -10,6 +10,7 @@ import {
 } from '../../../lib/productStore';
 import { addDeletedId, removeDeletedId } from '../../../lib/deletedProducts';
 import { enrichProductsForAdmin } from '../../../lib/curation';
+import { extractProductPageFields, hasTextCredentials, type ProductPageAiFields } from '../../../lib/ai';
 
 export const prerender = false;
 
@@ -96,7 +97,7 @@ function cleanExtractedText(value: unknown): string {
 /**
  * Extrae metadatos OpenGraph, Twitter Cards, Schema.org y etiquetas meta estándar del HTML.
  */
-function extractMetadata(html: string, targetUrl: string) {
+export function extractMetadata(html: string, targetUrl: string) {
   const merchant = detectMerchantFromUrl(targetUrl);
 
   // Helper para buscar meta tags con atributos en cualquier orden
@@ -155,66 +156,102 @@ function extractMetadata(html: string, targetUrl: string) {
   let reviewsCount: number | null = null;
   const pros: string[] = [];
   const cons: string[] = [];
+  // Specs recogidas del JSON-LD (additionalProperty): la base sobre la que las
+  // tablas HTML del comercio añaden más pares clave/valor más adelante.
+  const schemaSpecs: Record<string, string> = {};
+  const addSchemaSpec = (key: unknown, value: unknown) => {
+    const k = cleanExtractedText(String(key ?? '').replace(/<[^>]+>/g, ' '));
+    const v = cleanExtractedText(String(value ?? '').replace(/<[^>]+>/g, ' '));
+    if (k && v && v.length <= 160 && k.length <= 60 && v.toLowerCase() !== k.toLowerCase() && !schemaSpecs[k]) {
+      schemaSpecs[k] = v;
+    }
+  };
   const rawPriceMeta = findMetaContent('product:price:amount', 'og:price:amount', 'price');
   if (rawPriceMeta) {
     price = parsePrice(rawPriceMeta);
   }
   originalPrice = parsePrice(findMetaContent('product:price:original', 'product:original_price', 'og:price:standard'));
 
-  // Si no hay precio en meta tags, buscar en bloques JSON-LD Schema.org
-  if (price === null) {
-    const jsonLdMatches = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
-    if (jsonLdMatches) {
-      for (const block of jsonLdMatches) {
-        try {
-          const content = block.replace(/<script[^>]*>|<\/script>/gi, '').trim();
-          const parsedJson = JSON.parse(content);
+  // Bloques JSON-LD Schema.org: se recorren SIEMPRE (no sólo cuando falta el
+  // precio). Casi todas las tiendas publican el precio en meta tags Y los datos
+  // ricos (marca, valoración, opiniones, galería, specs) en el JSON-LD: antes,
+  // si había meta-precio, todo el schema se ignoraba y esos campos quedaban
+  // vacíos en el formulario.
+  const jsonLdMatches = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+  if (jsonLdMatches) {
+    for (const block of jsonLdMatches) {
+      try {
+        const content = block.replace(/<script[^>]*>|<\/script>/gi, '').trim();
+        const parsedJson = JSON.parse(content);
 
-          const searchSchemaForPrice = (obj: any): number | null => {
-            if (!obj || typeof obj !== 'object') return null;
-            if (!brand && obj.brand) brand = cleanExtractedText(typeof obj.brand === 'object' ? obj.brand.name : obj.brand);
-            if (!rating && obj.aggregateRating?.ratingValue) rating = parsePrice(obj.aggregateRating.ratingValue);
-            if (!reviewsCount && obj.aggregateRating?.reviewCount) reviewsCount = parsePrice(obj.aggregateRating.reviewCount);
-            if (!image && obj.image) {
-              const schemaImg = Array.isArray(obj.image) ? obj.image[0] : obj.image;
-              image = typeof schemaImg === 'string' ? schemaImg : schemaImg?.url || '';
-            }
-            // Galería: recolecta todas las imágenes del schema (si hay varias).
-            if (Array.isArray(obj.image)) {
-              for (const img of obj.image) {
-                addGallery(typeof img === 'string' ? img : img?.url);
+        const searchSchemaForPrice = (obj: any): number | null => {
+          if (!obj || typeof obj !== 'object') return null;
+          if (!brand && obj.brand) brand = cleanExtractedText(typeof obj.brand === 'object' ? obj.brand.name : obj.brand);
+          const agg = obj.aggregateRating;
+          if (agg && typeof agg === 'object') {
+            if (rating == null && agg.ratingValue != null) {
+              const parsedRating = parsePrice(String(agg.ratingValue).replace(/\/\s*5\s*$/i, ''));
+              if (parsedRating != null && parsedRating > 5 && parsedRating <= 100) {
+                // Algunas tiendas publican la valoración como porcentaje (0-100).
+                rating = Math.round((parsedRating / 20) * 10) / 10;
+              } else if (parsedRating != null && parsedRating <= 5) {
+                rating = parsedRating;
               }
-            } else if (typeof obj.image === 'string') {
-              addGallery(obj.image);
             }
-            if (!description && obj.description) description = cleanExtractedText(obj.description);
-            if (obj.offers) {
-              const offer = Array.isArray(obj.offers) ? obj.offers[0] : obj.offers;
-              const offerPrice = parsePrice(offer?.price ?? offer?.lowPrice);
-              const offerHighPrice = parsePrice(offer?.highPrice ?? offer?.priceSpecification?.maxPrice);
-              if (offerHighPrice !== null && (offerPrice === null || offerHighPrice > offerPrice)) originalPrice = offerHighPrice;
-              if (offerPrice !== null) return offerPrice;
+            if (reviewsCount == null) {
+              const countRaw = agg.reviewCount ?? agg.ratingCount ?? agg.userCount ?? agg.ratingCount;
+              const parsedCount = parsePrice(String(countRaw ?? ''));
+              if (parsedCount != null) reviewsCount = parsedCount;
             }
-            const objectPrice = parsePrice(obj.price);
-            if (objectPrice !== null) return objectPrice;
-            for (const value of Object.values(obj)) {
-              const nestedPrice = searchSchemaForPrice(value);
-              if (nestedPrice !== null) return nestedPrice;
-            }
-            return null;
-          };
-
-          const schemaPrice = Array.isArray(parsedJson)
-            ? parsedJson.map(searchSchemaForPrice).find((p) => p !== null)
-            : searchSchemaForPrice(parsedJson);
-
-          if (schemaPrice != null) {
-            price = schemaPrice;
-            break;
           }
-        } catch {
-          // JSON-LD malformado en página externa, ignorar de forma segura
+          if (!image && obj.image) {
+            const schemaImg = Array.isArray(obj.image) ? obj.image[0] : obj.image;
+            image = typeof schemaImg === 'string' ? schemaImg : schemaImg?.url || '';
+          }
+          // Galería: recolecta todas las imágenes del schema (si hay varias).
+          if (Array.isArray(obj.image)) {
+            for (const img of obj.image) {
+              addGallery(typeof img === 'string' ? img : img?.url);
+            }
+          } else if (typeof obj.image === 'string') {
+            addGallery(obj.image);
+          }
+          if (!description && obj.description) description = cleanExtractedText(obj.description);
+          // Especificaciones: additionalProperty / additionalType del schema.
+          if (Array.isArray(obj.additionalProperty)) {
+            for (const prop of obj.additionalProperty) {
+              if (prop && typeof prop === 'object') addSchemaSpec(prop.name, prop.value);
+            }
+          }
+          if (obj.color) addSchemaSpec('Color', obj.color);
+          if (obj.material) addSchemaSpec('Material', obj.material);
+          if (obj.model) addSchemaSpec('Modelo', obj.model);
+          if (obj.mpn) addSchemaSpec('MPN', obj.mpn);
+          if (obj.offers) {
+            const offer = Array.isArray(obj.offers) ? obj.offers[0] : obj.offers;
+            const offerPrice = parsePrice(offer?.price ?? offer?.lowPrice);
+            const offerHighPrice = parsePrice(offer?.highPrice ?? offer?.priceSpecification?.maxPrice);
+            if (offerHighPrice !== null && (price === null || offerHighPrice > price)) originalPrice = offerHighPrice;
+            if (offerPrice !== null && price === null) return offerPrice;
+          }
+          const objectPrice = parsePrice(obj.price);
+          if (objectPrice !== null && price === null) return objectPrice;
+          for (const value of Object.values(obj)) {
+            const nestedPrice = searchSchemaForPrice(value);
+            if (nestedPrice !== null) return nestedPrice;
+          }
+          return null;
+        };
+
+        const schemaPrice = Array.isArray(parsedJson)
+          ? parsedJson.map(searchSchemaForPrice).find((p) => p !== null)
+          : searchSchemaForPrice(parsedJson);
+
+        if (price === null && schemaPrice != null) {
+          price = schemaPrice;
         }
+      } catch {
+        // JSON-LD malformado en página externa, ignorar de forma segura
       }
     }
   }
@@ -255,6 +292,35 @@ function extractMetadata(html: string, targetUrl: string) {
         const digits = reviewsMatch[1].replace(/<[^>]+>/g, '').replace(/[^\d]/g, '');
         if (digits) reviewsCount = Number.parseInt(digits, 10);
       }
+    }
+  }
+
+  // Fallbacks genéricos de valoración y opiniones para el resto de comercios
+  // (PcComponentes, MediaMarkt, El Corte Inglés, Fnac, AliExpress…): datos
+  // embebidos en JSON, atributos data-rating y textos «N opiniones».
+  if (rating === null) {
+    const genericRatingMatch =
+      html.match(/"ratingValue"\s*:\s*"?\s*([\d.,]+)\s*"?/i) ||
+      html.match(/itemprop=["']ratingValue["'][^>]*content=["']([\d.,]+)["']/i) ||
+      html.match(/data-rating=["']\s*([\d.,]+)\s*["']/i) ||
+      html.match(/"rating"\s*:\s*"?\s*([\d.,]+)\s*"?/i) ||
+      html.match(/([\d.,]+)\s*\/\s*5\s*(?:estrellas|★|stars)/i) ||
+      html.match(/(?:valoraci[oó]n|rating)[^0-9<]{0,50}([\d.,]+)\s*(?:de|\/)\s*5/i);
+    if (genericRatingMatch?.[1]) {
+      const parsed = parsePrice(genericRatingMatch[1]);
+      if (parsed != null && parsed > 5 && parsed <= 100) rating = Math.round((parsed / 20) * 10) / 10;
+      else if (parsed != null && parsed <= 5) rating = parsed;
+    }
+  }
+  if (reviewsCount === null) {
+    const genericReviewsMatch =
+      html.match(/"reviewCount"\s*:\s*"?\s*([\d.,\s]+)\s*"?/i) ||
+      html.match(/"ratingCount"\s*:\s*"?\s*([\d.,\s]+)\s*"?/i) ||
+      html.match(/"totalReview"\s*:\s*"?\s*([\d.,\s]+)\s*"?/i) ||
+      html.match(/(\d[\d.,\s]*)\s*(?:opiniones|valoraciones|rese[nñ]as|reviews)/i);
+    if (genericReviewsMatch?.[1]) {
+      const digits = genericReviewsMatch[1].replace(/[^\d]/g, '');
+      if (digits) reviewsCount = Number.parseInt(digits, 10);
     }
   }
 
@@ -313,7 +379,7 @@ function extractMetadata(html: string, targetUrl: string) {
     htmlGallerySeen.add(u);
     htmlGalleryUrls.push(u);
   };
-  if (gallerySet.size < 3) {
+  if (gallerySet.size < 6) {
     const imgTagRe = /<img\b[^>]*>/gi;
     let imgTagMatch: RegExpExecArray | null;
     while ((imgTagMatch = imgTagRe.exec(html)) !== null) {
@@ -353,12 +419,53 @@ function extractMetadata(html: string, targetUrl: string) {
       // Orden de prioridad: zoom > original > lazy > srcset > src.
       for (const candidate of [zoom, original, lazy, bestSrcset, src]) pushHtmlGallery(candidate);
     }
+
+    // <link rel="preload" as="image">: la imagen principal que el navegador
+    // prioriza (habitual en SPAs como MediaMarkt o El Corte Inglés).
+    const preloadRe = /<link\b[^>]*rel=["']preload["'][^>]*as=["']image["'][^>]*>/gi;
+    let preloadMatch: RegExpExecArray | null;
+    while ((preloadMatch = preloadRe.exec(html)) !== null) {
+      const hrefMatch = preloadMatch[0].match(/\bhref=["']([^"']+)["']/i);
+      if (hrefMatch?.[1]) pushHtmlGallery(hrefMatch[1]);
+    }
+
+    // Imágenes embebidas en JSON/JS (SPAs y catálogos que guardan la galería en
+    // un estado de página): se exigen indicios de tamaño grande para no llenar
+    // la galería de iconos y avatares.
+    const embeddedRe = /https?:\\?\/\\?\/[^"'\\\s)\]]+\.(?:jpe?g|png|webp)(?:\?[^"'\\\s)\]]*)?/gi;
+    let embeddedMatch: RegExpExecArray | null;
+    let embeddedCount = 0;
+    while ((embeddedMatch = embeddedRe.exec(html)) !== null && embeddedCount < 60) {
+      const u = embeddedMatch[0].replace(/\\u002F/gi, '/').replace(/\\\//g, '/');
+      if (!/(\d{3,4}\s?[xX×]\s?\d{3,4}|_AC_|_SX\d+|_SL\d+|highres|hi_?res|1000|1200|1500|2000|zoom|full|original|grande|large)/i.test(u)) continue;
+      embeddedCount++;
+      pushHtmlGallery(u);
+    }
+
     for (const url of htmlGalleryUrls) addGallery(url);
   }
 
   if (price === null) {
     const amazonOffscreenPrice = html.match(/<span[^>]+class=["'][^"']*a-offscreen[^"']*["'][^>]*>\s*([\d.,]+)\s*€?/i);
     if (amazonOffscreenPrice?.[1]) price = parsePrice(amazonOffscreenPrice[1]);
+  }
+
+  // Precio embebido en JSON/JS (SPAs sin JSON-LD): sólo se acepta si el valor
+  // aparece junto a un indicador de moneda (priceCurrency, EUR, €) para no
+  // confundirlo con otros importes de la página (gastos de envío, banners…).
+  if (price === null) {
+    const embeddedPriceRe = /"?\b(?:price|salePrice|currentPrice|finalPrice|target_sale_price|offerPrice)\b"?\s*:\s*"?(\d+(?:[.,]\d{1,2})?)"?(?=[\s\S]{0,250}?(?:priceCurrency|EUR|€)|[\s\S]{0,120}?"(?:priceCurrency|currency)"\s*:\s*"EUR")/i;
+    const embeddedPriceMatch = html.match(embeddedPriceRe);
+    if (embeddedPriceMatch?.[1]) price = parsePrice(embeddedPriceMatch[1]);
+    if (price === null) {
+      const loosePriceMatch = html.match(/"priceCurrency"\s*:\s*"EUR"[\s\S]{0,200}?"price"\s*:\s*"?(\d+(?:[.,]\d{1,2})?)"?/i);
+      if (loosePriceMatch?.[1]) price = parsePrice(loosePriceMatch[1]);
+    }
+  }
+  if (originalPrice === null && price !== null) {
+    const embeddedOriginalRe = /"?\b(?:originalPrice|listPrice|priceOriginal|compareAtPrice|target_original_price)\b"?\s*:\s*"?(\d+(?:[.,]\d{1,2})?)"?/i;
+    const embeddedOriginalMatch = html.match(embeddedOriginalRe);
+    if (embeddedOriginalMatch?.[1]) originalPrice = parsePrice(embeddedOriginalMatch[1]);
   }
 
   if (!description) {
@@ -471,8 +578,10 @@ function extractMetadata(html: string, targetUrl: string) {
     if (brandMeta) brand = cleanExtractedText(brandMeta);
   }
 
-  // 2ª fuente: Amazon usa tablas técnicas y listas de detalle.
-  const specs: Record<string, string> = {};
+  // 2ª fuente: Amazon usa tablas técnicas y listas de detalle. El objeto nace
+  // con las specs ya recogidas del JSON-LD (additionalProperty) para que las
+  // tablas del HTML sólo añadan las que falten.
+  const specs: Record<string, string> = { ...schemaSpecs };
   const addSpec = (key: unknown, value: unknown) => {
     const k = cleanExtractedText(key);
     const v = cleanExtractedText(value);
@@ -530,7 +639,38 @@ function extractMetadata(html: string, targetUrl: string) {
     html.match(/(?:Sold by|Vendido por|Enviado por)\s*(?:&nbsp;|\s)*<\/span>\s*<span[^>]*>\s*([^<]{2,80})/i) ||
     html.match(/id=["']sellerProfileTriggerId["'][^>]*>\s*([^<]{2,80})/i);
   if (sellerMatch?.[1]) {
-    fulfillmentProvider = cleanExtractedText(sellerMatch[1]);
+    const cleaned = cleanExtractedText(sellerMatch[1]).trim();
+    // Guardia anti-basura: sólo texto legible (nada de JSON/plantillas).
+    if (cleaned && cleaned.length <= 70 && !/[{}"\\<>]/.test(cleaned)) {
+      fulfillmentProvider = cleaned;
+    }
+  }
+  // Genérico para el resto de comercios: «Vendido por X», «Ships from X»,
+  // «Tienda oficial de X», «Enviado y gestionado por X» (PcComponentes, ECI…).
+  // Se busca SOLO en el texto visible (sin <script>/<style>): en las SPAs el
+  // JSON embebido contiene claves tipo "seller" que romperían la extracción.
+  if (!fulfillmentProvider) {
+    const visibleHtml = html
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ');
+    const looksLikeSellerName = (value: string): boolean =>
+      value.length >= 2 &&
+      value.length <= 70 &&
+      !/[{}"\\<>|@=]/.test(value) &&
+      /[a-záéíóúñ]/i.test(value) &&
+      !/^(?:env[ií]o|pago|devoluci[oó]n|garant[ií]a|amazon|elige|ver|todo|desde|desp[uú]es)/i.test(value);
+    const genericSellerMatch =
+      visibleHtml.match(/(?:Vendido por|Sold by|Ships from|Enviado y gestionado por|Gestionado por|Tienda oficial de|Vendedor)\s*:?\s*(?:<\/(?:span|a|b|div|strong)>\s*)?<[^>]*>\s*([^<]{2,70})/i) ||
+      visibleHtml.match(/(?:Vendido por|Sold by|Ships from|Vendedor|Tienda oficial)\s*:?\s*([^<>\n]{3,70})/i);
+    if (genericSellerMatch?.[1]) {
+      const cleaned = cleanExtractedText(genericSellerMatch[1])
+        .replace(/^(?:y|\|)\s+/i, '')
+        .replace(/\s*[·|•]\s*(?:env[ií]o|pago|devoluci).*$/i, '')
+        .trim();
+      if (looksLikeSellerName(cleaned)) {
+        fulfillmentProvider = cleaned;
+      }
+    }
   }
 
   // ── ENVÍO: texto + días ───────────────────────────────────────────────────
@@ -543,11 +683,35 @@ function extractMetadata(html: string, targetUrl: string) {
   if (deliveryMatch) {
     const rawDelivery = (deliveryMatch[1] ?? deliveryMatch[0]).replace(/<[^>]+>/g, ' ');
     const cleanDelivery = cleanExtractedText(rawDelivery);
-    if (cleanDelivery && cleanDelivery.length <= 160) shippingInfo = cleanDelivery;
+    if (cleanDelivery && cleanDelivery.length <= 160 && !/[{}"\\<>]/.test(cleanDelivery)) {
+      shippingInfo = cleanDelivery;
+    }
     const daysMatch = cleanDelivery.match(/(\d+)\s*(?:-|–|a|y)?\s*(\d+)?\s*(?:días|día|days|day)\b/i);
     if (daysMatch) {
       const last = daysMatch[2] ? parseInt(daysMatch[2], 10) : parseInt(daysMatch[1], 10);
       if (Number.isFinite(last)) shippingDays = last;
+    }
+  }
+  // Genérico: «Llega en 3-5 días», «Envío gratis el martes», «Recíbelo mañana»…
+  // Ojo con el orden: primero se busca el patrón con DÍAS (si existe, manda);
+  // sólo si no aparece se cae a «gratis/mañana/hoy», porque el no-goloso se
+  // detendría antes en «gratis» y se perderían los días de entrega.
+  if (!shippingInfo) {
+    const genericDeliveryMatch =
+      html.match(/(?:Llega|Rec[ií]bete?|Entrega|Env[ií]o)[^<>]{0,120}?\d{1,3}\s*(?:[-–a]\s*)?\d{0,3}\s*d[ií]as/i) ||
+      html.match(/(?:Llega|Rec[ií]bete?|Entrega|Env[ií]o)[^<>]{0,120}?(?:ma[ñn]ana|hoy|gratis)/i);
+    if (genericDeliveryMatch) {
+      const cleanDelivery = cleanExtractedText(genericDeliveryMatch[0]);
+      // Texto humano y no fragmento de JSON/plantilla ({{ }}, comillas…).
+      const validDelivery = cleanDelivery && cleanDelivery.length <= 160 && !/[{}"\\<>]/.test(cleanDelivery);
+      if (validDelivery) shippingInfo = cleanDelivery;
+      const daysMatch = cleanDelivery.match(/(\d+)\s*(?:-|–|a|y)?\s*(\d+)?\s*(?:días|día|days|day)\b/i);
+      if (daysMatch && shippingDays == null) {
+        const last = daysMatch[2] ? parseInt(daysMatch[2], 10) : parseInt(daysMatch[1], 10);
+        if (Number.isFinite(last)) shippingDays = last;
+      } else if (!daysMatch && /ma[ñn]ana/i.test(cleanDelivery)) {
+        shippingDays = 1;
+      }
     }
   }
   if (!shippingInfo && merchant === 'AliExpress') {
@@ -555,6 +719,56 @@ function extractMetadata(html: string, targetUrl: string) {
     if (aliDays?.[1]) {
       shippingDays = parseInt(aliDays[1], 10);
       shippingInfo = `Envío en ${shippingDays} días`;
+    }
+  }
+
+  // ── ENLACE DE COMPRA DIRECTA (Buy Now) ────────────────────────────────────
+  // Amazon: el botón #buy-now-button apunta al checkout/compra inmediata.
+  let buyNowUrl = '';
+  const amazonBuyNow =
+    html.match(/id=["']buy-now-button["'][^>]*\bhref=["']([^"']+)["']/i) ||
+    html.match(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*id=["']buy-now-button["']/i);
+  if (amazonBuyNow?.[1] && /^https?:\/\//i.test(amazonBuyNow[1])) {
+    buyNowUrl = amazonBuyNow[1];
+  } else if (amazonBuyNow?.[1]) {
+    try {
+      buyNowUrl = new URL(amazonBuyNow[1], targetUrl).href;
+    } catch { /* href ilegible */ }
+  }
+  // Genérico: cualquier ancla cuyo texto sea «Comprar ahora»/«Buy now» y que
+  // apunte a un checkout, carrito o flujo de compra directa.
+  if (!buyNowUrl) {
+    const anchorRe = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+    let anchorMatch: RegExpExecArray | null;
+    while ((anchorMatch = anchorRe.exec(html)) !== null) {
+      const anchorText = cleanExtractedText(anchorMatch[2]);
+      if (!/^(?:comprar ahora|compra directa|buy\s?now|c[oó]mpralo ya|comprar ya|compra inmediata|ir a pagar)\b/i.test(anchorText)) continue;
+      const hrefMatch = anchorMatch[1].match(/\bhref=["']([^"']+)["']/i);
+      const href = hrefMatch?.[1] || '';
+      if (!href || !/checkout|cart|buy|order|buybox|express|pagar/i.test(href)) continue;
+      if (/^https?:\/\//i.test(href)) {
+        buyNowUrl = href;
+      } else {
+        try {
+          buyNowUrl = new URL(href, targetUrl).href;
+        } catch { continue; }
+      }
+      break;
+    }
+  }
+  // Compra directa embebida en JSON/JS (SPAs): checkoutUrl, buyNowUrl,
+  // addToCartUrl… guardadas en el estado de página.
+  if (!buyNowUrl) {
+    const embeddedBuyRe = /"?\b(?:checkoutUrl|buyNowUrl|buyNowURL|addToCartUrl|cartUrl|orderUrl|expressCheckoutUrl)\b"?\s*:\s*"((?:https?:)?\\?\/\\?\/[^"]+|[a-z0-9][^"]{2,180})"/i;
+    const embeddedBuyMatch = html.match(embeddedBuyRe);
+    if (embeddedBuyMatch?.[1]) {
+      const raw = embeddedBuyMatch[1].replace(/\\u002F/gi, '/').replace(/\\\//g, '/');
+      const candidate = /^https?:\/\//i.test(raw) ? raw : raw.replace(/^(?:\/\/)/, 'https://');
+      try {
+        buyNowUrl = new URL(candidate, targetUrl).href;
+      } catch {
+        buyNowUrl = '';
+      }
     }
   }
 
@@ -577,10 +791,17 @@ function extractMetadata(html: string, targetUrl: string) {
   if (image) pushUnique(image);
   for (const url of gallerySet) pushUnique(url);
 
+  // Candidatas extra para el filtro de la IA: todas las URLs recogidas, por si
+  // el regex se quedó con poquitas vistas y el modelo puede seleccionar más.
+  const imageCandidates = [...new Set([...finalGallery, ...gallerySet, ...htmlGalleryUrls])]
+    .filter((u) => /^https?:\/\//i.test(u))
+    .slice(0, 40);
+
   return {
     title: title || '',
     image: image || '',
     gallery: finalGallery,
+    imageCandidates,
     description: description || '',
     price: price !== null ? price : undefined,
     originalPrice: originalPrice !== null && price !== null && originalPrice > price ? originalPrice : undefined,
@@ -598,7 +819,271 @@ function extractMetadata(html: string, targetUrl: string) {
     fulfillmentProvider,
     shippingInfo: shippingInfo || undefined,
     shippingDays,
+    buyNowUrl: buyNowUrl || undefined,
   };
+}
+
+export interface ScrapePageResult {
+  ok: boolean;
+  blocked?: boolean;
+  message?: string;
+  requestedUrl: string;
+  effectiveUrl: string;
+  merchant: string;
+  html: string;
+  data?: ReturnType<typeof extractMetadata>;
+}
+
+/**
+ * Descarga una página de producto con cabeceras de navegador y extrae sus
+ * metadatos. No lanza excepciones: devuelve ok:false con el motivo para que
+ * cada endpoint decida cómo responder (scraped:false, fallback IA, etc.).
+ */
+export async function scrapeProductPage(
+  rawUrl: string,
+  options: { timeoutMs?: number } = {}
+): Promise<ScrapePageResult> {
+  const requestedUrl = String(rawUrl ?? '').trim();
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(requestedUrl);
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) throw new Error('Protocolo inválido');
+  } catch {
+    return {
+      ok: false,
+      message: 'La URL proporcionada no tiene un formato web válido (http/https).',
+      requestedUrl,
+      effectiveUrl: requestedUrl,
+      merchant: 'Comercio Externo',
+      html: '',
+    };
+  }
+
+  const detectedMerchant = detectMerchantFromUrl(requestedUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 8500);
+
+  let html = '';
+  let httpOk = true;
+  let failureReason = '';
+  let resolvedUrl = '';
+
+  try {
+    const response = await fetch(parsedUrl.href, {
+      method: 'GET',
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+        'Accept':
+          'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache',
+        'Sec-Ch-Ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+        'Connection': 'keep-alive',
+      },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+
+    if (!response.ok) {
+      httpOk = false;
+      failureReason = `El comercio respondió con código ${response.status} (${response.statusText})`;
+    } else {
+      html = await response.text();
+      const finalUrl = response.url?.trim();
+      if (finalUrl) {
+        try {
+          resolvedUrl = new URL(finalUrl).href;
+        } catch {
+          resolvedUrl = '';
+        }
+      }
+    }
+  } catch (fetchError: any) {
+    httpOk = false;
+    if (fetchError?.name === 'AbortError') {
+      failureReason = 'Tiempo de espera agotado al consultar la página externa';
+    } else {
+      failureReason = fetchError?.message || 'Fallo de conexión de red con el comercio de destino';
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const effectiveUrl = resolvedUrl || parsedUrl.href;
+  const finalMerchant = (() => {
+    const fromFinal = detectMerchantFromUrl(effectiveUrl);
+    return fromFinal !== 'Comercio Externo' ? fromFinal : detectedMerchant;
+  })();
+
+  // Página de bloqueo / CAPTCHA: aunque el status sea 200, no hay datos que extraer.
+  const botPageRe =
+    /validatecaptcha|robot check|enter the characters you see below|introduce los caracteres que ves|api-services-support@amazon|captcha-form|g-recaptcha|hcaptcha/i;
+  if (httpOk && html && botPageRe.test(html)) {
+    return {
+      ok: false,
+      blocked: true,
+      message:
+        'La tienda bloqueó la extracción automática desde el servidor con un verificador de humanos.',
+      requestedUrl,
+      effectiveUrl,
+      merchant: finalMerchant,
+      html,
+    };
+  }
+
+  if (!httpOk || !html) {
+    return {
+      ok: false,
+      message: failureReason || 'Sin contenido HTML',
+      requestedUrl,
+      effectiveUrl,
+      merchant: finalMerchant,
+      html: '',
+    };
+  }
+
+  return {
+    ok: true,
+    requestedUrl,
+    effectiveUrl,
+    merchant: finalMerchant,
+    html,
+    data: extractMetadata(html, effectiveUrl),
+  };
+}
+
+/**
+ * Complementa un producto con los datos de su propia página cuando el payload
+ * llega con huecos (marca, specs, valoración, opiniones, distribuidor, envío,
+ * compra directa, descripción o galería): scrape por regex + fallback de IA.
+ *
+ * - Muta `data` en el sitio (rellena sólo lo vacío).
+ * - Nunca lanza: si la tienda bloquea o falla la red, añade un aviso y sigue.
+ * - `data.complement === false` desactiva la lectura (p.ej. edición manual).
+ */
+export async function complementProductFromPage(
+  data: Record<string, any>,
+  warnings: string[],
+  options: { title?: string; timeoutMs?: number } = {},
+): Promise<void> {
+  if (data?.complement === false) return;
+  const pageUrl = String(data?.url ?? data?.productUrl ?? data?.affiliateUrl ?? '').trim();
+  if (!/^https?:\/\//i.test(pageUrl)) return;
+
+  const emptyStr = (value: unknown): boolean => value == null || String(value).trim() === '';
+  const galleryList: unknown[] = Array.isArray(data.gallery) ? data.gallery : [];
+  const needsScrape =
+    emptyStr(data.brand) ||
+    !data.specs ||
+    Object.keys(data.specs).length === 0 ||
+    emptyStr(data.fulfillmentProvider) ||
+    emptyStr(data.shippingInfo) ||
+    emptyStr(data.buyNowUrl) ||
+    emptyStr(data.description) ||
+    // `rating`/`reviewsCount`: sólo si el cliente NO los envió (undefined);
+    // un null explícito significa "limpiarlo" y no se rellena. La galería se
+    // lee sólo si viene VACÍA (con ≥1 imagen el flujo de análisis ya cubrió el
+    // resto de vistas y no interesa re-scrapear en cada guardado).
+    data.rating === undefined ||
+    data.reviewsCount === undefined ||
+    galleryList.length === 0;
+  if (!needsScrape) return;
+
+  try {
+    const page = await scrapeProductPage(pageUrl, { timeoutMs: options.timeoutMs ?? 8000 });
+    if (!page.ok || !page.data) {
+      if (page.blocked) {
+        warnings.push('La tienda bloqueó la lectura de su página; se usan los datos recibidos.');
+      } else {
+        warnings.push(`Lectura de la página no disponible (${page.message ?? 'sin datos'}).`);
+      }
+      return;
+    }
+
+    const scraped = page.data;
+    if (emptyStr(data.brand) && scraped.brand) data.brand = scraped.brand;
+    if ((!data.specs || Object.keys(data.specs).length === 0) && scraped.specs && Object.keys(scraped.specs).length) {
+      data.specs = scraped.specs;
+    }
+    if (data.rating === undefined && scraped.rating != null) data.rating = scraped.rating;
+    if (data.reviewsCount === undefined && scraped.reviewsCount != null) data.reviewsCount = scraped.reviewsCount;
+    if (emptyStr(data.fulfillmentProvider) && scraped.fulfillmentProvider) data.fulfillmentProvider = scraped.fulfillmentProvider;
+    if (emptyStr(data.shippingInfo) && scraped.shippingInfo) {
+      data.shippingInfo = scraped.shippingInfo;
+      if (scraped.shippingDays != null && data.shippingDays == null) data.shippingDays = scraped.shippingDays;
+    }
+    if (emptyStr(data.buyNowUrl) && scraped.buyNowUrl) data.buyNowUrl = scraped.buyNowUrl;
+    if (emptyStr(data.description) && scraped.description) data.description = scraped.description;
+    if (scraped.gallery?.length) {
+      const merged = (Array.isArray(data.gallery) ? data.gallery.map((g: unknown) => String(g ?? '').trim()) : [])
+        .filter(Boolean);
+      for (const img of scraped.gallery) {
+        if (merged.length >= 10) break;
+        if (!merged.includes(img)) merged.push(img);
+      }
+      data.gallery = merged;
+    }
+
+    // Huecos que el regex no cubrió → complemento con IA (si hay clave).
+    const stillMissing: string[] = [];
+    if (emptyStr(data.brand)) stillMissing.push('brand');
+    if (!data.specs || Object.keys(data.specs).length < 3) stillMissing.push('specs');
+    if (data.rating === undefined) stillMissing.push('rating');
+    if (data.reviewsCount === undefined) stillMissing.push('reviewsCount');
+    if (emptyStr(data.fulfillmentProvider)) stillMissing.push('fulfillmentProvider');
+    if (emptyStr(data.shippingInfo)) stillMissing.push('shippingInfo');
+    if (emptyStr(data.buyNowUrl)) stillMissing.push('buyNowUrl');
+    if (Array.isArray(data.gallery) && data.gallery.length < 3) stillMissing.push('gallery');
+
+    if (stillMissing.length && hasTextCredentials()) {
+      try {
+        const candidates: string[] = (Array.isArray(data.gallery) ? data.gallery : []).map((g: unknown) => String(g ?? ''));
+        const aiFields: ProductPageAiFields = await extractProductPageFields({
+          url: page.effectiveUrl,
+          merchant: page.merchant,
+          knownTitle: options.title || String(data.title ?? ''),
+          html: page.html,
+          candidateImages: candidates,
+          missing: stillMissing,
+        });
+        if (emptyStr(data.brand) && aiFields.brand) data.brand = aiFields.brand;
+        if ((!data.specs || Object.keys(data.specs).length < 3) && aiFields.specs && Object.keys(aiFields.specs).length) {
+          data.specs = { ...(data.specs ?? {}), ...aiFields.specs };
+        }
+        if (data.rating === undefined && aiFields.rating != null) data.rating = aiFields.rating;
+        if (data.reviewsCount === undefined && aiFields.reviewsCount != null) data.reviewsCount = aiFields.reviewsCount;
+        if (emptyStr(data.fulfillmentProvider) && aiFields.fulfillmentProvider) data.fulfillmentProvider = aiFields.fulfillmentProvider;
+        if (emptyStr(data.shippingInfo) && aiFields.shippingInfo) {
+          data.shippingInfo = aiFields.shippingInfo;
+          if (aiFields.shippingDays != null && data.shippingDays == null) data.shippingDays = aiFields.shippingDays;
+        }
+        if (emptyStr(data.buyNowUrl) && aiFields.buyNowUrl) data.buyNowUrl = aiFields.buyNowUrl;
+        const aiGallery = (aiFields.galleryIndices ?? [])
+          .map((index) => candidates[index - 1])
+          .filter((img): img is string => typeof img === 'string' && /^https?:\/\//i.test(img));
+        for (const img of aiGallery) {
+          const list: string[] = Array.isArray(data.gallery) ? data.gallery : (data.gallery = []);
+          if (list.length >= 10) break;
+          if (!list.includes(img)) list.push(img);
+        }
+      } catch (aiError: any) {
+        warnings.push(`Complemento IA de ficha no disponible (${aiError?.message ?? aiError}).`);
+      }
+    }
+    warnings.push('Ficha complementada con los datos de la página del producto.');
+  } catch (scrapeError: any) {
+    warnings.push(`Lectura de la página fallida (${scrapeError?.message ?? scrapeError}); se sigue con los datos recibidos.`);
+  }
 }
 
 /**
@@ -839,6 +1324,14 @@ export const POST: APIRoute = async ({ request }) => {
         );
       }
 
+      // Complemento best-effort desde la propia página del producto: rellena
+      // los huecos de la ficha (marca, specs, valoración, opiniones,
+      // distribuidor, envío, compra directa y galería) con scrape + IA.
+      const complementNotes: string[] = [];
+      await complementProductFromPage(dataToSave as Record<string, any>, complementNotes, {
+        title: String(dataToSave.title || ''),
+      });
+
       // Galería: si el cliente no envía ninguna, se conserva la ya guardada
       // (así editar un producto sin re-scrapear no borra sus imágenes).
       let gallery = Array.isArray(dataToSave.gallery)
@@ -970,6 +1463,7 @@ export const POST: APIRoute = async ({ request }) => {
           success: true,
           message: existingIndex >= 0 ? 'Producto actualizado con éxito' : 'Producto guardado con éxito',
           product: productToSave,
+          notes: complementNotes,
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       );
@@ -1002,75 +1496,14 @@ export const POST: APIRoute = async ({ request }) => {
 
     const detectedMerchant = detectMerchantFromUrl(targetUrl);
 
-    // Intentar fetch con User-Agent de navegador legítimo y timeout seguro
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8500); // 8.5s timeout
-
-    let html = '';
-    let fetchBlockedOrFailed = false;
-    let failureReason = '';
-    // URL final tras seguir redirecciones (enlaces cortos como amzn.to).
-    let resolvedUrl = '';
-
-    try {
-      const response = await fetch(parsedUrl.href, {
-        method: 'GET',
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
-          'Accept':
-            'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-          'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache',
-          'Sec-Ch-Ua': '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"',
-          'Sec-Ch-Ua-Mobile': '?0',
-          'Sec-Ch-Ua-Platform': '"Windows"',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': 'none',
-          'Sec-Fetch-User': '?1',
-          'Upgrade-Insecure-Requests': '1',
-          'Connection': 'keep-alive',
-        },
-        signal: controller.signal,
-        redirect: 'follow',
-      });
-
-      if (!response.ok) {
-        fetchBlockedOrFailed = true;
-        failureReason = `El comercio respondió con código ${response.status} (${response.statusText})`;
-      } else {
-        html = await response.text();
-        // Tras seguir la redirección (p. ej. amzn.to → /dp/ASIN), la URL final
-        // es la del producto real: la usamos para detectar comercio, ASIN y
-        // como enlace de afiliado guardado (más fiable que el enlace corto).
-        const finalUrl = response.url?.trim();
-        if (finalUrl) {
-          try {
-            resolvedUrl = new URL(finalUrl).href;
-          } catch {
-            resolvedUrl = '';
-          }
-        }
-      }
-    } catch (fetchError: any) {
-      fetchBlockedOrFailed = true;
-      if (fetchError.name === 'AbortError') {
-        failureReason = 'Tiempo de espera agotado al consultar la página externa';
-      } else {
-        failureReason = fetchError.message || 'Fallo de conexión de red con el comercio de destino';
-      }
-    } finally {
-      clearTimeout(timeout);
-    }
+    // Descarga con cabeceras de navegador + extracción de metadatos
+    // (OpenGraph, JSON-LD, datos embebidos y textos visibles).
+    const page = await scrapeProductPage(targetUrl);
 
     // Detección de página de bloqueo / CAPTCHA (Amazon y otras tiendas). Aunque
     // el status sea 200, si el HTML es un verificador de humanos no hay datos que
     // extraer: se trata como bloqueo para no devolver una ficha vacía como "éxito".
-    const botPageRe = /validatecaptcha|robot check|enter the characters you see below|introduce los caracteres que ves|api-services-support@amazon|captcha-form|g-recaptcha|hcaptcha/i;
-    if (!fetchBlockedOrFailed && html && botPageRe.test(html)) {
+    if (!page.ok && page.blocked) {
       return new Response(
         JSON.stringify({
           success: true,
@@ -1084,8 +1517,8 @@ export const POST: APIRoute = async ({ request }) => {
             originalPrice: null,
             image: '',
             category: 'Tecnología',
-            merchant: detectedMerchant,
-            affiliateUrl: parsedUrl.href,
+            merchant: page.merchant || detectedMerchant,
+            affiliateUrl: page.effectiveUrl || targetUrl,
             badge: '',
             verdict: '',
             pros: [],
@@ -1098,12 +1531,12 @@ export const POST: APIRoute = async ({ request }) => {
 
     // SI LA PÁGINA BLOQUEA EL SCRAPING O FALLA LA RED:
     // NO DEBE FALLAR EL SERVIDOR. Devolvemos respuesta 200 con scraped: false y la URL lista para completar manualmente.
-    if (fetchBlockedOrFailed || !html) {
+    if (!page.ok || !page.html || !page.data) {
       return new Response(
         JSON.stringify({
           success: true,
           scraped: false,
-          message: `Extracción automática no disponible: ${failureReason}. Completa los datos manualmente.`,
+          message: `Extracción automática no disponible: ${page.message ?? 'sin datos'}. Completa los datos manualmente.`,
           data: {
             title: '',
             description: '',
@@ -1111,8 +1544,8 @@ export const POST: APIRoute = async ({ request }) => {
             originalPrice: null,
             image: '',
             category: 'Tecnología',
-            merchant: detectedMerchant,
-            affiliateUrl: parsedUrl.href,
+            merchant: page.merchant || detectedMerchant,
+            affiliateUrl: page.effectiveUrl || targetUrl,
             badge: '',
             verdict: '',
             pros: [],
@@ -1125,14 +1558,59 @@ export const POST: APIRoute = async ({ request }) => {
 
     // URL efectiva del producto: la resuelta tras la redirección si existe
     // (convierte enlaces cortos como amzn.to en la URL real /dp/ASIN), si no la original.
-    const effectiveUrl = resolvedUrl || parsedUrl.href;
-    // Merchant según la URL final (los enlaces cortos ya no engañan a la detección).
-    const effectiveMerchant = detectMerchantFromUrl(effectiveUrl);
-
-    // Si obtuvimos el HTML, extraemos OpenGraph y Schemas
-    const extracted = extractMetadata(html, effectiveUrl);
+    const effectiveUrl = page.effectiveUrl;
     // Comercio detectado con la URL final tiene prioridad sobre el del enlace original.
-    const finalMerchant = effectiveMerchant !== 'Comercio Externo' ? effectiveMerchant : (extracted.merchant || detectedMerchant);
+    const finalMerchant = page.merchant;
+    const extracted = page.data;
+
+    // ── Fallback IA para los huecos que el HTML dejó vacíos ─────────────────
+    // El scrape por regex es la fuente principal; la IA sólo completa lo que
+    // falta (marca, valoración, opiniones, specs, distribuidor, envío, compra
+    // directa) y selecciona más vistas de la galería entre las candidatas.
+    const candidateImages = extracted.imageCandidates?.length
+      ? extracted.imageCandidates
+      : extracted.gallery ?? [];
+    const missing: string[] = [];
+    if (!extracted.brand) missing.push('brand');
+    if (extracted.rating == null) missing.push('rating');
+    if (extracted.reviewsCount == null) missing.push('reviewsCount');
+    if (!extracted.specs || Object.keys(extracted.specs).length < 3) missing.push('specs');
+    if (!extracted.fulfillmentProvider) missing.push('fulfillmentProvider');
+    if (!extracted.shippingInfo) missing.push('shippingInfo');
+    if (!extracted.buyNowUrl) missing.push('buyNowUrl');
+    if (candidateImages.length < 3) missing.push('gallery');
+
+    let aiFields: ProductPageAiFields | null = null;
+    if (missing.length && hasTextCredentials()) {
+      try {
+        aiFields = await extractProductPageFields({
+          url: effectiveUrl,
+          merchant: finalMerchant,
+          knownTitle: extracted.title,
+          html: page.html,
+          candidateImages,
+          missing,
+        });
+      } catch (aiError: any) {
+        console.warn('[API Products Add] Fallback IA de extracción no disponible:', aiError?.message ?? aiError);
+      }
+    }
+
+    // Combinación: el scrape manda; la IA rellena huecos y añade vistas extra.
+    const aiGallery = (aiFields?.galleryIndices ?? [])
+      .map((index) => candidateImages[index - 1])
+      .filter((img): img is string => typeof img === 'string' && /^https?:\/\//i.test(img));
+    const mergedGallery = [...(extracted.gallery ?? [])];
+    for (const img of aiGallery) {
+      if (mergedGallery.length >= 15) break;
+      if (!mergedGallery.includes(img)) mergedGallery.push(img);
+    }
+    const mergedSpecs =
+      extracted.specs && Object.keys(extracted.specs).length > 0
+        ? extracted.specs
+        : aiFields?.specs && Object.keys(aiFields.specs).length > 0
+          ? aiFields.specs
+          : undefined;
 
     return new Response(
       JSON.stringify({
@@ -1145,7 +1623,7 @@ export const POST: APIRoute = async ({ request }) => {
           price: extracted.price ?? null,
           originalPrice: extracted.originalPrice ?? extracted.price ?? null,
           image: extracted.image,
-          gallery: extracted.gallery ?? [],
+          gallery: mergedGallery,
           category: extracted.category,
           merchant: finalMerchant,
           affiliateUrl: effectiveUrl,
@@ -1153,13 +1631,14 @@ export const POST: APIRoute = async ({ request }) => {
           verdict: extracted.verdict,
           pros: extracted.pros,
           cons: extracted.cons,
-          brand: extracted.brand,
-          rating: extracted.rating ?? null,
-          reviewsCount: extracted.reviewsCount ?? null,
-          specs: extracted.specs ?? null,
-          fulfillmentProvider: extracted.fulfillmentProvider ?? '',
-          shippingInfo: extracted.shippingInfo ?? '',
-          shippingDays: extracted.shippingDays ?? null,
+          brand: extracted.brand || aiFields?.brand || '',
+          rating: extracted.rating ?? aiFields?.rating ?? null,
+          reviewsCount: extracted.reviewsCount ?? aiFields?.reviewsCount ?? null,
+          specs: mergedSpecs ?? null,
+          fulfillmentProvider: extracted.fulfillmentProvider || aiFields?.fulfillmentProvider || '',
+          shippingInfo: extracted.shippingInfo || aiFields?.shippingInfo || '',
+          shippingDays: extracted.shippingDays ?? aiFields?.shippingDays ?? null,
+          buyNowUrl: extracted.buyNowUrl || aiFields?.buyNowUrl || '',
         },
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } }

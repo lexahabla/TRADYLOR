@@ -52,6 +52,7 @@ interface AliProduct {
   relevant_market_commission_rate?: string;
   lastest_volume?: number | string;
   evaluate_rate?: string;
+  product_brand_name?: string;
   shop_name?: string;
   shop_url?: string;
   shop_id?: number | string;
@@ -230,6 +231,11 @@ function mapProduct(item: AliProduct, currency: string): UnifiedProduct | null {
 
   const extra: Record<string, string | number | boolean | null> = {
     'ID producto': text(item.product_id) || null,
+    // Marca y distribuidor: el TOP API los trae en product_brand_name /
+    // shop_name. Se publican con las claves que la tabla (detalle) y el payload
+    // de importación buscan: 'Marca' y 'Distribuidor'.
+    'Marca': text(item.product_brand_name) || null,
+    'Distribuidor': text(item.shop_name) || null,
     Tienda: text(item.shop_name) || null,
     'ID tienda': text(item.shop_id) || null,
     'URL tienda': text(item.shop_url) || null,
