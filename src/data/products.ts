@@ -121,6 +121,17 @@ export interface Product {
   alternative_product_ids?: string[];
   /** Puntuación de conversión/rentabilidad 0-100. */
   conversion_score?: number;
+
+  /** Estado de auditoría del producto: approved | rejected | pending. */
+  audit_status?: 'approved' | 'rejected' | 'pending';
+  /** Métricas del vendedor y calidad de reseñas. */
+  metrics?: {
+    sellerRating?: number;
+    sellerReviews?: number;
+    qualityScore?: number;
+    verified?: boolean;
+    priceStability?: 'stable' | 'rising' | 'falling' | 'volatile';
+  };
 }
 
 // â”€â”€â”€ Type guard: checks if a Product has the new structured fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

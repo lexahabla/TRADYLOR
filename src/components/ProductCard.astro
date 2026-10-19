@@ -1,6 +1,7 @@
 ---
 import type { Product } from '../data/products';
 import { getAffiliateUrl, NETWORK_LABELS, type AffiliateNetwork } from '../utils/affiliate';
+import TestProofBadge from './TestProofBadge.astro';
 import {
   extractAsinFromUrl,
   getAmazonAddToCartUrl,
@@ -435,6 +436,7 @@ const radarPayload = {
     </svg>
     <span>Pago y envío gestionados por el distribuidor oficial</span>
   </div>
+  <TestProofBadge product={product} />
 </article>
 )}
 

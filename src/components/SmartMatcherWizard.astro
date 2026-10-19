@@ -1,0 +1,659 @@
+---
+import type { Product } from '../data/products';
+
+export interface Props {
+  products: Product[];
+}
+
+const { products } = Astro.props;
+
+const approvedProducts = products
+  .filter((p) => p.audit_status !== 'rejected')
+  .map((p) => ({
+    id: p.id,
+    title: p.title,
+    price: p.price,
+    originalPrice: p.originalPrice,
+    image: p.image,
+    category: p.category,
+    rating: p.rating,
+    reviewsCount: p.reviewsCount,
+    conversionScore: p.conversion_score ?? 0,
+    pros: p.pros,
+    cons: p.cons,
+    slug: p.slug,
+  }));
+
+const productsJson = JSON.stringify(approvedProducts);
+---
+
+<section class="smw-section" data-smart-matcher>
+  <div class="smw-header">
+    <div class="smw-tag">Asistente Inteligente</div>
+    <h2 class="smw-title">¿Qué producto encaja contigo?</h2>
+    <p class="smw-desc">
+      Responde 3 preguntas rápidas y te recomendamos la mejor opción verificada de nuestro catálogo.
+    </p>
+  </div>
+
+  <div class="smw-wizard" data-wizard>
+    <div class="smw-progress" data-wizard-progress>
+      <div class="smw-step-indicator is-active" data-step-indicator="0">
+        <span class="smw-step-number">1</span>
+        <span class="smw-step-name">Uso</span>
+      </div>
+      <div class="smw-step-indicator" data-step-indicator="1">
+        <span class="smw-step-number">2</span>
+        <span class="smw-step-name">Presupuesto</span>
+      </div>
+      <div class="smw-step-indicator" data-step-indicator="2">
+        <span class="smw-step-number">3</span>
+        <span class="smw-step-name">Prioridad</span>
+      </div>
+    </div>
+
+    <div class="smw-body">
+      <div class="smw-step" data-wizard-step="0">
+        <h3 class="smw-step-title">¿Cuál es tu objetivo principal?</h3>
+        <p class="smw-step-subtitle">Selecciona el uso que le vas a dar</p>
+        <div class="smw-options">
+          <button type="button" class="smw-option" data-wizard-option="usage" data-value="productividad">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+            <span class="smw-option-label">Productividad</span>
+            <span class="smw-option-desc">Trabajo, estudio o multitarea</span>
+          </button>
+          <button type="button" class="smw-option" data-wizard-option="usage" data-value="entretenimiento">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+            <span class="smw-option-label">Entretenimiento</span>
+            <span class="smw-option-desc">Streaming, gaming, audio</span>
+          </button>
+          <button type="button" class="smw-option" data-wizard-option="usage" data-value="creatividad">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg></span>
+            <span class="smw-option-label">Creatividad</span>
+            <span class="smw-option-desc">Diseño, edición, creación</span>
+          </button>
+          <button type="button" class="smw-option" data-wizard-option="usage" data-value="hogar">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+            <span class="smw-option-label">Hogar Inteligente</span>
+            <span class="smw-option-desc">Automatización y domótica</span>
+          </button>
+          <button type="button" class="smw-option" data-wizard-option="usage" data-value="movilidad">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 17h-2v-6l2-5h9l4 5h3v6h-2"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/><path d="M12 8V4H8"/></svg></span>
+            <span class="smw-option-label">Movilidad</span>
+            <span class="smw-option-desc">Portátiles, wearables, transporte</span>
+          </button>
+          <button type="button" class="smw-option" data-wizard-option="usage" data-value="fitness">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 6.5l11 11"/><path d="M21 21l-1-1"/><path d="M3 3l1 1"/><path d="M18 22l4-4"/><path d="M2 6l4-4"/><path d="M3 10l7-7"/><path d="M14 21l7-7"/></svg></span>
+            <span class="smw-option-label">Fitness y Salud</span>
+            <span class="smw-option-desc">Wearables, salud, bienestar</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="smw-step" data-wizard-step="1" hidden>
+        <h3 class="smw-step-title">¿Cuál es tu presupuesto?</h3>
+        <p class="smw-step-subtitle">Elige el rango que más se acerca</p>
+        <div class="smw-options">
+          <button type="button" class="smw-option" data-wizard-option="budget" data-value="low">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+            <span class="smw-option-label">Hasta 100€</span>
+            <span class="smw-option-desc">Calidad esencial, gran valor</span>
+          </button>
+          <button type="button" class="smw-option" data-wizard-option="budget" data-value="mid">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+            <span class="smw-option-label">100€ – 400€</span>
+            <span class="smw-option-desc">Equilibrio perfecto calidad-precio</span>
+          </button>
+          <button type="button" class="smw-option" data-wizard-option="budget" data-value="high">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+            <span class="smw-option-label">400€ – 1000€</span>
+            <span class="smw-option-desc">Prestaciones profesionales</span>
+          </button>
+          <button type="button" class="smw-option" data-wizard-option="budget" data-value="premium">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+            <span class="smw-option-label">Más de 1000€</span>
+            <span class="smw-option-desc">Sin límites, lo mejor del mercado</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="smw-step" data-wizard-step="2" hidden>
+        <h3 class="smw-step-title">¿Qué priorizas más?</h3>
+        <p class="smw-step-subtitle">Tu decisión final nos da la clave</p>
+        <div class="smw-options">
+          <button type="button" class="smw-option" data-wizard-option="priority" data-value="price">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+            <span class="smw-option-label">Precio</span>
+            <span class="smw-option-desc">Maximizar el ahorro y la oferta</span>
+          </button>
+          <button type="button" class="smw-option" data-wizard-option="priority" data-value="quality">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></span>
+            <span class="smw-option-label">Calidad / Durabilidad</span>
+            <span class="smw-option-desc">Lo mejor aunque cueste más</span>
+          </button>
+          <button type="button" class="smw-option" data-wizard-option="priority" data-value="balance">
+            <span class="smw-option-icon" aria-hidden="true"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M5 8l7-5 7 5"/><path d="M5 16l7 5 7-5"/></svg></span>
+            <span class="smw-option-label">Equilibrio</span>
+            <span class="smw-option-desc">Relación calidad-precio óptima</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="smw-result" data-wizard-result hidden>
+        <div class="smw-result-badge" data-result-badge></div>
+        <h3 class="smw-result-title" data-result-title></h3>
+        <p class="smw-result-desc" data-result-desc></p>
+        <div class="smw-result-products" data-result-products></div>
+        <button type="button" class="smw-restart" data-wizard-restart>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+          Empezar de nuevo
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script type="application/json" id="smw-products-data" set:html={productsJson}></script>
+<script is:inline>
+  declare global {
+    interface Window { __smartMatcherProducts: unknown[] }
+  }
+  window.__smartMatcherProducts = JSON.parse(document.getElementById('smw-products-data')?.textContent || '[]');
+</script>
+
+<style>
+  .smw-section {
+    padding: 3.5rem 0;
+  }
+
+  .smw-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+
+  .smw-tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    margin-bottom: 0.85rem;
+  }
+
+  .smw-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.5rem;
+    letter-spacing: -0.02em;
+  }
+
+  .smw-desc {
+    font-size: 0.92rem;
+    color: rgba(255, 255, 255, 0.55);
+    margin: 0 auto;
+    max-width: 560px;
+    line-height: 1.6;
+  }
+
+  .smw-wizard {
+    max-width: 720px;
+    margin: 0 auto;
+    background: linear-gradient(160deg, rgba(59, 130, 246, 0.05) 0%, rgba(17, 24, 39, 0.8) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.18);
+    border-radius: 20px;
+    padding: 2rem;
+  }
+
+  .smw-progress {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+  }
+
+  .smw-step-indicator {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    transition: border-color 0.3s ease, background 0.3s ease;
+  }
+
+  .smw-step-indicator.is-active {
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(59, 130, 246, 0.1);
+  }
+
+  .smw-step-indicator.is-done {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.08);
+  }
+
+  .smw-step-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.75rem;
+    font-weight: 800;
+    flex-shrink: 0;
+    transition: background 0.3s ease, color 0.3s ease;
+  }
+
+  .smw-step-indicator.is-active .smw-step-number {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: #ffffff;
+  }
+
+  .smw-step-indicator.is-done .smw-step-number {
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #ffffff;
+  }
+
+  .smw-step-name {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .smw-step-indicator.is-active .smw-step-name {
+    color: #93c5fd;
+  }
+
+  .smw-step-indicator.is-done .smw-step-name {
+    color: #6ee7b7;
+  }
+
+  .smw-step-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 1.35rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.35rem;
+    text-align: center;
+  }
+
+  .smw-step-subtitle {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.92rem;
+    margin: 0 0 1.5rem;
+    text-align: center;
+  }
+
+  .smw-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+  }
+
+  .smw-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 1.1rem 0.85rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    cursor: pointer;
+    text-align: center;
+    font-family: inherit;
+    transition: border-color 0.25s ease, background 0.25s ease, transform 0.25s ease;
+  }
+
+  .smw-option:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(59, 130, 246, 0.08);
+    transform: translateY(-3px);
+  }
+
+  .smw-option-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    margin-bottom: 0.25rem;
+    transition: background 0.25s ease, transform 0.25s ease;
+  }
+
+  .smw-option:hover .smw-option-icon {
+    background: rgba(59, 130, 246, 0.22);
+    transform: scale(1.08);
+  }
+
+  .smw-option-label {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .smw-option-desc {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.5);
+    line-height: 1.35;
+  }
+
+  .smw-result {
+    text-align: center;
+    padding: 1rem 0;
+  }
+
+  .smw-result-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #052e22;
+    background: linear-gradient(135deg, #34d399, #10b981);
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    margin-bottom: 1rem;
+  }
+
+  .smw-result-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.75rem;
+  }
+
+  .smw-result-desc {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.92rem;
+    line-height: 1.6;
+    max-width: 520px;
+    margin: 0 auto 1.5rem;
+  }
+
+  .smw-result-products {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .smw-product-card {
+    background: rgba(17, 24, 39, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: border-color 0.25s ease, transform 0.25s ease;
+    text-decoration: none;
+    display: block;
+  }
+
+  .smw-product-card:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+    transform: translateY(-3px);
+  }
+
+  .smw-product-card-img {
+    width: 100%;
+    height: 140px;
+    object-fit: cover;
+    background: #1a1a2e;
+  }
+
+  .smw-product-card-body {
+    padding: 0.85rem;
+  }
+
+  .smw-product-card-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: 0.3rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.35;
+  }
+
+  .smw-product-card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .smw-product-card-price {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 1rem;
+    font-weight: 800;
+    color: #60a5fa;
+  }
+
+  .smw-product-card-score {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.2rem 0.5rem;
+    background: rgba(16, 185, 129, 0.12);
+    border-radius: 6px;
+    color: #34d399;
+    font-weight: 700;
+  }
+
+  .smw-restart {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.6rem 1.2rem;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.7);
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+
+  .smw-restart:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+    color: #ffffff;
+  }
+
+  @media (max-width: 640px) {
+    .smw-wizard {
+      padding: 1.25rem;
+    }
+
+    .smw-progress {
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .smw-options {
+      grid-template-columns: 1fr;
+    }
+
+    .smw-step-title {
+      font-size: 1.15rem;
+    }
+
+    .smw-result-title {
+      font-size: 1.3rem;
+    }
+  }
+</style>
+
+<script>
+  (() => {
+  interface SmartProduct {
+    id: string;
+    title: string;
+    price: number;
+    originalPrice?: number;
+    image: string;
+    category: string;
+    rating?: number;
+    reviewsCount?: number;
+    conversionScore: number;
+    pros: string[];
+    cons: string[];
+    slug?: string;
+  }
+
+  const initWizard = () => {
+    const root = document.querySelector<HTMLElement>('[data-smart-matcher]');
+    if (!root) return;
+
+    const wizard = root.querySelector<HTMLElement>('[data-wizard]');
+    if (!wizard) return;
+
+    const products: SmartProduct[] = window.__smartMatcherProducts || [];
+    const stepEls = wizard.querySelectorAll<HTMLElement>('[data-wizard-step]');
+    const indicators = wizard.querySelectorAll<HTMLElement>('[data-step-indicator]');
+    const resultEl = wizard.querySelector<HTMLElement>('[data-wizard-result]');
+    const badgeEl = wizard.querySelector<HTMLElement>('[data-result-badge]');
+    const titleEl = wizard.querySelector<HTMLElement>('[data-result-title]');
+    const descEl = wizard.querySelector<HTMLElement>('[data-result-desc]');
+    const productsEl = wizard.querySelector<HTMLElement>('[data-result-products]');
+    const restartBtn = wizard.querySelector<HTMLButtonElement>('[data-wizard-restart]');
+
+    let currentStep = 0;
+    const answers: Record<string, string> = {};
+
+    const budgetRanges: Record<string, [number, number]> = {
+      low: [0, 100],
+      mid: [100, 400],
+      high: [400, 1000],
+      premium: [1000, Infinity],
+    };
+
+    const showStep = (index: number) => {
+      stepEls.forEach((el, i) => {
+        el.hidden = i !== index;
+      });
+      indicators.forEach((el, i) => {
+        el.classList.toggle('is-active', i === index);
+        el.classList.toggle('is-done', i < index);
+      });
+      currentStep = index;
+    };
+
+    const getRecommendations = (): SmartProduct[] => {
+      const budget = answers.budget || 'mid';
+      const [min, max] = budgetRanges[budget] || [0, Infinity];
+      const priority = answers.priority || 'balance';
+
+      let filtered = products.filter((p) => p.price >= min && p.price <= max);
+
+      if (filtered.length === 0) {
+        filtered = products.slice();
+      }
+
+      const sorted = filtered.sort((a, b) => {
+        const scoreA = a.conversionScore;
+        const scoreB = b.conversionScore;
+
+        if (priority === 'price') {
+          return a.price - b.price || scoreB - scoreA;
+        }
+        if (priority === 'quality') {
+          return scoreB - scoreA || a.price - b.price;
+        }
+        return scoreB - scoreA;
+      });
+
+      return sorted.slice(0, 3);
+    };
+
+    const showResult = () => {
+      const recs = getRecommendations();
+
+      stepEls.forEach((el) => { el.hidden = true; });
+      indicators.forEach((el) => {
+        el.classList.remove('is-active');
+        el.classList.add('is-done');
+      });
+
+      if (recs.length > 0 && badgeEl && titleEl && descEl && productsEl) {
+        const priorityLabel = answers.priority === 'price' ? 'Precio' : answers.priority === 'quality' ? 'Calidad' : 'Equilibrio';
+        const budgetLabel = answers.budget === 'low' ? 'económico' : answers.budget === 'mid' ? 'moderado' : answers.budget === 'high' ? 'alto' : 'premium';
+        const usageLabel = answers.usage === 'productividad' ? 'productividad' : answers.usage === 'entretenimiento' ? 'entretenimiento' : answers.usage === 'creatividad' ? 'creatividad' : answers.usage === 'hogar' ? 'hogar' : answers.usage === 'movilidad' ? 'movilidad' : 'fitness';
+
+        badgeEl.textContent = `Smart Match: ${usageLabel} · ${budgetLabel} · ${priorityLabel}`;
+        titleEl.textContent = `Te recomendamos ${recs.length} op${recs.length === 1 ? 'ón' : 'ciones'} verificada${recs.length === 1 ? '' : 's'}`;
+        descEl.textContent = 'Estos productos han pasado nuestro filtro de auditoría y destacan por su puntuación de conversión y calidad verificada.';
+        productsEl.innerHTML = recs.map((p) => `
+          <a class="smw-product-card" href="/producto/${p.slug ?? p.id}" target="_blank" rel="noopener">
+            <img class="smw-product-card-img" src="${p.image}" alt="${p.title}" loading="lazy" />
+            <div class="smw-product-card-body">
+              <div class="smw-product-card-title">${p.title}</div>
+              <div class="smw-product-card-meta">
+                <span class="smw-product-card-price">${new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(p.price)}</span>
+                <span class="smw-product-card-score">${p.conversionScore}/100</span>
+              </div>
+            </div>
+          </a>
+        `).join('');
+      }
+
+      if (resultEl) resultEl.hidden = false;
+    };
+
+    wizard.querySelectorAll<HTMLButtonElement>('[data-wizard-option]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const field = btn.dataset.wizardOption;
+        const value = btn.dataset.value;
+        if (!field || !value) return;
+
+        answers[field] = value;
+
+        const siblings = wizard.querySelectorAll<HTMLButtonElement>(`[data-wizard-option="${field}"]`);
+        siblings.forEach((s) => s.classList.remove('is-selected'));
+        btn.classList.add('is-selected');
+
+        if (currentStep < 2) {
+          showStep(currentStep + 1);
+        } else {
+          showResult();
+        }
+      });
+    });
+
+    restartBtn?.addEventListener('click', () => {
+      Object.keys(answers).forEach((key) => { delete answers[key]; });
+      wizard.querySelectorAll('.smw-option.is-selected').forEach((el) => el.classList.remove('is-selected'));
+      if (resultEl) resultEl.hidden = true;
+      showStep(0);
+    });
+
+    showStep(0);
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initWizard);
+  } else {
+    initWizard();
+  }
+  })();
+</script>

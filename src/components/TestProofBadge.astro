@@ -1,0 +1,281 @@
+---
+import type { Product } from '../data/products';
+
+export interface Props {
+  product: Product;
+}
+
+const { product } = Astro.props;
+
+const priceStable = product.metrics?.priceStability === 'stable';
+const priceInflated = product.originalPrice
+  ? (product.originalPrice - product.price) / product.originalPrice < 0.1
+  : false;
+const priceOk = priceStable || priceInflated;
+
+const sellerRating = product.metrics?.sellerRating ?? 0;
+const sellerReviews = product.metrics?.sellerReviews ?? 0;
+const sellerOk = sellerRating >= 4.0 || sellerReviews > 100;
+
+const prosCount = Array.isArray(product.pros) ? product.pros.length : 0;
+const consCount = Array.isArray(product.cons) ? product.cons.length : 0;
+const convScore = product.conversion_score ?? 50;
+const balanceOk = prosCount > consCount || convScore >= 60;
+
+const pillar1Ok = priceOk;
+const pillar2Ok = sellerOk;
+const pillar3Ok = balanceOk;
+const allOk = pillar1Ok && pillar2Ok && pillar3Ok;
+---
+
+<div class="tpb-wrap" data-test-proof-badge>
+  <button
+    type="button"
+    class="tpb-badge"
+    data-tpb-toggle
+    aria-expanded="false"
+    aria-label="Ver desglose Test & Proof Auditado"
+  >
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <polyline points="9 12 11 14 15 10"/>
+    </svg>
+    <span>Test &amp; Proof Auditado</span>
+    <svg class="tpb-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  </button>
+
+  <div class="tpb-panel" data-tpb-panel hidden>
+    <div class="tpb-pillar" data-pillar-1>
+      <div class="tpb-pillar-header">
+        <span class="tpb-pillar-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </span>
+        <span class="tpb-pillar-title">Histórico y Transparencia de Precio</span>
+        {pillar1Ok
+          ? <span class="tpb-check ok" aria-label="Verificado"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+          : <span class="tpb-check warn" aria-label="Atención"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>}
+      </div>
+      <p class="tpb-pillar-desc">
+        {priceOk
+          ? 'Precio verificado sin inflado previo. El histórico muestra una evolución estable.'
+          : 'Precio con posibles fluctuaciones. Se recomienda revisar el histórico antes de comprar.'}
+      </p>
+    </div>
+
+    <div class="tpb-pillar" data-pillar-2>
+      <div class="tpb-pillar-header">
+        <span class="tpb-pillar-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+        </span>
+        <span class="tpb-pillar-title">Puntuación del Vendedor y Reseñas</span>
+        {pillar2Ok
+          ? <span class="tpb-check ok" aria-label="Verificado"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+          : <span class="tpb-check warn" aria-label="Atención"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>}
+      </div>
+      <p class="tpb-pillar-desc">
+        {sellerOk
+          ? `Vendedor con ${sellerRating > 0 ? `${sellerRating.toFixed(1)}/5` : 'buena reputación'} y ${sellerReviews > 0 ? `${sellerReviews} reseñas` : 'respuestas verificadas'}.`
+          : 'Vendedor con puntuación limitada. Se recomienda verificar las reseñas externas.'}
+      </p>
+    </div>
+
+    <div class="tpb-pillar" data-pillar-3>
+      <div class="tpb-pillar-header">
+        <span class="tpb-pillar-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
+        </span>
+        <span class="tpb-pillar-title">Balance Técnico Automatizado</span>
+        {pillar3Ok
+          ? <span class="tpb-check ok" aria-label="Verificado"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
+          : <span class="tpb-check warn" aria-label="Atención"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>}
+      </div>
+      <p class="tpb-pillar-desc">
+        {balanceOk
+          ? `${prosCount} pros vs ${consCount} contras. Conversion score: ${convScore}/100.`
+          : `${prosCount} pros vs ${consCount} contras. Se recomienda revisar las limitaciones.`}
+      </p>
+    </div>
+  </div>
+</div>
+
+<style>
+  .tpb-wrap {
+    position: relative;
+    display: inline-flex;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .tpb-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+    padding: 0.45rem 0.7rem;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(59, 130, 246, 0.08) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    border-radius: 8px;
+    color: #6ee7b7;
+    font-size: 0.7rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.25s ease, background 0.25s ease, transform 0.15s ease;
+    font-family: inherit;
+    text-align: center;
+    justify-content: center;
+  }
+
+  .tpb-badge:hover {
+    border-color: rgba(16, 185, 129, 0.5);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(59, 130, 246, 0.12) 100%);
+    transform: translateY(-1px);
+  }
+
+  .tpb-chevron {
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+  }
+
+  .tpb-badge[aria-expanded="true"] .tpb-chevron {
+    transform: rotate(180deg);
+  }
+
+  .tpb-panel {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    left: 0;
+    right: 0;
+    z-index: 50;
+    background: linear-gradient(160deg, rgba(17, 24, 39, 0.97) 0%, rgba(30, 41, 59, 0.95) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 12px;
+    padding: 0.85rem;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+    animation: tpb-slideDown 0.25s ease-out;
+  }
+
+  @keyframes tpb-slideDown {
+    from { opacity: 0; transform: translateY(-6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .tpb-pillar {
+    padding: 0.55rem 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .tpb-pillar:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .tpb-pillar-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.3rem;
+  }
+
+  .tpb-pillar-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(59, 130, 246, 0.12);
+    color: #60a5fa;
+    flex-shrink: 0;
+  }
+
+  .tpb-pillar-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #ffffff;
+    flex: 1;
+  }
+
+  .tpb-check {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .tpb-check.ok {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+  }
+
+  .tpb-check.warn {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+  }
+
+  .tpb-pillar-desc {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.45;
+    margin: 0;
+    padding-left: 2rem;
+  }
+
+  @media (max-width: 767px) {
+    .tpb-panel {
+      position: fixed;
+      top: auto;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      border-radius: 16px 16px 0 0;
+      padding: 1.25rem;
+      max-height: 70vh;
+      overflow-y: auto;
+      z-index: 100;
+    }
+
+    .tpb-pillar-desc {
+      padding-left: 0;
+    }
+  }
+</style>
+
+<script>
+  (() => {
+    const wrap = document.querySelector<HTMLElement>('[data-test-proof-badge]');
+    if (!wrap) return;
+
+    const toggle = wrap.querySelector<HTMLButtonElement>('[data-tpb-toggle]');
+    const panel = wrap.querySelector<HTMLElement>('[data-tpb-panel]');
+
+    if (!toggle || !panel) return;
+
+    toggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
+      toggle.setAttribute('aria-expanded', String(!isExpanded));
+      panel.hidden = isExpanded;
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!wrap.contains(e.target as Node) && !panel.hidden) {
+        toggle.setAttribute('aria-expanded', 'false');
+        panel.hidden = true;
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !panel.hidden) {
+        toggle.setAttribute('aria-expanded', 'false');
+        panel.hidden = true;
+        toggle.focus();
+      }
+    });
+  })();
+</script>

@@ -1,0 +1,275 @@
+---
+import type { Product } from '../data/products';
+
+export interface Props {
+  products: Product[];
+  title?: string;
+}
+
+const { products, title = 'Transparencia y Métricas de Compromiso' } = Astro.props;
+
+const totalProducts = products.length;
+const rejectedCount = products.filter((p) => p.audit_status === 'rejected').length;
+const rejectionRate = totalProducts > 0 ? Math.round((rejectedCount / totalProducts) * 100) : 0;
+const approvedCount = products.filter((p) => p.audit_status === 'approved').length;
+
+const productsWithSavings = products.filter(
+  (p) => p.originalPrice && p.originalPrice > p.price
+);
+const avgSavingsPercent = productsWithSavings.length > 0
+  ? Math.round(
+      productsWithSavings.reduce(
+        (acc, p) => acc + ((p.originalPrice! - p.price) / p.originalPrice!) * 100,
+        0,
+      ) / productsWithSavings.length,
+    )
+  : 0;
+
+const avgConversionScore = totalProducts > 0
+  ? Math.round(
+      products.reduce((acc, p) => acc + (p.conversion_score ?? 50), 0) / totalProducts,
+    )
+  : 0;
+---
+
+<section class="td-section" data-transparency-dashboard>
+  <div class="td-header">
+    <div class="td-tag">Transparencia Radical</div>
+    <h2 class="td-title">{title}</h2>
+    <p class="td-desc">
+      Estos números se calculan en tiempo real desde nuestro catálogo. Sin humo, sin cifras infladas.
+    </p>
+  </div>
+
+  <div class="td-grid">
+    <div class="td-card" data-metric="products">
+      <div class="td-card-icon" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      </div>
+      <div class="td-card-content">
+        <span class="td-card-value" data-counter={totalProducts}>{totalProducts}</span>
+        <span class="td-card-label">Productos Analizados</span>
+        <span class="td-card-sub">{approvedCount} aprobados · {rejectedCount} rechazados</span>
+      </div>
+    </div>
+
+    <div class="td-card" data-metric="rejection">
+      <div class="td-card-icon" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      </div>
+      <div class="td-card-content">
+        <span class="td-card-value" data-counter={rejectionRate} suffix="%">{rejectionRate}%</span>
+        <span class="td-card-label">Tasa de Rechazo</span>
+        <span class="td-card-sub">Descartados por baja calidad</span>
+      </div>
+    </div>
+
+    <div class="td-card" data-metric="savings">
+      <div class="td-card-icon" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <div class="td-card-content">
+        <span class="td-card-value" data-counter={avgSavingsPercent} suffix="%">{avgSavingsPercent}%</span>
+        <span class="td-card-label">Ahorro Medio Detectado</span>
+        <span class="td-card-sub">En productos con descuento real</span>
+      </div>
+    </div>
+
+    <div class="td-card" data-metric="freshness">
+      <div class="td-card-icon" aria-hidden="true">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      </div>
+      <div class="td-card-content">
+        <span class="td-card-value" data-counter={avgConversionScore}>{avgConversionScore}</span>
+        <span class="td-card-label">Score Medio de Catálogo</span>
+        <span class="td-card-sub">Conversión y calidad ponderada</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .td-section {
+    padding: 3.5rem 0;
+  }
+
+  .td-header {
+    text-align: center;
+    margin-bottom: 2.5rem;
+  }
+
+  .td-tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    margin-bottom: 0.85rem;
+  }
+
+  .td-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.5rem;
+    letter-spacing: -0.02em;
+  }
+
+  .td-desc {
+    font-size: 0.92rem;
+    color: rgba(255, 255, 255, 0.55);
+    margin: 0 auto;
+    max-width: 560px;
+    line-height: 1.6;
+  }
+
+  .td-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+  }
+
+  .td-card {
+    position: relative;
+    background: linear-gradient(160deg, rgba(59, 130, 246, 0.06) 0%, rgba(17, 24, 39, 0.8) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 1.5rem;
+    text-align: center;
+    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    overflow: hidden;
+  }
+
+  .td-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #3b82f6, #60a5fa, #34d399);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .td-card:hover {
+    transform: translateY(-4px);
+    border-color: rgba(59, 130, 246, 0.35);
+    box-shadow: 0 12px 32px rgba(59, 130, 246, 0.12);
+  }
+
+  .td-card:hover::before {
+    opacity: 1;
+  }
+
+  .td-card-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.18) 0%, rgba(59, 130, 246, 0.06) 100%);
+    border: 1px solid rgba(59, 130, 246, 0.28);
+    color: #60a5fa;
+    margin-bottom: 1rem;
+  }
+
+  .td-card-value {
+    display: block;
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: 2.4rem;
+    font-weight: 800;
+    line-height: 1;
+    background: linear-gradient(135deg, #ffffff 0%, #93c5fd 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.4rem;
+    transition: transform 0.3s ease;
+  }
+
+  .td-card:hover .td-card-value {
+    transform: scale(1.05);
+  }
+
+  .td-card-label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.85);
+    margin-bottom: 0.3rem;
+  }
+
+  .td-card-sub {
+    display: block;
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.45);
+    line-height: 1.4;
+  }
+
+  @media (max-width: 900px) {
+    .td-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 540px) {
+    .td-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .td-card-value {
+      font-size: 2rem;
+    }
+
+    .td-section {
+      padding: 2.5rem 0;
+    }
+  }
+</style>
+
+<script>
+  (() => {
+    const section = document.querySelector<HTMLElement>('[data-transparency-dashboard]');
+    if (!section) return;
+
+    const counters = section.querySelectorAll<HTMLElement>('[data-counter]');
+    const duration = 1200;
+    const startTime = performance.now();
+
+    const animate = (timestamp: number) => {
+      const elapsed = timestamp - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      counters.forEach((el) => {
+        const target = Number(el.dataset.counter) || 0;
+        const suffix = el.dataset.suffix || '';
+        el.textContent = `${Math.round(target * eased)}${suffix}`;
+      });
+
+      if (progress < 1) {
+        requestAnimationFrame(animate);
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          requestAnimationFrame(animate);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.3 },
+    );
+
+    observer.observe(section);
+  })();
+</script>
