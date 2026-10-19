@@ -23,6 +23,8 @@ import {
   getAliCatalogState,
   readAliCatalog,
   syncAliCatalog,
+  writeAliCatalog,
+  type AliCatalogSnapshot,
 } from '../../../../lib/aliexpressCatalog';
 import { getConnectedNetworkIds } from '../../../../lib/networks/credentials';
 
@@ -69,4 +71,63 @@ export const POST: APIRoute = async ({ request }) => {
     }),
     { status: 200, headers: jsonHeaders },
   );
+};
+
+export const DELETE: APIRoute = async ({ request }) => {
+  const unauthorizedResponse = requireAdminAuth(request);
+  if (unauthorizedResponse) return unauthorizedResponse;
+
+  const body = (await request.json().catch(() => ({}))) as { externalIds?: string[] };
+
+  try {
+    if (Array.isArray(body?.externalIds) && body.externalIds.length > 0) {
+      const idsToDelete = new Set(body.externalIds.map((id) => String(id).trim()).filter(Boolean));
+      const snapshot = readAliCatalog();
+      if (!snapshot) {
+        return new Response(
+          JSON.stringify({ success: false, message: 'No hay catálogo para borrar.' }),
+          { status: 404, headers: jsonHeaders },
+        );
+      }
+      const beforeCount = snapshot.products.length;
+      const filtered = snapshot.products.filter((p) => !idsToDelete.has(p.externalId));
+      const deletedCount = beforeCount - filtered.length;
+      const newSnapshot: AliCatalogSnapshot = { syncedAt: snapshot.syncedAt, products: filtered };
+      writeAliCatalog(newSnapshot);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          deleted: deletedCount,
+          remaining: filtered.length,
+          message: `${deletedCount} producto(s) eliminados del catálogo de AliExpress.`,
+        }),
+        { status: 200, headers: jsonHeaders },
+      );
+    } else {
+      const snapshot = readAliCatalog();
+      if (!snapshot) {
+        return new Response(
+          JSON.stringify({ success: true, deleted: 0, remaining: 0, message: 'El catálogo ya estaba vacío.' }),
+          { status: 200, headers: jsonHeaders },
+        );
+      }
+      const deletedCount = snapshot.products.length;
+      const newSnapshot: AliCatalogSnapshot = { syncedAt: '', products: [] };
+      writeAliCatalog(newSnapshot);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          deleted: deletedCount,
+          remaining: 0,
+          message: `Catálogo de AliExpress vaciado: ${deletedCount} producto(s) eliminados.`,
+        }),
+        { status: 200, headers: jsonHeaders },
+      );
+    }
+  } catch (error: any) {
+    return new Response(
+      JSON.stringify({ success: false, message: error?.message || 'Error al borrar el catálogo.' }),
+      { status: 500, headers: jsonHeaders },
+    );
+  }
 };

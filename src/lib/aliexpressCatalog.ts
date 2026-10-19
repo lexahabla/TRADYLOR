@@ -61,7 +61,7 @@ export function readAliCatalog(): AliCatalogSnapshot | null {
   }
 }
 
-function writeAliCatalog(snapshot: AliCatalogSnapshot): boolean {
+export function writeAliCatalog(snapshot: AliCatalogSnapshot): boolean {
   try {
     fs.mkdirSync(path.dirname(CATALOG_FILE), { recursive: true });
     fs.writeFileSync(CATALOG_FILE, JSON.stringify(snapshot), 'utf-8');

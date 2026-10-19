@@ -890,6 +890,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </button>
             <button type="button" id="btnAliMore" class="btn-secondary btn-sm" hidden title="Descarga más páginas del catálogo de AliExpress sin borrar los productos ya guardados">+ Cargar más productos</button>
           </div>
+          <div id="aliCatalogDanger" class="ali-catalog-danger" hidden>
+            <button type="button" id="btnAliDeleteSelected" class="btn-danger btn-sm" title="Elimina definitivamente los productos seleccionados del catálogo de AliExpress (no se pueden recuperar salvo volviendo a sincronizar)">🗑️ Borrar seleccionados</button>
+            <button type="button" id="btnAliDeleteAll" class="btn-danger btn-sm" title="Vacía completamente el catálogo de AliExpress (no se puede recuperar salvo volviendo a sincronizar)">🗑️ Borrar TODO el catálogo</button>
+          </div>
         </div>
 
         <!-- Selección masiva: la casilla de la cabecera marca la página actual;
@@ -4068,6 +4072,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const aliSubcatAssign = document.getElementById('aliSubcatAssign');
     const btnAliImportCat = document.getElementById('btnAliImportCat');
     const btnAliHideSel = document.getElementById('btnAliHideSel');
+    // Botones de peligro: borrar seleccionados / borrar todo el catálogo de AliExpress
+    const aliCatalogDanger = document.getElementById('aliCatalogDanger');
+    const btnAliDeleteSelected = document.getElementById('btnAliDeleteSelected');
+    const btnAliDeleteAll = document.getElementById('btnAliDeleteAll');
 
     /**
      * Rellena un select de subcategoría destino en cascada (#prodSubcatDest y
@@ -4542,9 +4550,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (!aliCatalogMeta) return;
       if (!state || !state.count) {
         aliCatalogMeta.textContent = 'Sin sincronizar';
+        if (aliCatalogDanger) aliCatalogDanger.hidden = true;
         return;
       }
       aliCatalogMeta.textContent = `${state.count} productos · ${aliRelTime(state.syncedAt)}${state.stale ? ' · obsoleto' : ''}`;
+      if (aliCatalogDanger) aliCatalogDanger.hidden = false;
     }
 
     /** GET de la caché: sólo lectura de disco en el servidor. */
@@ -4939,6 +4949,64 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         'Productos ocultos',
         `${ids.length} producto${ids.length === 1 ? '' : 's'} oculto${ids.length === 1 ? '' : 's'}: no se verán en la tabla ni se añadirán al catálogo. Recupéralos con «En catálogo › Descartados».`,
       );
+    });
+
+    // ── Borrar seleccionados del catálogo de AliExpress (peligro) ──────────────
+    btnAliDeleteSelected?.addEventListener('click', async () => {
+      const ids = [...aliSelected];
+      if (!ids.length) {
+        showAliStatus('warning', 'Sin selección', 'Marca en la tabla los productos que quieres borrar del catálogo.');
+        return;
+      }
+      if (!confirm(`¿Borrar ${ids.length} producto(s) seleccionado(s) del catálogo de AliExpress? Esta acción NO se puede deshacer (salvo volviendo a sincronizar).`)) return;
+      if (btnAliDeleteSelected) btnAliDeleteSelected.disabled = true;
+      try {
+        const res = await fetch('/api/admin/aliexpress/catalog', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ externalIds: ids }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAliStatus('success', 'Productos borrados', data.message);
+          aliSelected.clear();
+          await loadAliCatalog();
+        } else {
+          showAliStatus('error', 'No se pudo borrar', data.message);
+        }
+      } catch (err) {
+        console.error('Error borrando seleccionados:', err);
+        showAliStatus('error', 'Error de red', 'No se pudo contactar con el servidor.');
+      } finally {
+        if (btnAliDeleteSelected) btnAliDeleteSelected.disabled = false;
+      }
+    });
+
+    // ── Borrar TODO el catálogo de AliExpress (peligro) ────────────────────────
+    btnAliDeleteAll?.addEventListener('click', async () => {
+      if (!confirm('¿Estás seguro de que quieres vaciar COMPLETAMENTE el catálogo de AliExpress? Se perderán todos los productos guardados y no se podrán recuperar salvo volviendo a sincronizar.')) return;
+      if (!confirm('Última confirmación: esto borra TODO el catálogo de AliExpress. ¿Continuar?')) return;
+      if (btnAliDeleteAll) btnAliDeleteAll.disabled = true;
+      try {
+        const res = await fetch('/api/admin/aliexpress/catalog', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
+        if (data.success) {
+          showAliStatus('success', 'Catálogo vaciado', data.message);
+          aliSelected.clear();
+          await loadAliCatalog();
+        } else {
+          showAliStatus('error', 'No se pudo vaciar', data.message);
+        }
+      } catch (err) {
+        console.error('Error vaciando catálogo:', err);
+        showAliStatus('error', 'Error de red', 'No se pudo contactar con el servidor.');
+      } finally {
+        if (btnAliDeleteAll) btnAliDeleteAll.disabled = false;
+      }
     });
 
     // Primera carga: sólo lectura de la caché (sin llamadas a la API)
@@ -6197,6 +6265,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .ali-catalog-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; margin-left: auto; flex-wrap: wrap; }
   .ali-catalog-meta { color: var(--color-text-dim); font-size: .72rem; white-space: nowrap; }
   .ali-catalog-meta:empty { display: none; }
+  .ali-catalog-danger { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; margin-left: auto; flex-wrap: wrap; padding-top: .4rem; border-top: 1px dashed rgba(239, 68, 68, .3); width: 100%; }
+  .ali-catalog-danger[hidden] { display: none; }
+  .ali-catalog-danger .btn-danger { background: #7f1d1d; border-color: #ef4444; color: #fca5a5; }
+  .ali-catalog-danger .btn-danger:hover { background: #991b1b; border-color: #f87171; color: #fecaca; }
   :global(.ac-discount) { color: #6ee7b7; font-weight: 700; }
   :global(.ali-import) { flex-shrink: 0; }
   /* Estado «ya en el catálogo»: botón inactivo con texto y color propios */
