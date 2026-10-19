@@ -884,11 +884,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
           <div class="ali-catalog-head-actions">
             <span id="aliCatalogMeta" class="ali-catalog-meta">Cargando…</span>
-            <button type="button" id="btnAliSync" class="btn-primary btn-sm">
-              <span class="btn-text">Sincronizar</span>
-              <div class="btn-spinner" hidden></div>
-            </button>
-            <button type="button" id="btnAliMore" class="btn-secondary btn-sm" hidden title="Descarga más páginas del catálogo de AliExpress sin borrar los productos ya guardados">+ Cargar más productos</button>
+            <div class="ali-sync-controls" style="display: flex; align-items: center; gap: 0.5rem;">
+              <select id="aliSyncNetwork" class="sel-cat-assign" aria-label="Red a sincronizar" title="Elige qué red de afiliados sincronizar. 'Todas' sincroniza todas las conectadas.">
+                <option value="">Todas las conectadas</option>
+              </select>
+              <button type="button" id="btnAliSync" class="btn-primary btn-sm">
+                <span class="btn-text">Sincronizar</span>
+                <div class="btn-spinner" hidden></div>
+              </button>
+              <button type="button" id="btnAliMore" class="btn-secondary btn-sm" hidden title="Descarga más páginas del catálogo de AliExpress sin borrar los productos ya guardados">+ Cargar más productos</button>
+            </div>
           </div>
           <div id="aliCatalogDanger" class="ali-catalog-danger" hidden>
             <button type="button" id="btnAliDeleteSelected" class="btn-danger btn-sm" title="Elimina definitivamente los productos seleccionados del catálogo de AliExpress (no se pueden recuperar salvo volviendo a sincronizar)">🗑️ Borrar seleccionados</button>
@@ -4065,6 +4070,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const btnAliSelAllFiltered = document.getElementById('aliSelAllFiltered');
     const btnAliSelClear = document.getElementById('aliSelClear');
     const btnAliSelImport = document.getElementById('aliSelImport');
+    const aliSyncNetwork = document.getElementById('aliSyncNetwork');
     // Barra de acciones (#aliImportActions): alta directa en categorías
     // existentes, ocultado masivo y sincronización del caché.
     const aliImportTools = document.getElementById('aliImportTools');
@@ -4573,6 +4579,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         setAliMeta(data);
         renderAliCatalog();
         const connected = Array.isArray(data.networks) ? data.networks : [];
+        // Poblar selector de red para sincronización individual
+        if (aliSyncNetwork) {
+          const currentValue = aliSyncNetwork.value;
+          aliSyncNetwork.innerHTML = '<option value="">Todas las conectadas</option>' +
+            connected.map((netId) => {
+              const net = (networksCache || []).find((n) => n.id === netId);
+              const label = net ? net.name : netId;
+              return `<option value="${escapeHtml(netId)}">${escapeHtml(label)}</option>`;
+            }).join('');
+          if (currentValue && Array.from(aliSyncNetwork.options).some((o) => o.value === currentValue)) {
+            aliSyncNetwork.value = currentValue;
+          }
+        }
         if (!connected.length) showAliStatus('warning', 'Sin redes conectadas', 'Guarda las credenciales de AliExpress, eBay u otras redes en «1. Redes conectadas» y pulsa «Validar» para poder sincronizar.');
         else if (!data.count) showAliStatus('warning', 'Caché vacía', 'Todavía no hay productos guardados. Pulsa «Sincronizar» para descargar el catálogo.');
         else if (data.stale) showAliStatus('warning', 'Caché obsoleta', `El catálogo guardado tiene más de 6 horas (${aliRelTime(data.syncedAt)}). Pulsa «Sincronizar» para refrescarlo.`);
@@ -4585,7 +4604,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
 
     /** POST de sincronización: valida si hace falta, consulta la TOP API y reescribe el JSON. */
-    async function syncAliCatalogUI() {
+    async function syncAliCatalogUI(networkId?: string) {
       if (aliSyncing) return null;
       aliSyncing = true;
       const spinner = btnAliSync ? btnAliSync.querySelector('.btn-spinner') : null;
@@ -4599,20 +4618,42 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (text) text.textContent = 'Sincronizando...';
       if (textHeader) textHeader.textContent = 'Sincronizando...';
       try {
-        // Auto-validación: si AliExpress no figura conectada, valida primero.
-        // (El guard aliSyncing evita el bucle validate → sync → validate.)
-        const aliNet = (networksCache || []).find((n) => n.id === 'aliexpress');
-        if (aliNet && aliNet.status !== 'connected') {
-          showAliStatus('loading', 'Validando credenciales', 'Comprobando la conexión con AliExpress antes de sincronizar...');
-          const check = await validateNetwork('aliexpress');
-          const now = (check?.networks || []).find((n) => n.id === 'aliexpress');
-          if (!now || now.status !== 'connected') {
-            showAliStatus('error', 'AliExpress sin conectar', check?.message || 'Guarda y valida sus credenciales en «1. Redes conectadas».');
-            return null;
+        // Auto-validación solo si NO se ha seleccionado una red específica (comportamiento legacy)
+        // Si se elige una red concreta, solo validamos esa red.
+        const targetNetwork = networkId ?? aliSyncNetwork?.value ?? '';
+        if (!targetNetwork) {
+          // Modo "Todas": validar AliExpress si está en la lista (comportamiento legacy)
+          const aliNet = (networksCache || []).find((n) => n.id === 'aliexpress');
+          if (aliNet && aliNet.status !== 'connected') {
+            showAliStatus('loading', 'Validando credenciales', 'Comprobando la conexión con AliExpress antes de sincronizar...');
+            const check = await validateNetwork('aliexpress');
+            const now = (check?.networks || []).find((n) => n.id === 'aliexpress');
+            if (!now || now.status !== 'connected') {
+              showAliStatus('error', 'AliExpress sin conectar', check?.message || 'Guarda y valida sus credenciales en «1. Redes conectadas».');
+              return null;
+            }
+          }
+        } else if (targetNetwork === 'aliexpress') {
+          // Si se elige explícitamente AliExpress, validar solo esa red
+          const aliNet = (networksCache || []).find((n) => n.id === 'aliexpress');
+          if (aliNet && aliNet.status !== 'connected') {
+            showAliStatus('loading', 'Validando credenciales', 'Comprobando la conexión con AliExpress...');
+            const check = await validateNetwork('aliexpress');
+            const now = (check?.networks || []).find((n) => n.id === 'aliexpress');
+            if (!now || now.status !== 'connected') {
+              showAliStatus('error', 'AliExpress sin conectar', check?.message || 'Guarda y valida sus credenciales en «1. Redes conectadas».');
+              return null;
+            }
           }
         }
-        showAliStatus('loading', 'Sincronizando catálogo', 'Consultando las redes conectadas en curso (puede tardar unos segundos)...');
-        const res = await fetch('/api/admin/catalog', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        showAliStatus('loading', 'Sincronizando catálogo', targetNetwork
+          ? `Consultando la API de ${targetNetwork}...`
+          : 'Consultando las redes conectadas en curso (puede tardar unos segundos)...');
+        const res = await fetch('/api/admin/catalog', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ networkId: targetNetwork || undefined })
+        });
         const data = await res.json();
         // El sync re-trae el catálogo completo: se levantan los descartes locales.
         if (data.ok) acRemovedSave(new Set());
@@ -4623,7 +4664,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         setAliMeta(data);
         renderAliCatalog();
         if (data.ok) showAliStatus('success', 'Catálogo sincronizado', `${data.count} productos guardados en el servidor.`);
-        else showAliStatus('error', 'No se pudo sincronizar', data.message || 'AliExpress no respondió.');
+        else showAliStatus('error', 'No se pudo sincronizar', data.message || 'No se pudo sincronizar.');
         return data;
       } catch {
         showAliStatus('error', 'Fallo de red', 'No se pudo contactar con el servidor para sincronizar.');
@@ -4639,8 +4680,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
     }
 
-    btnAliSync?.addEventListener('click', () => syncAliCatalogUI());
-    btnAliSyncHeader?.addEventListener('click', () => syncAliCatalogUI());
+    btnAliSync?.addEventListener('click', () => syncAliCatalogUI(aliSyncNetwork?.value || undefined));
+    btnAliSyncHeader?.addEventListener('click', () => syncAliCatalogUI(aliSyncNetwork?.value || undefined));
 
 /** «Cargar más»: pide al servidor las páginas 2-3 de cada keyword y
      *  amplía la caché (POST { append: true }); los rangos se recalculan. */
@@ -4652,10 +4693,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (btnAliSyncHeader) btnAliSyncHeader.disabled = true;
         showAliStatus('loading', 'Ampliando catálogo', 'Descargando más páginas de las redes conectadas (puede tardar)...');
         try {
+          const targetNetwork = aliSyncNetwork?.value || '';
           const res = await fetch('/api/admin/catalog', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ append: true }),
+            body: JSON.stringify({ append: true, networkId: targetNetwork || undefined }),
           });
         const data = await res.json();
         aliProducts = Array.isArray(data.products) ? data.products : [];
@@ -4665,7 +4707,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         setAliMeta(data);
         renderAliCatalog();
         if (data.ok) showAliStatus('success', 'Catálogo ampliado', data.message || `${data.count} productos en total.`);
-        else showAliStatus('error', 'No se pudo ampliar', data.message || 'AliExpress no respondió.');
+        else showAliStatus('error', 'No se pudo ampliar', data.message || 'No se pudo ampliar.');
       } catch {
         showAliStatus('error', 'Fallo de red', 'No se pudo contactar con el servidor para ampliar el catálogo.');
       } finally {

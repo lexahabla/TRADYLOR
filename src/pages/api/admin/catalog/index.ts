@@ -96,8 +96,10 @@ export const POST: APIRoute = async ({ request }) => {
   const unauthorizedResponse = requireAdminAuth(request);
   if (unauthorizedResponse) return unauthorizedResponse;
 
-  const body = (await request.json().catch(() => ({}))) as { append?: boolean };
+  const body = (await request.json().catch(() => ({}))) as { append?: boolean; networkId?: string };
   const connected = getConnectedNetworkIds();
+  const targetNetworkId = body?.networkId;
+  const networksToSync = targetNetworkId ? (connected.includes(targetNetworkId) ? [targetNetworkId] : []) : connected;
   const errors: string[] = [];
   let totalAdded = 0;
 
@@ -106,7 +108,7 @@ export const POST: APIRoute = async ({ request }) => {
   const mergedById = new Map<string, UnifiedProduct>();
   for (const product of existing) mergedById.set(`${product.network}:${product.externalId}`, product);
 
-  for (const networkId of connected) {
+  for (const networkId of networksToSync) {
     const connector = getConnector(networkId);
     if (!connector) {
       errors.push(`Conector no disponible para ${networkId}`);
@@ -148,13 +150,17 @@ export const POST: APIRoute = async ({ request }) => {
     }
   }
 
+  if (targetNetworkId && !networksToSync.length) {
+    errors.push(`La red "${targetNetworkId}" no está conectada o no tiene credenciales válidas.`);
+  }
+
   const syncedAt = new Date().toISOString();
   const merged = stampFirstSeen([...mergedById.values()], existing, previous?.syncedAt, syncedAt);
   const snapshot: AffiliateCatalogSnapshot = { syncedAt, products: merged };
   const saved = writeAffiliateCatalog(snapshot);
 
   const message = saved
-    ? `Catálogo sincronizado: ${merged.length} productos de ${connected.length} redes.`
+    ? `Catálogo sincronizado: ${merged.length} productos de ${networksToSync.length} red${networksToSync.length !== 1 ? 'es' : ''}.`
     : 'No se pudo guardar la caché en el volumen.';
 
   return new Response(
