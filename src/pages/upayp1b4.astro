@@ -4047,6 +4047,23 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     if (networkList) loadNetworks();
 
+    // Fallback: si la sección de afiliados se muestra dinámicamente (cambio de clase),
+    // asegura que se carguen las redes y el catálogo.
+    const affiliatesSection = document.querySelector('section[data-admin-view="affiliates"]');
+    if (affiliatesSection) {
+      const observer = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          if (m.attributeName === 'class' && affiliatesSection.classList.contains('is-visible')) {
+            if (networkList && networksCache.length === 0) loadNetworks();
+            if (aliCatalogHost && aliProducts.length === 0) syncAliCatalogUI();
+            observer.disconnect();
+            break;
+          }
+        }
+      });
+      observer.observe(affiliatesSection, { attributes: true, attributeFilter: ['class'] });
+    }
+
     // =========================================================================
     // 5b. CATÁLOGO ALIEXPRESS EN CACHÉ (/api/admin/aliexpress/catalog)
     //    - GET: sólo lee el JSON del volumen. NUNCA consulta la TOP API en
@@ -6330,10 +6347,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   /* Visibilidad de secciones: el display base lo marca .is-visible únicamente, así las secciones ocultas nunca aparecen (el scoping de Astro sube la especificidad de las clases base con atributos) */
   .admin-grid-section,
   .admin-dashboard-view,
-  .products-list-card { display: none; }
-  .admin-grid-section.is-visible { display: grid; }
-  .admin-dashboard-view.is-visible { display: flex; }
-  .products-list-card.is-visible { display: flex; }
+  .products-list-card { display: none !important; }
+  .admin-grid-section.is-visible { display: grid !important; }
+  .admin-dashboard-view.is-visible { display: flex !important; }
+  .products-list-card.is-visible { display: flex !important; }
+
+  /* Fallback explícito para la sección de afiliados por si el scoping falla */
+  section[data-admin-view="affiliates"].is-visible { display: flex !important; }
+  section[data-admin-view="categories"].is-visible { display: flex !important; }
+  section[data-admin-view="analytics"].is-visible { display: flex !important; }
+  section[data-admin-view="marketing"].is-visible { display: flex !important; }
 
   @media (max-width: 900px) {
     .category-form { flex-direction: column; }
