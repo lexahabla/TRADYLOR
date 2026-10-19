@@ -724,10 +724,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <path d="M7 14l4-4 4 4 5-6"></path>
             </svg>
           </div>
-          <div>
+          <div class="card-header-main" style="flex: 1; min-width: 0;">
               <h2 class="card-title">2. Catálogo de Afiliados</h2>
             <p class="card-desc">Tabla amplia de todos los productos sincronizados con las redes conectadas (AliExpress, eBay…), guardados en el servidor. Usa «Sincronizar» para refrescarlo contra las APIs; se avisa si la caché supera las 6 horas.</p>
           </div>
+          <button type="button" id="btnAliSyncHeader" class="btn-primary btn-sm" style="flex-shrink: 0; margin-left: 1rem;" title="Sincroniza el catálogo contra las APIs de las redes conectadas (AliExpress, eBay…)">
+            <span class="btn-text">🔄 Sincronizar</span>
+            <div class="btn-spinner" hidden></div>
+          </button>
         </div>
 
         <div id="aliCatalogStatus" class="status-alert" hidden>
@@ -4049,6 +4053,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const aliCatalogStatusTitle = document.getElementById('aliCatalogStatusTitle');
     const aliCatalogStatusText = document.getElementById('aliCatalogStatusText');
     const btnAliSync = document.getElementById('btnAliSync');
+    const btnAliSyncHeader = document.getElementById('btnAliSyncHeader');
     const btnAliMore = document.getElementById('btnAliMore');
     const aliFilters = document.getElementById('aliFilters');
     const aliSelectionBar = document.getElementById('aliSelectionBar');
@@ -4575,9 +4580,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       aliSyncing = true;
       const spinner = btnAliSync ? btnAliSync.querySelector('.btn-spinner') : null;
       const text = btnAliSync ? btnAliSync.querySelector('.btn-text') : null;
+      const spinnerHeader = btnAliSyncHeader ? btnAliSyncHeader.querySelector('.btn-spinner') : null;
+      const textHeader = btnAliSyncHeader ? btnAliSyncHeader.querySelector('.btn-text') : null;
       if (btnAliSync) btnAliSync.disabled = true;
+      if (btnAliSyncHeader) btnAliSyncHeader.disabled = true;
       if (spinner) spinner.hidden = false;
+      if (spinnerHeader) spinnerHeader.hidden = false;
       if (text) text.textContent = 'Sincronizando...';
+      if (textHeader) textHeader.textContent = 'Sincronizando...';
       try {
         // Auto-validación: si AliExpress no figura conectada, valida primero.
         // (El guard aliSyncing evita el bucle validate → sync → validate.)
@@ -4611,20 +4621,25 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       } finally {
         aliSyncing = false;
         if (btnAliSync) btnAliSync.disabled = false;
+        if (btnAliSyncHeader) btnAliSyncHeader.disabled = false;
         if (spinner) spinner.hidden = true;
+        if (spinnerHeader) spinnerHeader.hidden = true;
         if (text) text.textContent = 'Sincronizar';
+        if (textHeader) textHeader.textContent = '🔄 Sincronizar';
       }
     }
 
     btnAliSync?.addEventListener('click', () => syncAliCatalogUI());
+    btnAliSyncHeader?.addEventListener('click', () => syncAliCatalogUI());
 
-    /** «Cargar más»: pide al servidor las páginas 2-3 de cada keyword y
+/** «Cargar más»: pide al servidor las páginas 2-3 de cada keyword y
      *  amplía la caché (POST { append: true }); los rangos se recalculan. */
     btnAliMore?.addEventListener('click', async () => {
       if (aliSyncing) return;
       aliSyncing = true;
       if (btnAliMore) btnAliMore.disabled = true;
       if (btnAliSync) btnAliSync.disabled = true;
+      if (btnAliSyncHeader) btnAliSyncHeader.disabled = true;
         showAliStatus('loading', 'Ampliando catálogo', 'Descargando más páginas de las redes conectadas (puede tardar)...');
         try {
           const res = await fetch('/api/admin/catalog', {
@@ -4647,6 +4662,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         aliSyncing = false;
         if (btnAliMore) btnAliMore.disabled = false;
         if (btnAliSync) btnAliSync.disabled = false;
+        if (btnAliSyncHeader) btnAliSyncHeader.disabled = false;
       }
     });
 
