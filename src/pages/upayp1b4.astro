@@ -561,6 +561,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="button" class="btn-ai btn-sm" id="btnProdNormalizeTags" title="Extraer tags técnicos normalizados (normalized_tags)">🏷️ Normalizar Tags</button>
         <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
         <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
+        <button type="button" class="btn-danger btn-sm" id="btnProdDeleteAll" title="Elimina TODOS los productos del catálogo (purga completa). Úsalo para resincronizar desde cero.">🗑️ Vaciar Catálogo</button>
       </div>
 
 
@@ -1056,6 +1057,21 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <div class="admin-modal-actions">
         <button type="button" class="btn-secondary" data-admin-modal-close>Cancelar</button>
         <button type="button" class="btn-danger-ghost" id="btnBulkDeleteConfirm">Sí, eliminar definitivamente</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de confirmación de vaciado total del catálogo -->
+  <div id="deleteAllModal" class="admin-modal" hidden>
+    <div class="admin-modal-backdrop" data-admin-modal-close></div>
+    <div class="admin-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="deleteAllTitle">
+      <button type="button" class="admin-modal-close" data-admin-modal-close aria-label="Cerrar">×</button>
+      <h3 id="deleteAllTitle" class="admin-modal-title">⚠️ Vaciar catálogo completamente</h3>
+      <p class="admin-modal-text">Esta acción elimina <strong>TODOS</strong> los productos de <code>products.json</code> y deja tombstones para que no reaparezcan.</p>
+      <p class="admin-modal-warning">🚨 <strong>Esta acción es irreversible y destructiva.</strong> Se perderán <strong id="deleteAllCount">0</strong> productos, sus fichas técnicas, imágenes, enlaces y curación editorial. Úsalo solo para resincronizar el catálogo desde cero.</p>
+      <div class="admin-modal-actions">
+        <button type="button" class="btn-secondary" data-admin-modal-close>Cancelar</button>
+        <button type="button" class="btn-danger" id="btnDeleteAllConfirm">Sí, vaciar el catálogo entero</button>
       </div>
     </div>
   </div>
@@ -2590,10 +2606,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           showAlert('loading', 'Eliminando producto...', `Eliminando ID: ${id}`);
 
           try {
-            const res = await fetch('/api/products/add', {
+            const res = await fetch('/api/products/delete', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ action: 'delete', id }),
+              body: JSON.stringify({ product_ids: [id] }),
             });
             const data = await res.json();
 
@@ -5468,9 +5484,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       closeAdminModal(bulkDeleteModal);
       showAlert('loading', 'Eliminando productos...', `Borrado masivo de ${ids.length} producto(s).`);
       try {
-        const res = await fetch('/api/products/bulk-delete', {
-          method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids }),
+        const res = await fetch('/api/products/delete', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product_ids: ids }),
         });
         const data = await res.json();
         selectedProductIds.clear();
@@ -5480,6 +5496,36 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           showAlert('success', 'Eliminación masiva', `${data.deleted} producto(s) eliminados · ${data.remaining} restantes en el catálogo.`);
         } else {
           showAlert('warning', 'Eliminación masiva', data.message || 'No se eliminó ningún producto.');
+        }
+      } catch {
+        showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');
+      }
+    });
+
+    // ── Vaciar catálogo completo (purga) ─────────────────────────────────────
+    const deleteAllModal = document.getElementById('deleteAllModal');
+    document.getElementById('btnProdDeleteAll')?.addEventListener('click', () => {
+      const total = currentProducts.length;
+      const countEl = document.getElementById('deleteAllCount');
+      if (countEl) countEl.textContent = String(total);
+      openAdminModal(deleteAllModal);
+    });
+    document.getElementById('btnDeleteAllConfirm')?.addEventListener('click', async () => {
+      closeAdminModal(deleteAllModal);
+      showAlert('loading', 'Vaciando catálogo...', `Eliminando todos los productos (${currentProducts.length}).`);
+      try {
+        const res = await fetch('/api/products/delete', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deleteAll: true }),
+        });
+        const data = await res.json();
+        selectedProductIds.clear();
+        updateProdSelCount();
+        await reloadProductsTable();
+        if (data.success) {
+          showAlert('success', 'Catálogo vaciado', `${data.deleted} producto(s) eliminados. El catálogo está vacío.`);
+        } else {
+          showAlert('warning', 'Catálogo vaciado', data.message || 'No se pudo vaciar el catálogo.');
         }
       } catch {
         showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');

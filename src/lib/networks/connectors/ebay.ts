@@ -2,21 +2,22 @@
  * ==============================================================================
  * TRADYLOR - CONECTOR eBAY PARTNER NETWORK
  * ==============================================================================
- * Documentación oficial: https://developer.ebay.com/api-docs/buy/static/api-browse.html
+ * Documentación oficial: https://developer.ebay.com/api-docs/buy/browse/resources/item_summary/methods/search
  *
- * Flujo OAuth client-credentials ya implementado en validate(): intercambia
- * Client ID/Secret por un token de aplicación. La búsqueda Browse API
- * (/item_summary/search) se cablea en fase 2.
+ * Flujo OAuth client-credentials implementado en validate(): intercambia
+ * Client ID/Secret por un token de aplicación.
+ * Búsqueda Browse API (/item_summary/search) con headers correctos para España.
+ * Usa EbayProductAdapter para normalizar la respuesta a UnifiedProduct.
  * ==============================================================================
  */
-
-import type { UnifiedProduct } from '../types';
 
 import { ConnectorError, fetchWithTimeout, sampleProducts, type NetworkConnector } from './base';
 import { getCredentialValues, setNetworkStatus } from '../credentials';
 import type { UnifiedProduct, UnifiedSearchParams } from '../types';
+import { EbayProductAdapter, type EbayItemSummary, type EbaySearchResponse } from './adapters/ebayProductAdapter';
 
 const EBAY_OAUTH_URL = 'https://api.ebay.com/identity/v1/oauth2/token';
+const EBAY_BROWSE_SEARCH_URL = 'https://api.ebay.com/buy/browse/v1/item_summary/search';
 
 export class EbayConnector implements NetworkConnector {
   readonly networkId = 'ebay';
@@ -88,86 +89,79 @@ export class EbayConnector implements NetworkConnector {
 
   async search(params: UnifiedSearchParams): Promise<UnifiedProduct[]> {
     const creds = getCredentialValues(this.networkId);
-    if (!creds) throw new ConnectorError(this.networkId, 'eBay Partner Network no está conectado. Añade sus credenciales primero.');
+    if (!creds) {
+      throw new ConnectorError(this.networkId, 'eBay Partner Network no está conectado. Añade sus credenciales primero.');
+    }
 
     try {
       const token = await this.getAccessToken();
-      const limit = Math.min(params.limit ?? 8, 50);
-      const url = new URL('https://api.ebay.com/buy/browse/v1/item_summary/search');
+      const limit = Math.min(params.limit ?? 20, 50);
+      const url = new URL(EBAY_BROWSE_SEARCH_URL);
+
+      // Parámetros de búsqueda
       if (params.query) url.searchParams.set('q', params.query);
       if (params.category) url.searchParams.set('category_ids', params.category);
       url.searchParams.set('limit', String(limit));
-      if (params.inStockOnly) url.searchParams.set('filter', 'buyingOptions:{FIXED_PRICE}');
-      if (params.sortBy === 'price_asc') url.searchParams.set('sort', 'price');
-      else if (params.sortBy === 'price_desc') url.searchParams.set('sort', '-price');
-      else if (params.sortBy === 'popularity') url.searchParams.set('sort', 'bestMatch');
 
+      // Filtros - solo los soportados por eBay Browse API
+      if (params.inStockOnly) {
+        url.searchParams.set('filter', 'buyingOptions:{FIXED_PRICE}');
+      }
+
+      // Ordenación
+      if (params.sortBy === 'price_asc') {
+        url.searchParams.set('sort', 'price');
+      } else if (params.sortBy === 'price_desc') {
+        url.searchParams.set('sort', '-price');
+      } else if (params.sortBy === 'popularity') {
+        url.searchParams.set('sort', 'bestMatch');
+      }
+      // Nota: eBay no soporta orden por rating ni comisión directamente
+
+      // Paginación (offset)
+      if (params.page && params.page > 1) {
+        url.searchParams.set('offset', String((params.page - 1) * limit));
+      }
+
+      // Headers correctos para marketplace España
       const response = await fetchWithTimeout(
         url.toString(),
         {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Language': 'es-ES',
-            'X-EBAY-C-MARKETPLACE-ID': 'EBAY_ES',
+            // Marketplace ID correcto para España (formato con guion)
+            'X-EBAY-C-MARKETPLACE-ID': 'EBAY-ES',
+            // Contexto de usuario final para resultados localizados en España
+            'X-EBAY-C-ENDUSERCTX': 'contextualLocation=country=ES',
           },
         },
-        12000,
+        15000,
       );
 
       if (!response.ok) {
         const text = await response.text().catch(() => '');
-        throw new ConnectorError(this.networkId, `Browse API HTTP ${response.status}: ${text.slice(0, 120)}`);
+        throw new ConnectorError(this.networkId, `Browse API HTTP ${response.status}: ${text.slice(0, 200)}`);
       }
 
-      const data = (await response.json()) as {
-        itemSummaries?: Array<{
-          itemId?: string;
-          title?: string;
-          price?: { value?: string; currency?: string };
-          image?: { imageUrl?: string };
-          itemWebUrl?: string;
-          itemAffiliateWebUrl?: string;
-          categories?: Array<{ categoryName?: string }>;
-          condition?: string;
-          buyingOptions?: string[];
-          shippingOptions?: Array<{ shippingCost?: { value?: string } }>;
-        }>;
-      };
-
+      const data = (await response.json()) as EbaySearchResponse;
       const items = data.itemSummaries ?? [];
       const campaignId = creds.campaignId;
 
-      return items
-        .filter((item) => item.itemId && item.price?.value)
-        .map((item) => {
-          const price = parseFloat(item.price?.value ?? '0') || 0;
-          const baseUrl = item.itemAffiliateWebUrl || item.itemWebUrl || '';
-          const productUrl = campaignId && baseUrl.includes('?')
-            ? `${baseUrl}&mkmk=${campaignId}`
-            : campaignId
-              ? `${baseUrl}?mkmk=${campaignId}`
-              : baseUrl;
+      // Usar el adaptador para normalizar
+      const adapter = new EbayProductAdapter(campaignId, params);
+      const products = adapter.adapt(items);
 
-          const product: UnifiedProduct = {
-            network: this.networkId,
-            externalId: item.itemId!,
-            title: item.title ?? 'Producto eBay',
-            description: '',
-            price,
-            currency: item.price?.currency ?? 'EUR',
-            image: item.image?.imageUrl ?? '',
-            category: params.category || item.categories?.[0]?.categoryName || 'General',
-            productUrl,
-            inStock: item.buyingOptions?.includes('FIXED_PRICE') ?? true,
-            estimated: false,
-          };
-          if (item.shippingOptions?.[0]?.shippingCost?.value === '0.0') {
-            product.shippingInfo = 'Envío gratis';
-          }
-          return product;
-        });
+      // Si no hay resultados reales, devolver productos de muestra (estimated: true)
+      if (products.length === 0) {
+        return sampleProducts(this.networkId, params, 37);
+      }
+
+      return products;
     } catch (error) {
       if (error instanceof ConnectorError) throw error;
+      console.error('[EbayConnector] Error en búsqueda:', error);
+      // Fallback a productos de muestra en caso de error inesperado
       return sampleProducts(this.networkId, params, 37);
     }
   }

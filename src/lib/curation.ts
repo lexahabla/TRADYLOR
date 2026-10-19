@@ -298,6 +298,21 @@ export function bulkDeleteProducts(ids: string[]): { deleted: string[]; missing:
   return { deleted, missing };
 }
 
+/**
+ * Vacía completamente el catálogo (products.json) y deja tombstones de todos los IDs
+ * para que no reaparecen en imports futuros. Devuelve el número de productos eliminados.
+ */
+export function deleteAllProducts(): { deletedCount: number } {
+  const products = readProductsFromFile();
+  const deletedCount = products.length;
+  if (deletedCount > 0) {
+    const allIds = products.map((p) => p.id);
+    writeProductsToFile([]);
+    for (const id of allIds) addDeletedId(id);
+  }
+  return { deletedCount };
+}
+
 // ─── Tags técnicos normalizados (matriz de atributos) ────────────────────────
 
 const TAG_PATTERNS: Array<{ re: RegExp; tag: string | ((m: RegExpMatchArray) => string) }> = [
