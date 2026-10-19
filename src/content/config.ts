@@ -101,6 +101,8 @@ const productSchema = z.object({
     cheaperOptionId: z.string().optional(),
     premiumOptionId: z.string().optional(),
     similarOptionId: z.string().optional(),
+    cheaperOptionIds: z.array(z.string()).optional(),
+    similarOptionIds: z.array(z.string()).optional(),
   }).optional(),
 
   // ─── Curación avanzada (opcionales; se gestionan desde el panel admin) ─────

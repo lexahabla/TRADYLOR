@@ -54,6 +54,19 @@ export interface Product {
   normalized_tags?: string[];
   /** IDs de productos alternativos vinculados (cross-matching bidireccional). */
   alternative_product_ids?: string[];
+  /**
+   * Slots de rol de las alternativas (cross-matching). Los campos en plural son
+   * los que usa el panel (se pueden elegir VARIAS económicas / competidores);
+   * los singulares se mantienen sincronizados con el primero de cada lista para
+   * no romper la PDP ni los datos antiguos.
+   */
+  alternatives?: {
+    premiumOptionId?: string;
+    cheaperOptionId?: string;
+    similarOptionId?: string;
+    cheaperOptionIds?: string[];
+    similarOptionIds?: string[];
+  };
   /** Puntuación de rentabilidad/conversión 0-100 (calculada; ver lib/curation.ts). */
   conversion_score?: number;
   /** Comisión estimada en € por venta (opcional; alimenta el conversion_score). */

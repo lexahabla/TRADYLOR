@@ -100,6 +100,8 @@ export interface Product {
     cheaperOptionId?: string;
     premiumOptionId?: string;
     similarOptionId?: string;
+    cheaperOptionIds?: string[];
+    similarOptionIds?: string[];
   };
 
   // ─── Curación avanzada (opcionales; retrocompatibles con products.json) ────

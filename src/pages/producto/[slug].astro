@@ -92,24 +92,41 @@ const affiliate = product.affiliate;
 const hasNewSchema = !!(pricing && conversionHooks && investigation && affiliate);
 
 // ─── Alternatives / Cross-Selling Resolution ─────────────────────────────────
+// Los roles admiten VARIOS productos (se guardan en los arrays `cheaperOptionIds`
+// y `similarOptionIds`); los campos singulares siguen siendo el primero de cada
+// lista, así que los datos antiguos siguen funcionando igual.
 const alternatives = product.alternatives;
-const cheaperProduct = alternatives?.cheaperOptionId
-  ? allProducts.find((p) => p.id === alternatives.cheaperOptionId)
-  : null;
-const premiumProduct = alternatives?.premiumOptionId
-  ? allProducts.find((p) => p.id === alternatives.premiumOptionId)
-  : null;
-const similarProduct = alternatives?.similarOptionId
-  ? allProducts.find((p) => p.id === alternatives.similarOptionId)
-  : null;
+const resolveProducts = (ids: Array<string | undefined | null>) =>
+  ids
+    .filter((id): id is string => Boolean(id))
+    .map((id) => allProducts.find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => Boolean(p));
+const cheaperOptionIds =
+  alternatives?.cheaperOptionIds?.length
+    ? alternatives.cheaperOptionIds
+    : alternatives?.cheaperOptionId
+      ? [alternatives.cheaperOptionId]
+      : [];
+const similarOptionIds =
+  alternatives?.similarOptionIds?.length
+    ? alternatives.similarOptionIds
+    : alternatives?.similarOptionId
+      ? [alternatives.similarOptionId]
+      : [];
+const cheaperProducts = resolveProducts(cheaperOptionIds);
+const premiumProducts = resolveProducts([alternatives?.premiumOptionId]);
+const similarProducts = resolveProducts(similarOptionIds);
 // Vinculadas en el panel que no ocupan un slot de rol (se muestran como competidores).
-const roleIds = new Set([
-  alternatives?.cheaperOptionId,
-  alternatives?.premiumOptionId,
-  alternatives?.similarOptionId,
-].filter(Boolean));
+const roleIds = new Set(
+  [...cheaperOptionIds, ...similarOptionIds, alternatives?.premiumOptionId].filter(Boolean) as string[],
+);
 const extraLinkedProducts = linkedAlternativeProducts.filter((p) => !roleIds.has(p.id));
-const hasAlternatives = !!(cheaperProduct || premiumProduct || similarProduct || extraLinkedProducts.length);
+const hasAlternatives = !!(
+  cheaperProducts.length ||
+  premiumProducts.length ||
+  similarProducts.length ||
+  extraLinkedProducts.length
+);
 
 // SEO: Datos estructurados de producto (Schema.org Product)
 const productSchema = {
@@ -715,8 +732,8 @@ const productSchema = {
         </div>
 
         <div class="alternatives-grid">
-          {cheaperProduct && (
-            <a href={`/producto/${productKey(cheaperProduct)}`} class="alternative-card alt-cheaper">
+          {cheaperProducts.map((p) => (
+            <a href={`/producto/${productKey(p)}`} class="alternative-card alt-cheaper">
               <span class="alt-badge alt-badge-cheaper">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
@@ -724,29 +741,29 @@ const productSchema = {
                 Más económico
               </span>
               <img
-                src={cheaperProduct.image}
-                alt={cheaperProduct.title}
+                src={p.image}
+                alt={p.title}
                 loading="lazy"
                 width="120"
                 height="120"
                 class="alt-image"
               />
-              <h3 class="alt-title">{cleanMarketplaceSuffix(cheaperProduct.title)}</h3>
-              <span class="alt-price">{formatCurrency(cheaperProduct.price)}</span>
-              {cheaperProduct.rating && (
+              <h3 class="alt-title">{cleanMarketplaceSuffix(p.title)}</h3>
+              <span class="alt-price">{formatCurrency(p.price)}</span>
+              {p.rating && (
                 <span class="alt-rating">
                   <svg width="12" height="12" viewBox="0 0 20 20" fill="#f59e0b">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                   </svg>
-                  {cheaperProduct.rating.toFixed(1)}
+                  {p.rating.toFixed(1)}
                 </span>
               )}
               <span class="alt-cta">Consultar análisis →</span>
             </a>
-          )}
+          ))}
 
-          {premiumProduct && (
-            <a href={`/producto/${productKey(premiumProduct)}`} class="alternative-card alt-premium">
+          {premiumProducts.map((p) => (
+            <a href={`/producto/${productKey(p)}`} class="alternative-card alt-premium">
               <span class="alt-badge alt-badge-premium">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
@@ -754,29 +771,29 @@ const productSchema = {
                 Opción premium
               </span>
               <img
-                src={premiumProduct.image}
-                alt={premiumProduct.title}
+                src={p.image}
+                alt={p.title}
                 loading="lazy"
                 width="120"
                 height="120"
                 class="alt-image"
               />
-              <h3 class="alt-title">{cleanMarketplaceSuffix(premiumProduct.title)}</h3>
-              <span class="alt-price">{formatCurrency(premiumProduct.price)}</span>
-              {premiumProduct.rating && (
+              <h3 class="alt-title">{cleanMarketplaceSuffix(p.title)}</h3>
+              <span class="alt-price">{formatCurrency(p.price)}</span>
+              {p.rating && (
                 <span class="alt-rating">
                   <svg width="12" height="12" viewBox="0 0 20 20" fill="#f59e0b">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                   </svg>
-                  {premiumProduct.rating.toFixed(1)}
+                  {p.rating.toFixed(1)}
                 </span>
               )}
               <span class="alt-cta">Consultar análisis →</span>
             </a>
-          )}
+          ))}
 
-          {similarProduct && (
-            <a href={`/producto/${productKey(similarProduct)}`} class="alternative-card alt-similar">
+          {similarProducts.map((p) => (
+            <a href={`/producto/${productKey(p)}`} class="alternative-card alt-similar">
               <span class="alt-badge alt-badge-similar">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                   <rect x="3" y="3" width="7" height="7" /><rect x="14" y="3" width="7" height="7" /><rect x="14" y="14" width="7" height="7" /><rect x="3" y="14" width="7" height="7" />
@@ -784,26 +801,26 @@ const productSchema = {
                 Competidor directo
               </span>
               <img
-                src={similarProduct.image}
-                alt={similarProduct.title}
+                src={p.image}
+                alt={p.title}
                 loading="lazy"
                 width="120"
                 height="120"
                 class="alt-image"
               />
-              <h3 class="alt-title">{cleanMarketplaceSuffix(similarProduct.title)}</h3>
-              <span class="alt-price">{formatCurrency(similarProduct.price)}</span>
-              {similarProduct.rating && (
+              <h3 class="alt-title">{cleanMarketplaceSuffix(p.title)}</h3>
+              <span class="alt-price">{formatCurrency(p.price)}</span>
+              {p.rating && (
                 <span class="alt-rating">
                   <svg width="12" height="12" viewBox="0 0 20 20" fill="#f59e0b">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                   </svg>
-                  {similarProduct.rating.toFixed(1)}
+                  {p.rating.toFixed(1)}
                 </span>
               )}
               <span class="alt-cta">Consultar análisis →</span>
             </a>
-          )}
+          ))}
 
           {extraLinkedProducts.map((p) => (
             <a href={`/producto/${productKey(p)}`} class="alternative-card alt-similar">

@@ -724,8 +724,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </svg>
           </div>
           <div>
-              <h2 class="card-title">2. Catálogo AliExpress (caché)</h2>
-            <p class="card-desc">Tabla amplia del último catálogo sincronizado, guardado en el servidor. Usa «Sincronizar» para refrescarlo contra la API; se avisa si la caché supera las 6 horas.</p>
+              <h2 class="card-title">2. Catálogo de Afiliados</h2>
+            <p class="card-desc">Tabla amplia de todos los productos sincronizados con las redes conectadas (AliExpress, Amazon, eBay…), guardados en el servidor. Usa «Sincronizar» para refrescarlo contra la API; se avisa si la caché supera las 6 horas.</p>
           </div>
         </div>
 
@@ -1093,7 +1093,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     <div class="admin-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="linkAltTitle">
       <button type="button" class="admin-modal-close" data-admin-modal-close aria-label="Cerrar">×</button>
       <h3 id="linkAltTitle" class="admin-modal-title">🔗 Vincular Alternativas <span class="admin-modal-subtitle" id="linkAltProductName"></span></h3>
-      <p class="admin-modal-text">Busca y marca productos del catálogo (o sugeridos por coincidencia de título) para enlazarlos como alternativas. La vinculación es <strong>bidireccional</strong> y actualiza el contador «Comparar con alternativas (N)» de la PDP.</p>
+      <p class="admin-modal-text">Busca y marca productos del catálogo (o sugeridos por coincidencia de título) para enlazarlos como alternativas. La vinculación es <strong>bidireccional</strong> y actualiza el contador «Comparar con alternativas (N)» de la PDP. Los tres roles se sugieren <strong>automáticamente</strong> al abrir y puedes cambiarlos (mantén <kbd>Ctrl</kbd> para elegir varias económicas o competidores).</p>
       <label class="admin-modal-field">
         <span>Buscar en el catálogo</span>
         <input type="search" id="linkAltSearch" placeholder="Filtrar por título, categoría o ID..." />
@@ -1111,15 +1111,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <div class="link-alt-roles">
         <label class="admin-modal-field">
           <span>⭐ Opción Principal / Mejor Valorada</span>
-          <select id="linkAltRolePremium"><option value="">— Ninguna —</option></select>
+          <select id="linkAltRolePremium" class="link-alt-role-select"><option value="">— Ninguna —</option></select>
         </label>
         <label class="admin-modal-field">
-          <span>💰 Alternativa Económica</span>
-          <select id="linkAltRoleCheap"><option value="">— Ninguna —</option></select>
+          <span>💰 Alternativa Económica <span class="muted">(varias)</span></span>
+          <select id="linkAltRoleCheap" class="link-alt-role-select" multiple size="4"><option value="">— Ninguna —</option></select>
         </label>
         <label class="admin-modal-field">
-          <span>🎯 Competidor directo</span>
-          <select id="linkAltRoleSimilar"><option value="">— Ninguna —</option></select>
+          <span>🎯 Competidor directo <span class="muted">(varios)</span></span>
+          <select id="linkAltRoleSimilar" class="link-alt-role-select" multiple size="4"><option value="">— Ninguna —</option></select>
         </label>
       </div>
       <p id="linkAltStatus" class="admin-modal-status" hidden></p>
@@ -1344,7 +1344,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const btnProdSelAll = document.getElementById('btnProdSelAll');
     const btnProdSelClear = document.getElementById('btnProdSelClear');
     const btnProdEnrich = document.getElementById('btnProdEnrich');
-    const btnProdDeleteSel = document.getElementById('btnProdDeleteSel');
     const prodCatAssign = document.getElementById('prodCatAssign');
     const btnProdAssignCat = document.getElementById('btnProdAssignCat');
     let selectedProductIds = new Set();
@@ -2378,9 +2377,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           prodPopulateFilterOptions();
           prodBuildRanges();
           prodFilterApply();
-          // El filtro «Estado» de la tabla AliExpress se calcula con esta lista
-          // (sólo se refrescan chips y contador: la tabla no cambia aquí).
-          if (aliFilterPanel) aliFilterPanel.refresh();
+          // El filtro «Estado» de la tabla de afiliados se calcula con esta lista.
+          try {
+            if (aliFilterPanel) aliFilterPanel.refresh();
+          } catch { /* el panel de filtros de afiliados aún no está montado */ }
+          // Y su TABLA se repinta: al dar de alta/borrar productos cambia el
+          // índice de estados (chips «✓ en catálogo», botón «Añadido» y contador).
+          try {
+            renderAliCatalog();
+          } catch { /* la tabla de afiliados aún no está montada */ }
         }
       } catch (err) {
         console.error('Error al recargar productos:', err);
@@ -2490,9 +2495,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               </dd></div>
               ${Array.isArray(p.normalized_tags) && p.normalized_tags.length ? `<div class="aff-detail-item"><dt>Tags normalizados (${p.normalized_tags.length})</dt><dd class="tag-chip-list">${p.normalized_tags.map((t) => `<span class="tag-chip">${escapeHtml ? escapeHtml(t) : t}</span>`).join('')}</dd></div>` : ''}
               <div class="aff-detail-item"><dt>Alternativas vinculadas</dt><dd>
-                ${Array.isArray(p.alternative_product_ids) && p.alternative_product_ids.length ? `${p.alternative_product_ids.length} vínculo(s)` : 'Ninguna'}
-                ${p.alternatives && p.alternatives.premiumOptionId ? ' · ⭐ principal' : ''}
-                ${p.alternatives && p.alternatives.cheaperOptionId ? ' · 💰 económica' : ''}
+                ${(() => {
+                  const a = p.alternatives || {};
+                  const links = Array.isArray(p.alternative_product_ids) ? p.alternative_product_ids.length : 0;
+                  const premium = a.premiumOptionId ? 1 : 0;
+                  const cheaper = (Array.isArray(a.cheaperOptionIds) ? a.cheaperOptionIds.length : 0) || (a.cheaperOptionId ? 1 : 0);
+                  const similar = (Array.isArray(a.similarOptionIds) ? a.similarOptionIds.length : 0) || (a.similarOptionId ? 1 : 0);
+                  if (!links && !premium && !cheaper && !similar) return 'Ninguna';
+                  return `${links} vínculo(s) · ⭐ ${premium} principal · 💰 ${cheaper} económica(s) · 🎯 ${similar} competidor(es)`;
+                })()}
                 <button type="button" class="btn-secondary btn-sm btn-link-alternatives" data-id="${p.id}">🔗 Vincular Alternativas</button>
               </dd></div>
               ${p.rating != null ? `<div class="aff-detail-item"><dt>Valoración</dt><dd>${Number(p.rating).toFixed(1)} ★ ${p.reviewsCount != null ? `(${p.reviewsCount} opiniones)` : ''}</dd></div>` : ''}
@@ -2956,22 +2967,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       });
       updateProdSelCount();
     });
-    btnProdDeleteSel?.addEventListener('click', async () => {
-      if (!selectedProductIds.size) return;
-      if (!confirm(`¿Eliminar ${selectedProductIds.size} producto(s) del catálogo?`)) return;
-      let ok = 0;
-      for (const id of Array.from(selectedProductIds)) {
-        try {
-          const res = await fetch('/api/products/add', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'delete', id })});
-          const data = await res.json();
-          if (data.success) ok++;
-        } catch {}
-      }
-      selectedProductIds.clear();
-      updateProdSelCount();
-      await reloadProductsTable();
-      showAlert('success', 'Eliminación masiva', `${ok} producto(s) eliminados del catálogo.`);
-    });
     btnProdEnrich?.addEventListener('click', async () => {
       const ids = Array.from(selectedProductIds);
       if (!ids.length) return;
@@ -3017,7 +3012,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     btnProdMakeSection?.addEventListener('click', async () => {
       const ids = Array.from(selectedProductIds);
-      if (!ids.length) return;
+      if (!ids.length) { showAlert('warning', 'Sin selección', 'Selecciona al menos un producto del catálogo.'); return; }
       const title = window.prompt('Título de la nueva sección:');
       if (!title || !title.trim()) return;
       const description = window.prompt('Descripción opcional (vacío para omitir):') || '';
@@ -3032,7 +3027,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           selectedProductIds.clear();
           updateProdSelCount();
           await loadSectionsAdmin();
-          showAlert('success', 'Sección creada', `"${title.trim()}" añadida a las secciones de la web.`);
+          showAlert('success', 'Sección creada', `${title.trim()} añadida a las secciones de la web.`);
         } else {
           showAlert('error', 'Error', data.message || 'No se pudo crear la sección.');
         }
@@ -3077,31 +3072,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         host.innerHTML = '<p class="text-muted">Error de red.</p>';
       }
     }
-    btnProdMakeSection?.addEventListener('click', async () => {
-      const ids = Array.from(selectedProductIds);
-      if (!ids.length) { showAlert('warning', 'Sin seleccion', 'Selecciona al menos un producto del catalogo.'); return; }
-      const title = window.prompt('Titulo de la nueva seccion:');
-      if (!title || !title.trim()) return;
-      const description = window.prompt('Descripcion opcional (vacio para omitir):') || '';
-      const published = window.confirm('Publicar en la web ahora?');
-      try {
-        const res = await fetch('/api/admin/sections', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'create', title: title.trim(), description: description.trim(), productIds: ids, published }),
-        });
-        const data = await res.json();
-        if (data.success) {
-          selectedProductIds.clear();
-          updateProdSelCount();
-          await loadSectionsAdmin();
-          showAlert('success', 'Seccion creada', title.trim() + ' anadida a las secciones de la web.');
-        } else {
-          showAlert('error', 'Error', data.message || 'No se pudo crear la seccion.');
-        }
-      } catch {
-        showAlert('error', 'Error de red', 'No se pudo crear la seccion.');
-      }
-    });
     if (typeof loadSectionsAdmin === 'function') loadSectionsAdmin();
     attachRowActions();
     if (typeof reloadProductsTable === 'function') reloadProductsTable();
@@ -3756,6 +3726,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           category: assignedCategory,
           merchant: product.network,
           affiliateUrl: affiliateLink,
+          // ID externo del comerciante (Item ID de AliExpress / ASIN): se
+          // persiste como `sourceId` para que el filtro «En catálogo »
+          // reconozca la fila aunque el enlace corto de afiliado cambie.
+          sourceId: String(product.sourceId || product.externalId || '').trim() || undefined,
           // URL de la ficha real (no el enlace corto de afiliado): el servidor
           // la lee para complementar marca, specs, opiniones, envío y Buy Now.
           url: product.productUrl || affiliateLink,
@@ -3851,6 +3825,22 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
 
     /**
+     * Botón «Añadir» de la fila con ese ID externo, tal como está pintada AHORA.
+     * Tras un repintado el botón original desaparece del DOM, así que los avisos
+     * se anclan en la fila recién renderizada (`data-ac-id`).
+     */
+    function aliImportButtonFor(externalId) {
+      const wanted = String(externalId || '');
+      if (!wanted) return null;
+      for (const row of document.querySelectorAll('[data-ac-id]')) {
+        if (String(row.getAttribute('data-ac-id') || '') === wanted) {
+          return row.querySelector('[data-ac-import]') || null;
+        }
+      }
+      return null;
+    }
+
+    /**
      * Categoría + subcategoría elegidas en la barra de acciones (#aliImportActions).
      * Devuelve `null` si no se ha elegido categoría (alta automática por keywords).
      */
@@ -3925,6 +3915,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             image: basic.image,
             gallery: basic.gallery,
             affiliateUrl: basic.affiliateUrl,
+            sourceId: basic.sourceId,
             merchant: product.network,
             url: product.productUrl,
             brand: basic.brand || (product.network === 'aliexpress' ? 'AliExpress' : product.network),
@@ -3948,29 +3939,38 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           // El servidor contesta `duplicate: true` si el producto ya existía
           // (misma URL o mismo título): no se crea una segunda fila.
           const duplicate = Boolean(alreadyImported || data.duplicate);
-          markAliImported(btn);
-          showAliImportFlag(
-            btn,
-            duplicate ? 'Ya estaba en el catálogo' : 'Añadido al catálogo',
-            duplicate ? 'warn' : 'ok',
-          );
-          aliInvalidateEstado();
           // Categoría/subcategoría elegidas en la barra de acciones: además del
           // nombre, se fijan los IDs jerárquicos sobre el producto recién dado
           // de alta (los duplicados conservan la categoría que ya tenían).
+          // Se hace ANTES de recargar, porque escribe en el servidor.
           if (!duplicate && chosen && chosen.categoryId) {
             await assignAliCategory([data.product?.id || basic.id], chosen);
           }
-          // Espera a recargar el catálogo registrado para que el índice de
-          // estados ya incluya este producto (y el contador sea correcto).
+          // Espera a recargar el catálogo registrado: además de la tabla de
+          // productos, `reloadProductsTable()` repinta la de afiliados con el
+          // índice de estados ya actualizado.
           await reloadProductsTable();
           // La API devuelve los avisos en `enrichment.warnings` (`warnings` suelto sólo existe en el 502).
           const warnings = Array.isArray(data.enrichment?.warnings) ? data.enrichment.warnings : [];
           if (warnings.length) showAliStatus('warning', 'Añadido con avisos', warnings.join(' | '));
-          // Con «En catálogo: No añadidos» la fila deja de cumplir el filtro,
-          // así que la tabla se repinta (y el letrero del botón con ella).
-          const estado = (aliFilterPanel && aliFilterPanel.getParams().estado) || 'ALL';
-          if (estado === 'PENDING') renderAliCatalog();
+          // El letrero va en el botón RECIENTEMENTE pintado: el original ya no
+          // existe en el DOM tras el repintado de la tabla.
+          const freshBtn = aliImportButtonFor(product.externalId);
+          if (freshBtn) {
+            markAliImported(freshBtn);
+            showAliImportFlag(
+              freshBtn,
+              duplicate ? 'Ya estaba en el catálogo' : 'Añadido al catálogo',
+              duplicate ? 'warn' : 'ok',
+            );
+          } else {
+            // La fila ya no se ve (filtro «No añadidos»): aviso en la tarjeta.
+            showAliStatus(
+              duplicate ? 'warning' : 'success',
+              duplicate ? 'Ya estaba en el catálogo' : 'Añadido al catálogo',
+              `«${product.title}» ${duplicate ? 'ya figuraba' : 'se ha añadido'} en el catálogo registrado.`,
+            );
+          }
           return { ok: true, duplicate, product: data.product };
         }
         const message = (data && data.message) || 'No se pudo añadir al catálogo.';
@@ -4125,27 +4125,151 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         .replace(/\/+$/, '');
     }
 
+    /** Título normalizado (minúsculas, sin acentos ni puntuación). */
+    function aliNormTitle(value) {
+      return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    /** Tokens significativos de un título (>2 caracteres). */
+    function aliTitleTokens(value) {
+      const t = aliNormTitle(value);
+      return t ? t.split(' ').filter((tok) => tok.length > 2) : [];
+    }
+
+    /** ID del artículo (Item ID de AliExpress / ASIN) extraído de una URL. */
+    function aliItemIdOf(value) {
+      const raw = String(value || '');
+      if (!raw) return '';
+      const m =
+        raw.match(/\/item\/(?:[^/?#]*\/)?(?:ae01_)?(\d{6,20})/i) ||
+        raw.match(/\/i\/(\d{6,20})(?:[/?#]|$)/i) ||
+        raw.match(/[?&](?:itemId|productId|productIdList)=(\d{6,20})/i) ||
+        raw.match(/\/(?:dp|gp\/product|product)\/([A-Z0-9]{10})(?:[/?#]|$)/i) ||
+        raw.match(/[?&]asin=([A-Z0-9]{10})/i);
+      return m ? m[1] || '' : '';
+    }
+
+    /** Clave comparable de un ID externo (sin prefijo «AE-» ni espacios). */
+    function aliIdKey(value) {
+      return String(value || '')
+        .trim()
+        .toUpperCase()
+        .replace(/^AE-?/, '');
+    }
+
+    /**
+     * Estado de importación de cada producto del catálogo de afiliados.
+     *  - DISCARDED: ocultado con la ✕ de la tabla (se conserva en la caché para
+     *    poder recuperarlo con el filtro «Descartados»).
+     *  - IMPORTED: ya existe en el catálogo Tradylor.
+     *  - PENDING:  el resto.
+     *
+     * El «ya existe» NO depende sólo de la URL: las filas importadas antes de
+     * persistir `sourceId` traen el enlace corto de afiliado (que cambia) o un
+     * título reescrito por IA. Por eso se comparan varias claves en orden:
+     *   1. sourceId / ID externo (ASIN · Item ID)
+     *   2. URL canónica (host + ruta, sin parámetros de tracking)
+     *   3. ID del artículo extraído de cualquier URL
+     *   4. imagen única del producto (mismo CDN, sin placeholders)
+     *   5. título normalizado (sin acentos ni puntuación)
+     *   6. coincidencia difusa de títulos (≥3 tokens comunes y ≥60 % de solape)
+     */
     function aliBuildEstadoIndex() {
       const index = new Map();
       const removed = acRemovedGet();
-      const catalogKeys = new Set();
+
+      // ── Índice del catálogo registrado (multi-clave) ──────────────────────
+      const idKeys = new Set();
+      const urlKeys = new Set();
+      const itemIds = new Set();
+      const imageKeys = new Set();
+      const titleKeys = new Set();
+      const catalogTokens = [];
+
+      const imageCount = new Map();
       for (const item of currentProducts) {
-        if (item.affiliateUrl) catalogKeys.add(aliNormKey(item.affiliateUrl));
-        if (item.title) catalogKeys.add(`t:${aliNormKey(item.title)}`);
+        const img = aliNormKey(item.image || '');
+        if (img && !img.includes('unsplash')) imageCount.set(img, (imageCount.get(img) || 0) + 1);
       }
+
+      for (const item of currentProducts) {
+        for (const rawId of [item.sourceId, item.asin]) {
+          const key = aliIdKey(rawId);
+          if (key) idKeys.add(key);
+        }
+        for (const url of [item.affiliateUrl, item.buyNowUrl, item.url]) {
+          if (!url) continue;
+          urlKeys.add(aliNormKey(url));
+          const itemId = aliIdKey(aliItemIdOf(url));
+          if (itemId) itemIds.add(itemId);
+        }
+        const img = aliNormKey(item.image || '');
+        if (img && !img.includes('unsplash') && imageCount.get(img) === 1) imageKeys.add(img);
+        const titleKey = aliNormTitle(item.title);
+        if (titleKey) {
+          titleKeys.add(`t:${titleKey}`);
+          catalogTokens.push(aliTitleTokens(titleKey));
+        }
+      }
+
       for (const product of aliProducts) {
         if (removed.has(product.externalId)) {
           index.set(product.externalId, 'DISCARDED');
           continue;
         }
+
         const urls = [
           product.productUrl,
           product.extra && product.extra['Enlace de afiliado'],
           product.extra && product.extra['URL del producto'],
         ]
           .filter(Boolean)
-          .map(aliNormKey);
-        const imported = urls.some((url) => catalogKeys.has(url)) || catalogKeys.has(`t:${aliNormKey(product.title)}`);
+          .map(String);
+
+        const externalKey = aliIdKey(product.externalId);
+        let imported =
+          Boolean(externalKey && idKeys.has(externalKey)) ||
+          urls.some((url) => urlKeys.has(aliNormKey(url))) ||
+          urls.some((url) => {
+            const itemId = aliIdKey(aliItemIdOf(url));
+            return Boolean(itemId && itemIds.has(itemId));
+          }) ||
+          Boolean(product.image && imageKeys.has(aliNormKey(product.image)));
+
+        if (!imported) {
+          const aliTitleKey = aliNormTitle(product.title);
+          if (aliTitleKey && titleKeys.has(`t:${aliTitleKey}`)) {
+            imported = true;
+          } else if (aliTitleKey && catalogTokens.length && currentProducts.length <= 20000) {
+            // Último recurso: el título de la ficha fue reescrito por la IA de
+            // enriquecimiento y ya no coincide literalmente con el de la tabla.
+            const aliTokens = aliTitleTokens(aliTitleKey);
+            const aliLen = aliTokens.length;
+            if (aliLen >= 3) {
+              const aliSet = new Set(aliTokens);
+              for (const tokens of catalogTokens) {
+                // Filtro barato: si las longitudes no pueden solaparse ≥60 %, no sigue.
+                if (Math.abs(tokens.length - aliLen) / Math.max(tokens.length, aliLen) > 0.4) continue;
+                let common = 0;
+                const small = tokens.length <= aliTokens.length ? tokens : aliTokens;
+                const big = tokens.length <= aliTokens.length ? aliTokens : tokens;
+                const bigSet = big === aliTokens ? aliSet : new Set(big);
+                for (const tok of small) if (bigSet.has(tok)) common++;
+                if (common >= 3 && common / small.length >= 0.6) {
+                  imported = true;
+                  break;
+                }
+              }
+            }
+          }
+        }
+
         index.set(product.externalId, imported ? 'IMPORTED' : 'PENDING');
       }
       return index;
@@ -4332,7 +4456,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                       : '';
                   const addBtnClass = `btn-success btn-sm unified-import ali-import${yaAnadido ? ' is-added' : ''}`;
                   return `
-                <tr class="aff-row" data-ac-row="${index}" tabindex="0" aria-expanded="false">
+                <tr class="aff-row" data-ac-row="${index}" data-ac-id="${escapeHtml(product.externalId)}" tabindex="0" aria-expanded="false">
                   <td class="ac-td-check"><input type="checkbox" data-ac-check="${index}" aria-label="Seleccionar producto" ${checked} /></td>
                   <td><span class="aff-thumb">${product.image ? `<img src="${escapeHtml(product.image)}" alt="" loading="lazy" />` : ''}</span></td>
                   <td class="aff-name">
@@ -5423,17 +5547,49 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     let linkAltProductId = null;
     let linkAltLinkedIds = new Set();
     let linkAltCatalog = [];
+    /**
+     * Selección de los 3 roles. La económica y el competidor admiten VARIOS ids
+     * (los selects son `multiple`); el campo premium sigue siendo único.
+     * El servidor los rellena automáticamente si el producto no tenía nada.
+     */
+    const LINK_ALT_ROLES_EMPTY = { premiumOptionId: '', cheaperOptionIds: [], similarOptionIds: [] };
+    let linkAltRoles = { ...LINK_ALT_ROLES_EMPTY };
+
+    function linkAltRoleSelected(roleKey) {
+      const value = linkAltRoles[roleKey];
+      if (Array.isArray(value)) return value.filter(Boolean);
+      return value ? [value] : [];
+    }
 
     function linkAltRenderRoles() {
-      for (const [selectId, roleKey] of [['linkAltRolePremium', 'premiumOptionId'], ['linkAltRoleCheap', 'cheaperOptionId'], ['linkAltRoleSimilar', 'similarOptionId']]) {
+      const byId = new Map(linkAltCatalog.map((p) => [p.id, p]));
+      // Cualquier id vinculado (aunque no esté en la muestra) debe poder elegirse.
+      for (const id of linkAltLinkedIds) {
+        if (!byId.has(id)) byId.set(id, { id, title: id, price: 0, image: '' });
+      }
+      const optionsFor = Array.from(linkAltLinkedIds)
+        .map((id) => byId.get(id))
+        .filter(Boolean);
+
+      for (const [selectId, roleKey] of [
+        ['linkAltRolePremium', 'premiumOptionId'],
+        ['linkAltRoleCheap', 'cheaperOptionIds'],
+        ['linkAltRoleSimilar', 'similarOptionIds'],
+      ]) {
         const select = document.getElementById(selectId);
         if (!select) continue;
-        const current = select.value;
-        select.innerHTML = '<option value="">— Ninguna —</option>' + linkAltCatalog
-          .filter((p) => linkAltLinkedIds.has(p.id))
+        // En los selects múltiples no hay «— Ninguna —»: sin selección = rol vacío.
+        const placeholder = select.multiple ? '' : '<option value="">— Ninguna —</option>';
+        select.innerHTML = placeholder + optionsFor
           .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.title).slice(0, 60)}</option>`)
           .join('');
-        if (current && Array.from(select.options).some((o) => o.value === current)) select.value = current;
+        const selected = new Set(linkAltRoleSelected(roleKey));
+        if (select.multiple) {
+          for (const option of select.options) option.selected = selected.has(option.value);
+        } else {
+          const first = [...selected][0] || '';
+          select.value = Array.from(select.options).some((o) => o.value === first) ? first : '';
+        }
       }
     }
 
@@ -5473,8 +5629,28 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (!checkbox) return;
       const id = checkbox.getAttribute('data-link-alt-check');
       if (!id) return;
-      if (checkbox.checked) linkAltLinkedIds.add(id); else linkAltLinkedIds.delete(id);
+      if (checkbox.checked) linkAltLinkedIds.add(id);
+      else {
+        linkAltLinkedIds.delete(id);
+        // Si se desvincula un producto ya no puede seguir en ningún rol.
+        if (linkAltRoles.premiumOptionId === id) linkAltRoles.premiumOptionId = '';
+        linkAltRoles.cheaperOptionIds = linkAltRoles.cheaperOptionIds.filter((v) => v !== id);
+        linkAltRoles.similarOptionIds = linkAltRoles.similarOptionIds.filter((v) => v !== id);
+      }
       linkAltRenderList();
+    });
+
+    // Cambio manual de un rol (único o múltiple): se guarda en el estado local.
+    document.addEventListener('change', (event) => {
+      const select = event.target.closest?.('.link-alt-role-select');
+      if (!select) return;
+      if (select.id === 'linkAltRolePremium') {
+        linkAltRoles.premiumOptionId = select.value || '';
+      } else if (select.id === 'linkAltRoleCheap') {
+        linkAltRoles.cheaperOptionIds = Array.from(select.selectedOptions || []).map((o) => o.value).filter(Boolean);
+      } else if (select.id === 'linkAltRoleSimilar') {
+        linkAltRoles.similarOptionIds = Array.from(select.selectedOptions || []).map((o) => o.value).filter(Boolean);
+      }
     });
     linkAltSearch?.addEventListener('input', linkAltRenderList);
 
@@ -5490,6 +5666,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (!id) return;
       linkAltProductId = id;
       linkAltLinkedIds = new Set();
+      linkAltRoles = { ...LINK_ALT_ROLES_EMPTY };
       if (linkAltStatus) { linkAltStatus.hidden = true; }
       if (linkAltSearch) linkAltSearch.value = '';
       const nameEl = document.getElementById('linkAltProductName');
@@ -5515,13 +5692,32 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             id: p.id, title: p.title, price: p.price, image: p.image, category: p.category,
           })),
         ];
-        const roles = data.product?.alternatives || {};
-        const setRole = (selectId, value) => { const el = document.getElementById(selectId); if (el) el.value = value || ''; };
-        // Los roles se re-pintan en linkAltRenderList; se guardan para el restore.
+        // Selección de roles: primero la del servidor (con los arrays), después
+        // la que traiga el producto (formato legado singular).
+        const serverRoles = data.roles || {};
+        const alts = data.product?.alternatives || {};
+        // Prioridad: lo que devuelve el servidor (arrays) → arrays guardados en
+        // el producto → valor legado singular (un único id).
+        const listOf = (serverArray, arrayField, singularField) => {
+          if (Array.isArray(serverArray) && serverArray.length) return serverArray.filter(Boolean);
+          const stored = Array.isArray(alts[arrayField]) ? alts[arrayField].filter(Boolean) : [];
+          if (stored.length) return stored;
+          return alts[singularField] ? [alts[singularField]] : [];
+        };
+        linkAltRoles = {
+          premiumOptionId: serverRoles.premiumOptionId || alts.premiumOptionId || '',
+          cheaperOptionIds: listOf(serverRoles.cheaperOptionIds, 'cheaperOptionIds', 'cheaperOptionId'),
+          similarOptionIds: listOf(serverRoles.similarOptionIds, 'similarOptionIds', 'similarOptionId'),
+        };
+        // Los roles se re-pintan en linkAltRenderList.
         linkAltRenderList();
-        setRole('linkAltRolePremium', roles.premiumOptionId);
-        setRole('linkAltRoleCheap', roles.cheaperOptionId);
-        setRole('linkAltRoleSimilar', roles.similarOptionId);
+        // El servidor rellena sólo cuando faltaba selección: se avisa para que
+        // se revise antes de confirmar.
+        if (serverRoles.auto && linkAltStatus) {
+          linkAltStatus.hidden = false;
+          linkAltStatus.className = 'admin-modal-status is-ok';
+          linkAltStatus.textContent = 'Selección automática aplicada (vínculos y roles ya guardados): revisa, ajusta lo que quieras y pulsa «Guardar vínculos» para confirmar.';
+        }
       } catch {
         if (linkAltSuggestions) linkAltSuggestions.innerHTML = '<p class="text-muted">Error de red cargando el catálogo.</p>';
       }
@@ -5530,15 +5726,20 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     document.getElementById('btnLinkAltSave')?.addEventListener('click', async () => {
       if (!linkAltProductId) return;
       const ids = Array.from(linkAltLinkedIds);
+      const roleSingle = (selectId) => document.getElementById(selectId)?.value || null;
+      const roleMulti = (selectId) =>
+        Array.from(document.getElementById(selectId)?.selectedOptions || [])
+          .map((option) => option.value)
+          .filter(Boolean);
       try {
         const res = await fetch('/api/admin/alternatives', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             productId: linkAltProductId,
             alternativeProductIds: ids,
-            premiumOptionId: document.getElementById('linkAltRolePremium')?.value || null,
-            cheaperOptionId: document.getElementById('linkAltRoleCheap')?.value || null,
-            similarOptionId: document.getElementById('linkAltRoleSimilar')?.value || null,
+            premiumOptionId: roleSingle('linkAltRolePremium'),
+            cheaperOptionIds: roleMulti('linkAltRoleCheap'),
+            similarOptionIds: roleMulti('linkAltRoleSimilar'),
           }),
         });
         const data = await res.json();

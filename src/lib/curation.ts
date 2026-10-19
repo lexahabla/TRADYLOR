@@ -400,10 +400,81 @@ export function suggestAlternatives(products: Product[], productId: string, limi
     .slice(0, limit);
 }
 
+/** Claves de rol en plural + singular (para leer cualquier formato guardado). */
+export function roleIdsOf(product: Product): {
+  premium: string[];
+  cheaper: string[];
+  similar: string[];
+} {
+  const alts = product.alternatives || {};
+  const list = (values: Array<string | undefined>): string[] =>
+    [...new Set(values.filter((value): value is string => Boolean(value)))];
+  return {
+    premium: list([alts.premiumOptionId]),
+    cheaper: list([...(alts.cheaperOptionIds || []), alts.cheaperOptionId]),
+    similar: list([...(alts.similarOptionIds || []), alts.similarOptionId]),
+  };
+}
+
+/**
+ * Asignación AUTOMÁTICA de los 3 roles sobre un conjunto de candidatas.
+ *
+ *  - ⭐ Opción Principal / Mejor Valorada: la candidata mejor valorada (empate →
+ *    la más cara, que es la que mejor encaja como «principal»).
+ *  - 💰 Alternativa Económica: las candidatas más baratas que la base; se
+ *    preseleccionan todas las que estén dentro del 8 % del precio mínimo
+ *    (puede haber MÁS de una; en el panel se puede cambiar la elección).
+ *  - 🎯 Competidor directo: las candidatas con mayor similitud de título
+ *    (≥ 0.45 y dentro del 80 % de la mejor), máximo 3.
+ */
+export function autoAlternativeRoles(
+  base: Product,
+  candidates: Product[],
+): { premiumOptionId?: string; cheaperOptionIds: string[]; similarOptionIds: string[] } {
+  const pool = candidates.filter((p) => p.id && p.id !== base.id);
+  if (!pool.length) return { cheaperOptionIds: [], similarOptionIds: [] };
+
+  const ratingOf = (p: Product): number => (Number.isFinite(Number(p.rating)) ? Number(p.rating) : 0);
+  const priceOf = (p: Product): number => (Number(p.price) > 0 ? Number(p.price) : 0);
+
+  const premium = [...pool].sort(
+    (a, b) => ratingOf(b) - ratingOf(a) || priceOf(b) - priceOf(a) || a.title.localeCompare(b.title, 'es'),
+  )[0];
+
+  const basePrice = priceOf(base);
+  const cheaper = basePrice > 0 ? pool.filter((p) => priceOf(p) > 0 && priceOf(p) < basePrice) : [];
+  cheaper.sort((a, b) => priceOf(a) - priceOf(b));
+  const cheapest = cheaper.length ? priceOf(cheaper[0]) : 0;
+  const cheaperOptionIds = cheaper
+    .filter((p) => priceOf(p) <= cheapest * 1.08)
+    .slice(0, 3)
+    .map((p) => p.id);
+
+  const scored = pool
+    .map((p) => ({ p, score: titleSimilarity(base.title, p.title) }))
+    .filter((item) => item.score >= 0.45)
+    .sort((a, b) => b.score - a.score);
+  const top = scored.length ? scored[0].score : 0;
+  const similarOptionIds = scored
+    .filter((item) => item.score >= Math.max(0.45, top * 0.8))
+    .slice(0, 3)
+    .map((item) => item.p.id);
+
+  return {
+    premiumOptionId: premium?.id,
+    cheaperOptionIds,
+    similarOptionIds,
+  };
+}
+
 /**
  * Vincula alternativas de forma BIDIRECCIONAL: el array alternative_product_ids
  * se actualiza en el producto base y en cada alternativa. Los slots de rol
  * (premium / económica / similar) se escriben en `alternatives` del producto base.
+ *
+ * `cheaperOptionIds` / `similarOptionIds` admiten VARIOS ids; los campos
+ * singulares (`cheaperOptionId` / `similarOptionId`) quedan sincronizados con
+ * el primero de cada lista para la PDP y los datos antiguos.
  */
 export function linkAlternatives(input: {
   productId: string;
@@ -411,26 +482,63 @@ export function linkAlternatives(input: {
   premiumOptionId?: string | null;
   cheaperOptionId?: string | null;
   similarOptionId?: string | null;
+  cheaperOptionIds?: Array<string | null | undefined>;
+  similarOptionIds?: Array<string | null | undefined>;
 }): { ok: boolean; message: string; product?: Product } {
   const products = readProductsFromFile();
   const base = products.find((p) => p.id === input.productId);
   if (!base) return { ok: false, message: `No existe el producto "${input.productId}".` };
 
+  const ids = [
+    ...(Array.isArray(input.cheaperOptionIds) ? input.cheaperOptionIds : []),
+    ...(Array.isArray(input.similarOptionIds) ? input.similarOptionIds : []),
+  ]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean);
+  for (const value of [input.cheaperOptionId, input.similarOptionId, input.premiumOptionId]) {
+    const id = String(value ?? '').trim();
+    if (id) ids.push(id);
+  }
+
   const linked = [...new Set(input.alternativeProductIds.map((id) => String(id || '').trim()).filter(Boolean))]
     .filter((id) => id !== base.id && products.some((p) => p.id === id));
+  // Los ids de rol siempre forman parte de la lista de alternativas.
+  for (const id of ids) {
+    if (id !== base.id && products.some((p) => p.id === id) && !linked.includes(id)) linked.push(id);
+  }
 
   base.alternative_product_ids = linked;
 
-  const roles = {
-    premiumOptionId: String(input.premiumOptionId ?? '').trim() || undefined,
-    cheaperOptionId: String(input.cheaperOptionId ?? '').trim() || undefined,
-    similarOptionId: String(input.similarOptionId ?? '').trim() || undefined,
-  };
+  const cheaperIds = [
+    ...new Set(
+      [
+        ...(Array.isArray(input.cheaperOptionIds) ? input.cheaperOptionIds : []),
+        input.cheaperOptionId,
+      ]
+        .map((value) => String(value ?? '').trim())
+        .filter(Boolean),
+    ),
+  ].filter((id) => linked.includes(id));
+  const similarIds = [
+    ...new Set(
+      [
+        ...(Array.isArray(input.similarOptionIds) ? input.similarOptionIds : []),
+        input.similarOptionId,
+      ]
+        .map((value) => String(value ?? '').trim())
+        .filter(Boolean),
+    ),
+  ].filter((id) => linked.includes(id));
+  const premiumId = String(input.premiumOptionId ?? '').trim() || undefined;
+  const resolvedPremium = premiumId && linked.includes(premiumId) ? premiumId : undefined;
+
   base.alternatives = {
     ...base.alternatives,
-    premiumOptionId: roles.premiumOptionId,
-    cheaperOptionId: roles.cheaperOptionId,
-    similarOptionId: roles.similarOptionId,
+    premiumOptionId: resolvedPremium,
+    cheaperOptionId: cheaperIds[0],
+    similarOptionId: similarIds[0],
+    cheaperOptionIds: cheaperIds,
+    similarOptionIds: similarIds,
   };
 
   // Sincronía bidireccional del array en cada alternativa.
@@ -449,4 +557,119 @@ export function linkAlternatives(input: {
 
   writeProductsToFile(products);
   return { ok: true, message: `${linked.length} alternativa(s) vinculada(s) a "${base.title}".`, product: base };
+}
+
+/**
+ * Auto-vinculación de alternativas al dar de alta un producto:
+ *  - Si el producto YA tiene vínculos no se toca nada (nunca se pisa la curación manual).
+ *  - Si no tiene ninguno, se sugieren las coincidencias (título/categoría) y se
+ *    guardan con los 3 roles rellenados automáticamente (premium / económica /
+ *    competidor directo).
+ *
+ * Devuelve el nº de alternativas vinculadas para poder avisar en el panel.
+ */
+export function autoLinkAlternatives(productId: string): { ok: boolean; linked: number; rolesAssigned: boolean } {
+  const products = readProductsFromFile();
+  const base = products.find((p) => p.id === productId);
+  if (!base) return { ok: false, linked: 0, rolesAssigned: false };
+  if (Array.isArray(base.alternative_product_ids) && base.alternative_product_ids.length) {
+    return { ok: true, linked: base.alternative_product_ids.length, rolesAssigned: false };
+  }
+  // Umbral ALTO a propósito: sólo se auto-vinculan productos que de verdad
+  // parecen la misma familia (título muy parecido, o categoría + parecido
+  // medio); el resto queda para la selección manual en el panel.
+  const suggestions = suggestAlternatives(products, productId, 12)
+    .filter(({ product: p, score }) => titleSimilarity(base.title, p.title) >= 0.45 || score >= 0.6)
+    .slice(0, 6)
+    .map((item) => item.product);
+  if (!suggestions.length) return { ok: true, linked: 0, rolesAssigned: false };
+  const roles = autoAlternativeRoles(base, suggestions);
+  const result = linkAlternatives({
+    productId,
+    alternativeProductIds: suggestions.map((p) => p.id),
+    premiumOptionId: roles.premiumOptionId ?? null,
+    cheaperOptionIds: roles.cheaperOptionIds,
+    similarOptionIds: roles.similarOptionIds,
+  });
+  return { ok: result.ok, linked: result.ok ? suggestions.length : 0, rolesAssigned: result.ok };
+}
+
+/**
+ * Garantiza que un producto tenga alternativas VINCULADAS y los 3 ROLES
+ * rellenos. Es lo que usa el panel al abrir el modal «Vincular Alternativas»:
+ * los productos antiguos (creados antes de esta lógica) reciben aquí su
+ * selección automática, que luego se puede cambiar a mano.
+ */
+export function ensureAlternativeRoles(productId: string): {
+  ok: boolean;
+  linkedIds: string[];
+  roles: { premiumOptionId?: string; cheaperOptionIds: string[]; similarOptionIds: string[] };
+  auto: boolean;
+  message?: string;
+} {
+  const products = readProductsFromFile();
+  const base = products.find((p) => p.id === productId);
+  if (!base) {
+    return { ok: false, linkedIds: [], roles: { cheaperOptionIds: [], similarOptionIds: [] }, auto: false, message: `Producto "${productId}" no encontrado.` };
+  }
+
+  const stored = roleIdsOf(base);
+  const hasLinks = Array.isArray(base.alternative_product_ids) && base.alternative_product_ids.length > 0;
+  const hasRoles = Boolean(stored.premium.length || stored.cheaper.length || stored.similar.length);
+
+  // 1) Sin vínculos → auto-vincula con sugerencias + roles.
+  if (!hasLinks) {
+    const auto = autoLinkAlternatives(productId);
+    if (auto.ok) {
+      const fresh = readProductsFromFile().find((p) => p.id === productId) || base;
+      const roles = roleIdsOf(fresh);
+      return {
+        ok: true,
+        linkedIds: fresh.alternative_product_ids || [],
+        roles: {
+          premiumOptionId: roles.premium[0],
+          cheaperOptionIds: roles.cheaper,
+          similarOptionIds: roles.similar,
+        },
+        auto: auto.rolesAssigned,
+      };
+    }
+    return { ok: false, linkedIds: [], roles: { cheaperOptionIds: [], similarOptionIds: [] }, auto: false, message: 'No se pudieron generar las alternativas.' };
+  }
+
+  // 2) Con vínculos pero sin roles → calcula los roles sobre ESAS alternativas.
+  if (!hasRoles) {
+    const candidates = products.filter((p) => (base.alternative_product_ids || []).includes(p.id));
+    const roles = autoAlternativeRoles(base, candidates);
+    const result = linkAlternatives({
+      productId,
+      alternativeProductIds: base.alternative_product_ids || [],
+      premiumOptionId: roles.premiumOptionId ?? null,
+      cheaperOptionIds: roles.cheaperOptionIds,
+      similarOptionIds: roles.similarOptionIds,
+    });
+    const fresh = result.product || base;
+    return {
+      ok: result.ok,
+      linkedIds: fresh.alternative_product_ids || [],
+      roles: {
+        premiumOptionId: roles.premiumOptionId,
+        cheaperOptionIds: roles.cheaperOptionIds,
+        similarOptionIds: roles.similarOptionIds,
+      },
+      auto: result.ok,
+      message: result.ok ? undefined : result.message,
+    };
+  }
+
+  return {
+    ok: true,
+    linkedIds: base.alternative_product_ids || [],
+    roles: {
+      premiumOptionId: stored.premium[0],
+      cheaperOptionIds: stored.cheaper,
+      similarOptionIds: stored.similar,
+    },
+    auto: false,
+  };
 }

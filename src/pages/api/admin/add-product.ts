@@ -12,7 +12,8 @@ import {
   type EnrichedText,
 } from '../../../lib/ai';
 import { enrichProductLocally } from '../../../lib/localEnrich';
-import { findDuplicateProduct, readProductsFromFile, slugify, upsertProduct, type Product } from '../../../lib/productStore';
+import { findDuplicateProduct, readProductsFromFile, slugify, upsertProduct, writeProductsToFile, type Product } from '../../../lib/productStore';
+import { autoLinkAlternatives } from '../../../lib/curation';
 import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../../../utils/amazon';
 import { complementProductFromPage } from '../products/add';
 
@@ -115,6 +116,19 @@ export const POST: APIRoute = async ({ request }) => {
         urls: [body?.affiliateUrl, body?.url, body?.buyNowUrl],
       });
       if (duplicate) {
+        // Auto-sanado: si venía de la tabla de afiliados y la fila existente
+        // no guarda el ID externo, se le estampa AHORA (una sola vez). Así el
+        // filtro «En catálogo › Añadidos» reconoce el producto para siempre.
+        const incomingSourceId = String(body?.sourceId ?? '').trim();
+        if (incomingSourceId && !String(duplicate.sourceId ?? '').trim()) {
+          const all = readProductsFromFile();
+          const target = all.find((item) => item.id === duplicate.id);
+          if (target) {
+            target.sourceId = incomingSourceId;
+            writeProductsToFile(all);
+            duplicate.sourceId = incomingSourceId;
+          }
+        }
         return jsonResponse(
           {
             success: true,
@@ -362,6 +376,11 @@ export const POST: APIRoute = async ({ request }) => {
           }
         }
       }
+      // sourceId del payload (ID externo: ASIN / Item ID de AliExpress) gana
+      // sobre el heredado: los productos importados antes de persistirlo ya
+      // no se pierden en el filtro «En catálogo ».
+      const incomingSourceId = String(body?.sourceId ?? '').trim();
+      if (incomingSourceId) base.sourceId = incomingSourceId;
       // Estado editorial: el enriquecimiento de texto completado marca ia_status.
       if (textStatus === 'ok' || textStatus === 'local') base.ia_status = 'completed';
       else if (textStatus === 'error') base.ia_status = 'error';
@@ -369,6 +388,14 @@ export const POST: APIRoute = async ({ request }) => {
       upsertProduct(base);
       saved = true;
       if (existing) warnings.push('Producto existente actualizado (upsert por id).');
+      // Vinculación automática de alternativas (sólo si el producto no tiene
+      // ninguna a mano); la respuesta lo informa para el aviso en el panel.
+      const autoAlt = autoLinkAlternatives(base.id);
+      if (autoAlt.ok && autoAlt.linked) {
+        warnings.push(`${autoAlt.linked} alternativa(s) vinculada(s) automáticamente.`);
+        const refreshed = readProductsFromFile().find((item) => item.id === base.id);
+        if (refreshed) Object.assign(base, refreshed);
+      }
     }
 
     const failed = options.text && options.image && textStatus === 'error' && imageStatus === 'error';

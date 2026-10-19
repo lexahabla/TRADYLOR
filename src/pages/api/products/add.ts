@@ -9,7 +9,7 @@ import {
   type Product,
 } from '../../../lib/productStore';
 import { addDeletedId, removeDeletedId } from '../../../lib/deletedProducts';
-import { enrichProductsForAdmin } from '../../../lib/curation';
+import { enrichProductsForAdmin, autoLinkAlternatives } from '../../../lib/curation';
 import { extractProductPageFields, hasTextCredentials, type ProductPageAiFields } from '../../../lib/ai';
 
 export const prerender = false;
@@ -1313,6 +1313,18 @@ export const POST: APIRoute = async ({ request }) => {
         productId,
       );
       if (duplicate) {
+        // Auto-sanado: si la fila existente no tiene el ID externo (productos
+        // importados antes de persistirlo) se le estampa ahora, para que el
+        // filtro «En catálogo › Añadidos» la reconozca.
+        const incomingSourceId = String((dataToSave as { sourceId?: string }).sourceId || '').trim();
+        if (incomingSourceId && !String(duplicate.sourceId || '').trim()) {
+          const target = currentProducts.find((p) => p.id === duplicate.id);
+          if (target) {
+            target.sourceId = incomingSourceId;
+            duplicate.sourceId = incomingSourceId;
+            writeProductsToFile(currentProducts);
+          }
+        }
         return new Response(
           JSON.stringify({
             success: false,
@@ -1426,6 +1438,18 @@ export const POST: APIRoute = async ({ request }) => {
             : typeof dataToSave.freeShipping === 'boolean'
               ? dataToSave.freeShipping
               : undefined,
+        // Curación que el formulario de la ficha SÍ puede traer (o que llega
+        // desde la tabla de afiliados): ID externo y vínculos/roles de
+        // alternativas. `undefined` → se conserva el valor ya guardado.
+        sourceId: strField(dataToSave.sourceId, existingProduct?.sourceId),
+        alternatives: dataToSave.alternatives === undefined
+          ? existingProduct?.alternatives
+          : dataToSave.alternatives && typeof dataToSave.alternatives === 'object' && !Array.isArray(dataToSave.alternatives)
+            ? (dataToSave.alternatives as Product['alternatives'])
+            : undefined,
+        alternative_product_ids: Array.isArray(dataToSave.alternative_product_ids)
+          ? (dataToSave.alternative_product_ids as unknown[]).map((v) => String(v ?? '').trim()).filter(Boolean)
+          : existingProduct?.alternative_product_ids,
       };
 
       // Si ya existe un producto con el mismo ID, se actualiza; si no, se añade al principio.
@@ -1457,6 +1481,14 @@ export const POST: APIRoute = async ({ request }) => {
 
       // Si el producto había sido borrado previamente, se revive (quito el tombstone).
       removeDeletedId(productId);
+
+      // Vinculación automática de alternativas: sólo aplica si el producto
+      // todavía no tiene ninguna a mano (nunca pisa la curación manual).
+      const autoAlt = autoLinkAlternatives(productId);
+      if (autoAlt.ok && autoAlt.linked) {
+        productToSave = readProductsFromFile().find((p) => p.id === productId) || productToSave;
+        complementNotes.push(`${autoAlt.linked} alternativa(s) vinculada(s) automáticamente con roles sugeridos.`);
+      }
 
       return new Response(
         JSON.stringify({

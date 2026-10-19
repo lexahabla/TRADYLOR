@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../lib/adminAuth';
-import { linkAlternatives, suggestAlternatives } from '../../../lib/curation';
+import { ensureAlternativeRoles, linkAlternatives, roleIdsOf, suggestAlternatives } from '../../../lib/curation';
 import { readProductsFromFile } from '../../../lib/productStore';
 
 export const prerender = false;
@@ -9,6 +9,11 @@ export const prerender = false;
  * GET /api/admin/alternatives?id=<productId>
  * Devuelve el producto, sus alternativas vinculadas y sugerencias por
  * coincidencia de título/categoría (cross-matching).
+ *
+ * Además GARANTIZA que el modal abra con la selección auto-rellena: si el
+ * producto no tiene alternativas, las sugiere y las vincula; si las tiene pero
+ * sin roles, le asigna los 3 roles automáticamente. Nunca toca vínculos/roles
+ * ya definidos a mano (`auto: false` cuando la selección ya existía).
  */
 export const GET: APIRoute = async ({ request }) => {
   const unauthorized = requireAdminAuth(request);
@@ -24,28 +29,37 @@ export const GET: APIRoute = async ({ request }) => {
     );
   }
 
-  const linkedIds = new Set(product.alternative_product_ids || []);
+  // Rellena la selección automática si faltaba (persiste en products.json).
+  const ensured = ensureAlternativeRoles(id);
+  const fresh = readProductsFromFile().find((p) => p.id === id) || product;
+  const roles = roleIdsOf(fresh);
+
+  const linkedIds = new Set(fresh.alternative_product_ids || []);
   // Incluye también los slots de rol (premium/económica/similar) como vinculados.
-  for (const roleId of [
-    product.alternatives?.premiumOptionId,
-    product.alternatives?.cheaperOptionId,
-    product.alternatives?.similarOptionId,
-  ]) {
+  for (const roleId of [...roles.premium, ...roles.cheaper, ...roles.similar]) {
     if (roleId) linkedIds.add(roleId);
   }
-  const linked = products.filter((p) => linkedIds.has(p.id));
+  const linked = readProductsFromFile().filter((p) => linkedIds.has(p.id));
 
   return new Response(
     JSON.stringify({
       success: true,
       product: {
-        id: product.id,
-        title: product.title,
-        alternative_product_ids: product.alternative_product_ids || [],
-        alternatives: product.alternatives || {},
+        id: fresh.id,
+        title: fresh.title,
+        alternative_product_ids: fresh.alternative_product_ids || [],
+        alternatives: fresh.alternatives || {},
       },
-      linked: linked.map((p) => ({ id: p.id, title: p.title, price: p.price, image: p.image, category: p.category })),
-      suggestions: suggestAlternatives(products, product.id, 8).map(({ product: p, score }) => ({
+      // Selección de los 3 roles (en plural: admite varias económicas/competidores)
+      // + flag de si acaba de rellenarse automáticamente.
+      roles: {
+        auto: ensured.auto,
+        premiumOptionId: roles.premium[0],
+        cheaperOptionIds: roles.cheaper,
+        similarOptionIds: roles.similar,
+      },
+      linked: linked.map((p) => ({ id: p.id, title: p.title, price: p.price, image: p.image, category: p.category, rating: p.rating })),
+      suggestions: suggestAlternatives(products, fresh.id, 8).map(({ product: p, score }) => ({
         id: p.id,
         title: p.title,
         price: p.price,
@@ -64,9 +78,11 @@ export const GET: APIRoute = async ({ request }) => {
  * Body: {
  *   productId: string,
  *   alternativeProductIds: string[],
- *   premiumOptionId?: string | null,   // Opción Principal / Mejor Valorada
- *   cheaperOptionId?: string | null,   // Alternativa Económica
- *   similarOptionId?: string | null    // Competidor directo
+ *   premiumOptionId?: string | null,        // Opción Principal / Mejor Valorada
+ *   cheaperOptionId?: string | null,        // Alternativa Económica (legado)
+ *   similarOptionId?: string | null,        // Competidor directo (legado)
+ *   cheaperOptionIds?: (string|null)[],     // Varias alternativas económicas
+ *   similarOptionIds?: (string|null)[]      // Varios competidores directos
  * }
  */
 export const POST: APIRoute = async ({ request }) => {
@@ -102,13 +118,25 @@ export const POST: APIRoute = async ({ request }) => {
     if (!alternativeProductIds.includes(roleId)) alternativeProductIds.push(roleId);
     return roleId;
   };
+  const ensureRolesInList = (values: unknown): string[] =>
+    (Array.isArray(values) ? values : [])
+      .map((value) => ensureRoleInList(value))
+      .filter((value): value is string => Boolean(value));
+
+  const cheaperOptionIds = ensureRolesInList(body?.cheaperOptionIds);
+  const similarOptionIds = ensureRolesInList(body?.similarOptionIds);
+  // El valor legado (singular) entra en la lista pero sólo si NO envían plural.
+  const legacyCheaper = ensureRoleInList(body?.cheaperOptionId);
+  const legacySimilar = ensureRoleInList(body?.similarOptionId);
 
   const result = linkAlternatives({
     productId,
     alternativeProductIds,
     premiumOptionId: ensureRoleInList(body?.premiumOptionId),
-    cheaperOptionId: ensureRoleInList(body?.cheaperOptionId),
-    similarOptionId: ensureRoleInList(body?.similarOptionId),
+    cheaperOptionId: cheaperOptionIds.length ? null : legacyCheaper,
+    similarOptionId: similarOptionIds.length ? null : legacySimilar,
+    cheaperOptionIds,
+    similarOptionIds,
   });
 
   if (!result.ok) {
