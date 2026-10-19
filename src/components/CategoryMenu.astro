@@ -878,9 +878,7 @@ const hueOf = (index: number) => (index * 43) % 360;
 
     const closePanel = () => setMenuOpen(false);
 
-    const targets = ['destacados', 'catalogo']
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => el instanceof HTMLElement);
+    const targets = Array.from(document.querySelectorAll<HTMLElement>('.section-header'));
 
     if (targets.length > 0 && 'IntersectionObserver' in window) {
       const visible = new Set<Element>();

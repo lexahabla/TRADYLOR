@@ -89,6 +89,9 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
+  <!-- Panel de ofertas/asistente: a ancho completo, justo debajo del header -->
+  <HeroSearchRadar deals={dealProducts} />
+
   <!-- ============================================================
        1. SECCIÓN CATÁLOGO COMPLETO: Todos los Productos (paginado)
        ============================================================ -->
@@ -176,9 +179,6 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
         En Tradylor desarmamos las campañas de marketing engañosas. Analizamos a fondo especificaciones, fiabilidad y relación calidad-precio para que ahorres tiempo, dinero y tomas decisiones de compra 100% acertadas.
       </p>
     </div>
-
-    <!-- Panel de ofertas/asistente: a ancho completo de la página (fuera del container) -->
-    <HeroSearchRadar deals={dealProducts} />
 
     <div class="container hero-container">
       <!-- Badges de Autoridad E-E-A-T -->
