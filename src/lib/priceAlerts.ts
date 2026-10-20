@@ -1,5 +1,5 @@
 import { findCatalogProduct } from './catalog';
-import { readAliCatalog } from './aliexpressCatalog';
+import { readAliCatalogUnified } from './aliexpressCatalog';
 import { sendGenericMailSmtp } from './mailer';
 import { findRadarUserById } from './radarAuth';
 import { collectPriceWatchItems, markPriceCheck } from './radarStore';
@@ -72,7 +72,7 @@ function resolveCurrentPrice(product: SavedProduct): CurrentPrice | null {
     };
   }
   if (product.store === 'aliexpress') {
-    const snapshot = readAliCatalog();
+    const snapshot = readAliCatalogUnified();
     if (snapshot?.products?.length) {
       const idNeedle = product.id.trim().toLowerCase();
       let match = snapshot.products.find(

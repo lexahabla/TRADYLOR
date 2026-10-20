@@ -11,7 +11,7 @@
  * ==============================================================================
  */
 
-import { AffiliateAdapter, createAdapter, enrichCapturedProduct, type AdaptedProduct } from './affiliateAdapter';
+import { AffiliateAdapter, createAdapter, enrichCapturedProduct, rawPayloadToUnified, type AdaptedProduct } from './affiliateAdapter';
 import {
   buildFullMasterPrompt,
   parseMasterPromptResponse,
@@ -221,8 +221,9 @@ export class MassCatalogPipeline {
     const warnings: string[] = [];
 
     try {
-      // Reconstruir UnifiedProduct desde rawPayload
-      const unifiedProduct = raw.rawPayload as unknown as AdaptedProduct['product'];
+      // Reconstruir UnifiedProduct desde rawPayload (canónico desde el PASO 6;
+      // los raws legados siguen siendo UnifiedProduct y también se aceptan)
+      const unifiedProduct = rawPayloadToUnified(raw.rawPayload);
 
       // 1. ENRIQUECIMIENTO IA (prompt maestro)
       let enrichment: MasterPromptOutput | null = null;
@@ -243,7 +244,8 @@ export class MassCatalogPipeline {
       const { categoryId, subcategoryId, categoryWarnings } = await this.resolveCategories(
         enrichment?.category,
         enrichment?.subcategory,
-        unifiedProduct.category
+        unifiedProduct.category,
+        unifiedProduct.title
       );
       warnings.push(...categoryWarnings);
 
@@ -435,7 +437,8 @@ export class MassCatalogPipeline {
   private async resolveCategories(
     aiCategory?: string,
     aiSubcategory?: string,
-    networkCategory?: string
+    networkCategory?: string,
+    titleHint?: string
   ): Promise<{ categoryId?: string; subcategoryId?: string; categoryWarnings: string[] }> {
     const warnings: string[] = [];
     let categoryId: string | undefined;
@@ -445,7 +448,7 @@ export class MassCatalogPipeline {
     let targetCategoryName = aiCategory;
     if (!targetCategoryName) {
       // Fallback: sugerencia por keywords del título+categoría de red
-      const suggestion = suggestCategory(`${unifiedProduct.title} ${networkCategory || ''}`.toLowerCase());
+      const suggestion = suggestCategory(`${titleHint ?? ''} ${networkCategory ?? ''}`.trim().toLowerCase());
       targetCategoryName = suggestion?.category.name;
     }
 
@@ -867,12 +870,12 @@ export async function processAdaptedProductsBatch(
       })();
 
       // Construir producto final (reutilizar lógica del pipeline)
-      const { buildEnrichedProduct } = await import('./massCatalogPipeline');
       // Nota: buildEnrichedProduct es método privado, replicamos lógica aquí simplificada
       const finalProduct = buildEnrichedProductForBatch(enrichedAdapted.product, enrichment, categoryId, subcategoryId);
 
       // Duplicados
-      const existing = readProductsFromFile().find(p => p.id === finalProduct.id || (enrichedAdapted.product.sourceId && p.sourceId === enrichedAdapted.product.sourceId));
+      const adaptedSourceId = (enrichedAdapted.product as { sourceId?: string }).sourceId;
+      const existing = readProductsFromFile().find(p => p.id === finalProduct.id || (adaptedSourceId && p.sourceId === adaptedSourceId));
       const isNew = !existing;
       const isUpdated = !!existing;
 

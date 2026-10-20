@@ -126,6 +126,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   `OPENAI_API_KEY` / `FLUX_API_KEY` para las imágenes; selectores
   `TEXT_AI_PROVIDER` y `IMAGE_AI_PROVIDER` (`openai` por defecto, `anthropic`/`flux`).
 - Claves de cada red de afiliación (opcional; activa los conectores correspondientes).
+  `EBAY_COMMISSION_RATE` (opcional): % base de comisión EPN que usa el catálogo de
+  eBay para la columna "Comisión %" (4-6%; por defecto 5).
 - **Desarrollo remoto (opcional)**: `GITHUB_PAT` (push a GitHub desde el contenedor),
   `GIT_USER_NAME` / `GIT_USER_EMAIL` (identidad de commit).
 - **Producción (contenedor)**: `TRADYLOR_DATA_DIR` (por defecto `src/data`, en prod

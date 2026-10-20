@@ -17,6 +17,7 @@
 
 import fs from 'node:fs';
 import { dataFile } from './paths';
+import { canonicalToUnified, normalizeCatalogProducts } from './networks/connectors/base';
 import type { Product } from '../data/products';
 
 export interface ResolvedShipping {
@@ -33,6 +34,12 @@ interface SnapshotEntry {
   productUrl?: string;
   extra?: Record<string, string | number | boolean | null>;
   shippingInfo?: string;
+}
+
+/** Snapshot crudo (canónico desde el PASO 6; legado unificado en ficheros viejos). */
+interface RawSnapshot {
+  syncedAt?: string;
+  products?: unknown[];
 }
 
 interface ShippingIndex {
@@ -75,12 +82,17 @@ function loadIndex(): ShippingIndex | null {
     const mtimeMs = fs.statSync(CATALOG_FILE).mtimeMs;
     if (indexCache && indexCache.mtimeMs === mtimeMs) return indexCache;
 
-    const parsed = JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf-8')) as { products?: SnapshotEntry[] };
+    const parsed = JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf-8')) as RawSnapshot;
     if (!parsed || !Array.isArray(parsed.products)) return null;
 
     const byUrl = new Map<string, SnapshotEntry>();
 
-    for (const entry of parsed.products) {
+    // El volumen persiste el contrato canónico (PASO 6); se proyecta a la
+    // forma unificada (productUrl / extra / shippingInfo) que indexa este módulo.
+    const entries = normalizeCatalogProducts(parsed.products, parsed.syncedAt ?? '')
+      .map((product): SnapshotEntry => canonicalToUnified(product));
+
+    for (const entry of entries) {
       if (!entry) continue;
       const extra = entry.extra ?? {};
       indexUrls(byUrl, [

@@ -13,12 +13,14 @@ import type { Product } from '../productStore';
  * Tabla: raw_affiliate_products
  * Almacena el payload COMPLETO y crudo de cada ingesta desde redes de afiliación.
  * Permite re-procesar, auditar y re-ejecutar el pipeline sin perder datos originales.
+ * Desde el PASO 6 el payload es un `CanonicalAffiliateProduct` (los raws legados
+ * guardan `UnifiedProduct`; `rawPayloadToUnified()` acepta ambos shapes).
  */
 export interface RawAffiliateProduct {
   id: string;                    // UUID v4 generado en la ingesta
   network: string;               // 'amazon' | 'aliexpress' | 'awin' | 'cj' | 'admitad' | 'tradedoubler' | 'kwanko' | 'etsy' | 'ebay' | 'generic'
   externalId: string;            // ID nativo de la red (ASIN, Item ID, etc.)
-  rawPayload: Record<string, unknown>; // JSON completo devuelto por la API del conector
+  rawPayload: Record<string, unknown>; // Contrato canónico del producto (o UnifiedProduct legado)
   capturedAt: string;            // ISO timestamp de la captura
   processed: boolean;            // Si ya pasó por el pipeline de enriquecimiento
   processedAt?: string;          // Cuándo se procesó

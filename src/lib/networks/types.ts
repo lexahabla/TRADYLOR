@@ -129,6 +129,20 @@ export interface CanonicalAffiliateProduct {
   /** Marca datos de muestra/respaldo (p. ej. fallback anti-503). Nunca se ingieren en el catálogo real. */
   estimated?: boolean;
 
+  /**
+   * Datos adicionales de la red que no encajan en el esquema (p. ej. visitas,
+   * vídeo, claves legadas de una caché antigua). Se conservan en la persistencia
+   * canónica y se vuelcan al `extra` de UnifiedProduct al proyectar para la UI.
+   */
+  extra?: Record<string, string | number | boolean | null>;
+
+  /**
+   * Fecha ISO en que el producto entró por primera vez en la caché del catálogo
+   * (equivalente canónico de `UnifiedProduct.firstSeenAt`; lo fija
+   * `stampFirstSeen` en cada sync).
+   */
+  firstSeenAt?: string;
+
   syncedAt: string;
 }
 

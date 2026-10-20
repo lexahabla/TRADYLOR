@@ -25,10 +25,14 @@ import {
 } from '../../../../lib/aliexpressCatalog';
 import { getConnectedNetworkIds } from '../../../../lib/networks/credentials';
 import { getConnector } from '../../../../lib/networks';
-import { searchCatalogBatch } from '../../../../lib/networks/connectors/base';
+import {
+  canonicalToUnified,
+  normalizeCatalogProducts,
+  searchCatalogBatch,
+} from '../../../../lib/networks/connectors/base';
 import { CATALOG_KEYWORDS } from '../../../../lib/networks/connectors/aliexpress';
 import { stampFirstSeen } from '../../../../lib/aliCatalogMerge';
-import type { UnifiedProduct } from '../../../../lib/networks/types';
+import type { CanonicalAffiliateProduct, UnifiedProduct } from '../../../../lib/networks/types';
 import fs from 'node:fs';
 import path from 'node:path';
 import { dataFile } from '../../../../lib/paths';
@@ -42,19 +46,26 @@ const jsonHeaders = {
 
 const CATALOG_FILE = dataFile('affiliate-catalog.json');
 
+/** Snapshot persistido en el volumen: SIEMPRE en el contrato canónico (PASO 6). */
 export interface AffiliateCatalogSnapshot {
   syncedAt: string;
-  products: UnifiedProduct[];
+  products: CanonicalAffiliateProduct[];
 }
 
-function readAffiliateCatalog(): AffiliateCatalogSnapshot | null {
+/**
+ * Lee el snapshot del volumen. Las cachés escritas antes del PASO 6 guardan
+ * `UnifiedProduct[]`: se migran a canónico en memoria (la próxima
+ * sincronización las reconsolida en disco).
+ */
+export function readAffiliateCatalog(): AffiliateCatalogSnapshot | null {
   try {
     if (!fs.existsSync(CATALOG_FILE)) return null;
     const parsed = JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf-8')) as Partial<AffiliateCatalogSnapshot>;
     if (!parsed || !Array.isArray(parsed.products)) return null;
+    const syncedAt = typeof parsed.syncedAt === 'string' ? parsed.syncedAt : '';
     return {
-      syncedAt: typeof parsed.syncedAt === 'string' ? parsed.syncedAt : '',
-      products: parsed.products,
+      syncedAt,
+      products: normalizeCatalogProducts(parsed.products, syncedAt),
     };
   } catch {
     return null;
@@ -75,14 +86,16 @@ function currentStatePayload() {
   const state = getAliCatalogState();
   const snapshot = readAffiliateCatalog();
   const connected = getConnectedNetworkIds();
+  // La UI del panel consume UnifiedProduct: se proyecta canónico → unificado
+  const products: UnifiedProduct[] = snapshot ? snapshot.products.map(canonicalToUnified) : [];
   return {
     success: true,
     connected,
     staleMs: ALI_CATALOG_STALE_MS,
     syncedAt: state.syncedAt,
     stale: state.stale,
-    count: snapshot?.products.length ?? 0,
-    products: snapshot?.products ?? [],
+    count: products.length,
+    products,
     networks: connected,
   };
 }
@@ -106,7 +119,7 @@ export const POST: APIRoute = async ({ request }) => {
 
   const previous = readAffiliateCatalog();
   const existing = previous?.products ?? [];
-  const mergedById = new Map<string, UnifiedProduct>();
+  const mergedById = new Map<string, CanonicalAffiliateProduct>();
   for (const product of existing) mergedById.set(`${product.network}:${product.externalId}`, product);
 
   for (const networkId of networksToSync) {

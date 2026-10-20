@@ -26,6 +26,7 @@ import {
   writeAliCatalog,
   type AliCatalogSnapshot,
 } from '../../../../lib/aliexpressCatalog';
+import { canonicalToUnified } from '../../../../lib/networks/connectors/base';
 import { getConnectedNetworkIds } from '../../../../lib/networks/credentials';
 
 export const prerender = false;
@@ -45,7 +46,8 @@ function currentStatePayload() {
     syncedAt: state.syncedAt,
     stale: state.stale,
     count: state.count,
-    products: snapshot?.products ?? [],
+    // El snapshot persiste el contrato canónico; la UI consume UnifiedProduct
+    products: snapshot ? snapshot.products.map(canonicalToUnified) : [],
   };
 }
 

@@ -19,7 +19,7 @@
  *  - Ya estaba en la caché CON fecha válida           → se conserva.
  *  - Ya estaba en la caché SIN fecha (caché anterior
  *    a este campo, o fecha ilegible)                  → fecha de la sincronización
- *    previa: es la cota más ajustada que se conoce (sabemos que ya estaba entonces,
+ *    previa: es la cota más ajustada que se conoce (sabíamos que ya estaba entonces,
  *    no cuándo entró). Sin sincronización previa válida → `now`.
  *
  * Con la primera sincronización tras desplegar este cambio, la caché antigua queda
@@ -27,8 +27,6 @@
  * «Fecha de alta» pone arriba las novedades reales.
  * ==============================================================================
  */
-
-import type { UnifiedProduct } from './networks/types';
 
 /** Devuelve la cadena si es una fecha ISO interpretable; si no, `undefined`. */
 export function validIsoDate(value: unknown): string | undefined {
@@ -45,12 +43,12 @@ export function validIsoDate(value: unknown): string | undefined {
  * @param previousSyncedAt `syncedAt` del snapshot anterior (puede faltar)
  * @param now              instante de ESTA sincronización (el mismo que irá en `syncedAt`)
  */
-export function stampFirstSeen(
-  merged: UnifiedProduct[],
-  existing: UnifiedProduct[],
+export function stampFirstSeen<T extends { externalId: string; firstSeenAt?: string }>(
+  merged: T[],
+  existing: T[],
   previousSyncedAt: string | null | undefined,
   now: string,
-): UnifiedProduct[] {
+): T[] {
   const known = new Map<string, string | undefined>();
   for (const product of existing) known.set(product.externalId, validIsoDate(product.firstSeenAt));
   const legacyDate = validIsoDate(previousSyncedAt) ?? now;

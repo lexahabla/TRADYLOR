@@ -172,6 +172,12 @@ export class EbayConnector implements NetworkConnector {
    * Búsqueda/sincronización al contrato canónico CanonicalAffiliateProduct.
    * A diferencia de search(), NO devuelve datos de muestra: el pipeline de
    * catálogo sólo debe ingerir productos reales (vacío si no hay resultados).
+   *
+   * El normalizador (EbayProductAdapter.adaptCanonical) aplica fallbacks para
+   * que el panel no muestre celdas «—»: descuento/precio original calculados,
+   * rating 4.5 y 15 opiniones sin feedback, comisión base EPN
+   * (EBAY_COMMISSION_RATE, por defecto 5%), vendedor «Vendedor de eBay» y
+   * envío «Envío estándar eBay (3-5 días)» cuando no hay fechas estimadas.
    */
   async searchCanonical(params: UnifiedSearchParams): Promise<CanonicalAffiliateProduct[]> {
     const items = await this.fetchItemSummaries(params);

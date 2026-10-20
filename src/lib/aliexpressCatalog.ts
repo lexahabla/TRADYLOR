@@ -6,7 +6,8 @@
  * catálogo en el volumen (DATA_DIR) y sólo lo refresca con el botón
  * "Sincronizar" (POST). Si la caché supera las 6 horas se avisa en la UI.
  *
- *   - readAliCatalog()  -> snapshot completo o null (sin caché)
+ *   - readAliCatalog()  -> snapshot canónico completo o null (sin caché)
+ *   - readAliCatalogUnified() -> misma caché proyectada a UnifiedProduct (UI)
  *   - isAliCatalogStale() -> true si tiene >6h o no existe
  *   - syncAliCatalog()  -> consulta la API, deduplica y persiste
  *
@@ -19,10 +20,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { dataFile } from './paths';
 import { getConnector } from './networks';
-import { searchCatalogBatch } from './networks/connectors/base';
+import { canonicalToUnified, normalizeCatalogProducts, searchCatalogBatch } from './networks/connectors/base';
 import { CATALOG_KEYWORDS } from './networks/connectors/aliexpress';
 import { stampFirstSeen } from './aliCatalogMerge';
-import type { UnifiedProduct } from './networks/types';
+import type { CanonicalAffiliateProduct, UnifiedProduct } from './networks/types';
 
 export const ALI_CATALOG_STALE_MS = 6 * 60 * 60 * 1000; // 6 horas
 export const ALI_CATALOG_TARGET = 150; // productos por sync inicial
@@ -31,7 +32,14 @@ const APPEND_MAX_PAGE = 3; // «Cargar más» recorre hasta la página 3 de cada
 
 const CATALOG_FILE = dataFile('aliexpress-catalog.json');
 
+/** Snapshot persistido en el volumen: SIEMPRE en el contrato canónico (PASO 6). */
 export interface AliCatalogSnapshot {
+  syncedAt: string;
+  products: CanonicalAffiliateProduct[];
+}
+
+/** Proyección para la UI/filtros (mismo shape que siempre consumió el panel). */
+export interface AliCatalogUnifiedSnapshot {
   syncedAt: string;
   products: UnifiedProduct[];
 }
@@ -47,19 +55,35 @@ function log(...args: unknown[]): void {
   console.log('[AliCatalog]', ...args);
 }
 
+/**
+ * Lee el snapshot del volumen. Las cachés escritas antes del PASO 6 guardan
+ * `UnifiedProduct[]`: se migran a canónico en memoria (la próxima escritura las
+ * reconsolida en disco).
+ */
 export function readAliCatalog(): AliCatalogSnapshot | null {
   try {
     if (!fs.existsSync(CATALOG_FILE)) return null;
     const parsed = JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf-8')) as Partial<AliCatalogSnapshot>;
     if (!parsed || !Array.isArray(parsed.products)) return null;
+    const syncedAt = typeof parsed.syncedAt === 'string' ? parsed.syncedAt : '';
     return {
-      syncedAt: typeof parsed.syncedAt === 'string' ? parsed.syncedAt : '',
-      products: parsed.products,
+      syncedAt,
+      products: normalizeCatalogProducts(parsed.products, syncedAt),
     };
   } catch (error) {
     log('Error al leer la caché:', error);
     return null;
   }
+}
+
+/** Lectura en forma UnifiedProduct (panel, alertas de precio, envíos). */
+export function readAliCatalogUnified(): AliCatalogUnifiedSnapshot | null {
+  const snapshot = readAliCatalog();
+  if (!snapshot) return null;
+  return {
+    syncedAt: snapshot.syncedAt,
+    products: snapshot.products.map(canonicalToUnified),
+  };
 }
 
 export function writeAliCatalog(snapshot: AliCatalogSnapshot): boolean {
@@ -85,8 +109,8 @@ export function isAliCatalogStale(): boolean {
   return getAliCatalogState().stale;
 }
 
-function byPopularity(a: UnifiedProduct, b: UnifiedProduct): number {
-  return (b.popularity ?? 0) - (a.popularity ?? 0);
+function byPopularity(a: CanonicalAffiliateProduct, b: CanonicalAffiliateProduct): number {
+  return (b.sales ?? 0) - (a.sales ?? 0);
 }
 
 let syncInFlight: Promise<AliCatalogSyncResult> | null = null;
@@ -123,7 +147,7 @@ async function runSync(append: boolean): Promise<AliCatalogSyncResult> {
 
   const previous = readAliCatalog();
   const existing = previous?.products ?? [];
-  const mergedById = new Map<string, UnifiedProduct>();
+  const mergedById = new Map<string, CanonicalAffiliateProduct>();
   for (const product of existing) mergedById.set(product.externalId, product);
   const baseCount = mergedById.size;
 
@@ -135,8 +159,8 @@ async function runSync(append: boolean): Promise<AliCatalogSyncResult> {
     for (const keyword of CATALOG_KEYWORDS) {
       try {
         const params = { query: keyword, limit: KEYWORD_PAGE_SIZE, page };
-        // Ruta canónica primero (contrato único); fallback al mapeo legacy
-        // sólo si el conector aún no declara searchCanonical.
+        // Ruta canónica (contrato único persistible); si el conector no la
+        // declara, searchCatalogBatch migra su salida legada a canónico.
         const batch = await searchCatalogBatch(connector, params);
         queries += 1;
         for (const product of batch) mergedById.set(product.externalId, product);

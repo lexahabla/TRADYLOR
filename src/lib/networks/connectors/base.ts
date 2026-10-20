@@ -33,6 +33,10 @@ export interface NetworkConnector {
  * Cubre todos los campos que lee la tabla del panel de Afiliados (Tienda,
  * Descuento, Días de envío, Ventas, Comisión estimada) tanto en las columnas
  * como en el desplegable de detalle y en el payload de importación.
+ *
+ * Los datos del `extra` passthrough canónico (claves legadas, valores de red que
+ * no encajan en el esquema) se conservan y sólo se sobrescriben con los valores
+ * regenerados del contrato canónico cuando estos tienen contenido.
  */
 export function canonicalToUnified(product: CanonicalAffiliateProduct): UnifiedProduct {
   const shipDaysRaw = Number(product.technicalSpecs?.['Días de envío']);
@@ -53,13 +57,71 @@ export function canonicalToUnified(product: CanonicalAffiliateProduct): UnifiedP
       ? Math.round(product.price * (product.commissionRate / 100) * 100) / 100
       : undefined;
 
+  // Datos passthrough canónicos (sin nulos): completan lo que el esquema no cubre
+  const passthrough: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(product.extra ?? {})) {
+    if (value == null || value === '') continue;
+    passthrough[key] = value;
+  }
+
+  const generated: Record<string, string | number | boolean | null> = {
+    'ID externo': product.externalId,
+    Marca: product.brand ?? null,
+    Distribuidor: product.merchantName || null,
+    Tienda: product.merchantName || null,
+    'ID tienda': product.merchantId || null,
+    'Categoría nivel 1': product.category || null,
+    'Categoría nivel 2': product.subCategory || null,
+    'Descuento': discountPct ? `${discountPct}%` : null,
+    'Comisión (%)': product.commissionRate || null,
+    'Comisión hot (%)': product.hotCommissionRate || null,
+    'Comisión estimada': commissionAmount ?? null,
+    'EPC': product.epc ?? null,
+    'Score de conversión': product.conversionScore ?? null,
+    'Valoración': product.rating || null,
+    'Reseñas': product.reviewCount || null,
+    'Ventas (30 días)': product.sales || null,
+    'Días de envío': shipDays ?? null,
+    'Garantía': product.guarantee || null,
+    'Mínimo histórico': product.historicalLow ? 'Sí' : null,
+    'Resumen editorial': product.editorialSummary || null,
+    'Puntos': product.pros?.length ? product.pros.join(' · ') : null,
+    'Pegas': product.cons?.length ? product.cons.join(' · ') : null,
+    'URL directa': product.directUrl || null,
+    'Enlace de afiliado': product.affiliateUrl || null,
+    'Enlace de compra directa': product.directUrl || null,
+    'URL del producto': product.directUrl || null,
+    'Imágenes': allImages.length ? allImages.join(' | ') : null,
+    'Especificaciones': product.technicalSpecs && Object.keys(product.technicalSpecs).length
+      ? Object.entries(product.technicalSpecs).map(([k, v]) => `${k}: ${v}`).join(' · ')
+      : null,
+    'Sincronizado': product.syncedAt,
+  };
+
+  const extra: Record<string, string | number | boolean | null> = { ...passthrough };
+  for (const [key, value] of Object.entries(generated)) {
+    if (value == null || value === '') continue;
+    extra[key] = value;
+  }
+  // El texto crudo de especificaciones legado (si existe) es más rico que el
+  // resumen regenerado a partir de technicalSpecs: se respeta.
+  if (passthrough['Especificaciones'] != null) {
+    extra['Especificaciones'] = passthrough['Especificaciones'];
+  }
+
+  // Envío: texto explícito (passthrough de red o legado) > derivado de los días
+  const explicitShipping = firstString(passthrough['Texto de envío'], passthrough['Envío']);
+  const shippingInfo = explicitShipping ?? (hasShipDays ? `Envío en ${shipDays} días` : undefined);
+
   return {
     network: product.network,
     externalId: product.externalId,
     title: product.title,
     description: product.description,
     price: product.price,
-    originalPrice: product.originalPrice > product.price ? product.originalPrice : undefined,
+    originalPrice: product.originalPrice >= product.price && product.originalPrice > 0
+      ? product.originalPrice
+      : undefined,
     currency: product.currency,
     image: product.mainImage,
     gallery: product.extraImages.length ? product.extraImages : undefined,
@@ -70,65 +132,182 @@ export function canonicalToUnified(product: CanonicalAffiliateProduct): UnifiedP
     commissionAmount,
     rating: product.rating || undefined,
     reviewsCount: product.reviewCount || undefined,
-    popularity: product.sales || undefined,
+    popularity: product.sales ?? undefined,
+    visits: toNumberOrNull(passthrough['Visitas'])
+      ?? toNumberOrNull(passthrough['Visitantes'])
+      ?? toNumberOrNull(passthrough['Visits'])
+      ?? undefined,
     inStock: product.inStock,
-    shippingInfo: hasShipDays ? `Envío en ${shipDays} días` : undefined,
+    shippingInfo,
     shippingDays: shipDays,
+    firstSeenAt: product.firstSeenAt,
     estimated: product.estimated === true,
-    extra: {
-      'ID externo': product.externalId,
-      Marca: product.brand ?? null,
-      Distribuidor: product.merchantName || null,
-      Tienda: product.merchantName || null,
-      'ID tienda': product.merchantId || null,
-      'Categoría nivel 1': product.category || null,
-      'Categoría nivel 2': product.subCategory || null,
-      'Descuento': discountPct ? `${discountPct}%` : null,
-      'Comisión (%)': product.commissionRate || null,
-      'Comisión hot (%)': product.hotCommissionRate || null,
-      'Comisión estimada': commissionAmount ?? null,
-      'EPC': product.epc ?? null,
-      'Score de conversión': product.conversionScore ?? null,
-      'Valoración': product.rating || null,
-      'Reseñas': product.reviewCount || null,
-      'Ventas (30 días)': product.sales || null,
-      'Días de envío': shipDays ?? null,
-      'Garantía': product.guarantee || null,
-      'Mínimo histórico': product.historicalLow ? 'Sí' : null,
-      'Resumen editorial': product.editorialSummary || null,
-      'Puntos': product.pros?.length ? product.pros.join(' · ') : null,
-      'Pegas': product.cons?.length ? product.cons.join(' · ') : null,
-      'URL directa': product.directUrl || null,
-      'Enlace de afiliado': product.affiliateUrl || null,
-      'Enlace de compra directa': product.directUrl || null,
-      'URL del producto': product.directUrl || null,
-      'Imágenes': allImages.length ? allImages.join(' | ') : null,
-      'Especificaciones': product.technicalSpecs && Object.keys(product.technicalSpecs).length
-        ? Object.entries(product.technicalSpecs).map(([k, v]) => `${k}: ${v}`).join(' · ')
-        : null,
-      'Sincronizado': product.syncedAt,
-    },
+    extra,
+  };
+}
+
+/** Primera cadena no vacía de la lista, o `undefined`. */
+function firstString(...values: Array<string | number | boolean | null | undefined>): string | undefined {
+  for (const value of values) {
+    if (value == null) continue;
+    const text = String(value).trim();
+    if (text) return text;
+  }
+  return undefined;
+}
+
+/** Número finito desde string/número (`"15%"` → 15), o `null`. */
+function toNumberOrNull(value: unknown): number | null {
+  if (value == null || value === '') return null;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  const cleaned = String(value).replace(/[^\d.,-]/g, '');
+  if (!/\d/.test(cleaned)) return null;
+  const parsed = Number(cleaned.replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/** Detecta el contrato canónico en un JSON leído del disco (puede ser legado). */
+export function isCanonicalProduct(value: unknown): value is CanonicalAffiliateProduct {
+  if (!value || typeof value !== 'object') return false;
+  const candidate = value as Partial<CanonicalAffiliateProduct>;
+  return typeof candidate.mainImage === 'string' && Array.isArray(candidate.extraImages);
+}
+
+/**
+ * Migra un UnifiedProduct de cachés legadas (pre-PASO 6) al contrato canónico.
+ * Es la puente que permite que `affiliate-catalog.json` /
+ * `aliexpress-catalog.json` pasen a persistir SÓLO `CanonicalAffiliateProduct`
+ * sin perder los datos que la tabla del panel y los filtros leen del `extra`.
+ */
+export function unifiedToCanonical(product: UnifiedProduct, fallbackSyncedAt: string): CanonicalAffiliateProduct {
+  const price = Number(product.price) || 0;
+  const passthrough: Record<string, string | number | boolean | null> = { ...(product.extra ?? {}) };
+
+  const discountRaw = toNumberOrNull(passthrough['Descuento']);
+  const originalRaw = Number(product.originalPrice);
+  const originalPrice = Number.isFinite(originalRaw) && originalRaw > price ? originalRaw : price;
+  const discountPercentage = discountRaw != null && discountRaw >= 0
+    ? Math.round(discountRaw * 100) / 100
+    : originalPrice > price
+      ? Math.round(((originalPrice - price) / originalPrice) * 10000) / 100
+      : 0;
+
+  const commissionRate = Number(product.commissionRate) || 0;
+  const commissionAmountRaw = Number(product.commissionAmount);
+  const estimatedCommission = Number.isFinite(commissionAmountRaw) && commissionAmountRaw > 0
+    ? Math.round(commissionAmountRaw * 100) / 100
+    : price > 0 && commissionRate > 0
+      ? Math.round(price * (commissionRate / 100) * 100) / 100
+      : 0;
+
+  const mainImage = product.image || '';
+  const gallery = (product.gallery ?? []).filter((url) => url && url !== mainImage);
+  const extraImages = [mainImage, ...gallery].filter(Boolean);
+
+  const technicalSpecs: Record<string, string> = {};
+  const shipDaysValue = firstString(passthrough['Días de envío'])
+    ?? (product.shippingDays != null && Number.isFinite(Number(product.shippingDays))
+      ? String(product.shippingDays)
+      : undefined);
+  if (shipDaysValue) technicalSpecs['Días de envío'] = shipDaysValue;
+
+  const pros = firstString(passthrough['Puntos'])?.split(' · ').map((s) => s.trim()).filter(Boolean);
+  const cons = firstString(passthrough['Pegas'])?.split(' · ').map((s) => s.trim()).filter(Boolean);
+
+  // El texto de envío legado se conserva como texto explícito del passthrough
+  if (product.shippingInfo && !passthrough['Texto de envío']) {
+    passthrough['Texto de envío'] = product.shippingInfo;
+  }
+  if (product.visits != null && passthrough['Visitas'] == null) {
+    passthrough['Visitas'] = product.visits;
+  }
+
+  const popularity = Number(product.popularity);
+
+  return {
+    network: product.network,
+    externalId: product.externalId,
+    affiliateUrl: product.productUrl || '',
+    directUrl: firstString(passthrough['URL directa'], passthrough['URL del producto']) ?? product.productUrl ?? '',
+    title: product.title,
+    description: product.description || product.title,
+    editorialSummary: firstString(passthrough['Resumen editorial']) ?? undefined,
+    price,
+    originalPrice,
+    currency: product.currency || 'EUR',
+    discountPercentage,
+    inStock: product.inStock !== false,
+    commissionRate,
+    estimatedCommission,
+    hotCommissionRate: toNumberOrNull(passthrough['Comisión hot (%)']) ?? undefined,
+    epc: toNumberOrNull(passthrough['EPC']) ?? undefined,
+    category: product.category || 'General',
+    subCategory: firstString(passthrough['Categoría nivel 2']) ?? undefined,
+    brand: product.brand || firstString(passthrough['Marca'], passthrough['Brand']) || undefined,
+    merchantName: firstString(passthrough['Tienda'], passthrough['Distribuidor'], passthrough['Vendedor']) || product.network,
+    merchantId: firstString(passthrough['ID tienda']) ?? undefined,
+    rating: Number(product.rating) || 0,
+    reviewCount: Number(product.reviewsCount) || 0,
+    sales: Number.isFinite(popularity) ? popularity : undefined,
+    mainImage,
+    extraImages,
+    technicalSpecs: Object.keys(technicalSpecs).length ? technicalSpecs : undefined,
+    pros: pros?.length ? pros : undefined,
+    cons: cons?.length ? cons : undefined,
+    conversionScore: toNumberOrNull(passthrough['Score de conversión']) ?? undefined,
+    historicalLow: passthrough['Mínimo histórico'] === 'Sí' ? true : undefined,
+    guarantee: firstString(passthrough['Garantía']) ?? undefined,
+    estimated: product.estimated === true,
+    extra: passthrough,
+    firstSeenAt: product.firstSeenAt,
+    syncedAt: fallbackSyncedAt || new Date().toISOString(),
   };
 }
 
 /**
+ * Normaliza una lista leída del disco al contrato canónico: lo que ya sea
+ * canónico pasa intacto y lo legado (`UnifiedProduct`) se migra. Así el volumen
+ * puede contener cachés antiguas escritas antes del PASO 6.
+ */
+export function normalizeCatalogProducts(raw: unknown[], fallbackSyncedAt: string): CanonicalAffiliateProduct[] {
+  const fallback = fallbackSyncedAt || new Date().toISOString();
+  const products: CanonicalAffiliateProduct[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    if (isCanonicalProduct(item)) {
+      products.push(item);
+      continue;
+    }
+    try {
+      products.push(unifiedToCanonical(item as unknown as UnifiedProduct, fallback));
+    } catch {
+      // Entrada corrupta: se descarta en vez de romper toda la lectura
+    }
+  }
+  return products;
+}
+
+/**
  * Busca en una red usando SIEMPRE el contrato canónico cuando la lo declara
- * (`searchCanonical` → `canonicalToUnified`); si aún no, cae a `search()`
- * descartando las muestras (`estimated`). Uniforme para AliExpress, eBay y
- * Amazon en el endpoint de catálogo y en la sincronización de la caché.
+ * (`searchCanonical`); si aún no, migra la salida legada de `search()`
+ * (`unifiedToCanonical`). Descarta las muestras (`estimated`). Uniforme para
+ * AliExpress, eBay, Amazon, Awin y Generic en el endpoint de catálogo y en la
+ * sincronización de la caché: el resultado es SIEMPRE persistible tal cual.
  */
 export async function searchCatalogBatch(
   connector: NetworkConnector,
   params: UnifiedSearchParams,
-): Promise<UnifiedProduct[]> {
+): Promise<CanonicalAffiliateProduct[]> {
   if (connector.searchCanonical) {
     const canonicalBatch = await connector.searchCanonical(params);
     // Nunca ingerir productos de muestra/respaldo (estimated) en la caché real
-    return canonicalBatch.filter((product) => !product.estimated).map(canonicalToUnified);
+    return canonicalBatch.filter((product) => !product.estimated);
   }
   const legacyBatch = await connector.search(params);
-  // Nunca ingerir productos de muestra (estimated) en la caché real
-  return legacyBatch.filter((product) => !product.estimated);
+  const now = new Date().toISOString();
+  return legacyBatch
+    .filter((product) => !product.estimated)
+    .map((product) => unifiedToCanonical(product, now));
 }
 
 /** Error estándar de conector con mensaje legible para el panel. */

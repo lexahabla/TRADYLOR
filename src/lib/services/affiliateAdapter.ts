@@ -9,9 +9,9 @@
  * ==============================================================================
  */
 
-import type { UnifiedProduct, UnifiedSearchParams } from '../networks/types';
+import type { CanonicalAffiliateProduct, UnifiedProduct, UnifiedSearchParams } from '../networks/types';
 import { getConnector } from '../networks';
-import { searchCatalogBatch } from '../networks/connectors/base';
+import { canonicalToUnified, isCanonicalProduct, searchCatalogBatch } from '../networks/connectors/base';
 import { extractMetadata, scrapeProductPage, type ScrapePageResult } from '../../pages/api/products/add';
 import { complementProductFromPage } from '../../pages/api/products/add';
 import { type Product } from '../productStore';
@@ -169,8 +169,8 @@ export class AffiliateAdapter {
       throw new Error(`Conector no disponible para la red: ${this.config.network}`);
     }
 
-    // Buscar el producto en la red vía la ruta canónica (searchCanonical →
-    // canonicalToUnified) para persistir el esquema unificado completo
+    // Ruta canónica: el resultado es SIEMPRE el contrato persistible y sin
+    // muestras (estimated); adaptProduct() guarda ese canónico como payload crudo
     const results = await searchCatalogBatch(connector, {
       query: externalId,
       limit: 1,
@@ -180,8 +180,7 @@ export class AffiliateAdapter {
       return null;
     }
 
-    const unifiedProduct = results[0];
-    return this.adaptProduct(unifiedProduct);
+    return this.adaptProduct(results[0]);
   }
 
   /**
@@ -197,12 +196,12 @@ export class AffiliateAdapter {
     const results = await searchCatalogBatch(connector, params);
     const adapted: AdaptedProduct[] = [];
 
-    for (const unifiedProduct of results) {
+    for (const canonical of results) {
       try {
-        const adaptedProduct = await this.adaptProduct(unifiedProduct);
+        const adaptedProduct = await this.adaptProduct(canonical);
         if (adaptedProduct) adapted.push(adaptedProduct);
       } catch (error) {
-        console.warn(`[AffiliateAdapter] Error adaptando ${unifiedProduct.externalId}:`, error);
+        console.warn(`[AffiliateAdapter] Error adaptando ${canonical.externalId}:`, error);
       }
     }
 
@@ -210,17 +209,20 @@ export class AffiliateAdapter {
   }
 
   /**
-   * Adapta un UnifiedProduct a formato enriquecido + guarda raw payload
+   * Adapta un producto canónico: proyecta a UnifiedProduct para el pipeline de
+   * enriquecimiento y persiste el CANÓNICO íntegro como payload crudo (auditoría
+   * sin pérdida de datos; ver PASO 6).
    */
-  private async adaptProduct(unified: UnifiedProduct): Promise<AdaptedProduct> {
+  async adaptProduct(canonical: CanonicalAffiliateProduct): Promise<AdaptedProduct> {
     const warnings: string[] = [];
+    const unified = canonicalToUnified(canonical);
 
     // 1. Guardar payload crudo INMEDIATAMENTE (auditoría, re-procesamiento)
     const rawPayload: RawAffiliateProduct = {
-      id: `raw-${this.config.network}-${unified.externalId}-${Date.now().toString(36)}`,
+      id: `raw-${this.config.network}-${canonical.externalId}-${Date.now().toString(36)}`,
       network: this.config.network,
-      externalId: unified.externalId,
-      rawPayload: unified as unknown as Record<string, unknown>,
+      externalId: canonical.externalId,
+      rawPayload: canonical as unknown as Record<string, unknown>,
       capturedAt: new Date().toISOString(),
       processed: false,
     };
@@ -268,17 +270,17 @@ export class AffiliateAdapter {
       // Galería completa unificada (máx 50 para no saturar)
       gallery: allImages.slice(0, 50),
       allImages: allImages.slice(0, 100),
-      // Datos extra de la red
-      networkExtra: unified.extra,
+      // Datos extra de la red (passthrough canónico)
+      networkExtra: canonical.extra ?? unified.extra,
       // URL fuente para referencia
-      sourceUrl: unified.productUrl,
+      sourceUrl: canonical.directUrl || canonical.affiliateUrl || unified.productUrl,
     };
 
     // 5. Aplicar mapeo de campos extra si existe
     if (unified.extra && this.config.fieldMapping) {
       for (const [sourceKey, targetKey] of Object.entries(this.config.fieldMapping)) {
         if (unified.extra[sourceKey] && !adaptedProduct[targetKey as keyof typeof adaptedProduct]) {
-          (adaptedProduct as Record<string, unknown>)[targetKey] = unified.extra[sourceKey];
+          (adaptedProduct as unknown as Record<string, unknown>)[targetKey] = unified.extra[sourceKey];
         }
       }
     }
@@ -353,7 +355,7 @@ export class AffiliateAdapter {
       return { total: 0, captured: 0, failed: 0, warnings: ['Catálogo vacío: sincroniza primero desde el panel'] };
     }
 
-    const networkProducts = snapshot.products.filter(p => p.network === this.config.network);
+    const networkProducts = snapshot.products.filter((p) => p.network === this.config.network);
     const warnings: string[] = [];
     let captured = 0;
     let failed = 0;
@@ -361,13 +363,13 @@ export class AffiliateAdapter {
     // Procesar en lotes para no saturar memoria
     for (let i = 0; i < networkProducts.length; i += batchSize) {
       const batch = networkProducts.slice(i, i + batchSize);
-      for (const product of batch) {
+      for (const canonical of batch) {
         try {
-          await this.adaptProduct(product);
+          await this.adaptProduct(canonical);
           captured++;
         } catch (error) {
           failed++;
-          warnings.push(`Error en ${product.externalId}: ${error instanceof Error ? error.message : 'desconocido'}`);
+          warnings.push(`Error en ${canonical.externalId}: ${error instanceof Error ? error.message : 'desconocido'}`);
         }
       }
       // Pequeña pausa entre lotes
@@ -414,11 +416,29 @@ export async function captureProductFromUrl(url: string): Promise<AdaptedProduct
   const connector = getConnector(network);
   if (!connector) return null;
 
-  // Buscar por URL como query
-  const results = await connector.search({ query: url, limit: 1 });
+  // Buscar por URL como query vía la ruta canónica (sin muestras estimated)
+  const results = await searchCatalogBatch(connector, { query: url, limit: 1 });
   if (!results.length) return null;
 
   return adapter.adaptProduct(results[0]);
+}
+
+/**
+ * Reconstruye el producto unificado que consume el pipeline de curación a
+ * partir del `rawPayload` persistido. Acepta el contrato canónico (PASO 6) y el
+ * shape legado `UnifiedProduct` (raws capturados antes del PASO 6).
+ */
+export function rawPayloadToUnified(payload: Record<string, unknown> | null | undefined): AdaptedProduct['product'] {
+  if (isCanonicalProduct(payload)) {
+    const unified = canonicalToUnified(payload);
+    return {
+      ...unified,
+      allImages: [payload.mainImage, ...payload.extraImages].filter(Boolean),
+      networkExtra: payload.extra ?? unified.extra,
+      sourceUrl: payload.directUrl || payload.affiliateUrl || unified.productUrl,
+    };
+  }
+  return payload as unknown as AdaptedProduct['product'];
 }
 
 /**
