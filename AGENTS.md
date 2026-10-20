@@ -10,6 +10,12 @@ Estas reglas aplican **siempre**, sea cual sea el modelo activo en opencode
 (Mimo, u otro seleccionado con `/model`): las carga opencode vía `opencode.json`
 al abrir el proyecto, y el agente debe seguirlas en cada sesión.
 
+0. **Preparación e inspección inicial al arrancar / tras un `/new`:**
+   Antes de responder o procesar la primera instrucción del usuario, el agente DEBE:
+   - Revisar el estado del repositorio (`git status` / último commit).
+   - Inspeccionar la estructura de archivos actual (consultando `estructura_limpia.txt` o `estructura.txt` si están disponibles).
+   - Confirmar mentalmente el contexto para estar listo sin asumir estados antiguos.
+
 1. **El desarrollo se hace en local** (Antigravity + opencode en la copia del
    repo del PC). No desarrollar dentro del contenedor de producción: su working
    tree es efímero y se pierde en el siguiente redeploy.
@@ -37,9 +43,7 @@ al abrir el proyecto, y el agente debe seguirlas en cada sesión.
    `.gitignore`; no forzar su inclusión ni pegar claves en el código.
 6. Tras un push, si el deploy falla (webhook/health), informar al usuario en vez
    de reintentar deploys a ciegas.
-7. **Cada tarea termina con commit + push + verificación de deploy + aviso al
-   usuario** con el resultado (y con el fallo si lo hay) en el mismo turno; esta
-   regla es obligatoria también entre sesiones y agentes distintos.
+7. **Cada tarea termina actualizando los archivos de estructura** (`estructura_limpia.txt` / `estructura.txt`) si se han añadido, modificado o eliminado archivos en el proyecto, seguido de commit + push + verificación de deploy + aviso al usuario con el resultado (y con el fallo si lo hay) en el mismo turno; esta regla es obligatoria también entre sesiones y agentes distintos.
 
 ## Qué es este proyecto
 
