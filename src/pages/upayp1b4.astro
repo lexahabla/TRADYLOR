@@ -5025,28 +5025,24 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
     });
 
-    // ── Borrar TODO el catálogo de AliExpress (peligro) ────────────────────────
+    // ── Borrar TODO el catálogo principal (products.json) vía API v1 ─────────────
     btnAliDeleteAll?.addEventListener('click', async () => {
-      if (!confirm('¿Estás seguro de que quieres vaciar COMPLETAMENTE el catálogo de AliExpress? Se perderán todos los productos guardados y no se podrán recuperar salvo volviendo a sincronizar.')) return;
-      if (!confirm('Última confirmación: esto borra TODO el catálogo de AliExpress. ¿Continuar?')) return;
+      if (!confirm('¿Estás seguro de que quieres vaciar COMPLETAMENTE el catálogo de productos? Se eliminarán todos los productos de products.json y no se podrán recuperar.')) return;
       if (btnAliDeleteAll) btnAliDeleteAll.disabled = true;
       try {
-        const res = await fetch('/api/admin/aliexpress/catalog', {
-          method: 'DELETE',
+        const res = await fetch('/api/v1/products/delete-all', {
+          method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
         });
         const data = await res.json();
         if (data.success) {
-          showAliStatus('success', 'Catálogo vaciado', data.message);
-          aliSelected.clear();
-          await loadAliCatalog();
+          window.location.reload();
         } else {
-          showAliStatus('error', 'No se pudo vaciar', data.message);
+          alert('Error: ' + (data.error || 'No se pudo vaciar el catálogo.'));
         }
       } catch (err) {
         console.error('Error vaciando catálogo:', err);
-        showAliStatus('error', 'Error de red', 'No se pudo contactar con el servidor.');
+        alert('Error de red: no se pudo contactar con el servidor.');
       } finally {
         if (btnAliDeleteAll) btnAliDeleteAll.disabled = false;
       }
