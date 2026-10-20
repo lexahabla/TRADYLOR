@@ -106,6 +106,47 @@ export const GET: APIRoute = async ({ request }) => {
   return new Response(JSON.stringify(currentStatePayload()), { status: 200, headers: jsonHeaders });
 };
 
+export const DELETE: APIRoute = async ({ request }) => {
+  const unauthorizedResponse = requireAdminAuth(request);
+  if (unauthorizedResponse) return unauthorizedResponse;
+
+  try {
+    const previous = readAffiliateCatalog();
+    if (!previous || previous.products.length === 0) {
+      return new Response(
+        JSON.stringify({ success: true, deleted: 0, remaining: 0, message: 'El catálogo de afiliados ya estaba vacío.' }),
+        { status: 200, headers: jsonHeaders },
+      );
+    }
+
+    const deletedCount = previous.products.length;
+    const newSnapshot: AffiliateCatalogSnapshot = { syncedAt: '', products: [] };
+    const saved = writeAffiliateCatalog(newSnapshot);
+
+    if (!saved) {
+      return new Response(
+        JSON.stringify({ success: false, message: 'No se pudo guardar la caché en el volumen.' }),
+        { status: 500, headers: jsonHeaders },
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        deleted: deletedCount,
+        remaining: 0,
+        message: `Catálogo de afiliados vaciado: ${deletedCount} producto(s) eliminados.`,
+      }),
+      { status: 200, headers: jsonHeaders },
+    );
+  } catch (error: any) {
+    return new Response(
+      JSON.stringify({ success: false, message: error?.message || 'Error al borrar el catálogo de afiliados.' }),
+      { status: 500, headers: jsonHeaders },
+    );
+  }
+};
+
 export const POST: APIRoute = async ({ request }) => {
   const unauthorizedResponse = requireAdminAuth(request);
   if (unauthorizedResponse) return unauthorizedResponse;

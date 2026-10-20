@@ -897,7 +897,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
           <div id="aliCatalogDanger" class="ali-catalog-danger" hidden>
             <button type="button" id="btnAliDeleteSelected" class="btn-danger btn-sm" title="Elimina definitivamente los productos seleccionados del catálogo de AliExpress (no se pueden recuperar salvo volviendo a sincronizar)">🗑️ Borrar seleccionados</button>
-            <button type="button" id="btnAliDeleteAll" class="btn-danger btn-sm" title="Vacía completamente el catálogo de AliExpress (no se puede recuperar salvo volviendo a sincronizar)">🗑️ Borrar TODO el catálogo</button>
+            <button type="button" id="btnAliDeleteAll" class="btn-danger btn-sm" title="Vacía completamente el catálogo de afiliados de TODAS las redes (no se puede recuperar salvo volviendo a sincronizar)">🗑️ Borrar TODO el catálogo</button>
           </div>
         </div>
 
@@ -5025,15 +5025,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
     });
 
-    // ── Borrar TODO el catálogo de afiliados (AliExpress) ───────────────────────
+    // ── Borrar TODO el catálogo de afiliados (TODAS las redes) ───────────────────────
     btnAliDeleteAll?.addEventListener('click', async () => {
-      if (!confirm('¿Estás seguro de que quieres vaciar COMPLETAMENTE el catálogo de afiliados? Se eliminarán todos los productos de la caché de AliExpress y no se podrán recuperar (salvo volviendo a sincronizar).')) return;
+      if (!confirm('¿Estás seguro de que quieres vaciar COMPLETAMENTE el catálogo de afiliados? Se eliminarán TODOS los productos de TODAS las redes y no se podrán recuperar (salvo volviendo a sincronizar).')) return;
       if (btnAliDeleteAll) btnAliDeleteAll.disabled = true;
       try {
-        const res = await fetch('/api/admin/aliexpress/catalog', {
+        const res = await fetch('/api/admin/catalog', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
         });
         const data = await res.json();
         if (data.success) {
