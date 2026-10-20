@@ -546,6 +546,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll">Seleccionar todos los visibles</button>
         <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear">Limpiar</button>
         <button type="button" class="btn-ai btn-sm" id="btnProdEnrich">Enriquecer con IA (texto + imagen)</button>
+        <button type="button" class="btn-ai btn-sm" id="btnProdOpenCode" title="Asistente OpenCode: redacta prompts en lenguaje natural para curar el catálogo">🤖 Asistente IA</button>
         <select id="prodCatAssign" class="sel-cat-assign" aria-label="Categoría destino">
           <option value="">Categoría destino…</option>
         </select>
@@ -1118,6 +1119,33 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="submit" class="btn-success" id="btnCreateSubcatSubmit">Crear subcategoría</button>
       </div>
     </form>
+  </div>
+
+  <!-- Modal del Asistente OpenCode -->
+  <div id="opencodeAssistantModal" class="admin-modal admin-modal-wide" hidden>
+    <div class="admin-modal-backdrop" data-admin-modal-close></div>
+    <div class="admin-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="opencodeAssistantTitle">
+      <button type="button" class="admin-modal-close" data-admin-modal-close aria-label="Cerrar">×</button>
+      <h3 id="opencodeAssistantTitle" class="admin-modal-title">🤖 Asistente OpenCode</h3>
+      <p class="admin-modal-text">Redacta instrucciones en lenguaje natural para curar el catálogo. Ejemplos: <em>«Reorganiza las categorías de electrónica»</em>, <em>«Revisa precios desalineados en el último lote»</em>, <em>«Filtra anomalías en productos sin enriquecer»</em>.</p>
+      <div class="admin-modal-field">
+        <span>Prompt</span>
+        <textarea id="opencodePrompt" rows="4" placeholder="Escribe tu instrucción aquí... (ej: Reorganiza las categorías de electrónica, Revisa precios desalineados, Filtra anomalías en el último lote)" style="resize: vertical; min-height: 100px;"></textarea>
+      </div>
+      <label class="admin-modal-field">
+        <span>Contexto adicional (opcional)</span>
+        <select id="opencodeContext" style="padding: .45rem .6rem;">
+          <option value="selected">Solo productos seleccionados (0 seleccionados)</option>
+          <option value="all">Todo el catálogo visible (filtrado actual)</option>
+          <option value="full">Catálogo completo (todos los productos)</option>
+        </select>
+      </label>
+      <p id="opencodeStatus" class="admin-modal-status" hidden></p>
+      <div class="admin-modal-actions">
+        <button type="button" class="btn-secondary" data-admin-modal-close>Cancelar</button>
+        <button type="button" class="btn-ai" id="btnOpenCodeExecute">Enviar a OpenCode</button>
+      </div>
+    </div>
   </div>
 
   <!-- Modal de vinculación de alternativas (cross-matching) -->
@@ -5660,6 +5688,68 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         setTimeout(() => closeAdminModal(createSubcategoryModal), 700);
       } catch {
         if (status) { status.hidden = false; status.className = 'admin-modal-status is-error'; status.textContent = 'Error de red al crear la subcategoría.'; }
+      }
+    });
+
+    // ── Modal: Asistente OpenCode ─────────────────────────────────────────────
+    const opencodeModal = document.getElementById('opencodeAssistantModal');
+    const opencodePrompt = document.getElementById('opencodePrompt');
+    const opencodeContext = document.getElementById('opencodeContext');
+    const opencodeStatus = document.getElementById('opencodeStatus');
+    document.getElementById('btnProdOpenCode')?.addEventListener('click', () => {
+      const selectedCount = selectedProductIds.size;
+      const contextSelect = document.getElementById('opencodeContext');
+      if (contextSelect) {
+        contextSelect.querySelector('option[value="selected"]').textContent = `Solo productos seleccionados (${selectedCount} seleccionados)`;
+      }
+      if (opencodePrompt) opencodePrompt.value = '';
+      if (opencodeStatus) { opencodeStatus.hidden = true; opencodeStatus.textContent = ''; opencodeStatus.className = 'admin-modal-status'; }
+      openAdminModal(opencodeModal);
+      opencodePrompt?.focus();
+    });
+    document.getElementById('btnOpenCodeExecute')?.addEventListener('click', async () => {
+      const prompt = opencodePrompt?.value?.trim();
+      if (!prompt) {
+        if (opencodeStatus) { opencodeStatus.hidden = false; opencodeStatus.className = 'admin-modal-status is-error'; opencodeStatus.textContent = 'Escribe un prompt antes de enviar.'; }
+        return;
+      }
+      const context = opencodeContext?.value || 'selected';
+      if (opencodeStatus) { opencodeStatus.hidden = false; opencodeStatus.className = 'admin-modal-status'; opencodeStatus.textContent = 'Enviando a OpenCode...'; }
+      try {
+        let productIds: string[] = [];
+        if (context === 'selected') {
+          productIds = Array.from(selectedProductIds);
+          if (!productIds.length) {
+            if (opencodeStatus) { opencodeStatus.hidden = false; opencodeStatus.className = 'admin-modal-status is-error'; opencodeStatus.textContent = 'No hay productos seleccionados.'; }
+            return;
+          }
+        } else if (context === 'all') {
+          productIds = currentProducts.map((p: any) => p.id);
+        } else if (context === 'full') {
+          try {
+            const res = await fetch('/api/v1/products?limit=10000', { cache: 'no-store' });
+            const data = await res.json();
+            if (data.products && Array.isArray(data.products)) productIds = data.products.map((p: any) => p.id);
+          } catch {
+            if (opencodeStatus) { opencodeStatus.hidden = false; opencodeStatus.className = 'admin-modal-status is-error'; opencodeStatus.textContent = 'No se pudo obtener el catálogo completo.'; }
+            return;
+          }
+        }
+        const res = await fetch('/api/v1/admin/opencode-command', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt, productIds, context }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (opencodeStatus) { opencodeStatus.hidden = false; opencodeStatus.className = 'admin-modal-status is-ok'; opencodeStatus.textContent = data.message || 'Comando ejecutado correctamente.'; }
+          if (data.reload) await reloadProductsTable();
+          selectedProductIds.clear();
+          updateProdSelCount();
+        } else {
+          if (opencodeStatus) { opencodeStatus.hidden = false; opencodeStatus.className = 'admin-modal-status is-error'; opencodeStatus.textContent = data.message || 'Error al ejecutar el comando.'; }
+        }
+      } catch {
+        if (opencodeStatus) { opencodeStatus.hidden = false; opencodeStatus.className = 'admin-modal-status is-error'; opencodeStatus.textContent = 'Error de red al contactar con el servidor.'; }
       }
     });
 
