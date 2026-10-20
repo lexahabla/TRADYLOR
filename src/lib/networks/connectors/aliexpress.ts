@@ -13,7 +13,7 @@
  */
 
 import { createHmac } from 'node:crypto';
-import { ConnectorError, fetchWithTimeout, type NetworkConnector } from './base';
+import { ConnectorError, canonicalToUnified, fetchWithTimeout, type NetworkConnector } from './base';
 import { getMergedCredentialValues, setNetworkStatus } from '../credentials';
 import type { CanonicalAffiliateProduct, UnifiedProduct, UnifiedSearchParams } from '../types';
 
@@ -424,31 +424,10 @@ export class AliExpressConnector implements NetworkConnector {
   }
 
   async search(params: UnifiedSearchParams): Promise<UnifiedProduct[]> {
-    const creds = resolveCreds();
-    if (!creds?.appKey || !creds?.appSecret) {
-      throw new ConnectorError(this.networkId, 'AliExpress no está conectado. Añade sus credenciales primero.');
-    }
-
-    const limit = Math.min(params.limit ?? 20, 50);
-    if (params.query) return queryProducts(creds, params.query, limit, params.page ?? 1);
-
-    const seen = new Set<string>();
-    const merged: UnifiedProduct[] = [];
-    for (const keyword of CATALOG_KEYWORDS) {
-      if (merged.length >= limit) break;
-      try {
-        const batch = await queryProducts(creds, keyword, 10);
-        for (const product of batch) {
-          if (seen.has(product.externalId)) continue;
-          seen.add(product.externalId);
-          merged.push(product);
-          if (merged.length >= limit) break;
-        }
-      } catch (error) {
-        if (!merged.length && keyword === CATALOG_KEYWORDS[0]) throw error;
-      }
-    }
-    return merged;
+    // Delega en la ruta canónica: mismo mapeo de precios/descuento/envío que
+    // usa el pipeline de catálogo (evita dos normalizadores divergentes).
+    const canonical = await this.searchCanonical(params);
+    return canonical.map(canonicalToUnified);
   }
 
   /** Búsqueda al contrato canónico (pipeline). Mapea precios, descuento y rating /5 ★. */

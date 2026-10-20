@@ -7,11 +7,12 @@
  * Flujo OAuth client-credentials implementado en validate(): intercambia
  * Client ID/Secret por un token de aplicación.
  * Búsqueda Browse API (/item_summary/search) con headers correctos para España.
- * Usa EbayProductAdapter para normalizar la respuesta a UnifiedProduct.
+ * Usa EbayProductAdapter para normalizar la respuesta al contrato canónico
+ * (CanonicalAffiliateProduct → UnifiedProduct vía canonicalToUnified).
  * ==============================================================================
  */
 
-import { ConnectorError, fetchWithTimeout, sampleProducts, type NetworkConnector } from './base';
+import { ConnectorError, canonicalToUnified, fetchWithTimeout, sampleProducts, type NetworkConnector } from './base';
 import { getCredentialValues, setNetworkStatus } from '../credentials';
 import type { CanonicalAffiliateProduct, UnifiedProduct, UnifiedSearchParams } from '../types';
 import { EbayProductAdapter, type EbayItemSummary, type EbaySearchResponse } from './adapters/ebayProductAdapter';
@@ -150,20 +151,15 @@ export class EbayConnector implements NetworkConnector {
 
   async search(params: UnifiedSearchParams): Promise<UnifiedProduct[]> {
     try {
-      const items = await this.fetchItemSummaries(params);
-      const creds = getCredentialValues(this.networkId);
-      const campaignId = creds?.campaignId ?? '';
-
-      // Usar el adaptador para normalizar
-      const adapter = new EbayProductAdapter(campaignId, params);
-      const products = adapter.adapt(items);
+      // Delega en la ruta canónica (mismo mapeo que usa el pipeline de catálogo)
+      const canonical = await this.searchCanonical(params);
 
       // Si no hay resultados reales, devolver productos de muestra (estimated: true)
-      if (products.length === 0) {
+      if (canonical.length === 0) {
         return sampleProducts(this.networkId, params, 37);
       }
 
-      return products;
+      return canonical.map(canonicalToUnified);
     } catch (error) {
       if (error instanceof ConnectorError) throw error;
       console.error('[EbayConnector] Error en búsqueda:', error);

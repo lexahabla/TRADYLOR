@@ -162,6 +162,21 @@ export class EbayProductAdapter {
     if (item.condition) technicalSpecs['Estado'] = item.condition;
     if (item.itemLocation?.country) technicalSpecs['Ubicación'] = item.itemLocation.country;
 
+    // Envío: días máximos estimados de entrega (la tabla de catálogo lee
+    // 'Días de envío' para la columna de envío; sin esto saldría «—»)
+    const shipping = item.shippingOptions?.[0];
+    const deliveryMax = shipping?.maxEstimatedDeliveryDate;
+    if (deliveryMax) {
+      const days = Math.ceil((Date.parse(deliveryMax) - Date.now()) / 86_400_000);
+      if (Number.isFinite(days) && days > 0) technicalSpecs['Días de envío'] = String(days);
+    }
+    if (shipping?.shippingCost?.value != null) {
+      const cost = this.parsePrice(shipping.shippingCost.value);
+      technicalSpecs['Coste de envío'] = cost > 0
+        ? `${cost.toFixed(2)} ${shipping.shippingCost.currency ?? currency}`
+        : 'Gratis';
+    }
+
     // eBay Browse API no da comisión por ítem → 0 (evita celdas vacías sin inventar %)
     const commissionRate = 0;
 

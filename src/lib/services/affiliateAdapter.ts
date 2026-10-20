@@ -11,6 +11,7 @@
 
 import type { UnifiedProduct, UnifiedSearchParams } from '../networks/types';
 import { getConnector } from '../networks';
+import { searchCatalogBatch } from '../networks/connectors/base';
 import { extractMetadata, scrapeProductPage, type ScrapePageResult } from '../../pages/api/products/add';
 import { complementProductFromPage } from '../../pages/api/products/add';
 import { type Product } from '../productStore';
@@ -168,8 +169,9 @@ export class AffiliateAdapter {
       throw new Error(`Conector no disponible para la red: ${this.config.network}`);
     }
 
-    // Buscar el producto en la red
-    const results = await connector.search({
+    // Buscar el producto en la red vía la ruta canónica (searchCanonical →
+    // canonicalToUnified) para persistir el esquema unificado completo
+    const results = await searchCatalogBatch(connector, {
       query: externalId,
       limit: 1,
     });
@@ -191,7 +193,8 @@ export class AffiliateAdapter {
       throw new Error(`Conector no disponible para la red: ${this.config.network}`);
     }
 
-    const results = await connector.search(params);
+    // Ruta canónica: nunca se ingeren muestras (estimated) ni datos sin normalizar
+    const results = await searchCatalogBatch(connector, params);
     const adapted: AdaptedProduct[] = [];
 
     for (const unifiedProduct of results) {
