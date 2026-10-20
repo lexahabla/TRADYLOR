@@ -560,6 +560,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="button" class="btn-secondary btn-sm" id="btnProdBulkBadge" title="Aplica la etiqueta destacada (badge) a todos los productos seleccionados">🏷️ Asignar Badge</button>
         <button type="button" class="btn-ai btn-sm" id="btnProdNormalizeTags" title="Extraer tags técnicos normalizados (normalized_tags)">🏷️ Normalizar Tags</button>
         <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
+        <button type="button" class="btn-ai btn-sm" id="btnBuildCatalog" title="Construye el catálogo completo consultando TODAS las redes conectadas (eBay, AliExpress, etc.), normaliza, deduplica cross-merchant, autoclasifica, detecta ofertas estrella (hsr) y guarda en products.json. Proceso completo de un solo clic.">
+          <span class="btn-text">🏗️ Construir Catálogo</span>
+          <div class="btn-spinner" hidden></div>
+        </button>
         <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
         <button type="button" class="btn-danger btn-sm" id="btnProdDeleteAll" title="Elimina TODOS los productos del catálogo (purga completa). Úsalo para resincronizar desde cero.">🗑️ Vaciar Catálogo</button>
       </div>
@@ -3130,6 +3134,57 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     if (typeof loadSectionsAdmin === 'function') loadSectionsAdmin();
     attachRowActions();
     if (typeof reloadProductsTable === 'function') reloadProductsTable();
+
+    // Handler para btnBuildCatalog (construcción automática del catálogo multi-comerciante)
+    const btnBuildCatalog = document.getElementById('btnBuildCatalog');
+    const btnBuildCatalogText = btnBuildCatalog?.querySelector('.btn-text') || btnBuildCatalog;
+    const btnBuildCatalogSpinner = btnBuildCatalog?.querySelector('.btn-spinner');
+    btnBuildCatalog?.addEventListener('click', async () => {
+      if (!btnBuildCatalog) return;
+      btnBuildCatalog.disabled = true;
+      btnBuildCatalog.classList.add('loading');
+      if (btnBuildCatalogSpinner) btnBuildCatalogSpinner.hidden = false;
+      if (btnBuildCatalogText) btnBuildCatalogText.textContent = 'Construyendo…';
+
+      showAlert('loading', 'Construyendo catálogo multi-comerciante…', 'Consultando APIs de todas las redes conectadas, normalizando, deduplicando cross-merchant, autoclasificando y detectando ofertas estrella. Esto puede tardar 30-120 segundos.');
+
+      try {
+        const res = await fetch('/api/v1/products/build-catalog', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          // Recargar tabla de productos para mostrar los nuevos/actualizados
+          await reloadProductsTable();
+
+          const lines = [
+            `Redes consultadas: ${(data.networksQueried || []).join(', ') || 'ninguna'}`,
+            `Productos brutos: ${data.rawTotal}`,
+            `Tras filtro calidad: ${data.afterQualityFilter}`,
+            `Grupos cross-merchant: ${data.crossMerchantGroups} (duplicados resueltos: ${data.duplicatesResolved})`,
+            `Categorías creadas: ${data.categoriesCreated} · Subcategorías: ${data.subcategoriesCreated}`,
+            `Ofertas estrella (hsr): ${data.hsrDetected}`,
+            `Nuevos: ${data.upserted} · Actualizados: ${data.updated}`,
+            `Duración: ${Math.round(data.durationMs / 1000)}s`,
+          ];
+          showAlert('success', '✅ Catálogo construido con éxito', lines.join('\n'));
+        } else {
+          showAlert('error', 'Error construyendo catálogo', data.errors?.join('\n') || 'Error desconocido');
+        }
+      } catch (err) {
+        console.error(err);
+        showAlert('error', 'Error de red', 'No se pudo contactar con /api/v1/products/build-catalog');
+      } finally {
+        if (btnBuildCatalog) {
+          btnBuildCatalog.disabled = false;
+          btnBuildCatalog.classList.remove('loading');
+        }
+        if (btnBuildCatalogSpinner) btnBuildCatalogSpinner.hidden = true;
+        if (btnBuildCatalogText) btnBuildCatalogText.textContent = '🏗️ Construir Catálogo';
+      }
+    });
 
     // Botón flotante: sube al menú de secciones (admin-section-nav).
     const adminBackToTop = document.getElementById('adminBackToTop');
