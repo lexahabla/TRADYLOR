@@ -10,6 +10,11 @@
  * AmazonProductAdapter a CanonicalAffiliateProduct (imágenes variantes y
  * CustomerReviews). Si faltan credenciales o la llamada falla, search()
  * sigue devolviendo la muestra estimada de siempre (UI intacta).
+ *
+ * Modo fallback anti-503: si PA-API responde 503 o una página HTML de
+ * bloqueo, search() y searchCanonical() no lanzan excepción: registran el
+ * aviso controlado y devuelven datos de respaldo marcados `estimated: true`
+ * (nunca se ingieren en el catálogo real, filtra searchCatalogBatch).
  * ==============================================================================
  */
 
@@ -163,6 +168,87 @@ function shouldRetry(response: Response, parsed: AmazonSearchItemsResponse | nul
   return /TooMany|Throttl|SlowDown|ServiceUnavailable|InternalFailure/i.test(code);
 }
 
+/* ---------------- Detección de bloqueo (503 / página HTML anti-bot) ---------------- */
+
+/**
+ * ¿La respuesta es un bloqueo (HTTP 503) en vez de JSON de PA-API?
+ * Intercepta ANTES de parsear: la capa anti-bot de Amazon devuelve 503 con
+ * una página HTML (`<!DOCTYPE html>`) que rompería JSON.parse.
+ */
+function isBlockedResponse(response: Response, raw: string): boolean {
+  if (response.status === 503) return true;
+  return /^\s*<(!doctype\s+html|html)/i.test(raw);
+}
+
+/** Error de bloqueo (503/HTML): los llamantes activan el modo de respaldo. */
+export class AmazonBlockedError extends ConnectorError {
+  constructor(message: string) {
+    super('amazon', message);
+    this.name = 'AmazonBlockedError';
+  }
+}
+
+/* ---------------- Respuesta de respaldo (fallback canónico) ---------------- */
+
+const FALLBACK_IMAGE = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=800&auto=format&fit=crop';
+const FALLBACK_CATEGORIES = [
+  'Tecnología',
+  'Informática & Laptops',
+  'Audio & Sonido',
+  'Hogar Inteligente',
+  'Gaming & Accesorios',
+];
+
+/**
+ * Datos de ejemplo válidos `CanonicalAffiliateProduct` para no dejar la tabla
+ * de afiliados del panel sin filas ni con celdas vacías cuando PA-API
+ * bloquea la IP. Van marcados `estimated: true`: la UI los muestra como
+ * estimados y `searchCatalogBatch` los excluye de la caché real.
+ */
+function fallbackCanonicalProducts(params: UnifiedSearchParams, creds: AmazonCreds | null): CanonicalAffiliateProduct[] {
+  const count = Math.min(Math.max(params.limit ?? 8, 1), 10);
+  const term = (params.query || params.category || 'producto').slice(0, 60);
+  const syncedAt = new Date().toISOString();
+  const tag = creds?.trackingId ?? '';
+
+  return Array.from({ length: count }, (_, index) => {
+    const price = Math.round((29.99 + index * 13.5 + term.length * 0.9) * 100) / 100;
+    const originalPrice = Math.round(price * 1.15 * 100) / 100;
+    const discountPercentage = Math.round(((originalPrice - price) / originalPrice) * 10000) / 100;
+    const commissionRate = 4;
+    const searchUrl = `https://www.amazon.es/s?k=${encodeURIComponent(term)}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`;
+
+    return {
+      network: 'amazon',
+      externalId: `amazon-fallback-${syncedAt}-${index}`,
+      affiliateUrl: searchUrl,
+      directUrl: searchUrl,
+      title: `${term.charAt(0).toUpperCase()}${term.slice(1)} — referencia destacada ${index + 1} (Amazon)`,
+      description: `Resultado de respaldo mientras PA-API está bloqueado (HTTP 503). Consulta la API oficial de Amazon para datos reales de «${term}».`,
+      price,
+      originalPrice,
+      currency: 'EUR',
+      discountPercentage,
+      inStock: true,
+      commissionRate,
+      estimatedCommission: Math.round(price * (commissionRate / 100) * 100) / 100,
+      category: params.category || FALLBACK_CATEGORIES[index % FALLBACK_CATEGORIES.length],
+      merchantName: 'Amazon.es',
+      rating: Math.round((3.8 + (index % 12) / 10) * 10) / 10,
+      reviewCount: 120 + index * 87,
+      sales: 50 + ((index * 7) % 50),
+      mainImage: FALLBACK_IMAGE,
+      extraImages: [],
+      technicalSpecs: {
+        'Días de envío': '3',
+        'Aviso': 'Respaldo automático: PA-API bloqueado (503).',
+      },
+      estimated: true,
+      syncedAt,
+    } satisfies CanonicalAffiliateProduct;
+  });
+}
+
 /* ---------------- Petición SearchItems ---------------- */
 
 function buildRequestBody(params: UnifiedSearchParams, partnerTag: string): AmazonSearchItemsRequest {
@@ -200,6 +286,7 @@ async function searchItemsRaw(params: UnifiedSearchParams, creds: AmazonCreds): 
   const bodyJson = JSON.stringify(buildRequestBody(params, creds.trackingId));
   const url = `${PAAPI_URL}?AssociateTag=${encodeURIComponent(creds.trackingId)}`;
   let lastDetail = 'sin respuesta';
+  let blocked = false;
 
   for (let attempt = 1; attempt <= PAAPI_MAX_ATTEMPTS; attempt += 1) {
     // Firma nueva en cada intento para que X-Amz-Date no caduque tras el backoff
@@ -222,6 +309,17 @@ async function searchItemsRaw(params: UnifiedSearchParams, creds: AmazonCreds): 
       lastDetail = error instanceof Error ? error.message : 'fallo de red';
       if (attempt < PAAPI_MAX_ATTEMPTS) {
         await sleep(backoffMs(attempt));
+        continue;
+      }
+      break;
+    }
+
+    // Anti-bot: 503 o página HTML de bloqueo → se intercepta ANTES de parsear JSON
+    if (isBlockedResponse(response, raw)) {
+      blocked = true;
+      lastDetail = `HTTP ${response.status} (página de bloqueo, no JSON)`;
+      if (attempt < PAAPI_MAX_ATTEMPTS) {
+        await sleep(retryAfterMs(response, attempt));
         continue;
       }
       break;
@@ -253,6 +351,12 @@ async function searchItemsRaw(params: UnifiedSearchParams, creds: AmazonCreds): 
     }
 
     return parsed.SearchResult?.Items ?? [];
+  }
+
+  if (blocked) {
+    throw new AmazonBlockedError(
+      `IP bloqueada o servicio no disponible (HTTP 503 / página HTML) tras ${PAAPI_MAX_ATTEMPTS} intentos: ${lastDetail}.`,
+    );
   }
 
   throw new ConnectorError(
@@ -291,7 +395,19 @@ export class AmazonConnector implements NetworkConnector {
     if (!creds) {
       throw new ConnectorError(this.networkId, 'Amazon no está conectado. Añade sus credenciales primero.');
     }
-    const items = await searchItemsRaw(params, creds);
+
+    let items: AmazonItem[];
+    try {
+      items = await searchItemsRaw(params, creds);
+    } catch (error) {
+      // IP bloqueada / PA-API caído: no interrumpir el panel → respaldo canónico
+      if (error instanceof AmazonBlockedError) {
+        console.warn('[Amazon Connector] IP bloqueada o servicio no disponible (503). Activando modo de respaldo seguro.');
+        return fallbackCanonicalProducts(params, creds);
+      }
+      throw error;
+    }
+
     const adapter = new AmazonProductAdapter(creds.trackingId);
     return adapter.adapt(items);
   }

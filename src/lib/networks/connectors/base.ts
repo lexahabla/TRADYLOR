@@ -74,7 +74,7 @@ export function canonicalToUnified(product: CanonicalAffiliateProduct): UnifiedP
     inStock: product.inStock,
     shippingInfo: hasShipDays ? `Envío en ${shipDays} días` : undefined,
     shippingDays: shipDays,
-    estimated: false,
+    estimated: product.estimated === true,
     extra: {
       'ID externo': product.externalId,
       Marca: product.brand ?? null,
@@ -123,7 +123,8 @@ export async function searchCatalogBatch(
 ): Promise<UnifiedProduct[]> {
   if (connector.searchCanonical) {
     const canonicalBatch = await connector.searchCanonical(params);
-    return canonicalBatch.map(canonicalToUnified);
+    // Nunca ingerir productos de muestra/respaldo (estimated) en la caché real
+    return canonicalBatch.filter((product) => !product.estimated).map(canonicalToUnified);
   }
   const legacyBatch = await connector.search(params);
   // Nunca ingerir productos de muestra (estimated) en la caché real

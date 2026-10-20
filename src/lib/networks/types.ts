@@ -126,6 +126,9 @@ export interface CanonicalAffiliateProduct {
   historicalLow?: boolean;
   guarantee?: string;
 
+  /** Marca datos de muestra/respaldo (p. ej. fallback anti-503). Nunca se ingieren en el catálogo real. */
+  estimated?: boolean;
+
   syncedAt: string;
 }
 
