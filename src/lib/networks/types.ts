@@ -75,6 +75,52 @@ export interface UnifiedProduct {
   extra?: Record<string, string | number | boolean | null>;
 }
 
+/**
+ * Contrato de datos único de producto de afiliación.
+ * Todas las redes (AliExpress, eBay, Amazon…) normalizan su entrada a esta
+ * interfaz antes de entrar en el pipeline de catálogo.
+ */
+export interface CanonicalAffiliateProduct {
+  network: 'aliexpress' | 'ebay' | 'amazon' | string;
+  externalId: string;
+  affiliateUrl: string;
+  directUrl: string;
+
+  title: string;
+  description: string;
+  editorialSummary?: string;
+  price: number;
+  originalPrice: number;
+  currency: string;
+  discountPercentage: number;
+  inStock: boolean;
+
+  commissionRate: number;
+  estimatedCommission: number;
+  epc?: number;
+
+  category: string;
+  subCategory?: string;
+  brand?: string;
+  merchantName: string;
+  merchantId?: string;
+
+  rating: number;
+  reviewCount: number;
+
+  mainImage: string;
+  extraImages: string[];
+
+  technicalSpecs?: Record<string, string>;
+  pros?: string[];
+  cons?: string[];
+  conversionScore?: number;
+  historicalLow?: boolean;
+  guarantee?: string;
+
+  syncedAt: string;
+}
+
 /** Parámetros de búsqueda unificada */
 export interface UnifiedSearchParams {
   query?: string;
