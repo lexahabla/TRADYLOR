@@ -560,10 +560,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="button" class="btn-secondary btn-sm" id="btnProdBulkBadge" title="Aplica la etiqueta destacada (badge) a todos los productos seleccionados">🏷️ Asignar Badge</button>
         <button type="button" class="btn-ai btn-sm" id="btnProdNormalizeTags" title="Extraer tags técnicos normalizados (normalized_tags)">🏷️ Normalizar Tags</button>
         <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
-        <button type="button" class="btn-ai btn-sm" id="btnBuildCatalog" title="Construye el catálogo completo consultando TODAS las redes conectadas (eBay, AliExpress, etc.), normaliza, deduplica cross-merchant, autoclasifica, detecta ofertas estrella (hsr) y guarda en products.json. Proceso completo de un solo clic.">
-          <span class="btn-text">🏗️ Construir Catálogo</span>
-          <div class="btn-spinner" hidden></div>
-        </button>
         <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
         <button type="button" class="btn-danger btn-sm" id="btnProdDeleteAll" title="Elimina TODOS los productos del catálogo (purga completa). Úsalo para resincronizar desde cero.">🗑️ Vaciar Catálogo</button>
       </div>
@@ -897,6 +893,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <div class="btn-spinner" hidden></div>
               </button>
               <button type="button" id="btnAliMore" class="btn-secondary btn-sm" hidden title="Descarga más páginas del catálogo de AliExpress sin borrar los productos ya guardados">+ Cargar más productos</button>
+              <button type="button" class="btn-ai btn-sm" id="btnBuildCatalog" title="Construye el catálogo completo consultando TODAS las redes conectadas (eBay, AliExpress, etc.), normaliza, deduplica cross-merchant, autoclasifica, detecta ofertas estrella (hsr) y guarda en products.json. Proceso completo de un solo clic.">
+                <span class="btn-text">🏗️ Construir Catálogo</span>
+                <div class="btn-spinner" hidden></div>
+              </button>
             </div>
           </div>
           <div id="aliCatalogDanger" class="ali-catalog-danger" hidden>
