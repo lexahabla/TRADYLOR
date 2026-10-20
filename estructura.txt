@@ -127,7 +127,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\metodologia.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\mi-radar.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\perfil.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\upayp1b4.astro
-D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\ejemplo-afiliados.astro
+D:\AXEL\WEBS\WEBS\TRADYLOR\tradylor_web\src\pages\ejemplo-afiliados.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\checkout\[id].astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\out\[id].astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\p\[id].ts
