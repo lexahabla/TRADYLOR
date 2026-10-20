@@ -1183,8 +1183,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 </Layout>
 
 <!-- Client-side Script para interacción dinámica del panel -->
-<script is:inline define:vars={{ associateTag: getAmazonAssociateTag() }}>
+<script is:inline define:vars={{ associateTag: getAmazonAssociateTag(), apiToken: import.meta.env.TRADYLOR_API_TOKEN ?? process.env.TRADYLOR_API_TOKEN }}>
   window.TRADYLOR_ASSOCIATE_TAG = associateTag;
+  window.TRADYLOR_API_TOKEN = apiToken;
 </script>
 <!--
   Módulo de filtros del catálogo AliExpress (TypeScript, bundled por Astro).
@@ -3149,9 +3150,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       showAlert('loading', 'Construyendo catálogo multi-comerciante…', 'Consultando APIs de todas las redes conectadas, normalizando, deduplicando cross-merchant, autoclasificando y detectando ofertas estrella. Esto puede tardar 30-120 segundos.');
 
       try {
+        const apiToken = window.TRADYLOR_API_TOKEN;
         const res = await fetch('/api/v1/products/build-catalog', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(apiToken ? { 'Authorization': `Bearer ${apiToken}` } : {})
+          },
         });
         const data = await res.json();
 
