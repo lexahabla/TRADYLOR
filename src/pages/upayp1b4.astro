@@ -4047,23 +4047,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     if (networkList) loadNetworks();
 
-    // Fallback: si la sección de afiliados se muestra dinámicamente (cambio de clase),
-    // asegura que se carguen las redes y el catálogo.
-    const affiliatesSection = document.querySelector('section[data-admin-view="affiliates"]');
-    if (affiliatesSection) {
-      const observer = new MutationObserver((mutations) => {
-        for (const m of mutations) {
-          if (m.attributeName === 'class' && affiliatesSection.classList.contains('is-visible')) {
-            if (networkList && networksCache.length === 0) loadNetworks();
-            if (aliCatalogHost && aliProducts.length === 0) syncAliCatalogUI();
-            observer.disconnect();
-            break;
-          }
-        }
-      });
-      observer.observe(affiliatesSection, { attributes: true, attributeFilter: ['class'] });
-    }
-
     // =========================================================================
     // 5b. CATÁLOGO ALIEXPRESS EN CACHÉ (/api/admin/aliexpress/catalog)
     //    - GET: sólo lee el JSON del volumen. NUNCA consulta la TOP API en
@@ -4621,7 +4604,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
 
     /** POST de sincronización: valida si hace falta, consulta la TOP API y reescribe el JSON. */
-    async function syncAliCatalogUI(networkId?: string) {
+    async function syncAliCatalogUI(networkId) {
       if (aliSyncing) return null;
       aliSyncing = true;
       const spinner = btnAliSync ? btnAliSync.querySelector('.btn-spinner') : null;
