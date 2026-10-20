@@ -19,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { dataFile } from './paths';
 import { getConnector } from './networks';
-import { canonicalToUnified } from './networks/connectors/base';
+import { searchCatalogBatch } from './networks/connectors/base';
 import { CATALOG_KEYWORDS } from './networks/connectors/aliexpress';
 import { stampFirstSeen } from './aliCatalogMerge';
 import type { UnifiedProduct } from './networks/types';
@@ -137,9 +137,7 @@ async function runSync(append: boolean): Promise<AliCatalogSyncResult> {
         const params = { query: keyword, limit: KEYWORD_PAGE_SIZE, page };
         // Ruta canónica primero (contrato único); fallback al mapeo legacy
         // sólo si el conector aún no declara searchCanonical.
-        const batch = connector.searchCanonical
-          ? (await connector.searchCanonical(params)).map(canonicalToUnified)
-          : await connector.search(params);
+        const batch = await searchCatalogBatch(connector, params);
         queries += 1;
         for (const product of batch) mergedById.set(product.externalId, product);
       } catch (error) {

@@ -55,6 +55,8 @@ export interface UnifiedProduct {
   gallery?: string[];
   category: string;
   productUrl: string;
+  /** Marca/fabricante cuando la red la declara. */
+  brand?: string;
   commissionRate?: number;
   commissionAmount?: number;
   rating?: number;
@@ -64,6 +66,8 @@ export interface UnifiedProduct {
   visits?: number;
   inStock: boolean;
   shippingInfo?: string;
+  /** Días de envío declarados por la red (cuando no vienen en `extra`). */
+  shippingDays?: number;
   /**
    * Fecha ISO en que el producto entró por primera vez en la caché del catálogo.
    * La fija `syncAliCatalog` (ver `lib/aliCatalogMerge.ts`); los conectores no la

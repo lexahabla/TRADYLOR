@@ -115,6 +115,54 @@ function signRequest(body: string, creds: AmazonCreds, amzDate: string, associat
   };
 }
 
+/* ---------------- Blindaje anti-503 / anti-bot ---------------- */
+
+/**
+ * Cabeceras de navegador reales: la PA-API deteja peticiones sin User-Agent
+ * de cliente y responde 503/429 desde su capa anti-bot. Van firmadas FUERA de
+ * `SignedHeaders`, así la firma SigV4 sigue siendo válida.
+ */
+const BROWSER_HEADERS: Record<string, string> = {
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+  Accept: 'application/json, text/plain, */*',
+  'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+  'Cache-Control': 'no-cache',
+  Pragma: 'no-cache',
+  Origin: 'https://www.amazon.es',
+  Referer: 'https://www.amazon.es/',
+};
+
+/** Estados transitorios (sobrecarga / rate limit) que se reintentan. */
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+/** Total de intentos (1 original + 2 reintentos con backoff). */
+const PAAPI_MAX_ATTEMPTS = 3;
+const PAAPI_TIMEOUT_MS = 15000;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Backoff exponencial con jitter: 400 ms → 800 ms → 1600 ms… */
+function backoffMs(attempt: number): number {
+  return 400 * 2 ** (attempt - 1) + Math.round(Math.random() * 200);
+}
+
+/** Respeta `Retry-After` (segundos) si la API lo envía; si no, backoff. */
+function retryAfterMs(response: Response, attempt: number): number {
+  const header = response.headers.get('retry-after');
+  const seconds = header ? Number(header) : NaN;
+  if (Number.isFinite(seconds) && seconds > 0) return Math.min(seconds, 5) * 1000;
+  return backoffMs(attempt);
+}
+
+/** ¿Conviene reintentar? Estado HTTP transitorio o error de throttling en el cuerpo. */
+function shouldRetry(response: Response, parsed: AmazonSearchItemsResponse | null): boolean {
+  if (RETRYABLE_STATUS.has(response.status)) return true;
+  const code = parsed?.Errors?.[0]?.Code ?? '';
+  return /TooMany|Throttl|SlowDown|ServiceUnavailable|InternalFailure/i.test(code);
+}
+
 /* ---------------- Petición SearchItems ---------------- */
 
 function buildRequestBody(params: UnifiedSearchParams, partnerTag: string): AmazonSearchItemsRequest {
@@ -139,40 +187,78 @@ function buildRequestBody(params: UnifiedSearchParams, partnerTag: string): Amaz
   return body;
 }
 
-/** Llama a SearchItems con firma SigV4 y devuelve los items crudos. */
+/**
+ * Llama a SearchItems con firma SigV4 y devuelve los items crudos.
+ *
+ * Blindado: reintenta con backoff exponencial ante 429/5xx (503 típico de la
+ * capa anti-bot de PA-API), re-firma cada intento (X-Amz-Date nuevo) y, si la
+ * API sigue fallando tras los reintentos, lanza `ConnectorError` con mensaje
+ * legible: los llamantes ya lo gestionan (search() → muestra estimada;
+ * catálogo → error parcial sin cortar la sincronización).
+ */
 async function searchItemsRaw(params: UnifiedSearchParams, creds: AmazonCreds): Promise<AmazonItem[]> {
   const bodyJson = JSON.stringify(buildRequestBody(params, creds.trackingId));
-  const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
-  const headers = signRequest(bodyJson, creds, amzDate, creds.trackingId);
-
   const url = `${PAAPI_URL}?AssociateTag=${encodeURIComponent(creds.trackingId)}`;
-  const response = await fetchWithTimeout(url, {
-    method: 'POST',
-    headers,
-    body: bodyJson,
-  }, 15000);
+  let lastDetail = 'sin respuesta';
 
-  const raw = await response.text();
-  let parsed: AmazonSearchItemsResponse | null = null;
-  try {
-    parsed = JSON.parse(raw) as AmazonSearchItemsResponse;
-  } catch {
-    parsed = null;
+  for (let attempt = 1; attempt <= PAAPI_MAX_ATTEMPTS; attempt += 1) {
+    // Firma nueva en cada intento para que X-Amz-Date no caduque tras el backoff
+    const amzDate = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
+    const headers = {
+      ...signRequest(bodyJson, creds, amzDate, creds.trackingId),
+      ...BROWSER_HEADERS,
+    };
+
+    let response: Response;
+    let raw: string;
+    try {
+      response = await fetchWithTimeout(url, {
+        method: 'POST',
+        headers,
+        body: bodyJson,
+      }, PAAPI_TIMEOUT_MS);
+      raw = await response.text();
+    } catch (error) {
+      lastDetail = error instanceof Error ? error.message : 'fallo de red';
+      if (attempt < PAAPI_MAX_ATTEMPTS) {
+        await sleep(backoffMs(attempt));
+        continue;
+      }
+      break;
+    }
+
+    let parsed: AmazonSearchItemsResponse | null = null;
+    try {
+      parsed = JSON.parse(raw) as AmazonSearchItemsResponse;
+    } catch {
+      parsed = null;
+    }
+
+    if (attempt < PAAPI_MAX_ATTEMPTS && shouldRetry(response, parsed)) {
+      lastDetail = `HTTP ${response.status}`;
+      await sleep(retryAfterMs(response, attempt));
+      continue;
+    }
+
+    if (!response.ok || !parsed) {
+      const apiError = parsed?.Errors?.[0];
+      const detail = apiError
+        ? `${apiError.Code ?? 'error'}: ${apiError.Message ?? 'sin detalle'}`
+        : `HTTP ${response.status}: ${raw.slice(0, 160)}`;
+      throw new ConnectorError('amazon', `Amazon PA-API: ${detail}`);
+    }
+    if (parsed.Errors?.length) {
+      const first = parsed.Errors[0];
+      throw new ConnectorError('amazon', `Amazon PA-API: ${first.Code ?? 'error'}: ${first.Message ?? 'petición rechazada'}.`);
+    }
+
+    return parsed.SearchResult?.Items ?? [];
   }
 
-  if (!response.ok || !parsed) {
-    const apiError = parsed?.Errors?.[0];
-    const detail = apiError
-      ? `${apiError.Code ?? 'error'}: ${apiError.Message ?? 'sin detalle'}`
-      : `HTTP ${response.status}: ${raw.slice(0, 160)}`;
-    throw new ConnectorError('amazon', `Amazon PA-API: ${detail}`);
-  }
-  if (parsed.Errors?.length) {
-    const first = parsed.Errors[0];
-    throw new ConnectorError('amazon', `Amazon PA-API: ${first.Code ?? 'error'}: ${first.Message ?? 'petición rechazada'}.`);
-  }
-
-  return parsed.SearchResult?.Items ?? [];
+  throw new ConnectorError(
+    'amazon',
+    `Amazon PA-API no disponible tras ${PAAPI_MAX_ATTEMPTS} intentos: ${lastDetail}.`,
+  );
 }
 
 export class AmazonConnector implements NetworkConnector {
