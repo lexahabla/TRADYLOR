@@ -342,6 +342,7 @@ function mapCanonicalProduct(item: AliProduct, currency: string): CanonicalAffil
       : 0;
 
   const commissionRate = num(item.commission_rate) ?? num(item.hot_product_commission_rate) ?? num(item.relevant_market_commission_rate) ?? 0;
+  const hotCommissionRate = num(item.hot_product_commission_rate) ?? 0;
   const estimatedCommission = price && commissionRate ? Math.round(price * (commissionRate / 100) * 100) / 100 : 0;
 
   // evaluate_rate es un porcentaje (p. ej. 96 = 96% ≈ 4.8 ★ sobre 5)
@@ -371,6 +372,7 @@ function mapCanonicalProduct(item: AliProduct, currency: string): CanonicalAffil
     discountPercentage,
     inStock: true,
     commissionRate,
+    hotCommissionRate: hotCommissionRate || undefined,
     estimatedCommission,
     category: text(item.first_level_category_name) || 'AliExpress',
     subCategory: text(item.second_level_category_name) || undefined,
@@ -379,6 +381,7 @@ function mapCanonicalProduct(item: AliProduct, currency: string): CanonicalAffil
     merchantId: text(item.shop_id) || undefined,
     rating,
     reviewCount: 0,
+    sales: num(item.lastest_volume) || undefined,
     mainImage,
     extraImages,
     technicalSpecs: Object.keys(technicalSpecs).length ? technicalSpecs : undefined,

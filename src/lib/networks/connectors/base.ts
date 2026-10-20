@@ -31,6 +31,9 @@ export interface NetworkConnector {
  * contrato de UnifiedProduct ni de los consumidores actuales.
  */
 export function canonicalToUnified(product: CanonicalAffiliateProduct): UnifiedProduct {
+  const shipDays = Number(product.technicalSpecs?.['Días de envío']);
+  const hasShipDays = Number.isFinite(shipDays) && shipDays > 0;
+  const allImages = [product.mainImage, ...product.extraImages].filter(Boolean);
   return {
     network: product.network,
     externalId: product.externalId,
@@ -44,24 +47,39 @@ export function canonicalToUnified(product: CanonicalAffiliateProduct): UnifiedP
     category: product.category,
     productUrl: product.affiliateUrl || product.directUrl,
     commissionRate: product.commissionRate || undefined,
-    commissionAmount: product.commissionRate ? Math.round(product.price * (product.commissionRate / 100) * 100) / 100 : undefined,
+    commissionAmount: product.estimatedCommission > 0
+      ? product.estimatedCommission
+      : product.commissionRate
+        ? Math.round(product.price * (product.commissionRate / 100) * 100) / 100
+        : undefined,
     rating: product.rating || undefined,
     reviewsCount: product.reviewCount || undefined,
-    popularity: undefined,
+    popularity: product.sales || undefined,
     inStock: product.inStock,
+    shippingInfo: hasShipDays ? `Envío en ${shipDays} días` : undefined,
     estimated: false,
     extra: {
       'ID externo': product.externalId,
       Marca: product.brand ?? null,
       Distribuidor: product.merchantName || null,
-      'Descuento (%)': product.discountPercentage || null,
+      Tienda: product.merchantName || null,
+      'Categoría nivel 1': product.category || null,
+      'Categoría nivel 2': product.subCategory || null,
+      'Descuento': product.discountPercentage ? `${product.discountPercentage}%` : null,
       'Comisión (%)': product.commissionRate || null,
+      'Comisión hot (%)': product.hotCommissionRate || null,
       'Comisión estimada': product.estimatedCommission || null,
       'Valoración': product.rating || null,
       'Reseñas': product.reviewCount || null,
+      'Ventas (30 días)': product.sales || null,
+      'Días de envío': hasShipDays ? shipDays : null,
       'URL directa': product.directUrl || null,
       'Enlace de afiliado': product.affiliateUrl || null,
-      'Imágenes extra': product.extraImages.length || null,
+      'URL del producto': product.directUrl || null,
+      'Imágenes': allImages.length ? allImages.join(' | ') : null,
+      'Especificaciones': product.technicalSpecs && Object.keys(product.technicalSpecs).length
+        ? Object.entries(product.technicalSpecs).map(([k, v]) => `${k}: ${v}`).join(' · ')
+        : null,
       'Sincronizado': product.syncedAt,
     },
   };

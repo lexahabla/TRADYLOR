@@ -97,6 +97,8 @@ export interface CanonicalAffiliateProduct {
 
   commissionRate: number;
   estimatedCommission: number;
+  /** Comisión extra de campaña Hot (%), cuando la red la declara (AliExpress). */
+  hotCommissionRate?: number;
   epc?: number;
 
   category: string;
@@ -107,6 +109,8 @@ export interface CanonicalAffiliateProduct {
 
   rating: number;
   reviewCount: number;
+  /** Ventas o alcance reciente cuando la red lo publica (p. ej. AliExpress `lastest_volume`). */
+  sales?: number;
 
   mainImage: string;
   extraImages: string[];

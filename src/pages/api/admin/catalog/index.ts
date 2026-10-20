@@ -25,6 +25,7 @@ import {
 } from '../../../../lib/aliexpressCatalog';
 import { getConnectedNetworkIds } from '../../../../lib/networks/credentials';
 import { getConnector } from '../../../../lib/networks';
+import { canonicalToUnified } from '../../../../lib/networks/connectors/base';
 import { CATALOG_KEYWORDS } from '../../../../lib/networks/connectors/aliexpress';
 import { stampFirstSeen } from '../../../../lib/aliCatalogMerge';
 import type { UnifiedProduct } from '../../../../lib/networks/types';
@@ -134,7 +135,15 @@ export const POST: APIRoute = async ({ request }) => {
         for (const page of pages) {
           for (const keyword of CATALOG_KEYWORDS) {
             try {
-              const batch = await connector.search({ query: keyword, limit: 20, page });
+              let batch: UnifiedProduct[];
+              if (connector.searchCanonical) {
+                const canonicalBatch = await connector.searchCanonical({ query: keyword, limit: 20, page });
+                batch = canonicalBatch.map(canonicalToUnified);
+              } else {
+                const legacyBatch = await connector.search({ query: keyword, limit: 20, page });
+                // Nunca ingerir productos de muestra (estimated) en la caché real
+                batch = legacyBatch.filter((product) => !product.estimated);
+              }
               for (const product of batch) {
                 mergedById.set(`${product.network}:${product.externalId}`, product);
               }

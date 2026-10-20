@@ -4505,8 +4505,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 .map((product, offset) => {
                   const index = offset;
                   const discount = aliDiscount(product);
-                  const shop = aliExtra(product, 'Tienda');
+                  const shop = aliExtra(product, 'Tienda') || aliExtra(product, 'Distribuidor');
                   const shippingDays = aliExtra(product, 'Días de envío');
+                  const sales = product.popularity != null ? product.popularity : aliExtra(product, 'Ventas (30 días)');
                   const checked = aliSelected.has(product.externalId) ? ' checked' : '';
                   const estado = aliEstadoIndex().get(product.externalId);
                   const yaAnadido = estado === 'IMPORTED';
@@ -4530,7 +4531,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                   <td class="aff-num ac-discount">${discount ? escapeHtml(discount) : '—'}</td>
                   <td class="aff-num">${product.commissionRate != null ? `${product.commissionRate}%` : '—'}</td>
                   <td class="aff-num">${product.commissionAmount != null ? money(product.commissionAmount, product.currency) : '—'}</td>
-                  <td class="aff-num">${product.popularity != null ? product.popularity : '—'}</td>
+                  <td class="aff-num">${sales != null ? sales : '—'}</td>
                   <td class="aff-num">${product.rating != null ? `${product.rating} / 5` : '—'}</td>
                   <td>${shop ? escapeHtml(shop) : '—'}</td>
                   <td>${shippingDays != null ? `${escapeHtml(shippingDays)} d` : product.shippingInfo ? escapeHtml(product.shippingInfo) : '—'}</td>
