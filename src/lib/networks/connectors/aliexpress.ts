@@ -15,7 +15,7 @@
 import { createHmac } from 'node:crypto';
 import { ConnectorError, fetchWithTimeout, type NetworkConnector } from './base';
 import { getMergedCredentialValues, setNetworkStatus } from '../credentials';
-import type { UnifiedProduct, UnifiedSearchParams } from '../types';
+import type { CanonicalAffiliateProduct, UnifiedProduct, UnifiedSearchParams } from '../types';
 
 function gateways(): string[] {
   const configured = envValue('ALIEXPRESS_SERVER_URL');
@@ -286,12 +286,12 @@ function mapProduct(item: AliProduct, currency: string): UnifiedProduct | null {
   };
 }
 
-async function queryProducts(
+async function queryRaw(
   creds: Record<string, string>,
   keywords: string,
   pageSize: number,
   page = 1,
-): Promise<UnifiedProduct[]> {
+): Promise<AliProduct[]> {
   const payload = await callApi('aliexpress.affiliate.product.query', creds, {
     keywords: keywords || 'best seller',
     target_currency: 'EUR',
@@ -301,9 +301,101 @@ async function queryProducts(
     page_no: String(Math.max(1, page)),
     sort: 'LAST_VOLUME_DESC',
   });
-  return extractProducts(payload)
-    .map((item) => mapProduct(item, 'EUR'))
+  return extractProducts(payload);
+}
+
+async function queryProducts(
+  creds: Record<string, string>,
+  keywords: string,
+  pageSize: number,
+  page = 1,
+): Promise<UnifiedProduct[]> {
+  const currency = 'EUR';
+  return (await queryRaw(creds, keywords, pageSize, page))
+    .map((item) => mapProduct(item, currency))
     .filter((item): item is UnifiedProduct => item !== null);
+}
+
+/**
+ * Mapea un producto TOP al contrato canónico CanonicalAffiliateProduct.
+ * - Precio de venta: `target_sale_price` (fallbacks app/sale).
+ * - Precio original: `target_original_price` (fallback `original_price`).
+ * - Descuento: `discount` de la API o calculado contra el precio original.
+ * - Valoración: `evaluate_rate` viene en % (0-100) y se normaliza a escala 5 ★.
+ */
+function mapCanonicalProduct(item: AliProduct, currency: string): CanonicalAffiliateProduct | null {
+  const title = text(item.product_title);
+  const directUrl = text(item.product_detail_url);
+  const promotionLink = text(item.promotion_link);
+  const productUrl = directUrl || promotionLink;
+  if (!title || !productUrl) return null;
+
+  const price = num(item.target_sale_price) ?? num(item.target_app_sale_price) ?? num(item.sale_price) ?? num(item.app_sale_price) ?? 0;
+  const rawOriginal = num(item.target_original_price) ?? num(item.original_price);
+  const originalPrice = rawOriginal && rawOriginal > price ? rawOriginal : price;
+
+  const apiDiscount = num(item.discount);
+  const discountPercentage = apiDiscount != null
+    ? Math.max(0, Math.round(apiDiscount * 100) / 100)
+    : originalPrice > price
+      ? Math.round(((originalPrice - price) / originalPrice) * 10000) / 100
+      : 0;
+
+  const commissionRate = num(item.commission_rate) ?? num(item.hot_product_commission_rate) ?? num(item.relevant_market_commission_rate) ?? 0;
+  const estimatedCommission = price && commissionRate ? Math.round(price * (commissionRate / 100) * 100) / 100 : 0;
+
+  // evaluate_rate es un porcentaje (p. ej. 96 = 96% ≈ 4.8 ★ sobre 5)
+  const ratingPercent = num(item.evaluate_rate);
+  const rating = ratingPercent != null ? Math.min(5, Math.max(0, Math.round((ratingPercent / 20) * 10) / 10)) : 0;
+
+  const images = gallery(item);
+  const mainImage = text(item.product_main_image_url) || images[0] || '';
+  const extraImages = images.filter((url) => url !== mainImage);
+
+  const technicalSpecs: Record<string, string> = {};
+  const shipDays = text(item.ship_to_days);
+  if (shipDays) technicalSpecs['Días de envío'] = shipDays;
+  const platform = text(item.platform_product_type);
+  if (platform) technicalSpecs['Plataforma'] = platform;
+
+  return {
+    network: 'aliexpress',
+    externalId: text(item.product_id) || productUrl,
+    affiliateUrl: promotionLink || productUrl,
+    directUrl,
+    title,
+    description: [text(item.shop_name), text(item.second_level_category_name)].filter(Boolean).join(' · ') || title,
+    price,
+    originalPrice,
+    currency,
+    discountPercentage,
+    inStock: true,
+    commissionRate,
+    estimatedCommission,
+    category: text(item.first_level_category_name) || 'AliExpress',
+    subCategory: text(item.second_level_category_name) || undefined,
+    brand: text(item.product_brand_name) || undefined,
+    merchantName: text(item.shop_name) || 'AliExpress',
+    merchantId: text(item.shop_id) || undefined,
+    rating,
+    reviewCount: 0,
+    mainImage,
+    extraImages,
+    technicalSpecs: Object.keys(technicalSpecs).length ? technicalSpecs : undefined,
+    syncedAt: new Date().toISOString(),
+  };
+}
+
+async function queryCanonicalProducts(
+  creds: Record<string, string>,
+  keywords: string,
+  pageSize: number,
+  page = 1,
+): Promise<CanonicalAffiliateProduct[]> {
+  const currency = 'EUR';
+  return (await queryRaw(creds, keywords, pageSize, page))
+    .map((item) => mapCanonicalProduct(item, currency))
+    .filter((item): item is CanonicalAffiliateProduct => item !== null);
 }
 
 export class AliExpressConnector implements NetworkConnector {
@@ -343,6 +435,35 @@ export class AliExpressConnector implements NetworkConnector {
       if (merged.length >= limit) break;
       try {
         const batch = await queryProducts(creds, keyword, 10);
+        for (const product of batch) {
+          if (seen.has(product.externalId)) continue;
+          seen.add(product.externalId);
+          merged.push(product);
+          if (merged.length >= limit) break;
+        }
+      } catch (error) {
+        if (!merged.length && keyword === CATALOG_KEYWORDS[0]) throw error;
+      }
+    }
+    return merged;
+  }
+
+  /** Búsqueda al contrato canónico (pipeline). Mapea precios, descuento y rating /5 ★. */
+  async searchCanonical(params: UnifiedSearchParams): Promise<CanonicalAffiliateProduct[]> {
+    const creds = resolveCreds();
+    if (!creds?.appKey || !creds?.appSecret) {
+      throw new ConnectorError(this.networkId, 'AliExpress no está conectado. Añade sus credenciales primero.');
+    }
+
+    const limit = Math.min(params.limit ?? 20, 50);
+    if (params.query) return queryCanonicalProducts(creds, params.query, limit, params.page ?? 1);
+
+    const seen = new Set<string>();
+    const merged: CanonicalAffiliateProduct[] = [];
+    for (const keyword of CATALOG_KEYWORDS) {
+      if (merged.length >= limit) break;
+      try {
+        const batch = await queryCanonicalProducts(creds, keyword, 10);
         for (const product of batch) {
           if (seen.has(product.externalId)) continue;
           seen.add(product.externalId);

@@ -25970,6 +25970,7 @@ D:.
     |   |       |   generic.ts
     |   |       |   
     |   |       \---adapters
+    |   |               amazonProductAdapter.ts
     |   |               ebayProductAdapter.ts
     |   |               
     |   \---services

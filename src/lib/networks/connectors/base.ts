@@ -9,7 +9,7 @@
  * ==============================================================================
  */
 
-import type { UnifiedProduct, UnifiedSearchParams } from '../types';
+import type { CanonicalAffiliateProduct, UnifiedProduct, UnifiedSearchParams } from '../types';
 
 export interface NetworkConnector {
   readonly networkId: string;
@@ -17,6 +17,54 @@ export interface NetworkConnector {
   validate(): Promise<{ ok: boolean; message: string }>;
   /** Busca productos normalizados en la red. */
   search(params: UnifiedSearchParams): Promise<UnifiedProduct[]>;
+  /**
+   * Búsqueda/sincronización al contrato canónico `CanonicalAffiliateProduct`
+   * (alimenta el pipeline de catálogo). Opcional: las redes que aún no
+   * implementen el mapeo canónico no la declaran.
+   */
+  searchCanonical?(params: UnifiedSearchParams): Promise<CanonicalAffiliateProduct[]>;
+}
+
+/**
+ * Convierte un producto canónico a UnifiedProduct para las rutas de UI
+ * existentes (búsqueda unificada, tablas del panel). Aditivo: no cambia el
+ * contrato de UnifiedProduct ni de los consumidores actuales.
+ */
+export function canonicalToUnified(product: CanonicalAffiliateProduct): UnifiedProduct {
+  return {
+    network: product.network,
+    externalId: product.externalId,
+    title: product.title,
+    description: product.description,
+    price: product.price,
+    originalPrice: product.originalPrice > product.price ? product.originalPrice : undefined,
+    currency: product.currency,
+    image: product.mainImage,
+    gallery: product.extraImages.length ? product.extraImages : undefined,
+    category: product.category,
+    productUrl: product.affiliateUrl || product.directUrl,
+    commissionRate: product.commissionRate || undefined,
+    commissionAmount: product.commissionRate ? Math.round(product.price * (product.commissionRate / 100) * 100) / 100 : undefined,
+    rating: product.rating || undefined,
+    reviewsCount: product.reviewCount || undefined,
+    popularity: undefined,
+    inStock: product.inStock,
+    estimated: false,
+    extra: {
+      'ID externo': product.externalId,
+      Marca: product.brand ?? null,
+      Distribuidor: product.merchantName || null,
+      'Descuento (%)': product.discountPercentage || null,
+      'Comisión (%)': product.commissionRate || null,
+      'Comisión estimada': product.estimatedCommission || null,
+      'Valoración': product.rating || null,
+      'Reseñas': product.reviewCount || null,
+      'URL directa': product.directUrl || null,
+      'Enlace de afiliado': product.affiliateUrl || null,
+      'Imágenes extra': product.extraImages.length || null,
+      'Sincronizado': product.syncedAt,
+    },
+  };
 }
 
 /** Error estándar de conector con mensaje legible para el panel. */

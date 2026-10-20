@@ -9,7 +9,7 @@
  * ==============================================================================
  */
 
-import type { UnifiedProduct, UnifiedSearchParams } from '../../types';
+import type { CanonicalAffiliateProduct, UnifiedProduct, UnifiedSearchParams } from '../../types';
 
 /** Respuesta cruda de eBay Browse API (subset de campos relevantes) */
 export interface EbayItemSummary {
@@ -90,6 +90,108 @@ export class EbayProductAdapter {
       .filter((item) => item.itemId && item.price?.value)
       .map((item) => this.adaptSingle(item))
       .filter((product): product is UnifiedProduct => product !== null);
+  }
+
+  /**
+   * Transforma un array de EbayItemSummary al contrato canónico
+   * CanonicalAffiliateProduct (pipeline). Aplica fallbacks para que ninguna
+   * celda del catálogo quede vacía.
+   */
+  adaptCanonical(items: EbayItemSummary[]): CanonicalAffiliateProduct[] {
+    return items
+      .filter((item) => item.itemId)
+      .map((item) => this.adaptSingleCanonical(item))
+      .filter((product): product is CanonicalAffiliateProduct => product !== null);
+  }
+
+  adaptSingleCanonical(item: EbayItemSummary): CanonicalAffiliateProduct | null {
+    const externalId = item.itemId ?? item.legacyItemId;
+    if (!externalId) return null;
+
+    // Precio limpio (Browse API lo devuelve como string decimal)
+    const price = this.parsePrice(item.price?.value);
+    const currency = item.price?.currency ?? 'EUR';
+
+    // Precio original + descuento (marketingPrice) con fallback calculado
+    let originalPrice = price;
+    if (item.marketingPrice?.originalPrice?.value) {
+      const orig = this.parsePrice(item.marketingPrice.originalPrice.value);
+      if (orig > price) originalPrice = orig;
+    }
+    let discountPercentage = 0;
+    if (item.marketingPrice?.discountPercentage) {
+      const parsed = this.parsePrice(item.marketingPrice.discountPercentage);
+      if (parsed > 0) discountPercentage = Math.round(parsed * 100) / 100;
+    } else if (originalPrice > price && originalPrice > 0) {
+      discountPercentage = Math.round(((originalPrice - price) / originalPrice) * 10000) / 100;
+    }
+
+    // URL de afiliado con Campaign ID (mkmk) siempre inyectado
+    const directUrl = item.itemWebUrl ?? item.itemAffiliateWebUrl ?? '';
+    const affiliateUrl = this.buildAffiliateUrl(item.itemAffiliateWebUrl || item.itemWebUrl || '');
+
+    // Vendedor (fallback 'eBay' para evitar celdas vacías)
+    const merchantName = item.seller?.username?.trim() || 'eBay';
+
+    // Valoración: feedback del vendedor en % → escala 5 ★; fallback 0
+    let rating = 0;
+    if (item.seller?.feedbackPercentage) {
+      const fb = parseFloat(item.seller.feedbackPercentage);
+      if (!Number.isNaN(fb)) rating = Math.round((fb / 100) * 5 * 10) / 10;
+    }
+    const reviewCount = item.seller?.feedbackScore ?? 0;
+
+    // Imágenes: principal + secundarias (sin duplicar la principal)
+    const mainImage = item.image?.imageUrl ?? item.product?.image?.imageUrl ?? '';
+    const extraImages = (item.additionalImages ?? [])
+      .map((img) => img.imageUrl)
+      .filter((url): url is string => Boolean(url) && url !== mainImage);
+
+    // Fallbacks de texto/categoría
+    const title = item.title?.trim() || 'Producto eBay';
+    const description = item.shortDescription?.trim() || `Artículo de eBay vendido por ${merchantName}.`;
+    const category = this.searchParams.category || item.categories?.[0]?.categoryName || 'General';
+
+    // Especificaciones a partir de los aspectos del producto
+    const technicalSpecs: Record<string, string> = {};
+    for (const group of item.product?.aspectGroups ?? []) {
+      for (const aspect of group.aspects ?? []) {
+        if (aspect.name && aspect.value) technicalSpecs[aspect.name] = aspect.value;
+      }
+    }
+    if (item.condition) technicalSpecs['Estado'] = item.condition;
+    if (item.itemLocation?.country) technicalSpecs['Ubicación'] = item.itemLocation.country;
+
+    // eBay Browse API no da comisión por ítem → 0 (evita celdas vacías sin inventar %)
+    const commissionRate = 0;
+
+    const inStock = item.buyingOptions ? item.buyingOptions.includes('FIXED_PRICE') : true;
+
+    return {
+      network: 'ebay',
+      externalId,
+      affiliateUrl,
+      directUrl,
+      title,
+      description,
+      price,
+      originalPrice,
+      currency,
+      discountPercentage,
+      inStock,
+      commissionRate,
+      estimatedCommission: 0,
+      category,
+      brand: item.product?.brand?.trim() || undefined,
+      merchantName,
+      merchantId: item.seller?.username || undefined,
+      rating,
+      reviewCount,
+      mainImage,
+      extraImages,
+      technicalSpecs: Object.keys(technicalSpecs).length ? technicalSpecs : undefined,
+      syncedAt: new Date().toISOString(),
+    };
   }
 
   /**
