@@ -1437,6 +1437,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
      * `reloadProductsTable()` la toca antes de llegar a esa sección.
      */
     let aliEstadoCache = null;
+    let categoriesCache = [];
+    let activeProdPreset = '';
+    let aliFilterPanel = null;
 
     // Helper para mostrar feedback de alerta
     function showAlert(type, title, message) {
@@ -4484,7 +4487,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
      * `src/utils/aliCatalogFilters.ts`; aquí sólo se le aportan los datos del
      * panel (catálogo, estado de importación) y el repintado de la tabla.
      */
-    let aliFilterPanel = null;
 
     function mountAliFilterBar() {
       const bridge = window.tradylorAliFilters;
@@ -5175,7 +5177,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const categoryStatusTitle = document.getElementById('categoryStatusTitle');
     const categoryStatusText = document.getElementById('categoryStatusText');
     const categoryListDatalist = document.getElementById('categoryList');
-    let categoriesCache = [];
 
     function showCategoryStatus(type, title, message) {
       if (!categoryStatus) return;
@@ -5526,7 +5527,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // normalización de tags, vinculación de alternativas y preview card.
     // (Bloque aditivo: no toca los handlers existentes de productSelBar.)
     // =========================================================================
-    let activeProdPreset = '';
 
     function prodMatchesPreset(product, preset) {
       switch (preset) {
