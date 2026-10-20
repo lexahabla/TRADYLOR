@@ -5037,7 +5037,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const data = await res.json();
         if (data.success) {
           showAliStatus('success', 'Catálogo vaciado', data.message);
-          await loadAliCatalog();
+          aliProducts = [];
+          aliPage = 1;
+          aliSelected.clear();
+          aliInvalidateEstado();
+          if (aliCatalogHost) {
+            aliCatalogHost.innerHTML = '<div class="empty-dashboard">Catálogo vaciado. Pulsa «Sincronizar» para descargar el catálogo de las redes conectadas.</div>';
+          }
+          if (aliFilters) aliFilters.hidden = false;
+          if (aliImportTools) aliImportTools.hidden = false;
+          if (btnAliMore) btnAliMore.hidden = true;
+          if (aliCatalogMeta) aliCatalogMeta.textContent = 'Sin sincronizar';
+          if (aliCatalogDanger) aliCatalogDanger.hidden = true;
+          aliUpdateSelectionUI([]);
         } else {
           showAliStatus('error', 'No se pudo vaciar', data.message);
         }
