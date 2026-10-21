@@ -52,7 +52,10 @@ Astro.response.headers.set('Cache-Control', 'no-store');
 
 // Leer productos almacenados para renderizar inicialmente en el servidor (SSR)
 const DATA_FILE_PATH = dataFile('products.json');
-let initialProducts: Product[] = [];
+// El enriquecimiento añade score, flags de duplicado y la RED de afiliados
+// (`network` / `network_label`) que pinta la columna «Comercio».
+type EnrichedProduct = ReturnType<typeof enrichProductsForAdmin>[number];
+let initialProducts: EnrichedProduct[] = [];
 
 try {
   if (fs.existsSync(DATA_FILE_PATH)) {
@@ -504,7 +507,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <div class="ali-filters-row">
           <div class="filter-field ali-f-search">
             <label for="inputFilterList">BUSCAR PRODUCTOS</label>
-            <input type="search" id="inputFilterList" placeholder="Filtrar por título o comercio..." />
+            <input type="search" id="inputFilterList" placeholder="Filtrar por título, comerciante o red..." />
           </div>
           <div class="filter-field">
             <label for="prodFCat">Categoría</label>
@@ -515,7 +518,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <select id="prodSubcatAssign"><option value="">Todas las subcategorías</option></select>
           </div>
           <div class="filter-field">
-            <label for="prodFMerchant">Comercio</label>
+            <label for="prodFMerchant">Comerciante</label>
             <select id="prodFMerchant"><option value="">Todos</option></select>
           </div>
           <div class="filter-field ali-sort-field">
@@ -526,7 +529,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <option value="precio">Precio</option>
                 <option value="nombre">Nombre</option>
                 <option value="categoria">Categoría</option>
-                <option value="comercio">Comercio</option>
+                <option value="comercio">Comerciante</option>
                 <option value="descuento">Mayor descuento</option>
                 <option value="valoracion">Mejor valoración</option>
                 <option value="score">Conversión (score)</option>
@@ -585,7 +588,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <th><input type="checkbox" id="prodCheckAll" aria-label="Seleccionar todos los visibles" /></th>
                 <th>Imagen</th>
                 <th>Producto & Categoría</th>
-                <th>Comercio</th>
+                <th title="Red de afiliados a la que pertenece el producto (Amazon, eBay, AliExpress…)">Comercio</th>
                 <th>Precio</th>
                 <th title="Margen de conversión potencial (score 0-100)">Score</th>
                 <th>Enlace Afiliado</th>
@@ -612,7 +615,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                     </div>
                   </td>
                   <td class="col-merchant">
-                    <span class="merchant-badge">{p.merchant}</span>
+                    <span class="merchant-badge" title={`Red de afiliados${p.merchant ? ` · Comerciante: ${p.merchant}` : ''}`}>
+                      {p.network_label || p.merchant || '—'}
+                    </span>
                   </td>
                   <td class="col-price">
                     <span class="price-val">{p.price.toFixed(2)} €</span>
@@ -2607,7 +2612,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 ${p.is_duplicate ? `<span class="dup-pill" title="Duplicado ${p.duplicate_reason ? `(${p.duplicate_reason})` : ''}${p.duplicate_of ? ` de ${p.duplicate_of}` : ''}">${p.possible_duplicate ? '♻️ ¿Dup?' : '♻️ Dup'}</span>` : ''}
               </div>
             </td>
-            <td class="col-merchant"><span class="merchant-badge">${p.merchant}</span></td>
+            <td class="col-merchant"><span class="merchant-badge" title="${p.merchant ? `Comerciante: ${escapeHtml(p.merchant)}` : 'Red de afiliados'}">${escapeHtml(p.network_label || p.merchant || '—')}</span></td>
             <td class="col-price">
               <span class="price-val">${Number(p.price).toFixed(2)} €</span>
               ${p.originalPrice ? `<span class="price-old">${Number(p.originalPrice).toFixed(2)} €</span>` : ''}
@@ -2653,7 +2658,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <select class="row-cat-select" data-id="${p.id}" aria-label="Categoría del producto">${catSelectOptionsFor(p.category_id, p.category)}</select>
                 <select class="row-subcat-select" data-id="${p.id}" aria-label="Subcategoría del producto">${subcatOptionsFor(p.category_id, p.category, p.subcategory_id)}</select>
               </dd></div>
-              <div class="aff-detail-item"><dt>Comercio</dt><dd>${p.merchant}</dd></div>
+              <div class="aff-detail-item"><dt>Red de afiliados</dt><dd>${escapeHtml(p.network_label || '—')}</dd></div>
+              <div class="aff-detail-item"><dt>Comerciante</dt><dd>${escapeHtml(p.merchant || '—')}</dd></div>
               ${p.brand ? `<div class="aff-detail-item"><dt>Marca</dt><dd>${escapeHtml ? escapeHtml(p.brand) : p.brand}</dd></div>` : ''}
               ${p.fulfillmentProvider && p.fulfillmentProvider !== p.merchant ? `<div class="aff-detail-item"><dt>Distribuidor</dt><dd>${escapeHtml ? escapeHtml(p.fulfillmentProvider) : p.fulfillmentProvider}</dd></div>` : ''}
               <div class="aff-detail-item"><dt>Precio</dt><dd>${Number(p.price).toFixed(2)} €</dd></div>
@@ -2976,7 +2982,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           if (rating == null || rating < prodRange.ratingMin) return false;
         }
         if (q) {
-          const haystack = `${product.title} ${product.merchant || ''} ${product.category || ''} ${(product.brand || '')}`.toLowerCase();
+          // La búsqueda mira también la red de afiliados («amazon», «ebay»…).
+          const haystack = `${product.title} ${product.merchant || ''} ${product.network_label || ''} ${product.category || ''} ${(product.brand || '')}`.toLowerCase();
           if (!haystack.includes(q)) return false;
         }
         return true;

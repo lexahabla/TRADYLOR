@@ -16,8 +16,12 @@ export interface Product {
   gallery?: string[];
   category: string;
   merchant: string;
+  /** Red de afiliados a la que pertenece el producto (amazon, aliexpress, ebay…). */
+  network?: string;
   affiliateUrl: string;
   buyNowUrl?: string;
+  /** Datos extra del catálogo multi-red (incluye `crossMerchant.networks`). */
+  extra?: Record<string, unknown>;
   /** Código ASIN de Amazon (autodetectado desde el enlace de afiliado). */
   asin?: string;
   pros: string[];

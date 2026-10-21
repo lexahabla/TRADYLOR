@@ -17,6 +17,7 @@ import {
   type Product,
 } from './productStore';
 import { addDeletedId } from './deletedProducts';
+import { getProductNetwork } from './productNetwork';
 
 // ─── Parámetros de tracking/afiliación que se ignoran al comparar URLs ───────
 const TRACKING_PARAMS = new Set([
@@ -244,7 +245,7 @@ export function computeEditorialStatus(product: Product): { ia_status: string; l
  * Enriquece una copia de los productos con los campos de curación que usa el
  * panel admin: conversion_score, is_duplicate (+motivo), ia_status y link_status.
  */
-export function enrichProductsForAdmin(products: Product[]): Array<Product & DuplicateFlag & { ia_status: string; link_status: string; conversion_score: number }> {
+export function enrichProductsForAdmin(products: Product[]): Array<Product & DuplicateFlag & { ia_status: string; link_status: string; conversion_score: number; network: string; network_label: string }> {
   const duplicates = detectDuplicates(products);
   return products.map((product) => {
     const status = computeEditorialStatus(product);
@@ -252,10 +253,15 @@ export function enrichProductsForAdmin(products: Product[]): Array<Product & Dup
     const score = Number.isFinite(Number(product.conversion_score)) && Number(product.conversion_score) > 0
       ? Number(product.conversion_score)
       : computeConversionScore(product);
+    // Red de afiliados a la que pertenece el producto (Amazon, eBay, AliExpress…).
+    // Es derivado: no se persiste, se recalcula en cada respuesta del panel.
+    const network = getProductNetwork(product);
     return {
       ...product,
       ...status,
       conversion_score: score,
+      network: network.id,
+      network_label: network.label,
       is_duplicate: Boolean(flag?.is_duplicate),
       duplicate_reason: flag?.duplicate_reason,
       duplicate_group: flag?.duplicate_group,

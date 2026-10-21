@@ -75,6 +75,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\pipeline\stagePublish.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\pipeline\types.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\priceAlerts.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\priceHistory.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\productNetwork.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\productStore.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\purchaseUrl.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\radarAuth.ts
