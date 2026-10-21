@@ -5320,6 +5320,34 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (migrateStatusText) migrateStatusText.textContent = message;
     }
 
+    /**
+     * Rellena el filtro de subcategoría de la tabla de productos con las
+     * subcategorías de la raíz elegida en el filtro de categoría.
+     * El value de cada opción es el id de categories.json (el filtro compara
+     * por id con fallback por nombre).
+     */
+    function syncSubcatFilter() {
+      const sel = document.getElementById('prodSubcatAssign');
+      if (!sel) return;
+      const current = sel.value;
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      const catFilter = document.getElementById('prodFCat');
+      const parentName = catFilter && 'value' in catFilter ? String(catFilter.value || '').trim() : '';
+      const parent = parentName
+        ? allCats.find((category) => !category.parentId && (category.name === parentName || category.id === parentName))
+        : null;
+      const subs = allCats.filter((category) => category.parentId && (!parent || category.parentId === parent.id));
+      const optionLabel = (category) => {
+        if (parent) return `${category.icon ? `${category.icon} ` : ''}${category.name}`;
+        const owner = allCats.find((candidate) => candidate.id === category.parentId);
+        return owner ? `${owner.name} › ${category.name}` : category.name;
+      };
+      sel.innerHTML =
+        '<option value="">Todas las subcategorías</option>' +
+        subs.map((category) => `<option value="${escapeHtml(category.id)}">${escapeHtml(optionLabel(category))}</option>`).join('');
+      if (current && Array.from(sel.options).some((option) => option.value === current)) sel.value = current;
+    }
+
     /** Vuelca las categorías raíz en datalist + selects de Afiliados y formulario. */
     function syncCategorySelects(categories) {
       const roots = categories.filter((category) => !category.parentId);
@@ -5480,8 +5508,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const data = await res.json();
         if (data.success && Array.isArray(data.categories)) {
           categoriesCache = data.categories;
-          syncCategorySelects(categoriesCache);
+          // La tabla se repinta SIEMPRE: si la sincronización de los selectores
+          // falla, la lista de categorías sigue siendo visible.
           renderCategoryList(categoriesCache);
+          try {
+            syncCategorySelects(categoriesCache);
+          } catch (err) {
+            console.error('[Admin Categorías] Error al sincronizar los selectores:', err);
+          }
         } else if (categoryTableBody) {
           categoryTableBody.innerHTML = '<tr class="empty-row"><td colspan="5" style="text-align: center; padding: 2rem; color: var(--color-text-dim);">No se pudieron cargar las categorías.</td></tr>';
         }
