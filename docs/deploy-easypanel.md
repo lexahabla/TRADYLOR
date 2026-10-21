@@ -128,6 +128,17 @@ Notas:
 - **Logs**: Easy Panel → pestaña *Terminal / Logs* del servicio.
 - **Consola Node**: `npm run build` ya está hecho dentro de la imagen; para una sesión
   interactiva usar el terminal de Easy Panel (`node dist/server/entry.mjs`).
+- **Resetear la contraseña del admin** (cuando el panel rechaza la clave y no coincide
+  con `ADMIN_PASSWORD`): en la Terminal de Easy Panel,
+
+  ```bash
+  cd /app && node scripts/reset-admin-password.mjs            # usa $ADMIN_PASSWORD
+  node scripts/reset-admin-password.mjs --password 'mi-clave'  # clave explícita
+  node scripts/reset-admin-password.mjs --list                 # listar usuarios
+  ```
+
+  Reescribe el hash scrypt del usuario master en `/app/data/users.json` (con copia
+  previa en `/app/data/backups/`) e invalida las sesiones abiertas.
 
 ## 8. Estructura del contenedor
 
