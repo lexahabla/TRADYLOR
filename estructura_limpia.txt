@@ -1,4 +1,5 @@
-﻿D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\DateRangeFilter.astro
+﻿D:\AXEL\WEBS\TRADYLOR\tradylor_web\scripts\reset-admin-password.mjs
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\DateRangeFilter.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\FinancialHeaderCards.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\MarketingMenu.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\MetricCard.astro
