@@ -18,6 +18,8 @@
  *   { "dryRun": true }              → simula y devuelve el plan sin escribir.
  *   { "keepSubcategories": true }   → conserva las subcategorías cuelgues de
  *                                      las 8 raíces fijas (no las huérfanas).
+ *   { "manual": { "<id>": "<raiz>" } } → asigna esos productos a la raíz indicada
+ *                                      (tiene prioridad sobre el matching).
  *
  * SOLO para uso administrativo (requiere rol admin).
  * ==============================================================================
@@ -59,6 +61,7 @@ interface MigrateReport {
   productsUnchanged: number;
   productsWithoutMatch: number;
   productsWithoutMatchSample: string[];
+  manualApplied: string[];
   categoryCounts: Record<string, number>;
   errors: string[];
 }
@@ -101,12 +104,14 @@ export const POST: APIRoute = async ({ request }) => {
   // Opciones opcionales del cuerpo (JSON) o de la query string.
   let dryRun = false;
   let keepSubcategories = false;
+  let manual: Record<string, string> = {};
   try {
     const raw = await request.text();
     if (raw.trim()) {
       const body = JSON.parse(raw);
       dryRun = body?.dryRun === true;
       keepSubcategories = body?.keepSubcategories === true;
+      if (body?.manual && typeof body.manual === 'object') manual = body.manual;
     }
   } catch {
     // Cuerpo no JSON: se ignoran las opciones (comportamiento por defecto).
@@ -132,6 +137,7 @@ export const POST: APIRoute = async ({ request }) => {
     productsUnchanged: 0,
     productsWithoutMatch: 0,
     productsWithoutMatchSample: [],
+    manualApplied: [],
     categoryCounts: {},
     errors: [],
   };
@@ -182,11 +188,23 @@ export const POST: APIRoute = async ({ request }) => {
 
     for (const product of products) {
       const matched = suggestCategoryStrictIn(productHaystack(product), fixedRoots);
-      const target = matched ?? fallbackRoot;
+      let target = matched ?? fallbackRoot;
       if (!matched) {
         report.productsWithoutMatch++;
         if (report.productsWithoutMatchSample.length < 25) {
           report.productsWithoutMatchSample.push(product.title || product.id);
+        }
+      }
+
+      // Asignación manual (prioridad sobre el matching automático).
+      const manualRootId = manual[product.id];
+      if (manualRootId) {
+        const manualRoot = fixedRoots.find((root) => root.id === manualRootId);
+        if (manualRoot) {
+          target = manualRoot;
+          report.manualApplied.push(`${product.id} -> ${manualRoot.id}`);
+        } else {
+          report.errors.push(`Raíz manual desconocida para "${product.id}": ${manualRootId}`);
         }
       }
 

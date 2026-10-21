@@ -377,6 +377,7 @@ Estado actual de la taxonomía (no escribe nada):
 |---|---|---|
 | `dryRun` | boolean | `true` calcula el plan y devuelve el reporte **sin escribir nada**. |
 | `keepSubcategories` | boolean | `true` conserva las subcategorías colgando de las 8 raíces fijas (las huérfanas se eliminan igual). |
+| `manual` | object | Mapa `{ "<idProducto>": "<idRaíz>" }` para colocar productos concretos en la raíz indicada (tiene prioridad sobre el matching automático). |
 
 Proceso: (1) garantiza las 8 raíces fijas, (2) reasigna cada producto con matching
 estricto por palabras clave, (3) elimina raíces/subcategorías huérfanas,
