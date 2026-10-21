@@ -1,71 +1,316 @@
 ---
 /**
- * TRADYLOR — /admin/marketing/calendario (sección Calendario del módulo Marketing)
+ * TRADYLOR — /upayp1b4/marketing/calendario
+ * Calendario comercial del módulo de Marketing: fechas clave del año con la
+ * antelación de aviso, el mix de canales, los ángulos de copy, el checklist
+ * de preparación y las categorías del catálogo que encajan en cada campaña.
  */
 export const prerender = false;
 
-import Layout from '../../../layouts/Layout.astro';
-import AdminNav from '../../../components/AdminNav.astro';
-import AdminUserMenu from '../../../components/AdminUserMenu.astro';
-import MarketingMenu from '../../../components/admin/MarketingMenu.astro';
+import MarketingShell from '../../../components/admin/MarketingShell.astro';
 import { getSessionUser } from '../../../lib/adminAuth';
+import {
+  ETIQUETAS_PRIORIDAD,
+  ETIQUETAS_TIPO,
+  fechaCorta,
+  getMomentosComerciales,
+  getMomentosEnVentana,
+  getProximoMomento,
+  type MomentoResuelto,
+} from '../../../lib/marketingCalendar';
+import { getCampanaCatalogo, getResumenCatalogo } from '../../../lib/marketingInsights';
 
 const sessionUser = getSessionUser(Astro.request);
 if (!sessionUser) return Astro.redirect('/upayp1b4');
 if (sessionUser.role !== 'admin') return Astro.redirect('/upayp1b4/perfil');
 
 Astro.response.headers.set('Cache-Control', 'no-store');
+
+const ANIO_ACTUAL = new Date().getFullYear();
+const anioPedido = Number(Astro.url.searchParams.get('ano') ?? ANIO_ACTUAL);
+const anio =
+  Number.isFinite(anioPedido) && anioPedido >= 2020 && anioPedido <= 2035 ? anioPedido : ANIO_ACTUAL;
+const anios = [ANIO_ACTUAL - 1, ANIO_ACTUAL, ANIO_ACTUAL + 1];
+
+const momentos = getMomentosComerciales(anio);
+const proximo = getProximoMomento(anio);
+const enVentana = getMomentosEnVentana(anio);
+const resumen = getResumenCatalogo();
+
+const campanas = momentos.map((momento) => ({
+  momento,
+  categorias: getCampanaCatalogo(momento),
+}));
+
+const trimestres = [1, 2, 3, 4].map((trimestre) => ({
+  trimestre,
+  campanas: campanas.filter((c) => c.momento.trimestre === trimestre),
+}));
+
+const ETIQUETAS_ESTADO: Record<MomentoResuelto['estado'], string> = {
+  pasada: 'Finalizada',
+  'en-curso': 'En curso',
+  preparacion: 'Ventana de preparación',
+  programada: 'Programada',
+};
+
+const formatoEuro = new Intl.NumberFormat('es-ES', {
+  style: 'currency',
+  currency: 'EUR',
+  maximumFractionDigits: 0,
+});
 ---
 
-<Layout
-  title="Calendario | Marketing | Admin Tradylor"
-  description="Calendario comercial global del módulo de Marketing."
+<MarketingShell
+  user={sessionUser}
+  seccion="calendario"
+  breadcrumb="Calendario"
+  titulo="Calendario comercial"
+  documentTitle="Calendario | Marketing | Admin Tradylor"
+  descripcion="Fechas clave comerciales con antelación de aviso, mix de canales, ángulos de copy y categorías del catálogo."
+  sub="Fechas clave del año con la alerta de 3-4 semanas, el mix de canales, los ángulos de copy y las categorías de nuestro catálogo que encajan en cada campaña. Las fechas se calculan sobre el calendario real del año elegido."
 >
-  <Fragment slot="header-end">
-    <AdminUserMenu user={sessionUser} active="marketing" />
-  </Fragment>
-  <div class="admin-module-wrapper">
-    <header class="admin-header">
-      <div class="admin-tag-row">
-        <a class="admin-tag-link" href="/upayp1b4">Panel de administración</a>
-        <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <a class="admin-tag-link" href="/upayp1b4/marketing">Marketing</a>
-        <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <div class="admin-tag-pill">Calendario</div>
-      </div>
-      <h1 class="admin-title">Calendario</h1>
-      <p class="admin-subtitle">
-        Fechas clave comerciales del año con alertas anticipadas, mix de canales sugerido y
-        ángulos de copy para cada campaña.
-      </p>
-    </header>
+  <!-- Resumen -->
+  <section class="mc-summary">
+    <article class="mc-card mc-card--destacada">
+      <span class="mc-label">Próxima campaña</span>
+      <strong class="mc-valor">
+        {proximo ? `${proximo.icono} ${proximo.nombre}` : 'Sin campañas'}
+      </strong>
+      <span class="mc-nota">
+        {
+          proximo
+            ? `${fechaCorta(proximo.fecha)} · ${proximo.diasHasta >= 0 ? `en ${proximo.diasHasta} días` : 'en curso'}`
+            : 'No hay fechas clave configuradas para este año'
+        }
+      </span>
+    </article>
+    <article class="mc-card">
+      <span class="mc-label">Alertas abiertas</span>
+      <strong class="mc-valor">{enVentana.length}</strong>
+      <span class="mc-nota">Campañas dentro de su ventana de preparación</span>
+    </article>
+    <article class="mc-card">
+      <span class="mc-label">Fechas clave del año</span>
+      <strong class="mc-valor">{momentos.length}</strong>
+      <span class="mc-nota">Entre descuentos, temporadas y eventos</span>
+    </article>
+    <article class="mc-card">
+      <span class="mc-label">Catálogo disponible</span>
+      <strong class="mc-valor">{resumen.productos}</strong>
+      <span class="mc-nota">
+        {resumen.categorias} categorías · precio medio {formatoEuro.format(resumen.precioMedio)}
+      </span>
+    </article>
+  </section>
 
-    <AdminNav context="catalogo" active="marketing" user={sessionUser} />
+  <!-- Selector de año -->
+  <nav class="mc-years" aria-label="Año del calendario">
+    {anios.map((opcion) => (
+      <a class:list={['mc-year', { 'is-active': opcion === anio }]} href={`/upayp1b4/marketing/calendario?ano=${opcion}`}>
+        {opcion}
+      </a>
+    ))}
+  </nav>
 
-    <MarketingMenu active="calendario" />
+  <!-- Timeline -->
+  {
+    trimestres.map(({ trimestre, campanas: delTrimestre }) => (
+      <section class="mc-quarter">
+        <h2 class="mc-quarter-title">
+          <span class="mc-quarter-badge">Q{trimestre}</span>
+          {['Enero – Marzo', 'Abril – Junio', 'Julio – Septiembre', 'Octubre – Diciembre'][trimestre - 1]}
+          <span class="mc-quarter-count">{delTrimestre.length} campañas</span>
+        </h2>
 
-    <section class="marketing-placeholder">
-      <span class="marketing-placeholder-pill">En preparación</span>
-      <p>
-        Aquí se mostrará la línea de tiempo anual (Black Friday, Cyber Monday, Singles' Day,
-        Navidad, estacionales locales) con la alerta de 3–4 semanas de antelación, el mix de
-        canales y los ángulos de copy de cada campaña.
-      </p>
-    </section>
-  </div>
-</Layout>
+        <div class="mc-timeline">
+          {delTrimestre.map(({ momento, categorias }) => (
+            <article class:list={['mc-event', `mc-event--${momento.estado}`]}>
+              <div class="mc-event-date">
+                <span class="mc-event-day">{momento.fecha.slice(8, 10)}</span>
+                <span class="mc-event-month">{momento.fecha.slice(5, 7)}</span>
+                <span class="mc-event-year">{momento.fecha.slice(0, 4)}</span>
+              </div>
 
-<style>
-  .admin-module-wrapper { display: flex; flex-direction: column; gap: 2rem; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
-  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
-  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; width: fit-content; }
-  .admin-tag-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
-  .admin-tag-row .admin-tag-pill { margin: 0; }
-  .admin-tag-link { font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; text-decoration: none; transition: color 0.16s ease; }
-  .admin-tag-link:hover { color: #93c5fd; }
-  .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
-  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
-  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
-  .marketing-placeholder { display: flex; flex-direction: column; align-items: flex-start; gap: 0.9rem; padding: 1.6rem 1.4rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; color: var(--color-text-muted); font-size: 0.92rem; line-height: 1.65; }
-  .marketing-placeholder-pill { padding: 0.35rem 0.85rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+              <div class="mc-event-body">
+                <header class="mc-event-head">
+                  <h3 class="mc-event-title">
+                    <span aria-hidden="true">{momento.icono}</span> {momento.nombre}
+                  </h3>
+                  <div class="mc-pills">
+                    <span class:list={['mc-pill', `mc-pill--${momento.tipo}`]}>{ETIQUETAS_TIPO[momento.tipo]}</span>
+                    <span class:list={['mc-pill', `mc-pill--${momento.prioridad}`]}>
+                      Prioridad {ETIQUETAS_PRIORIDAD[momento.prioridad]}
+                    </span>
+                    <span class:list={['mc-pill', `mc-pill--${momento.estado}`]}>{ETIQUETAS_ESTADO[momento.estado]}</span>
+                  </div>
+                </header>
+
+                <p class="mc-event-action">
+                  <strong>Acción:</strong> {momento.accion}
+                </p>
+
+                <dl class="mc-meta">
+                  <div>
+                    <dt>Ventana</dt>
+                    <dd>
+                      {fechaCorta(momento.fecha)} → {fechaCorta(momento.fin)} ({momento.duracionDias} días)
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Alerta de preparación</dt>
+                    <dd>
+                      {fechaCorta(momento.alertaDesde)} ({momento.leadDays} días antes)
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Estado</dt>
+                    <dd>
+                      {momento.diasHasta >= 0
+                        ? `Faltan ${momento.diasHasta} días`
+                        : `Terminó hace ${Math.abs(momento.diasHasta)} días`}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div class="mc-block">
+                  <span class="mc-block-label">Mix de canales</span>
+                  <div class="mc-mix">
+                    {momento.canales.map((canal) => (
+                      <span
+                        class="mc-mix-part"
+                        style={`width:${canal.peso}%;`}
+                        title={`${canal.etiqueta}: ${canal.peso}%`}
+                      />
+                    ))}
+                  </div>
+                  <ul class="mc-chips">
+                    {momento.canales.map((canal) => (
+                      <li class="mc-chip">
+                        {canal.etiqueta} <strong>{canal.peso}%</strong>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div class="mc-block">
+                  <span class="mc-block-label">Ángulos de copy</span>
+                  <ul class="mc-copy">
+                    {momento.copy.map((angulo) => (
+                      <li>“{angulo}”</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div class="mc-block">
+                  <span class="mc-block-label">
+                    Categorías del catálogo que encajan ({categorias.length})
+                  </span>
+                  {categorias.length ? (
+                    <ul class="mc-chips">
+                      {categorias.map((categoria) => (
+                        <li class="mc-chip mc-chip--cat">
+                          <span aria-hidden="true">{categoria.icono}</span> {categoria.nombre}
+                          <strong>{categoria.productos}</strong>
+                          <span class="mc-chip-note">
+                            {formatoEuro.format(categoria.precioMedio)}
+                            {categoria.descuentoMedio > 0 ? ` · -${categoria.descuentoMedio}%` : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p class="mc-empty">Ninguna categoría del catálogo encaja con esta campaña todavía.</p>
+                  )}
+                </div>
+
+                <details class="mc-details">
+                  <summary>Checklist de preparación ({momento.preparacion.length})</summary>
+                  <ul class="mc-checklist">
+                    {momento.preparacion.map((paso) => (
+                      <li>{paso}</li>
+                    ))}
+                  </ul>
+                </details>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    ))
+  }
+</MarketingShell>
+
+<style is:global>
+  .mc-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.9rem; }
+  .mc-card { display: flex; flex-direction: column; gap: 0.35rem; padding: 1.1rem 1.15rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 14px; }
+  .mc-card--destacada { border-color: rgba(96, 165, 250, 0.45); background: rgba(59, 130, 246, 0.08); }
+  .mc-label { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--color-text-dim); }
+  .mc-valor { font-size: 1.4rem; font-weight: 800; color: var(--color-text-main); line-height: 1.2; }
+  .mc-nota { font-size: 0.78rem; color: var(--color-text-muted); }
+
+  .mc-years { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+  .mc-year { padding: 0.4rem 0.9rem; border: 1px solid var(--color-border); border-radius: 9999px; font-size: 0.78rem; font-weight: 700; color: var(--color-text-muted); text-decoration: none; transition: all 0.16s ease; }
+  .mc-year:hover { color: var(--color-text-main); border-color: rgba(96, 165, 250, 0.5); }
+  .mc-year.is-active { color: #93c5fd; background: rgba(96, 165, 250, 0.14); border-color: rgba(96, 165, 250, 0.45); }
+
+  .mc-quarter { display: flex; flex-direction: column; gap: 1rem; }
+  .mc-quarter-title { display: flex; align-items: center; gap: 0.7rem; font-family: var(--font-heading); font-size: 1.15rem; font-weight: 800; color: var(--color-text-main); }
+  .mc-quarter-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 2.4rem; padding: 0.2rem 0.5rem; border-radius: 8px; font-size: 0.74rem; font-weight: 800; color: #93c5fd; background: rgba(96, 165, 250, 0.14); border: 1px solid rgba(96, 165, 250, 0.3); }
+  .mc-quarter-count { font-size: 0.74rem; font-weight: 700; color: var(--color-text-dim); }
+
+  .mc-timeline { display: flex; flex-direction: column; gap: 0.9rem; }
+  .mc-event { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 1.1rem; padding: 1.15rem 1.2rem; background: rgba(255, 255, 255, 0.025); border: 1px solid var(--color-border); border-left: 3px solid var(--color-border); border-radius: 14px; }
+  .mc-event--en-curso { border-left-color: #34d399; background: rgba(16, 185, 129, 0.06); }
+  .mc-event--preparacion { border-left-color: #fbbf24; background: rgba(245, 158, 11, 0.06); }
+  .mc-event--programada { border-left-color: #60a5fa; }
+  .mc-event--pasada { opacity: 0.62; }
+
+  .mc-event-date { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1rem; padding: 0.6rem 0.4rem; border-radius: 12px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--color-border); }
+  .mc-event-day { font-size: 1.5rem; font-weight: 800; color: var(--color-text-main); line-height: 1; }
+  .mc-event-month { font-size: 0.78rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: #60a5fa; }
+  .mc-event-year { font-size: 0.66rem; color: var(--color-text-dim); }
+
+  .mc-event-body { display: flex; flex-direction: column; gap: 0.85rem; min-width: 0; }
+  .mc-event-head { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; }
+  .mc-event-title { font-family: var(--font-heading); font-size: 1.05rem; font-weight: 800; color: var(--color-text-main); }
+  .mc-pills { display: flex; gap: 0.35rem; flex-wrap: wrap; }
+  .mc-pill { padding: 0.2rem 0.55rem; border-radius: 9999px; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; border: 1px solid var(--color-border); color: var(--color-text-muted); background: rgba(255, 255, 255, 0.04); }
+  .mc-pill--alta { color: #fca5a5; border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.1); }
+  .mc-pill--media { color: #fbbf24; border-color: rgba(251, 191, 36, 0.3); background: rgba(251, 191, 36, 0.09); }
+  .mc-pill--descuento { color: #93c5fd; border-color: rgba(96, 165, 250, 0.35); background: rgba(96, 165, 250, 0.1); }
+  .mc-pill--temporada { color: #6ee7b7; border-color: rgba(52, 211, 153, 0.3); background: rgba(16, 185, 129, 0.1); }
+  .mc-pill--en-curso { color: #6ee7b7; border-color: rgba(52, 211, 153, 0.4); background: rgba(16, 185, 129, 0.12); }
+  .mc-pill--preparacion { color: #fbbf24; border-color: rgba(251, 191, 36, 0.4); background: rgba(245, 158, 11, 0.12); }
+
+  .mc-event-action { font-size: 0.87rem; line-height: 1.6; color: var(--color-text-muted); }
+  .mc-event-action strong { color: var(--color-text-main); }
+
+  .mc-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.6rem; margin: 0; }
+  .mc-meta dt { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-dim); }
+  .mc-meta dd { margin: 0.15rem 0 0; font-size: 0.82rem; color: var(--color-text-main); }
+
+  .mc-block { display: flex; flex-direction: column; gap: 0.45rem; }
+  .mc-block-label { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-dim); }
+
+  .mc-mix { display: flex; height: 8px; border-radius: 9999px; overflow: hidden; background: rgba(255, 255, 255, 0.05); }
+  .mc-mix-part:nth-child(1) { background: #60a5fa; }
+  .mc-mix-part:nth-child(2) { background: #f472b6; }
+  .mc-mix-part:nth-child(3) { background: #34d399; }
+  .mc-mix-part:nth-child(4) { background: #fbbf24; }
+  .mc-mix-part:nth-child(5) { background: #a78bfa; }
+
+  .mc-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+  .mc-chip { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.28rem 0.6rem; border-radius: 9999px; font-size: 0.73rem; font-weight: 600; color: var(--color-text-muted); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--color-border); }
+  .mc-chip strong { color: var(--color-text-main); }
+  .mc-chip--cat { color: var(--color-text-main); }
+  .mc-chip-note { color: var(--color-text-dim); font-size: 0.68rem; }
+
+  .mc-copy { margin: 0; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.84rem; color: var(--color-text-muted); }
+
+  .mc-empty { margin: 0; font-size: 0.8rem; color: var(--color-text-dim); }
+
+  .mc-details { border: 1px dashed var(--color-border); border-radius: 12px; padding: 0.6rem 0.85rem; }
+  .mc-details summary { cursor: pointer; font-size: 0.78rem; font-weight: 700; color: var(--color-text-muted); }
+  .mc-checklist { margin: 0.7rem 0 0.2rem; padding-left: 1.1rem; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; color: var(--color-text-muted); }
 </style>

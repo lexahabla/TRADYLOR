@@ -1,71 +1,322 @@
 ---
 /**
- * TRADYLOR — /admin/marketing/tendencias (sección Tendencias del módulo Marketing)
+ * TRADYLOR — /upayp1b4/marketing/tendencias
+ * Tendencias del módulo de Marketing: variación real por categoría, movimientos
+ * de precio del histórico, señales (tags técnicos) y estacionalidad mensual con
+ * la previsión de las próximas campañas del calendario.
  */
 export const prerender = false;
 
-import Layout from '../../../layouts/Layout.astro';
-import AdminNav from '../../../components/AdminNav.astro';
-import AdminUserMenu from '../../../components/AdminUserMenu.astro';
-import MarketingMenu from '../../../components/admin/MarketingMenu.astro';
+import MarketingShell from '../../../components/admin/MarketingShell.astro';
 import { getSessionUser } from '../../../lib/adminAuth';
+import { getTendencias } from '../../../lib/marketingInsights';
+import { fechaCorta } from '../../../lib/marketingCalendar';
 
 const sessionUser = getSessionUser(Astro.request);
 if (!sessionUser) return Astro.redirect('/upayp1b4');
 if (sessionUser.role !== 'admin') return Astro.redirect('/upayp1b4/perfil');
 
 Astro.response.headers.set('Cache-Control', 'no-store');
+
+const tendencias = getTendencias();
+const maxVisitas = Math.max(1, ...tendencias.categorias.map((c) => c.visitas));
+const maxIndice = Math.max(1, ...tendencias.estacionalidad.map((m) => m.indice));
+const enCrecimiento = tendencias.categorias.filter((c) => c.variacion > 0);
+const formatoEuro = new Intl.NumberFormat('es-ES', {
+  style: 'currency',
+  currency: 'EUR',
+  maximumFractionDigits: 2,
+});
 ---
 
-<Layout
-  title="Tendencias | Marketing | Admin Tradylor"
-  description="Escucha activa y tendencias del módulo de Marketing."
+<MarketingShell
+  user={sessionUser}
+  seccion="tendencias"
+  breadcrumb="Tendencias"
+  titulo="Tendencias"
+  documentTitle="Tendencias | Marketing | Admin Tradylor"
+  descripcion="Variación por categoría, movimientos de precio, señales y estacionalidad con previsión de campañas."
+  sub="Qué está moviendo el catálogo ahora mismo: variación de visitas por categoría frente al periodo anterior, movimientos de precio del histórico, señales técnicas dominantes y estacionalidad mensual."
 >
-  <Fragment slot="header-end">
-    <AdminUserMenu user={sessionUser} active="marketing" />
-  </Fragment>
-  <div class="admin-module-wrapper">
-    <header class="admin-header">
-      <div class="admin-tag-row">
-        <a class="admin-tag-link" href="/upayp1b4">Panel de administración</a>
-        <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <a class="admin-tag-link" href="/upayp1b4/marketing">Marketing</a>
-        <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <div class="admin-tag-pill">Tendencias</div>
-      </div>
-      <h1 class="admin-title">Tendencias</h1>
-      <p class="admin-subtitle">
-        Qué se busca y dónde publicarlo: tendencias de keyword por categoría del catálogo y
-        matriz que recomienda canal, formato y gancho según el tipo de producto.
-      </p>
-    </header>
+  <section class="mt-summary">
+    <article class="mt-card">
+      <span class="mt-label">Visitas (30 días)</span>
+      <strong class="mt-valor">{tendencias.totalVisitas}</strong>
+      <span class="mt-nota">páginas de producto medidas en analítica</span>
+    </article>
+    <article class="mt-card">
+      <span class="mt-label">Categorías en crecimiento</span>
+      <strong class="mt-valor">{enCrecimiento.length}</strong>
+      <span class="mt-nota">de {tendencias.categorias.length} categorías raíz</span>
+    </article>
+    <article class="mt-card">
+      <span class="mt-label">Precios al alza</span>
+      <strong class="mt-valor">{tendencias.alAlza.length}</strong>
+      <span class="mt-nota">productos con subida en el histórico</span>
+    </article>
+    <article class="mt-card">
+      <span class="mt-label">Precios a la baja</span>
+      <strong class="mt-valor">{tendencias.aLaBaja.length}</strong>
+      <span class="mt-nota">oportunidad para comunicar el descuento</span>
+    </article>
+    <article class="mt-card">
+      <span class="mt-label">Señales detectadas</span>
+      <strong class="mt-valor">{tendencias.senales.length}</strong>
+      <span class="mt-nota">tags técnicos con presencia en el catálogo</span>
+    </article>
+  </section>
 
-    <AdminNav context="catalogo" active="marketing" user={sessionUser} />
+  <section class="mt-block">
+    <h2 class="mt-title">Momentum por categoría</h2>
+    <p class="mt-lead">
+      Visitas a fichas de producto de los últimos 30 días comparadas con los 30 anteriores. Cuando no
+      hay histórico, la variación se muestra como 0 (no hay con qué comparar).
+    </p>
+    <div class="mt-table-wrap">
+      <table class="mt-table">
+        <thead>
+          <tr>
+            <th scope="col">Categoría</th>
+            <th scope="col">Visitas</th>
+            <th scope="col">Periodo anterior</th>
+            <th scope="col">Variación</th>
+            <th scope="col">Productos</th>
+            <th scope="col">Precio medio</th>
+            <th scope="col">Descuento medio</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            tendencias.categorias.map((categoria) => (
+              <tr>
+                <td>
+                  <span class="mt-cat">
+                    <span aria-hidden="true">{categoria.icono}</span> {categoria.nombre}
+                  </span>
+                </td>
+                <td>
+                  <div class="mt-bar">
+                    <div
+                      class="mt-bar-fill"
+                      style={`width:${Math.round((categoria.visitas / maxVisitas) * 100)}%;`}
+                    />
+                  </div>
+                  <span class="mt-sub">{categoria.visitas}</span>
+                </td>
+                <td class="mt-sub">{categoria.visitasAnterior}</td>
+                <td>
+                  <span
+                    class:list={[
+                      'mt-delta',
+                      categoria.variacion > 0
+                        ? 'is-up'
+                        : categoria.variacion < 0
+                          ? 'is-down'
+                          : 'is-flat',
+                    ]}
+                  >
+                    {categoria.variacion > 0 ? '▲' : categoria.variacion < 0 ? '▼' : '—'}{' '}
+                    {categoria.variacion}%
+                  </span>
+                </td>
+                <td>{categoria.productos}</td>
+                <td>{formatoEuro.format(categoria.precioMedio)}</td>
+                <td>{categoria.descuentoMedio > 0 ? `-${categoria.descuentoMedio}%` : '—'}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
 
-    <MarketingMenu active="tendencias" />
+  <section class="mt-grid">
+    <article class="mt-panel">
+      <h2 class="mt-title">Precios al alza</h2>
+      <p class="mt-lead">Productos cuyo último precio del histórico supera al anterior.</p>
+      {
+        tendencias.alAlza.length ? (
+          <ul class="mt-list">
+            {tendencias.alAlza.map((movimiento) => (
+              <li class="mt-item">
+                <div class="mt-item-main">
+                  <a class="mt-item-title" href={movimiento.url}>
+                    {movimiento.titulo}
+                  </a>
+                  <span class="mt-sub">{movimiento.categoria}</span>
+                </div>
+                <div class="mt-item-side">
+                  <span class="mt-price">
+                    {formatoEuro.format(movimiento.precio)}
+                    <span class="mt-sub">antes {formatoEuro.format(movimiento.anterior)}</span>
+                  </span>
+                  <span class="mt-delta is-up">+{movimiento.variacion}%</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="mt-empty">Sin movimientos de precio registrados en el histórico.</p>
+        )
+      }
+    </article>
 
-    <section class="marketing-placeholder">
-      <span class="marketing-placeholder-pill">En preparación</span>
-      <p>
-        Aquí se mostrará la tabla de tendencias por categoría (keyword, fuente, volumen y
-        variación) y la matriz de canales con el canal ideal, el mejor formato y el gancho
-        sugerido para cada tipo de producto.
-      </p>
-    </section>
-  </div>
-</Layout>
+    <article class="mt-panel">
+      <h2 class="mt-title">Precios a la baja</h2>
+      <p class="mt-lead">Oportunidades de descuento: el producto ya está más barato que antes.</p>
+      {
+        tendencias.aLaBaja.length ? (
+          <ul class="mt-list">
+            {tendencias.aLaBaja.map((movimiento) => (
+              <li class="mt-item">
+                <div class="mt-item-main">
+                  <a class="mt-item-title" href={movimiento.url}>
+                    {movimiento.titulo}
+                  </a>
+                  <span class="mt-sub">{movimiento.categoria}</span>
+                </div>
+                <div class="mt-item-side">
+                  <span class="mt-price">
+                    {formatoEuro.format(movimiento.precio)}
+                    <span class="mt-sub">antes {formatoEuro.format(movimiento.anterior)}</span>
+                  </span>
+                  <span class="mt-delta is-down">{movimiento.variacion}%</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p class="mt-empty">Sin bajadas de precio registradas en el histórico.</p>
+        )
+      }
+    </article>
+  </section>
 
-<style>
-  .admin-module-wrapper { display: flex; flex-direction: column; gap: 2rem; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
-  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
-  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; width: fit-content; }
-  .admin-tag-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
-  .admin-tag-row .admin-tag-pill { margin: 0; }
-  .admin-tag-link { font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; text-decoration: none; transition: color 0.16s ease; }
-  .admin-tag-link:hover { color: #93c5fd; }
-  .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
-  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
-  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
-  .marketing-placeholder { display: flex; flex-direction: column; align-items: flex-start; gap: 0.9rem; padding: 1.6rem 1.4rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; color: var(--color-text-muted); font-size: 0.92rem; line-height: 1.65; }
-  .marketing-placeholder-pill { padding: 0.35rem 0.85rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+  <section class="mt-block">
+    <h2 class="mt-title">Señales del catálogo</h2>
+    <p class="mt-lead">
+      Etiquetas técnicas más presentes en los productos con buena conversión. Sirven para el copy y
+      para saber qué características clave hay que destacar en cada categoría.
+    </p>
+    {
+      tendencias.senales.length ? (
+        <ul class="mt-chips">
+          {tendencias.senales.map((senal) => (
+            <li class="mt-chip">
+              <strong>{senal.tag}</strong>
+              <span>{senal.productos} productos</span>
+              {senal.precioMedio > 0 && <span class="mt-chip-note">{formatoEuro.format(senal.precioMedio)}</span>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="mt-empty">Todavía no hay etiquetas normalizadas en el catálogo.</p>
+      )
+    }
+  </section>
+
+  <section class="mt-block">
+    <h2 class="mt-title">Estacionalidad y previsión</h2>
+    <p class="mt-lead">
+      Índice de visitas de cada mes respecto a la media anual (100 = mes medio) y las campañas que
+      tocan cada mes según el calendario comercial.
+    </p>
+    <div class="mt-season">
+      {
+        tendencias.estacionalidad.map((mes) => (
+          <div class="mt-season-item">
+            <span class="mt-season-label">{mes.etiqueta}</span>
+            <div class="mt-bar">
+              <div
+                class="mt-bar-fill"
+                style={`width:${Math.round((mes.indice / maxIndice) * 100)}%;`}
+              />
+            </div>
+            <span class="mt-season-index">{mes.indice}</span>
+            <span class="mt-sub">{mes.visitas} visitas</span>
+          </div>
+        ))
+      }
+      {!tendencias.estacionalidad.length && (
+        <p class="mt-empty">Sin histórico mensual todavía: el índice aparecerá tras el primer mes cerrado.</p>
+      )}
+    </div>
+
+    <div class="mt-forecast">
+      <h3 class="mt-subtitle">Próximas campañas</h3>
+      <ul class="mt-forecast-list">
+        {
+          tendencias.previstas.map((campana) => (
+            <li class="mt-forecast-item">
+              <span class="mt-forecast-icon" aria-hidden="true">{campana.icono}</span>
+              <div class="mt-item-main">
+                <span class="mt-item-title">{campana.nombre}</span>
+                <span class="mt-sub">
+                  {fechaCorta(campana.fecha)} · {campana.diasHasta} días · {campana.accion}
+                </span>
+              </div>
+              <a class="mt-link" href="/upayp1b4/marketing/calendario">Ver en el calendario →</a>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+</MarketingShell>
+
+<style is:global>
+  .mt-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.9rem; }
+  .mt-card { display: flex; flex-direction: column; gap: 0.35rem; padding: 1.1rem 1.15rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 14px; }
+  .mt-label { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--color-text-dim); }
+  .mt-valor { font-size: 1.35rem; font-weight: 800; color: var(--color-text-main); line-height: 1.2; }
+  .mt-nota { font-size: 0.76rem; color: var(--color-text-muted); }
+
+  .mt-block { display: flex; flex-direction: column; gap: 0.85rem; }
+  .mt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 0.9rem; }
+  .mt-panel { display: flex; flex-direction: column; gap: 0.7rem; padding: 1.1rem 1.2rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 14px; }
+  .mt-title { font-family: var(--font-heading); font-size: 1.15rem; font-weight: 800; color: var(--color-text-main); }
+  .mt-subtitle { font-family: var(--font-heading); font-size: 0.95rem; font-weight: 800; color: var(--color-text-main); }
+  .mt-lead { font-size: 0.85rem; color: var(--color-text-muted); max-width: 860px; line-height: 1.6; }
+  .mt-sub { font-size: 0.68rem; color: var(--color-text-dim); }
+
+  .mt-table-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: 14px; }
+  .mt-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 760px; }
+  .mt-table th { text-align: left; padding: 0.7rem 0.8rem; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-dim); background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--color-border); }
+  .mt-table td { padding: 0.7rem 0.8rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); color: var(--color-text-main); vertical-align: middle; }
+  .mt-table tbody tr:last-child td { border-bottom: 0; }
+  .mt-cat { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 700; }
+  .mt-bar { width: 110px; height: 6px; border-radius: 9999px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+  .mt-bar-fill { height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #38bdf8, #60a5fa); }
+  .mt-delta { display: inline-block; padding: 0.16rem 0.5rem; border-radius: 9999px; font-size: 0.72rem; font-weight: 800; }
+  .mt-delta.is-up { color: #6ee7b7; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(52, 211, 153, 0.3); }
+  .mt-delta.is-down { color: #fca5a5; background: rgba(248, 113, 113, 0.12); border: 1px solid rgba(248, 113, 113, 0.3); }
+  .mt-delta.is-flat { color: var(--color-text-dim); border: 1px solid var(--color-border); }
+
+  .mt-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.6rem; }
+  .mt-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.8rem; padding-bottom: 0.6rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+  .mt-item:last-child { border-bottom: 0; padding-bottom: 0; }
+  .mt-item-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+  .mt-item-title { font-size: 0.85rem; font-weight: 700; color: var(--color-text-main); text-decoration: none; }
+  .mt-item-title:hover { color: #93c5fd; }
+  .mt-item-side { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
+  .mt-price { display: inline-flex; flex-direction: column; align-items: flex-end; font-size: 0.85rem; font-weight: 700; color: var(--color-text-main); }
+
+  .mt-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; list-style: none; margin: 0; padding: 0; }
+  .mt-chip { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.3rem 0.65rem; border-radius: 9999px; font-size: 0.74rem; color: var(--color-text-muted); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--color-border); }
+  .mt-chip strong { color: var(--color-text-main); }
+  .mt-chip-note { color: var(--color-text-dim); font-size: 0.68rem; }
+  .mt-empty { margin: 0; font-size: 0.8rem; color: var(--color-text-dim); }
+
+  .mt-season { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.7rem; }
+  .mt-season-item { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.75rem 0.85rem; border: 1px solid var(--color-border); border-radius: 12px; background: rgba(255, 255, 255, 0.02); }
+  .mt-season-label { font-size: 0.76rem; font-weight: 700; color: var(--color-text-main); }
+  .mt-season-index { font-size: 1.05rem; font-weight: 800; color: #93c5fd; }
+
+  .mt-forecast { display: flex; flex-direction: column; gap: 0.6rem; }
+  .mt-forecast-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.55rem; }
+  .mt-forecast-item { display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem 0.9rem; border: 1px solid var(--color-border); border-radius: 12px; background: rgba(255, 255, 255, 0.02); }
+  .mt-forecast-icon { font-size: 1.2rem; }
+  .mt-item-main { flex: 1; min-width: 0; }
+  .mt-link { font-size: 0.78rem; font-weight: 700; color: #93c5fd; text-decoration: none; white-space: nowrap; }
+  .mt-link:hover { color: #bfdbfe; }
 </style>

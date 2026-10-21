@@ -4,6 +4,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\scripts\reset-admin-password.mjs
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\DateRangeFilter.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\FinancialHeaderCards.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\MarketingMenu.astro
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\MarketingShell.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\MetricCard.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\PeriodPicker.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\ProductMetricsTable.astro
@@ -54,7 +55,9 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\excelExport.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\localEnrich.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\mailer.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\marketingAudience.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\marketingCalendar.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\marketingEmail.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\marketingInsights.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\marketingLeads.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\media.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\networks\connectors\adapters\amazonProductAdapter.ts

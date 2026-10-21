@@ -1,71 +1,194 @@
 ---
 /**
- * TRADYLOR — /admin/marketing/market-action (sección Market Action del módulo Marketing)
+ * TRADYLOR — /upayp1b4/marketing/market-action
+ * Market Action del módulo de Marketing: planificador de acciones de conversión.
+ * Muestra el embudo real de los últimos 30 días y, a partir del comportamiento
+ * de la audiencia, las acciones concretas a ejecutar con su valor en riesgo.
  */
 export const prerender = false;
 
-import Layout from '../../../layouts/Layout.astro';
-import AdminNav from '../../../components/AdminNav.astro';
-import AdminUserMenu from '../../../components/AdminUserMenu.astro';
-import MarketingMenu from '../../../components/admin/MarketingMenu.astro';
+import MarketingShell from '../../../components/admin/MarketingShell.astro';
 import { getSessionUser } from '../../../lib/adminAuth';
+import { getMarketActions } from '../../../lib/marketingInsights';
 
 const sessionUser = getSessionUser(Astro.request);
 if (!sessionUser) return Astro.redirect('/upayp1b4');
 if (sessionUser.role !== 'admin') return Astro.redirect('/upayp1b4/perfil');
 
 Astro.response.headers.set('Cache-Control', 'no-store');
+
+const { embudo, acciones, totalUsuarios } = getMarketActions();
+
+const etapas = [
+  { id: 'visitas', etiqueta: 'Visitas', valor: embudo.visitas, nota: 'páginas vistas (page_view)' },
+  { id: 'fichas', etiqueta: 'Fichas de producto', valor: embudo.fichas, nota: 'visitas con producto' },
+  { id: 'salidas', etiqueta: 'Clics de salida', valor: embudo.salidas, nota: 'salidas a la tienda' },
+  { id: 'compras', etiqueta: 'Compras', valor: embudo.compras, nota: 'eventos de compra' },
+];
+const maxEtapa = Math.max(1, ...etapas.map((e) => e.valor));
+const formatoEuro = new Intl.NumberFormat('es-ES', {
+  style: 'currency',
+  currency: 'EUR',
+  maximumFractionDigits: 0,
+});
 ---
 
-<Layout
-  title="Market Action | Marketing | Admin Tradylor"
-  description="Playbooks de conversión y calculadora de ROI/ROAS del módulo de Marketing."
+<MarketingShell
+  user={sessionUser}
+  seccion="market-action"
+  breadcrumb="Market Action"
+  titulo="Market Action"
+  documentTitle="Market Action | Marketing | Admin Tradylor"
+  descripcion="Planificador de acciones de conversión: embudo real y acciones priorizadas sobre la audiencia."
+  sub="Del embudo real de los últimos 30 días a la acción concreta: qué segmento atacar, con qué canal, en qué plazo y qué dinero hay en juego."
 >
-  <Fragment slot="header-end">
-    <AdminUserMenu user={sessionUser} active="marketing" />
-  </Fragment>
-  <div class="admin-module-wrapper">
-    <header class="admin-header">
-      <div class="admin-tag-row">
-        <a class="admin-tag-link" href="/upayp1b4">Panel de administración</a>
-        <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <a class="admin-tag-link" href="/upayp1b4/marketing">Marketing</a>
-        <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <div class="admin-tag-pill">Market Action</div>
+  <section class="ma-block">
+    <h2 class="ma-title">Embudo de los últimos {embudo.dias} días</h2>
+    <div class="ma-funnel">
+      {
+        etapas.map((etapa) => (
+          <div class="ma-stage">
+            <div class="ma-stage-head">
+              <span class="ma-stage-label">{etapa.etiqueta}</span>
+              <strong class="ma-stage-value">{etapa.valor}</strong>
+            </div>
+            <div class="ma-stage-bar">
+              <div class="ma-stage-fill" style={`width:${Math.max(2, Math.round((etapa.valor / maxEtapa) * 100))}%;`} />
+            </div>
+            <span class="ma-stage-note">{etapa.nota}</span>
+          </div>
+        ))
+      }
+    </div>
+    <div class="ma-kpis">
+      <div class="ma-kpi">
+        <span class="ma-kpi-label">Conversión (sesión → salida/compra)</span>
+        <strong class="ma-kpi-value">{embudo.conversionPct}%</strong>
       </div>
-      <h1 class="admin-title">Market Action</h1>
-      <p class="admin-subtitle">
-        Operativa de conversión: manuales con pasos y KPIs para up-selling, cross-selling y
-        fidelización, más la calculadora de rentabilidad antes de ejecutar presupuesto.
-      </p>
-    </header>
+      <div class="ma-kpi">
+        <span class="ma-kpi-label">Audiencia total</span>
+        <strong class="ma-kpi-value">{totalUsuarios}</strong>
+      </div>
+      <div class="ma-kpi">
+        <span class="ma-kpi-label">Usuarios con carrito abierto</span>
+        <strong class="ma-kpi-value">
+          {embudo.CarritoAbandonoPct === null ? '—' : `${embudo.CarritoAbandonoPct}%`}
+        </strong>
+      </div>
+      <div class="ma-kpi">
+        <span class="ma-kpi-label">Compras medidas</span>
+        <strong class="ma-kpi-value">{embudo.compras}</strong>
+      </div>
+    </div>
+    {
+      embudo.visitas === 0 && (
+        <p class="ma-note">
+          Todavía no hay medición de tráfico en este periodo. Las acciones se calculan con los datos de
+          la audiencia (Mi Radar), pero las cifras del embudo aparecerán en cuanto entre el primer
+          beacon de analítica.
+        </p>
+      )
+    }
+  </section>
 
-    <AdminNav context="catalogo" active="marketing" user={sessionUser} />
+  <section class="ma-block">
+    <h2 class="ma-title">Acciones priorizadas</h2>
+    <p class="ma-lead">
+      Cada acción nace del comportamiento real de la audiencia: quién tiene el carrito abierto, quién
+      está caliente y no ha comprado, qué guardó sin decidirse y a quién hay que rescatar.
+    </p>
+    <div class="ma-grid">
+      {
+        acciones.map((accion) => (
+          <article class:list={['ma-card', `ma-card--${accion.prioridad}`]}>
+            <header class="ma-card-head">
+              <span class="ma-card-icon" aria-hidden="true">{accion.icono}</span>
+              <h3 class="ma-card-title">{accion.titulo}</h3>
+              <span class:list={['ma-pill', `ma-pill--${accion.prioridad}`]}>
+                Prioridad {accion.prioridad}
+              </span>
+            </header>
 
-    <MarketingMenu active="market-action" />
+            <div class="ma-card-metrics">
+              <div>
+                <span class="ma-metric-label">Usuarios</span>
+                <strong class="ma-metric-value">{accion.usuarios}</strong>
+              </div>
+              <div>
+                <span class="ma-metric-label">Valor en juego</span>
+                <strong class="ma-metric-value">
+                  {accion.valor > 0 ? formatoEuro.format(accion.valor) : '—'}
+                </strong>
+              </div>
+            </div>
 
-    <section class="marketing-placeholder">
-      <span class="marketing-placeholder-pill">En preparación</span>
-      <p>
-        Aquí se mostrará la biblioteca de playbooks (pasos, KPIs y lift estimado por manual) y la
-        calculadora interactiva de ROI/ROAS para validar la rentabilidad de cada acción antes de
-        lanzarla.
-      </p>
-    </section>
-  </div>
-</Layout>
+            <dl class="ma-meta">
+              <div>
+                <dt>Canal</dt>
+                <dd>{accion.canal}</dd>
+              </div>
+              <div>
+                <dt>Plazo</dt>
+                <dd>{accion.plazo}</dd>
+              </div>
+            </dl>
 
-<style>
-  .admin-module-wrapper { display: flex; flex-direction: column; gap: 2rem; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
-  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
-  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; width: fit-content; }
-  .admin-tag-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
-  .admin-tag-row .admin-tag-pill { margin: 0; }
-  .admin-tag-link { font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; text-decoration: none; transition: color 0.16s ease; }
-  .admin-tag-link:hover { color: #93c5fd; }
-  .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
-  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
-  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
-  .marketing-placeholder { display: flex; flex-direction: column; align-items: flex-start; gap: 0.9rem; padding: 1.6rem 1.4rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; color: var(--color-text-muted); font-size: 0.92rem; line-height: 1.65; }
-  .marketing-placeholder-pill { padding: 0.35rem 0.85rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+            <ol class="ma-steps">
+              {accion.pasos.map((paso) => (
+                <li>{paso}</li>
+              ))}
+            </ol>
+
+            <a class="ma-link" href={accion.enlace}>{accion.etiquetaEnlace} →</a>
+          </article>
+        ))
+      }
+    </div>
+  </section>
+</MarketingShell>
+
+<style is:global>
+  .ma-block { display: flex; flex-direction: column; gap: 1rem; }
+  .ma-title { font-family: var(--font-heading); font-size: 1.15rem; font-weight: 800; color: var(--color-text-main); }
+  .ma-lead { font-size: 0.85rem; color: var(--color-text-muted); max-width: 860px; line-height: 1.6; }
+
+  .ma-funnel { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.8rem; }
+  .ma-stage { display: flex; flex-direction: column; gap: 0.4rem; padding: 1rem 1.05rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 14px; }
+  .ma-stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+  .ma-stage-label { font-size: 0.72rem; font-weight: 700; color: var(--color-text-muted); }
+  .ma-stage-value { font-size: 1.5rem; font-weight: 800; color: var(--color-text-main); }
+  .ma-stage-bar { height: 7px; border-radius: 9999px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+  .ma-stage-fill { height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #38bdf8, #818cf8); }
+  .ma-stage-note { font-size: 0.68rem; color: var(--color-text-dim); }
+
+  .ma-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0.8rem; }
+  .ma-kpi { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.9rem 1rem; border: 1px solid var(--color-border); border-radius: 12px; background: rgba(255, 255, 255, 0.02); }
+  .ma-kpi-label { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-dim); }
+  .ma-kpi-value { font-size: 1.25rem; font-weight: 800; color: var(--color-text-main); }
+
+  .ma-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 0.9rem; }
+  .ma-card { display: flex; flex-direction: column; gap: 0.8rem; padding: 1.15rem 1.2rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-top: 3px solid var(--color-border); border-radius: 14px; }
+  .ma-card--alta { border-top-color: #f87171; }
+  .ma-card--media { border-top-color: #fbbf24; }
+  .ma-card--baja { border-top-color: #64748b; }
+  .ma-card-head { display: flex; align-items: center; gap: 0.55rem; flex-wrap: wrap; }
+  .ma-card-icon { font-size: 1.3rem; }
+  .ma-card-title { flex: 1; min-width: 0; font-family: var(--font-heading); font-size: 1rem; font-weight: 800; color: var(--color-text-main); }
+  .ma-pill { padding: 0.18rem 0.5rem; border-radius: 9999px; font-size: 0.64rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; border: 1px solid var(--color-border); }
+  .ma-pill--alta { color: #fca5a5; border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.1); }
+  .ma-pill--media { color: #fbbf24; border-color: rgba(251, 191, 36, 0.3); background: rgba(245, 158, 11, 0.09); }
+  .ma-pill--baja { color: var(--color-text-dim); }
+
+  .ma-card-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+  .ma-metric-label { display: block; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-text-dim); }
+  .ma-metric-value { font-size: 1.15rem; font-weight: 800; color: var(--color-text-main); }
+
+  .ma-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; margin: 0; }
+  .ma-meta dt { font-size: 0.64rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; color: var(--color-text-dim); }
+  .ma-meta dd { margin: 0.15rem 0 0; font-size: 0.8rem; color: var(--color-text-main); }
+
+  .ma-steps { margin: 0; padding-left: 1.15rem; display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.82rem; color: var(--color-text-muted); }
+  .ma-link { align-self: flex-start; font-size: 0.8rem; font-weight: 700; color: #93c5fd; text-decoration: none; border-bottom: 1px solid rgba(147, 197, 253, 0.35); }
+  .ma-link:hover { color: #bfdbfe; }
+  .ma-note { font-size: 0.8rem; color: var(--color-text-muted); padding: 0.85rem 0.95rem; border: 1px dashed var(--color-border); border-radius: 12px; }
 </style>

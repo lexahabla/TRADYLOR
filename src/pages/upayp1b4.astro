@@ -533,9 +533,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <button type="button" id="prodFSortDir" class="btn-secondary btn-sm ali-sort-dir" title="Invertir el orden (mayor a menor / menor a mayor)">↓</button>
             </div>
           </div>
-          <!-- Precio (€), Descuento y Valoración: MISMA FILA que el resto de filtros -->
-          <div id="prodRangeFields" class="ali-range-fields"></div>
-          <button type="button" id="prodFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
+          <!-- Precio (€), Valoración, Descuento y "Limpiar filtros": MISMA FILA que el resto de filtros.
+               El botón se recoloca desde JS entre Valoración y Descuento (ver prodBuildRanges). -->
+          <div id="prodRangeFields" class="ali-range-fields">
+            <button type="button" id="prodFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
+          </div>
         </div>
       </div>
 
@@ -1115,7 +1117,41 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     </section>
 
     <section data-admin-view="marketing" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'marketing' }]}>
-      <div class="view-heading"><span class="admin-tag-pill">Crecimiento y distribución</span><h2 class="admin-title">Marketing</h2><p class="admin-subtitle">Prepara conexiones con analítica, redes sociales, email y automatizaciones. Las credenciales se leen desde el entorno del servidor.</p></div>
+      <div class="view-heading">
+        <span class="admin-tag-pill">Crecimiento y distribución</span>
+        <h2 class="admin-title">Marketing</h2>
+        <p class="admin-subtitle">Prepara conexiones con analítica, redes sociales, email y automatizaciones. Las credenciales se leen desde el entorno del servidor.</p>
+        <div class="view-heading-actions">
+          <a class="guide-link" href="/upayp1b4/marketing">Abrir el módulo de Marketing <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+      <div class="mk-grid">
+        <a class="mk-card" href="/upayp1b4/marketing/usuarios">
+          <span class="mk-card-icon" aria-hidden="true">👥</span>
+          <strong class="mk-card-title">Usuarios</strong>
+          <span class="mk-card-text">Ficha 360 de la audiencia, segmentador e integración de email.</span>
+        </a>
+        <a class="mk-card" href="/upayp1b4/marketing/market-map">
+          <span class="mk-card-icon" aria-hidden="true">🗺️</span>
+          <strong class="mk-card-title">Market Map</strong>
+          <span class="mk-card-text">Audiencia por mercado, cobertura de redes y ventana comercial.</span>
+        </a>
+        <a class="mk-card" href="/upayp1b4/marketing/calendario">
+          <span class="mk-card-icon" aria-hidden="true">📅</span>
+          <strong class="mk-card-title">Calendario</strong>
+          <span class="mk-card-text">Fechas clave, alerta de 3-4 semanas, mix de canales y copy.</span>
+        </a>
+        <a class="mk-card" href="/upayp1b4/marketing/market-action">
+          <span class="mk-card-icon" aria-hidden="true">🎯</span>
+          <strong class="mk-card-title">Market Action</strong>
+          <span class="mk-card-text">Embudo real y acciones de conversión priorizadas por segmento.</span>
+        </a>
+        <a class="mk-card" href="/upayp1b4/marketing/tendencias">
+          <span class="mk-card-icon" aria-hidden="true">📈</span>
+          <strong class="mk-card-title">Tendencias</strong>
+          <span class="mk-card-text">Momentum por categoría, movimientos de precio y estacionalidad.</span>
+        </a>
+      </div>
     </section>
 
     <section data-admin-view="analytics" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'analytics' }]}>
@@ -2945,7 +2981,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       return original > price && price > 0 ? Math.round(((original - price) / original) * 100) : 0;
     }
 
-    /** Construye los controles de rango: precio min/máx, descuento y valoración. */
+    /** Construye los controles de rango: precio min/máx, valoración y descuento. */
     function prodBuildRanges() {
       if (!prodRangeFields) return;
       // Conserva los valores ya escritos por el usuario al repintar la tabla.
@@ -2953,17 +2989,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const keepPriceMax = document.getElementById('prodFPriceMax')?.value || '';
       const keepDisc = document.getElementById('prodFDiscRange')?.value || '';
       const keepRating = document.getElementById('prodFRatingMin')?.value || '';
+      // El botón "Limpiar filtros" vive dentro del contenedor: se guarda la
+      // referencia antes de repintar (si no, el innerHTML lo destruiría).
+      const resetBtn = document.getElementById('prodFReset');
       const prices = currentProducts.map((p) => Number(p.price)).filter((v) => Number.isFinite(v) && v > 0);
       const dataMin = prices.length ? Math.floor(Math.min(...prices)) : 0;
       const dataMax = prices.length ? Math.ceil(Math.max(...prices)) : 0;
       prodRangeFields.innerHTML = `
-        <div class="filter-field prod-range-field" data-range-field="disc">
-          <label for="prodFDiscRange">Descuento</label>
-          <select id="prodFDiscRange">
-            <option value="">Cualquiera</option>
-            ${PROD_DISCOUNT_RANGES.map((r) => `<option value="${r.value}"${r.value === keepDisc ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
-          </select>
-        </div>
         <div class="filter-field prod-range-field" data-range-field="price">
           <label for="prodFPriceMin">Precio (€)</label>
           <div class="ali-pair">
@@ -2978,7 +3010,21 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <option value="">Cualquiera</option>
             ${PROD_RATING_OPTIONS.map((r) => `<option value="${r.value}"${r.value === keepRating ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
           </select>
+        </div>
+        <div class="filter-field prod-range-field" data-range-field="disc">
+          <label for="prodFDiscRange">Descuento</label>
+          <select id="prodFDiscRange">
+            <option value="">Cualquiera</option>
+            ${PROD_DISCOUNT_RANGES.map((r) => `<option value="${r.value}"${r.value === keepDisc ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
+          </select>
         </div>`;
+      // Orden pedido: Valoración va justo detrás de Precio y el botón
+      // "Limpiar filtros" se queda entre Valoración y Descuento. El botón se
+      // mueve (no se recrea) para no perder su listener.
+      if (resetBtn) {
+        const discField = prodRangeFields.querySelector('[data-range-field="disc"]');
+        if (discField) prodRangeFields.insertBefore(resetBtn, discField);
+      }
     }
 
     /** Lee los tres controles de rango tal y como están ahora en el DOM. */
@@ -6708,6 +6754,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   .view-heading { padding-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
   .view-heading .admin-title { margin: .75rem 0 .5rem; }
   .view-heading-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: .6rem; margin-top: .9rem; }
+
+  /* Módulo de Marketing (tarjetas de acceso a las 5 secciones) */
+  .mk-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .8rem; }
+  .mk-card { display: flex; flex-direction: column; gap: .35rem; padding: 1rem 1.05rem; background: rgba(255, 255, 255, .03); border: 1px solid var(--color-border); border-radius: 14px; text-decoration: none; transition: border-color .16s ease, transform .16s ease, background .16s ease; }
+  .mk-card:hover { border-color: rgba(96, 165, 250, .5); background: rgba(59, 130, 246, .07); transform: translateY(-1px); }
+  .mk-card-icon { font-size: 1.35rem; }
+  .mk-card-title { font-family: var(--font-heading); font-size: .98rem; font-weight: 800; color: var(--color-text-main); }
+  .mk-card-text { font-size: .8rem; line-height: 1.55; color: var(--color-text-muted); }
   .data-example-pill { padding: .35rem .85rem; color: #fbbf24; background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .3); border-radius: 9999px; font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
   .guide-link { display: inline-flex; align-items: center; gap: .4rem; padding: .55rem 1rem; color: #06121f; background: #38bdf8; border-radius: 9999px; font-size: .78rem; font-weight: 800; text-decoration: none; transition: background .2s ease; }
   .guide-link:hover { background: #7dd3fc; }

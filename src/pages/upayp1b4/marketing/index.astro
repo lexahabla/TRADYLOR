@@ -1,69 +1,129 @@
 ---
 /**
- * TRADYLOR — /admin/marketing (menú del módulo de Marketing)
- * Mantiene la cabecera y el admin-section-nav del resto del backend.
+ * TRADYLOR — /upayp1b4/marketing (menú del módulo de Marketing)
+ * Resumen del módulo: acceso a las cinco secciones con una foto rápida de la
+ * situación actual (audiencia, catálogo, campaña próxima y embudo).
  */
 export const prerender = false;
 
-import Layout from '../../../layouts/Layout.astro';
-import AdminNav from '../../../components/AdminNav.astro';
-import AdminUserMenu from '../../../components/AdminUserMenu.astro';
-import MarketingMenu from '../../../components/admin/MarketingMenu.astro';
+import MarketingShell from '../../../components/admin/MarketingShell.astro';
 import { getSessionUser } from '../../../lib/adminAuth';
+import { getMarketMap } from '../../../lib/marketingInsights';
+import { getMarketActions } from '../../../lib/marketingInsights';
+import { getResumenCatalogo } from '../../../lib/marketingInsights';
 
 const sessionUser = getSessionUser(Astro.request);
 if (!sessionUser) return Astro.redirect('/upayp1b4');
 if (sessionUser.role !== 'admin') return Astro.redirect('/upayp1b4/perfil');
 
 Astro.response.headers.set('Cache-Control', 'no-store');
+
+const mapa = getMarketMap();
+const acciones = getMarketActions();
+const resumen = getResumenCatalogo();
+
+const secciones = [
+  {
+    href: '/upayp1b4/marketing/usuarios',
+    icono: '👥',
+    titulo: 'Usuarios',
+    texto: 'Ficha 360 de cada usuario de Mi Radar, segmentador de audiencias e integración de email.',
+    dato: `${acciones.totalUsuarios} usuarios en la audiencia`,
+  },
+  {
+    href: '/upayp1b4/marketing/market-map',
+    icono: '🗺️',
+    titulo: 'Market Map',
+    texto: 'Audiencia por mercado, cobertura de redes de afiliados y ventana comercial de cada país.',
+    dato: `${mapa.mercados.filter((m) => m.usuarios > 0).length} mercados con audiencia`,
+  },
+  {
+    href: '/upayp1b4/marketing/calendario',
+    icono: '📅',
+    titulo: 'Calendario',
+    texto: 'Fechas clave del año con alerta de 3-4 semanas, mix de canales, ángulos de copy y preparación.',
+    dato: mapa.proximo ? `Próxima: ${mapa.proximo.nombre}` : 'Sin campañas activas',
+  },
+  {
+    href: '/upayp1b4/marketing/market-action',
+    icono: '🎯',
+    titulo: 'Market Action',
+    texto: 'Embudo real de los últimos 30 días y acciones de conversión priorizadas por segmento.',
+    dato: `${acciones.acciones.filter((a) => a.usuarios > 0).length} acciones con audiencia afectada`,
+  },
+  {
+    href: '/upayp1b4/marketing/tendencias',
+    icono: '📈',
+    titulo: 'Tendencias',
+    texto: 'Momentum por categoría, movimientos de precio del histórico, señales y estacionalidad.',
+    dato: `${resumen.productos} productos vigilados`,
+  },
+];
 ---
 
-<Layout
-  title="Marketing | Admin Tradylor"
-  description="Backend de Marketing de Tradylor: usuarios, Market Map, calendario, Market Action y tendencias."
+<MarketingShell
+  user={sessionUser}
+  seccion="usuarios"
+  breadcrumb="Marketing"
+  titulo="Marketing"
+  documentTitle="Marketing | Admin Tradylor"
+  descripcion="Backend de Marketing de Tradylor: usuarios, Market Map, calendario, Market Action y tendencias."
+  sub="Módulo central para maximizar ventas globales: audiencias, inteligencia geográfica, planificación comercial, acciones de conversión y escucha activa. Elige una sección del menú."
 >
-  <Fragment slot="header-end">
-    <AdminUserMenu user={sessionUser} active="marketing" />
-  </Fragment>
-  <div class="admin-module-wrapper">
-    <header class="admin-header">
-      <div class="admin-tag-row">
-        <a class="admin-tag-link" href="/upayp1b4">Panel de administración</a>
-        <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <div class="admin-tag-pill">Marketing</div>
-      </div>
-      <h1 class="admin-title">Marketing</h1>
-      <p class="admin-subtitle">
-        Módulo central para maximizar ventas globales: audiencias, inteligencia geográfica,
-        planificación comercial, acciones de conversión y escucha activa. Elige una sección del menú.
-      </p>
-    </header>
+  <section class="mkh-summary">
+    <article class="mkh-card">
+      <span class="mkh-label">Audiencia</span>
+      <strong class="mkh-valor">{acciones.totalUsuarios}</strong>
+      <span class="mkh-nota">usuarios de Mi Radar segmentables</span>
+    </article>
+    <article class="mkh-card">
+      <span class="mkh-label">LTV</span>
+      <strong class="mkh-valor">{mapa.totalLtv.toFixed(0)} €</strong>
+      <span class="mkh-nota">valor acumulado de compras confirmadas</span>
+    </article>
+    <article class="mkh-card">
+      <span class="mkh-label">Catálogo</span>
+      <strong class="mkh-valor">{resumen.productos}</strong>
+      <span class="mkh-nota">
+        {resumen.categorias} categorías · {resumen.redes.length} redes
+      </span>
+    </article>
+    <article class="mkh-card mkh-card--destacada">
+      <span class="mkh-label">Campaña activa</span>
+      <strong class="mkh-valor">{mapa.proximo ? mapa.proximo.nombre : '—'}</strong>
+      <span class="mkh-nota">
+        {mapa.proximo ? `desde el ${mapa.proximo.fecha.slice(8, 10)}/${mapa.proximo.fecha.slice(5, 7)}` : 'Sin campañas'}
+      </span>
+    </article>
+  </section>
 
-    <AdminNav context="catalogo" active="marketing" user={sessionUser} />
+  <nav class="mkh-grid" aria-label="Secciones del módulo de Marketing">
+    {
+      secciones.map((seccion) => (
+        <a class="mkh-card-link" href={seccion.href}>
+          <span class="mkh-card-icon" aria-hidden="true">{seccion.icono}</span>
+          <strong class="mkh-card-title">{seccion.titulo}</strong>
+          <span class="mkh-card-text">{seccion.texto}</span>
+          <span class="mkh-card-dato">{seccion.dato}</span>
+        </a>
+      ))
+    }
+  </nav>
+</MarketingShell>
 
-    <MarketingMenu />
+<style is:global>
+  .mkh-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.9rem; }
+  .mkh-card { display: flex; flex-direction: column; gap: 0.35rem; padding: 1.1rem 1.15rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 14px; }
+  .mkh-card--destacada { border-color: rgba(96, 165, 250, 0.45); background: rgba(59, 130, 246, 0.08); }
+  .mkh-label { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--color-text-dim); }
+  .mkh-valor { font-size: 1.35rem; font-weight: 800; color: var(--color-text-main); line-height: 1.2; }
+  .mkh-nota { font-size: 0.76rem; color: var(--color-text-muted); }
 
-    <section class="marketing-empty">
-      <p>
-        Selecciona <strong>Usuarios</strong>, <strong>Market Map</strong>,
-        <strong>Calendario</strong>, <strong>Market Action</strong> o
-        <strong>Tendencias</strong> en el menú superior para entrar en cada sección.
-      </p>
-    </section>
-  </div>
-</Layout>
-
-<style>
-  .admin-module-wrapper { display: flex; flex-direction: column; gap: 2rem; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
-  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
-  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; width: fit-content; }
-  .admin-tag-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
-  .admin-tag-row .admin-tag-pill { margin: 0; }
-  .admin-tag-link { font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; text-decoration: none; transition: color 0.16s ease; }
-  .admin-tag-link:hover { color: #93c5fd; }
-  .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
-  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
-  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
-  .marketing-empty { padding: 1.6rem 1.4rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; color: var(--color-text-muted); font-size: 0.92rem; line-height: 1.65; }
-  .marketing-empty strong { color: var(--color-text-main); }
+  .mkh-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.9rem; }
+  .mkh-card-link { display: flex; flex-direction: column; gap: 0.4rem; padding: 1.15rem 1.2rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 14px; text-decoration: none; transition: border-color .16s ease, background .16s ease, transform .16s ease; }
+  .mkh-card-link:hover { border-color: rgba(96, 165, 250, .5); background: rgba(59, 130, 246, .07); transform: translateY(-1px); }
+  .mkh-card-icon { font-size: 1.5rem; }
+  .mkh-card-title { font-family: var(--font-heading); font-size: 1.05rem; font-weight: 800; color: var(--color-text-main); }
+  .mkh-card-text { font-size: 0.82rem; line-height: 1.55; color: var(--color-text-muted); }
+  .mkh-card-dato { margin-top: 0.35rem; font-size: 0.72rem; font-weight: 700; color: #93c5fd; }
 </style>

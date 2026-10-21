@@ -1,71 +1,229 @@
 ---
 /**
- * TRADYLOR — /admin/marketing/market-map (sección Market Map del módulo Marketing)
+ * TRADYLOR — /upayp1b4/marketing/market-map
+ * Market Map del módulo de Marketing: inteligencia geográfica. Muestra la
+ * audiencia real por mercado (usuarios de Mi Radar que declaran su país), la
+ * cobertura de redes de afiliados por país, el catálogo disponible y la
+ * ventana comercial vigente en cada mercado.
  */
 export const prerender = false;
 
-import Layout from '../../../layouts/Layout.astro';
-import AdminNav from '../../../components/AdminNav.astro';
-import AdminUserMenu from '../../../components/AdminUserMenu.astro';
-import MarketingMenu from '../../../components/admin/MarketingMenu.astro';
+import MarketingShell from '../../../components/admin/MarketingShell.astro';
 import { getSessionUser } from '../../../lib/adminAuth';
+import { getMarketMap } from '../../../lib/marketingInsights';
 
 const sessionUser = getSessionUser(Astro.request);
 if (!sessionUser) return Astro.redirect('/upayp1b4');
 if (sessionUser.role !== 'admin') return Astro.redirect('/upayp1b4/perfil');
 
 Astro.response.headers.set('Cache-Control', 'no-store');
+
+const mapa = getMarketMap();
+const maxUsuarios = Math.max(1, ...mapa.mercados.map((m) => m.usuarios));
+const conAudiencia = mapa.mercados.filter((m) => m.usuarios > 0);
+const formatoEuro = new Intl.NumberFormat('es-ES', {
+  style: 'currency',
+  currency: 'EUR',
+  maximumFractionDigits: 0,
+});
 ---
 
-<Layout
-  title="Market Map | Marketing | Admin Tradylor"
-  description="Mapa mundial de tráfico y ventas del módulo de Marketing."
+<MarketingShell
+  user={sessionUser}
+  seccion="market-map"
+  breadcrumb="Market Map"
+  titulo="Market Map"
+  documentTitle="Market Map | Marketing | Admin Tradylor"
+  descripcion="Inteligencia geográfica: audiencia por mercado, cobertura de redes y ventana comercial."
+  sub="Qué mercados tienen audiencia real, qué redes los cubren y en qué ventana comercial conviene empujar cada uno. Los datos de audiencia salen de los usuarios de Mi Radar que declaran su país; la cobertura, de las redes del catálogo."
 >
-  <Fragment slot="header-end">
-    <AdminUserMenu user={sessionUser} active="marketing" />
-  </Fragment>
-  <div class="admin-module-wrapper">
-    <header class="admin-header">
-      <div class="admin-tag-row">
-        <a class="admin-tag-link" href="/upayp1b4">Panel de administración</a>
-        <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <a class="admin-tag-link" href="/upayp1b4/marketing">Marketing</a>
-        <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <div class="admin-tag-pill">Market Map</div>
-      </div>
-      <h1 class="admin-title">Market Map</h1>
-      <p class="admin-subtitle">
-        Inteligencia geográfica de la tienda: dónde entra el tráfico, dónde se compra y dónde está
-        la oportunidad con mercados emergentes.
-      </p>
-    </header>
+  <section class="mm-summary">
+    <article class="mm-card">
+      <span class="mm-label">Mercados con audiencia</span>
+      <strong class="mm-valor">{conAudiencia.length}</strong>
+      <span class="mm-nota">de {mapa.mercados.length} mercados monitorizados</span>
+    </article>
+    <article class="mm-card">
+      <span class="mm-label">Usuarios segmentables</span>
+      <strong class="mm-valor">{mapa.totalUsuarios}</strong>
+      <span class="mm-nota">con país declarado en su perfil</span>
+    </article>
+    <article class="mm-card">
+      <span class="mm-label">LTV por mercado</span>
+      <strong class="mm-valor">{formatoEuro.format(mapa.totalLtv)}</strong>
+      <span class="mm-nota">valor acumulado de las compras confirmadas</span>
+    </article>
+    <article class="mm-card">
+      <span class="mm-label">Redes en el catálogo</span>
+      <strong class="mm-valor">{mapa.cobertura.length}</strong>
+      <span class="mm-nota">
+        {mapa.cobertura.map((c) => c.productos).reduce((suma, n) => suma + n, 0)} productos con red asignada
+      </span>
+    </article>
+    <article class="mm-card mm-card--destacada">
+      <span class="mm-label">Ventana comercial activa</span>
+      <strong class="mm-valor">
+        {mapa.proximo ? `${mapa.proximo.icono} ${mapa.proximo.nombre}` : 'Sin campañas'}
+      </strong>
+      <span class="mm-nota">
+        {mapa.proximo ? `desde el ${mapa.proximo.fecha.slice(8, 10)}/${mapa.proximo.fecha.slice(5, 7)}` : '—'}
+      </span>
+    </article>
+  </section>
 
-    <AdminNav context="catalogo" active="marketing" user={sessionUser} />
+  <section class="mm-block">
+    <h2 class="mm-title">Audiencia por mercado</h2>
+    <p class="mm-lead">
+      Cada fila combina la audiencia declarada (barra), su valor y la cobertura técnica. La prioridad
+      sale del lead score medio y del peso del mercado sobre el total.
+    </p>
+    <div class="mm-table-wrap">
+      <table class="mm-table">
+        <thead>
+          <tr>
+            <th scope="col">Mercado</th>
+            <th scope="col">Audiencia</th>
+            <th scope="col">% total</th>
+            <th scope="col">LTV</th>
+            <th scope="col">Lead score</th>
+            <th scope="col">Carrito</th>
+            <th scope="col">Redes</th>
+            <th scope="col">Prioridad</th>
+            <th scope="col">Ventana</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            mapa.mercados.map((mercado) => (
+              <tr>
+                <td>
+                  <span class="mm-pais">
+                    <span aria-hidden="true">{mercado.bandera}</span> {mercado.nombre}
+                  </span>
+                  <span class="mm-sub">Idioma {mercado.idioma} · {mercado.huso}</span>
+                </td>
+                <td>
+                  <div class="mm-bar">
+                    <div
+                      class="mm-bar-fill"
+                      style={`width:${Math.round((mercado.usuarios / maxUsuarios) * 100)}%;`}
+                    />
+                  </div>
+                  <span class="mm-sub">{mercado.usuarios} usuarios</span>
+                </td>
+                <td>{mercado.porcentajeUsuarios}%</td>
+                <td>{formatoEuro.format(mercado.ltv)}</td>
+                <td>
+                  <span class:list={['mm-score', mercado.leadScore >= 60 ? 'is-alto' : mercado.leadScore >= 40 ? 'is-medio' : 'is-bajo']}>
+                    {mercado.leadScore || '—'}
+                  </span>
+                </td>
+                <td>{mercado.carrito > 0 ? formatoEuro.format(mercado.carrito) : '—'}</td>
+                <td>
+                  <ul class="mm-chips">
+                    {mercado.redes.slice(0, 4).map((red) => (
+                      <li class="mm-chip">{red}</li>
+                    ))}
+                    {mercado.redes.length > 4 && <li class="mm-chip mm-chip--more">+{mercado.redes.length - 4}</li>}
+                  </ul>
+                </td>
+                <td>
+                  <span class:list={['mm-prioridad', `mm-prioridad--${mercado.prioridad}`]}>
+                    {mercado.prioridad}
+                  </span>
+                  <span class="mm-sub">{mercado.accion}</span>
+                </td>
+                <td class="mm-ventana">{mercado.ventana}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
 
-    <MarketingMenu active="market-map" />
+  <section class="mm-block">
+    <h2 class="mm-title">Cobertura de redes por mercado</h2>
+    <p class="mm-lead">
+      Qué redes de afiliados están activas en el catálogo y en qué países se pueden usar sus enlaces.
+    </p>
+    <div class="mm-table-wrap">
+      <table class="mm-table">
+        <thead>
+          <tr>
+            <th scope="col">Red</th>
+            <th scope="col">Productos</th>
+            <th scope="col">Mercados cubiertos</th>
+          </tr>
+        </thead>
+        <tbody>
+          {
+            mapa.cobertura.map((cobertura) => (
+              <tr>
+                <td>{cobertura.etiqueta}</td>
+                <td>{cobertura.productos}</td>
+                <td>
+                  <ul class="mm-chips">
+                    {cobertura.mercados.map((mercado) => (
+                      <li class="mm-chip">{mercado}</li>
+                    ))}
+                  </ul>
+                </td>
+              </tr>
+            ))
+          }
+          {!mapa.cobertura.length && (
+            <tr>
+              <td colspan="3" class="mm-empty">Aún no hay redes asignadas en el catálogo.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+    {
+      mapa.sinCobertura.length > 0 && (
+        <p class="mm-note">
+          Mercados sin ninguna red activa en el catálogo: {mapa.sinCobertura.join(', ')}. Asignar red a
+          los productos es el primer paso para poder venderlos allí.
+        </p>
+      )
+    }
+  </section>
+</MarketingShell>
 
-    <section class="marketing-placeholder">
-      <span class="marketing-placeholder-pill">En preparación</span>
-      <p>
-        Aquí se mostrará el mapa mundial interactivo con capas conmutables (sesiones, ventas,
-        ingresos y conversión), el ranking de países y el panel de mercados emergentes con su
-        recomendación accionable.
-      </p>
-    </section>
-  </div>
-</Layout>
+<style is:global>
+  .mm-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.9rem; }
+  .mm-card { display: flex; flex-direction: column; gap: 0.35rem; padding: 1.1rem 1.15rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 14px; }
+  .mm-card--destacada { border-color: rgba(96, 165, 250, 0.45); background: rgba(59, 130, 246, 0.08); }
+  .mm-label { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: var(--color-text-dim); }
+  .mm-valor { font-size: 1.35rem; font-weight: 800; color: var(--color-text-main); line-height: 1.2; }
+  .mm-nota { font-size: 0.76rem; color: var(--color-text-muted); }
 
-<style>
-  .admin-module-wrapper { display: flex; flex-direction: column; gap: 2rem; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
-  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
-  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; width: fit-content; }
-  .admin-tag-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
-  .admin-tag-row .admin-tag-pill { margin: 0; }
-  .admin-tag-link { font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; text-decoration: none; transition: color 0.16s ease; }
-  .admin-tag-link:hover { color: #93c5fd; }
-  .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
-  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
-  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
-  .marketing-placeholder { display: flex; flex-direction: column; align-items: flex-start; gap: 0.9rem; padding: 1.6rem 1.4rem; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--color-border); border-radius: 16px; color: var(--color-text-muted); font-size: 0.92rem; line-height: 1.65; }
-  .marketing-placeholder-pill { padding: 0.35rem 0.85rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
+  .mm-block { display: flex; flex-direction: column; gap: 0.8rem; }
+  .mm-title { font-family: var(--font-heading); font-size: 1.15rem; font-weight: 800; color: var(--color-text-main); }
+  .mm-lead { font-size: 0.85rem; color: var(--color-text-muted); max-width: 860px; line-height: 1.6; }
+
+  .mm-table-wrap { overflow-x: auto; border: 1px solid var(--color-border); border-radius: 14px; }
+  .mm-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; min-width: 900px; }
+  .mm-table th { text-align: left; padding: 0.7rem 0.8rem; font-size: 0.66rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-dim); background: rgba(255, 255, 255, 0.03); border-bottom: 1px solid var(--color-border); }
+  .mm-table td { padding: 0.7rem 0.8rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); color: var(--color-text-main); vertical-align: top; }
+  .mm-table tbody tr:last-child td { border-bottom: 0; }
+  .mm-pais { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 700; }
+  .mm-sub { display: block; margin-top: 0.25rem; font-size: 0.7rem; color: var(--color-text-dim); max-width: 260px; }
+  .mm-bar { width: 120px; height: 6px; border-radius: 9999px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+  .mm-bar-fill { height: 100%; border-radius: 9999px; background: linear-gradient(90deg, #38bdf8, #60a5fa); }
+  .mm-score { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 9999px; font-size: 0.72rem; font-weight: 800; border: 1px solid var(--color-border); }
+  .mm-score.is-alto { color: #6ee7b7; border-color: rgba(52, 211, 153, 0.35); background: rgba(16, 185, 129, 0.1); }
+  .mm-score.is-medio { color: #fbbf24; border-color: rgba(251, 191, 36, 0.3); background: rgba(245, 158, 11, 0.09); }
+  .mm-score.is-bajo { color: var(--color-text-dim); }
+  .mm-chips { display: flex; flex-wrap: wrap; gap: 0.25rem; list-style: none; margin: 0; padding: 0; }
+  .mm-chip { padding: 0.16rem 0.45rem; border-radius: 9999px; font-size: 0.66rem; font-weight: 700; color: var(--color-text-muted); background: rgba(255, 255, 255, 0.04); border: 1px solid var(--color-border); }
+  .mm-chip--more { color: #93c5fd; }
+  .mm-prioridad { display: inline-block; padding: 0.16rem 0.5rem; border-radius: 9999px; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; border: 1px solid var(--color-border); }
+  .mm-prioridad--alta { color: #6ee7b7; border-color: rgba(52, 211, 153, 0.35); background: rgba(16, 185, 129, 0.1); }
+  .mm-prioridad--media { color: #fbbf24; border-color: rgba(251, 191, 36, 0.3); background: rgba(245, 158, 11, 0.09); }
+  .mm-prioridad--baja { color: var(--color-text-dim); }
+  .mm-ventana { font-size: 0.76rem; color: var(--color-text-muted); white-space: nowrap; }
+  .mm-empty { text-align: center; color: var(--color-text-dim); padding: 1.4rem; }
+  .mm-note { font-size: 0.8rem; color: var(--color-text-muted); padding: 0.8rem 0.9rem; border: 1px dashed var(--color-border); border-radius: 12px; }
 </style>

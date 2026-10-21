@@ -1,0 +1,67 @@
+---
+/**
+ * TRADYLOR — Shell compartido del módulo de Marketing
+ * Cabecera + navegación del backend + submenú de Marketing + hueco de contenido.
+ * La autenticación la hace cada página (para poder redirigir antes de renderizar).
+ */
+import Layout from '../../layouts/Layout.astro';
+import AdminNav from '../AdminNav.astro';
+import AdminUserMenu from '../AdminUserMenu.astro';
+import MarketingMenu from './MarketingMenu.astro';
+import type { PublicUser } from '../../lib/userStore';
+
+interface Props {
+  user: PublicUser;
+  /** Etiqueta del submenú activo (coincide con MarketingMenu). */
+  seccion: 'usuarios' | 'market-map' | 'calendario' | 'market-action' | 'tendencias';
+  /** Etiqueta mostrada en la migaja de breadcrumbs. */
+  breadcrumb: string;
+  /** H1 de la página. */
+  titulo: string;
+  /** Texto del <title> del documento. */
+  documentTitle: string;
+  descripcion: string;
+  /** Subtítulo bajo el H1. */
+  sub: string;
+}
+
+const { user, seccion, breadcrumb, titulo, documentTitle, descripcion, sub } = Astro.props;
+---
+
+<Layout title={documentTitle} description={descripcion}>
+  <Fragment slot="header-end">
+    <AdminUserMenu user={user} active="marketing" />
+  </Fragment>
+  <div class="admin-module-wrapper">
+    <header class="admin-header">
+      <div class="admin-tag-row">
+        <a class="admin-tag-link" href="/upayp1b4">Panel de administración</a>
+        <span class="admin-tag-sep" aria-hidden="true">/</span>
+        <a class="admin-tag-link" href="/upayp1b4/marketing">Marketing</a>
+        <span class="admin-tag-sep" aria-hidden="true">/</span>
+        <div class="admin-tag-pill">{breadcrumb}</div>
+      </div>
+      <h1 class="admin-title">{titulo}</h1>
+      <p class="admin-subtitle">{sub}</p>
+    </header>
+
+    <AdminNav context="catalogo" active="marketing" user={user} />
+
+    <MarketingMenu active={seccion} />
+
+    <slot />
+  </div>
+</Layout>
+
+<style is:global>
+  .admin-module-wrapper { display: flex; flex-direction: column; gap: 2rem; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
+  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; width: fit-content; }
+  .admin-tag-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+  .admin-tag-row .admin-tag-pill { margin: 0; }
+  .admin-tag-link { font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; text-decoration: none; transition: color 0.16s ease; }
+  .admin-tag-link:hover { color: #93c5fd; }
+  .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
+  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
+  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
+</style>

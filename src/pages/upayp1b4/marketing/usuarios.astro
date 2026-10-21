@@ -62,7 +62,7 @@ const payload = {
   profileOptions,
   categoryLabels,
 };
-// `</` evita cerrar el <script> accidentalmente si un título lo contiene.
+// Se escapan los caracteres "<" para que un título no rompa el script inline.
 const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
 ---
 
