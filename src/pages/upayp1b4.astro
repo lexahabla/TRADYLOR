@@ -2957,6 +2957,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const dataMin = prices.length ? Math.floor(Math.min(...prices)) : 0;
       const dataMax = prices.length ? Math.ceil(Math.max(...prices)) : 0;
       prodRangeFields.innerHTML = `
+        <div class="filter-field prod-range-field" data-range-field="disc">
+          <label for="prodFDiscRange">Descuento</label>
+          <select id="prodFDiscRange">
+            <option value="">Cualquiera</option>
+            ${PROD_DISCOUNT_RANGES.map((r) => `<option value="${r.value}"${r.value === keepDisc ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
+          </select>
+        </div>
         <div class="filter-field prod-range-field" data-range-field="price">
           <label for="prodFPriceMin">Precio (€)</label>
           <div class="ali-pair">
@@ -2964,13 +2971,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <span class="ali-pair-sep" aria-hidden="true">–</span>
             <input type="number" id="prodFPriceMax" max="${dataMax}" step="0.01" placeholder="Máx." inputmode="decimal" value="${escapeHtml(keepPriceMax)}" />
           </div>
-        </div>
-        <div class="filter-field prod-range-field" data-range-field="disc">
-          <label for="prodFDiscRange">Descuento</label>
-          <select id="prodFDiscRange">
-            <option value="">Cualquiera</option>
-            ${PROD_DISCOUNT_RANGES.map((r) => `<option value="${r.value}"${r.value === keepDisc ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
-          </select>
         </div>
         <div class="filter-field prod-range-field" data-range-field="rating">
           <label for="prodFRatingMin">Valoración</label>
