@@ -379,6 +379,9 @@ Estado actual de la taxonomía (no escribe nada):
 | `keepSubcategories` | boolean | `true` conserva las subcategorías colgando de las 8 raíces fijas (las huérfanas se eliminan igual). |
 | `manual` | object | Mapa `{ "<idProducto>": "<idRaíz>" }` para colocar productos concretos en la raíz indicada (tiene prioridad sobre el matching automático). |
 
+> Un cuerpo que no sea JSON válido devuelve **HTTP 400** (`{"success":false,"error":"Cuerpo JSON inválido…"}`)
+> **sin escribir nada**: la migración real nunca se ejecuta por un body mal formado.
+
 Proceso: (1) garantiza las 8 raíces fijas, (2) reasigna cada producto con matching
 estricto por palabras clave, (3) elimina raíces/subcategorías huérfanas,
 (4) **guarda copia de seguridad** de `categories.json` y `products.json` en
@@ -392,16 +395,31 @@ Respuesta:
   "dryRun": false,
   "backupDir": "/app/data/backups/categories-2026-10-21T18-56-13-073Z",
   "rootsInstalled": ["Informática y Oficina", "Audio y Sonido", "..."],
+  "roots": [{ "id": "informatica-oficina", "name": "Informática y Oficina", "icon": "💻" }],
   "rootCategoriesRemoved": ["Relojes"],
   "subcategoriesRemoved": ["Accesorios de la motocicleta"],
   "productsReassigned": 12,
   "productsUnchanged": 43,
   "productsWithoutMatch": 1,
   "productsWithoutMatchSample": ["Chaleco de cuero para moto"],
+  "productsWithoutMatchList": [
+    { "id": "p_123", "title": "Chaleco de cuero para moto", "currentCategory": "Accesorios" }
+  ],
+  "manualApplied": ["p_123 -> audio-sonido"],
   "categoryCounts": { "audio-sonido": 23, "informatica-oficina": 32 },
   "durationMs": 42
 }
 ```
+
+| Campo de la respuesta | Descripción |
+|---|---|
+| `roots` | Las **8 raíces fijas** (`id`, `name`, `icon`): son los únicos destinos admitidos en el mapa `manual`. |
+| `productsWithoutMatchList` | Detalle (`id`, `title`, `currentCategory`) de los productos que el matching automático no clasificó (los que caen en la raíz de reserva). Máximo 200 entradas; el contador `productsWithoutMatch` es el total. |
+| `manualApplied` | Asignaciones manuales efectivamente aplicadas (`"<idProducto> -> <idRaíz>"`). |
+
+El panel admin (`/upayp1b4`, sección Categorías) usa la vista previa (`dryRun: true`) para
+listar los productos sin coincidencia, dejar que el administrador elija la raíz de cada uno
+y ejecutar la migración con el mapa `manual`.
 
 Es **idempotente**: al repetirla no vuelve a reasignar ni a podar nada.
 

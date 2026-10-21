@@ -1039,6 +1039,30 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <p id="migrateStatusText">Mensaje...</p>
           </div>
         </div>
+
+        <!-- 2.b. Reasignación manual de los productos que el matching no clasificó -->
+        <div id="migrateManualBox" class="migrate-manual-box" hidden>
+          <div class="migrate-manual-head">
+            <div>
+              <strong id="migrateManualTitle">Reasignación manual</strong>
+              <p id="migrateManualDesc" class="migrate-manual-desc">
+                Productos sin coincidencia automática. Elige la categoría raíz de cada uno y ejecuta
+                la migración: la asignación manual tiene prioridad sobre el matching.
+              </p>
+            </div>
+            <div class="migrate-manual-actions">
+              <span id="migrateManualCount" class="migrate-manual-count">0 seleccionados</span>
+              <button type="button" id="btnMigrateManualClear" class="btn-secondary btn-sm" title="Quita todas las asignaciones manuales">
+                <span class="btn-text">Limpiar</span>
+              </button>
+              <button type="button" id="btnMigrateManualRun" class="btn-danger btn-sm" title="Ejecuta la migración aplicando las asignaciones manuales">
+                <span class="btn-text">🔄 Migrar con estas asignaciones</span>
+                <div class="btn-spinner" hidden></div>
+              </button>
+            </div>
+          </div>
+          <div id="migrateManualList" class="migrate-manual-list"></div>
+        </div>
       </div>
 
       <!-- 3. Vista en tarjetas con acordeón para subcategorías -->
@@ -5219,6 +5243,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const migrateStatusIcon = document.getElementById('migrateStatusIcon');
     const migrateStatusTitle = document.getElementById('migrateStatusTitle');
     const migrateStatusText = document.getElementById('migrateStatusText');
+    const migrateManualBox = document.getElementById('migrateManualBox');
+    const migrateManualTitle = document.getElementById('migrateManualTitle');
+    const migrateManualDesc = document.getElementById('migrateManualDesc');
+    const migrateManualList = document.getElementById('migrateManualList');
+    const migrateManualCount = document.getElementById('migrateManualCount');
+    const btnMigrateManualClear = document.getElementById('btnMigrateManualClear');
+    const btnMigrateManualRun = document.getElementById('btnMigrateManualRun');
 
     function showCategoryStatus(type, title, message) {
       if (!categoryStatus) return;
@@ -5314,8 +5345,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         return;
       }
 
-      const escapeHtml = (value) =>
-        String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }[ch] || ch));
+      // NOTA: se usa el `escapeHtml` del ámbito del módulo (arriba): una copia
+      // local con las entidades HTML mal escritas rompía la sintaxis de TODO el
+      // script inline del panel (el JS entero dejaba de ejecutarse).
 
       const getProductCount = (categoryId) => {
         return currentProducts.filter((p) => p.category_id === categoryId).length;
@@ -5613,10 +5645,95 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     });
 
     // Migración de categorías: vista previa (dry-run) + ejecución real.
-    async function runCategoryMigration(dryRun) {
-      const button = dryRun ? btnMigratePreview : btnMigrateCategories;
+
+    /**
+     * Dibuja la lista de productos que el matching automático no supo
+     * clasificar, con un selector de categoría raíz por producto. La
+     * asignación manual tiene prioridad sobre el matching (body.manual).
+     */
+    function renderMigrateManualList(report) {
+      if (!migrateManualBox || !migrateManualList) return;
+      const roots = Array.isArray(report?.roots) ? report.roots : [];
+      const items = Array.isArray(report?.productsWithoutMatchList) ? report.productsWithoutMatchList : [];
+      const total = Number(report?.productsWithoutMatch ?? items.length) || 0;
+
+      if (!items.length) {
+        migrateManualBox.hidden = true;
+        migrateManualList.innerHTML = '';
+        updateMigrateManualCount();
+        return;
+      }
+
+      const options = roots
+        .map(
+          (r) =>
+            `<option value="${escapeHtml(r.id)}">${escapeHtml(r.icon ? r.icon + ' ' : '')}${escapeHtml(r.name)}</option>`
+        )
+        .join('');
+
+      migrateManualList.innerHTML = items
+        .map(
+          (p) => `
+          <div class="migrate-manual-row" data-manual-id="${escapeHtml(p.id)}">
+            <div class="migrate-manual-info">
+              <span class="migrate-manual-name" title="${escapeHtml(p.title)}">${escapeHtml(p.title)}</span>
+              <span class="migrate-manual-meta">ID: ${escapeHtml(p.id)}${p.currentCategory ? ' · Actual: ' + escapeHtml(p.currentCategory) : ''}</span>
+            </div>
+            <select class="migrate-manual-select" data-manual-id="${escapeHtml(p.id)}" aria-label="Categoría raíz del producto">
+              <option value="">— Sin cambio (automático) —</option>
+              ${options}
+            </select>
+          </div>`
+        )
+        .join('');
+
+      if (migrateManualTitle) migrateManualTitle.textContent = `Reasignación manual (${items.length})`;
+      if (migrateManualDesc) {
+        migrateManualDesc.textContent =
+          total > items.length
+            ? `El matching automático no classificó ${total} productos (se muestran los primeros ${items.length}). Elige la categoría raíz de cada uno: la asignación manual tiene prioridad sobre el matching.`
+            : 'Productos sin coincidencia automática. Elige la categoría raíz de cada uno: la asignación manual tiene prioridad sobre el matching.';
+      }
+      migrateManualBox.hidden = false;
+      updateMigrateManualCount();
+    }
+
+    /** Recoge el mapa { idProducto → idRaíz } de los selects con valor. */
+    function collectMigrateManualMap() {
+      const map = {};
+      if (!migrateManualList) return map;
+      migrateManualList.querySelectorAll('select.migrate-manual-select').forEach((sel) => {
+        const id = String(sel.getAttribute('data-manual-id') || '').trim();
+        const rootId = String(sel.value || '').trim();
+        if (id && rootId) map[id] = rootId;
+      });
+      return map;
+    }
+
+    /** Actualiza el contador de asignaciones manuales seleccionadas. */
+    function updateMigrateManualCount() {
+      if (!migrateManualCount) return;
+      const count = Object.keys(collectMigrateManualMap()).length;
+      migrateManualCount.textContent = `${count} seleccionado${count === 1 ? '' : 's'}`;
+    }
+
+    migrateManualList?.addEventListener('change', (event) => {
+      if (event.target && event.target.closest('.migrate-manual-select')) updateMigrateManualCount();
+    });
+
+    btnMigrateManualClear?.addEventListener('click', () => {
+      migrateManualList?.querySelectorAll('select.migrate-manual-select').forEach((sel) => {
+        sel.value = '';
+      });
+      updateMigrateManualCount();
+    });
+
+    // Migración de categorías: vista previa (dry-run) + ejecución real.
+    async function runCategoryMigration(dryRun, manual, triggerButton) {
+      const button = triggerButton || (dryRun ? btnMigratePreview : btnMigrateCategories);
       const spinner = button?.querySelector('.btn-spinner');
       const text = button?.querySelector('.btn-text');
+      const originalText = text ? text.textContent : '';
       if (button) button.disabled = true;
       if (spinner) spinner.hidden = false;
       if (text) text.textContent = dryRun ? 'Simulando…' : 'Migrando…';
@@ -5633,15 +5750,20 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const res = await fetch('/api/admin/migrate-categories', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dryRun }),
+          body: JSON.stringify({
+            dryRun,
+            ...(manual && Object.keys(manual).length ? { manual } : {}),
+          }),
         });
         const data = await res.json();
 
         if (data.success) {
+          const manualCount = Object.keys(manual || {}).length;
           const lines = [
             `Productos reasignados: ${data.productsReassigned}`,
             `Productos sin cambios: ${data.productsUnchanged}`,
             `Productos sin coincidencia (van a Informática y Oficina): ${data.productsWithoutMatch ?? 0}${data.productsWithoutMatchSample?.length ? ' (' + data.productsWithoutMatchSample.slice(0, 5).join(', ') + ')' : ''}`,
+            ...(manualCount ? [`Asignaciones manuales aplicadas: ${manualCount}${data.manualApplied?.length ? ' (' + data.manualApplied.slice(0, 5).join(', ') + ')' : ''}`] : []),
             `Categorías raíz eliminadas: ${data.rootCategoriesRemoved.length}${data.rootCategoriesRemoved.length ? ' (' + data.rootCategoriesRemoved.join(', ') + ')' : ''}`,
             `Subcategorías eliminadas: ${data.subcategoriesRemoved.length}${data.subcategoriesRemoved.length ? ' (' + data.subcategoriesRemoved.join(', ') + ')' : ''}`,
             `Copia de seguridad: ${data.backupDir ?? '(no se creó: simulación)'}`,
@@ -5652,7 +5774,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             dryRun ? '👁 Vista previa de la migración' : '✅ Migración completada',
             lines.join('\n')
           );
-          if (!dryRun) {
+          if (dryRun) {
+            // La vista previa deja preparada la reasignación manual de los
+            // productos que el matching no supo clasificar.
+            renderMigrateManualList(data);
+          } else {
+            migrateManualBox.hidden = true;
+            migrateManualList.innerHTML = '';
+            updateMigrateManualCount();
             await loadCategories();
             await reloadProductsTable();
           }
@@ -5665,8 +5794,20 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       } finally {
         if (button) button.disabled = false;
         if (spinner) spinner.hidden = true;
-        if (text) text.textContent = dryRun ? '👁 Ver vista previa' : '🔄 Ejecutar Migración';
+        if (text) text.textContent = originalText;
       }
+    }
+
+    /** Confirmación común de la migración (indica cuántas asignaciones manuales van). */
+    function confirmMigrate(manualCount) {
+      const manualLine = manualCount
+        ? `\n5. Aplicar ${manualCount} asignación(es) manual(es) de categoría\n`
+        : '';
+      return window.confirm(
+        '⚠️ MIGRACIÓN DE CATEGORÍAS\n\nEsto va a:\n1. Reasignar TODOS los productos a las 8 categorías raíz fijas\n2. Eliminar categorías raíz huérfanas/duplicadas\n3. Eliminar subcategorías (se recrean bajo demanda al importar productos)\n4. Actualizar contadores de productos' +
+        manualLine +
+        '\nAntes de escribir se guarda una copia de seguridad en /app/data/backups/.\n\n¿Continuar?'
+      );
     }
 
     // Botón de vista previa (no escribe nada)
@@ -5676,9 +5817,23 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     // Botón de migración de categorías
     btnMigrateCategories?.addEventListener('click', async () => {
-      if (!window.confirm('⚠️ MIGRACIÓN DE CATEGORÍAS\n\nEsto va a:\n1. Reasignar TODOS los productos a las 8 categorías raíz fijas\n2. Eliminar categorías raíz huérfanas/duplicadas\n3. Eliminar subcategorías (se recrean bajo demanda al importar productos)\n4. Actualizar contadores de productos\n\nAntes de escribir se guarda una copia de seguridad en /app/data/backups/.\n\n¿Continuar?')) return;
+      const manual = collectMigrateManualMap();
+      if (!confirmMigrate(Object.keys(manual).length)) return;
 
-      await runCategoryMigration(false);
+      await runCategoryMigration(false, manual);
+    });
+
+    // Botón «Migrar con estas asignaciones» (dentro de la caja de reasignación manual)
+    btnMigrateManualRun?.addEventListener('click', async () => {
+      const manual = collectMigrateManualMap();
+      const manualCount = Object.keys(manual).length;
+      if (!manualCount) {
+        showMigrateStatus('warning', 'Sin asignaciones manuales', 'Elige al menos una categoría raíz antes de migrar.');
+        return;
+      }
+      if (!confirmMigrate(manualCount)) return;
+
+      await runCategoryMigration(false, manual, btnMigrateManualRun);
     });
 
     // Carga inicial
@@ -7127,6 +7282,27 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     border: 1px solid rgba(59, 130, 246, 0.3);
     color: #bfdbfe;
   }
+
+  /* Reasignación manual de la migración de categorías (filas creadas por JS) */
+  :global(.migrate-manual-box) {
+    margin-top: 1rem;
+    padding: .9rem 1rem;
+    border: 1px solid rgba(96, 165, 250, .28);
+    border-radius: var(--border-radius-sm);
+    background: rgba(59, 130, 246, .07);
+  }
+  :global(.migrate-manual-box[hidden]) { display: none; }
+  :global(.migrate-manual-head) { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; flex-wrap: wrap; }
+  :global(.migrate-manual-head strong) { display: block; font-size: .82rem; color: #bfdbfe; }
+  :global(.migrate-manual-desc) { margin: .2rem 0 0; font-size: .74rem; color: var(--color-text-dim); }
+  :global(.migrate-manual-actions) { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+  :global(.migrate-manual-count) { font-size: .72rem; color: var(--color-text-muted); }
+  :global(.migrate-manual-list) { display: flex; flex-direction: column; gap: .4rem; margin-top: .75rem; max-height: 22rem; overflow: auto; }
+  :global(.migrate-manual-row) { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .45rem .6rem; border: 1px solid rgba(148, 163, 184, .22); border-radius: 8px; background: #0b1220; }
+  :global(.migrate-manual-info) { display: flex; flex-direction: column; min-width: 0; }
+  :global(.migrate-manual-name) { font-size: .78rem; color: var(--color-text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40rem; }
+  :global(.migrate-manual-meta) { font-size: .68rem; color: var(--color-text-dim); }
+  :global(.migrate-manual-select) { padding: .3rem .5rem; font-size: .72rem; color: var(--color-text-main); background: #0b1220; border: 1px solid var(--color-border); border-radius: 6px; max-width: 16rem; }
 
   /* Formulario */
   .product-edit-form {

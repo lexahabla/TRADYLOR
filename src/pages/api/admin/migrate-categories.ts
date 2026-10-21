@@ -21,6 +21,14 @@
  *   { "manual": { "<id>": "<raiz>" } } → asigna esos productos a la raíz indicada
  *                                      (tiene prioridad sobre el matching).
  *
+ * El reporte incluye `roots` (las 8 raíces fijas admitidas como destino
+ * manual) y `productsWithoutMatchList` (id + título de los productos que el
+ * matching automático no supo clasificar), para que el panel pueda ofrecer
+ * la reasignación manual antes de ejecutar.
+ *
+ * Un cuerpo no parseable devuelve HTTP 400 sin tocar nada (nunca ejecuta la
+ * migración real por error).
+ *
  * SOLO para uso administrativo (requiere rol admin).
  * ==============================================================================
  */
@@ -55,16 +63,23 @@ interface MigrateReport {
   backupDir: string | null;
   backupFiles: string[];
   rootsInstalled: string[];
+  /** Las 8 categorías raíz fijas (id + nombre) admitidas como destino manual. */
+  roots: { id: string; name: string; icon: string }[];
   rootCategoriesRemoved: string[];
   subcategoriesRemoved: string[];
   productsReassigned: number;
   productsUnchanged: number;
   productsWithoutMatch: number;
   productsWithoutMatchSample: string[];
+  /** Detalle de los productos sin coincidencia (id + título) para poder asignarlos a mano. */
+  productsWithoutMatchList: { id: string; title: string; currentCategory: string }[];
   manualApplied: string[];
   categoryCounts: Record<string, number>;
   errors: string[];
 }
+
+/** Tope de productos sin coincidencia que se devuelven en detalle (el contador es total). */
+const MAX_WITHOUT_MATCH_LIST = 200;
 
 /** Texto con el que se clasifica un producto (nunca el campo `category` viejo). */
 function productHaystack(product: Product): string {
@@ -105,16 +120,21 @@ export const POST: APIRoute = async ({ request }) => {
   let dryRun = false;
   let keepSubcategories = false;
   let manual: Record<string, string> = {};
-  try {
-    const raw = await request.text();
-    if (raw.trim()) {
-      const body = JSON.parse(raw);
-      dryRun = body?.dryRun === true;
-      keepSubcategories = body?.keepSubcategories === true;
-      if (body?.manual && typeof body.manual === 'object') manual = body.manual;
+  const raw = await request.text();
+  if (raw.trim()) {
+    // Un cuerpo no parseable NO debe ejecutar la migración real: se rechaza.
+    let body: Record<string, unknown> | null = null;
+    try {
+      body = JSON.parse(raw);
+    } catch {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Cuerpo JSON inválido: se esperaba { dryRun, keepSubcategories, manual }.' }),
+        { status: 400, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } }
+      );
     }
-  } catch {
-    // Cuerpo no JSON: se ignoran las opciones (comportamiento por defecto).
+    dryRun = body?.dryRun === true;
+    keepSubcategories = body?.keepSubcategories === true;
+    if (body?.manual && typeof body.manual === 'object') manual = body.manual as Record<string, string>;
   }
   if (String(new URL(request.url).searchParams.get('dryRun')) === '1') dryRun = true;
   if (String(new URL(request.url).searchParams.get('keepSubcategories')) === '1') keepSubcategories = true;
@@ -131,12 +151,14 @@ export const POST: APIRoute = async ({ request }) => {
     backupDir: null,
     backupFiles: [],
     rootsInstalled: [],
+    roots: [],
     rootCategoriesRemoved: [],
     subcategoriesRemoved: [],
     productsReassigned: 0,
     productsUnchanged: 0,
     productsWithoutMatch: 0,
     productsWithoutMatchSample: [],
+    productsWithoutMatchList: [],
     manualApplied: [],
     categoryCounts: {},
     errors: [],
@@ -156,6 +178,11 @@ export const POST: APIRoute = async ({ request }) => {
     }));
     const fixedRootIds = new Set(fixedRoots.map((root) => root.id));
     report.rootsInstalled = fixedRoots.map((root) => root.name);
+    report.roots = fixedRoots.map((root) => ({
+      id: root.id,
+      name: root.name,
+      icon: root.icon || '',
+    }));
 
     // 2. Qué se elimina: raíces que no son fijas y subcategorías huérfanas.
     const currentRoots = currentCategories.filter((c) => !c.parentId);
@@ -193,6 +220,13 @@ export const POST: APIRoute = async ({ request }) => {
         report.productsWithoutMatch++;
         if (report.productsWithoutMatchSample.length < 25) {
           report.productsWithoutMatchSample.push(product.title || product.id);
+        }
+        if (report.productsWithoutMatchList.length < MAX_WITHOUT_MATCH_LIST) {
+          report.productsWithoutMatchList.push({
+            id: product.id,
+            title: product.title || product.id,
+            currentCategory: product.category || '',
+          });
         }
       }
 
