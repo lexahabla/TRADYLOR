@@ -123,6 +123,18 @@ const productSchema = z.object({
   /** Puntuación de conversión/rentabilidad 0-100 (calculada en el panel). */
   conversion_score: z.number().optional(),
 
+  // ─── Pipeline de automatización (opcionales; alimentan las métricas de transparencia) ──
+  /** Estado de auditoría "Test & Proof": approved | rejected | pending. */
+  audit_status: z.enum(['approved', 'rejected', 'pending']).optional(),
+  /** Puntuación de auditoría 0-100 (Etapa 2 del pipeline). */
+  audit_score: z.number().min(0).max(100).optional(),
+  /** Motivos de rechazo de la auditoría (códigos; Etapa 2 del pipeline). */
+  audit_reasons: z.array(z.string()).optional(),
+  /** Versión del pipeline que lastró por última vez el producto. */
+  pipeline_version: z.number().optional(),
+  /** Timestamp ISO de la última ejecución del pipeline sobre el producto. */
+  pipeline_run_at: z.string().optional(),
+
   // ─── Media & Visual ────────────────────────────────────────────────────────
   image: z.string().default('/images/placeholder-product.jpg'),
   /** Galería completa del producto (vistas adicionales para el carrusel). */

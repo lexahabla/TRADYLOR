@@ -179,5 +179,10 @@ function normalizeToProduct(schema: Product): FlatProduct {
     normalized_tags: schema.normalized_tags,
     alternative_product_ids: schema.alternative_product_ids,
     conversion_score: schema.conversion_score,
+    audit_status: schema.audit_status,
+    audit_score: schema.audit_score,
+    audit_reasons: schema.audit_reasons,
+    pipeline_version: schema.pipeline_version,
+    pipeline_run_at: schema.pipeline_run_at,
   };
 }

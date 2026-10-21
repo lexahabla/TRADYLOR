@@ -879,24 +879,45 @@ const hueOf = (index: number) => (index * 43) % 360;
     const closePanel = () => setMenuOpen(false);
 
     const targets = Array.from(document.querySelectorAll<HTMLElement>('.section-header'));
+    // 1er <section> de la página (panel hero `[data-hsr]`): mientras sea visible
+    // la barra de categorías permanece oculta; aparece al entrar en #catalogo.
+    const firstSection = document.querySelector<HTMLElement>('section');
 
     if (targets.length > 0 && 'IntersectionObserver' in window) {
       const visible = new Set<Element>();
+      let firstSectionVisible = false;
+
+      const applyShow = () => {
+        // Sin 1er section se mantiene el comportamiento histórico intacto.
+        const show = firstSection ? visible.size > 0 && !firstSectionVisible : visible.size > 0;
+        isVisible = show;
+        bar.classList.toggle('is-visible', show);
+        if (!show) closePanel();
+        applyLayout();
+      };
+
       const observer = new IntersectionObserver(
         (entries) => {
           for (const entry of entries) {
             if (entry.isIntersecting) visible.add(entry.target);
             else visible.delete(entry.target);
           }
-          const show = visible.size > 0;
-          isVisible = show;
-          bar.classList.toggle('is-visible', show);
-          if (!show) closePanel();
-          applyLayout();
+          applyShow();
         },
         { rootMargin: '-72px 0px 0px 0px' }
       );
       targets.forEach((target) => observer.observe(target));
+
+      if (firstSection) {
+        const heroObserver = new IntersectionObserver(
+          (entries) => {
+            firstSectionVisible = entries.some((entry) => entry.isIntersecting);
+            applyShow();
+          },
+          { rootMargin: '-72px 0px 0px 0px' }
+        );
+        heroObserver.observe(firstSection);
+      }
     }
 
     window.addEventListener('resize', applyLayout);

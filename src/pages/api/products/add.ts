@@ -1465,6 +1465,12 @@ export const POST: APIRoute = async ({ request }) => {
           // Un cambio de categoría invalida los IDs jerárquicos asignados antes.
           category_id: categoryChanged ? undefined : existingProduct.category_id,
           subcategory_id: categoryChanged ? undefined : existingProduct.subcategory_id,
+          // Pipeline de automatización: una edición manual no borra la auditoría.
+          audit_status: existingProduct.audit_status,
+          audit_score: existingProduct.audit_score,
+          audit_reasons: existingProduct.audit_reasons,
+          pipeline_version: existingProduct.pipeline_version,
+          pipeline_run_at: existingProduct.pipeline_run_at,
         };
         currentProducts[existingIndex] = productToSave;
       } else {

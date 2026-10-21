@@ -124,6 +124,14 @@ export interface Product {
 
   /** Estado de auditoría del producto: approved | rejected | pending. */
   audit_status?: 'approved' | 'rejected' | 'pending';
+  /** Puntuación de auditoría 0-100 (Etapa 2 del pipeline). */
+  audit_score?: number;
+  /** Motivos de rechazo de la auditoría (códigos; Etapa 2 del pipeline). */
+  audit_reasons?: string[];
+  /** Versión del pipeline que lastró por última vez el producto. */
+  pipeline_version?: number;
+  /** Timestamp ISO de la última ejecución del pipeline sobre el producto. */
+  pipeline_run_at?: string;
   /** Métricas del vendedor y calidad de reseñas. */
   metrics?: {
     sellerRating?: number;
@@ -206,6 +214,11 @@ export function toStructuredProduct(flat: Product): ProductSchema {
     normalized_tags: flat.normalized_tags,
     alternative_product_ids: flat.alternative_product_ids,
     conversion_score: flat.conversion_score,
+    audit_status: flat.audit_status,
+    audit_score: flat.audit_score,
+    audit_reasons: flat.audit_reasons,
+    pipeline_version: flat.pipeline_version,
+    pipeline_run_at: flat.pipeline_run_at,
     image: flat.image,
     gallery: flat.gallery,
     badge: flat.badge,

@@ -366,9 +366,11 @@ export const POST: APIRoute = async ({ request }) => {
         // Curación: el upsert conserva los campos de catálogo jerárquico y
         // cross-matching que el formulario de enriquecimiento no conoce.
         const CURATION_FIELDS = [
-          'sourceId', 'category_id', 'subcategory_id', 'link_status',
+          'sourceId', 'category_id', 'subcategory_id', 'ia_status', 'link_status',
           'normalized_tags', 'alternative_product_ids', 'alternatives',
           'conversion_score', 'commissionEstimate', 'sales30d',
+          'audit_status', 'audit_score', 'audit_reasons',
+          'pipeline_version', 'pipeline_run_at',
         ] as const;
         for (const field of CURATION_FIELDS) {
           if ((existing as any)[field] !== undefined) {

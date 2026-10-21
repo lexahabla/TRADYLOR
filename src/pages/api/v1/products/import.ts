@@ -8,16 +8,18 @@
  *
  * Autenticación: header  Authorization: Bearer <TRADYLOR_API_TOKEN>
  *
- * Permite que un flujo de n8n (consulta periódica a redes + algoritmo de
- * selección por rentabilidad/comisión/tendencia) autoinyecte los mejores
- * productos en products.json sin intervención manual. El link cloaking se
- * aplica automáticamente en el frontend vía /out/[id].
+ * Ejecuta el PIPELINE de 4 etapas (ingest → audit → categorize → publish) y
+ * conserva el contrato retrocompatible (success/imported/failed/results[].ok/
+ * message/product/updated) añadiendo las claves nuevas del pipeline (stage,
+ * duplicate, duplicate_reason, audit_status, audit_score, pipeline).
  * ==============================================================================
  */
 
 import type { APIRoute } from 'astro';
-import { upsertCatalogProduct } from '../../../../lib/catalogStore';
 import { isValidApiToken, unauthorizedApiResponse } from '../../../../lib/apiAuth';
+import { slugifyProduct } from '../../../../lib/catalogStore';
+import { runProductPipeline } from '../../../../lib/pipeline';
+import { readProductsFromFile } from '../../../../lib/productStore';
 
 export const prerender = false;
 
@@ -41,11 +43,33 @@ export const POST: APIRoute = async ({ request }) => {
     );
   }
 
-  const results = items.map((item) => ({
-    id: item?.id ?? null,
-    title: item?.title ?? null,
-    ...upsertCatalogProduct(item ?? {}),
-  }));
+  const results = [];
+  for (const item of items) {
+    const requestedId = item?.id ?? null;
+    const requestedTitle = item?.title ?? null;
+
+    // `updated` conserva su semántica histórica: el producto ya existía antes.
+    const existedBefore = readProductsFromFile().some(
+      (product) => product.id === (requestedId || slugifyProduct(String(requestedTitle || ''))),
+    );
+
+    const result = await runProductPipeline(item ?? {});
+
+    results.push({
+      id: result.product?.id ?? requestedId,
+      title: result.product?.title ?? requestedTitle,
+      ok: result.ok,
+      message: result.message ?? (result.ok ? 'Producto procesado por el pipeline.' : 'No se pudo procesar.'),
+      updated: existedBefore,
+      // Claves nuevas del pipeline (aditivas; ninguna elimina las anteriores).
+      stage: result.stage,
+      duplicate: result.duplicate ?? false,
+      duplicate_reason: result.duplicate_reason,
+      audit_status: result.audit_status,
+      audit_score: result.audit_score,
+      pipeline: result.pipeline,
+    });
+  }
 
   const okCount = results.filter((r) => r.ok).length;
   return new Response(

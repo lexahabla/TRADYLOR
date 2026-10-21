@@ -88,6 +88,21 @@ Inserta o actualiza productos en el catálogo (`products.json`). El `id` se
 genera desde el título si no se indica; si el `id` ya existe, el producto se
 actualiza (upsert). Acepta un producto o un lote de hasta 50.
 
+### Pipeline de automatización (4 etapas)
+
+Cada producto pasa por un pipeline interno **aditivo** (no cambia el contrato,
+sólo añade información):
+
+| Etapa | Qué hace |
+|---|---|
+| **1. Ingesta** | Normaliza el contrato n8n y detecta **duplicados** (sourceId → URL canónica → título limpio). Un duplicado **no se persiste** y se informa con `duplicate:true`. |
+| **2. Auditoría "Test & Proof"** | Score 0-100 (descuento verificado 40 + vendedor de confianza 30 + reseñas 30). `≥ 60` ⇒ `approved`; si no ⇒ `rejected` + motivos. |
+| **3. Categorización** | Autasocia `category_id` + `subcategory_id` (crea la subcategoría si no existe), enriquece el texto (local + IA si hay claves) y calcula `conversion_score` y `normalized_tags`. |
+| **4. Publicación** | Persiste en `products.json` (tombstones, `buyNowUrl` de Amazon) y estampa `audit_status`, `audit_score`, `audit_reasons` y `pipeline_version`. |
+
+Los productos rechazados **sí se persisten** (con `audit_status:'rejected'`) para
+alimentar las métricas de transparencia.
+
 ### Body — producto individual
 
 ```json
@@ -175,16 +190,50 @@ Un payload de n8n con el contrato de curación se acepta tal cual en
 
 ### Respuesta 200 (lote)
 
+Las claves nuevas del pipeline son **aditivas** (ninguna elimina las históricas):
+
 ```json
 {
   "success": true,
-  "imported": 3,
-  "failed": 0,
+  "imported": 2,
+  "failed": 1,
   "results": [
-    { "id": "roborock-q-revo", "title": "Roborock Q Revo", "ok": true, "message": "Producto guardado con éxito.", "updated": false }
+    {
+      "id": "roborock-q-revo",
+      "title": "Roborock Q Revo",
+      "ok": true,
+      "message": "Producto procesado por el pipeline.",
+      "updated": false,
+      "stage": "publish",
+      "duplicate": false,
+      "duplicate_reason": null,
+      "audit_status": "approved",
+      "audit_score": 86,
+      "pipeline": { "ingest": true, "audit": true, "categorize": true, "publish": true, "version": 1, "durationMs": 42 }
+    },
+    {
+      "id": "otro-id",
+      "title": "Roborock Q Revo",
+      "ok": false,
+      "message": "Duplicado detectado (canonicalUrl) de «roborock-q-revo»: no se persiste.",
+      "updated": false,
+      "stage": "ingest",
+      "duplicate": true,
+      "duplicate_reason": "canonicalUrl",
+      "audit_status": null,
+      "audit_score": null,
+      "pipeline": { "ingest": false, "audit": false, "categorize": false, "publish": false, "version": 1, "durationMs": 3 }
+    }
   ]
 }
 ```
+
+| Clave nueva | Descripción |
+|---|---|
+| `stage` | Última etapa alcanzada: `ingest` \| `audit` \| `categorize` \| `publish`. |
+| `duplicate` / `duplicate_reason` | `true` + `sourceId` \| `canonicalUrl` \| `cleanTitle` cuando el producto ya existía (no se persiste). |
+| `audit_status` / `audit_score` | Resultado de la Etapa 2 (`approved`/`rejected`/`pending` y score 0-100). |
+| `pipeline` | Trazabilidad por etapa, versión y duración en ms. |
 
 ### Ejemplo n8n (flujo periódico sugerido)
 
@@ -251,6 +300,48 @@ Si defines `N8N_CLICK_WEBHOOK_URL`, cada salida dispara un `POST` JSON
 
 Uso sugerido en n8n: Webhook node → registrar conversión → (opcional) notificar
 por Slack/Telegram o actualizar una hoja de cálculo de comisiones.
+
+---
+
+## 4. Reproceso del pipeline (admin, interno)
+
+Endpoint **protegido por sesión de administrador** (cookie
+`tradylor_admin_session`; NO usa el token de la API v1). Re-ejecuta las 4
+etapas sobre productos ya existentes del catálogo.
+
+### GET /api/admin/pipeline
+
+Métricas de transparencia derivadas de `products.json` + `pipeline-metrics.json`:
+
+```json
+{
+  "success": true,
+  "approved": 12,
+  "rejected": 3,
+  "pending": 40,
+  "avg_audit_score": 58.4,
+  "by_reason": { "sin-descuento-verificado": 3, "vendedor-no-verificado": 1 },
+  "duplicates_discarded": 2,
+  "last_run": "2026-10-20T22:22:38.814Z",
+  "runs": 24,
+  "productsProcessed": 27
+}
+```
+
+### POST /api/admin/pipeline
+
+```json
+{ "mode": "reprocess", "ids": ["roborock-q-revo"], "dryRun": false }
+```
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `ids` | string[] | Opcional; vacío/ausente = todo el catálogo. |
+| `dryRun` | boolean | `true` ejecuta ingest → audit → categorize **sin persistir** (etapa 4 omitida). |
+| `enrich` | boolean | `false` desactiva la IA de texto (default `true`). |
+
+Respuesta: `{ success, mode, total, processed, failed, results[] }` con el mismo
+detalle por producto que la importación.
 
 ---
 

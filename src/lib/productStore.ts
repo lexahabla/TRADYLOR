@@ -5,6 +5,8 @@ import { dataFile } from './paths';
 // Interfaz del producto (compartida por el panel admin y los endpoints de alta)
 export interface Product {
   id: string;
+  /** Ruta canónica `/producto/[slug]` (contrato n8n; si falta, se usa el `id`). */
+  slug?: string;
   title: string;
   description: string;
   price: number;
@@ -73,6 +75,18 @@ export interface Product {
   commissionEstimate?: number;
   /** Ventas estimadas en los últimos 30 días (opcional; alimenta el score). */
   sales30d?: number;
+
+  // ─── Pipeline de automatización (campos opcionales; retrocompatibles) ───────
+  /** Estado de auditoría "Test & Proof": approved | rejected | pending. */
+  audit_status?: 'approved' | 'rejected' | 'pending';
+  /** Puntuación de auditoría 0-100 (Etapa 2 del pipeline). */
+  audit_score?: number;
+  /** Motivos de rechazo de la auditoría (códigos; Etapa 2 del pipeline). */
+  audit_reasons?: string[];
+  /** Versión del pipeline que lastró por última vez el producto. */
+  pipeline_version?: number;
+  /** Timestamp ISO de la última ejecución del pipeline sobre el producto. */
+  pipeline_run_at?: string;
 }
 
 // Ruta al archivo de persistencia JSON

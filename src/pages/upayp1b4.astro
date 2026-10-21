@@ -1425,6 +1425,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const btnProdSelAll = document.getElementById('btnProdSelAll');
     const btnProdSelClear = document.getElementById('btnProdSelClear');
     const btnProdEnrich = document.getElementById('btnProdEnrich');
+    const btnProdMakeSection = document.getElementById('btnProdMakeSection');
     const prodCatAssign = document.getElementById('prodCatAssign');
     const btnProdAssignCat = document.getElementById('btnProdAssignCat');
     let selectedProductIds = new Set();
@@ -5716,7 +5717,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const context = opencodeContext?.value || 'selected';
       if (opencodeStatus) { opencodeStatus.hidden = false; opencodeStatus.className = 'admin-modal-status'; opencodeStatus.textContent = 'Enviando a OpenCode...'; }
       try {
-        let productIds: string[] = [];
+        let productIds = [];
         if (context === 'selected') {
           productIds = Array.from(selectedProductIds);
           if (!productIds.length) {
@@ -5724,12 +5725,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             return;
           }
         } else if (context === 'all') {
-          productIds = currentProducts.map((p: any) => p.id);
+          productIds = currentProducts.map((p) => p.id);
         } else if (context === 'full') {
           try {
             const res = await fetch('/api/v1/products?limit=10000', { cache: 'no-store' });
             const data = await res.json();
-            if (data.products && Array.isArray(data.products)) productIds = data.products.map((p: any) => p.id);
+            if (data.products && Array.isArray(data.products)) productIds = data.products.map((p) => p.id);
           } catch {
             if (opencodeStatus) { opencodeStatus.hidden = false; opencodeStatus.className = 'admin-modal-status is-error'; opencodeStatus.textContent = 'No se pudo obtener el catálogo completo.'; }
             return;
