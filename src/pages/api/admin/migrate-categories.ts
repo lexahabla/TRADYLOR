@@ -1,166 +1,230 @@
 /**
  * ==============================================================================
- * TRADYLOR - MIGRACIÓN DE CATEGORÍAS Y PRODUCTOS
+ * TRADYLOR - MIGRACIÓN DE CATEGORÍAS Y PRODUCTOS (segura e idempotente)
  * ==============================================================================
  * POST /api/admin/migrate-categories
  *
- * Proceso de migración único para unificar categorías:
- * 1. Reasigna TODOS los productos existentes a las 8 categorías raíz fijas
- *    usando la lógica estricta de matching por palabras clave (suggestCategoryStrict).
- * 2. Elimina categorías raíz huérfanas/duplicadas que no son de las 8 fijas.
- * 3. Elimina subcategorías huérfanas (sin padre válido).
- * 4. Actualiza contadores de productos por categoría.
- * 5. Devuelve reporte detallado de cambios.
+ * Objetivo: dejar el catálogo con la taxonomía fija de 8 categorías raíz.
+ * 1. Garantiza que las 8 raíces fijas existan (las crea si faltan) ANTES de
+ *    clasificar, para que el matching estricto siempre resuelva.
+ * 2. Reasigna TODOS los productos a una de esas 8 raíces por matching estricto
+ *    de palabras clave (título + descripción + marca + ficha + tags).
+ * 3. Elimina las categorías raíz que no son las 8 fijas y las subcategorías
+ *    huérfanas (o todas, salvo que se pida conservarlas).
+ * 4. Guarda una copia de categories.json y products.json antes de escribir.
+ * 5. Devuelve un reporte detallado de los cambios.
  *
- * SOLO para uso administrativo (requiere auth de admin).
+ * Body (JSON opcional):
+ *   { "dryRun": true }              → simula y devuelve el plan sin escribir.
+ *   { "keepSubcategories": true }   → conserva las subcategorías cuelgues de
+ *                                      las 8 raíces fijas (no las huérfanas).
+ *
+ * SOLO para uso administrativo (requiere rol admin).
  * ==============================================================================
  */
 
 import type { APIRoute } from 'astro';
-import { getCategories, suggestCategoryStrict, writeCategories, getCategoryById } from '../../../lib/categories';
-import { readProductsFromFile, writeProductsToFile, slugify } from '../../../lib/productStore';
+import fs from 'node:fs';
+import path from 'node:path';
+import {
+  DEFAULT_CATEGORIES,
+  getCategories,
+  suggestCategoryStrictIn,
+  writeCategories,
+  type Category,
+} from '../../../lib/categories';
+import { readProductsFromFile, writeProductsToFile } from '../../../lib/productStore';
 import type { Product } from '../../../lib/productStore';
-import { getSessionUser } from '../../../lib/adminAuth';
+import { DATA_DIR, dataFile } from '../../../lib/paths';
+import { requireAdminAuth } from '../../../lib/adminAuth';
 
 export const prerender = false;
 
-const VALID_ROOT_CATEGORY_IDS = [
-  'informatica-oficina',
-  'audio-sonido',
-  'smartwatches',
-  'hogar-inteligencia',
-  'movil-accesorios',
-  'fotografia-video',
-  'gaming',
-  'herramientas-bricolaje',
-];
+/** Raíz usada cuando ningún producto encaja en las 8 categorías fijas. */
+const FALLBACK_ROOT_ID = 'informatica-oficina';
 
 interface MigrateReport {
   success: boolean;
+  dryRun: boolean;
+  keepSubcategories: boolean;
   startedAt: string;
   finishedAt: string;
   durationMs: number;
-  productsReassigned: number;
-  productsUnchanged: number;
+  backupDir: string | null;
+  backupFiles: string[];
+  rootsInstalled: string[];
   rootCategoriesRemoved: string[];
   subcategoriesRemoved: string[];
+  productsReassigned: number;
+  productsUnchanged: number;
+  productsWithoutMatch: number;
+  productsWithoutMatchSample: string[];
   categoryCounts: Record<string, number>;
   errors: string[];
 }
 
-function getValidRootCategories() {
-  return getCategories().filter((c) => !c.parentId && VALID_ROOT_CATEGORY_IDS.includes(c.id));
+/** Texto con el que se clasifica un producto (nunca el campo `category` viejo). */
+function productHaystack(product: Product): string {
+  const specs = product.specs ? Object.values(product.specs).join(' ') : '';
+  const tags = Array.isArray(product.normalized_tags) ? product.normalized_tags.join(' ') : '';
+  return [
+    product.title,
+    product.description,
+    product.brand,
+    product.techSheet,
+    specs,
+    tags,
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+/** Copia categories.json y products.json a DATA_DIR/backups antes de escribir. */
+function createBackup(stamp: string): { dir: string; files: string[] } {
+  const dir = path.join(DATA_DIR, 'backups', `categories-${stamp}`);
+  fs.mkdirSync(dir, { recursive: true });
+  const files: string[] = [];
+  for (const name of ['categories.json', 'products.json']) {
+    const src = dataFile(name);
+    if (!fs.existsSync(src)) continue;
+    const dest = path.join(dir, name);
+    fs.copyFileSync(src, dest);
+    files.push(dest);
+  }
+  return { dir, files };
 }
 
 export const POST: APIRoute = async ({ request }) => {
-  const auth = getSessionUser(request);
-  if (!auth || auth.role !== 'admin') {
-    return new Response(JSON.stringify({ success: false, message: 'No autorizado: se requiere rol admin' }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  const unauthorized = requireAdminAuth(request);
+  if (unauthorized) return unauthorized;
+
+  // Opciones opcionales del cuerpo (JSON) o de la query string.
+  let dryRun = false;
+  let keepSubcategories = false;
+  try {
+    const raw = await request.text();
+    if (raw.trim()) {
+      const body = JSON.parse(raw);
+      dryRun = body?.dryRun === true;
+      keepSubcategories = body?.keepSubcategories === true;
+    }
+  } catch {
+    // Cuerpo no JSON: se ignoran las opciones (comportamiento por defecto).
   }
+  if (String(new URL(request.url).searchParams.get('dryRun')) === '1') dryRun = true;
+  if (String(new URL(request.url).searchParams.get('keepSubcategories')) === '1') keepSubcategories = true;
 
   const startedAt = new Date().toISOString();
   const startTime = Date.now();
   const report: MigrateReport = {
     success: false,
+    dryRun,
+    keepSubcategories,
     startedAt,
     finishedAt: '',
     durationMs: 0,
-    productsReassigned: 0,
-    productsUnchanged: 0,
+    backupDir: null,
+    backupFiles: [],
+    rootsInstalled: [],
     rootCategoriesRemoved: [],
     subcategoriesRemoved: [],
+    productsReassigned: 0,
+    productsUnchanged: 0,
+    productsWithoutMatch: 0,
+    productsWithoutMatchSample: [],
     categoryCounts: {},
     errors: [],
   };
 
   try {
-    // 1. Cargar productos y categorías actuales
+    const currentCategories = getCategories();
     const products = readProductsFromFile();
-    const allCategories = getCategories();
 
-    // 2. Identificar categorías raíz válidas (las 8 fijas)
-    const validRoots = getValidRootCategories();
-    const validRootIds = new Set(validRoots.map((c) => c.id));
+    // 1. Las 8 raíces fijas canónicas (id, nombre, icono y keywords oficiales).
+    const fixedRoots: Category[] = DEFAULT_CATEGORIES.map((root) => ({
+      id: root.id,
+      name: root.name,
+      slug: root.slug,
+      icon: root.icon,
+      keywords: [...root.keywords],
+    }));
+    const fixedRootIds = new Set(fixedRoots.map((root) => root.id));
+    report.rootsInstalled = fixedRoots.map((root) => root.name);
 
-    // 3. Identificar categorías a eliminar:
-    // - Raíces que NO son de las 8 fijas
-    // - Subcategorías cuyo padre no existe o no es una raíz válida
-    const orphanRoots = allCategories.filter(
-      (c) => !c.parentId && !validRootIds.has(c.id)
+    // 2. Qué se elimina: raíces que no son fijas y subcategorías huérfanas.
+    const currentRoots = currentCategories.filter((c) => !c.parentId);
+    const currentRootIds = new Set(currentRoots.map((c) => c.id));
+    const orphanRoots = currentCategories.filter(
+      (c) => !c.parentId && !fixedRootIds.has(c.id)
     );
-    const orphanSubs = allCategories.filter(
-      (c) => c.parentId && (!getCategoryById(c.parentId) || !validRootIds.has(getCategoryById(c.parentId)?.id ?? ''))
+    const orphanSubs = currentCategories.filter(
+      (c) => c.parentId && !fixedRootIds.has(c.parentId)
     );
 
-    // 4. Reasignar cada producto a una categoría raíz válida
+    report.rootCategoriesRemoved = orphanRoots.map((c) => c.name);
+    report.subcategoriesRemoved = orphanSubs.map((c) => c.name);
+
+    // 3. Taxonomía final: las 8 raíces fijas (+ subcategorías válidas si se piden).
+    const keptSubs = keepSubcategories
+      ? currentCategories.filter((c) => c.parentId && fixedRootIds.has(c.parentId))
+      : [];
+    const nextCategories: Category[] = [...fixedRoots, ...keptSubs];
+    if (!keepSubcategories) {
+      report.subcategoriesRemoved = currentCategories
+        .filter((c) => c.parentId)
+        .map((c) => c.name);
+    }
+
+    // 4. Reasignación de productos con matching estricto sobre las 8 raíces.
+    const fallbackRoot = fixedRoots.find((r) => r.id === FALLBACK_ROOT_ID) ?? fixedRoots[0];
+    const keptSubIds = new Set(keptSubs.map((c) => c.id));
+    const counts: Record<string, number> = {};
+
     for (const product of products) {
-      const text = `${product.title} ${product.description ?? ''} ${product.category ?? ''}`;
-      const matched = suggestCategoryStrict(text);
-
-      let newCategoryId: string;
-      let newCategoryName: string;
-      let newSubcategoryId: string | undefined;
-
-      if (matched) {
-        newCategoryId = matched.id;
-        newCategoryName = matched.name;
-      } else {
-        // Fallback a Informática y Oficina
-        const fallback = validRoots.find((c) => c.id === 'informatica-oficina');
-        newCategoryId = fallback?.id ?? 'informatica-oficina';
-        newCategoryName = fallback?.name ?? 'Informática y Oficina';
-      }
-
-      // Verificar si la subcategoría actual del producto es válida
-      if (product.subcategory_id) {
-        const subCat = getCategoryById(product.subcategory_id);
-        if (subCat && subCat.parentId === newCategoryId) {
-          newSubcategoryId = subCat.id;
+      const matched = suggestCategoryStrictIn(productHaystack(product), fixedRoots);
+      const target = matched ?? fallbackRoot;
+      if (!matched) {
+        report.productsWithoutMatch++;
+        if (report.productsWithoutMatchSample.length < 25) {
+          report.productsWithoutMatchSample.push(product.title || product.id);
         }
       }
 
-      const oldCategory = product.category;
-      const oldCategoryId = product.category_id;
-      const oldSubcategoryId = product.subcategory_id;
+      const nextSubcategoryId =
+        product.subcategory_id && keptSubIds.has(product.subcategory_id)
+          ? product.subcategory_id
+          : undefined;
 
-      if (oldCategoryId !== newCategoryId || oldSubcategoryId !== newSubcategoryId) {
-        product.category = newCategoryName;
-        product.category_id = newCategoryId;
-        product.subcategory_id = newSubcategoryId;
+      const changed =
+        product.category !== target.name ||
+        product.category_id !== target.id ||
+        (product.subcategory_id ?? undefined) !== nextSubcategoryId;
+
+      if (changed) {
+        product.category = target.name;
+        product.category_id = target.id;
+        product.subcategory_id = nextSubcategoryId;
         report.productsReassigned++;
       } else {
         report.productsUnchanged++;
       }
-    }
 
-    // 5. Guardar productos actualizados
-    writeProductsToFile(products);
-
-    // 6. Eliminar categorías huérfanas
-    const categoriesToKeep = allCategories.filter(
-      (c) => !orphanRoots.some((o) => o.id === c.id) && !orphanSubs.some((o) => o.id === c.id)
-    );
-
-    for (const orphan of orphanRoots) {
-      report.rootCategoriesRemoved.push(orphan.name);
-    }
-    for (const orphan of orphanSubs) {
-      report.subcategoriesRemoved.push(orphan.name);
-    }
-
-    writeCategories(categoriesToKeep);
-
-    // 7. Calcular contadores por categoría
-    const counts: Record<string, number> = {};
-    for (const product of products) {
-      if (product.category_id) {
-        counts[product.category_id] = (counts[product.category_id] || 0) + 1;
-      }
+      counts[target.id] = (counts[target.id] ?? 0) + 1;
     }
     report.categoryCounts = counts;
+
+    // 5. Escritura (con backup previo). En dry-run no se toca nada.
+    if (!dryRun) {
+      const stamp = startedAt.replace(/[:.]/g, '-');
+      const backup = createBackup(stamp);
+      report.backupDir = backup.dir;
+      report.backupFiles = backup.files;
+
+      writeCategories(nextCategories);
+      if (!writeProductsToFile(products)) {
+        throw new Error('No se pudo escribir products.json');
+      }
+    }
 
     report.success = true;
   } catch (error) {
@@ -174,6 +238,35 @@ export const POST: APIRoute = async ({ request }) => {
 
   return new Response(JSON.stringify(report), {
     status: report.success ? 200 : 500,
-    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
   });
+};
+
+/** GET: estado actual de la taxonomía (sin escribir nada). */
+export const GET: APIRoute = async ({ request }) => {
+  const unauthorized = requireAdminAuth(request);
+  if (unauthorized) return unauthorized;
+
+  const categories = getCategories();
+  const roots = categories.filter((c) => !c.parentId);
+  const subcategories = categories.filter((c) => Boolean(c.parentId));
+  const products = readProductsFromFile();
+  const missingFixedRoots = DEFAULT_CATEGORIES.filter(
+    (root) => !roots.some((c) => c.id === root.id)
+  ).map((root) => root.id);
+  const unknownRoots = roots.filter((c) => !DEFAULT_CATEGORIES.some((root) => root.id === c.id)).map((c) => c.id);
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      total: categories.length,
+      roots: roots.length,
+      subcategories: subcategories.length,
+      missingFixedRoots,
+      unknownRoots,
+      products: products.length,
+      productsWithoutRoot: products.filter((p) => !p.category_id).length,
+    }),
+    { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } }
+  );
 };

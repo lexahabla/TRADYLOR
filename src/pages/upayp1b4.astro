@@ -1021,9 +1021,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
           <div style="flex: 1;">
             <h2 class="card-title">Migración de categorías y productos</h2>
-            <p class="card-desc">Reasigna todos los productos existentes a las 8 categorías raíz fijas, elimina categorías huérfanas/duplicadas y actualiza contadores. <strong>Irreversible</strong> salvo restaurar backup.</p>
+            <p class="card-desc">Reasigna todos los productos existentes a las 8 categorías raíz fijas, elimina categorías huérfanas/duplicadas y actualiza contadores. Antes de escribir se guarda <strong>copia de seguridad</strong> en <code>/app/data/backups/</code>.</p>
           </div>
-          <button type="button" id="btnMigrateCategories" class="btn-danger btn-sm" style="margin-left: auto;" title="Ejecuta la migración completa de categorías y productos">
+          <button type="button" id="btnMigratePreview" class="btn-secondary btn-sm" title="Simula la migración y muestra el plan sin escribir nada">
+            <span class="btn-text">👁 Ver vista previa</span>
+            <div class="btn-spinner" hidden></div>
+          </button>
+          <button type="button" id="btnMigrateCategories" class="btn-danger btn-sm" title="Ejecuta la migración completa de categorías y productos">
             <span class="btn-text">🔄 Ejecutar Migración</span>
             <div class="btn-spinner" hidden></div>
           </button>
@@ -5210,6 +5214,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const categoryStatusText = document.getElementById('categoryStatusText');
     const categoriesGrid = document.getElementById('categoriesGrid');
     const btnMigrateCategories = document.getElementById('btnMigrateCategories');
+    const btnMigratePreview = document.getElementById('btnMigratePreview');
     const migrateStatus = document.getElementById('migrateStatus');
     const migrateStatusIcon = document.getElementById('migrateStatusIcon');
     const migrateStatusTitle = document.getElementById('migrateStatusTitle');
@@ -5607,33 +5612,50 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
     });
 
-    // Botón de migración de categorías
-    btnMigrateCategories?.addEventListener('click', async () => {
-      if (!window.confirm('⚠️ MIGRACIÓN IRREVERSIBLE\n\nEsto va a:\n1. Reasignar TODOS los productos a las 8 categorías raíz fijas\n2. Eliminar categorías raíz huérfanas/duplicadas\n3. Eliminar subcategorías sin padre válido\n4. Actualizar contadores de productos\n\n¿Continuar?')) return;
-
-      btnMigrateCategories.disabled = true;
-      const spinner = btnMigrateCategories?.querySelector('.btn-spinner');
-      const text = btnMigrateCategories?.querySelector('.btn-text');
+    // Migración de categorías: vista previa (dry-run) + ejecución real.
+    async function runCategoryMigration(dryRun) {
+      const button = dryRun ? btnMigratePreview : btnMigrateCategories;
+      const spinner = button?.querySelector('.btn-spinner');
+      const text = button?.querySelector('.btn-text');
+      if (button) button.disabled = true;
       if (spinner) spinner.hidden = false;
-      if (text) text.textContent = 'Migrando…';
+      if (text) text.textContent = dryRun ? 'Simulando…' : 'Migrando…';
 
-      showMigrateStatus('loading', 'Ejecutando migración…', 'Reasignando productos, limpiando categorías huérfanas y actualizando contadores. Esto puede tardar unos segundos.');
+      showMigrateStatus(
+        'loading',
+        dryRun ? 'Simulando migración…' : 'Ejecutando migración…',
+        dryRun
+          ? 'Calculando el plan (sin escribir nada en el servidor).'
+          : 'Reasignando productos, limpiando categorías huérfanas y actualizando contadores. Se guarda una copia de seguridad antes de escribir.'
+      );
 
       try {
-        const res = await fetch('/api/admin/migrate-categories', { method: 'POST' });
+        const res = await fetch('/api/admin/migrate-categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dryRun }),
+        });
         const data = await res.json();
 
         if (data.success) {
           const lines = [
             `Productos reasignados: ${data.productsReassigned}`,
             `Productos sin cambios: ${data.productsUnchanged}`,
+            `Productos sin coincidencia (van a Informática y Oficina): ${data.productsWithoutMatch ?? 0}${data.productsWithoutMatchSample?.length ? ' (' + data.productsWithoutMatchSample.slice(0, 5).join(', ') + ')' : ''}`,
             `Categorías raíz eliminadas: ${data.rootCategoriesRemoved.length}${data.rootCategoriesRemoved.length ? ' (' + data.rootCategoriesRemoved.join(', ') + ')' : ''}`,
             `Subcategorías eliminadas: ${data.subcategoriesRemoved.length}${data.subcategoriesRemoved.length ? ' (' + data.subcategoriesRemoved.join(', ') + ')' : ''}`,
+            `Copia de seguridad: ${data.backupDir ?? '(no se creó: simulación)'}`,
             `Duración: ${Math.round(data.durationMs / 1000)}s`,
           ];
-          showMigrateStatus('success', '✅ Migración completada', lines.join('\n'));
-          await loadCategories();
-          await reloadProductsTable();
+          showMigrateStatus(
+            'success',
+            dryRun ? '👁 Vista previa de la migración' : '✅ Migración completada',
+            lines.join('\n')
+          );
+          if (!dryRun) {
+            await loadCategories();
+            await reloadProductsTable();
+          }
         } else {
           showMigrateStatus('error', 'Error en migración', data.errors?.join('\n') || 'Error desconocido');
         }
@@ -5641,10 +5663,22 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         console.error('[MigrateCategories] Error:', err);
         showMigrateStatus('error', 'Error de red', 'No se pudo contactar con /api/admin/migrate-categories');
       } finally {
-        if (btnMigrateCategories) btnMigrateCategories.disabled = false;
+        if (button) button.disabled = false;
         if (spinner) spinner.hidden = true;
-        if (text) text.textContent = '🔄 Ejecutar Migración';
+        if (text) text.textContent = dryRun ? '👁 Ver vista previa' : '🔄 Ejecutar Migración';
       }
+    }
+
+    // Botón de vista previa (no escribe nada)
+    btnMigratePreview?.addEventListener('click', () => {
+      runCategoryMigration(true);
+    });
+
+    // Botón de migración de categorías
+    btnMigrateCategories?.addEventListener('click', async () => {
+      if (!window.confirm('⚠️ MIGRACIÓN DE CATEGORÍAS\n\nEsto va a:\n1. Reasignar TODOS los productos a las 8 categorías raíz fijas\n2. Eliminar categorías raíz huérfanas/duplicadas\n3. Eliminar subcategorías (se recrean bajo demanda al importar productos)\n4. Actualizar contadores de productos\n\nAntes de escribir se guarda una copia de seguridad en /app/data/backups/.\n\n¿Continuar?')) return;
+
+      await runCategoryMigration(false);
     });
 
     // Carga inicial

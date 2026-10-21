@@ -345,6 +345,67 @@ detalle por producto que la importación.
 
 ---
 
+## 5. Migración de categorías (admin, interno)
+
+Endpoint **protegido por sesión de administrador** (cookie `tradylor_admin_session`).
+Fija el catálogo en la taxonomía de **8 categorías raíz** y reasigna los productos.
+
+### GET /api/admin/migrate-categories
+
+Estado actual de la taxonomía (no escribe nada):
+
+```json
+{
+  "success": true,
+  "total": 8,
+  "roots": 8,
+  "subcategories": 0,
+  "missingFixedRoots": [],
+  "unknownRoots": [],
+  "products": 55,
+  "productsWithoutRoot": 0
+}
+```
+
+### POST /api/admin/migrate-categories
+
+```json
+{ "dryRun": false, "keepSubcategories": false }
+```
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `dryRun` | boolean | `true` calcula el plan y devuelve el reporte **sin escribir nada**. |
+| `keepSubcategories` | boolean | `true` conserva las subcategorías colgando de las 8 raíces fijas (las huérfanas se eliminan igual). |
+
+Proceso: (1) garantiza las 8 raíces fijas, (2) reasigna cada producto con matching
+estricto por palabras clave, (3) elimina raíces/subcategorías huérfanas,
+(4) **guarda copia de seguridad** de `categories.json` y `products.json` en
+`DATA_DIR/backups/categories-<timestamp>/` antes de escribir, (5) devuelve el reporte.
+
+Respuesta:
+
+```json
+{
+  "success": true,
+  "dryRun": false,
+  "backupDir": "/app/data/backups/categories-2026-10-21T18-56-13-073Z",
+  "rootsInstalled": ["Informática y Oficina", "Audio y Sonido", "..."],
+  "rootCategoriesRemoved": ["Relojes"],
+  "subcategoriesRemoved": ["Accesorios de la motocicleta"],
+  "productsReassigned": 12,
+  "productsUnchanged": 43,
+  "productsWithoutMatch": 1,
+  "productsWithoutMatchSample": ["Chaleco de cuero para moto"],
+  "categoryCounts": { "audio-sonido": 23, "informatica-oficina": 32 },
+  "durationMs": 42
+}
+```
+
+Es **idempotente**: al repetirla no vuelve a reasignar ni a podar nada.
+
+---
+
 ## Notas operativas
 
 - Máximo **50 productos** por petición de importación.

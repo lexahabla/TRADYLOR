@@ -455,8 +455,16 @@ export function suggestCategory(text: string): { category: Category; matches: nu
  * - Taladro/atornillador/sierra/amoladora -> Herramientas y Bricolaje
  */
 export function suggestCategoryStrict(text: string): Category | null {
+  return suggestCategoryStrictIn(text, getCategories().filter((c) => !c.parentId));
+}
+
+/**
+ * Autasociación estricta contra un conjunto concreto de categorías raíz.
+ * Misma semántica que suggestCategoryStrict pero SIN leer categories.json:
+ * permite simular la migración (dry-run) antes de escribir nada en disco.
+ */
+export function suggestCategoryStrictIn(text: string, rootCategories: Category[]): Category | null {
   const haystack = ` ${text.toLowerCase()} `;
-  const rootCategories = getCategories().filter((c) => !c.parentId);
 
   // Reglas de asignación obligatoria por palabras clave prioritarias
   const mandatoryRules: Array<{ categoryId: string; keywords: string[] }> = [
