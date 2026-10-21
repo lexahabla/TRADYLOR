@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../lib/adminAuth';
-import { getCategories, suggestCategory } from '../../../lib/categories';
+import { getCategories, suggestCategory, resolveCategoryIds } from '../../../lib/categories';
 import {
   readProductsFromFile,
   writeProductsToFile,
@@ -1103,6 +1103,13 @@ function resolveCategory(explicit: unknown, haystack: string): string {
   return names[0] || 'Tecnología';
 }
 
+/**
+ * Resuelve los ids jerárquicos (category_id / subcategory_id) a partir del
+ * nombre de la categoría y de la subcategoría elegidas en el panel. Si el
+ * nombre no existe en categories.json no se devuelve id (el producto guarda
+ * sólo el texto, como antes).
+ */
+
 // ==============================================================================
 // 1. GET: Retorna la lista actual de productos
 // ==============================================================================
@@ -1380,6 +1387,17 @@ export const POST: APIRoute = async ({ request }) => {
         return Number(sent);
       };
 
+      // Categoría y subcategoría elegidas en el panel: se guardan el nombre
+      // (legado) y los ids jerárquicos de categories.json.
+      const resolvedCategoryName = resolveCategory(
+        dataToSave.category,
+        `${dataToSave.title} ${dataToSave.description || ''}`
+      );
+      const subcategorySent = (dataToSave as Record<string, unknown>).subcategory;
+      const subcategoryProvided = subcategorySent !== undefined;
+      const requestedSubcategory = String(subcategorySent ?? '').trim();
+      const resolvedIds = resolveCategoryIds(resolvedCategoryName, requestedSubcategory);
+
       const newProduct: Product = {
         id: productId,
         title: String(dataToSave.title).trim(),
@@ -1388,7 +1406,9 @@ export const POST: APIRoute = async ({ request }) => {
         originalPrice: numField(dataToSave.originalPrice, existingProduct?.originalPrice),
         image: resolvedImage,
         gallery: gallery.slice(0, 10),
-        category: resolveCategory(dataToSave.category, `${dataToSave.title} ${dataToSave.description || ''}`),
+        category: resolvedCategoryName,
+        category_id: resolvedIds.category_id ?? existingProduct?.category_id,
+        subcategory_id: resolvedIds.subcategory_id,
         merchant: String(dataToSave.merchant || detectMerchantFromUrl(dataToSave.affiliateUrl)).trim(),
         affiliateUrl: String(dataToSave.affiliateUrl).trim(),
         buyNowUrl: strField(dataToSave.buyNowUrl, existingProduct?.buyNowUrl),
@@ -1462,9 +1482,16 @@ export const POST: APIRoute = async ({ request }) => {
         productToSave = {
           ...existingProduct,
           ...newProduct,
-          // Un cambio de categoría invalida los IDs jerárquicos asignados antes.
-          category_id: categoryChanged ? undefined : existingProduct.category_id,
-          subcategory_id: categoryChanged ? undefined : existingProduct.subcategory_id,
+          // Un cambio de categoría invalida los IDs jerárquicos asignados antes
+          // (salvo que el panel haya indicado una categoría/subcategoría válida).
+          category_id:
+            newProduct.category_id ??
+            (categoryChanged ? undefined : existingProduct.category_id),
+          subcategory_id: subcategoryProvided
+            ? newProduct.subcategory_id
+            : categoryChanged
+              ? undefined
+              : existingProduct.subcategory_id,
           // Pipeline de automatización: una edición manual no borra la auditoría.
           audit_status: existingProduct.audit_status,
           audit_score: existingProduct.audit_score,

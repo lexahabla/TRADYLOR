@@ -11,8 +11,8 @@
  *    keywords definidas (se usa en el formulario de alta y en el scraper).
  *  - Compatibilidad: getCategoryNames() devuelve los nombres para el datalist
  *    del formulario y el filtro legacy del panel.
- *  - REGLAS ESTRICTAS: NO creación automática de categorías. Solo 8 categorías
- *    raíz fijas + subcategorías creadas explícitamente por el admin.
+ *  - Taxonomía LIBRE: el admin puede crear, editar y eliminar categorías raíz y
+ *    subcategorías (un solo nivel de profundidad) desde el panel.
  * ==============================================================================
  */
 
@@ -36,9 +36,10 @@ export interface Category {
 const CATEGORIES_PATH = dataFile('categories.json');
 
 /**
- * 8 CATEGORÍAS RAÍZ FIJAS Y LIMPIAS - NO SE CREAN AUTOMÁTICAMENTE MÁS.
- * Cada una tiene keywords obligatorias para matching inteligente.
- * Prohibida la creación de categorías caóticas desde proveedores.
+ * CATEGORÍAS BASE DEL CATÁLOGO (semilla).
+ * Se escriben sólo si el archivo no existe o está vacío/corrupto; a partir de
+ * ahí manda categories.json y el admin puede crear, editar y eliminar
+ * libremente categorías raíz y subcategorías.
  */
 export const DEFAULT_CATEGORIES: Category[] = [
   {
@@ -259,6 +260,35 @@ export function getCategoryNames(): string[] {
   return getCategories().map((category) => category.name);
 }
 
+/**
+ * Resuelve los ids jerárquicos (category_id / subcategory_id) a partir del
+ * nombre de la categoría y de la subcategoría. Si el nombre no existe en
+ * categories.json no se devuelve id (el producto guarda sólo el texto).
+ */
+export function resolveCategoryIds(
+  categoryName: string,
+  subcategoryName = ''
+): { category_id?: string; subcategory_id?: string } {
+  const categories = getCategories();
+  const target = normalizeKey(categoryName);
+  if (!target) return {};
+  const root = categories.find(
+    (category) =>
+      !category.parentId &&
+      (normalizeKey(category.name) === target || normalizeKey(category.slug) === target)
+  );
+  if (!root) return {};
+  const wanted = normalizeKey(subcategoryName);
+  const sub = wanted
+    ? categories.find(
+        (category) =>
+          category.parentId === root.id &&
+          (normalizeKey(category.name) === wanted || normalizeKey(category.slug) === wanted)
+      )
+    : undefined;
+  return { category_id: root.id, ...(sub ? { subcategory_id: sub.id } : {}) };
+}
+
 /** Devuelve las subcategorías hijas de una categoría raíz (por id o slug). */
 export function getSubcategories(parentId: string): Category[] {
   const parent = getCategoryById(parentId);
@@ -289,6 +319,11 @@ export interface CategoryResult {
   message: string;
   categories: Category[];
   category?: Category;
+  /**
+   * Ids que han cambiado (de <from> a <to>). Sirve para reapuntar en el
+   * catálogo los productos que estaban asignados a esas categorías.
+   */
+  remapped?: { from: string; to: string }[];
 }
 
 export function createCategory(input: CategoryInput): CategoryResult {
@@ -297,37 +332,44 @@ export function createCategory(input: CategoryInput): CategoryResult {
 
   const categories = getCategories();
 
-  // REGLAS ESTRICTAS: Prohibida creación de categorías raíz nuevas.
-  // Solo se permiten SUBCATEGORÍAS bajo las 8 categorías raíz fijas.
+  // Categoría raíz (sin padre) o subcategoría (con padre). Sólo se permite un
+  // nivel de profundidad: el padre debe ser siempre una categoría raíz.
   const rawParentId = String(input.parentId ?? '').trim();
-  if (!rawParentId) {
+  let parentId: string | null = null;
+  let parentName = '';
+  if (rawParentId) {
+    const parent = getCategoryById(rawParentId);
+    if (!parent) {
+      return { ok: false, message: `No existe la categoría padre "${rawParentId}".`, categories };
+    }
+    if (parent.parentId) {
+      return { ok: false, message: `"${parent.name}" ya es una subcategoría: sólo se permite un nivel.`, categories };
+    }
+    parentId = parent.id;
+    parentName = parent.name;
+  }
+
+  const slugBase = slugifyCategory(name);
+  const slug = parentId ? `${parentId}--${slugBase}` : slugBase;
+  if (
+    categories.some(
+      (c) =>
+        c.slug === slug ||
+        (c.name.toLowerCase() === name.toLowerCase() && (c.parentId ?? null) === parentId)
+    )
+  ) {
     return {
       ok: false,
-      message: 'No se pueden crear nuevas categorías raíz. Las 8 categorías principales son fijas. Use una categoría padre para crear una subcategoría.',
-      categories
+      message: `Ya existe una categoría con el nombre "${name}"${parentId ? ' en esa rama' : ''}.`,
+      categories,
     };
-  }
-
-  const parent = getCategoryById(rawParentId);
-  if (!parent) {
-    return { ok: false, message: `No existe la categoría padre "${rawParentId}".`, categories };
-  }
-  if (parent.parentId) {
-    return { ok: false, message: `"${parent.name}" ya es una subcategoría: sólo se permite un nivel de profundidad.`, categories };
-  }
-
-  const parentId = parent.id;
-  const slugBase = slugifyCategory(name);
-  const slug = `${parentId}--${slugBase}`;
-  if (categories.some((c) => c.slug === slug || (c.name.toLowerCase() === name.toLowerCase() && c.parentId === parentId))) {
-    return { ok: false, message: `Ya existe una subcategoría con el nombre "${name}" en "${parent.name}".`, categories };
   }
 
   const category: Category = {
     id: slug,
     name,
     slug,
-    icon: String(input.icon ?? '').trim() || '📂',
+    icon: String(input.icon ?? '').trim() || (parentId ? '📂' : '📦'),
     keywords: (input.keywords ?? []).map((k) => String(k).trim().toLowerCase()).filter(Boolean),
     parentId,
   };
@@ -335,7 +377,9 @@ export function createCategory(input: CategoryInput): CategoryResult {
   writeCategories(categories);
   return {
     ok: true,
-    message: `Subcategoría "${name}" creada y vinculada a "${parent.name}".`,
+    message: parentId
+      ? `Subcategoría "${name}" creada y vinculada a "${parentName}".`
+      : `Categoría "${name}" creada correctamente.`,
     categories,
     category,
   };
@@ -350,10 +394,10 @@ export function updateCategory(slug: string, input: CategoryInput): CategoryResu
   if (!name) return { ok: false, message: 'El nombre de la categoría es obligatorio.', categories };
 
   const previous = categories[index];
-  const isRootCategory = !previous.parentId;
 
-  // REGLAS ESTRICTAS: No permitir convertir una categoría raíz en subcategoría
-  // ni una subcategoría en categoría raíz (quitar parentId).
+  // Re-parentado opcional: una raíz puede pasar a ser subcategoría de otra
+  // raíz y una subcategoría puede volver a la raíz. Sólo un nivel de
+  // profundidad: el padre elegido debe ser siempre una categoría raíz.
   let parentId = previous.parentId ?? null;
   if (input.parentId !== undefined) {
     const rawParentId = String(input.parentId ?? '').trim();
@@ -361,16 +405,19 @@ export function updateCategory(slug: string, input: CategoryInput): CategoryResu
       const parent = getCategoryById(rawParentId);
       if (!parent) return { ok: false, message: `No existe la categoría padre "${rawParentId}".`, categories };
       if (parent.parentId) return { ok: false, message: `"${parent.name}" ya es una subcategoría.`, categories };
-      // No permitir cambiar el padre de una categoría raíz
-      if (isRootCategory) {
-        return { ok: false, message: 'No se puede cambiar la categoría padre de una categoría raíz principal.', categories };
+      if (parent.id === previous.id) {
+        return { ok: false, message: 'Una categoría no puede ser padre de sí misma.', categories };
+      }
+      const childCount = categories.filter((c) => c.parentId === previous.id).length;
+      if (childCount > 0) {
+        return {
+          ok: false,
+          message: `"${previous.name}" tiene ${childCount} subcategoría(s): muévelas antes de convertirla en subcategoría.`,
+          categories,
+        };
       }
       parentId = parent.id;
     } else {
-      // No permitir quitar el parentId (convertir subcategoría en raíz)
-      if (!isRootCategory) {
-        return { ok: false, message: 'No se puede convertir una subcategoría en categoría raíz. Las 8 categorías principales son fijas.', categories };
-      }
       parentId = null;
     }
   }
@@ -389,14 +436,31 @@ export function updateCategory(slug: string, input: CategoryInput): CategoryResu
     parentId,
   };
 
-  // Si cambió el id (slug) de una categoría padre, re-apunta sus subcategorías.
+  // Si cambió el id (slug) de una categoría raíz, sus subcategorías se
+  // re-apuntan y se re-sluguean (el id de una subcategoría lleva el prefijo
+  // del padre). Se devuelve el mapa de ids para reapuntar los productos.
+  const remapped: { from: string; to: string }[] = [];
   if (parentId === null && previous.id !== newSlug) {
     for (const category of categories) {
-      if (category.parentId === previous.id) category.parentId = newSlug;
+      if (category.parentId !== previous.id) continue;
+      const suffix = category.id.startsWith(`${previous.id}--`)
+        ? category.id.slice(previous.id.length + 2)
+        : slugifyCategory(category.name);
+      const nextChildId = `${newSlug}--${suffix}`;
+      remapped.push({ from: category.id, to: nextChildId });
+      category.id = nextChildId;
+      category.slug = nextChildId;
+      category.parentId = newSlug;
     }
   }
   writeCategories(categories);
-  return { ok: true, message: `Categoría actualizada a "${name}".`, categories, category: categories[index] };
+  return {
+    ok: true,
+    message: `Categoría actualizada a "${name}".`,
+    categories,
+    category: categories[index],
+    ...(remapped.length ? { remapped } : {}),
+  };
 }
 
 export function removeCategory(slug: string): CategoryResult {
@@ -420,14 +484,14 @@ export function removeCategory(slug: string): CategoryResult {
 
 /**
  * Autasociación: dado un título + descripción, sugiere la categoría RAÍZ
- * cuyas keywords tengan más coincidencias. Solo busca en las 8 categorías
- * raíz fijas (ignora subcategorías). Devuelve null si no hay aciertos.
+ * cuyas keywords tengan más coincidencias. Sólo busca en las categorías raíz
+ * actuales (ignora subcategorías). Devuelve null si no hay aciertos.
  */
 export function suggestCategory(text: string): { category: Category; matches: number } | null {
   const haystack = ` ${text.toLowerCase()} `;
   let best: { category: Category; matches: number } | null = null;
 
-  // Solo categorías raíz (las 8 fijas) para clasificación automática
+  // Sólo categorías raíz (las subcategorías se eligen a mano en el panel).
   const rootCategories = getCategories().filter((c) => !c.parentId);
 
   for (const category of rootCategories) {
@@ -444,7 +508,10 @@ export function suggestCategory(text: string): { category: Category; matches: nu
 
 /**
  * Autasociación estricta para build-catalog: asigna OBLIGATORIAMENTE a una
- * de las 8 categorías raíz según reglas de matching por palabras clave.
+ * de las categorías raíz del catálogo según reglas de matching por palabras
+ * clave. Las reglas prioritarias cubren las 8 categorías base; si alguna ya no
+ * existe (se renombró o eliminó) se resuelve por puntuación de keywords, de
+ * modo que las categorías creadas por el admin también reciben productos.
  * - Teclado/ratón/monitor/portátil/SSD -> Informática y Oficina
  * - Auriculares/altavoz/soundbar -> Audio y Sonido
  * - Smartwatch/reloj inteligente/pulsera -> Smartwatches y Wearables

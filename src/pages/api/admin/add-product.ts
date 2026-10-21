@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../lib/adminAuth';
-import { suggestCategory } from '../../../lib/categories';
+import { suggestCategory, resolveCategoryIds } from '../../../lib/categories';
 import {
   buildRealisticPricing,
   enrichProductText,
@@ -375,6 +375,22 @@ export const POST: APIRoute = async ({ request }) => {
         for (const field of CURATION_FIELDS) {
           if ((existing as any)[field] !== undefined) {
             (base as any)[field] = (existing as any)[field];
+          }
+        }
+        // Categorización jerárquica: si la categoría o la subcategoría han
+        // cambiado, se recalculan los ids de categories.json (la curación
+        // heredada no debe dejar ids de la categoría anterior).
+        const categoryChanged = base.category !== existing.category;
+        if (categoryChanged || body?.subcategory !== undefined) {
+          const resolvedIds = resolveCategoryIds(
+            base.category,
+            String(body?.subcategory ?? '').trim()
+          );
+          if (resolvedIds.category_id) base.category_id = resolvedIds.category_id;
+          else if (categoryChanged) delete base.category_id;
+          if (resolvedIds.subcategory_id) base.subcategory_id = resolvedIds.subcategory_id;
+          else if (categoryChanged || String(body?.subcategory ?? '').trim()) {
+            delete base.subcategory_id;
           }
         }
       }

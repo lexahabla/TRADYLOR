@@ -345,10 +345,11 @@ detalle por producto que la importación.
 
 ---
 
-## 5. Migración de categorías (admin, interno)
+## 5. Reclasificación de productos por categoría (admin, interno)
 
 Endpoint **protegido por sesión de administrador** (cookie `tradylor_admin_session`).
-Fija el catálogo en la taxonomía de **8 categorías raíz** y reasigna los productos.
+Reasigna los productos a la taxonomía **actual** del catálogo (las categorías raíz y
+subcategorías que el admin haya creado). **No elimina ninguna categoría**.
 
 ### GET /api/admin/migrate-categories
 
@@ -357,35 +358,35 @@ Estado actual de la taxonomía (no escribe nada):
 ```json
 {
   "success": true,
-  "total": 8,
-  "roots": 8,
-  "subcategories": 0,
-  "missingFixedRoots": [],
-  "unknownRoots": [],
+  "total": 9,
+  "roots": 9,
+  "subcategories": 2,
   "products": 55,
-  "productsWithoutRoot": 0
+  "productsWithoutRoot": 0,
+  "productsWithUnknownRoot": 0
 }
 ```
 
 ### POST /api/admin/migrate-categories
 
 ```json
-{ "dryRun": false, "keepSubcategories": false }
+{ "dryRun": false, "manual": { "p_123": "audio-sonido" } }
 ```
 
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `dryRun` | boolean | `true` calcula el plan y devuelve el reporte **sin escribir nada**. |
-| `keepSubcategories` | boolean | `true` conserva las subcategorías colgando de las 8 raíces fijas (las huérfanas se eliminan igual). |
 | `manual` | object | Mapa `{ "<idProducto>": "<idRaíz>" }` para colocar productos concretos en la raíz indicada (tiene prioridad sobre el matching automático). |
 
 > Un cuerpo que no sea JSON válido devuelve **HTTP 400** (`{"success":false,"error":"Cuerpo JSON inválido…"}`)
-> **sin escribir nada**: la migración real nunca se ejecuta por un body mal formado.
+> **sin escribir nada**: la reclasificación real nunca se ejecuta por un body mal formado.
 
-Proceso: (1) garantiza las 8 raíces fijas, (2) reasigna cada producto con matching
-estricto por palabras clave, (3) elimina raíces/subcategorías huérfanas,
-(4) **guarda copia de seguridad** de `categories.json` y `products.json` en
-`DATA_DIR/backups/categories-<timestamp>/` antes de escribir, (5) devuelve el reporte.
+Proceso: (1) toma las categorías raíz actuales, (2) reasigna cada producto con
+matching estricto por palabras clave (los que ya estaban en una categoría válida y
+no encajan se dejan donde están y se listan para colocarlos a mano),
+(3) **guarda copia de seguridad** de `categories.json` y `products.json` en
+`DATA_DIR/backups/categories-<timestamp>/` antes de escribir, (4) devuelve el reporte.
+No borra ni crea categorías: eso se hace desde el panel (o con `/api/categories`).
 
 Respuesta:
 
@@ -396,8 +397,8 @@ Respuesta:
   "backupDir": "/app/data/backups/categories-2026-10-21T18-56-13-073Z",
   "rootsInstalled": ["Informática y Oficina", "Audio y Sonido", "..."],
   "roots": [{ "id": "informatica-oficina", "name": "Informática y Oficina", "icon": "💻" }],
-  "rootCategoriesRemoved": ["Relojes"],
-  "subcategoriesRemoved": ["Accesorios de la motocicleta"],
+  "rootCategoriesRemoved": [],
+  "subcategoriesRemoved": [],
   "productsReassigned": 12,
   "productsUnchanged": 43,
   "productsWithoutMatch": 1,
@@ -413,15 +414,64 @@ Respuesta:
 
 | Campo de la respuesta | Descripción |
 |---|---|
-| `roots` | Las **8 raíces fijas** (`id`, `name`, `icon`): son los únicos destinos admitidos en el mapa `manual`. |
-| `productsWithoutMatchList` | Detalle (`id`, `title`, `currentCategory`) de los productos que el matching automático no clasificó (los que caen en la raíz de reserva). Máximo 200 entradas; el contador `productsWithoutMatch` es el total. |
+| `roots` | Las **categorías raíz actuales** (`id`, `name`, `icon`): son los únicos destinos admitidos en el mapa `manual`. |
+| `productsWithoutMatchList` | Detalle (`id`, `title`, `currentCategory`) de los productos que el matching automático no clasificó y que no tenían una categoría válida (los que caen en la raíz por defecto). Máximo 200 entradas; el contador `productsWithoutMatch` es el total. |
 | `manualApplied` | Asignaciones manuales efectivamente aplicadas (`"<idProducto> -> <idRaíz>"`). |
 
 El panel admin (`/upayp1b4`, sección Categorías) usa la vista previa (`dryRun: true`) para
 listar los productos sin coincidencia, dejar que el administrador elija la raíz de cada uno
-y ejecutar la migración con el mapa `manual`.
+y ejecutar la reclasificación con el mapa `manual`.
 
 Es **idempotente**: al repetirla no vuelve a reasignar ni a podar nada.
+
+---
+
+## 6. Categorías y subcategorías (admin, interno)
+
+CRUD de la taxonomía del catálogo. **Protegido por sesión de administrador**
+(cookie `tradylor_admin_session`) en los métodos de escritura.
+
+### GET /api/categories
+
+Público. Devuelve todas las categorías con su conteo de productos:
+
+```json
+{
+  "success": true,
+  "total": 9,
+  "categories": [
+    { "id": "audio-sonido", "name": "Audio y Sonido", "slug": "audio-sonido", "icon": "🎧", "keywords": ["..."], "productCount": 23 }
+  ]
+}
+```
+
+Admite `?suggest=<texto>` para probar el matching por palabras clave.
+
+### POST /api/categories — alta
+
+```json
+{ "name": "Iluminación", "icon": "💡", "keywords": ["led", "lampara"], "parentId": null }
+```
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `name` | string | Obligatorio. |
+| `icon` | string | Emoji (opcional). |
+| `keywords` | string[] | Palabras clave de autodetección (opcional). |
+| `parentId` | string\|null | **Vacío/null = categoría raíz**. Con valor = subcategoría de esa raíz (un solo nivel de profundidad). |
+
+### PUT /api/categories/[id] — edición
+
+Mismos campos que el alta. `parentId` **ausente** conserva el padre actual;
+`null`/vacío convierte la categoría en raíz; con valor la mueve de rama. Si el
+id cambia (renombrada) los productos que la tenían asignada se reapuntan al id
+nuevo (`repointedProducts` en la respuesta).
+
+### DELETE /api/categories/[id] — baja
+
+Elimina la categoría y, en cascada, sus subcategorías. Los productos conservan
+el texto de la categoría pero se les quitan los ids jerárquicos que quedaban
+huérfanos (`cleanedProducts` en la respuesta).
 
 ---
 

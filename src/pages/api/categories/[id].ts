@@ -1,12 +1,72 @@
 import type { APIRoute } from 'astro';
 import {
   getCategoryById,
+  getCategories,
   updateCategory,
   removeCategory,
 } from '../../../lib/categories';
+import { readProductsFromFile, writeProductsToFile } from '../../../lib/productStore';
 import { requireAdminAuth } from '../../../lib/adminAuth';
 
 export const prerender = false;
+
+/**
+ * Reapunta en el catálogo los productos que apuntaban a los ids anteriores
+ * de las categorías (el id deriva del nombre: al renombrarlas cambia).
+ */
+function remapProductsInProducts(pairs: { from: string; to: string }[]): number {
+  if (!pairs.length) return 0;
+  try {
+    const products = readProductsFromFile();
+    let changed = 0;
+    for (const product of products) {
+      let touched = false;
+      for (const pair of pairs) {
+        if (product.category_id === pair.from) {
+          product.category_id = pair.to;
+          touched = true;
+        }
+        if (product.subcategory_id === pair.from) {
+          product.subcategory_id = pair.to;
+          touched = true;
+        }
+      }
+      if (touched) changed++;
+    }
+    if (changed) writeProductsToFile(products);
+    return changed;
+  } catch (error) {
+    console.error('[API Categories] Error reapuntando productos:', error);
+    return 0;
+  }
+}
+
+/** Limpia los ids de categoría que quedan huérfanos tras eliminar categorías. */
+function clearCategoryInProducts(ids: string[]): number {
+  if (!ids.length) return 0;
+  try {
+    const wanted = new Set(ids);
+    const products = readProductsFromFile();
+    let changed = 0;
+    for (const product of products) {
+      let touched = false;
+      if (product.category_id && wanted.has(product.category_id)) {
+        delete product.category_id;
+        touched = true;
+      }
+      if (product.subcategory_id && wanted.has(product.subcategory_id)) {
+        delete product.subcategory_id;
+        touched = true;
+      }
+      if (touched) changed++;
+    }
+    if (changed) writeProductsToFile(products);
+    return changed;
+  } catch (error) {
+    console.error('[API Categories] Error limpiando ids de productos:', error);
+    return 0;
+  }
+}
 
 /**
  * GET /api/categories/[id]
@@ -107,12 +167,25 @@ export const PUT: APIRoute = async ({ params, request }) => {
       );
     }
 
+    // Si el id de la categoría cambió (renombrada o movida de rama) los
+    // productos que la tenían asignada se reapuntan al id nuevo. Lo mismo con
+    // las subcategorías, cuyo id lleva el prefijo del padre.
+    const previousId = current?.id;
+    const pairs = [
+      ...(previousId && result.category && previousId !== result.category.id
+        ? [{ from: previousId, to: result.category.id }]
+        : []),
+      ...(result.remapped ?? []),
+    ];
+    const repointed = remapProductsInProducts(pairs);
+
     return new Response(
       JSON.stringify({
         success: true,
         message: result.message,
         category: result.category,
         categories: result.categories,
+        repointedProducts: repointed,
       }),
       { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
     );
@@ -145,6 +218,15 @@ export const DELETE: APIRoute = async ({ params, request }) => {
   }
 
   const target = getCategoryById(id);
+  // IDs que dejan de existir: la categoría y sus subcategorías (borrado en cascada).
+  const removedIds = target
+    ? [
+        target.id,
+        ...getCategories()
+          .filter((category) => category.parentId === target.id)
+          .map((category) => category.id),
+      ]
+    : [];
   const result = removeCategory(target?.slug ?? id);
   if (!result.ok) {
     return new Response(
@@ -153,11 +235,16 @@ export const DELETE: APIRoute = async ({ params, request }) => {
     );
   }
 
+  // Los productos conservan su texto de categoría, pero se les quitan los ids
+  // que apuntan a categorías ya inexistentes.
+  const cleaned = clearCategoryInProducts(removedIds);
+
   return new Response(
     JSON.stringify({
       success: true,
       message: result.message,
       categories: result.categories,
+      cleanedProducts: cleaned,
     }),
     { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
   );
