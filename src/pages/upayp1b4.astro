@@ -506,7 +506,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <div id="prodFilters" class="ali-filters prod-filters">
         <div class="ali-filters-row">
           <div class="filter-field ali-f-search">
-            <label for="inputFilterList">BUSCAR PRODUCTOS</label>
+            <label for="inputFilterList">Buscar por nombre</label>
             <input type="search" id="inputFilterList" placeholder="Filtrar por título, comerciante o red..." />
           </div>
           <div class="filter-field">
@@ -6805,8 +6805,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
   .filter-field { display: grid; gap: .3rem; flex: 1; min-width: 110px; }
   .filter-field label { color: var(--color-text-dim); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-  /* Mismo estilo (color y tipografía) que .product-sel-title */
-  .filter-field label[for="inputFilterList"] { color: #93c5fd; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
   .filter-field input, .filter-field select { width: 100%; box-sizing: border-box; padding: .55rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
   .filter-field input:focus, .filter-field select:focus { border-color: #38bdf8; }
   /* Opciones de CUALQUIER desplegable: texto negro sobre fondo claro (el
@@ -6897,20 +6895,24 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
      Selector más específico para fijar un ancho que deje ver «€» / «%». */
   .ali-filters .ali-pair .ali-pair-unit { flex: 0 0 62px; width: 62px; padding-left: .55rem; padding-right: .3rem; }
   /* Controles de rango del Catálogo de Productos Registrados (precio min/máx,
-     descuento por rangos y valoración por umbral). */
+     descuento por rangos y valoración por umbral).
+     Se inyectan por JS (innerHTML), así que las reglas van en :global (Astro
+     sólo añade el atributo de scope a los elementos del template): sin esto
+     estos controles salían como inputs/selects nativos, distintos del resto
+     de la fila. Ahora heredan EXACTAMENTE el estilo de `.filter-field` (el
+     input de búsqueda, Categoría, Subcategoría y Ordenar por). */
   .ali-filters .filter-field.ali-f-pair { flex: 0 1 170px; min-width: 152px; }
-  /* Precio, Descuento y Valoración: los tres comparten CAJA (ancho, alto,
-     tipografía y etiqueta) para que la fila de filtros quede homogénea. */
-  .prod-filters .filter-field.prod-range-field { flex: 0 1 156px; min-width: 138px; }
-  .prod-filters .filter-field.prod-range-field select,
-  .prod-filters .filter-field.prod-range-field .ali-pair { height: 2.15rem; }
-  .prod-filters .filter-field.prod-range-field select { padding: .4rem .55rem; font-size: .78rem; }
-  /* El par de precios se pinta como un único control (misma caja que los select). */
-  .prod-filters .filter-field.prod-range-field .ali-pair { display: flex; align-items: stretch; gap: 0; overflow: hidden; background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); }
-  .prod-filters .filter-field.prod-range-field .ali-pair:focus-within { border-color: #38bdf8; }
-  .prod-filters .filter-field.prod-range-field .ali-pair input { flex: 1 1 0; min-width: 0; height: 100%; padding: .4rem .5rem; color: var(--color-text-main); background: transparent; border: 0; font: inherit; font-size: .78rem; outline: none; }
-  .prod-filters .filter-field.prod-range-field .ali-pair input::placeholder { color: var(--color-text-dim); }
-  .prod-filters .filter-field.prod-range-field .ali-pair-sep { display: flex; align-items: center; padding: 0 .1rem; color: var(--color-text-dim); font-size: .7rem; }
+  .prod-filters :global(.filter-field.prod-range-field) { display: grid; gap: .3rem; flex: 0 1 156px; min-width: 138px; }
+  .prod-filters :global(.filter-field.prod-range-field label) { color: var(--color-text-dim); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .prod-filters :global(.filter-field.prod-range-field input),
+  .prod-filters :global(.filter-field.prod-range-field select) { width: 100%; box-sizing: border-box; padding: .55rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
+  .prod-filters :global(.filter-field.prod-range-field input:focus),
+  .prod-filters :global(.filter-field.prod-range-field select:focus) { border-color: #38bdf8; }
+  /* El par de precios: dos campos con la misma caja que el input de búsqueda. */
+  .prod-filters :global(.filter-field.prod-range-field .ali-pair) { display: flex; align-items: stretch; gap: .35rem; }
+  .prod-filters :global(.filter-field.prod-range-field .ali-pair input) { flex: 1 1 0; width: auto; min-width: 0; }
+  .prod-filters :global(.filter-field.prod-range-field .ali-pair input::placeholder) { color: var(--color-text-dim); }
+  .prod-filters :global(.filter-field.prod-range-field .ali-pair-sep) { display: flex; align-items: center; color: var(--color-text-dim); font-size: .7rem; }
   /* El botón de limpiar filtros se alinea con la altura de los controles. */
   .prod-filters .ali-f-reset { min-height: 2.15rem; }
 

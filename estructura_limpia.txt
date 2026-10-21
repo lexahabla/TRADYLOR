@@ -1,4 +1,6 @@
-﻿D:\AXEL\WEBS\TRADYLOR\tradylor_web\scripts\reset-admin-password.mjs
+﻿D:\AXEL\WEBS\TRADYLOR\tradylor_web\docs\api-v1.md
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\docs\deploy-easypanel.md
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\scripts\reset-admin-password.mjs
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\DateRangeFilter.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\FinancialHeaderCards.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\MarketingMenu.astro
@@ -28,6 +30,10 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\SmartMatcherWizard.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\TestProofBadge.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\TransparencyDashboard.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\content\config.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\data\metricasGlosario.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\data\mockAnalytics.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\data\mockVentas.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\data\products.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\env.d.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\layouts\Layout.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\adminAuth.ts
