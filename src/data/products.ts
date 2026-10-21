@@ -37,7 +37,11 @@ export interface Product {
   merchant: string;
   affiliateUrl: string;
   buyNowUrl?: string;
-  /** CÃ³digo ASIN de Amazon (se autodetecta al pegar el enlace de afiliado). */
+  /** Red de afiliados a la que pertenece el producto (amazon, aliexpress, ebay.). */
+  network?: string;
+  /** Datos extra del catálogo multi-red (incluye `crossMerchant.networks`). */
+  extra?: Record<string, unknown>;
+  /** Código ASIN de Amazon (se autodetecta al pegar el enlace de afiliado). */
   asin?: string;
   pros: string[];
   cons: string[];
@@ -121,6 +125,10 @@ export interface Product {
   alternative_product_ids?: string[];
   /** Puntuación de conversión/rentabilidad 0-100. */
   conversion_score?: number;
+  /** Comisión estimada de la red de afiliados (%). */
+  commissionEstimate?: number;
+  /** Ventas estimadas en los últimos 30 días. */
+  sales30d?: number;
 
   /** Estado de auditoría del producto: approved | rejected | pending. */
   audit_status?: 'approved' | 'rejected' | 'pending';
