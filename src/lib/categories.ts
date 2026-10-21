@@ -11,6 +11,8 @@
  *    keywords definidas (se usa en el formulario de alta y en el scraper).
  *  - Compatibilidad: getCategoryNames() devuelve los nombres para el datalist
  *    del formulario y el filtro legacy del panel.
+ *  - REGLAS ESTRICTAS: NO creación automática de categorías. Solo 8 categorías
+ *    raíz fijas + subcategorías creadas explícitamente por el admin.
  * ==============================================================================
  */
 
@@ -33,35 +35,124 @@ export interface Category {
 
 const CATEGORIES_PATH = dataFile('categories.json');
 
-/** Categorías base: se escriben si el archivo no existe o está vacío/corrupto. */
+/**
+ * 8 CATEGORÍAS RAÍZ FIJAS Y LIMPIAS - NO SE CREAN AUTOMÁTICAMENTE MÁS.
+ * Cada una tiene keywords obligatorias para matching inteligente.
+ * Prohibida la creación de categorías caóticas desde proveedores.
+ */
 export const DEFAULT_CATEGORIES: Category[] = [
+  {
+    id: 'informatica-oficina',
+    name: 'Informática y Oficina',
+    slug: 'informatica-oficina',
+    icon: '💻',
+    keywords: [
+      'teclado', 'raton', 'ratón', 'mouse', 'monitor', 'portatil', 'portátil', 'laptop', 'macbook',
+      'ssd', 'disco duro', 'memoria ram', 'procesador', 'grafica', 'gráfica', 'gpu', 'rtx', 'gtx',
+      'placa base', 'motherboard', 'fuente poder', 'gabinete', 'torre', 'ordenador', 'pc ', 'sobremesa',
+      'chromebook', 'tablet', 'impresora', 'escanner', 'webcam', 'microfono', 'micrófono',
+      'auriculares gaming', 'cascos gaming', 'teclado mecanico', 'teclado mecánico', 'switch', 'hub usb',
+      'docking station', 'adaptador', 'cable hdmi', 'cable displayport', 'kvm'
+    ],
+  },
   {
     id: 'audio-sonido',
     name: 'Audio y Sonido',
     slug: 'audio-sonido',
     icon: '🎧',
-    keywords: ['auriculares', 'auricular', 'altavoz', 'altavoces', 'sonido', 'audio', 'soundbar', 'barra de sonido', 'microfono', 'micrófono', 'noise cancelling', 'cancelacion de ruido', ' earbuds', 'earbuds', ' cascos', 'cascos'],
+    keywords: [
+      'auriculares', 'auricular', 'altavoz', 'altavoces', 'sonido', 'audio', 'soundbar', 'barra de sonido',
+      'microfono', 'micrófono', 'noise cancelling', 'cancelacion de ruido', 'cancelación de ruido',
+      'earbuds', 'cascos', 'auriculares bluetooth', 'auriculares inalambricos', 'auriculares inalámbricos',
+      'auriculares deportivos', 'true wireless', 'tw', 'headphones', 'headset', 'speakers',
+      'bafle', 'subwoofer', 'amplificador', 'receptor', 'dac', 'interface audio', 'mezclador'
+    ],
   },
   {
-    id: 'informatica',
-    name: 'Informática',
-    slug: 'informatica',
-    icon: '💻',
-    keywords: ['portatil', 'portátil', 'laptop', 'macbook', 'tablet', 'e-reader', 'ereader', 'ebook', 'kindle', 'ordenador', 'pc ', 'sobremesa', 'monitor', 'teclado', 'raton', 'ratón', 'ssd', 'disco duro', 'memoria ram', 'procesador', 'chromebook'],
+    id: 'smartwatches',
+    name: 'Smartwatches y Wearables',
+    slug: 'smartwatches',
+    icon: '⌚',
+    keywords: [
+      'smartwatch', 'reloj inteligente', 'reloj smart', 'wearable', 'pulsera actividad', 'pulsera inteligente',
+      'fitness tracker', 'activity tracker', 'garmin', 'apple watch', 'galaxy watch', 'pixel watch',
+      'amazfit', 'huawei watch', 'xiaomi watch', 'oneplus watch', 'reloj gps', 'reloj deporte',
+      'monitor frecuencia cardiaca', 'spo2', 'oxigeno sangre', 'ecg', 'pulsometro', 'pulsómetro'
+    ],
   },
   {
-    id: 'hogar-inteligente',
-    name: 'Hogar Inteligente',
-    slug: 'hogar-inteligente',
+    id: 'hogar-inteligencia',
+    name: 'Hogar e Inteligencia',
+    slug: 'hogar-inteligencia',
     icon: '🏠',
-    keywords: ['robot aspirador', 'aspirador', 'aspiradora', 'smart home', 'domotica', 'domótica', 'bombilla', 'enchufe inteligente', 'alexa', 'google home', 'termostato', 'camara vigilancia', 'cámara vigilancia', 'timbre', 'fregasuelos', 'roborock', 'roomba'],
+    keywords: [
+      'robot aspirador', 'aspirador robot', 'aspiradora robot', 'fregasuelos', 'roborock', 'roomba',
+      'smart home', 'domotica', 'domótica', 'bombilla inteligente', 'bombilla wifi', 'enchufe inteligente',
+      'enchufe wifi', 'alexa', 'google home', 'home assistant', 'matter', 'thread', 'zigbee', 'zwave',
+      'termostato inteligente', 'camara vigilancia', 'cámara vigilancia', 'timbre inteligente', 'video portero',
+      'sensor movimiento', 'sensor puerta', 'sensor temperatura', 'sensor humedad', 'riego inteligente',
+      'cafetera inteligente', 'freidora aire', 'freidora sin aceite', 'horno inteligente', 'nevera inteligente',
+      'lavadora inteligente', 'secadora inteligente', 'purificador aire', 'humidificador inteligente'
+    ],
   },
   {
-    id: 'herramientas',
-    name: 'Herramientas',
-    slug: 'herramientas',
+    id: 'movil-accesorios',
+    name: 'Móvil y Accesorios',
+    slug: 'movil-accesorios',
+    icon: '📱',
+    keywords: [
+      'smartphone', 'movil', 'móvil', 'celular', 'telefono', 'teléfono', 'iphone', 'samsung galaxy',
+      'xiaomi', 'oneplus', 'google pixel', 'nothing phone', 'motorola', 'oppo', 'vivo', 'realme',
+      'funda movil', 'funda móvil', 'cristal templado', 'protector pantalla', 'cargador', 'cargador rapido',
+      'cargador rápido', 'cargador usb c', 'cargador inalambrico', 'cargador inalámbrico', 'powerbank',
+      'bateria externa', 'batería externa', 'power bank', 'soporte coche', 'soporte escritorio',
+      'anillo magsafe', 'popsocket', 'cable usb c', 'cable lightning', 'adaptador otg', 'hub movil'
+    ],
+  },
+  {
+    id: 'fotografia-video',
+    name: 'Fotografía y Vídeo',
+    slug: 'fotografia-video',
+    icon: '📷',
+    keywords: [
+      'camara', 'cámara', 'camara reflex', 'cámara reflex', 'camara mirrorless', 'cámara mirrorless',
+      'camara compacta', 'cámara compacta', 'camara accion', 'cámara acción', 'gopro', 'dji osmo',
+      'objetivo', 'lente', 'objetivo zoom', 'objetivo gran angular', 'objetivo macro', 'objetivo retrato',
+      'tripode', 'trípode', 'monopie', 'gimbal', 'estabilizador', 'ronin', 'dji ronin', 'zhiyun',
+      'drone', 'dron', 'dji mavic', 'dji mini', 'dji air', 'autel', 'parrot',
+      'microfono video', 'micrófono video', 'rode', 'dji mic', 'hollywood', 'luz video', 'panel led',
+      'softbox', 'ring light', 'luz anillo', 'fondo fotografia', 'fondo video', 'teleprompter'
+    ],
+  },
+  {
+    id: 'gaming',
+    name: 'Gaming',
+    slug: 'gaming',
+    icon: '🎮',
+    keywords: [
+      'gaming', 'videojuego', 'consola', 'playstation', 'ps5', 'ps4', 'xbox', 'series x', 'series s',
+      'nintendo switch', 'switch oled', 'steam deck', 'rog ally', 'lenovo legion go',
+      'mando', 'controlador', 'dualsense', 'dualshock', 'xbox controller', 'pro controller',
+      'raton gaming', 'ratón gaming', 'mouse gaming', 'teclado gaming', 'teclado mecanico gaming',
+      'teclado mecánico gaming', 'auriculares gaming', 'cascos gaming', 'headset gaming',
+      'silla gaming', 'mesa gaming', 'monitor gaming', 'monitor 144hz', 'monitor 240hz', 'curvo gaming',
+      'tarjeta grafica', 'tarjeta gráfica', 'rtx 40', 'rtx 30', 'rx 7000', 'rx 6000'
+    ],
+  },
+  {
+    id: 'herramientas-bricolaje',
+    name: 'Herramientas y Bricolaje',
+    slug: 'herramientas-bricolaje',
     icon: '🛠️',
-    keywords: ['taladro', 'atornillador', 'sierra', 'herramienta', 'destornillador', 'llave', 'martillo', 'lijadora', 'amoladora', 'broca', 'bosch', 'dewalt', 'makita', 'nivel laser', 'multimetro', 'multímetro'],
+    keywords: [
+      'taladro', 'atornillador', 'taladro atornillador', 'martillo percutor', 'rotomartillo', 'demoledor',
+      'sierra', 'sierra circular', 'sierra caladora', 'sierra sable', 'amoladora', 'radial', 'lijadora',
+      'lijadora orbital', 'lijadora banda', 'multimetro', 'multímetro', 'pinza amperimetrica', 'pinza amperimétrica',
+      'destornillador', 'llave', 'llave inglesa', 'llave fija', 'llave tubo', 'juego llaves', 'trinquete',
+      'nivel laser', 'nivel láser', 'metro laser', 'metro láser', 'detector pared', 'detector cables',
+      'bosch', 'dewalt', 'makita', 'milwaukee', 'einhell', 'black decker', 'ryobi', 'park side',
+      'compresor', 'pistola pintura', 'pistola calor', 'soldador', 'inversora soldar', 'cortadora plasma'
+    ],
   },
 ];
 
@@ -110,7 +201,7 @@ function readCategories(): Category[] {
   return [...DEFAULT_CATEGORIES];
 }
 
-function writeCategories(categories: Category[]): void {
+export function writeCategories(categories: Category[]): void {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(CATEGORIES_PATH, JSON.stringify(categories, null, 2), 'utf-8');
 }
@@ -206,31 +297,37 @@ export function createCategory(input: CategoryInput): CategoryResult {
 
   const categories = getCategories();
 
-  // Subcategoría: validar el padre y usar un slug único dentro de su rama.
-  let parentId: string | null = null;
+  // REGLAS ESTRICTAS: Prohibida creación de categorías raíz nuevas.
+  // Solo se permiten SUBCATEGORÍAS bajo las 8 categorías raíz fijas.
   const rawParentId = String(input.parentId ?? '').trim();
-  if (rawParentId) {
-    const parent = getCategoryById(rawParentId);
-    if (!parent) {
-      return { ok: false, message: `No existe la categoría padre "${rawParentId}".`, categories };
-    }
-    if (parent.parentId) {
-      return { ok: false, message: `"${parent.name}" ya es una subcategoría: sólo se permite un nivel.`, categories };
-    }
-    parentId = parent.id;
+  if (!rawParentId) {
+    return {
+      ok: false,
+      message: 'No se pueden crear nuevas categorías raíz. Las 8 categorías principales son fijas. Use una categoría padre para crear una subcategoría.',
+      categories
+    };
   }
 
+  const parent = getCategoryById(rawParentId);
+  if (!parent) {
+    return { ok: false, message: `No existe la categoría padre "${rawParentId}".`, categories };
+  }
+  if (parent.parentId) {
+    return { ok: false, message: `"${parent.name}" ya es una subcategoría: sólo se permite un nivel de profundidad.`, categories };
+  }
+
+  const parentId = parent.id;
   const slugBase = slugifyCategory(name);
-  const slug = parentId ? `${parentId}--${slugBase}` : slugBase;
-  if (categories.some((c) => c.slug === slug || (c.name.toLowerCase() === name.toLowerCase() && (c.parentId ?? null) === parentId))) {
-    return { ok: false, message: `Ya existe una categoría con el nombre "${name}"${parentId ? ' en esa rama' : ''}.`, categories };
+  const slug = `${parentId}--${slugBase}`;
+  if (categories.some((c) => c.slug === slug || (c.name.toLowerCase() === name.toLowerCase() && c.parentId === parentId))) {
+    return { ok: false, message: `Ya existe una subcategoría con el nombre "${name}" en "${parent.name}".`, categories };
   }
 
   const category: Category = {
     id: slug,
     name,
     slug,
-    icon: String(input.icon ?? '').trim() || '📦',
+    icon: String(input.icon ?? '').trim() || '📂',
     keywords: (input.keywords ?? []).map((k) => String(k).trim().toLowerCase()).filter(Boolean),
     parentId,
   };
@@ -238,9 +335,7 @@ export function createCategory(input: CategoryInput): CategoryResult {
   writeCategories(categories);
   return {
     ok: true,
-    message: parentId
-      ? `Subcategoría "${name}" creada y vinculada.`
-      : `Categoría "${name}" creada correctamente.`,
+    message: `Subcategoría "${name}" creada y vinculada a "${parent.name}".`,
     categories,
     category,
   };
@@ -255,8 +350,10 @@ export function updateCategory(slug: string, input: CategoryInput): CategoryResu
   if (!name) return { ok: false, message: 'El nombre de la categoría es obligatorio.', categories };
 
   const previous = categories[index];
-  const newSlugBase = slugifyCategory(name);
-  // Conserva el parentId existente salvo que se envíe explícitamente otro valor.
+  const isRootCategory = !previous.parentId;
+
+  // REGLAS ESTRICTAS: No permitir convertir una categoría raíz en subcategoría
+  // ni una subcategoría en categoría raíz (quitar parentId).
   let parentId = previous.parentId ?? null;
   if (input.parentId !== undefined) {
     const rawParentId = String(input.parentId ?? '').trim();
@@ -264,11 +361,20 @@ export function updateCategory(slug: string, input: CategoryInput): CategoryResu
       const parent = getCategoryById(rawParentId);
       if (!parent) return { ok: false, message: `No existe la categoría padre "${rawParentId}".`, categories };
       if (parent.parentId) return { ok: false, message: `"${parent.name}" ya es una subcategoría.`, categories };
+      // No permitir cambiar el padre de una categoría raíz
+      if (isRootCategory) {
+        return { ok: false, message: 'No se puede cambiar la categoría padre de una categoría raíz principal.', categories };
+      }
       parentId = parent.id;
     } else {
+      // No permitir quitar el parentId (convertir subcategoría en raíz)
+      if (!isRootCategory) {
+        return { ok: false, message: 'No se puede convertir una subcategoría en categoría raíz. Las 8 categorías principales son fijas.', categories };
+      }
       parentId = null;
     }
   }
+  const newSlugBase = slugifyCategory(name);
   const newSlug = parentId ? `${parentId}--${newSlugBase}` : newSlugBase;
   const duplicate = categories.some((c) => c.slug !== slug && (c.slug === newSlug || (c.name.toLowerCase() === name.toLowerCase() && (c.parentId ?? null) === parentId)));
   if (duplicate) return { ok: false, message: `Ya existe otra categoría con el nombre "${name}".`, categories };
@@ -313,14 +419,18 @@ export function removeCategory(slug: string): CategoryResult {
 }
 
 /**
- * Autasociación: dado un texto (título + descripción), sugiere la categoría
- * cuyas keywords tengan más coincidencias. Devuelve null si no hay aciertos.
+ * Autasociación: dado un título + descripción, sugiere la categoría RAÍZ
+ * cuyas keywords tengan más coincidencias. Solo busca en las 8 categorías
+ * raíz fijas (ignora subcategorías). Devuelve null si no hay aciertos.
  */
 export function suggestCategory(text: string): { category: Category; matches: number } | null {
   const haystack = ` ${text.toLowerCase()} `;
   let best: { category: Category; matches: number } | null = null;
 
-  for (const category of getCategories()) {
+  // Solo categorías raíz (las 8 fijas) para clasificación automática
+  const rootCategories = getCategories().filter((c) => !c.parentId);
+
+  for (const category of rootCategories) {
     const matches = category.keywords.reduce(
       (count, keyword) => (keyword && haystack.includes(keyword) ? count + 1 : count),
       0,
@@ -330,4 +440,56 @@ export function suggestCategory(text: string): { category: Category; matches: nu
     }
   }
   return best;
+}
+
+/**
+ * Autasociación estricta para build-catalog: asigna OBLIGATORIAMENTE a una
+ * de las 8 categorías raíz según reglas de matching por palabras clave.
+ * - Teclado/ratón/monitor/portátil/SSD -> Informática y Oficina
+ * - Auriculares/altavoz/soundbar -> Audio y Sonido
+ * - Smartwatch/reloj inteligente/pulsera -> Smartwatches y Wearables
+ * - Robot aspirador/domotica/enchufe inteligente -> Hogar e Inteligencia
+ * - Smartphone/funda/cargador/powerbank -> Móvil y Accesorios
+ * - Cámara/objetivo/drone/gimbal -> Fotografía y Vídeo
+ * - Consola/mando/gaming -> Gaming
+ * - Taladro/atornillador/sierra/amoladora -> Herramientas y Bricolaje
+ */
+export function suggestCategoryStrict(text: string): Category | null {
+  const haystack = ` ${text.toLowerCase()} `;
+  const rootCategories = getCategories().filter((c) => !c.parentId);
+
+  // Reglas de asignación obligatoria por palabras clave prioritarias
+  const mandatoryRules: Array<{ categoryId: string; keywords: string[] }> = [
+    { categoryId: 'informatica-oficina', keywords: ['teclado', 'raton', 'ratón', 'mouse', 'monitor', 'portatil', 'portátil', 'laptop', 'macbook', 'ssd', 'disco duro', 'memoria ram', 'procesador', 'grafica', 'gráfica', 'gpu', 'placa base', 'motherboard', 'fuente poder', 'gabinete', 'torre', 'ordenador', 'chromebook', 'impresora', 'webcam', 'teclado mecanico', 'teclado mecánico', 'switch', 'hub usb', 'docking'] },
+    { categoryId: 'audio-sonido', keywords: ['auriculares', 'auricular', 'altavoz', 'altavoces', 'soundbar', 'barra de sonido', 'earbuds', 'cascos', 'true wireless', 'tw', 'headphones', 'headset', 'speakers', 'bafle', 'subwoofer', 'amplificador', 'interface audio', 'mezclador'] },
+    { categoryId: 'smartwatches', keywords: ['smartwatch', 'reloj inteligente', 'reloj smart', 'wearable', 'pulsera actividad', 'pulsera inteligente', 'fitness tracker', 'activity tracker', 'apple watch', 'galaxy watch', 'pixel watch', 'amazfit', 'huawei watch', 'xiaomi watch', 'reloj gps', 'reloj deporte', 'pulsometro', 'pulsómetro', 'spo2', 'ecg'] },
+    { categoryId: 'hogar-inteligencia', keywords: ['robot aspirador', 'aspirador robot', 'aspiradora robot', 'fregasuelos', 'roborock', 'roomba', 'domotica', 'domótica', 'bombilla inteligente', 'bombilla wifi', 'enchufe inteligente', 'enchufe wifi', 'termostato inteligente', 'camara vigilancia', 'cámara vigilancia', 'timbre inteligente', 'video portero', 'sensor movimiento', 'sensor puerta', 'purificador aire', 'humidificador inteligente', 'cafetera inteligente', 'freidora aire', 'freidora sin aceite'] },
+    { categoryId: 'movil-accesorios', keywords: ['smartphone', 'iphone', 'samsung galaxy', 'xiaomi', 'oneplus', 'google pixel', 'funda movil', 'funda móvil', 'cristal templado', 'protector pantalla', 'cargador rapido', 'cargador rápido', 'cargador usb c', 'cargador inalambrico', 'cargador inalámbrico', 'powerbank', 'bateria externa', 'batería externa', 'power bank', 'soporte coche', 'anillo magsafe', 'popsocket'] },
+    { categoryId: 'fotografia-video', keywords: ['camara', 'cámara', 'camara reflex', 'cámara reflex', 'camara mirrorless', 'cámara mirrorless', 'camara accion', 'cámara acción', 'gopro', 'dji osmo', 'objetivo', 'lente', 'tripode', 'trípode', 'gimbal', 'estabilizador', 'drone', 'dron', 'dji mavic', 'dji mini', 'dji air', 'microfono video', 'micrófono video', 'luz video', 'panel led', 'softbox', 'ring light'] },
+    { categoryId: 'gaming', keywords: ['gaming', 'videojuego', 'consola', 'playstation', 'ps5', 'ps4', 'xbox', 'series x', 'series s', 'nintendo switch', 'steam deck', 'mando', 'controlador', 'dualsense', 'dualshock', 'raton gaming', 'ratón gaming', 'mouse gaming', 'teclado gaming', 'teclado mecanico gaming', 'teclado mecánico gaming', 'auriculares gaming', 'cascos gaming', 'headset gaming', 'silla gaming', 'monitor gaming', 'tarjeta grafica', 'tarjeta gráfica', 'rtx 40', 'rtx 30', 'rx 7000', 'rx 6000'] },
+    { categoryId: 'herramientas-bricolaje', keywords: ['taladro', 'atornillador', 'martillo percutor', 'rotomartillo', 'sierra circular', 'sierra caladora', 'amoladora', 'radial', 'lijadora', 'multimetro', 'multímetro', 'destornillador', 'llave inglesa', 'llave fija', 'llave tubo', 'trinquete', 'nivel laser', 'nivel láser', 'bosch', 'dewalt', 'makita', 'milwaukee', 'einhell', 'compresor', 'soldador', 'cortadora plasma'] },
+  ];
+
+  // Primero: reglas obligatorias (coincidencia exacta de palabra clave prioritaria)
+  for (const rule of mandatoryRules) {
+    for (const keyword of rule.keywords) {
+      if (haystack.includes(` ${keyword} `) || haystack.startsWith(`${keyword} `) || haystack.endsWith(` ${keyword}`)) {
+        const cat = rootCategories.find((c) => c.id === rule.categoryId);
+        if (cat) return cat;
+      }
+    }
+  }
+
+  // Segundo: matching por puntuación de keywords (fallback)
+  let best: { category: Category; matches: number } | null = null;
+  for (const category of rootCategories) {
+    const matches = category.keywords.reduce(
+      (count, keyword) => (keyword && haystack.includes(keyword) ? count + 1 : count),
+      0,
+    );
+    if (matches > 0 && (!best || matches > best.matches)) {
+      best = { category, matches };
+    }
+  }
+  return best?.category ?? null;
 }

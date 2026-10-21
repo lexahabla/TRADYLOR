@@ -1438,6 +1438,232 @@ const resolvedImage = toAbsolute(image);
           gap: 0.4rem;
         }
       }
+
+      /* =========================================================================
+         CATEGORÍAS ADMIN — Grid de tarjetas con acordeón para subcategorías
+         ========================================================================= */
+      .categories-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 1.25rem;
+        margin-top: 1rem;
+      }
+      .cat-card {
+        background: var(--color-bg-card);
+        border: 1px solid var(--color-border);
+        border-radius: var(--border-radius-md);
+        overflow: hidden;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      }
+      .cat-card:hover {
+        border-color: var(--color-border-hover);
+        box-shadow: var(--shadow-card);
+      }
+      .cat-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 1rem 1.25rem;
+        background: var(--color-surface-subtle);
+        border-bottom: 1px solid var(--color-border);
+        cursor: pointer;
+      }
+      .cat-main-info {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
+      }
+      .cat-icon {
+        font-size: 1.75rem;
+        line-height: 1;
+      }
+      .cat-name-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 0.15rem;
+        min-width: 0;
+      }
+      .cat-name {
+        font-family: var(--font-heading);
+        font-weight: 700;
+        font-size: 1.05rem;
+        color: var(--color-text-main);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .cat-slug {
+        font-size: 0.7rem;
+        color: var(--color-text-dim);
+        font-family: monospace;
+      }
+      .cat-stats {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+      .cat-count {
+        font-size: 0.75rem;
+        color: var(--color-text-muted);
+        font-weight: 500;
+      }
+      .subcat-count-badge {
+        font-size: 0.7rem;
+        color: var(--color-primary);
+        font-weight: 600;
+        background: rgba(59, 130, 246, 0.12);
+        padding: 0.15rem 0.5rem;
+        border-radius: 999px;
+      }
+      .cat-accordion-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        color: var(--color-text-muted);
+        cursor: pointer;
+        flex-shrink: 0;
+        transition: all 0.2s ease;
+      }
+      .cat-accordion-btn:hover {
+        background: var(--color-primary);
+        border-color: var(--color-primary);
+        color: #ffffff;
+      }
+      .cat-accordion-btn:focus-visible {
+        outline: 2px solid var(--color-primary);
+        outline-offset: 2px;
+      }
+      .cat-accordion-btn svg {
+        transition: transform 0.2s ease;
+      }
+      .cat-accordion-btn[aria-expanded="true"] svg {
+        transform: rotate(180deg);
+      }
+      .cat-subcat-panel {
+        padding: 0;
+        overflow: hidden;
+        max-height: 0;
+        transition: max-height 0.3s ease, padding 0.3s ease;
+      }
+      .cat-subcat-panel:not([hidden]) {
+        max-height: 500px;
+        padding: 0.75rem 1rem;
+      }
+      .subcat-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+      }
+      .subcat-card {
+        background: var(--color-surface-subtle);
+        border: 1px solid var(--color-border);
+        border-radius: var(--border-radius-sm);
+        padding: 0.75rem 1rem;
+        transition: border-color 0.2s ease;
+      }
+      .subcat-card:hover {
+        border-color: var(--color-border-hover);
+      }
+      .subcat-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+      }
+      .subcat-icon {
+        font-size: 1.25rem;
+        flex-shrink: 0;
+      }
+      .subcat-name {
+        font-weight: 600;
+        color: var(--color-text-main);
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .subcat-count {
+        font-size: 0.7rem;
+        color: var(--color-text-dim);
+        font-family: monospace;
+        white-space: nowrap;
+      }
+      .subcat-actions {
+        display: flex;
+        gap: 0.25rem;
+      }
+      .subcat-keywords {
+        margin-top: 0.5rem;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+      }
+      .subcat-empty {
+        text-align: center;
+        padding: 1rem;
+        color: var(--color-text-dim);
+        font-size: 0.8rem;
+      }
+      .subcat-add-row {
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid var(--color-border);
+        text-align: center;
+      }
+      .cat-card-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0.75rem 1.25rem;
+        background: var(--color-surface-subtle);
+        border-top: 1px solid var(--color-border);
+      }
+      .cat-edit-root {
+        font-size: 0.75rem;
+      }
+      .cat-root-hint {
+        font-size: 0.7rem;
+        color: var(--color-text-dim);
+        font-style: italic;
+      }
+      .cat-kw {
+        display: inline-block;
+        font-size: 0.65rem;
+        font-weight: 600;
+        color: var(--color-primary);
+        background: rgba(59, 130, 246, 0.12);
+        padding: 0.1rem 0.45rem;
+        border-radius: 4px;
+      }
+      .cat-kw-empty {
+        font-size: 0.65rem;
+        color: var(--color-text-dim);
+        font-style: italic;
+      }
+      /* Animación suave para el panel de subcategorías */
+      .cat-subcat-panel[hidden] {
+        display: block !important;
+        max-height: 0;
+        padding: 0;
+        overflow: hidden;
+      }
+      .cat-subcat-panel:not([hidden]) {
+        display: block !important;
+      }
+
+      /* Responsive para categorías grid */
+      @media (max-width: 768px) {
+        .categories-grid {
+          grid-template-columns: 1fr;
+        }
+      }
     </style>
 
     <!-- Oculta el banner y el gadget del widget de Google Translate (sólo usamos

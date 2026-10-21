@@ -925,10 +925,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <div class="view-heading">
         <span class="admin-tag-pill">Organización del catálogo</span>
         <h2 class="admin-title">Categorías</h2>
-        <p class="admin-subtitle">Crea y mantiene las categorías disponibles para clasificar productos importados y añadidos manualmente. Se aplican al instante en el formulario de productos y en el importador de Afiliados.</p>
+        <p class="admin-subtitle">8 categorías raíz fijas + subcategorías creadas por el admin. El matching automático usa palabras clave obligatorias; prohibida la creación automática de categorías nuevas.</p>
       </div>
 
-      <!-- 1. Formulario de alta / edición de categorías (colapsable) -->
+      <!-- 1. Formulario de alta / edición de SUBCATEGORÍAS (colapsable) -->
       <div class="admin-card">
         <div class="card-header" style="cursor: pointer;" id="categoryFormToggle" role="button" aria-expanded="false" aria-controls="categoryFormPanel" tabindex="0">
           <div class="header-icon">
@@ -938,8 +938,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </svg>
           </div>
           <div style="flex: 1;">
-            <h2 class="card-title">1. Nueva categoría</h2>
-            <p class="card-desc">El nombre define la etiqueta visible. Las palabras clave permiten autoasociar productos importados por su título y descripción.</p>
+            <h2 class="card-title">1. Nueva subcategoría</h2>
+            <p class="card-desc">Las 8 categorías raíz son fijas. Selecciona una categoría padre y define la subcategoría con sus palabras clave para la autodetección.</p>
           </div>
           <button type="button" class="btn-ghost btn-sm" id="btnToggleCategoryForm" aria-label="Mostrar formulario de creación" style="margin-left: auto;">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="categoryFormChevron">
@@ -955,23 +955,23 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
             <div class="form-row two-cols">
               <div class="form-group">
-                <label for="catName" class="field-label">Nombre de la categoría <span class="required">*</span></label>
-                <input type="text" id="catName" placeholder="Ej: Electrodomésticos" required />
+                <label for="catName" class="field-label">Nombre de la subcategoría <span class="required">*</span></label>
+                <input type="text" id="catName" placeholder="Ej: SSD Internos" required />
               </div>
               <div class="form-group">
                 <label for="catIcon" class="field-label">Icono (emoji) <span class="label-hint">(opcional)</span></label>
-                <input type="text" id="catIcon" placeholder="Ej: 🍳" maxlength="8" />
+                <input type="text" id="catIcon" placeholder="Ej: 💾" maxlength="8" />
               </div>
             </div>
 
             <div class="form-row">
               <div class="form-group full-width">
                 <label for="catParent" class="field-label">
-                  <span>Categoría padre</span>
-                  <span class="label-hint">Vacío = categoría raíz · elige una raíz para crear una SUBCATEGORÍA</span>
+                  <span>Categoría padre (raíz) <span class="required">*</span></span>
+                  <span class="label-hint">Obligatorio: elige una de las 8 categorías raíz fijas</span>
                 </label>
-                <select id="catParent">
-                  <option value="">Ninguna (categoría raíz)</option>
+                <select id="catParent" required>
+                  <option value="">Selecciona categoría raíz…</option>
                 </select>
               </div>
             </div>
@@ -980,9 +980,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <div class="form-group full-width">
                 <label for="catKeywords" class="field-label">
                   <span>Palabras clave</span>
-                  <span class="label-hint">Separadas por comas · se usan para la autodetección</span>
+                  <span class="label-hint">Separadas por comas · se usan para la autodetección en build-catalog</span>
                 </label>
-                <input type="text" id="catKeywords" placeholder="cafetera, espresso, hervidor, jarra..." />
+                <input type="text" id="catKeywords" placeholder="ssd, disco solido, nvme, m.2..." />
               </div>
             </div>
 
@@ -993,7 +993,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                   <polyline points="17 21 17 13 7 13 7 21"></polyline>
                   <polyline points="7 3 7 8 15 8"></polyline>
                 </svg>
-                <span id="btnSaveCategoryLabel">Crear categoría</span>
+                <span id="btnSaveCategoryLabel">Crear subcategoría</span>
               </button>
               <button type="button" id="btnCancelCategory" class="btn-secondary" hidden>
                 <span>Cancelar edición</span>
@@ -1011,40 +1011,51 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </div>
       </div>
 
-      <!-- 2. Tabla compacta de categorías existentes -->
+      <!-- 2. Botón de migración de categorías (solo admin) -->
+      <div class="admin-card" style="margin-top: 1rem;">
+        <div class="card-header">
+          <div class="header-icon icon-amber">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M7 16l-4-4 4-4M5 12h14M17 8l4-4-4-4"></path>
+            </svg>
+          </div>
+          <div style="flex: 1;">
+            <h2 class="card-title">Migración de categorías y productos</h2>
+            <p class="card-desc">Reasigna todos los productos existentes a las 8 categorías raíz fijas, elimina categorías huérfanas/duplicadas y actualiza contadores. <strong>Irreversible</strong> salvo restaurar backup.</p>
+          </div>
+          <button type="button" id="btnMigrateCategories" class="btn-danger btn-sm" style="margin-left: auto;" title="Ejecuta la migración completa de categorías y productos">
+            <span class="btn-text">🔄 Ejecutar Migración</span>
+            <div class="btn-spinner" hidden></div>
+          </button>
+        </div>
+        <div id="migrateStatus" class="status-alert" hidden>
+          <div class="alert-icon" id="migrateStatusIcon">ℹ️</div>
+          <div class="alert-content">
+            <strong id="migrateStatusTitle">Estado</strong>
+            <p id="migrateStatusText">Mensaje...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Vista en tarjetas con acordeón para subcategorías -->
       <div class="admin-card">
         <div class="card-header">
           <div class="header-icon icon-cyan">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="8" y1="6" x2="21" y2="6"></line>
-              <line x1="8" y1="12" x2="21" y2="12"></line>
-              <line x1="8" y1="18" x2="21" y2="18"></line>
-              <line x1="3" y1="6" x2="3.01" y2="6"></line>
-              <line x1="3" y1="12" x2="3.01" y2="12"></line>
-              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1"></rect>
             </svg>
           </div>
           <div>
-            <h2 class="card-title">2. Categorías existentes</h2>
-            <p class="card-desc">Lista jerárquica compacta: icono, nombre, palabras clave, conteo de productos y acciones rápidas.</p>
+            <h2 class="card-title">2. Categorías y subcategorías</h2>
+            <p class="card-desc">Tarjetas por categoría raíz. Cada tarjeta tiene acordeón para ver/ocultar sus subcategorías. Contadores de productos actualizados en tiempo real.</p>
           </div>
         </div>
 
-        <div class="category-table-wrapper">
-          <table id="categoryTable" class="category-table" aria-label="Lista de categorías">
-            <thead>
-              <tr>
-                <th scope="col" style="width: 40px;"></th>
-                <th scope="col">Categoría / Subcategoría</th>
-                <th scope="col" style="width: 200px;">Palabras clave</th>
-                <th scope="col" style="width: 90px; text-align: center;">Productos</th>
-                <th scope="col" style="width: 140px;">Acciones</th>
-              </tr>
-            </thead>
-            <tbody id="categoryTableBody">
-              <tr class="loading-row"><td colspan="5"><div class="loading-panel">Cargando categorías...</div></td></tr>
-            </tbody>
-          </table>
+        <div id="categoriesGrid" class="categories-grid">
+          <div class="loading-panel">Cargando categorías...</div>
         </div>
       </div>
     </section>
@@ -5176,15 +5187,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // Primera carga: sólo lectura de la caché (sin llamadas a la API)
     loadAliCatalog();
 
-    // =========================================================================
-    // 6. GESTIÓN DE CATEGORÍAS (CRUD + relleno de selectores del panel)
-    //    - Rellena el datalist del formulario de productos.
-    //    - Rellena el filtro y los selectores «Categoría destino» (tabla de
-    //      productos y barra de acciones de Afiliados #aliCatAssign).
-    //    - Alta / edición / borrado contra /api/categories.
+// =========================================================================
+    // 6. GESTIÓN DE CATEGORÍAS — Vista en tarjetas con acordeón
+    //    - 8 categorías raíz fijas + subcategorías creadas por admin
+    //    - Formulario solo para subcategorías (parentId obligatorio)
+    //    - Tarjetas con botón acordeón para ver/ocultar subcategorías
+    //    - Botones Editar/Eliminar funcionales en cada tarjeta/subcategoría
+    //    - Botón de migración para reasignar productos y limpiar huérfanas
     // =========================================================================
     const categoryForm = document.getElementById('categoryForm');
-    const categoryListView = document.getElementById('categoryListView');
     const catEditingSlug = document.getElementById('catEditingSlug');
     const catName = document.getElementById('catName');
     const catIcon = document.getElementById('catIcon');
@@ -5193,12 +5204,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const btnSaveCategory = document.getElementById('btnSaveCategory');
     const btnSaveCategoryLabel = document.getElementById('btnSaveCategoryLabel');
     const btnCancelCategory = document.getElementById('btnCancelCategory');
-    const categoryFormTitle = document.getElementById('categoryFormTitle');
     const categoryStatus = document.getElementById('categoryStatus');
     const categoryStatusIcon = document.getElementById('categoryStatusIcon');
     const categoryStatusTitle = document.getElementById('categoryStatusTitle');
     const categoryStatusText = document.getElementById('categoryStatusText');
-    const categoryListDatalist = document.getElementById('categoryList');
+    const categoriesGrid = document.getElementById('categoriesGrid');
+    const btnMigrateCategories = document.getElementById('btnMigrateCategories');
+    const migrateStatus = document.getElementById('migrateStatus');
+    const migrateStatusIcon = document.getElementById('migrateStatusIcon');
+    const migrateStatusTitle = document.getElementById('migrateStatusTitle');
+    const migrateStatusText = document.getElementById('migrateStatusText');
 
     function showCategoryStatus(type, title, message) {
       if (!categoryStatus) return;
@@ -5211,15 +5226,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (categoryStatusText) categoryStatusText.textContent = message;
     }
 
-    /** Vuelca las categorías en datalist + selects de Afiliados. */
-    function syncCategorySelects(categories) {
-      if (categoryListDatalist) {
-        categoryListDatalist.innerHTML = categories
-          .map((category) => `<option value="${escapeHtml(category.name)}"></option>`)
-          .join('');
+    function showMigrateStatus(type, title, message) {
+      if (!migrateStatus) return;
+      migrateStatus.hidden = false;
+      migrateStatus.className = `status-alert alert-${type}`;
+      if (migrateStatusIcon) {
+        migrateStatusIcon.textContent = type === 'success' ? '✅' : type === 'error' ? '❌' : type === 'warning' ? '⚠️' : 'ℹ️';
       }
+      if (migrateStatusTitle) migrateStatusTitle.textContent = title;
+      if (migrateStatusText) migrateStatusText.textContent = message;
+    }
 
-      // Sólo raíces: las subcategorías se eligen en los selectores en cascada.
+    /** Vuelca las categorías raíz en datalist + selects de Afiliados y formulario. */
+    function syncCategorySelects(categories) {
       const roots = categories.filter((category) => !category.parentId);
 
       // Select de la barra de selección de la tabla: asignar categoría en masa.
@@ -5228,14 +5247,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const current = catAssign.value;
         catAssign.innerHTML =
           '<option value="">Categoría destino…</option>' +
-          roots
-            .map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.icon || '')} ${escapeHtml(category.name)}</option>`)
-            .join('');
+          roots.map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.icon || '')} ${escapeHtml(category.name)}</option>`).join('');
         if (current) catAssign.value = current;
       }
 
-      // Filtro de categoría de la tabla del catálogo (raíces; las hijas van en
-      // el filtro de subcategorías, id: prodSubcatAssign, justo al lado).
+      // Filtro de categoría de la tabla del catálogo.
       const prodFCatSel = document.getElementById('prodFCat');
       if (prodFCatSel) {
         const current = prodFCatSel.value;
@@ -5245,15 +5261,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         if (current) prodFCatSel.value = current;
       }
 
-      // Selector de categoría padre del formulario de Categorías: permite crear
-      // subcategorías desde el apartado Categorías (vacío = categoría raíz).
+      // Selector de categoría padre del formulario de Categorías (solo raíces).
       const catParentSel = document.getElementById('catParent');
       if (catParentSel) {
         const current = catParentSel.value;
         const editingSlug = catEditingSlug ? catEditingSlug.value.trim() : '';
         const editingId = editingSlug ? (categories.find((category) => category.slug === editingSlug)?.id || '') : '';
         catParentSel.innerHTML =
-          '<option value="">Ninguna (categoría raíz)</option>' +
+          '<option value="">Selecciona categoría raíz…</option>' +
           roots
             .filter((category) => category.id !== editingId)
             .map((category) => `<option value="${escapeHtml(category.id)}">${escapeHtml(category.icon || '')} ${escapeHtml(category.name)}</option>`)
@@ -5261,120 +5276,106 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         if (current) catParentSel.value = current;
       }
 
-      // Categoría destino del bloque de acciones de Afiliados (#aliCatAssign).
+      // Categoría destino del bloque de acciones de Afiliados.
       const aliCatSel = document.getElementById('aliCatAssign');
       if (aliCatSel) {
         const current = aliCatSel.value;
         aliCatSel.innerHTML =
           '<option value="">Categoría destino…</option>' +
-          roots
-            .map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.icon || '')} ${escapeHtml(category.name)}</option>`)
-            .join('');
+          roots.map((category) => `<option value="${escapeHtml(category.name)}">${escapeHtml(category.icon || '')} ${escapeHtml(category.name)}</option>`).join('');
         if (current) aliCatSel.value = current;
       }
 
-      // Refresca el filtro de subcategorías de la tabla y la cascada de destino.
       syncSubcatFilter();
       syncSubcatAssign();
       syncAliSubcatAssign();
       if (currentProducts.length) prodFilterApply();
     }
 
-    /**
-     * Filtro de subcategorías de la tabla (id: prodSubcatAssign, en #prodFilters).
-     * En cascada con el filtro de categoría: si hay una raíz elegida sólo muestra
-     * sus hijas; si no, muestra todas las subcategorías etiquetadas «Padre › Hija».
-     * Cada opción guarda el id real de categories.json como value.
-     */
-    function syncSubcatFilter() {
-      const sel = document.getElementById('prodSubcatAssign');
-      if (!sel) return;
-      const current = sel.value;
-      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
-      const catFilter = document.getElementById('prodFCat');
-      const parentName = catFilter && 'value' in catFilter ? String(catFilter.value || '').trim() : '';
-      const parent = parentName ? allCats.find((category) => !category.parentId && category.name === parentName) : null;
-      const subs = allCats.filter((category) => category.parentId && (!parent || category.parentId === parent.id));
-      const optionLabel = (category) => {
-        if (parent) return `${category.icon ? `${category.icon} ` : ''}${category.name}`;
-        const owner = allCats.find((candidate) => candidate.id === category.parentId);
-        return owner ? `${owner.name} › ${category.name}` : category.name;
-      };
-      sel.innerHTML =
-        '<option value="">Todas las subcategorías</option>' +
-        subs.map((category) => `<option value="${escapeHtml(category.id)}">${escapeHtml(optionLabel(category))}</option>`).join('');
-      if (current && Array.from(sel.options).some((option) => option.value === current)) sel.value = current;
-    }
+    /** Renderiza la cuadrícula de tarjetas con acordeón para subcategorías. */
+    function renderCategoriesGrid(categories) {
+      if (!categoriesGrid) return;
 
-    function renderCategoryList(categories) {
-      const tbody = document.getElementById('categoryTableBody');
-      if (!tbody) return;
+      const roots = categories.filter((category) => !category.parentId);
+      const subsByParent = new Map<string, typeof categories>();
+      for (const cat of categories.filter((c) => c.parentId)) {
+        const arr = subsByParent.get(cat.parentId) || [];
+        arr.push(cat);
+        subsByParent.set(cat.parentId, arr);
+      }
 
-      if (!categories.length) {
-        tbody.innerHTML = '<tr class="empty-row"><td colspan="5" style="text-align: center; padding: 2rem; color: var(--color-text-dim);">No hay categorías creadas aún.</td></tr>';
+      if (!roots.length) {
+        categoriesGrid.innerHTML = '<div class="loading-panel">No hay categorías raíz configuradas.</div>';
         return;
       }
 
-      const escapeHtml = (value) =>
-        String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": "'" }[ch]));
+      const escapeHtml = (value: string) =>
+        String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }[ch] || ch));
 
-      const roots = categories.filter((category) => !category.parentId);
-      const subcategoriesOf = (parentId) => categories.filter((category) => category.parentId === parentId);
-
-      const buildRow = (category, isSub, parentName) => {
-        const keywords = (category.keywords || []).slice(0, 5);
-        const productCount = category.productCount ?? 0;
-        const icon = escapeHtml(category.icon || '📦');
-        const name = escapeHtml(category.name);
-        const slug = escapeHtml(category.slug);
-
-        const keywordsHtml = keywords.length === 0
-          ? '<span class="cat-kw-empty">(sin palabras clave)</span>'
-          : keywords.map((kw) => `<span class="cat-kw">${escapeHtml(kw)}</span>`).join('');
-
-        const hierarchyIcon = isSub
-          ? '<span class="cat-hierarchy-indent" aria-hidden="true">├─</span>'
-          : '';
-
-        const hierarchyLabel = isSub && parentName
-          ? `<span class="cat-parent-badge">${escapeHtml(parentName)}</span>`
-          : '';
-
-        const actionsHtml = `
-          <div class="cat-actions">
-            ${!isSub ? `<button type="button" class="btn-ghost btn-xs cat-add-sub" data-slug="${slug}" title="Añadir subcategoría" aria-label="Añadir subcategoría a ${name}">➕</button>` : ''}
-            <button type="button" class="btn-ghost btn-xs cat-edit" data-slug="${slug}" title="Editar" aria-label="Editar ${name}">✏️</button>
-            <button type="button" class="btn-ghost btn-xs btn-danger-ghost cat-delete" data-slug="${slug}" data-name="${name}" title="Eliminar" aria-label="Eliminar ${name}">🗑️</button>
-          </div>
-        `;
-
-        return `
-          <tr class="cat-row${isSub ? ' is-subcategory' : ''}" data-slug="${slug}">
-            <td class="cat-icon-cell" aria-hidden="true">${icon}</td>
-            <td class="cat-name-cell">
-              <div class="cat-name-wrap">
-                <span class="cat-name-main">${hierarchyIcon}${hierarchyLabel}${name}</span>
-                <span class="cat-slug">${slug}</span>
-              </div>
-            </td>
-            <td class="cat-keywords-cell">${keywordsHtml}</td>
-            <td class="cat-count-cell" style="text-align: center;">${productCount}</td>
-            <td class="cat-actions-cell">${actionsHtml}</td>
-          </tr>
-        `;
+      const getProductCount = (categoryId: string) => {
+        return currentProducts.filter((p) => p.category_id === categoryId).length;
       };
 
-      const rows = [];
-      for (const root of roots) {
-        rows.push(buildRow(root, false, ''));
-        for (const sub of subcategoriesOf(root.id)) rows.push(buildRow(sub, true, root.name));
-      }
-      // Subcategorías huérfanas (padre eliminado fuera del panel): al final.
-      for (const sub of categories.filter((category) => category.parentId && !roots.some((root) => root.id === category.parentId))) {
-        rows.push(buildRow(sub, true, ''));
-      }
+      const getSubProductCount = (subId: string) => {
+        return currentProducts.filter((p) => p.subcategory_id === subId).length;
+      };
 
-      tbody.innerHTML = rows.join('');
+      categoriesGrid.innerHTML = roots.map((root) => {
+        const subs = subsByParent.get(root.id) || [];
+        const rootCount = getProductCount(root.id);
+        const subCards = subs.map((sub) => {
+          const subCount = getSubProductCount(sub.id);
+          return `
+            <div class="subcat-card" data-slug="${escapeHtml(sub.slug)}" data-id="${escapeHtml(sub.id)}">
+              <div class="subcat-header">
+                <span class="subcat-icon" aria-hidden="true">${escapeHtml(sub.icon || '📂')}</span>
+                <span class="subcat-name">${escapeHtml(sub.name)}</span>
+                <span class="subcat-count">${subCount} prod.</span>
+                <div class="subcat-actions">
+                  <button type="button" class="btn-ghost btn-xs cat-edit-sub" data-slug="${escapeHtml(sub.slug)}" title="Editar" aria-label="Editar ${escapeHtml(sub.name)}">✏️</button>
+                  <button type="button" class="btn-ghost btn-xs btn-danger-ghost cat-delete-sub" data-slug="${escapeHtml(sub.slug)}" data-name="${escapeHtml(sub.name)}" title="Eliminar" aria-label="Eliminar ${escapeHtml(sub.name)}">🗑️</button>
+                </div>
+              </div>
+              <div class="subcat-keywords">
+                ${(sub.keywords || []).slice(0, 8).map((kw) => `<span class="cat-kw">${escapeHtml(kw)}</span>`).join('') || '<span class="cat-kw-empty">(sin palabras clave)</span>'}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+        return `
+          <article class="cat-card" data-root-id="${escapeHtml(root.id)}">
+            <div class="cat-card-header">
+              <div class="cat-main-info">
+                <span class="cat-icon" aria-hidden="true">${escapeHtml(root.icon || '📦')}</span>
+                <div class="cat-name-wrap">
+                  <span class="cat-name">${escapeHtml(root.name)}</span>
+                  <span class="cat-slug">${escapeHtml(root.slug)}</span>
+                </div>
+              </div>
+              <div class="cat-stats">
+                <span class="cat-count">${rootCount} productos</span>
+                <span class="subcat-count-badge">${subs.length} subcategoría${subs.length !== 1 ? 's' : ''}</span>
+              </div>
+              <button type="button" class="cat-accordion-btn" aria-expanded="false" aria-controls="subcat-panel-${escapeHtml(root.id)}" title="Ver/ocultar subcategorías">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+              </button>
+            </div>
+            <div id="subcat-panel-${escapeHtml(root.id)}" class="cat-subcat-panel" hidden>
+              <div class="subcat-list">
+                ${subCards || '<div class="subcat-empty">Sin subcategorías. Usa el formulario para añadir una.</div>'}
+              </div>
+              <div class="subcat-add-row">
+                <button type="button" class="btn-secondary btn-sm cat-add-sub" data-root-id="${escapeHtml(root.id)}" data-root-name="${escapeHtml(root.name)}">➕ Añadir subcategoría</button>
+              </div>
+            </div>
+            <div class="cat-card-actions">
+              <button type="button" class="btn-ghost btn-xs cat-edit-root" data-slug="${escapeHtml(root.slug)}" title="Editar categoría raíz" aria-label="Editar ${escapeHtml(root.name)}">✏️ Editar raíz</button>
+              <span class="cat-root-hint">Categoría raíz fija — no eliminable</span>
+            </div>
+          </article>
+        `;
+      }).join('');
     }
 
     async function loadCategories() {
@@ -5384,14 +5385,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         if (data.success && Array.isArray(data.categories)) {
           categoriesCache = data.categories;
           syncCategorySelects(categoriesCache);
-          renderCategoryList(categoriesCache);
-        } else if (categoryListView) {
-          categoryListView.innerHTML = '<div class="empty-dashboard">No se pudieron cargar las categorías.</div>';
+          renderCategoriesGrid(categoriesCache);
+        } else {
+          if (categoriesGrid) categoriesGrid.innerHTML = '<div class="empty-dashboard">No se pudieron cargar las categorías.</div>';
         }
       } catch {
-        if (categoryListView) {
-          categoryListView.innerHTML = '<div class="empty-dashboard">No se pudieron cargar las categorías.</div>';
-        }
+        if (categoriesGrid) categoriesGrid.innerHTML = '<div class="empty-dashboard">No se pudieron cargar las categorías.</div>';
       }
     }
 
@@ -5401,8 +5400,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (catIcon) catIcon.value = '';
       if (catKeywords) catKeywords.value = '';
       if (catParent) catParent.value = '';
-      if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Crear categoría';
-      if (categoryFormTitle) categoryFormTitle.textContent = '1. Crear nueva categoría';
+      if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Crear subcategoría';
       if (btnCancelCategory) btnCancelCategory.hidden = true;
     }
 
@@ -5424,7 +5422,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     }
 
     formToggle?.addEventListener('click', (event) => {
-      if (event.target.closest('button')) return; // Evita doble toggle al clickar el botón
+      if (event.target.closest('button')) return;
       toggleCategoryForm();
     });
     toggleBtn?.addEventListener('click', () => toggleCategoryForm());
@@ -5433,13 +5431,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       event.preventDefault();
       const name = catName ? catName.value.trim() : '';
       if (!name) {
-        showCategoryStatus('warning', 'Nombre requerido', 'Escribe un nombre para la categoría.');
+        showCategoryStatus('warning', 'Nombre requerido', 'Escribe un nombre para la subcategoría.');
         return;
       }
 
       const editingSlug = catEditingSlug ? catEditingSlug.value.trim() : '';
-      // Categoría padre seleccionada → la categoría se guarda como SUBCATEGORÍA.
       const parentId = catParent && 'value' in catParent ? String(catParent.value || '').trim() : '';
+      if (!parentId) {
+        showCategoryStatus('warning', 'Categoría padre requerida', 'Debes seleccionar una categoría raíz para crear la subcategoría.');
+        return;
+      }
       if (editingSlug && parentId) {
         const self = Array.isArray(categoriesCache) ? categoriesCache.find((category) => category.slug === editingSlug) : undefined;
         if (self && self.id === parentId) {
@@ -5469,12 +5470,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         const data = await res.json();
 
         if (data.success) {
-          const successTitle = isEdit ? 'Categoría actualizada' : parentId ? 'Subcategoría creada' : 'Categoría creada';
+          const successTitle = isEdit ? 'Subcategoría actualizada' : 'Subcategoría creada';
           showCategoryStatus('success', successTitle, data.message);
           resetCategoryForm();
           await loadCategories();
         } else {
-          showCategoryStatus('error', isEdit ? 'Error al actualizar' : 'Error al crear', data.message || 'No se pudo guardar la categoría.');
+          showCategoryStatus('error', isEdit ? 'Error al actualizar' : 'Error al crear', data.message || 'No se pudo guardar la subcategoría.');
         }
       } catch {
         showCategoryStatus('error', 'Error de red', 'No se pudo enviar la solicitud al servidor.');
@@ -5488,33 +5489,30 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (categoryStatus) categoryStatus.hidden = true;
     });
 
-    // Al elegir categoría padre en el formulario, el modo pasa a subcategoría.
-    catParent?.addEventListener('change', () => {
-      if (catEditingSlug && catEditingSlug.value) return;
-      const parentId = catParent && 'value' in catParent ? String(catParent.value || '').trim() : '';
-      const parent = parentId && Array.isArray(categoriesCache)
-        ? categoriesCache.find((category) => category.id === parentId)
-        : undefined;
-      if (parent) {
-        if (categoryFormTitle) categoryFormTitle.textContent = `1. Nueva subcategoría de «${parent.name}»`;
-        if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Crear subcategoría';
-        if (btnCancelCategory) btnCancelCategory.hidden = false;
-      } else {
-        if (categoryFormTitle) categoryFormTitle.textContent = '1. Crear nueva categoría';
-        if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Crear categoría';
-        if (btnCancelCategory) btnCancelCategory.hidden = true;
+    // Delegación de eventos en la cuadrícula de tarjetas
+    categoriesGrid?.addEventListener('click', async (event) => {
+      const target = event.target;
+
+      // Acordeón: toggle de subcategorías
+      const accordionBtn = target.closest('.cat-accordion-btn');
+      if (accordionBtn) {
+        const rootId = accordionBtn.closest('.cat-card')?.dataset.rootId;
+        const panel = document.getElementById(`subcat-panel-${rootId}`);
+        const isOpen = panel && !panel.hidden;
+        if (panel) {
+          panel.hidden = isOpen;
+          accordionBtn.setAttribute('aria-expanded', String(!isOpen));
+          accordionBtn.querySelector('svg')?.style.setProperty('transform', isOpen ? 'rotate(0deg)' : 'rotate(180deg)');
+        }
+        return;
       }
-    });
 
-categoryListView?.addEventListener('click', async (event) => {
-      const addSubBtn = event.target.closest('.cat-add-sub');
-      const editBtn = event.target.closest('.cat-edit');
-      const deleteBtn = event.target.closest('.cat-delete');
-
-      // «➕ Subcategoría»: prepara el formulario en modo subcategoría de la raíz.
+      // Añadir subcategoría (desde botón en panel o en acciones)
+      const addSubBtn = target.closest('.cat-add-sub');
       if (addSubBtn) {
-        const slug = addSubBtn.dataset.slug;
-        const root = Array.isArray(categoriesCache) ? categoriesCache.find((category) => category.slug === slug) : undefined;
+        const rootId = addSubBtn.dataset.rootId || addSubBtn.closest('.cat-card')?.dataset.rootId;
+        const rootName = addSubBtn.dataset.rootName;
+        const root = Array.isArray(categoriesCache) ? categoriesCache.find((c) => c.id === rootId) : undefined;
         if (!root) return;
         if (catEditingSlug) catEditingSlug.value = '';
         if (catName) catName.value = '';
@@ -5522,18 +5520,9 @@ categoryListView?.addEventListener('click', async (event) => {
         if (catKeywords) catKeywords.value = '';
         if (catParent) catParent.value = root.id;
         if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Crear subcategoría';
-        if (categoryFormTitle) categoryFormTitle.textContent = `1. Nueva subcategoría de «${root.name}»`;
         if (btnCancelCategory) btnCancelCategory.hidden = false;
-        // Mostrar el formulario colapsable si estaba oculto
-        const formPanel = document.getElementById('categoryFormPanel');
-        const toggleBtn = document.getElementById('btnToggleCategoryForm');
-        const chevron = document.getElementById('categoryFormChevron');
-        const toggleLabel = document.getElementById('categoryFormToggleLabel');
         if (formPanel && formPanel.hidden) {
-          formPanel.hidden = false;
-          if (chevron) chevron.style.transform = 'rotate(180deg)';
-          if (toggleLabel) toggleLabel.textContent = 'Ocultar';
-          if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+          toggleCategoryForm(true);
         }
         showCategoryStatus('loading', 'Modo subcategoría', `Se guardará vinculada a «${root.name}» en categories.json.`);
         categoryForm?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -5541,8 +5530,10 @@ categoryListView?.addEventListener('click', async (event) => {
         return;
       }
 
-      if (editBtn) {
-        const slug = editBtn.dataset.slug;
+      // Editar subcategoría
+      const editSubBtn = target.closest('.cat-edit-sub');
+      if (editSubBtn) {
+        const slug = editSubBtn.dataset.slug;
         const category = categoriesCache.find((c) => c.slug === slug);
         if (!category) return;
         if (catEditingSlug) catEditingSlug.value = category.slug;
@@ -5551,55 +5542,113 @@ categoryListView?.addEventListener('click', async (event) => {
         if (catKeywords) catKeywords.value = (category.keywords || []).join(', ');
         if (catParent) catParent.value = category.parentId || '';
         if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Guardar cambios';
-        if (categoryFormTitle) categoryFormTitle.textContent = `1. Editando "${category.name}"${category.parentId ? ' (subcategoría)' : ''}`;
         if (btnCancelCategory) btnCancelCategory.hidden = false;
-        // Mostrar el formulario colapsable si estaba oculto
-        const formPanel = document.getElementById('categoryFormPanel');
-        const toggleBtn = document.getElementById('btnToggleCategoryForm');
-        const chevron = document.getElementById('categoryFormChevron');
-        const toggleLabel = document.getElementById('categoryFormToggleLabel');
         if (formPanel && formPanel.hidden) {
-          formPanel.hidden = false;
-          if (chevron) chevron.style.transform = 'rotate(180deg)';
-          if (toggleLabel) toggleLabel.textContent = 'Ocultar';
-          if (toggleBtn) toggleBtn.setAttribute('aria-expanded', 'true');
+          toggleCategoryForm(true);
         }
         showCategoryStatus('loading', 'Modo edición', 'Ajusta los campos y pulsa "Guardar cambios".');
         categoryForm?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         catName?.focus();
+        return;
       }
 
-      if (deleteBtn) {
-        const slug = deleteBtn.dataset.slug;
-        const name = deleteBtn.dataset.name;
+      // Eliminar subcategoría
+      const deleteSubBtn = target.closest('.cat-delete-sub');
+      if (deleteSubBtn) {
+        const slug = deleteSubBtn.dataset.slug;
+        const name = deleteSubBtn.dataset.name;
         if (!slug) return;
-        const target = Array.isArray(categoriesCache) ? categoriesCache.find((category) => category.slug === slug) : undefined;
-        const childCount = target && !target.parentId
-          ? categoriesCache.filter((category) => category.parentId === target.id).length
-          : 0;
+        const targetCat = Array.isArray(categoriesCache) ? categoriesCache.find((c) => c.slug === slug) : undefined;
+        const subCount = targetCat && targetCat.parentId ? 0 : categoriesCache.filter((c) => c.parentId === targetCat?.id).length;
         const confirmed = window.confirm(
-          `¿Eliminar la categoría "${name}"?${childCount ? ` Se eliminarán también sus ${childCount} subcategoría(s).` : ''} Los productos existentes conservan su texto de categoría.`
+          `¿Eliminar la subcategoría "${name}"?${subCount ? ` Se eliminarán también sus ${subCount} subcategoría(s).` : ''} Los productos existentes conservan su texto de categoría.`
         );
         if (!confirmed) return;
 
-        deleteBtn.disabled = true;
+        deleteSubBtn.disabled = true;
         try {
           const res = await fetch(`/api/categories/${encodeURIComponent(slug)}`, { method: 'DELETE' });
           const data = await res.json();
           if (data.success) {
-            showCategoryStatus('success', 'Categoría eliminada', data.message);
+            showCategoryStatus('success', 'Subcategoría eliminada', data.message);
             if (catEditingSlug && catEditingSlug.value === slug) resetCategoryForm();
             await loadCategories();
           } else {
-            showCategoryStatus('error', 'Error al eliminar', data.message || 'No se pudo eliminar la categoría.');
-            deleteBtn.disabled = false;
+            showCategoryStatus('error', 'Error al eliminar', data.message || 'No se pudo eliminar la subcategoría.');
+            deleteSubBtn.disabled = false;
           }
         } catch {
           showCategoryStatus('error', 'Error de red', 'No se pudo enviar la solicitud al servidor.');
-          deleteBtn.disabled = false;
+          deleteSubBtn.disabled = false;
         }
+        return;
+      }
+
+      // Editar categoría raíz (solo nombre/icono/keywords, sin cambiar parentId)
+      const editRootBtn = target.closest('.cat-edit-root');
+      if (editRootBtn) {
+        const slug = editRootBtn.dataset.slug;
+        const category = categoriesCache.find((c) => c.slug === slug);
+        if (!category) return;
+        if (catEditingSlug) catEditingSlug.value = category.slug;
+        if (catName) catName.value = category.name;
+        if (catIcon) catIcon.value = category.icon || '';
+        if (catKeywords) catKeywords.value = (category.keywords || []).join(', ');
+        if (catParent) catParent.value = ''; // Raíz no tiene padre
+        if (btnSaveCategoryLabel) btnSaveCategoryLabel.textContent = 'Guardar cambios (raíz)';
+        if (btnCancelCategory) btnCancelCategory.hidden = false;
+        if (formPanel && formPanel.hidden) {
+          toggleCategoryForm(true);
+        }
+        showCategoryStatus('loading', 'Editando categoría raíz', 'Solo se pueden cambiar nombre, icono y palabras clave. La categoría raíz no puede tener padre.');
+        categoryForm?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        catName?.focus();
+        return;
       }
     });
+
+    // Botón de migración de categorías
+    btnMigrateCategories?.addEventListener('click', async () => {
+      if (!window.confirm('⚠️ MIGRACIÓN IRREVERSIBLE\n\nEsto va a:\n1. Reasignar TODOS los productos a las 8 categorías raíz fijas\n2. Eliminar categorías raíz huérfanas/duplicadas\n3. Eliminar subcategorías sin padre válido\n4. Actualizar contadores de productos\n\n¿Continuar?')) return;
+
+      btnMigrateCategories.disabled = true;
+      const spinner = btnMigrateCategories?.querySelector('.btn-spinner');
+      const text = btnMigrateCategories?.querySelector('.btn-text');
+      if (spinner) spinner.hidden = false;
+      if (text) text.textContent = 'Migrando…';
+
+      showMigrateStatus('loading', 'Ejecutando migración…', 'Reasignando productos, limpiando categorías huérfanas y actualizando contadores. Esto puede tardar unos segundos.');
+
+      try {
+        const res = await fetch('/api/admin/migrate-categories', { method: 'POST' });
+        const data = await res.json();
+
+        if (data.success) {
+          const lines = [
+            `Productos reasignados: ${data.productsReassigned}`,
+            `Productos sin cambios: ${data.productsUnchanged}`,
+            `Categorías raíz eliminadas: ${data.rootCategoriesRemoved.length}${data.rootCategoriesRemoved.length ? ' (' + data.rootCategoriesRemoved.join(', ') + ')' : ''}`,
+            `Subcategorías eliminadas: ${data.subcategoriesRemoved.length}${data.subcategoriesRemoved.length ? ' (' + data.subcategoriesRemoved.join(', ') + ')' : ''}`,
+            `Duración: ${Math.round(data.durationMs / 1000)}s`,
+          ];
+          showMigrateStatus('success', '✅ Migración completada', lines.join('\n'));
+          await loadCategories();
+          await reloadProductsTable();
+        } else {
+          showMigrateStatus('error', 'Error en migración', data.errors?.join('\n') || 'Error desconocido');
+        }
+      } catch (err) {
+        console.error('[MigrateCategories] Error:', err);
+        showMigrateStatus('error', 'Error de red', 'No se pudo contactar con /api/admin/migrate-categories');
+      } finally {
+        if (btnMigrateCategories) btnMigrateCategories.disabled = false;
+        if (spinner) spinner.hidden = true;
+        if (text) text.textContent = '🔄 Ejecutar Migración';
+      }
+    });
+
+    // Carga inicial
+    loadCategories();
 
     // =========================================================================
     // CURACIÓN AVANZADA — presets, bulk delete, subcategorías, score,

@@ -21,7 +21,7 @@
 import type { APIRoute } from 'astro';
 import { unifiedSearch, getConnector } from '../../../../lib/networks';
 import { getConnectedNetworkIds } from '../../../../lib/networks/credentials';
-import { getCategories, createCategory, suggestCategory, slugifyCategory } from '../../../../lib/categories';
+import { getCategories, suggestCategoryStrict, slugifyCategory } from '../../../../lib/categories';
 import { readProductsFromFile, writeProductsToFile, slugify, type Product } from '../../../../lib/productStore';
 import { isValidApiToken, unauthorizedApiResponse } from '../../../../lib/apiAuth';
 import { canonicalToUnified } from '../../../../lib/networks/connectors/base';
@@ -371,7 +371,7 @@ function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantG
   return groups;
 }
 
-// ─── Paso 4: Autoclasificación dinámica ────────────────────────────────────
+// ─── Paso 4: Autoclasificación estricta (SOLO 8 categorías raíz fijas) ────────
 
 async function autoCategorize(groups: CrossMerchantGroup[]): Promise<{
   categoriesCreated: number;
@@ -380,64 +380,48 @@ async function autoCategorize(groups: CrossMerchantGroup[]): Promise<{
 }> {
   const existingCategories = getCategories();
   const rootCategories = existingCategories.filter((c) => !c.parentId);
-  let categoriesCreated = 0;
-  let subcategoriesCreated = 0;
+  // NO se crean categorías automáticamente: categoriesCreated = 0, subcategoriesCreated = 0
   const categorizedGroups: Array<CrossMerchantGroup & { category: string; subcategory?: string }> = [];
 
   for (const group of groups) {
-    // Usar suggestCategory existente (basado en keywords)
-    const suggestion = suggestCategory(`${group.canonical.title} ${group.canonical.description} ${group.canonical.category}`);
-    let categoryName = suggestion?.category.name ?? group.canonical.category;
-    let subcategoryName: string | undefined;
+    // Usar suggestCategoryStrict: matching obligatorio contra las 8 categorías raíz
+    const text = `${group.canonical.title} ${group.canonical.description} ${group.canonical.category}`;
+    const matchedCategory = suggestCategoryStrict(text);
 
-    // Si no hay sugerencia buena, intentar inferir de la categoría de la red
-    if (!suggestion || suggestion.matches < 2) {
-      const networkCat = group.canonical.category.trim();
-      const match = rootCategories.find(
-        (c) => c.name.toLowerCase() === networkCat.toLowerCase() || c.slug === slugifyCategory(networkCat)
-      );
-      if (match) {
-        categoryName = match.name;
-      } else {
-        // Crear nueva categoría raíz
-        const slug = slugifyCategory(networkCat) || 'general';
-        const createResult = createCategory({ name: networkCat, icon: '📦', keywords: [networkCat.toLowerCase()] });
-        if (createResult.ok) {
-          categoriesCreated++;
-          categoryName = networkCat;
-        } else {
-          categoryName = 'Tecnología';
-        }
-      }
+    let categoryName: string;
+    let categoryId: string | undefined;
+
+    if (matchedCategory) {
+      categoryName = matchedCategory.name;
+      categoryId = matchedCategory.id;
+    } else {
+      // Fallback: si no hay match, asignar a "Informática y Oficina" por defecto
+      const fallback = rootCategories.find((c) => c.id === 'informatica-oficina');
+      categoryName = fallback?.name ?? 'Informática y Oficina';
+      categoryId = fallback?.id;
     }
 
-    // Subcategoría: usar subCategory del producto canónico si existe
+    // Subcategoría: SOLO usar subcategorías YA EXISTENTES en el catálogo
+    // NO se crean subcategorías automáticamente
+    let subcategoryName: string | undefined;
+    let subcategoryId: string | undefined;
+
     if (group.canonical.subCategory) {
-      const parentCat = existingCategories.find((c) => c.name === categoryName) ?? rootCategories[0];
+      const parentCat = existingCategories.find((c) => c.id === categoryId) ?? rootCategories[0];
       if (parentCat) {
         const subSlug = `${parentCat.id}--${slugifyCategory(group.canonical.subCategory)}`;
         const existingSub = existingCategories.find((c) => c.slug === subSlug);
-        if (!existingSub) {
-          const createResult = createCategory({
-            name: group.canonical.subCategory,
-            parentId: parentCat.id,
-            icon: '📂',
-            keywords: [group.canonical.subCategory.toLowerCase()],
-          });
-          if (createResult.ok) {
-            subcategoriesCreated++;
-            subcategoryName = group.canonical.subCategory;
-          }
-        } else {
+        if (existingSub) {
           subcategoryName = existingSub.name;
+          subcategoryId = existingSub.id;
         }
       }
     }
 
-    categorizedGroups.push({ ...group, category: categoryName, subcategory: subcategoryName });
+    categorizedGroups.push({ ...group, category: categoryName, subcategory: subcategoryName, _categoryId: categoryId, _subcategoryId: subcategoryId });
   }
 
-  return { categoriesCreated, subcategoriesCreated, categorizedGroups };
+  return { categoriesCreated: 0, subcategoriesCreated: 0, categorizedGroups };
 }
 
 // ─── Paso 5: Detección ofertas estrella (HS = High Selling / Hot Selection) ─
@@ -516,6 +500,11 @@ function upsertProducts(
     const hsrBadge = group.isHSR ? 'Oferta Estrella' : undefined;
 
     // Construir producto para products.json
+    const categoryId = (group as any)._categoryId ?? getCategories().find((c) => c.name === group.category)?.id;
+    const subcategoryId = (group as any)._subcategoryId ?? (group.subcategory
+      ? getCategories().find((c) => c.name === group.subcategory && c.parentId)?.id
+      : undefined);
+
     const product: Product = {
       id: baseId,
       title: canonical.title,
@@ -525,9 +514,7 @@ function upsertProducts(
       image: canonical.mainImage,
       gallery: [...new Set([canonical.mainImage, ...group.allExtraImages])].filter(Boolean).slice(0, 10),
       category: group.category,
-      subcategory_id: group.subcategory
-        ? getCategories().find((c) => c.name === group.subcategory && c.parentId)?.id
-        : undefined,
+      subcategory_id: subcategoryId,
       merchant: group.allMerchantNames[group.allNetworks[0]] ?? canonical.merchantName,
       affiliateUrl: group.allAffiliateUrls[group.allNetworks[0]] ?? canonical.affiliateUrl,
       buyNowUrl: group.allDirectUrls[group.allNetworks[0]] ?? canonical.directUrl,
@@ -546,7 +533,7 @@ function upsertProducts(
       shippingDays: canonical.shippingDays,
       freeShipping: canonical.extra?.['Envío gratis'] === true,
       sourceId: canonical.externalId,
-      category_id: getCategories().find((c) => c.name === group.category)?.id,
+      category_id: categoryId,
       conversion_score: group.hsrScore,
       commissionEstimate: group.bestCommissionAmount,
       sales30d: group.bestSales,
