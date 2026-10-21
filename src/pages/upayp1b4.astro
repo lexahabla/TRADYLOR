@@ -5297,7 +5297,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (!categoriesGrid) return;
 
       const roots = categories.filter((category) => !category.parentId);
-      const subsByParent = new Map<string, typeof categories>();
+      const subsByParent = new Map();
       for (const cat of categories.filter((c) => c.parentId)) {
         const arr = subsByParent.get(cat.parentId) || [];
         arr.push(cat);
@@ -5309,14 +5309,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         return;
       }
 
-      const escapeHtml = (value: string) =>
+      const escapeHtml = (value) =>
         String(value).replace(/[&<>"']/g, (ch) => ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": ''' }[ch] || ch));
 
-      const getProductCount = (categoryId: string) => {
+      const getProductCount = (categoryId) => {
         return currentProducts.filter((p) => p.category_id === categoryId).length;
       };
 
-      const getSubProductCount = (subId: string) => {
+      const getSubProductCount = (subId) => {
         return currentProducts.filter((p) => p.subcategory_id === subId).length;
       };
 
