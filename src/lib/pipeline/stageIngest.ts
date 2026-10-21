@@ -145,6 +145,9 @@ export function runStageIngest(
 
   const resolvedAsin = asin || extractAsinFromUrl(affiliateUrl);
   const product: PipelineProduct = {
+    // Se conservan los campos ya guardados que el pipeline no conoce (galería,
+    // extra, etc.): un reproceso NUNCA debe perder datos del catálogo.
+    ...((existing ?? {}) as Partial<Product>),
     id: candidateId,
     slug: data.slug ?? existing?.slug,
     title,
@@ -152,6 +155,8 @@ export function runStageIngest(
     price: candidate.price,
     originalPrice: data.originalPrice != null ? Number(data.originalPrice) : undefined,
     image: candidate.image || DEFAULT_IMAGE,
+    gallery: data.gallery ?? existing?.gallery,
+    extra: data.extra ?? existing?.extra,
     category: candidate.category,
     merchant: candidate.merchant,
     affiliateUrl,

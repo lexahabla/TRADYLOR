@@ -108,6 +108,24 @@ function resolveCategories(
   let subcategoryId = product.subcategory_id;
   let root: Category | undefined;
 
+  // Curaduría manual: si el producto ya tiene categoría asignada en el panel se
+  // RESPETA (el pipeline nunca pisa una asignación manual ni la descoloca de su
+  // subcategoría). Sólo se autasocian los productos que aún no tienen categoría.
+  if (categoryId) {
+    const curated = getCategoryById(categoryId);
+    if (curated) {
+      if (curated.parentId) {
+        root = getCategoryById(curated.parentId) ?? undefined;
+        categoryId = curated.parentId;
+        subcategoryId = curated.id;
+      } else {
+        root = curated;
+        subcategoryId = product.subcategory_id;
+      }
+      return { category: root, categoryId, subcategoryId };
+    }
+  }
+
   if (suggestion) {
     const suggested = suggestion.category;
     if (suggested.parentId) {

@@ -75,7 +75,7 @@ const pageDescription = "Gestión, scraping de metadatos y alta de productos con
 // El módulo "Tráfico y ventas" se muestra como una sección más del panel
 const requestedSection = Astro.url.searchParams.get('section') || 'products';
 
-const allowedSections = ['products', 'affiliates', 'categories', 'analytics', 'marketing'];
+const allowedSections = ['products', 'affiliates', 'categories', 'analytics', 'marketing', 'transparency'];
 const initialSection = allowedSections.includes(requestedSection) ? requestedSection : 'products';
 ---
 
@@ -516,10 +516,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <div class="filter-field">
             <label for="prodSubcatAssign">Subcategoría</label>
             <select id="prodSubcatAssign"><option value="">Todas las subcategorías</option></select>
-          </div>
-          <div class="filter-field">
-            <label for="prodFMerchant">Comerciante</label>
-            <select id="prodFMerchant"><option value="">Todos</option></select>
           </div>
           <div class="filter-field ali-sort-field">
             <label for="prodFSort">Ordenar por</label>
@@ -1134,6 +1130,83 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       </div>
       <TrafficSalesDashboard />
     </section>
+
+    <section data-admin-view="transparency" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'transparency' }]}>
+      <div class="view-heading">
+        <span class="admin-tag-pill">Calidad y trazabilidad</span>
+        <h2 class="admin-title">Transparencia y Pipeline</h2>
+        <p class="admin-subtitle">El pipeline de 4 etapas (ingesta → auditoría → categorización → publicación) evalúa cada producto del catálogo. Estas mismas métricas alimentan el panel de transparencia de la web pública.</p>
+      </div>
+
+      <div class="admin-card">
+        <div class="card-header">
+          <div class="header-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+              <polyline points="9 12 11 14 15 10"></polyline>
+            </svg>
+          </div>
+          <div style="flex: 1;">
+            <h2 class="card-title">Métricas de auditoría «Test &amp; Proof»</h2>
+            <p class="card-desc">Reprocesa el catálogo para estampar la auditoría (descuento verificado, vendedor de confianza y reseñas), los tags normalizados y el score de conversión. <strong>Simular</strong> no escribe nada.</p>
+          </div>
+          <button type="button" id="btnPipelineRefresh" class="btn-secondary btn-sm" title="Vuelve a leer las métricas">
+            <span class="btn-text">↻ Actualizar</span>
+          </button>
+          <button type="button" id="btnPipelineDryRun" class="btn-secondary btn-sm" title="Ejecuta el pipeline completo SIN escribir en el catálogo">
+            <span class="btn-text">👁 Simular</span>
+            <div class="btn-spinner" hidden></div>
+          </button>
+          <button type="button" id="btnPipelineRun" class="btn-danger btn-sm" title="Reprocesa el catálogo y guarda el resultado">
+            <span class="btn-text">🔄 Reprocesar</span>
+            <div class="btn-spinner" hidden></div>
+          </button>
+        </div>
+
+        <div class="tp-metrics" id="tpMetrics">
+          <div class="tp-metric"><span class="tp-metric-value is-ok" id="tpApproved">–</span><span class="tp-metric-label">Aprobados</span></div>
+          <div class="tp-metric"><span class="tp-metric-value is-warn" id="tpRejected">–</span><span class="tp-metric-label">Rechazados</span></div>
+          <div class="tp-metric"><span class="tp-metric-value" id="tpPending">–</span><span class="tp-metric-label">Sin auditar</span></div>
+          <div class="tp-metric"><span class="tp-metric-value" id="tpScore">–</span><span class="tp-metric-label">Score medio</span></div>
+          <div class="tp-metric"><span class="tp-metric-value" id="tpDupes">–</span><span class="tp-metric-label">Duplicados descartados</span></div>
+          <div class="tp-metric"><span class="tp-metric-value is-small" id="tpLastRun">–</span><span class="tp-metric-label">Última ejecución</span></div>
+        </div>
+
+        <div class="tp-reasons" id="tpReasons" hidden>
+          <span class="tp-reasons-title">Motivos de rechazo</span>
+          <div class="tp-reasons-list" id="tpReasonsList"></div>
+        </div>
+
+        <div class="tp-options">
+          <label class="nf-check" for="tpEnrich">
+            <input type="checkbox" id="tpEnrich" />
+            <span>Enriquecer el texto con IA (más lento, consume créditos)</span>
+          </label>
+        </div>
+
+        <div id="tpStatus" class="status-alert" hidden>
+          <div class="alert-icon" id="tpStatusIcon">ℹ️</div>
+          <div class="alert-content">
+            <strong id="tpStatusTitle">Estado</strong>
+            <p id="tpStatusText">Mensaje...</p>
+          </div>
+        </div>
+
+        <div class="tp-results" id="tpResults" hidden>
+          <table class="tp-table" aria-label="Resultado del pipeline por producto">
+            <thead>
+              <tr>
+                <th scope="col">Producto</th>
+                <th scope="col" style="width: 120px;">Estado</th>
+                <th scope="col" style="width: 70px; text-align: right;">Score</th>
+                <th scope="col" style="width: 180px;">Motivo</th>
+              </tr>
+            </thead>
+            <tbody id="tpResultsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   </div>
 
   <!-- Botón flotante: sube directamente al menú de secciones del backend -->
@@ -1504,7 +1577,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const inputFilterList = document.getElementById('inputFilterList');
     const prodFCat = document.getElementById('prodFCat');
     const prodSubcatFilter = document.getElementById('prodSubcatAssign');
-    const prodFMerchant = document.getElementById('prodFMerchant');
     const prodFSort = document.getElementById('prodFSort');
     const prodFSortDir = document.getElementById('prodFSortDir');
     const prodFReset = document.getElementById('prodFReset');
@@ -2550,7 +2622,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         if (data.success && Array.isArray(data.products)) {
           currentProducts = data.products;
           aliInvalidateEstado();
-          prodPopulateFilterOptions();
           prodBuildRanges();
           prodFilterApply();
           // El filtro «Estado» de la tabla de afiliados se calcula con esta lista.
@@ -2886,7 +2957,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const dataMin = prices.length ? Math.floor(Math.min(...prices)) : 0;
       const dataMax = prices.length ? Math.ceil(Math.max(...prices)) : 0;
       prodRangeFields.innerHTML = `
-        <div class="filter-field ali-f-pair" data-range-field="price">
+        <div class="filter-field prod-range-field" data-range-field="price">
           <label for="prodFPriceMin">Precio (€)</label>
           <div class="ali-pair">
             <input type="number" id="prodFPriceMin" min="${dataMin}" step="0.01" placeholder="Mín." inputmode="decimal" value="${escapeHtml(keepPriceMin)}" />
@@ -2894,14 +2965,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <input type="number" id="prodFPriceMax" max="${dataMax}" step="0.01" placeholder="Máx." inputmode="decimal" value="${escapeHtml(keepPriceMax)}" />
           </div>
         </div>
-        <div class="filter-field" data-range-field="disc">
+        <div class="filter-field prod-range-field" data-range-field="disc">
           <label for="prodFDiscRange">Descuento</label>
           <select id="prodFDiscRange">
             <option value="">Cualquiera</option>
             ${PROD_DISCOUNT_RANGES.map((r) => `<option value="${r.value}"${r.value === keepDisc ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
           </select>
         </div>
-        <div class="filter-field" data-range-field="rating">
+        <div class="filter-field prod-range-field" data-range-field="rating">
           <label for="prodFRatingMin">Valoración</label>
           <select id="prodFRatingMin">
             <option value="">Cualquiera</option>
@@ -2924,21 +2995,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       };
     }
 
-    function prodPopulateFilterOptions() {
-      const fill = (select, values, anyLabel) => {
-        if (!select) return;
-        const current = select.value;
-        select.innerHTML = `<option value="">${anyLabel}</option>` + values.map((v) => `<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
-        if (values.includes(current)) select.value = current;
-      };
-      fill(prodFMerchant, [...new Set(currentProducts.map((p) => p.merchant).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es')), 'Todos');
-    }
-
     function prodFilterApply() {
       const q = (inputFilterList?.value || '').trim().toLowerCase();
       const cat = prodFCat?.value || '';
       const subcatId = prodSubcatFilter?.value || '';
-      const merchant = prodFMerchant?.value || '';
       const sortKey = prodFSort?.value || 'default';
       const dir = prodSortDir === 'asc' ? 1 : -1;
       const prodRange = prodReadRangeFilters();
@@ -2967,7 +3027,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           }
           if (!matchSub) return false;
         }
-        if (merchant && (product.merchant || '') !== merchant) return false;
         // Preset editorial activo (1 clic): filtro complementario.
         if (typeof activeProdPreset !== 'undefined' && activeProdPreset && !prodMatchesPreset(product, activeProdPreset)) return false;
         const price = Number(product.price) || 0;
@@ -3017,7 +3076,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       prodFilterApply();
     });
     prodSubcatFilter?.addEventListener('change', prodFilterApply);
-    prodFMerchant?.addEventListener('change', prodFilterApply);
     prodFSort?.addEventListener('change', prodFilterApply);
     prodFSortDir?.addEventListener('click', () => {
       prodSortDir = prodSortDir === 'desc' ? 'asc' : 'desc';
@@ -3028,7 +3086,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (inputFilterList) inputFilterList.value = '';
       if (prodFCat) prodFCat.value = '';
       syncSubcatFilter();
-      if (prodFMerchant) prodFMerchant.value = '';
       if (prodFSort) prodFSort.value = 'default';
       prodSortDir = 'desc';
       if (prodFSortDir) prodFSortDir.textContent = '↓';
@@ -6517,6 +6574,132 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     });
 
     loadCategories();
+
+    // =========================================================================
+    // TRANSPARENCIA Y PIPELINE (métricas de auditoría + reproceso)
+    // =========================================================================
+    const tpApproved = document.getElementById('tpApproved');
+    const tpRejected = document.getElementById('tpRejected');
+    const tpPending = document.getElementById('tpPending');
+    const tpScore = document.getElementById('tpScore');
+    const tpDupes = document.getElementById('tpDupes');
+    const tpLastRun = document.getElementById('tpLastRun');
+    const tpReasons = document.getElementById('tpReasons');
+    const tpReasonsList = document.getElementById('tpReasonsList');
+    const tpResults = document.getElementById('tpResults');
+    const tpResultsBody = document.getElementById('tpResultsBody');
+    const tpStatus = document.getElementById('tpStatus');
+    const tpStatusIcon = document.getElementById('tpStatusIcon');
+    const tpStatusTitle = document.getElementById('tpStatusTitle');
+    const tpStatusText = document.getElementById('tpStatusText');
+    const tpEnrich = document.getElementById('tpEnrich');
+    const btnPipelineRefresh = document.getElementById('btnPipelineRefresh');
+    const btnPipelineDryRun = document.getElementById('btnPipelineDryRun');
+    const btnPipelineRun = document.getElementById('btnPipelineRun');
+
+    const TP_REASON_LABELS = {
+      'rating-insuficiente': 'Valoración insuficiente',
+      'pocas-resenas': 'Pocas reseñas',
+      'sin-descuento-verificado': 'Sin descuento verificado',
+      'vendedor-no-verificado': 'Vendedor no verificado',
+      'sin-datos-suficientes': 'Sin datos suficientes',
+    };
+
+    function tpShowStatus(kind, title, text) {
+      if (!tpStatus) return;
+      tpStatus.hidden = false;
+      tpStatusIcon.textContent = kind === 'ok' ? '✅' : kind === 'error' ? '⚠️' : 'ℹ️';
+      tpStatusTitle.textContent = title;
+      tpStatusText.textContent = text;
+    }
+
+    function tpFormatDate(value) {
+      if (!value) return 'Nunca';
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return String(value);
+      return date.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+    }
+
+    async function tpLoadMetrics() {
+      try {
+        const res = await fetch('/api/admin/pipeline', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'No se pudieron leer las métricas.');
+        if (tpApproved) tpApproved.textContent = data.approved ?? 0;
+        if (tpRejected) tpRejected.textContent = data.rejected ?? 0;
+        if (tpPending) tpPending.textContent = data.pending ?? 0;
+        if (tpScore) tpScore.textContent = data.avg_audit_score ?? 0;
+        if (tpDupes) tpDupes.textContent = data.duplicates_discarded ?? 0;
+        if (tpLastRun) tpLastRun.textContent = tpFormatDate(data.last_run);
+        const reasons = data.by_reason || {};
+        const entries = Object.entries(reasons);
+        if (tpReasons && tpReasonsList) {
+          tpReasons.hidden = entries.length === 0;
+          tpReasonsList.innerHTML = entries
+            .sort((a, b) => b[1] - a[1])
+            .map(([reason, count]) => `<span class="tp-reason-chip"><strong>${escapeHtml(count)}</strong> ${escapeHtml(TP_REASON_LABELS[reason] || reason)}</span>`)
+            .join('');
+        }
+      } catch (err) {
+        tpShowStatus('error', 'Error al leer las métricas', err?.message || 'Fallo de red.');
+      }
+    }
+
+    async function tpRunPipeline(dryRun) {
+      const btn = dryRun ? btnPipelineDryRun : btnPipelineRun;
+      const spinner = btn ? btn.querySelector('.btn-spinner') : null;
+      const text = btn ? btn.querySelector('.btn-text') : null;
+      const original = text ? text.textContent : '';
+      if (btn) btn.disabled = true;
+      if (spinner) spinner.hidden = false;
+      if (text) text.textContent = dryRun ? 'Simulando…' : 'Reprocesando…';
+      try {
+        const res = await fetch('/api/admin/pipeline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'reprocess', dryRun: dryRun === true, enrich: tpEnrich ? tpEnrich.checked : false }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'El pipeline no pudo ejecutarse.');
+        const rows = Array.isArray(data.results) ? data.results : [];
+        if (tpResultsBody) {
+          tpResultsBody.innerHTML = rows
+            .map((row) => {
+              const status = row.audit_status || (row.duplicate ? 'duplicado' : '—');
+              const reason = row.duplicate_reason ? `Duplicado (${row.duplicate_reason})` : (row.message || '');
+              return `<tr>
+                <td>${escapeHtml(row.title || row.id || '—')}</td>
+                <td><span class="tp-badge is-${escapeHtml(status)}">${escapeHtml(status)}</span></td>
+                <td class="text-right">${row.audit_score != null ? escapeHtml(row.audit_score) : '—'}</td>
+                <td>${escapeHtml(reason)}</td>
+              </tr>`;
+            })
+            .join('');
+        }
+        if (tpResults) tpResults.hidden = rows.length === 0;
+        tpShowStatus(
+          'ok',
+          dryRun ? 'Simulación terminada (no se ha escrito nada)' : 'Catálogo reprocesado',
+          `${data.processed ?? 0} de ${data.total ?? 0} productos procesados${data.failed ? ` · ${data.failed} con error` : ''}.`
+        );
+        await tpLoadMetrics();
+        if (!dryRun) await reloadProductsTable();
+      } catch (err) {
+        tpShowStatus('error', 'Error al ejecutar el pipeline', err?.message || 'Fallo de red.');
+      } finally {
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.hidden = true;
+        if (text) text.textContent = original;
+      }
+    }
+
+    btnPipelineRefresh?.addEventListener('click', () => tpLoadMetrics());
+    btnPipelineDryRun?.addEventListener('click', () => tpRunPipeline(true));
+    btnPipelineRun?.addEventListener('click', () => {
+      const ok = window.confirm('Se reprocesará todo el catálogo (auditoría, tags y score). ¿Continuar?');
+      if (ok) tpRunPipeline(false);
+    });
+    if (btnPipelineRefresh) tpLoadMetrics();
   });
 </script>
 
@@ -6716,8 +6899,20 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   /* Controles de rango del Catálogo de Productos Registrados (precio min/máx,
      descuento por rangos y valoración por umbral). */
   .ali-filters .filter-field.ali-f-pair { flex: 0 1 170px; min-width: 152px; }
-  .ali-filters .filter-field[data-range-field="disc"],
-  .ali-filters .filter-field[data-range-field="rating"] { flex: 0 1 132px; min-width: 120px; }
+  /* Precio, Descuento y Valoración: los tres comparten CAJA (ancho, alto,
+     tipografía y etiqueta) para que la fila de filtros quede homogénea. */
+  .prod-filters .filter-field.prod-range-field { flex: 0 1 156px; min-width: 138px; }
+  .prod-filters .filter-field.prod-range-field select,
+  .prod-filters .filter-field.prod-range-field .ali-pair { height: 2.15rem; }
+  .prod-filters .filter-field.prod-range-field select { padding: .4rem .55rem; font-size: .78rem; }
+  /* El par de precios se pinta como un único control (misma caja que los select). */
+  .prod-filters .filter-field.prod-range-field .ali-pair { display: flex; align-items: stretch; gap: 0; overflow: hidden; background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); }
+  .prod-filters .filter-field.prod-range-field .ali-pair:focus-within { border-color: #38bdf8; }
+  .prod-filters .filter-field.prod-range-field .ali-pair input { flex: 1 1 0; min-width: 0; height: 100%; padding: .4rem .5rem; color: var(--color-text-main); background: transparent; border: 0; font: inherit; font-size: .78rem; outline: none; }
+  .prod-filters .filter-field.prod-range-field .ali-pair input::placeholder { color: var(--color-text-dim); }
+  .prod-filters .filter-field.prod-range-field .ali-pair-sep { display: flex; align-items: center; padding: 0 .1rem; color: var(--color-text-dim); font-size: .7rem; }
+  /* El botón de limpiar filtros se alinea con la altura de los controles. */
+  .prod-filters .ali-f-reset { min-height: 2.15rem; }
 
   /* CAPA 3 · Panel desplegable «Más filtros» */
   .ali-advanced { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem .7rem; padding: .55rem .6rem; background: rgba(255, 255, 255, .025); border: 1px dashed rgba(148, 163, 184, .22); border-radius: 8px; }
@@ -6965,6 +7160,32 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
   .text-right { text-align: right; }
 
+  /* ── Sección «Transparencia y Pipeline» ──────────────────────────────── */
+  .tp-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .6rem; margin-top: 1rem; }
+  .tp-metric { display: flex; flex-direction: column; gap: .15rem; padding: .7rem .8rem; background: rgba(255, 255, 255, .03); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); }
+  .tp-metric-value { color: var(--color-text-main); font-size: 1.5rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .tp-metric-value.is-small { font-size: .78rem; font-weight: 700; }
+  .tp-metric-value.is-ok { color: #6ee7b7; }
+  .tp-metric-value.is-warn { color: #fca5a5; }
+  .tp-metric-label { color: var(--color-text-dim); font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .tp-reasons { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-top: .9rem; }
+  .tp-reasons[hidden] { display: none; }
+  .tp-reasons-title { color: var(--color-text-dim); font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .tp-reasons-list { display: flex; gap: .35rem; flex-wrap: wrap; }
+  .tp-reason-chip { display: inline-flex; align-items: center; gap: .3rem; padding: .22rem .55rem; color: #bae6fd; background: rgba(56, 189, 248, .1); border: 1px solid rgba(56, 189, 248, .28); border-radius: 999px; font-size: .68rem; font-weight: 600; }
+  .tp-reason-chip strong { color: #e0f2fe; font-weight: 800; }
+  .tp-options { margin-top: .9rem; }
+  .tp-results { margin-top: .9rem; max-height: 22rem; overflow: auto; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); }
+  .tp-results[hidden] { display: none; }
+  .tp-table { width: 100%; border-collapse: collapse; font-size: .72rem; }
+  .tp-table th { position: sticky; top: 0; padding: .45rem .6rem; text-align: left; font-size: .6rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--color-text-muted); background: #121826; border-bottom: 1px solid var(--color-border); }
+  .tp-table td { padding: .4rem .6rem; color: var(--color-text-main); border-bottom: 1px solid rgba(255, 255, 255, .05); vertical-align: middle; }
+  .tp-badge { display: inline-block; padding: .1rem .45rem; border-radius: 999px; font-size: .62rem; font-weight: 800; text-transform: lowercase; }
+  .tp-badge.is-approved { color: #6ee7b7; background: rgba(16, 185, 129, .12); border: 1px solid rgba(16, 185, 129, .3); }
+  .tp-badge.is-rejected { color: #fca5a5; background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); }
+  .tp-badge.is-pending { color: #fcd34d; background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .3); }
+  .tp-badge.is-duplicado { color: #c4b5fd; background: rgba(139, 92, 246, .12); border: 1px solid rgba(139, 92, 246, .3); }
+
   /* Visibilidad de secciones: el display base lo marca .is-visible únicamente, así las secciones ocultas nunca aparecen (el scoping de Astro sube la especificidad de las clases base con atributos) */
   .admin-grid-section,
   .admin-dashboard-view,
@@ -6978,6 +7199,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   section[data-admin-view="categories"].is-visible { display: flex !important; }
   section[data-admin-view="analytics"].is-visible { display: flex !important; }
   section[data-admin-view="marketing"].is-visible { display: flex !important; }
+  section[data-admin-view="transparency"].is-visible { display: flex !important; }
 
   @media (max-width: 900px) {
     .category-form { flex-direction: column; }
