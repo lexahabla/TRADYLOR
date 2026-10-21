@@ -63,15 +63,65 @@ const items = context === 'catalogo' ? catalogItems : userItems;
     // Menú responsive: despliega las secciones en pantallas estrechas
     const navToggle = document.getElementById('adminNavToggle');
     const navLinks = document.getElementById('adminNavLinks');
+
+    const setActiveItem = (section) => {
+      navLinks?.querySelectorAll('.admin-nav-item.is-active').forEach((el) => el.classList.remove('is-active'));
+      navLinks?.querySelector(`.admin-nav-item[data-admin-tab="${section}"]`)?.classList.add('is-active');
+    };
+
+    const closeMenu = () => {
+      navLinks?.classList.remove('is-open');
+      navToggle?.setAttribute('aria-expanded', 'false');
+    };
+
+    // Cambio de sección instantáneo: las secciones viven ya en el DOM (SSR),
+    // así que se conmutan sin recargar la página.
+    const showSection = (section, { pushUrl = true, scroll = true } = {}) => {
+      if (!section) return;
+      const targets = document.querySelectorAll(`section[data-admin-view="${section}"]`);
+      if (!targets.length) return;
+      document.querySelectorAll('section[data-admin-view]').forEach((el) => {
+        el.classList.toggle('is-visible', el.getAttribute('data-admin-view') === section);
+      });
+      setActiveItem(section);
+      if (pushUrl) {
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set('section', section);
+        window.history.pushState({ section }, '', nextUrl.toString());
+      }
+      if (scroll) window.scrollTo({ top: 0, behavior: 'auto' });
+    };
+
     navToggle?.addEventListener('click', () => {
       const isOpen = navLinks?.classList.toggle('is-open');
       navToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
     });
+
     navLinks?.addEventListener('click', (event) => {
-      if (event.target.closest('.admin-nav-item')) {
-        navLinks.classList.remove('is-open');
-        navToggle?.setAttribute('aria-expanded', 'false');
+      const item = event.target.closest('.admin-nav-item');
+      if (!item) return;
+      const href = item.getAttribute('href') || '';
+      let url;
+      try {
+        url = new URL(href, window.location.href);
+      } catch {
+        return;
       }
+      const section = url.searchParams.get('section');
+      // Solo se interceptan las secciones que existen en esta misma página;
+      // los enlaces a otras rutas (p. ej. la app de marketing) navegan normal.
+      if (!section || !document.querySelector(`section[data-admin-view="${section}"]`)) {
+        closeMenu();
+        return;
+      }
+      event.preventDefault();
+      showSection(section);
+      closeMenu();
+    });
+
+    window.addEventListener('popstate', () => {
+      const section = new URL(window.location.href).searchParams.get('section');
+      if (section) showSection(section, { pushUrl: false, scroll: false });
     });
   });
 </script>
