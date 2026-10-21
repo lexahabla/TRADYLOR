@@ -30,6 +30,9 @@ src/data/credentials.json
 src/data/users.json
 src/data/avatars/
 
+# copias de seguridad de datos (contienen hashes de contraseña: nunca al repo)
+src/data/backups/
+
 # usuarios finales y datos de Mi Radar (se generan en el volumen, nunca en el repo)
 src/data/radar-users.json
 src/data/radar-data.json
