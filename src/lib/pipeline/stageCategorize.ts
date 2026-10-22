@@ -10,7 +10,7 @@
  * ==============================================================================
  */
 
-import { enrichProductLocally } from '../localEnrich';
+import { cleanGeneratedDescription, enrichProductLocally } from '../localEnrich';
 import { enrichProductText, hasTextCredentials, textProvider, type EnrichedText } from '../ai';
 import {
   createCategory,
@@ -234,7 +234,10 @@ export async function runStageCategorize(
       const ai = await enrichProductText(
         {
           title: next.title,
-          description: next.description,
+          // A la IA se le pasa la descripción "de origen": si el texto actual ya
+          // incluye bloques generados por un reproceso anterior, se limpian para
+          // no multiplicar el texto ni contaminar el prompt.
+          description: cleanGeneratedDescription(next.description),
           category: next.category,
           url: next.affiliateUrl,
           price: next.price,
@@ -284,7 +287,9 @@ export async function runStageCategorize(
   next.link_status = status.link_status;
 
   // Rastro del enriquecimiento con IA (visible en el panel y en la API).
-  next.ai_enriched = aiEnriched;
+  // Si se conservó el texto de IA anterior, la ficha sigue siendo "enriquecida
+  // con IA" aunque este intento haya fallado (el fallo queda en ai_error).
+  next.ai_enriched = aiEnriched || preservePreviousText;
   if (aiError) next.ai_error = aiError.slice(0, 200);
   else delete next.ai_error;
 

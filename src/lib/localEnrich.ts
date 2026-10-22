@@ -81,6 +81,31 @@ function cleanBullet(text: string): string {
 }
 
 /**
+ * Quita los bloques que generó el propio enriquecimiento local en reprocesos
+ * anteriores.
+ *
+ * El bloque generado tiene esta forma:
+ *   «<Nombre> es una opción <tipo>. En el momento de revisarlo, <hechos>.»
+ *
+ * Sin esta limpieza, cada reproceso envolvía la descripción anterior (que ya
+ * era la plantilla) y el texto se multiplicaba: tras 3 pases la descripción
+ * llevaba la misma frase repetida tres veces.
+ */
+const GENERATED_BLOCK_RE = /[^.!?]*\bes una opci[oó]n\b[^.!?]*[.]\s*En el momento de revisarlo,[^.!?]*[.]\s*/gi;
+
+/**
+ * Devuelve la descripción "de origen" (la del comercio), sin los bloques que
+ * generó el propio enrichment local. Si todo el texto era generado, devuelve
+ * cadena vacía (la plantilla se reconstruye desde cero).
+ */
+export function cleanGeneratedDescription(text?: string): string {
+  const raw = String(text || '').trim();
+  if (!raw) return '';
+  if (!/En el momento de revisarlo/i.test(raw)) return raw.replace(/\s+/g, ' ').trim();
+  return raw.replace(GENERATED_BLOCK_RE, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/**
  * Genera la descripción editorial (2–3 frases) a partir de lo que sabemos.
  * Nunca inventa specs ni números: sólo usa precio, marca, valoración y contexto.
  */
@@ -106,11 +131,12 @@ function buildDescription(input: LocalEnrichInput): string {
   if (facts.length) {
     parts.push(`En el momento de revisarlo, ${facts.join(' y ')}.`);
   }
-  if (input.description) {
-    // Añadimos la descripción del comercio como contexto final, recortada.
-    const desc = String(input.description).trim().replace(/\s+/g, ' ');
-    const short = desc.length > 220 ? `${desc.slice(0, 217).trimEnd()}…` : desc;
-    if (short) parts.push(short);
+  // Contexto final: la descripción del comercio, SIN los bloques que generó el
+  // propio enriquecimiento en reprocesos anteriores (si no, se duplicaba).
+  const source = cleanGeneratedDescription(input.description);
+  if (source) {
+    const short = source.length > 220 ? `${source.slice(0, 217).trimEnd()}…` : source;
+    parts.push(short);
   }
   return parts.join(' ').trim();
 }
