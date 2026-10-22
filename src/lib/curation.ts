@@ -77,8 +77,14 @@ export function cleanTitleKey(title: string | null | undefined): string {
     .trim();
 }
 
-/** Extrae el ASIN (Amazon) o el Item ID (AliExpress) del enlace/título. */
-export function extractSourceId(product: Product): string {
+/**
+ * Extrae el ASIN (Amazon) o el Item ID (AliExpress) del enlace/título.
+ * Acepta cualquier objeto con esos campos (p. ej. el producto canónico de una
+ * red, que no es un `Product` del store pero sí trae `externalId`/enlace).
+ */
+export function extractSourceId(
+  product: Pick<Product, 'sourceId' | 'asin' | 'affiliateUrl' | 'buyNowUrl'>
+): string {
   if (String(product.sourceId || '').trim()) return String(product.sourceId).trim();
   if (String(product.asin || '').trim()) return String(product.asin).trim();
   const haystack = `${product.affiliateUrl || ''} ${product.buyNowUrl || ''}`;

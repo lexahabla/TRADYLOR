@@ -27,7 +27,8 @@ import { getCategories, suggestCategoryStrict, slugifyCategory } from '../../../
 import { readProductsFromFile, writeProductsToFile, slugify, type Product } from '../../../../lib/productStore';
 import { isValidApiToken, unauthorizedApiResponse } from '../../../../lib/apiAuth';
 import { canonicalToUnified } from '../../../../lib/networks/connectors/base';
-import type { CanonicalAffiliateProduct, UnifiedProduct, NetworkConnector } from '../../../../lib/networks/types';
+import type { NetworkConnector } from '../../../../lib/networks/connectors/base';
+import type { CanonicalAffiliateProduct, UnifiedProduct } from '../../../../lib/networks/types';
 import { toHiResImageUrl } from '../../../../lib/imageQuality';
 import { cleanTitleKey, canonicalProductUrl, extractSourceId, titleSimilarity } from '../../../../lib/curation';
 import { readDeletedIds } from '../../../../lib/deletedProducts';
@@ -301,7 +302,7 @@ async function ingestAllNetworks(): Promise<{
             });
             for (const product of batch) {
               if (networkCanonical.length >= BUILD_CONFIG.PER_NETWORK_LIMIT) break;
-              const dedupeKey = canonicalProductUrl(product.affiliateUrl) || extractSourceId(product) || cleanTitleKey(product.title);
+              const dedupeKey = canonicalProductUrl(product.affiliateUrl) || extractSourceId({ sourceId: product.externalId, affiliateUrl: product.affiliateUrl }) || cleanTitleKey(product.title);
               if (seenInNetwork.has(dedupeKey)) continue;
               seenInNetwork.add(dedupeKey);
               networkCanonical.push(product);
@@ -679,7 +680,7 @@ async function buildAndUpsertProducts(
       description: canonical.description || `${canonical.brand ?? canonical.merchantName} · ${canonical.category}`,
       price: group.bestPrice,
       originalPrice: group.bestOriginalPrice > group.bestPrice ? group.bestOriginalPrice : undefined,
-      image: upgraded.mainImage,
+      image: upgraded.mainImage || canonical.mainImage || '',
       gallery: upgraded.gallery,
       category: group.category || '', // vacío si no encaja
       subcategory_id: group.subcategoryId,
@@ -697,8 +698,9 @@ async function buildAndUpsertProducts(
       rating: group.bestRating > 0 ? group.bestRating : undefined,
       reviewsCount: canonical.reviewCount > 0 ? canonical.reviewCount : undefined,
       brand: canonical.brand,
-      shippingInfo: canonical.shippingInfo,
-      shippingDays: canonical.shippingDays,
+      // El envío viaja en la proyección unificada (el canónico no lo declara).
+      shippingInfo: canonical._sourceUnified?.shippingInfo ?? canonical.extra?.['Texto de envío'] as string | undefined,
+      shippingDays: canonical._sourceUnified?.shippingDays,
       freeShipping: canonical.extra?.['Envío gratis'] === true,
       sourceId: canonical.externalId,
       category_id: group.categoryId,
@@ -801,14 +803,28 @@ async function buildAndUpsertProducts(
     product.conversion_score = computeConversionScore(product);
 
     if (existingIndex >= 0) {
-      existingProducts[existingIndex] = { ...existingProducts[existingIndex], ...product };
+      const prev = existingProducts[existingIndex];
+      // Al actualizar NO se puede perder lo ya curado. La pasada actual puede
+      // no encontrar categoría (viene `category: ''`) o no traer subcategoría,
+      // y el producto puede haberse localizado por URL canónica o por duplicado
+      // (en cuyo caso el id generado NO es el id real). Si se sobrescribiera,
+      // el producto renombraría y dejaría de aparecer en las secciones que lo
+      // referencian.
+      existingProducts[existingIndex] = {
+        ...prev,
+        ...product,
+        id: prev.id,
+        category: product.category || prev.category || '',
+        category_id: product.category_id ?? prev.category_id,
+        subcategory_id: product.subcategory_id ?? prev.subcategory_id,
+      };
       updated++;
-      if (!dryRun) wouldUpdate++;
+      wouldUpdate++;
     } else {
       existingProducts.unshift(product);
       upserted++;
+      wouldUpsert++;
       existingIds.add(baseId);
-      if (!dryRun) wouldUpsert++;
     }
   }
 
@@ -895,10 +911,12 @@ export const POST: APIRoute = async ({ request, url }) => {
     report.updated = updated;
     report.aiEnrichedText = aiEnrichedText;
     report.aiEnrichedImages = aiEnrichedImages;
-    if (dryRun) {
-      report.wouldUpsert = wouldUpsert;
-      report.wouldUpdate = wouldUpdate;
-    }
+    // `wouldUpsert`/`wouldUpdate` son los mismos números que `upserted`/
+    // `updated` (el código de escritura es idéntico en dry-run y en real):
+    // en simulación sirven para saber qué se escribiría y en real deja el
+    // reporte completo y coherente en los dos modos.
+    report.wouldUpsert = wouldUpsert;
+    report.wouldUpdate = wouldUpdate;
 
     // Métricas pipeline
     if (!dryRun) {
