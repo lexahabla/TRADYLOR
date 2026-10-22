@@ -6956,14 +6956,20 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
      de la fila. Ahora heredan EXACTAMENTE el estilo de `.filter-field` (el
      input de búsqueda, Categoría, Subcategoría y Ordenar por). */
   .ali-filters .filter-field.ali-f-pair { flex: 0 1 170px; min-width: 152px; }
-  .prod-filters :global(.filter-field.prod-range-field) { display: grid; gap: .3rem; flex: 0 1 156px; min-width: 138px; }
+  /* Columna fija (minmax(0,1fr)): con la columna `auto` el grid se dimensionaba
+     por el max-content de los inputs y el par Mín/Máx se salía del campo
+     (404px dentro de 156px) =&gt; se solapaba con Descuento y con el botón. */
+  .prod-filters :global(.filter-field.prod-range-field) { display: grid; grid-template-columns: minmax(0, 1fr); gap: .3rem; flex: 0 1 156px; min-width: 138px; }
+  /* Precio lleva dos casillas: necesita algo más de ancho para que no se
+     compriman. */
+  .prod-filters :global(.filter-field.prod-range-field[data-range-field="price"]) { flex: 0 1 214px; min-width: 190px; }
   .prod-filters :global(.filter-field.prod-range-field label) { color: var(--color-text-dim); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
   .prod-filters :global(.filter-field.prod-range-field input),
   .prod-filters :global(.filter-field.prod-range-field select) { width: 100%; box-sizing: border-box; padding: .55rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
   .prod-filters :global(.filter-field.prod-range-field input:focus),
   .prod-filters :global(.filter-field.prod-range-field select:focus) { border-color: #38bdf8; }
   /* El par de precios: dos campos con la misma caja que el input de búsqueda. */
-  .prod-filters :global(.filter-field.prod-range-field .ali-pair) { display: flex; align-items: stretch; gap: .35rem; }
+  .prod-filters :global(.filter-field.prod-range-field .ali-pair) { display: flex; align-items: stretch; gap: .35rem; min-width: 0; }
   .prod-filters :global(.filter-field.prod-range-field .ali-pair input) { flex: 1 1 0; width: auto; min-width: 0; }
   .prod-filters :global(.filter-field.prod-range-field .ali-pair input::placeholder) { color: var(--color-text-dim); }
   .prod-filters :global(.filter-field.prod-range-field .ali-pair-sep) { display: flex; align-items: center; color: var(--color-text-dim); font-size: .7rem; }
