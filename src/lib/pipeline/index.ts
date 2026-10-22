@@ -28,6 +28,11 @@ export interface PipelineOptions {
   enrich?: boolean;
   /** Fuerza el proveedor de IA de texto para esta ejecución. */
   provider?: 'openai' | 'anthropic' | 'groq';
+  /**
+   * Fuerza el MODELO de IA para esta ejecución. Los límites de peticiones de
+   * Groq son por modelo: agotar el TPD de uno no agota el de los demás.
+   */
+  model?: string;
   /** No persiste: sólo ejecuta ingest → audit → categorize. */
   dryRun?: boolean;
 }
@@ -72,6 +77,7 @@ export async function runProductPipeline(
   const categorize = await runStageCategorize(product, config, {
     enrich: options.enrich,
     provider: options.provider,
+    model: options.model,
   });
   if (!categorize.ok) {
     return { ...categorize, pipeline: makeTrace({ ingest: true, audit: true }) };
@@ -154,7 +160,12 @@ export interface ReprocessResult {
  */
 export async function reprocessCatalog(
   ids?: string[],
-  options: { dryRun?: boolean; enrich?: boolean; provider?: 'openai' | 'anthropic' | 'groq' } = {},
+  options: {
+    dryRun?: boolean;
+    enrich?: boolean;
+    provider?: 'openai' | 'anthropic' | 'groq';
+    model?: string;
+  } = {},
 ): Promise<ReprocessResult> {
   const products = readProductsFromFile();
   const targets = ids && ids.length ? products.filter((p) => ids.includes(p.id)) : products;
@@ -166,6 +177,7 @@ export async function reprocessCatalog(
         ignoreId: product.id,
         enrich: options.enrich,
         provider: options.provider,
+        model: options.model,
         dryRun: options.dryRun,
       }),
     );

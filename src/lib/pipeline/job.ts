@@ -60,6 +60,8 @@ export interface PipelineJobState {
   currentTitle: string | null;
   /** Proveedor de IA forzado para esta tanda (null = el de por defecto). */
   provider: string | null;
+  /** Modelo de IA forzado para esta tanda (null = el del proveedor). */
+  model: string | null;
   /** Si la tanda usa la IA de texto. */
   enrich: boolean;
   /** Si la tanda es una simulación (no escribe). */
@@ -80,6 +82,8 @@ export interface StartJobOptions {
   dryRun?: boolean;
   enrich?: boolean;
   provider?: 'openai' | 'anthropic' | 'groq';
+  /** Modelo de IA para esta tanda (los límites de Groq son por modelo). */
+  model?: string;
 }
 
 const JOB_FILE = dataFile('pipeline-job.json');
@@ -117,6 +121,7 @@ function emptyState(): PipelineJobState {
     current: null,
     currentTitle: null,
     provider: null,
+    model: null,
     enrich: false,
     dryRun: false,
     startedAt: '',
@@ -198,6 +203,7 @@ export function startPipelineJob(
     scope,
     total: targets.length,
     provider: options.provider ?? null,
+    model: options.model?.trim() || null,
     enrich: options.enrich !== false,
     dryRun: options.dryRun === true,
     startedAt: new Date().toISOString(),
@@ -244,6 +250,8 @@ async function runJob(state: PipelineJobState, targets: any[]): Promise<void> {
     state.provider === 'openai' || state.provider === 'anthropic' || state.provider === 'groq'
       ? state.provider
       : undefined;
+  // Modelo forzado para la tanda (los límites de Groq son por modelo).
+  const model = state.model?.trim() || undefined;
 
   try {
     for (const product of targets) {
@@ -261,6 +269,7 @@ async function runJob(state: PipelineJobState, targets: any[]): Promise<void> {
         ignoreId: product.id,
         enrich: state.enrich,
         provider,
+        model,
         dryRun: state.dryRun,
       });
 
@@ -274,6 +283,7 @@ async function runJob(state: PipelineJobState, targets: any[]): Promise<void> {
             ignoreId: product.id,
             enrich: state.enrich,
             provider,
+            model,
             dryRun: state.dryRun,
           });
         }

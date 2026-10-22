@@ -10,8 +10,8 @@
  *
  * POST /api/admin/pipeline
  *   -> { mode: 'reprocess', ids?: string[], scope?: 'ids'|'all', dryRun?: boolean,
- *        enrich?: boolean, provider?: 'openai'|'anthropic'|'groq', confirm?: boolean,
- *        background?: boolean }
+ *        enrich?: boolean, provider?: 'openai'|'anthropic'|'groq', model?: string,
+ *        confirm?: boolean, background?: boolean }
  *      Re-ejecuta las 4 etapas sobre productos existentes del catálogo.
  *      Para escribir sobre TODO el catálogo hacen falta `scope:'all'` + `confirm:true`.
  *      Con `background:true` la tarea se lanza en SEGUNDO PLANO (devuelve al
@@ -207,12 +207,16 @@ export const POST: APIRoute = async ({ request }) => {
       ? providerRaw
       : undefined;
 
+    // Modelo opcional para esta tanda: los límites de peticiones de Groq son
+    // POR MODELO (TPD), así que agotar uno no agota el resto.
+    const model = String(body.model || '').trim() || undefined;
+
     // ── Segundo plano ────────────────────────────────────────────────────────
     // Reprocesar el catálogo entero con IA tarda minutos: dentro de la petición
     // HTTP el proxy la cortaba a mitad. Con `background:true` la tarea sigue
     // en el servidor y el panel consulta el avance con GET (clave `job`).
     if (body.background === true) {
-      const started = startPipelineJob({ ids, scope, dryRun, enrich: body.enrich !== false, provider });
+      const started = startPipelineJob({ ids, scope, dryRun, enrich: body.enrich !== false, provider, model });
       if (!started.ok) {
         return errorResponse(started.message || 'No se pudo lanzar el reproceso en segundo plano.', 409);
       }
@@ -224,6 +228,7 @@ export const POST: APIRoute = async ({ request }) => {
           scope,
           dryRun,
           provider: provider ?? null,
+          model: model ?? null,
           total: started.state?.total ?? 0,
           job: started.state,
           message: 'Reproceso lanzado en segundo plano. El avance se consulta con GET /api/admin/pipeline.',
@@ -236,6 +241,7 @@ export const POST: APIRoute = async ({ request }) => {
       dryRun,
       enrich: body.enrich !== false,
       provider,
+      model,
     });
 
     const okCount = results.filter((result) => result.ok).length;

@@ -1312,6 +1312,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <option value="groq">Groq</option>
             </select>
           </label>
+          <label class="tp-provider" for="tpModel">
+            <span class="tp-provider-label">Modelo (opcional)</span>
+            <input id="tpModel" type="text" placeholder="auto (el del proveedor)" title="Modelo de IA para esta tanda. Los límites de peticiones de Groq son POR MODELO: si uno se agota, prueba con otro." />
+          </label>
           <button type="button" id="btnPipelineStop" class="btn-secondary btn-sm" hidden title="Detiene el reproceso en curso tras el producto actual">
             <span class="btn-text">⏹ Detener</span>
           </button>
@@ -6986,6 +6990,7 @@ function renderTableRows(products) {
     const tpStatusText = document.getElementById('tpStatusText');
     const tpEnrich = document.getElementById('tpEnrich');
     const tpProvider = document.getElementById('tpProvider');
+    const tpModel = document.getElementById('tpModel');
     const tpAiEnriched = document.getElementById('tpAiEnriched');
     const tpAiFailed = document.getElementById('tpAiFailed');
     const tpProgress = document.getElementById('tpProgress');
@@ -7066,6 +7071,7 @@ function renderTableRows(products) {
         // IA tarda minutos y dentro de la petición HTTP el proxy la cortaba
         // a mitad (el trabajo se perdía). El avance se consulta con GET.
         const provider = tpProvider ? String(tpProvider.value || '').trim().toLowerCase() : '';
+        const model = tpModel ? String(tpModel.value || '').trim() : '';
         const res = await fetch('/api/admin/pipeline', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -7076,6 +7082,7 @@ function renderTableRows(products) {
             dryRun: dryRun === true,
             enrich: tpEnrich ? tpEnrich.checked : false,
             provider: provider || undefined,
+            model: model || undefined,
             background: true,
           }),
         });
@@ -7145,6 +7152,7 @@ function renderTableRows(products) {
         if (job.aiFailed) bits.push(`${job.aiFailed} sin IA`);
         if (job.failed) bits.push(`${job.failed} con error`);
         if (job.provider) bits.push(`proveedor: ${job.provider}`);
+        if (job.model) bits.push(`modelo: ${job.model}`);
         tpProgressText.textContent = `${job.message || ''} ${bits.join(' · ')}`.trim();
         tpProgressText.className = 'tp-progress-text'
           + (job.status === 'error' ? ' is-error' : job.status === 'done' ? ' is-ok' : '');
@@ -7200,9 +7208,10 @@ function renderTableRows(products) {
     btnPipelineStop?.addEventListener('click', () => tpStopPipeline());
     btnPipelineRun?.addEventListener('click', () => {
       const provider = tpProvider ? String(tpProvider.value || '').trim() : '';
+      const model = tpModel ? String(tpModel.value || '').trim() : '';
       const enrich = !!(tpEnrich && tpEnrich.checked);
       const detalle = enrich
-        ? ` (con enriquecimiento de IA; proveedor: ${provider || 'automático'})`
+        ? ` (con enriquecimiento de IA; proveedor: ${provider || 'automático'}${model ? `, modelo: ${model}` : ''})`
         : ' (sin enriquecimiento de IA)';
       const ok = window.confirm(
         `Se reprocesará todo el catálogo (auditoría, tags y score)${detalle}. ` +
@@ -7746,6 +7755,7 @@ function renderTableRows(products) {
   .tp-provider { display: flex; flex-direction: column; gap: .25rem; }
   .tp-provider-label { color: var(--color-text-dim); font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
   .tp-provider select { width: auto; min-width: 230px; padding: .45rem .6rem; font-size: .78rem; }
+  .tp-provider input { width: auto; min-width: 230px; padding: .45rem .6rem; font-size: .78rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font-family: inherit; outline: none; }
   .tp-progress { margin-top: .9rem; }
   .tp-progress[hidden] { display: none; }
   .tp-progress-bar { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .07); overflow: hidden; }

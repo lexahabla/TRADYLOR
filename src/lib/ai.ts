@@ -161,10 +161,13 @@ export async function enrichProductText(input: {
   /** Precio de oferta de referencia (si el scraping/usuario ya lo conoce). */
   price?: number;
   originalPrice?: number;
-}, options: { provider?: TextProvider } = {}): Promise<EnrichedText> {
+}, options: { provider?: TextProvider; model?: string } = {}): Promise<EnrichedText> {
   // El proveedor se puede forzar por petición (p. ej. cuando el proveedor por
   // defecto agota su límite de peticiones y hay otro con claves configuradas).
   const provider = options.provider ?? textProvider();
+  // El modelo también: los límites diarios de Groq son POR MODELO, así que
+  // quedarse sin TPD en un modelo no implica quedarse sin cuota en todos.
+  const forcedModel = options.model?.trim();
   if (!hasTextCredentials(provider)) {
     throw new Error(
       provider === 'anthropic'
@@ -187,7 +190,7 @@ export async function enrichProductText(input: {
     .join('\n');
 
   if (provider === 'anthropic') {
-    const model = env('ANTHROPIC_MODEL') || 'claude-3-5-sonnet-latest';
+    const model = forcedModel || env('ANTHROPIC_MODEL') || 'claude-3-5-sonnet-latest';
     const response = await fetchWithTimeout(
       'https://api.anthropic.com/v1/messages',
       {
@@ -213,9 +216,10 @@ export async function enrichProductText(input: {
 
   if (provider === 'groq') {
     // Groq es compatible con la API de OpenAI; nivel gratuito para desarrolladores.
-    // Modelo fijo openai/gpt-oss-120b (disponible en el plan free; llama-3.3-70b es Enterprise).
-    // Se ignora GROQ_MODEL para evitar modelos no disponibles en el nivel gratuito.
-    const model = 'openai/gpt-oss-120b';
+    // El modelo se puede forzar por petición: los límites diarios de tokens
+    // (TPD) son POR MODELO, así que agotar uno no agota los demás.
+    // Por defecto: openai/gpt-oss-120b (disponible en el plan free).
+    const model = forcedModel || env('GROQ_MODEL') || 'openai/gpt-oss-120b';
     const response = await fetchWithTimeout(
       'https://api.groq.com/openai/v1/chat/completions',
       {
@@ -244,7 +248,7 @@ export async function enrichProductText(input: {
     return normalizeEnrichedText(parseLooseJson(text));
   }
 
-  const model = env('OPENAI_MODEL') || 'gpt-4o-mini';
+  const model = forcedModel || env('OPENAI_MODEL') || 'gpt-4o-mini';
   const response = await fetchWithTimeout(
     'https://api.openai.com/v1/chat/completions',
     {

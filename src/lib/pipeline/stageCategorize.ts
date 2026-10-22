@@ -188,7 +188,7 @@ function hasCompletedSheet(product: PipelineProduct): boolean {
 export async function runStageCategorize(
   product: PipelineProduct,
   config: PipelineConfig,
-  options: { enrich?: boolean; provider?: 'openai' | 'anthropic' | 'groq' } = {},
+  options: { enrich?: boolean; provider?: 'openai' | 'anthropic' | 'groq'; model?: string } = {},
 ): Promise<StageResult> {
   const haystack = buildHaystack(product);
   const { category: root, categoryId, subcategoryId } = resolveCategories(product, haystack, config);
@@ -240,7 +240,9 @@ export async function runStageCategorize(
           price: next.price,
           originalPrice: next.originalPrice,
         },
-        options.provider ? { provider: options.provider } : {},
+        options.provider || options.model
+          ? { provider: options.provider, model: options.model }
+          : {},
       );
       enriched = overlayText(local, ai);
       aiEnriched = true;

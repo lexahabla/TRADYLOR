@@ -537,6 +537,7 @@ reprocesa el catálogo por defecto). Hay dos modos:
 | `dryRun` | boolean | `true` = ingest → audit → categorize **sin persistir**. En `mode:'dedupe'` es la simulación (default: simulación). |
 | `enrich` | boolean | `false` desactiva la IA de texto (default `true`). |
 | `provider` | string | Fuerza el proveedor de IA para esta tanda: `openai`, `anthropic` o `groq`. Útil cuando el proveedor por defecto (`TEXT_AI_PROVIDER`) agota su límite de peticiones y hay otro con claves configuradas. |
+| `model` | string | Fuerza el **modelo** de IA para esta tanda (p. ej. `openai/gpt-oss-120b`). Los límites de Groq son **por modelo** (TPD): agotar uno no agota el resto. Vacío = el modelo por defecto del proveedor. |
 | `background` | boolean | `true` lanza el reproceso en **segundo plano** y responde al instante con `202` (§5.2). Es la única forma viable de reprocesar el catálogo entero con IA. |
 
 Respuesta (reprocess síncrono): `{ success, mode, scope, dryRun, total, processed, failed, ai_enriched, ai_failed, results[] }`
@@ -587,6 +588,7 @@ sigue en el proceso SSR (Node standalone) y el avance se consulta con `GET`.
   "confirm": true,
   "enrich": true,
   "provider": "openai",
+  "model": "gpt-4o-mini",
   "background": true
 }
 ```
@@ -678,7 +680,7 @@ pisa la redacción editorial anterior. El fallo queda registrado en `ai_error`
 |---|---|---|
 | `openai` | `OPENAI_API_KEY` (+ `OPENAI_MODEL`) | Requiere saldo en la cuenta: sin créditos responde `429 insufficient_quota`. |
 | `anthropic` | `ANTHROPIC_API_KEY` (+ `ANTHROPIC_MODEL`) | Si la clave **no** está vinculada a un workspace, hace falta además `ANTHROPIC_WORKSPACE_ID` (cabecera `anthropic-workspace-id`); si falta, la API responde `400`. |
-| `groq` | `GROQ_API_KEY` | Plan gratuito con **límite diario de tokens** (`TPD`): al agotarse responde `429` y el lote se queda sin enriquecer. |
+| `groq` | `GROQ_API_KEY` (+ `GROQ_MODEL`) | Plan gratuito con **límite diario de tokens por modelo** (`TPD`): al agotarse responde `429` y el lote se queda sin enriquecer. Se puede forzar otro modelo con `model` (o `GROQ_MODEL`) porque los cubos de cuota son independientes. |
 
 ---
 
