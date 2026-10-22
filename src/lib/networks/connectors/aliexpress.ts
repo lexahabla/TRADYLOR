@@ -209,11 +209,16 @@ function extractProducts(payload: Record<string, unknown>): AliProduct[] {
   return [];
 }
 
+import { toHiResImageUrl } from '../../imageQuality';
+
 function gallery(item: AliProduct): string[] {
   const raw = item.product_small_image_urls;
-  if (Array.isArray(raw)) return raw.filter(Boolean).map(String);
-  if (raw && Array.isArray(raw.string)) return raw.string.filter(Boolean);
-  return [];
+  const base = Array.isArray(raw)
+    ? raw.filter(Boolean).map(String)
+    : raw && Array.isArray(raw.string)
+      ? raw.string.filter(Boolean)
+      : [];
+  return base.map(toHiResImageUrl).filter((u): u is string => Boolean(u));
 }
 
 function mapProduct(item: AliProduct, currency: string): UnifiedProduct | null {
@@ -228,6 +233,7 @@ function mapProduct(item: AliProduct, currency: string): UnifiedProduct | null {
   const rating = num(item.evaluate_rate);
   const discount = num(item.discount);
   const images = gallery(item);
+  const mainImageHiRes = toHiResImageUrl(text(item.product_main_image_url) || images[0] || '');
 
   const extra: Record<string, string | number | boolean | null> = {
     'ID producto': text(item.product_id) || null,
@@ -270,7 +276,7 @@ function mapProduct(item: AliProduct, currency: string): UnifiedProduct | null {
     price,
     originalPrice: originalPrice && originalPrice > price ? originalPrice : undefined,
     currency,
-    image: text(item.product_main_image_url) || images[0] || '',
+    image: mainImageHiRes || '',
     gallery: images.length ? images : undefined,
     category: text(item.second_level_category_name) || text(item.first_level_category_name) || 'AliExpress',
     productUrl,

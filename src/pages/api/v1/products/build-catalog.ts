@@ -5,16 +5,18 @@
  * POST /api/v1/products/build-catalog
  *
  * Autenticación: header Authorization: Bearer <TRADYLOR_API_TOKEN>
+ * Query opcional: ?dryRun=1  → no persiste, solo reporta
  *
- * Proceso completo de un solo clic:
- *   1. Ingesión paralela de todas las redes conectadas (eBay, AliExpress, etc.)
- *   2. Normalización canónica (CanonicalAffiliateProduct)
- *   3. Filtro de calidad estricto (imagen, título, precio > 0, sin guiones)
- *   4. Deduplicación cross-merchant (mismo producto en varias redes → una entidad)
- *   5. Autoclasificación dinámica (crea categorías/subcategorías si no existen)
- *   6. Detección ofertas estrella (class="hsr", top 10-15 por descuento/margen)
- *   7. Ordenación inteligente (popularidad, ventas, score conversión)
- *   8. Upsert masivo en products.json + reporte JSON detallado
+ * Proceso:
+ *   1. Ingesión PARALELA de todas las redes conectadas
+ *   2. Normalización canónica + filtro calidad + upgrade imágenes a resolución original
+ *   3. Deduplicación cross-merchant (reutiliza lógica de curation.ts + stageIngest.ts)
+ *   4. Categorización SOLO en categorías existentes (roots + subs con keywords)
+ *   5. Detección ofertas estrella (HSR)
+ *   6. Ordenación inteligente
+ *   7. Stamping campos pipeline (audit_status, audit_score, ia_status, link_status,
+ *      normalized_tags, conversion_score, pipeline_version, pipeline_run_at)
+ *   8. Upsert atómico en products.json + reporte JSON detallado
  * ==============================================================================
  */
 
@@ -26,6 +28,18 @@ import { readProductsFromFile, writeProductsToFile, slugify, type Product } from
 import { isValidApiToken, unauthorizedApiResponse } from '../../../../lib/apiAuth';
 import { canonicalToUnified } from '../../../../lib/networks/connectors/base';
 import type { CanonicalAffiliateProduct, UnifiedProduct, NetworkConnector } from '../../../../lib/networks/types';
+import { toHiResImageUrl } from '../../../../lib/imageQuality';
+import { cleanTitleKey, canonicalProductUrl, extractSourceId, titleSimilarity } from '../../../../lib/curation';
+import { readDeletedIds } from '../../../../lib/deletedProducts';
+import { slugifyProduct, upsertCatalogProduct } from '../../../../lib/catalogStore';
+import { findIngestDuplicate } from '../../../../lib/pipeline/stageIngest';
+import { runStageAudit } from '../../../../lib/pipeline/stageAudit';
+import { getPipelineConfig } from '../../../../lib/pipeline/config';
+import { computeEditorialStatus, extractNormalizedTags, computeConversionScore } from '../../../../lib/curation';
+import { incrementMetric } from '../../../../lib/pipeline/metrics';
+import fs from 'fs';
+import path from 'path';
+import { DATA_DIR } from '../../../../lib/paths';
 
 export const prerender = false;
 
@@ -33,7 +47,6 @@ const jsonHeaders = { 'Content-Type': 'application/json; charset=utf-8' };
 
 // ─── Configuración del proceso ──────────────────────────────────────────────
 const BUILD_CONFIG = {
-  // Palabras clave de barrido amplio para cada red (mismo que usa AliExpressConnector)
   CATALOG_KEYWORDS: [
     'auriculares bluetooth',
     'robot aspirador',
@@ -52,26 +65,22 @@ const BUILD_CONFIG = {
     'patinete electrico',
   ],
 
-  // Límites por red para no saturar APIs
   PER_NETWORK_LIMIT: 50,
 
-  // Umbrales de calidad
   MIN_PRICE: 1,
   MIN_TITLE_LENGTH: 5,
   REQUIRE_IMAGE: true,
 
-  // Ofertas estrella (HS = High Selling / Hot Selection)
-  HSR_COUNT: 12,                    // 10-15 productos
-  HSR_MIN_DISCOUNT: 15,             // % descuento mínimo
-  HSR_MIN_COMMISSION: 3,            // % comisión mínima
+  HSR_COUNT: 12,
+  HSR_MIN_DISCOUNT: 15,
+  HSR_MIN_COMMISSION: 3,
 
-  // Cross-merchant matching
-  TITLE_SIMILARITY_THRESHOLD: 0.75, // Jaccard similarity para considerar mismo producto
-  MAX_CROSS_MERCHANT_GROUPS: 100,   // Límite grupos de deduplicación
+  TITLE_SIMILARITY_THRESHOLD: 0.75,
+  // Sin límite duro; se reporta truncated si hay muchos
+  MAX_CROSS_MERCHANT_GROUPS: 1000,
 } as const;
 
 // ─── Interfaces internas ────────────────────────────────────────────────────
-
 interface BuildReport {
   success: boolean;
   startedAt: string;
@@ -83,11 +92,13 @@ interface BuildReport {
   afterQualityFilter: number;
   crossMerchantGroups: number;
   duplicatesResolved: number;
-  categoriesCreated: number;
-  subcategoriesCreated: number;
+  uncategorized: number;
   hsrDetected: number;
   upserted: number;
   updated: number;
+  truncated: number;
+  wouldUpsert?: number;
+  wouldUpdate?: number;
   errors: string[];
 }
 
@@ -96,26 +107,23 @@ interface CanonicalWithMeta extends CanonicalAffiliateProduct {
   _sourceUnified: UnifiedProduct;
 }
 
+interface CrossMerchantGroup {
+  canonical: CanonicalWithMeta;
+  variants: CanonicalWithMeta[];
+  bestPrice: number;
+  bestOriginalPrice: number;
+  bestCommissionRate: number;
+  bestCommissionAmount: number;
+  bestRating: number;
+  bestSales: number;
+  allNetworks: string[];
+  allAffiliateUrls: Record<string, string>;
+  allDirectUrls: Record<string, string>;
+  allMerchantNames: Record<string, string>;
+  allExtraImages: string[];
+}
+
 // ─── Utilidades ─────────────────────────────────────────────────────────────
-
-function cleanTitleKey(title: string): string {
-  return title
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function titleSimilarity(a: string, b: string): number {
-  const tokensA = new Set(cleanTitleKey(a).split(' ').filter((t) => t.length > 2));
-  const tokensB = new Set(cleanTitleKey(b).split(' ').filter((t) => t.length > 2));
-  if (!tokensA.size || !tokensB.size) return 0;
-  let intersection = 0;
-  for (const token of tokensA) if (tokensB.has(token)) intersection += 1;
-  return intersection / (tokensA.size + tokensB.size - intersection);
-}
 
 function hasValidImage(image: string): boolean {
   if (!image || !image.trim()) return false;
@@ -150,7 +158,34 @@ function calculateCommissionEstimate(price: number, commissionRate: number): num
   return Math.round(price * (commissionRate / 100) * 100) / 100;
 }
 
-// ─── Paso 1: Ingesión multi-comerciante (paralelo) ──────────────────────────
+function cleanMerchant(name: string | undefined): string {
+  if (!name || name.trim() === '—' || name.trim() === '-') return '';
+  return name.trim();
+}
+
+// Upgrade imágenes a resolución original
+function upgradeImages(obj: { mainImage?: string; extraImages?: string[]; gallery?: string[] }): {
+  mainImage?: string;
+  extraImages: string[];
+  gallery: string[];
+} {
+  const main = toHiResImageUrl(obj.mainImage);
+  const extra = (obj.extraImages ?? []).map(toHiResImageUrl).filter((u): u is string => Boolean(u));
+  const gallery = (obj.gallery ?? []).map(toHiResImageUrl).filter((u): u is string => Boolean(u));
+  const allGallery = main ? [main, ...gallery.filter((u) => u !== main)] : gallery;
+  return { mainImage: main, extraImages: extra, gallery: allGallery.slice(0, 10) };
+}
+
+// Generar id único basado en slugifyProduct (consistente con pipeline/panel)
+function generateProductId(title: string, existingIds: Set<string>): string {
+  let base = slugifyProduct(title);
+  if (!existingIds.has(base)) return base;
+  let suffix = 2;
+  while (existingIds.has(`${base}-${suffix}`)) suffix++;
+  return `${base}-${suffix}`;
+}
+
+// ─── Paso 1: Ingesión multi-comerciante (PARALELO por red) ──────────────────
 
 async function ingestAllNetworks(): Promise<{
   canonicalProducts: CanonicalWithMeta[];
@@ -163,101 +198,138 @@ async function ingestAllNetworks(): Promise<{
   const errors: string[] = [];
   const byNetwork: Record<string, number> = {};
 
-  // Para cada red conectada, buscar con sus palabras clave
-  const allCanonical: CanonicalWithMeta[] = [];
+  const results = await Promise.allSettled(
+    connected.map(async (networkId) => {
+      try {
+        const connector = getConnector(networkId) as NetworkConnector | null;
+        if (!connector || typeof connector.searchCanonical !== 'function') {
+          // Fallback: unifiedSearch CON query por keyword
+          const allCanonical: CanonicalWithMeta[] = [];
+          const seenInNetwork = new Set<string>();
 
-  for (const networkId of connected) {
-    try {
-      const connector = getConnector(networkId) as NetworkConnector | null;
-      if (!connector || typeof connector.searchCanonical !== 'function') {
-        // Fallback: usar unifiedSearch que ya existe
-        const results = await unifiedSearch({
-          limit: BUILD_CONFIG.PER_NETWORK_LIMIT,
-          sortBy: 'popularity',
-        });
-        const networkProducts = results.byNetwork.find((r) => r.network === networkId)?.products ?? [];
-        for (const up of networkProducts) {
-          // Convertir UnifiedProduct → CanonicalAffiliateProduct aproximado
-          const canonical: CanonicalWithMeta = {
-            network: networkId,
-            externalId: up.externalId,
-            affiliateUrl: up.productUrl,
-            directUrl: up.productUrl,
-            title: up.title,
-            description: up.description,
-            price: up.price,
-            originalPrice: up.originalPrice ?? up.price,
-            currency: up.currency,
-            discountPercentage: up.originalPrice && up.originalPrice > up.price
-              ? calculateDiscountPercentage(up.originalPrice, up.price)
-              : 0,
-            inStock: up.inStock,
-            commissionRate: up.commissionRate ?? 0,
-            estimatedCommission: calculateCommissionEstimate(up.price, up.commissionRate ?? 0),
-            category: up.category,
-            brand: up.brand,
-            merchantName: up.extra?.Tienda as string ?? up.extra?.Distribuidor as string ?? networkId,
-            merchantId: up.extra?.['ID tienda'] as string ?? undefined,
-            rating: up.rating ?? 0,
-            reviewCount: up.reviewsCount ?? 0,
-            sales: up.popularity ?? up.extra?.['Ventas (30 días)'] as number ?? undefined,
-            mainImage: up.image,
-            extraImages: up.gallery?.filter((g) => g !== up.image) ?? [],
-            syncedAt: new Date().toISOString(),
-            _network: networkId,
-            _sourceUnified: up,
-          };
-          allCanonical.push(canonical);
-        }
-        byNetwork[networkId] = networkProducts.length;
-        continue;
-      }
+          for (const keyword of BUILD_CONFIG.CATALOG_KEYWORDS) {
+            if (allCanonical.length >= BUILD_CONFIG.PER_NETWORK_LIMIT) break;
+            try {
+              const results = await unifiedSearch({
+                query: keyword,
+                networks: [networkId],
+                limit: 10,
+                sortBy: 'popularity',
+              });
+              const networkProducts = results.byNetwork.find((r) => r.network === networkId)?.products ?? [];
+              for (const up of networkProducts) {
+                if (allCanonical.length >= BUILD_CONFIG.PER_NETWORK_LIMIT) break;
+                const dedupeKey = canonicalProductUrl(up.productUrl) || extractSourceId({ ...up, affiliateUrl: up.productUrl } as any) || cleanTitleKey(up.title);
+                if (seenInNetwork.has(dedupeKey)) continue;
+                seenInNetwork.add(dedupeKey);
 
-      // Usar searchCanonical del conector nativo
-      let networkCanonical: CanonicalAffiliateProduct[] = [];
-      for (const keyword of BUILD_CONFIG.CATALOG_KEYWORDS) {
-        if (networkCanonical.length >= BUILD_CONFIG.PER_NETWORK_LIMIT) break;
-        try {
-          const batch = await connector.searchCanonical({
-            query: keyword,
-            limit: 10,
-            sortBy: 'popularity',
-          });
-          for (const product of batch) {
-            if (networkCanonical.length >= BUILD_CONFIG.PER_NETWORK_LIMIT) break;
-            networkCanonical.push(product);
+                const upgraded = upgradeImages({ mainImage: up.image, gallery: up.gallery });
+
+                const canonical: CanonicalWithMeta = {
+                  network: networkId,
+                  externalId: up.externalId,
+                  affiliateUrl: up.productUrl,
+                  directUrl: up.productUrl,
+                  title: up.title,
+                  description: up.description,
+                  price: up.price,
+                  originalPrice: up.originalPrice ?? up.price,
+                  currency: up.currency,
+                  discountPercentage: up.originalPrice && up.originalPrice > up.price
+                    ? calculateDiscountPercentage(up.originalPrice, up.price)
+                    : 0,
+                  inStock: up.inStock,
+                  commissionRate: up.commissionRate ?? 0,
+                  estimatedCommission: calculateCommissionEstimate(up.price, up.commissionRate ?? 0),
+                  category: up.category,
+                  brand: up.brand,
+                  merchantName: up.extra?.Tienda as string ?? up.extra?.Distribuidor as string ?? networkId,
+                  merchantId: up.extra?.['ID tienda'] as string ?? undefined,
+                  rating: up.rating ?? 0,
+                  reviewCount: up.reviewsCount ?? 0,
+                  sales: up.popularity ?? up.extra?.['Ventas (30 días)'] as number ?? undefined,
+                  mainImage: upgraded.mainImage || up.image,
+                  extraImages: upgraded.extraImages,
+                  syncedAt: new Date().toISOString(),
+                  _network: networkId,
+                  _sourceUnified: up,
+                };
+                allCanonical.push(canonical);
+              }
+            } catch (e) {
+              errors.push(`${networkId}:${keyword} → ${e instanceof Error ? e.message : 'error'}`);
+            }
           }
-        } catch (e) {
-          errors.push(`${networkId}:${keyword} → ${e instanceof Error ? e.message : 'error'}`);
+          byNetwork[networkId] = allCanonical.length;
+          return { canonicalProducts: allCanonical, networkId, errors: [] };
         }
-      }
 
-      for (const canonical of networkCanonical) {
-        allCanonical.push({
-          ...canonical,
-          _network: networkId,
-          _sourceUnified: canonicalToUnified(canonical),
+        // Usar searchCanonical del conector nativo
+        let networkCanonical: CanonicalAffiliateProduct[] = [];
+        const seenInNetwork = new Set<string>();
+
+        for (const keyword of BUILD_CONFIG.CATALOG_KEYWORDS) {
+          if (networkCanonical.length >= BUILD_CONFIG.PER_NETWORK_LIMIT) break;
+          try {
+            const batch = await connector.searchCanonical({
+              query: keyword,
+              limit: 10,
+              sortBy: 'popularity',
+            });
+            for (const product of batch) {
+              if (networkCanonical.length >= BUILD_CONFIG.PER_NETWORK_LIMIT) break;
+              const dedupeKey = canonicalProductUrl(product.affiliateUrl) || extractSourceId(product) || cleanTitleKey(product.title);
+              if (seenInNetwork.has(dedupeKey)) continue;
+              seenInNetwork.add(dedupeKey);
+              networkCanonical.push(product);
+            }
+          } catch (e) {
+            errors.push(`${networkId}:${keyword} → ${e instanceof Error ? e.message : 'error'}`);
+          }
+        }
+
+        const upgradedCanonical = networkCanonical.map((canonical) => {
+          const upgraded = upgradeImages({ mainImage: canonical.mainImage, extraImages: canonical.extraImages });
+          return {
+            ...canonical,
+            mainImage: upgraded.mainImage || canonical.mainImage,
+            extraImages: upgraded.extraImages,
+            _network: networkId,
+            _sourceUnified: canonicalToUnified(canonical),
+          } as CanonicalWithMeta;
         });
+
+        byNetwork[networkId] = upgradedCanonical.length;
+        return { canonicalProducts: upgradedCanonical, networkId, errors: [] };
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Error desconocido';
+        errors.push(`${networkId}: ${msg}`);
+        byNetwork[networkId] = 0;
+        return { canonicalProducts: [], networkId, errors: [msg] };
       }
-      byNetwork[networkId] = networkCanonical.length;
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Error desconocido';
-      errors.push(`${networkId}: ${msg}`);
-      byNetwork[networkId] = 0;
+    })
+  );
+
+  const allCanonical: CanonicalWithMeta[] = [];
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      allCanonical.push(...result.value.canonicalProducts);
+      errors.push(...result.value.errors);
+    } else {
+      errors.push(result.reason instanceof Error ? result.reason.message : 'Error desconocido en red');
     }
   }
 
   return { canonicalProducts: allCanonical, byNetwork, networksQueried, errors };
 }
 
-// ─── Paso 2: Filtro de calidad estricto ────────────────────────────────────
-
+// ─── Paso 2: Filtro de calidad ─────────────────────────────────────────────
 function qualityFilter(products: CanonicalWithMeta[]): CanonicalWithMeta[] {
   return products.filter((p) => {
     if (!isValidTitle(p.title)) return false;
     if (!isValidPrice(p.price)) return false;
     if (BUILD_CONFIG.REQUIRE_IMAGE && !hasValidImage(p.mainImage)) return false;
-    // Descartar campos con guiones que deterioran la UI
+    // Limpiar guiones
     if (p.description?.trim() === '—' || p.description?.trim() === '-') p.description = '';
     if (p.brand?.trim() === '—' || p.brand?.trim() === '-') p.brand = undefined;
     if (p.merchantName?.trim() === '—' || p.merchantName?.trim() === '-') p.merchantName = p._network;
@@ -265,25 +337,10 @@ function qualityFilter(products: CanonicalWithMeta[]): CanonicalWithMeta[] {
   });
 }
 
-// ─── Paso 3: Deduplicación cross-merchant ──────────────────────────────────
-
-interface CrossMerchantGroup {
-  canonical: CanonicalWithMeta;
-  variants: CanonicalWithMeta[]; // mismo producto en otras redes
-  bestPrice: number;
-  bestOriginalPrice: number;
-  bestCommissionRate: number;
-  bestCommissionAmount: number;
-  bestRating: number;
-  bestSales: number;
-  allNetworks: string[];
-  allAffiliateUrls: Record<string, string>;
-  allDirectUrls: Record<string, string>;
-  allMerchantNames: Record<string, string>;
-  allExtraImages: string[];
-}
-
+// ─── Paso 3: Deduplicación cross-merchant (reutiliza curation.ts) ──────────
 function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantGroup[] {
+  // 1) Agrupar por red nativa: detectDuplicates usa sourceId / URL canónica / título limpio
+  // Pero aquí trabajamos cross-merchant, así que usamos lógica similar adaptada
   const groups: CrossMerchantGroup[] = [];
   const used = new Set<number>();
 
@@ -294,7 +351,7 @@ function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantG
     const allNetworks = new Set<string>([base._network]);
     const allAffiliateUrls: Record<string, string> = { [base._network]: base.affiliateUrl };
     const allDirectUrls: Record<string, string> = { [base._network]: base.directUrl };
-    const allMerchantNames: Record<string, string> = { [base._network]: base.merchantName };
+    const allMerchantNames: Record<string, string> = { [base._network]: cleanMerchant(base.merchantName) };
     const allExtraImages = [...base.extraImages];
 
     let bestPrice = base.price;
@@ -304,41 +361,45 @@ function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantG
     let bestRating = base.rating;
     let bestSales = base.sales ?? 0;
 
-    // Buscar coincidencias en el resto
     for (let j = i + 1; j < products.length; j++) {
       if (used.has(j)) continue;
       const candidate = products[j];
 
-      // Criterio 1: sourceId idéntico (ASIN, Item ID)
+      let match = false;
+      // Criterio 1: sourceId idéntico
       if (base.externalId && candidate.externalId && base.externalId === candidate.externalId) {
-        // Mismo ID externo → mismo producto
+        match = true;
       }
-      // Criterio 2: alta similitud de título (≥ threshold)
+      // Criterio 2: URL canónica idéntica
+      else if (base.affiliateUrl && candidate.affiliateUrl) {
+        if (canonicalProductUrl(base.affiliateUrl) === canonicalProductUrl(candidate.affiliateUrl)) {
+          match = true;
+        }
+      }
+      // Criterio 3: título limpio muy similar (Jaccard ≥ threshold)
       else if (titleSimilarity(base.title, candidate.title) >= BUILD_CONFIG.TITLE_SIMILARITY_THRESHOLD) {
-        // Título muy similar → probable mismo producto
+        match = true;
       }
-      // Criterio 3: marca + modelo en título
+      // Criterio 4: misma marca + título parecido
       else if (
         base.brand &&
         candidate.brand &&
         base.brand.toLowerCase() === candidate.brand.toLowerCase() &&
         titleSimilarity(base.title, candidate.title) >= 0.6
       ) {
-        // Misma marca + título parecido
-      } else {
-        continue;
+        match = true;
       }
 
-      // Agrupar
+      if (!match) continue;
+
       variants.push(candidate);
       used.add(j);
       allNetworks.add(candidate._network);
       allAffiliateUrls[candidate._network] = candidate.affiliateUrl;
       allDirectUrls[candidate._network] = candidate.directUrl;
-      allMerchantNames[candidate._network] = candidate.merchantName;
+      allMerchantNames[candidate._network] = cleanMerchant(candidate.merchantName);
       allExtraImages.push(...candidate.extraImages);
 
-      // Mejorar métricas con la mejor variante
       if (candidate.price < bestPrice) bestPrice = candidate.price;
       if (candidate.originalPrice > bestOriginalPrice) bestOriginalPrice = candidate.originalPrice;
       if (candidate.commissionRate > bestCommissionRate) bestCommissionRate = candidate.commissionRate;
@@ -371,72 +432,80 @@ function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantG
   return groups;
 }
 
-// ─── Paso 4: Autoclasificación estricta (SOLO 8 categorías raíz fijas) ────────
-
+// ─── Paso 4: Categorización SOLO en existentes (roots + subs por keywords) ──
 async function autoCategorize(groups: CrossMerchantGroup[]): Promise<{
-  categoriesCreated: number;
-  subcategoriesCreated: number;
-  categorizedGroups: Array<CrossMerchantGroup & { category: string; subcategory?: string }>;
+  uncategorized: number;
+  categorizedGroups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string }>;
 }> {
   const existingCategories = getCategories();
   const rootCategories = existingCategories.filter((c) => !c.parentId);
-  // NO se crean categorías automáticamente: categoriesCreated = 0, subcategoriesCreated = 0
-  const categorizedGroups: Array<CrossMerchantGroup & { category: string; subcategory?: string }> = [];
+  const categorizedGroups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string }> = [];
+  let uncategorized = 0;
 
   for (const group of groups) {
-    // Usar suggestCategoryStrict: matching obligatorio contra las 8 categorías raíz
-    const text = `${group.canonical.title} ${group.canonical.description} ${group.canonical.category}`;
-    const matchedCategory = suggestCategoryStrict(text);
+    const text = `${group.canonical.title} ${group.canonical.description} ${group.canonical.category}`.toLowerCase();
 
-    let categoryName: string;
+    // 1) Buscar mejor root por suggestCategoryStrict (usa mandatory rules + keywords scoring)
+    const matchedRoot = suggestCategoryStrict(text);
+
+    let categoryName = '';
     let categoryId: string | undefined;
-
-    if (matchedCategory) {
-      categoryName = matchedCategory.name;
-      categoryId = matchedCategory.id;
-    } else {
-      // Fallback: si no hay match, asignar a "Informática y Oficina" por defecto
-      const fallback = rootCategories.find((c) => c.id === 'informatica-oficina');
-      categoryName = fallback?.name ?? 'Informática y Oficina';
-      categoryId = fallback?.id;
-    }
-
-    // Subcategoría: SOLO usar subcategorías YA EXISTENTES en el catálogo
-    // NO se crean subcategorías automáticamente
     let subcategoryName: string | undefined;
     let subcategoryId: string | undefined;
 
-    if (group.canonical.subCategory) {
-      const parentCat = existingCategories.find((c) => c.id === categoryId) ?? rootCategories[0];
-      if (parentCat) {
-        const subSlug = `${parentCat.id}--${slugifyCategory(group.canonical.subCategory)}`;
-        const existingSub = existingCategories.find((c) => c.slug === subSlug);
-        if (existingSub) {
-          subcategoryName = existingSub.name;
-          subcategoryId = existingSub.id;
+    if (matchedRoot) {
+      categoryName = matchedRoot.name;
+      categoryId = matchedRoot.id;
+
+      // 2) Buscar mejor subcategoría existente bajo esta root por keywords
+      const subs = existingCategories.filter((c) => c.parentId === categoryId);
+      if (subs.length > 0) {
+        let bestSub: { cat: typeof subs[0]; matches: number } | null = null;
+        for (const sub of subs) {
+          const matches = (sub.keywords ?? []).reduce(
+            (count, kw) => (kw && text.includes(kw.toLowerCase()) ? count + 1 : count),
+            0
+          );
+          if (matches > 0 && (!bestSub || matches > bestSub.matches)) {
+            bestSub = { cat: sub, matches };
+          }
+        }
+        if (bestSub) {
+          subcategoryName = bestSub.cat.name;
+          subcategoryId = bestSub.cat.id;
         }
       }
     }
 
-    categorizedGroups.push({ ...group, category: categoryName, subcategory: subcategoryName, _categoryId: categoryId, _subcategoryId: subcategoryId });
+    // 3) Si no hay match de root → sin categoría
+    if (!categoryId) {
+      uncategorized++;
+      categoryName = '';
+    }
+
+    categorizedGroups.push({
+      ...group,
+      category: categoryName,
+      subcategory: subcategoryName,
+      categoryId,
+      subcategoryId,
+    });
   }
 
-  return { categoriesCreated: 0, subcategoriesCreated: 0, categorizedGroups };
+  return { uncategorized, categorizedGroups };
 }
 
-// ─── Paso 5: Detección ofertas estrella (HS = High Selling / Hot Selection) ─
-
-function detectHSR(groups: Array<CrossMerchantGroup & { category: string; subcategory?: string }>): Array<CrossMerchantGroup & { category: string; subcategory?: string; isHSR: boolean; hsrScore: number }> {
-  // Score HS = combinación de descuento, comisión, rating, ventas
+// ─── Paso 5: Detección ofertas estrella (HSR) ───────────────────────────────
+function detectHSR(groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string }>): Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }> {
   const scored = groups.map((group) => {
     const discount = group.bestOriginalPrice > group.bestPrice
       ? calculateDiscountPercentage(group.bestOriginalPrice, group.bestPrice)
       : 0;
 
-    const commissionScore = Math.min(100, (group.bestCommissionRate / 20) * 100); // 20% = 100 pts
-    const discountScore = Math.min(100, (discount / 50) * 100); // 50% descuento = 100 pts
+    const commissionScore = Math.min(100, (group.bestCommissionRate / 20) * 100);
+    const discountScore = Math.min(100, (discount / 50) * 100);
     const ratingScore = (group.bestRating / 5) * 100;
-    const salesScore = Math.min(100, Math.log10(1 + group.bestSales) * 20); // log scale
+    const salesScore = Math.min(100, Math.log10(1 + group.bestSales) * 20);
 
     const hsrScore = Math.round(
       discountScore * 0.4 +
@@ -452,7 +521,6 @@ function detectHSR(groups: Array<CrossMerchantGroup & { category: string; subcat
     return { ...group, isHSR, hsrScore };
   });
 
-  // Ordenar por hsrScore descendente y tomar top N
   scored.sort((a, b) => b.hsrScore - a.hsrScore);
   const hsrCount = Math.min(BUILD_CONFIG.HSR_COUNT, scored.filter((g) => g.isHSR).length);
   scored.slice(0, hsrCount).forEach((g) => { g.isHSR = true; });
@@ -461,49 +529,72 @@ function detectHSR(groups: Array<CrossMerchantGroup & { category: string; subcat
 }
 
 // ─── Paso 6: Ordenación inteligente ────────────────────────────────────────
-
-function smartSort(groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; isHSR: boolean; hsrScore: number }>): typeof groups {
-  // Primero HS, luego por score de conversión (popularidad × comisión / precio)
+function smartSort(groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }>): typeof groups {
   return groups.sort((a, b) => {
     if (a.isHSR !== b.isHSR) return a.isHSR ? -1 : 1;
-    // Score de conversión: (ventas * comisión) / precio
     const scoreA = (a.bestSales * a.bestCommissionAmount) / Math.max(a.bestPrice, 1);
     const scoreB = (b.bestSales * b.bestCommissionAmount) / Math.max(b.bestPrice, 1);
     return scoreB - scoreA;
   });
 }
 
-// ─── Paso 7: Upsert masivo en products.json ────────────────────────────────
-
-function upsertProducts(
-  groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; isHSR: boolean; hsrScore: number }>
-): { upserted: number; updated: number; products: Product[] } {
+// ─── Paso 7: Construcción de Product + stamping pipeline + upsert atómico ────
+async function buildAndUpsertProducts(
+  groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }>,
+  dryRun: boolean
+): Promise<{ upserted: number; updated: number; wouldUpsert: number; wouldUpdate: number }> {
   const existingProducts = readProductsFromFile();
+  const existingIds = new Set(existingProducts.map((p) => p.id));
+  const deletedIds = new Set(readDeletedIds());
+
   let upserted = 0;
   let updated = 0;
+  let wouldUpsert = 0;
+  let wouldUpdate = 0;
+
+  const pipelineConfig = getPipelineConfig();
 
   for (const group of groups) {
     const canonical = group.canonical;
-    const baseId = slugify(canonical.title);
+    const baseId = generateProductId(canonical.title, existingIds);
 
-    // Buscar duplicado existente en products.json
-    let existingIndex = existingProducts.findIndex((p) => p.id === baseId);
-    if (existingIndex === -1) {
-      // Buscar por URL canónica
-      existingIndex = existingProducts.findIndex((p) =>
-        canonical.affiliateUrl && p.affiliateUrl &&
-        p.affiliateUrl.split('?')[0] === canonical.affiliateUrl.split('?')[0]
-      );
+    // Saltar tombstones
+    if (deletedIds.has(baseId)) {
+      continue;
+    }
+
+    // Duplicado contra catálogo existente (reutiliza stageIngest)
+    const duplicateHit = findIngestDuplicate(existingProducts, {
+      ...canonical,
+      id: baseId,
+      category: group.category || 'Tecnología',
+      merchant: cleanMerchant(group.allMerchantNames[group.allNetworks[0]]) || canonical.merchantName,
+      affiliateUrl: group.allAffiliateUrls[group.allNetworks[0]] || canonical.affiliateUrl,
+    } as any, baseId);
+
+    let existingIndex = -1;
+    if (duplicateHit) {
+      existingIndex = existingProducts.findIndex((p) => p.id === duplicateHit.duplicateOf);
+    } else {
+      // Buscar por id generado
+      existingIndex = existingProducts.findIndex((p) => p.id === baseId);
+      if (existingIndex === -1) {
+        // Buscar por URL canónica
+        existingIndex = existingProducts.findIndex((p) =>
+          canonical.affiliateUrl && p.affiliateUrl &&
+          canonicalProductUrl(canonical.affiliateUrl) === canonicalProductUrl(p.affiliateUrl)
+        );
+      }
     }
 
     const discountPct = calculateDiscountPercentage(group.bestOriginalPrice, group.bestPrice);
     const hsrBadge = group.isHSR ? 'Oferta Estrella' : undefined;
 
-    // Construir producto para products.json
-    const categoryId = (group as any)._categoryId ?? getCategories().find((c) => c.name === group.category)?.id;
-    const subcategoryId = (group as any)._subcategoryId ?? (group.subcategory
-      ? getCategories().find((c) => c.name === group.subcategory && c.parentId)?.id
-      : undefined);
+    const upgraded = upgradeImages({
+      mainImage: canonical.mainImage,
+      extraImages: canonical.extraImages,
+      gallery: group.allExtraImages,
+    });
 
     const product: Product = {
       id: baseId,
@@ -511,13 +602,13 @@ function upsertProducts(
       description: canonical.description || `${canonical.brand ?? canonical.merchantName} · ${canonical.category}`,
       price: group.bestPrice,
       originalPrice: group.bestOriginalPrice > group.bestPrice ? group.bestOriginalPrice : undefined,
-      image: canonical.mainImage,
-      gallery: [...new Set([canonical.mainImage, ...group.allExtraImages])].filter(Boolean).slice(0, 10),
-      category: group.category,
-      subcategory_id: subcategoryId,
-      merchant: group.allMerchantNames[group.allNetworks[0]] ?? canonical.merchantName,
-      affiliateUrl: group.allAffiliateUrls[group.allNetworks[0]] ?? canonical.affiliateUrl,
-      buyNowUrl: group.allDirectUrls[group.allNetworks[0]] ?? canonical.directUrl,
+      image: upgraded.mainImage,
+      gallery: upgraded.gallery,
+      category: group.category || '', // vacío si no encaja
+      subcategory_id: group.subcategoryId,
+      merchant: cleanMerchant(group.allMerchantNames[group.allNetworks[0]]) || canonical.merchantName,
+      affiliateUrl: group.allAffiliateUrls[group.allNetworks[0]] || canonical.affiliateUrl,
+      buyNowUrl: group.allDirectUrls[group.allNetworks[0]] || canonical.directUrl,
       asin: canonical.network === 'amazon' ? canonical.externalId : undefined,
       pros: [
         `Disponible en ${group.allNetworks.length} comerciante(s)`,
@@ -533,11 +624,19 @@ function upsertProducts(
       shippingDays: canonical.shippingDays,
       freeShipping: canonical.extra?.['Envío gratis'] === true,
       sourceId: canonical.externalId,
-      category_id: categoryId,
-      conversion_score: group.hsrScore,
+      category_id: group.categoryId,
+      // Pipeline fields
+      audit_status: 'pending',
+      audit_score: 0,
+      audit_reasons: [],
+      ia_status: 'pending',
+      link_status: 'pending',
+      normalized_tags: [],
+      conversion_score: 0,
+      pipeline_version: pipelineConfig.version,
+      pipeline_run_at: new Date().toISOString(),
       commissionEstimate: group.bestCommissionAmount,
       sales30d: group.bestSales,
-      // Cross-merchant data en extra
       extra: {
         ...canonical.extra,
         crossMerchant: {
@@ -552,23 +651,54 @@ function upsertProducts(
       },
     };
 
+    // Stamping pipeline: auditoría
+    const auditResult = runStageAudit(product, pipelineConfig);
+    if (auditResult.ok && auditResult.product) {
+      product.audit_status = (auditResult.product as any).audit_status ?? 'pending';
+      product.audit_score = (auditResult.product as any).audit_score ?? 0;
+      product.audit_reasons = (auditResult.product as any).audit_reasons ?? [];
+    }
+
+    // Editorial status
+    const editorial = computeEditorialStatus(product);
+    product.ia_status = editorial.ia_status;
+    product.link_status = editorial.link_status;
+
+    // Tags normalizados
+    product.normalized_tags = extractNormalizedTags(product);
+
+    // Conversion score real (no hsrScore)
+    product.conversion_score = computeConversionScore(product);
+
     if (existingIndex >= 0) {
       existingProducts[existingIndex] = { ...existingProducts[existingIndex], ...product };
       updated++;
+      if (!dryRun) wouldUpdate++;
     } else {
       existingProducts.unshift(product);
       upserted++;
+      existingIds.add(baseId);
+      if (!dryRun) wouldUpsert++;
     }
   }
 
-  writeProductsToFile(existingProducts);
-  return { upserted, updated, products: existingProducts };
+  if (!dryRun) {
+    // Escritura atómica tmp+rename (patrón de metrics.ts)
+    const DATA_FILE = path.join(DATA_DIR, 'products.json');
+    const tmpFile = `${DATA_FILE}.tmp`;
+    fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
+    fs.writeFileSync(tmpFile, JSON.stringify(existingProducts, null, 2), 'utf-8');
+    fs.renameSync(tmpFile, DATA_FILE);
+  }
+
+  return { upserted, updated, wouldUpsert, wouldUpdate };
 }
 
 // ─── Endpoint principal ────────────────────────────────────────────────────
-
-export const POST: APIRoute = async ({ request }) => {
+export const POST: APIRoute = async ({ request, url }) => {
   if (!isValidApiToken(request)) return unauthorizedApiResponse();
+
+  const dryRun = url.searchParams.get('dryRun') === '1';
 
   const startedAt = new Date().toISOString();
   const startTime = Date.now();
@@ -583,23 +713,23 @@ export const POST: APIRoute = async ({ request }) => {
     afterQualityFilter: 0,
     crossMerchantGroups: 0,
     duplicatesResolved: 0,
-    categoriesCreated: 0,
-    subcategoriesCreated: 0,
+    uncategorized: 0,
     hsrDetected: 0,
     upserted: 0,
     updated: 0,
+    truncated: 0,
     errors: [],
   };
 
   try {
-    // 1. Ingesión multi-comerciante
+    // 1. Ingesión paralela
     const { canonicalProducts, byNetwork, networksQueried, errors: ingestErrors } = await ingestAllNetworks();
     report.networksQueried = networksQueried;
     report.productsByNetwork = byNetwork;
     report.rawTotal = canonicalProducts.length;
     report.errors.push(...ingestErrors);
 
-    // 2. Filtro de calidad
+    // 2. Filtro calidad
     const qualityProducts = qualityFilter(canonicalProducts);
     report.afterQualityFilter = qualityProducts.length;
 
@@ -607,23 +737,39 @@ export const POST: APIRoute = async ({ request }) => {
     const groups = deduplicateCrossMerchant(qualityProducts);
     report.crossMerchantGroups = groups.length;
     report.duplicatesResolved = qualityProducts.length - groups.length;
+    if (groups.length >= BUILD_CONFIG.MAX_CROSS_MERCHANT_GROUPS) {
+      report.truncated = groups.length - BUILD_CONFIG.MAX_CROSS_MERCHANT_GROUPS;
+    }
 
-    // 4. Autoclasificación
-    const { categoriesCreated, subcategoriesCreated, categorizedGroups } = await autoCategorize(groups);
-    report.categoriesCreated = categoriesCreated;
-    report.subcategoriesCreated = subcategoriesCreated;
+    // 4. Categorización (solo existentes)
+    const { uncategorized, categorizedGroups } = await autoCategorize(groups);
+    report.uncategorized = uncategorized;
 
-    // 5. Detección ofertas estrella (HS)
+    // 5. HSR
     const withHSR = detectHSR(categorizedGroups);
     report.hsrDetected = withHSR.filter((g) => g.isHSR).length;
 
-    // 6. Ordenación inteligente
+    // 6. Ordenación
     const sortedGroups = smartSort(withHSR);
 
-    // 7. Upsert masivo
-    const { upserted, updated } = upsertProducts(sortedGroups);
+    // 7. Build + upsert con stamping pipeline
+    const { upserted, updated, wouldUpsert, wouldUpdate } = await buildAndUpsertProducts(sortedGroups, dryRun);
     report.upserted = upserted;
     report.updated = updated;
+    if (dryRun) {
+      report.wouldUpsert = wouldUpsert;
+      report.wouldUpdate = wouldUpdate;
+    }
+
+    // Métricas pipeline
+    if (!dryRun) {
+      try {
+        incrementMetric('runs');
+        incrementMetric('duplicatesDiscarded', report.duplicatesResolved);
+      } catch {
+        // no romper si fallan métricas
+      }
+    }
 
     report.success = true;
   } catch (error) {

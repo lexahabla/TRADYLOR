@@ -51,7 +51,7 @@ function matchesFilters(product: UnifiedProduct, params: UnifiedSearchParams): b
   if (params.minCommission != null && (product.commissionRate ?? 0) < params.minCommission) return false;
   if (params.minRating != null && (product.rating ?? 0) < params.minRating) return false;
   if (params.inStockOnly && !product.inStock) return false;
-  if (params.category && product.category.toLowerCase() !== params.category.toLowerCase()) return false;
+  if (params.category && (product.category ?? '').toLowerCase() !== params.category.toLowerCase()) return false;
   return true;
 }
 

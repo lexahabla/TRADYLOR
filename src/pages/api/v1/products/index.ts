@@ -30,7 +30,7 @@ export const GET: APIRoute = ({ request, url }) => {
   const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200);
 
   let products = getCatalogProducts();
-  if (category) products = products.filter((p) => p.category.toLowerCase() === category);
+  if (category) products = products.filter((p) => (p.category ?? '').toLowerCase() === category);
   if (minPrice != null) products = products.filter((p) => p.price >= minPrice);
   if (maxPrice != null) products = products.filter((p) => p.price <= maxPrice);
 

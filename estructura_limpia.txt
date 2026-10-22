@@ -67,6 +67,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\networks\connectors\amazon.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\networks\connectors\awin.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\networks\connectors\base.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\networks\connectors\ebay.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\imageQuality.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\networks\connectors\generic.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\networks\credentials.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\networks\customNetworks.ts
