@@ -8657,9 +8657,9 @@ function renderTableRows(products) {
   }
 
   /* ── Tabla de productos registrados (50 filas/página) ──────────────────────
-     Fila compacta: ~53 px de alto (la tabla de afiliados mide ~47 px, así que
-     aquí queda un pelín más grande que en aquella) con la tipografía y los
-     elementos escalados en proporción. */
+     Fila compacta: ~62 px de alto. La tabla de afiliados mide ~60 px, así que
+     aquí queda un pelín más grande que en aquella, pero cabe el doble de
+     productos por página que antes (25 → 50). */
   :global(.products-table-responsive) {
     overflow-x: auto;
   }
@@ -8667,12 +8667,12 @@ function renderTableRows(products) {
   :global(.products-table) {
     width: 100%;
     border-collapse: collapse;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
   }
 
   :global(.products-table th) {
     text-align: left;
-    padding: 0.5rem 0.7rem;
+    padding: 0.55rem 0.7rem;
     color: var(--color-text-dim);
     font-size: 0.68rem;
     font-weight: 700;
@@ -8682,7 +8682,7 @@ function renderTableRows(products) {
   }
 
   :global(.products-table td) {
-    padding: 0.35rem 0.7rem;
+    padding: 0.6rem 0.7rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     vertical-align: middle;
   }
@@ -8692,10 +8692,10 @@ function renderTableRows(products) {
   }
 
   :global(.thumb-img) {
-    width: 40px;
-    height: 40px;
-    max-width: 40px;
-    max-height: 40px;
+    width: 42px;
+    height: 42px;
+    max-width: 42px;
+    max-height: 42px;
     object-fit: cover;
     border-radius: 6px;
     background: #080c14;
