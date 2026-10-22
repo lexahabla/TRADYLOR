@@ -8,6 +8,8 @@ export interface Product {
   slug?: string;
   title: string;
   description: string;
+  /** Descripción original del comercio (sin bloques generados por el enrichment). */
+  sourceDescription?: string;
   price: number;
   originalPrice?: number;
   image: string;

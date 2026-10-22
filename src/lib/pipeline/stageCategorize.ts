@@ -204,6 +204,7 @@ export async function runStageCategorize(
   const local = enrichProductLocally({
     title: next.title,
     description: next.description,
+    sourceDescription: next.sourceDescription,
     category: next.category,
     brand: next.brand,
     merchant: next.merchant,
@@ -234,10 +235,8 @@ export async function runStageCategorize(
       const ai = await enrichProductText(
         {
           title: next.title,
-          // A la IA se le pasa la descripción "de origen": si el texto actual ya
-          // incluye bloques generados por un reproceso anterior, se limpian para
-          // no multiplicar el texto ni contaminar el prompt.
-          description: cleanGeneratedDescription(next.description),
+          // A la IA se le pasa la descripción "de origen" (sin bloques generados).
+          description: cleanGeneratedDescription(next.sourceDescription ?? next.description),
           category: next.category,
           url: next.affiliateUrl,
           price: next.price,

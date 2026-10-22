@@ -13,6 +13,7 @@
  */
 
 import { fromN8nContract, slugifyProduct } from '../catalogStore';
+import { cleanGeneratedDescription } from '../localEnrich';
 import { readDeletedIds } from '../deletedProducts';
 import { readProductsFromFile, type Product } from '../productStore';
 import { canonicalProductUrl, cleanTitleKey, extractSourceId } from '../curation';
@@ -194,6 +195,12 @@ export function runStageIngest(
     commissionEstimate: existing?.commissionEstimate,
     sales30d: existing?.sales30d,
     brand: data.brand ? String(data.brand).trim() : existing?.brand,
+    // Descripción original del comercio: se fija en el primer pase y nunca se
+    // sobrescribe, para que el enrichment no se multiplique entre reprocesos.
+    sourceDescription:
+      existing?.sourceDescription ||
+      cleanGeneratedDescription(candidate.description) ||
+      undefined,
   };
 
   return { ok: true, stage: 'ingest', product };

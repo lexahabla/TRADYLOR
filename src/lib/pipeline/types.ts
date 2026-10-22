@@ -30,6 +30,8 @@ export interface PipelineFields {
   ai_enriched?: boolean;
   /** Motivo por el que falló el enriquecimiento con IA (truncado a 200 chars). */
   ai_error?: string;
+  /** Descripción original del comercio (sin bloques generados por el enrichment). */
+  sourceDescription?: string;
 }
 
 /** Producto interno del pipeline: el modelo canónico + los campos nuevos. */

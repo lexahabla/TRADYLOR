@@ -16,6 +16,9 @@ import { buildRealisticPricing, synthesizeTitleLocally, type EnrichedText } from
 export interface LocalEnrichInput {
   title: string;
   description?: string;
+  /** Descripción original del comercio (sin bloques generados). Si existe, se
+   *  usa en lugar de `description` para construir la plantilla. */
+  sourceDescription?: string;
   category?: string;
   brand?: string;
   merchant?: string;
@@ -131,9 +134,10 @@ function buildDescription(input: LocalEnrichInput): string {
   if (facts.length) {
     parts.push(`En el momento de revisarlo, ${facts.join(' y ')}.`);
   }
-  // Contexto final: la descripción del comercio, SIN los bloques que generó el
-  // propio enriquecimiento en reprocesos anteriores (si no, se duplicaba).
-  const source = cleanGeneratedDescription(input.description);
+  // Contexto final: la descripción original del comercio (si la tenemos) o, en
+  // su defecto, la descripción actual saneada de bloques generados.
+  const sourceRaw = input.sourceDescription ?? input.description;
+  const source = cleanGeneratedDescription(sourceRaw);
   if (source) {
     const short = source.length > 220 ? `${source.slice(0, 217).trimEnd()}…` : source;
     parts.push(short);

@@ -138,6 +138,8 @@ const productSchema = z.object({
   ai_enriched: z.boolean().optional(),
   /** Motivo por el que la IA de texto no pudo enriquecer la ficha. */
   ai_error: z.string().optional(),
+  /** Descripción original del comercio (sin bloques generados por el enrichment). */
+  sourceDescription: z.string().optional(),
 
   // ─── Media & Visual ────────────────────────────────────────────────────────
   image: z.string().default('/images/placeholder-product.jpg'),

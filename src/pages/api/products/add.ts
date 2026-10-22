@@ -1499,7 +1499,7 @@ export const POST: APIRoute = async ({ request }) => {
           pipeline_version: existingProduct.pipeline_version,
           pipeline_run_at: existingProduct.pipeline_run_at,
           ai_enriched: existingProduct.ai_enriched,
-          ai_error: existingProduct.ai_error,
+          ai_error: existingProduct.ai_error, sourceDescription: existingProduct.sourceDescription,
         };
         currentProducts[existingIndex] = productToSave;
       } else {
