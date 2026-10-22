@@ -37,6 +37,7 @@ import { runStageAudit } from '../../../../lib/pipeline/stageAudit';
 import { getPipelineConfig } from '../../../../lib/pipeline/config';
 import { computeEditorialStatus, extractNormalizedTags, computeConversionScore } from '../../../../lib/curation';
 import { incrementMetric } from '../../../../lib/pipeline/metrics';
+import { enrichProductText, generateProductImage, hasTextCredentials, hasImageCredentials } from '../../../../lib/ai';
 import fs from 'fs';
 import path from 'path';
 import { DATA_DIR } from '../../../../lib/paths';
@@ -97,6 +98,8 @@ interface BuildReport {
   upserted: number;
   updated: number;
   truncated: number;
+  aiEnrichedText: number;
+  aiEnrichedImages: number;
   wouldUpsert?: number;
   wouldUpdate?: number;
   errors: string[];
@@ -542,7 +545,7 @@ function smartSort(groups: Array<CrossMerchantGroup & { category: string; subcat
 async function buildAndUpsertProducts(
   groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }>,
   dryRun: boolean
-): Promise<{ upserted: number; updated: number; wouldUpsert: number; wouldUpdate: number }> {
+): Promise<{ upserted: number; updated: number; wouldUpsert: number; wouldUpdate: number; aiEnrichedText: number; aiEnrichedImages: number }> {
   const existingProducts = readProductsFromFile();
   const existingIds = new Set(existingProducts.map((p) => p.id));
   const deletedIds = new Set(readDeletedIds());
@@ -551,6 +554,8 @@ async function buildAndUpsertProducts(
   let updated = 0;
   let wouldUpsert = 0;
   let wouldUpdate = 0;
+  let aiEnrichedTextCount = 0;
+  let aiEnrichedImagesCount = 0;
 
   const pipelineConfig = getPipelineConfig();
 
@@ -651,6 +656,59 @@ async function buildAndUpsertProducts(
       },
     };
 
+    // ─── Enriquecimiento con IA (texto + imagen) ────────────────────────────────
+    // Solo enriquecer productos NUEVOS (no actualizaciones) y solo si hay credenciales
+    if (existingIndex === -1) {
+      const hasTextAI = hasTextCredentials();
+      const hasImageAI = hasImageCredentials();
+
+      if (hasTextAI || hasImageAI) {
+        try {
+          // Enriquecer texto si hay credenciales
+          if (hasTextAI) {
+            const aiText = await enrichProductText({
+              title: product.title,
+              description: product.description,
+              category: product.category,
+              url: product.affiliateUrl,
+              price: product.price,
+              originalPrice: product.originalPrice,
+            });
+
+            // Aplicar enriquecimiento de texto
+            if (aiText.title) product.title = aiText.title;
+            if (aiText.description) product.description = aiText.description;
+            if (aiText.techSheet) product.techSheet = aiText.techSheet;
+            if (aiText.specs && Object.keys(aiText.specs).length > 0) product.specs = aiText.specs;
+            if (aiText.pros && aiText.pros.length > 0) product.pros = aiText.pros;
+            if (aiText.cons && aiText.cons.length > 0) product.cons = aiText.cons;
+            if (aiText.verdict) product.verdict = aiText.verdict;
+            if (aiText.category) product.category = aiText.category;
+            if (aiText.pricing) {
+              product.price = aiText.pricing.price;
+              product.originalPrice = aiText.pricing.originalPrice;
+            }
+            product.ia_status = 'completed';
+            aiEnrichedTextCount++;
+          }
+
+          // Generar imagen si hay credenciales y no tiene imagen
+          if (hasImageAI && (!product.image || product.image === '—')) {
+            try {
+              const imageResult = await generateProductImage(product.title);
+              product.image = imageResult.url;
+              product.gallery = [imageResult.url, ...(product.gallery || [])].slice(0, 10);
+              aiEnrichedImagesCount++;
+            } catch (imgError) {
+              console.warn(`[BuildCatalog] Error generando imagen para ${product.id}:`, imgError);
+            }
+          }
+        } catch (aiError) {
+          console.warn(`[BuildCatalog] Error enriqueciendo con IA para ${product.id}:`, aiError);
+        }
+      }
+    }
+
     // Stamping pipeline: auditoría
     const auditResult = runStageAudit(product, pipelineConfig);
     if (auditResult.ok && auditResult.product) {
@@ -691,7 +749,7 @@ async function buildAndUpsertProducts(
     fs.renameSync(tmpFile, DATA_FILE);
   }
 
-  return { upserted, updated, wouldUpsert, wouldUpdate };
+  return { upserted, updated, wouldUpsert, wouldUpdate, aiEnrichedText: aiEnrichedTextCount, aiEnrichedImages: aiEnrichedImagesCount };
 }
 
 // ─── Endpoint principal ────────────────────────────────────────────────────
@@ -718,6 +776,8 @@ export const POST: APIRoute = async ({ request, url }) => {
     upserted: 0,
     updated: 0,
     truncated: 0,
+    aiEnrichedText: 0,
+    aiEnrichedImages: 0,
     errors: [],
   };
 
@@ -753,9 +813,11 @@ export const POST: APIRoute = async ({ request, url }) => {
     const sortedGroups = smartSort(withHSR);
 
     // 7. Build + upsert con stamping pipeline
-    const { upserted, updated, wouldUpsert, wouldUpdate } = await buildAndUpsertProducts(sortedGroups, dryRun);
+    const { upserted, updated, wouldUpsert, wouldUpdate, aiEnrichedText, aiEnrichedImages } = await buildAndUpsertProducts(sortedGroups, dryRun);
     report.upserted = upserted;
     report.updated = updated;
+    report.aiEnrichedText = aiEnrichedText;
+    report.aiEnrichedImages = aiEnrichedImages;
     if (dryRun) {
       report.wouldUpsert = wouldUpsert;
       report.wouldUpdate = wouldUpdate;

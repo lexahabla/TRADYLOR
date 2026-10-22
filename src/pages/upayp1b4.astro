@@ -69,6 +69,12 @@ try {
 // primera pintura de la tabla; el cliente recalcula con cada recarga vía API.
 initialProducts = enrichProductsForAdmin(initialProducts as Product[]);
 
+// Paginación SSR: 50 productos por página
+const PRODUCTS_PER_PAGE = 50;
+const initialTotalProducts = initialProducts.length;
+const initialTotalPages = Math.ceil(initialTotalProducts / PRODUCTS_PER_PAGE);
+const initialPageProducts = initialProducts.slice(0, PRODUCTS_PER_PAGE);
+
 const pageTitle = "Panel de Administración | Tradylor";
 const pageDescription = "Gestión, scraping de metadatos y alta de productos con enlaces de afiliación en Tradylor.";
 
@@ -593,13 +599,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <th class="text-right">Acciones</th>
               </tr>
             </thead>
-          <tbody id="productsTableBody">
-               {initialProducts.length === 0 ? (
+<tbody id="productsTableBody">
+               {initialPageProducts.length === 0 ? (
                 <tr class="empty-row">
                   <td colspan="8">No hay productos registrados en el catálogo aún.</td>
                 </tr>
               ) : (
-                initialProducts.map((p) => (
+                initialPageProducts.map((p) => (
                   <tr data-product-id={p.id} class="product-row">
                     <td class="col-check"><input type="checkbox" data-prod-check data-id={p.id} aria-label="Seleccionar producto" /></td>
                     <td class="col-thumb">
@@ -683,6 +689,35 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </tbody>
         </table>
       </div>
+
+      <!-- Paginación del Catálogo de Productos -->
+      <div id="productsPagination" class="products-pagination" {initialTotalPages <= 1 ? 'hidden' : ''}>
+        <div class="pagination-info">
+          <span id="paginationTotal">{initialTotalProducts} producto{initialTotalProducts !== 1 ? 's' : ''} (página 1 de {initialTotalPages})</span>
+        </div>
+        <nav class="pagination-controls" aria-label="Paginación del catálogo">
+          <button type="button" id="paginationPrev" class="btn-secondary btn-sm" disabled aria-label="Página anterior">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            Anterior
+          </button>
+          <div class="pagination-pages" id="paginationPages" role="group" aria-label="Números de página">
+            {Array.from({ length: Math.min(initialTotalPages, 5) }, (_, i) => i + 1).map((pageNum) => (
+              <button type="button" class={`pagination-page${pageNum === 1 ? ' active' : ''}`} data-page={pageNum} aria-label={`Página ${pageNum}`} aria-current={pageNum === 1 ? 'page' : undefined}>{pageNum}</button>
+            ))}
+            {initialTotalPages > 5 && (
+              <>
+                <span class="pagination-ellipsis" aria-hidden="true">…</span>
+                <button type="button" class="pagination-page" data-page={initialTotalPages} aria-label={`Página ${initialTotalPages}`}>{initialTotalPages}</button>
+              </>
+            )}
+          </div>
+          <button type="button" id="paginationNext" class="btn-secondary btn-sm" {initialTotalPages <= 1 ? 'disabled' : ''} aria-label="Página siguiente">
+            Siguiente
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </nav>
+      </div>
+
       <div class="sections-admin">
         <div class="list-header-row">
           <div>
@@ -1632,6 +1667,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const btnProdAssignCat = document.getElementById('btnProdAssignCat');
     let selectedProductIds = new Set();
     let currentProducts = [];
+    // Paginación del catálogo de productos
+    let currentPage = 1;
+    const PRODUCTS_PER_PAGE = 50;
+    let filteredProducts = [];
     /**
      * Caché de `externalId → estado de importación` del catálogo AliExpress
      * (PENDING / IMPORTED / DISCARDED). Se invalida con `aliInvalidateEstado()`
@@ -2679,10 +2718,31 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
     }
 
-    function renderTableRows(products) {
+function renderTableRows(products) {
       if (!productsTableBody) return;
 
-       if (products.length === 0) {
+      // Guardar productos filtrados para paginación
+      filteredProducts = products;
+
+      // Resetear a la primera página al cambiar filtros
+      currentPage = 1;
+
+      // Actualizar controles de paginación
+      updatePaginationControls();
+
+      const totalProducts = products.length;
+      const totalPages = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
+      const startIndex = (currentPage - 1) * PRODUCTS_PER_PAGE;
+      const endIndex = Math.min(startIndex + PRODUCTS_PER_PAGE, totalProducts);
+      const pageProducts = products.slice(startIndex, endIndex);
+
+      // Actualizar info de total
+      const paginationTotal = document.getElementById('paginationTotal');
+      if (paginationTotal) {
+        paginationTotal.textContent = `${totalProducts} producto${totalProducts !== 1 ? 's' : ''} (página ${currentPage} de ${totalPages || 1})`;
+      }
+
+      if (pageProducts.length === 0) {
         productsTableBody.innerHTML = `
           <tr class="empty-row">
             <td colspan="8">No hay productos registrados en el catálogo aún.</td>
@@ -2707,7 +2767,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         `<option value="${escapeHtml(c.id)}"${(categoryId ? c.id === categoryId : c.name === categoryName) ? ' selected' : ''}>${escapeHtml(c.name)}</option>`
       ).join('');
 
-      productsTableBody.innerHTML = products
+      productsTableBody.innerHTML = pageProducts
         .map(
           (p, index) => `
           <tr data-product-id="${p.id}" class="product-row" data-prod-row="${index}">
@@ -3120,7 +3180,87 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       renderTableRows(filtered);
     }
 
-    if (inputFilterList) inputFilterList.addEventListener('input', prodFilterApply);
+    // ─── Paginación del catálogo de productos ─────────────────────────────────
+    function updatePaginationControls() {
+      const paginationEl = document.getElementById('productsPagination');
+      const paginationPages = document.getElementById('paginationPages');
+      const paginationPrev = document.getElementById('paginationPrev');
+      const paginationNext = document.getElementById('paginationNext');
+
+      if (!paginationEl || !paginationPages || !paginationPrev || !paginationNext) return;
+
+      const totalProducts = filteredProducts.length;
+      const totalPages = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
+
+      if (totalPages <= 1) {
+        paginationEl.hidden = true;
+        return;
+      }
+
+      paginationEl.hidden = false;
+
+      // Botones prev/next
+      paginationPrev.disabled = currentPage <= 1;
+      paginationNext.disabled = currentPage >= totalPages;
+
+      // Generar números de página
+      let pagesHtml = '';
+      const maxVisiblePages = 5;
+      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+
+      if (endPage - startPage + 1 < maxVisiblePages) {
+        startPage = Math.max(1, endPage - maxVisiblePages + 1);
+      }
+
+      if (startPage > 1) {
+        pagesHtml += `<button type="button" class="pagination-page" data-page="1" aria-label="Página 1">1</button>`;
+        if (startPage > 2) {
+          pagesHtml += `<span class="pagination-ellipsis" aria-hidden="true">…</span>`;
+        }
+      }
+
+      for (let i = startPage; i <= endPage; i++) {
+        pagesHtml += `<button type="button" class="pagination-page${i === currentPage ? ' active' : ''}" data-page="${i}" aria-label="Página ${i}"${i === currentPage ? ' aria-current="page"' : ''}>${i}</button>`;
+      }
+
+      if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+          pagesHtml += `<span class="pagination-ellipsis" aria-hidden="true">…</span>`;
+        }
+        pagesHtml += `<button type="button" class="pagination-page" data-page="${totalPages}" aria-label="Página ${totalPages}">${totalPages}</button>`;
+      }
+
+      paginationPages.innerHTML = pagesHtml;
+
+      // Event listeners para botones de página
+      paginationPages.querySelectorAll('.pagination-page').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const page = parseInt(btn.getAttribute('data-page'), 10);
+          if (!Number.isNaN(page) && page !== currentPage) {
+            goToPage(page);
+          }
+        });
+      });
+    }
+
+    function goToPage(page) {
+      const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
+      if (page < 1 || page > totalPages) return;
+      currentPage = page;
+      renderTableRows(filteredProducts);
+      // Scroll suave al inicio de la tabla
+      const tableEl = document.getElementById('productsTable');
+      if (tableEl) {
+        tableEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    // Event listeners para botones prev/next
+    const paginationPrev = document.getElementById('paginationPrev');
+    const paginationNext = document.getElementById('paginationNext');
+    paginationPrev?.addEventListener('click', () => goToPage(currentPage - 1));
+    paginationNext?.addEventListener('click', () => goToPage(currentPage + 1));
     prodFCat?.addEventListener('change', () => {
       // El filtro de subcategoría se repliega sobre la categoría elegida.
       syncSubcatFilter();
@@ -3430,6 +3570,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             `Grupos cross-merchant: ${data.crossMerchantGroups} (duplicados resueltos: ${data.duplicatesResolved})`,
             `Sin categoría: ${data.uncategorized ?? 0}`,
             `Ofertas estrella (hsr): ${data.hsrDetected}`,
+            `IA - Texto enriquecido: ${data.aiEnrichedText ?? 0} · Imágenes generadas: ${data.aiEnrichedImages ?? 0}`,
             dryRun ? `Se crearían: ${data.wouldUpsert ?? 0} · Se actualizarían: ${data.wouldUpdate ?? 0}`
               : `Nuevos: ${data.upserted} · Actualizados: ${data.updated}`,
             `Duración: ${Math.round(data.durationMs / 1000)}s`,
@@ -8654,6 +8795,89 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     text-align: center;
     padding: 3rem;
     color: var(--color-text-dim);
+  }
+
+  /* ============ PAGINACIÓN DEL CATÁLOGO DE PRODUCTOS ============ */
+  :global(.products-pagination) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    margin-top: 1rem;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+  }
+
+  :global(.pagination-info) {
+    font-size: 0.85rem;
+    color: var(--color-text-dim);
+    white-space: nowrap;
+  }
+
+  :global(.pagination-controls) {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  :global(.pagination-controls .btn-secondary) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.5rem 0.85rem;
+  }
+
+  :global(.pagination-pages) {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+
+  :global(.pagination-page) {
+    min-width: 36px;
+    height: 36px;
+    padding: 0 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--color-text-main);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  :global(.pagination-page:hover:not(.active):not(:disabled)) {
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #60a5fa;
+  }
+
+  :global(.pagination-page.active) {
+    background: #3b82f6;
+    border-color: #3b82f6;
+    color: #fff;
+  }
+
+  :global(.pagination-page:disabled) {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  :global(.pagination-ellipsis) {
+    color: var(--color-text-dim);
+    padding: 0 0.25rem;
+  }
+
+  :global(.pagination-controls .btn-secondary:disabled) {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   /* ============ CURACIÓN AVANZADA (presets, score, duplicados, modales) ==== */
