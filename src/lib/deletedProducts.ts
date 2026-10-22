@@ -1,6 +1,6 @@
 import fs from 'node:fs';
-import path from 'node:path';
 import { dataFile } from './paths';
+import { writeJsonArrayFile } from './jsonStore';
 
 /**
  * Lista de IDs de productos eliminados desde el panel admin.
@@ -10,13 +10,6 @@ import { dataFile } from './paths';
  */
 
 const DELETED_FILE = dataFile('deleted-product-ids.json');
-
-function ensureDir(): void {
-  const dir = path.dirname(DELETED_FILE);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-}
 
 // IDs de productos eliminados previamente (curados del catálogo inicial).
 const BUILTIN_DELETED = [
@@ -45,22 +38,12 @@ export function addDeletedId(id: string): void {
   const ids = readDeletedIds();
   if (ids.includes(id)) return;
   ids.push(id);
-  try {
-    ensureDir();
-    fs.writeFileSync(DELETED_FILE, JSON.stringify(ids, null, 2), 'utf-8');
-  } catch (error) {
-    console.error('[DeletedProducts] Error al guardar deleted-product-ids.json:', error);
-  }
+  writeJsonArrayFile(DELETED_FILE, ids);
 }
 
 export function removeDeletedId(id: string): void {
   const ids = readDeletedIds();
   const next = ids.filter((x) => x !== id);
   if (next.length === ids.length) return;
-  try {
-    ensureDir();
-    fs.writeFileSync(DELETED_FILE, JSON.stringify(next, null, 2), 'utf-8');
-  } catch (error) {
-    console.error('[DeletedProducts] Error al guardar deleted-product-ids.json:', error);
-  }
+  writeJsonArrayFile(DELETED_FILE, next);
 }

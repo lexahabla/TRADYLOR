@@ -12,10 +12,10 @@
  * ==============================================================================
  */
 
-import fs from 'node:fs';
 import { products as staticProducts, type Product } from '../data/products';
 import { validateProducts, validateSingleProduct } from './validateProducts';
 import { dataFile } from './paths';
+import { readJsonArrayFile } from './jsonStore';
 import { readDeletedIds } from './deletedProducts';
 
 const DATA_FILE_PATH = dataFile('products.json');
@@ -64,19 +64,10 @@ function mergeProducts(base: Product, overlay: Product): Product {
 }
 
 export function getCatalogProducts(): Product[] {
-  let rawJson: unknown[] = [];
-
-  try {
-    if (fs.existsSync(DATA_FILE_PATH)) {
-      const raw = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        rawJson = parsed;
-      }
-    }
-  } catch (error) {
-    console.error('[Catalog] Error al leer products.json:', error);
-  }
+  // Lectura tolerante: si el JSON está a medio escribir, `readJsonArrayFile`
+  // reintenta y devuelve la última versión válida (antes devolvía `[]` y la
+  // web se quedaba sin catálogo).
+  const rawJson = readJsonArrayFile<unknown>(DATA_FILE_PATH);
 
   const mergedRaw: unknown[] = [];
   const liveIds = new Set<string>();

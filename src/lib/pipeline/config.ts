@@ -29,6 +29,8 @@ export interface PipelineConfig {
   weightDiscount: number;
   /** Mapa subcategoría → keywords para inferir la subcategoría hija. */
   subcategoryKeywords: Record<string, string[]>;
+  /** Subcategorías candidatas por categoría raíz (evita taxonomías absurdas). */
+  rootSubcategories: Record<string, string[]>;
   /** Versión del pipeline estampada en `pipeline_version`. */
   version: number;
 }
@@ -103,12 +105,37 @@ export const SUBCATEGORY_KEYWORDS: Record<string, string[]> = {
   'Ratones': ['ratón', 'raton', 'mouse'],
   'Almacenamiento': ['ssd', 'disco duro', 'hdd', 'almacenamiento', 'nvme', 'm.2'],
   'Robot Aspirador': ['robot aspirador', 'aspirador', 'aspiradora', 'roborock', 'roomba'],
-  'Iluminación': ['bombilla', 'iluminación', 'iluminacion', 'led', 'lámpara', 'lampara'],
-  'Cámaras de Vigilancia': ['cámara vigilancia', 'camara vigilancia', 'cámara', 'camara', 'videovigilancia'],
+  'Iluminación': ['bombilla', 'iluminación', 'iluminacion', 'led', 'lámpara', 'lampara', 'flexo'],
+  'Cámaras': ['cámara', 'camara', 'cámara digital', 'camara digital', 'reflex', 'mirrorless', 'compacta', 'cámara de acción', 'camara de accion', 'gopro', 'objetivo', 'lente'],
+  'Drones': ['drone', 'dron', 'quadcopter', 'fpv', 'dji'],
+  'Cámaras de Vigilancia': ['cámara vigilancia', 'camara vigilancia', 'videovigilancia', 'vigilancia', 'grabador'],
   'Taladros': ['taladro', 'atornillador', 'drill'],
   'Herramientas Manuales': ['destornillador', 'llave', 'martillo', 'alicate', 'sierra'],
   'Cafeteras': ['cafetera', 'café', 'cafe', 'espresso'],
   'Freidoras': ['freidora', 'airfryer', 'air fryer'],
+  'Cargadores': ['cargador', 'carga rápida', 'carga rapida', 'usb-c', 'power delivery', 'enlucidor'],
+  'Power Banks': ['power bank', 'powerbank', 'batería externa', 'bateria externa'],
+  'Enchufes Inteligentes': ['enchufe inteligente', 'enchufe wifi', 'tapo', 'plug inteligente', 'enchufe programable'],
+  'Mandos': ['mando', 'mandos', 'gamepad', 'joystick', 'control de juegos', 'control de juego'],
+  'Sillas Gamer': ['silla gamer', 'silla de oficina'],
+};
+
+/**
+ * Subcategorías candidatas por categoría raíz.
+ * Sin este mapa, la inferencia global por keywords podía crear taxonomías
+ * absurdas ("Informática y Oficina > Altavoces"). Cada raíz sólo puede
+ * recibir las subcategorías de su lista; si la raíz no está en el mapa se usa
+ * la inferencia global (comportamiento anterior).
+ */
+export const ROOT_SUBCATEGORIES: Record<string, string[]> = {
+  'informatica-oficina': ['Portátiles', 'Monitores', 'Teclados', 'Ratones', 'Almacenamiento'],
+  'audio-sonido': ['Auriculares', 'Altavoces'],
+  'smartwatches': ['Smartwatches'],
+  'movil-accesorios': ['Cargadores', 'Power Banks'],
+  'fotografia-video': ['Drones', 'Cámaras', 'Cámaras de Vigilancia'],
+  'gaming': ['Mandos', 'Sillas Gamer'],
+  'hogar-inteligencia': ['Robot Aspirador', 'Enchufes Inteligentes', 'Iluminación', 'Cafeteras', 'Freidoras', 'Cámaras de Vigilancia'],
+  'herramientas-bricolaje': ['Taladros', 'Herramientas Manuales'],
 };
 
 /** Devuelve la configuración activa del pipeline (umbrales override por env). */
@@ -124,6 +151,7 @@ export function getPipelineConfig(): PipelineConfig {
     weightReviews: envNumber('PIPELINE_WEIGHT_REVIEWS', 30),
     weightDiscount: envNumber('PIPELINE_WEIGHT_DISCOUNT', 20),
     subcategoryKeywords: SUBCATEGORY_KEYWORDS,
+    rootSubcategories: ROOT_SUBCATEGORIES,
     version: envNumber('PIPELINE_VERSION', 2),
   };
 }

@@ -40,20 +40,36 @@ function buildHaystack(product: PipelineProduct): string {
     .join(' · ');
 }
 
-/** Infiere el nombre de subcategoría hija a partir del mapa de keywords de config. */
+/**
+ * Infiere el nombre de la subcategoría hija a partir del mapa de keywords de config.
+ * Sólo se consideran las subcategorías **candidatas de esa categoría raíz**
+ * (`config.rootSubcategories`): así no se crean taxonomías absurdas como
+ * "Informática y Oficina > Altavoces".
+ *
+ * El título pesa el doble que el resto del texto: "Power Bank 30000mAh" tiene
+ * que ir a "Power Banks" y no a "Cargadores" sólo porque la descripción
+ * mencione un cargador.
+ */
 function inferSubcategoryName(
   rootId: string,
+  title: string,
   haystack: string,
   config: PipelineConfig,
 ): string | undefined {
+  const titleText = title.toLowerCase();
   const text = haystack.toLowerCase();
-  let best: { name: string; matches: number } | null = null;
-  for (const [name, keywords] of Object.entries(config.subcategoryKeywords)) {
-    const matches = keywords.reduce(
-      (count, keyword) => (keyword && text.includes(keyword.toLowerCase()) ? count + 1 : count),
-      0,
-    );
-    if (matches > 0 && (!best || matches > best.matches)) best = { name, matches };
+  const candidates = config.rootSubcategories[rootId] ?? Object.keys(config.subcategoryKeywords);
+  let best: { name: string; score: number } | null = null;
+  for (const name of candidates) {
+    const keywords = config.subcategoryKeywords[name] ?? [];
+    let score = 0;
+    for (const keyword of keywords) {
+      const key = keyword.toLowerCase();
+      if (!key) continue;
+      if (titleText.includes(key)) score += 2;
+      else if (text.includes(key)) score += 1;
+    }
+    if (score > 0 && (!best || score > best.score)) best = { name, score };
   }
   return best?.name;
 }
@@ -111,22 +127,21 @@ function resolveCategories(
   // Curaduría manual: si el producto ya tiene categoría asignada en el panel se
   // RESPETA (el pipeline nunca pisa una asignación manual ni la descoloca de su
   // subcategoría). Sólo se autasocian los productos que aún no tienen categoría.
-  if (categoryId) {
-    const curated = getCategoryById(categoryId);
-    if (curated) {
-      if (curated.parentId) {
-        root = getCategoryById(curated.parentId) ?? undefined;
-        categoryId = curated.parentId;
-        subcategoryId = curated.id;
-      } else {
-        root = curated;
-        subcategoryId = product.subcategory_id;
-      }
+  const curated = categoryId ? getCategoryById(categoryId) : undefined;
+  if (curated) {
+    if (curated.parentId) {
+      // Ya está dentro de una subcategoría: se mantiene tal cual.
+      root = getCategoryById(curated.parentId) ?? undefined;
+      categoryId = curated.parentId;
+      subcategoryId = curated.id;
       return { category: root, categoryId, subcategoryId };
     }
-  }
-
-  if (suggestion) {
+    // Es una categoría raíz: se respeta, pero si falta la subcategoría se infiere
+    // más abajo. Antes el retorno temprano dejaba la ficha sin subcategoría y
+    // fuera del preset "⭐ Listos para Publicar" (0 de 25 en producción).
+    root = curated;
+    subcategoryId = product.subcategory_id;
+  } else if (suggestion) {
     const suggested = suggestion.category;
     if (suggested.parentId) {
       root = getCategoryById(suggested.parentId) ?? undefined;
@@ -139,13 +154,9 @@ function resolveCategories(
     }
   }
 
-  if (!categoryId) {
-    root = root ?? undefined;
-  }
-
   // Subcategoría hija: se infiere y crea si la categoría raíz aún no la tiene.
   if (categoryId && !subcategoryId) {
-    const inferred = inferSubcategoryName(categoryId, haystack, config);
+    const inferred = inferSubcategoryName(categoryId, product.title || '', haystack, config);
     if (inferred) {
       const sub = getOrCreateSubcategory(categoryId, inferred);
       subcategoryId = sub.id;
@@ -154,6 +165,19 @@ function resolveCategories(
   }
 
   return { category: root, categoryId, subcategoryId };
+}
+
+/**
+ * La ficha está "completa" si ya tiene descripción, veredicto, ficha técnica o
+ * especificaciones: en ese caso se marca como `ia_status='completed'` (mismo
+ * criterio que usa el preset "⭐ Listos para Publicar" del panel).
+ */
+function hasCompletedSheet(product: PipelineProduct): boolean {
+  if ((product.verdict || '').trim()) return true;
+  if ((product.techSheet || '').trim()) return true;
+  if ((product.description || '').trim().length >= 60) return true;
+  if (product.specs && Object.keys(product.specs).length > 0) return true;
+  return false;
 }
 
 /**
@@ -205,8 +229,11 @@ export async function runStageCategorize(
         originalPrice: next.originalPrice,
       });
       enriched = overlayText(local, ai);
-    } catch {
-      // Sin IA disponible: se mantiene la ficha local (no destructivo).
+    } catch (error) {
+      // Sin IA disponible: se mantiene la ficha local (no destructivo), pero se
+      // deja rastro: en producción el fallo era silencioso (límite de peticiones
+      // de Groq) y media parte del catálogo se quedaba sin enriquecer.
+      console.warn(`[Pipeline] Sin enriquecimiento de IA para "${next.title}":`, error);
     }
   }
 
@@ -223,8 +250,12 @@ export async function runStageCategorize(
 
   next.normalized_tags = extractNormalizedTags(next);
   next.conversion_score = computeConversionScore(next);
+
+  // Estado editorial: la ficha se marca como 'completed' cuando el
+  // enriquecimiento ya la ha completado (aunque trajera un 'pending'
+  // heredado), y el enlace queda 'active' si tiene URL de afiliado.
   const status = computeEditorialStatus(next);
-  next.ia_status = status.ia_status;
+  next.ia_status = status.ia_status === 'completed' || hasCompletedSheet(next) ? 'completed' : status.ia_status;
   next.link_status = status.link_status;
 
   return { ok: true, stage: 'categorize', product: next };

@@ -11,34 +11,22 @@
  * ==============================================================================
  */
 
-import fs from 'node:fs';
-import path from 'node:path';
 import type { Product } from '../data/products';
 import { dataFile } from './paths';
+import { readJsonArrayFile, writeJsonArrayFile } from './jsonStore';
 import { readDeletedIds } from './deletedProducts';
 import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../utils/amazon';
 
 const DATA_FILE_PATH = dataFile('products.json');
 
+/** Lee el catálogo (tolerante a un JSON truncado: nunca devuelve `[]` en seco). */
 export function readCatalogFromFile(): Product[] {
-  try {
-    if (!fs.existsSync(DATA_FILE_PATH)) return [];
-    return JSON.parse(fs.readFileSync(DATA_FILE_PATH, 'utf-8'));
-  } catch (error) {
-    console.error('[CatalogStore] Error al leer products.json:', error);
-    return [];
-  }
+  return readJsonArrayFile<Product>(DATA_FILE_PATH);
 }
 
+/** Escribe el catálogo de forma atómica (temporal + rename). */
 function writeCatalogToFile(products: Product[]): boolean {
-  try {
-    fs.mkdirSync(path.dirname(DATA_FILE_PATH), { recursive: true });
-    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(products, null, 2), 'utf-8');
-    return true;
-  } catch (error) {
-    console.error('[CatalogStore] Error al guardar products.json:', error);
-    return false;
-  }
+  return writeJsonArrayFile(DATA_FILE_PATH, products);
 }
 
 export function slugifyProduct(text: string): string {

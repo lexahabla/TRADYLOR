@@ -737,7 +737,10 @@ async function buildAndUpsertProducts(
       audit_score: 0,
       audit_reasons: [],
       ia_status: 'pending',
-      link_status: 'pending',
+      // El estado del enlace lo recalcula `computeEditorialStatus` (activo si el
+      // producto trae URL de afiliado); el valor inicial evita dejar el campo
+      // vacío en el objeto intermedio.
+      link_status: group.allAffiliateUrls[0] || canonical.affiliateUrl ? 'active' : 'pending',
       normalized_tags: [],
       conversion_score: 0,
       pipeline_version: pipelineConfig.version,

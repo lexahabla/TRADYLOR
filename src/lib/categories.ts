@@ -17,7 +17,8 @@
  */
 
 import fs from 'node:fs';
-import { DATA_DIR, dataFile } from './paths';
+import { dataFile } from './paths';
+import { writeJsonArrayFile } from './jsonStore';
 
 export interface Category {
   id: string;
@@ -203,8 +204,9 @@ function readCategories(): Category[] {
 }
 
 export function writeCategories(categories: Category[]): void {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(CATEGORIES_PATH, JSON.stringify(categories, null, 2), 'utf-8');
+  // Escritura atómica (temporal + rename): el pipeline crea subcategorías
+  // durante el reproceso y un fallo a mitad no debe dejar la taxonomía rota.
+  writeJsonArrayFile(CATEGORIES_PATH, categories);
 }
 
 /** Garantiza que el archivo existe con el esquema rico (migración perezosa). */

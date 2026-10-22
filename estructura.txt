@@ -83,6 +83,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\curation.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\deletedProducts.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\excelExport.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\imageQuality.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\jsonStore.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\localEnrich.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\mailer.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\marketingAudience.ts

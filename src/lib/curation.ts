@@ -262,8 +262,15 @@ export function conversionScoreLevel(score: number): 'high' | 'mid' | 'low' {
 export function computeEditorialStatus(product: Product): { ia_status: string; link_status: string } {
   const ia = String(product.ia_status || '').trim()
     || ((product.description || '').trim().length >= 60 ? 'completed' : 'pending');
-  const link = String(product.link_status || '').trim()
-    || ((product.affiliateUrl || '').trim() ? 'active' : 'pending');
+  // El enlace está ACTIVO si el producto tiene URL de afiliado (mismo criterio
+  // que `add-product.ts` y `massCatalogPipeline.ts`). Antes el 'pending'
+  // heredado de las importaciones antiguas (o precargado por el build) dejaba
+  // el catálogo entero fuera del preset "⭐ Listos para Publicar". Sólo se
+  // respeta 'broken' (enlace marcado como roto a mano).
+  const rawLink = String(product.link_status || '').trim().toLowerCase();
+  const link = rawLink === 'broken'
+    ? 'broken'
+    : ((product.affiliateUrl || '').trim() ? 'active' : 'pending');
   return { ia_status: ia, link_status: link };
 }
 

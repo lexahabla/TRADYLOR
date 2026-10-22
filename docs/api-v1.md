@@ -124,6 +124,23 @@ sólo añade información):
 Los productos rechazados **sí se persisten** (con `audit_status:'rejected'`) para
 alimentar las métricas de transparencia.
 
+> **Categorías y estados editoriales.** La subcategoría se infiere también
+> cuando el producto ya tiene una categoría raíz curada a mano (antes se
+> quedaba sin subcategoría y fuera del preset «⭐ Listos para Publicar» del
+> panel). La inferencia sólo usa las subcategorías candidatas de esa raíz
+> (`ROOT_SUBCATEGORIES` en `src/lib/pipeline/config.ts`), así que no se
+> crean taxonomías absurdas ("Informática y Oficina > Altavoces"). El estado
+> del enlace (`link_status`) es `active` en cuanto el producto tiene URL de
+> afiliado (sólo se respeta `broken`); el estado de la IA (`ia_status`) pasa a
+> `completed` cuando la ficha ya tiene descripción, veredicto, ficha técnica o
+> especificaciones.
+
+> **Escrituras atómicas.** `products.json`, `categories.json` y
+> `deleted-product-ids.json` se escriben de forma atómica (fichero temporal +
+> `rename`) y se leen con reintentos: si el JSON quedó truncado, se devuelve la
+> última versión válida en vez de un `[]` vacío (un `[]` provocaba que el
+> siguiente `upsert` **borrase el catálogo entero**).
+
 ### Etapa 2: auditoría "Test & Proof" (v2)
 
 | Bloque | Peso | Evalúa | Motivo de rechazo |

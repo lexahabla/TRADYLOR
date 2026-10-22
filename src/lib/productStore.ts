@@ -1,6 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { dataFile } from './paths';
+import { readJsonArrayFile, writeJsonArrayFile } from './jsonStore';
 
 // Interfaz del producto (compartida por el panel admin y los endpoints de alta)
 export interface Product {
@@ -98,35 +97,21 @@ export const DATA_FILE_PATH = dataFile('products.json');
 
 /**
  * Lee de forma segura los productos almacenados en el archivo JSON local.
+ * Tolera un fichero truncado (reintenta y, si sigue roto, devuelve la última
+ * versión válida en memoria): devolver `[]` aquí hacía que el siguiente
+ * `upsert` borrase el catálogo entero.
  */
 export function readProductsFromFile(): Product[] {
-  try {
-    if (!fs.existsSync(DATA_FILE_PATH)) {
-      return [];
-    }
-    const raw = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
-    return JSON.parse(raw);
-  } catch (error) {
-    console.error('[ProductStore] Error al leer products.json:', error);
-    return [];
-  }
+  return readJsonArrayFile<Product>(DATA_FILE_PATH);
 }
 
 /**
  * Escribe los productos en el archivo JSON local garantizando el formateo.
+ * Escritura ATÓMICA (temporal + rename): si el proceso se cae a mitad, el
+ * fichero bueno sigue intacto.
  */
 export function writeProductsToFile(products: Product[]): boolean {
-  try {
-    const dir = path.dirname(DATA_FILE_PATH);
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    fs.writeFileSync(DATA_FILE_PATH, JSON.stringify(products, null, 2), 'utf-8');
-    return true;
-  } catch (error) {
-    console.error('[ProductStore] Error al guardar en products.json:', error);
-    return false;
-  }
+  return writeJsonArrayFile(DATA_FILE_PATH, products);
 }
 
 /**
