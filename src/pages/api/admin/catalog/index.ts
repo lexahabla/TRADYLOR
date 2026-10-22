@@ -23,6 +23,7 @@ import {
   readAliCatalog,
   syncAliCatalog,
 } from '../../../../lib/aliexpressCatalog';
+import { readAffiliateCatalog as readAffiliateCatalogFromLib } from '../../../../lib/affiliateCatalog';
 import { getConnectedNetworkIds } from '../../../../lib/networks/credentials';
 import { getConnector } from '../../../../lib/networks';
 import {
@@ -33,6 +34,7 @@ import {
 import { CATALOG_KEYWORDS } from '../../../../lib/networks/connectors/aliexpress';
 import { stampFirstSeen } from '../../../../lib/aliCatalogMerge';
 import type { CanonicalAffiliateProduct, UnifiedProduct } from '../../../../lib/networks/types';
+import type { AffiliateCatalogSnapshot as AffiliateCatalogSnapshotLib } from '../../../../lib/affiliateCatalog';
 import fs from 'node:fs';
 import path from 'node:path';
 import { dataFile } from '../../../../lib/paths';
@@ -58,18 +60,7 @@ export interface AffiliateCatalogSnapshot {
  * sincronización las reconsolida en disco).
  */
 export function readAffiliateCatalog(): AffiliateCatalogSnapshot | null {
-  try {
-    if (!fs.existsSync(CATALOG_FILE)) return null;
-    const parsed = JSON.parse(fs.readFileSync(CATALOG_FILE, 'utf-8')) as Partial<AffiliateCatalogSnapshot>;
-    if (!parsed || !Array.isArray(parsed.products)) return null;
-    const syncedAt = typeof parsed.syncedAt === 'string' ? parsed.syncedAt : '';
-    return {
-      syncedAt,
-      products: normalizeCatalogProducts(parsed.products, syncedAt),
-    };
-  } catch {
-    return null;
-  }
+  return readAffiliateCatalogFromLib() as AffiliateCatalogSnapshot | null;
 }
 
 function writeAffiliateCatalog(snapshot: AffiliateCatalogSnapshot): boolean {

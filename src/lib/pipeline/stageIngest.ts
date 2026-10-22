@@ -14,6 +14,7 @@
 
 import { fromN8nContract, slugifyProduct } from '../catalogStore';
 import { cleanGeneratedDescription } from '../localEnrich';
+import { findAffiliateDescription } from '../affiliateCatalog';
 import { readDeletedIds } from '../deletedProducts';
 import { readProductsFromFile, type Product } from '../productStore';
 import { canonicalProductUrl, cleanTitleKey, extractSourceId } from '../curation';
@@ -199,6 +200,8 @@ export function runStageIngest(
     // sobrescribe, para que el enrichment no se multiplique entre reprocesos.
     sourceDescription:
       existing?.sourceDescription ||
+      findAffiliateDescription(candidate.merchant, candidate.sourceId || '') ||
+      findAffiliateDescription(candidate.merchant, extractSourceId(candidate)) ||
       cleanGeneratedDescription(candidate.description) ||
       undefined,
   };
