@@ -533,8 +533,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <button type="button" id="prodFSortDir" class="btn-secondary btn-sm ali-sort-dir" title="Invertir el orden (mayor a menor / menor a mayor)">↓</button>
             </div>
           </div>
-          <!-- Precio (€), Valoración, Descuento y "Limpiar filtros": MISMA FILA que el resto de filtros.
-               El botón se recoloca desde JS entre Valoración y Descuento (ver prodBuildRanges). -->
+          <!-- Valoración, Precio (€), Descuento y "Limpiar filtros": MISMA FILA que el resto de filtros.
+               El botón se recoloca desde JS detrás de Descuento (ver prodBuildRanges). -->
           <div id="prodRangeFields" class="ali-range-fields">
             <button type="button" id="prodFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
           </div>
@@ -2996,6 +2996,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       const dataMin = prices.length ? Math.floor(Math.min(...prices)) : 0;
       const dataMax = prices.length ? Math.ceil(Math.max(...prices)) : 0;
       prodRangeFields.innerHTML = `
+        <div class="filter-field prod-range-field" data-range-field="rating">
+          <label for="prodFRatingMin">Valoración</label>
+          <select id="prodFRatingMin">
+            <option value="">Cualquiera</option>
+            ${PROD_RATING_OPTIONS.map((r) => `<option value="${r.value}"${r.value === keepRating ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
+          </select>
+        </div>
         <div class="filter-field prod-range-field" data-range-field="price">
           <label for="prodFPriceMin">Precio (€)</label>
           <div class="ali-pair">
@@ -3004,13 +3011,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <input type="number" id="prodFPriceMax" max="${dataMax}" step="0.01" placeholder="Máx." inputmode="decimal" value="${escapeHtml(keepPriceMax)}" />
           </div>
         </div>
-        <div class="filter-field prod-range-field" data-range-field="rating">
-          <label for="prodFRatingMin">Valoración</label>
-          <select id="prodFRatingMin">
-            <option value="">Cualquiera</option>
-            ${PROD_RATING_OPTIONS.map((r) => `<option value="${r.value}"${r.value === keepRating ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
-          </select>
-        </div>
         <div class="filter-field prod-range-field" data-range-field="disc">
           <label for="prodFDiscRange">Descuento</label>
           <select id="prodFDiscRange">
@@ -3018,12 +3018,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             ${PROD_DISCOUNT_RANGES.map((r) => `<option value="${r.value}"${r.value === keepDisc ? ' selected' : ''}>${escapeHtml(r.label)}</option>`).join('')}
           </select>
         </div>`;
-      // Orden pedido: Valoración va justo detrás de Precio y el botón
-      // "Limpiar filtros" se queda entre Valoración y Descuento. El botón se
-      // mueve (no se recrea) para no perder su listener.
+      // Orden pedido: Valoración, después Precio, después Descuento y, al final,
+      // el botón "Limpiar filtros". El botón se mueve (no se recrea) para no
+      // perder su listener.
       if (resetBtn) {
         const discField = prodRangeFields.querySelector('[data-range-field="disc"]');
-        if (discField) prodRangeFields.insertBefore(resetBtn, discField);
+        if (discField) prodRangeFields.insertBefore(resetBtn, discField.nextSibling);
       }
     }
 
