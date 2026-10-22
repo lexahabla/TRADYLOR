@@ -37,7 +37,7 @@ import { findIngestDuplicate } from '../../../../lib/pipeline/stageIngest';
 import { runStageAudit } from '../../../../lib/pipeline/stageAudit';
 import { getPipelineConfig } from '../../../../lib/pipeline/config';
 import { computeEditorialStatus, extractNormalizedTags, computeConversionScore } from '../../../../lib/curation';
-import { incrementMetric } from '../../../../lib/pipeline/metrics';
+import { incrementMetric, touchMetrics } from '../../../../lib/pipeline/metrics';
 import { enrichProductText, generateProductImage, hasTextCredentials, hasImageCredentials } from '../../../../lib/ai';
 import fs from 'fs';
 import path from 'path';
@@ -923,6 +923,10 @@ export const POST: APIRoute = async ({ request, url }) => {
       try {
         incrementMetric('runs');
         incrementMetric('duplicatesDiscarded', report.duplicatesResolved);
+        incrementMetric('productsProcessed', report.crossMerchantGroups);
+        // Sin esto el panel «Pipeline» mostraría siempre la fecha de la
+        // última ejecución del pipeline de importación, no la de este build.
+        touchMetrics();
       } catch {
         // no romper si fallan métricas
       }
