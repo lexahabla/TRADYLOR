@@ -11,6 +11,8 @@ export interface WebSection {
   productIds: string[];
   published: boolean;
   order: number;
+  /** 'above' = por encima del catálogo principal; 'below' = por debajo. */
+  position?: 'above' | 'below';
   createdAt: string;
 }
 

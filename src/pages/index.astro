@@ -20,9 +20,13 @@ const publishedSections = (readSections() || [])
   .sort((a, b) => a.order - b.order)
   .map((s) => ({
     ...s,
+    position: s.position === 'above' ? 'above' : 'below',
     products: s.productIds.map((id) => allProducts.find((p) => p.id === id)).filter(Boolean),
   }))
   .filter((s) => s.products.length > 0);
+
+const aboveCatalogSections = publishedSections.filter((s) => s.position === 'above');
+const belowCatalogSections = publishedSections.filter((s) => s.position !== 'above');
 
 const categoryParam = (Astro.url.searchParams.get('category') ?? '').toLowerCase().trim();
 const activeCategory = categoryParam ? getCategoryById(categoryParam) ?? null : null;
@@ -61,7 +65,7 @@ const dealProducts = allProducts
   .slice(0, 10);
 
 // ─── Pagination for "Todos los Productos" ────────────────────────────────────
-const PRODUCTS_PER_PAGE = 12;
+const PRODUCTS_PER_PAGE = 40;
 const pageParam = Astro.url.searchParams.get('page');
 const totalPages = Math.max(1, Math.ceil(sorted.length / PRODUCTS_PER_PAGE));
 const requestedPage = parseInt(pageParam ?? '1', 10) || 1;
@@ -70,6 +74,28 @@ const paginatedProducts = sorted.slice(
   (currentPage - 1) * PRODUCTS_PER_PAGE,
   currentPage * PRODUCTS_PER_PAGE
 );
+
+// ─── Paginación compacta (estilo admin: 5 visibles + primera/última con …) ───
+const buildPageRange = (current, total) => {
+  const maxVisible = 5;
+  let start = Math.max(1, current - Math.floor(maxVisible / 2));
+  let end = Math.min(total, start + maxVisible - 1);
+  if (end - start + 1 < maxVisible) {
+    start = Math.max(1, end - maxVisible + 1);
+  }
+  const pages = [];
+  if (start > 1) {
+    pages.push(1);
+    if (start > 2) pages.push('ellipsis');
+  }
+  for (let i = start; i <= end; i++) pages.push(i);
+  if (end < total) {
+    if (end < total - 1) pages.push('ellipsis');
+    pages.push(total);
+  }
+  return pages;
+};
+const pageRange = buildPageRange(currentPage, totalPages);
 
 const pageTitle = "Tradylor | Portal de Curación, Análisis y Ofertas Verificadas";
 const pageDescription = "Descubre las mejores selecciones y comparativas de producto. Análisis honestos, pros y contras objetivos y enlaces de compra verificados con las mejores ofertas.";
@@ -93,6 +119,29 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
 <Layout title={pageTitle} description={pageDescription}>
   <!-- Panel de ofertas/asistente: a ancho completo, justo debajo del header -->
   <HeroSearchRadar deals={dealProducts} />
+
+  <!-- ============================================================
+       SECCIONES DINÁMICAS POR ENCIMA DEL CATÁLOGO (estilo HSR)
+       ============================================================ -->
+  {aboveCatalogSections.map((section) => (
+    <section class="hsr" data-dynamic-section={section.id} aria-label={section.title}>
+      <div class="hsr-section-head">
+        <h2 class="hsr-section-title">{section.title}</h2>
+        {section.description && <p class="hsr-lead">{section.description}</p>}
+      </div>
+      <div class="hsr-deals" data-hsr-deals>
+        <button type="button" class="hsr-carousel-btn hsr-carousel-prev" data-hsr-prev aria-label="Anteriores">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+        </button>
+        <div class="hsr-deals-track" data-hsr-track>
+          {section.products.map((item) => <ProductCard product={item} layout="compact" />)}
+        </div>
+        <button type="button" class="hsr-carousel-btn hsr-carousel-next" data-hsr-next aria-label="Siguientes">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+        </button>
+      </div>
+    </section>
+  ))}
 
   <!-- ============================================================
        1. SECCIÓN CATÁLOGO COMPLETO: Todos los Productos (paginado)
@@ -137,15 +186,19 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
           )}
 
           <div class="page-numbers">
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-              <a
-                href={pageHref(page)}
-                class:list={['page-num', { active: page === currentPage }]}
-                aria-label={`Página ${page}`}
-                aria-current={page === currentPage ? 'page' : undefined}
-              >
-                {page}
-              </a>
+            {pageRange.map((page) => (
+              page === 'ellipsis' ? (
+                <span class="page-ellipsis" aria-hidden="true">…</span>
+              ) : (
+                <a
+                  href={pageHref(page)}
+                  class:list={['page-num', { active: page === currentPage }]}
+                  aria-label={`Página ${page}`}
+                  aria-current={page === currentPage ? 'page' : undefined}
+                >
+                  {page}
+                </a>
+              )
             ))}
           </div>
 
@@ -380,20 +433,72 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
 
   <CategoryMenu activeSlug={activeCategory?.slug} />
 
-  {publishedSections.map((section) => (
-    <section class="products-section" data-dynamic-section={section.id}>
-      <div class="container">
-        <div class="section-header">
-          <h2 class="section-title">{section.title}</h2>
-          {section.description && <p class="section-desc">{section.description}</p>}
+  <!-- ============================================================
+       SECCIONES DINÁMICAS POR DEBAJO DEL CATÁLOGO (estilo HSR)
+       ============================================================ -->
+  {belowCatalogSections.map((section) => (
+    <section class="hsr" data-dynamic-section={section.id} aria-label={section.title}>
+      <div class="hsr-section-head">
+        <h2 class="hsr-section-title">{section.title}</h2>
+        {section.description && <p class="hsr-lead">{section.description}</p>}
+      </div>
+      <div class="hsr-deals" data-hsr-deals>
+        <button type="button" class="hsr-carousel-btn hsr-carousel-prev" data-hsr-prev aria-label="Anteriores">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+        </button>
+        <div class="hsr-deals-track" data-hsr-track>
+          {section.products.map((item) => <ProductCard product={item} layout="compact" />)}
         </div>
-        <div class="products-grid">
-          {section.products.map((item) => <ProductCard product={item} />)}
-        </div>
+        <button type="button" class="hsr-carousel-btn hsr-carousel-next" data-hsr-next aria-label="Siguientes">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+        </button>
       </div>
     </section>
   ))}
 </Layout>
+
+<script>
+  const initDynamicCarousels = (): void => {
+    document.querySelectorAll<HTMLElement>('[data-hsr-track]').forEach((track) => {
+      const root = track.closest('section') as HTMLElement | null;
+      if (!root) return;
+      // Evitar doble init si ya tiene listeners (HSR principal se gestiona aparte)
+      if (root.dataset.carouselInit === '1') return;
+      // Solo inicializar secciones dinámicas (no el HSR principal que ya tiene su script)
+      if (!root.hasAttribute('data-dynamic-section')) return;
+      root.dataset.carouselInit = '1';
+      const prevBtn = root.querySelector<HTMLButtonElement>('[data-hsr-prev]');
+      const nextBtn = root.querySelector<HTMLButtonElement>('[data-hsr-next]');
+
+      const step = (): number => {
+        const card = track.querySelector<HTMLElement>('.product-card');
+        if (!card) return Math.round(track.clientWidth * 0.8);
+        const styles = window.getComputedStyle(track);
+        const gap = parseFloat(styles.columnGap || styles.gap || '0') || 0;
+        return card.offsetWidth + gap;
+      };
+
+      const syncArrows = (): void => {
+        const maxScroll = track.scrollWidth - track.clientWidth;
+        const scrollable = maxScroll > 4;
+        if (prevBtn) prevBtn.disabled = !scrollable || track.scrollLeft <= 4;
+        if (nextBtn) nextBtn.disabled = !scrollable || track.scrollLeft >= maxScroll - 4;
+      };
+
+      prevBtn?.addEventListener('click', () => track.scrollBy({ left: -step(), behavior: 'smooth' }));
+      nextBtn?.addEventListener('click', () => track.scrollBy({ left: step(), behavior: 'smooth' }));
+      track.addEventListener('scroll', syncArrows, { passive: true });
+      window.addEventListener('resize', syncArrows);
+      syncArrows();
+    });
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDynamicCarousels);
+  } else {
+    initDynamicCarousels();
+  }
+</script>
 
 <style>
   /* ============ DESIGN TOKENS & BASE ============ */
@@ -679,6 +784,21 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       grid-template-columns: 1fr;
       gap: 1.5rem;
     }
+  }
+
+  /* ============ SECCIONES DINÁMICAS (estilo HSR) ============ */
+  .hsr-section-head {
+    margin-bottom: 0.75rem;
+  }
+  .hsr-section-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--color-text, #e2e8f0);
+    margin: 0 0 0.25rem;
+  }
+  .page-ellipsis {
+    padding: 0 0.25rem;
+    color: var(--color-text-dim, #94a3b8);
   }
 
   /* ============ PAGINATION ============ */

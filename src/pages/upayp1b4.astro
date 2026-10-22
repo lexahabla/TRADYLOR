@@ -1532,6 +1532,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <textarea id="createSectionDescription" placeholder="Breve descripción que aparecerá en la sección (máx. 200 caracteres)" maxlength="200" rows="3"></textarea>
     </div>
     <div class="admin-modal-field">
+      <span>Posición en la web</span>
+      <select id="createSectionPosition" style="width:100%;padding:.5rem;border-radius:8px;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);">
+        <option value="below" selected>Por debajo del catálogo principal</option>
+        <option value="above">Por encima del catálogo principal</option>
+      </select>
+    </div>
+    <div class="admin-modal-field">
       <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:600;">
         <input type="checkbox" id="createSectionPublished" checked /> Publicar en la web inmediatamente
       </label>
@@ -3596,6 +3603,7 @@ function renderTableRows(products, resetPage = true) {
     const createSectionTitle = document.getElementById('createSectionTitle');
     const createSectionDescription = document.getElementById('createSectionDescription');
     const createSectionPublished = document.getElementById('createSectionPublished');
+    const createSectionPosition = document.getElementById('createSectionPosition');
     const createSectionConfirm = document.getElementById('createSectionConfirm');
     const createSectionStatus = document.getElementById('createSectionStatus');
     // OJO: este bloque es un <script is:inline>, es decir NO lo procesa Vite:
@@ -3611,6 +3619,7 @@ function renderTableRows(products, resetPage = true) {
       createSectionTitle.value = '';
       createSectionDescription.value = '';
       createSectionPublished.checked = true;
+      if (createSectionPosition) createSectionPosition.value = 'below';
       createSectionStatus.hidden = true;
       createSectionStatus.textContent = '';
       createSectionStatus.className = 'admin-modal-status';
@@ -3639,6 +3648,7 @@ function renderTableRows(products, resetPage = true) {
       }
       const description = createSectionDescription.value.trim();
       const published = createSectionPublished.checked;
+      const position = createSectionPosition ? createSectionPosition.value : 'below';
 
       createSectionConfirm.disabled = true;
       createSectionConfirm.textContent = 'Creando…';
@@ -3647,7 +3657,7 @@ function renderTableRows(products, resetPage = true) {
       try {
         const res = await fetch('/api/admin/sections', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'create', title, description, productIds: createSectionProductIds, published }),
+          body: JSON.stringify({ action: 'create', title, description, productIds: createSectionProductIds, published, position }),
         });
         const data = await res.json();
         if (data.success) {
@@ -3683,6 +3693,7 @@ function renderTableRows(products, resetPage = true) {
         host.innerHTML = sections.map((s) => `
           <div class="section-admin-row">
             <strong>${escapeHtml ? escapeHtml(s.title) : s.title}</strong> <span class="admin-tag-pill">${s.published ? 'publicada' : 'oculta'}</span>
+            <span class="admin-tag-pill">${s.position === 'above' ? 'encima catálogo' : 'debajo catálogo'}</span>
             <span class="muted">${(s.productIds || []).length} producto(s)</span>
             <button type="button" class="btn-secondary btn-sm" data-section-toggle="${s.id}" data-published="${!s.published}">${s.published ? 'Ocultar' : 'Publicar'}</button>
             <button type="button" class="btn-danger-ghost btn-sm" data-section-delete="${s.id}">Eliminar</button>

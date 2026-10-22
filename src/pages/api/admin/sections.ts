@@ -24,6 +24,7 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(JSON.stringify({ success: false, message: 'El título es obligatorio' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
     const id = body?.id ? String(body.id) : slugifySection(title);
+    const position = body?.position === 'above' ? 'above' : 'below';
     const section: WebSection = {
       id,
       title,
@@ -31,6 +32,7 @@ export const POST: APIRoute = async ({ request }) => {
       productIds: Array.isArray(body?.productIds) ? body.productIds.map((x: unknown) => String(x)) : [],
       published: body?.published !== false,
       order: typeof body?.order === 'number' ? body.order : readSections().length,
+      position,
       createdAt: body?.createdAt ? String(body.createdAt) : new Date().toISOString(),
     };
     const ok = upsertSection(section);
