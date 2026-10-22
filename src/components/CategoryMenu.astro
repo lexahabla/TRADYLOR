@@ -9,6 +9,11 @@ export interface Props {
 const { activeSlug } = Astro.props;
 const categories = getCategories();
 
+// La barra se monta en el Layout de todas las páginas públicas: si la página
+// no pasa el prop, la categoría activa se deduce de ?category= en la URL.
+const slugParam = (Astro.url.searchParams.get('category') ?? '').toLowerCase().trim();
+const activeSlugResolved = activeSlug ?? (slugParam || undefined);
+
 // Raíces + subcategorías agrupadas (el panel las muestra anidadas).
 const roots = categories.filter((cat) => !cat.parentId);
 const subsByParent = new Map<string, Category[]>();
@@ -19,194 +24,219 @@ for (const cat of categories) {
   subsByParent.set(cat.parentId, list);
 }
 
-const activeCategory = activeSlug ? categories.find((cat) => cat.slug === activeSlug) : undefined;
+const activeCategory = activeSlugResolved ? categories.find((cat) => cat.slug === activeSlugResolved) : undefined;
 const activeParentId = activeCategory?.parentId ?? null;
-const isRootActive = (cat: Category) => activeSlug === cat.slug || activeParentId === cat.id;
+const isRootActive = (cat: Category) => activeSlugResolved === cat.slug || activeParentId === cat.id;
 // Tono de color distinto por categoría para los iconos del panel.
 const hueOf = (index: number) => (index * 43) % 360;
 ---
 
-<nav id="categoryBar" class="category-bar" aria-label="Categorías y accesos rápidos">
+<nav id="categoryBar" class="category-bar" aria-label="Categorías, búsqueda y navegación">
   <div class="category-frame" id="categoryFrame">
-    <!-- Desplegable de categorías (con subcategorías anidadas) -->
-    <div class="category-menu" data-cm-menu>
-      <button
-        type="button"
-        class:list={['category-menu-btn', { 'has-active': Boolean(activeCategory) }]}
-        data-cm-menu-btn
-        aria-label="Explorar categorías"
-        aria-expanded="false"
-        aria-controls="categoryPanel"
-      >
-        {activeCategory ? (
-          <span class="cm-btn-icon" aria-hidden="true">{activeCategory.icon}</span>
-        ) : (
-          <svg class="cm-btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
-            <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
-            <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
-            <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+    <!-- Buscador unificado (estilo Amazon #nav-search, adaptado a Tradylor):
+         [Categorías ▾] | [input] [x] [lupa] en una sola pastilla. -->
+    <form class="nav-search" data-cm-search role="search" autocomplete="off">
+      <div class="category-menu" data-cm-menu>
+        <button
+          type="button"
+          class:list={['category-menu-btn', { 'has-active': Boolean(activeCategory) }]}
+          data-cm-menu-btn
+          aria-label="Explorar categorías"
+          aria-expanded="false"
+          aria-controls="categoryPanel"
+        >
+          {activeCategory ? (
+            <span class="cm-btn-icon" aria-hidden="true">{activeCategory.icon}</span>
+          ) : (
+            <svg class="cm-btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+            </svg>
+          )}
+          <span class="cm-btn-label">{activeCategory ? activeCategory.name : 'Categorías'}</span>
+          <svg class="cm-btn-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9"></polyline>
           </svg>
-        )}
-        <span class="cm-btn-label">{activeCategory ? activeCategory.name : 'Categorías'}</span>
-        <svg class="cm-btn-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <polyline points="6 9 12 15 18 9"></polyline>
+        </button>
+
+        <div class="category-panel" id="categoryPanel" data-cm-panel hidden>
+          <div class="cat-panel-head">
+            <span class="cat-panel-title">Explora por categoría</span>
+            <a class:list={['cat-panel-all', { 'is-active': !activeSlugResolved }]} href="/#catalogo">Ver todo</a>
+          </div>
+
+          <div class="cat-panel-grid">
+            <a
+              class:list={['cat-card', 'is-todos', { 'is-active': !activeSlugResolved }]}
+              href="/#catalogo"
+              aria-current={!activeSlugResolved ? 'true' : undefined}
+            >
+              <span class="cat-card-icon" aria-hidden="true">🛍️</span>
+              <span class="cat-card-text">
+                <span class="cat-card-name">Todos</span>
+                <span class="cat-card-meta">Catálogo completo</span>
+              </span>
+            </a>
+
+            {roots.map((cat, index) => {
+              const subs = subsByParent.get(cat.id) ?? [];
+              return (
+                <div class="cat-group">
+                  <a
+                    class:list={['cat-card', { 'is-active': isRootActive(cat) }]}
+                    href={`/?category=${encodeURIComponent(cat.slug)}#catalogo`}
+                    aria-current={activeSlugResolved === cat.slug ? 'true' : undefined}
+                    style={`--h: ${hueOf(index)}`}
+                  >
+                    <span class="cat-card-icon" aria-hidden="true">{cat.icon}</span>
+                    <span class="cat-card-text">
+                      <span class="cat-card-name">{cat.name}</span>
+                      <span class="cat-card-meta">
+                        {subs.length > 0 ? `${subs.length} subcategoría${subs.length > 1 ? 's' : ''}` : 'Ver productos'}
+                      </span>
+                    </span>
+                    <svg class="cat-card-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                  </a>
+
+                  {subs.length > 0 && (
+                    <div class="cat-subs">
+                      {subs.map((sub) => (
+                        <a
+                          class:list={['cat-sub', { 'is-active': activeSlugResolved === sub.slug }]}
+                          href={`/?category=${encodeURIComponent(sub.slug)}#catalogo`}
+                          aria-current={activeSlugResolved === sub.slug ? 'true' : undefined}
+                          style={`--h: ${hueOf(index)}`}
+                        >
+                          <span class="cat-sub-icon" aria-hidden="true">{sub.icon}</span>
+                          <span>{sub.name}</span>
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <span class="ns-sep" aria-hidden="true"></span>
+
+      <input type="search" class="ns-input cm-search-input" data-cm-search-input placeholder="Buscar productos…" aria-label="Buscar productos" />
+
+      <button type="button" class="ns-clear" data-cm-clear aria-label="Borrar la búsqueda" hidden>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
       </button>
 
-      <div class="category-panel" id="categoryPanel" data-cm-panel hidden>
-        <div class="cat-panel-head">
-          <span class="cat-panel-title">Explora por categoría</span>
-          <a class:list={['cat-panel-all', { 'is-active': !activeSlug }]} href="/#catalogo">Ver todo</a>
-        </div>
-
-        <div class="cat-panel-grid">
-          <a
-            class:list={['cat-card', 'is-todos', { 'is-active': !activeSlug }]}
-            href="/#catalogo"
-            aria-current={!activeSlug ? 'true' : undefined}
-          >
-            <span class="cat-card-icon" aria-hidden="true">🛍️</span>
-            <span class="cat-card-text">
-              <span class="cat-card-name">Todos</span>
-              <span class="cat-card-meta">Catálogo completo</span>
-            </span>
-          </a>
-
-          {roots.map((cat, index) => {
-            const subs = subsByParent.get(cat.id) ?? [];
-            return (
-              <div class="cat-group">
-                <a
-                  class:list={['cat-card', { 'is-active': isRootActive(cat) }]}
-                  href={`/?category=${encodeURIComponent(cat.slug)}#catalogo`}
-                  aria-current={activeSlug === cat.slug ? 'true' : undefined}
-                  style={`--h: ${hueOf(index)}`}
-                >
-                  <span class="cat-card-icon" aria-hidden="true">{cat.icon}</span>
-                  <span class="cat-card-text">
-                    <span class="cat-card-name">{cat.name}</span>
-                    <span class="cat-card-meta">
-                      {subs.length > 0 ? `${subs.length} subcategoría${subs.length > 1 ? 's' : ''}` : 'Ver productos'}
-                    </span>
-                  </span>
-                  <svg class="cat-card-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                  </svg>
-                </a>
-
-                {subs.length > 0 && (
-                  <div class="cat-subs">
-                    {subs.map((sub) => (
-                      <a
-                        class:list={['cat-sub', { 'is-active': activeSlug === sub.slug }]}
-                        href={`/?category=${encodeURIComponent(sub.slug)}#catalogo`}
-                        aria-current={activeSlug === sub.slug ? 'true' : undefined}
-                        style={`--h: ${hueOf(index)}`}
-                      >
-                        <span class="cat-sub-icon" aria-hidden="true">{sub.icon}</span>
-                        <span>{sub.name}</span>
-                      </a>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-
-    <!-- Elementos principales: Buscar, Mi perfil y Mi Radar -->
-    <div class="category-actions">
-      <!-- Buscador en cascada (sugerencias en vivo vía /api/search) -->
-      <form class="category-search" data-cm-search role="search" autocomplete="off">
-        <svg class="cm-search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <button type="submit" class="ns-submit" aria-label="Buscar">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
-        <input type="search" class="cm-search-input" data-cm-search-input placeholder="Buscar…" aria-label="Buscar productos" />
-        <div class="cm-search-drop" data-cm-search-drop hidden></div>
-      </form>
+      </button>
 
-      <a class="category-pill" data-cm-perfil href="/metodologia" title="Tu perfil de comprador" aria-label="Mi perfil">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-          <circle cx="12" cy="7" r="4"></circle>
-        </svg>
-        <span class="category-pill-label">Mi perfil</span>
-      </a>
-      <a class="category-pill" href="/mi-radar" title="Abrir Mi Radar" aria-label="Mi Radar">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="9" opacity="0.45"></circle>
-          <circle cx="12" cy="12" r="5" opacity="0.7"></circle>
-          <line x1="12" y1="12" x2="12" y2="4"></line>
-        </svg>
-        <span class="category-pill-label">Mi Radar</span>
-        <span class="cm-radar-count" data-cm-radar-count hidden>0</span>
-      </a>
-    </div>
+      <!-- Sugerencias en vivo (vía /api/search) -->
+      <div class="cm-search-drop" data-cm-search-drop hidden></div>
+    </form>
+
+    <!-- Hamburguesa del menú principal (móvil) -->
+    <button type="button" class="nav-toggle-btn" aria-label="Abrir menú" aria-controls="mainNav" aria-expanded="false">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="4" y1="7" x2="20" y2="7"></line>
+        <line x1="4" y1="12" x2="20" y2="12"></line>
+        <line x1="4" y1="17" x2="20" y2="17"></line>
+      </svg>
+    </button>
+
+    <!-- Navegación principal: vive dentro de la barra fija -->
+    <nav id="mainNav" class="main-nav" aria-label="Navegación Principal">
+      <ul class="nav-list">
+        <li><a href="/#destacados" class="nav-link">Top Selecciones</a></li>
+        <li><a href="/#metodologia" class="nav-link">Metodología</a></li>
+        <li><a href="/#comparativas" class="nav-link">Comparativas</a></li>
+        <li><a href="#aviso-legal" class="nav-link">Aviso de Afiliación</a></li>
+      </ul>
+    </nav>
   </div>
 </nav>
 
 <style is:global>
+  /* ── Barra fija: queda pegada justo debajo del header (sticky, en flujo) ── */
   .category-bar {
-    position: fixed;
-    top: 0;
+    position: sticky;
+    top: calc(var(--header-h, 72px));
     left: 0;
     right: 0;
-    z-index: 110;
-    background: rgba(12, 16, 26, 0.94);
+    z-index: 90;
+    background: #000000;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
-    opacity: 0;
-    transform: translateY(-100%);
-    pointer-events: none;
-    transition:
-      transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
-      opacity 0.3s ease;
-  }
-
-  .category-bar.is-visible {
-    opacity: 1;
-    transform: translateY(0);
-    pointer-events: auto;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   }
 
   .category-frame {
     display: flex;
     align-items: center;
-    gap: 0.6rem;
+    gap: 0.75rem;
     max-width: var(--max-width);
     margin: 0 auto;
     padding: 0.5rem 1.5rem;
   }
 
-  /* ── Desplegable de categorías ─────────────────────────────────────── */
+  /* ── Buscador unificado (estilo Amazon, colores Tradylor) ─────────────── */
+  .nav-search {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1 1 22rem;
+    max-width: 40rem;
+    min-width: 0;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      background 0.2s ease;
+  }
+
+  .nav-search:focus-within {
+    background: rgba(2, 6, 23, 0.85);
+    border-color: rgba(96, 165, 250, 0.55);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
+  }
+
+  /* Selector de categorías (primer segmento de la pastilla) */
   .category-menu {
     position: relative;
     flex-shrink: 0;
+    height: 100%;
   }
 
   .category-menu-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.9rem;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 999px;
+    gap: 0.45rem;
+    height: 100%;
+    padding: 0 0.7rem 0 0.85rem;
+    background: transparent;
+    border: none;
+    border-radius: 10px 0 0 10px;
     color: rgba(255, 255, 255, 0.85);
     font-family: var(--font-body, inherit);
-    font-size: 0.82rem;
+    font-size: 0.8rem;
     font-weight: 700;
     cursor: pointer;
     white-space: nowrap;
     transition:
       background 0.2s ease,
-      border-color 0.2s ease,
       color 0.2s ease,
       box-shadow 0.2s ease;
   }
@@ -215,7 +245,6 @@ const hueOf = (index: number) => (index * 43) % 360;
   .category-menu-btn[aria-expanded='true'],
   .category-menu-btn.has-active {
     background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-    border-color: rgba(96, 165, 250, 0.6);
     color: #ffffff;
     box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
   }
@@ -246,6 +275,90 @@ const hueOf = (index: number) => (index * 43) % 360;
     transform: rotate(180deg);
   }
 
+  .ns-sep {
+    width: 1px;
+    height: 60%;
+    background: rgba(255, 255, 255, 0.14);
+    flex-shrink: 0;
+  }
+
+  .ns-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    padding: 0 0.5rem;
+    font-family: var(--font-body, inherit);
+    font-size: 0.85rem;
+    color: #f3f4f6;
+    color-scheme: dark;
+    background: transparent;
+    border: none;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  .ns-input::placeholder {
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  /* Oculta la X nativa de <input type="search">: usamos la nuestra */
+  .ns-input::-webkit-search-cancel-button,
+  .ns-input::-webkit-search-decoration {
+    display: none;
+    -webkit-appearance: none;
+  }
+
+  .ns-clear {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    flex-shrink: 0;
+    padding: 0;
+    color: rgba(255, 255, 255, 0.5);
+    background: transparent;
+    border: none;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.18s ease, color 0.18s ease;
+  }
+
+  .ns-clear:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+  }
+
+  .ns-submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    margin-right: 4px;
+    padding: 0;
+    color: #ffffff;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+    transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+  }
+
+  .ns-submit:hover {
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.55);
+    transform: translateY(-1px);
+  }
+
+  .ns-submit:active {
+    transform: scale(0.96);
+  }
+
+  /* ── Desplegable de categorías ─────────────────────────────────────── */
   .category-panel {
     position: absolute;
     top: calc(100% + 0.6rem);
@@ -498,107 +611,13 @@ const hueOf = (index: number) => (index * 43) % 360;
     line-height: 1;
   }
 
-  /* ── Elementos principales ─────────────────────────────────────────── */
-  .category-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.4rem;
-    flex: 0 1 auto;
-    min-width: 0;
-    margin-left: auto;
-  }
-
-  .category-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    padding: 0.5rem 0.8rem;
-    border-radius: 999px;
-    font-size: 0.8rem;
-    font-weight: 700;
-    font-family: var(--font-body, inherit);
-    color: #f1f5f9;
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    text-decoration: none;
-    white-space: nowrap;
-    flex-shrink: 0;
-    transition:
-      background 0.2s ease,
-      color 0.2s ease,
-      border-color 0.2s ease,
-      box-shadow 0.2s ease;
-  }
-
-  .category-pill:hover {
-    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-    border-color: rgba(96, 165, 250, 0.6);
-    color: #ffffff;
-    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
-  }
-
-  .cm-radar-count {
-    min-width: 1.15rem;
-    padding: 0.02rem 0.32rem;
-    font-size: 0.68rem;
-    font-weight: 800;
-    text-align: center;
-    color: #ffffff;
-    background: linear-gradient(135deg, #f59e0b, #ea580c);
-    border-radius: 999px;
-    line-height: 1.35;
-  }
-
-  .cm-radar-count[hidden] {
-    display: none;
-  }
-
-  /* ── Buscador en cascada ───────────────────────────────────────────── */
-  .category-search {
-    position: relative;
-    flex: 0 1 13.5rem;
-    min-width: 7.5rem;
-  }
-
-  .cm-search-icon {
-    position: absolute;
-    left: 0.65rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: rgba(255, 255, 255, 0.45);
-    pointer-events: none;
-  }
-
-  .cm-search-input {
-    width: 100%;
-    padding: 0.5rem 0.75rem 0.5rem 1.9rem;
-    font-family: var(--font-body, inherit);
-    font-size: 0.8rem;
-    color: #e5e7eb;
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 999px;
-    outline: none;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-  }
-
-  .cm-search-input::placeholder {
-    color: rgba(255, 255, 255, 0.45);
-  }
-
-  .cm-search-input:focus {
-    background: rgba(2, 6, 23, 0.9);
-    border-color: rgba(96, 165, 250, 0.55);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
-  }
-
+  /* ── Sugerencias del buscador (cascada) ──────────────────────────────── */
   .cm-search-drop {
     position: absolute;
-    top: calc(100% + 8px);
+    top: calc(100% + 6px);
     left: 0;
-    right: auto;
     z-index: 5;
-    width: min(21rem, calc(100vw - 1.5rem));
+    width: min(24rem, calc(100vw - 1.5rem));
     background: rgba(12, 16, 26, 0.97);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 14px;
@@ -745,85 +764,46 @@ const hueOf = (index: number) => (index * 43) % 360;
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
   }
 
-  /* Etiquetas de los accesos: se ocultan cuando la barra queda muy justa */
-  @media (max-width: 700px) {
-    .category-pill-label {
-      display: none;
+  /* ── Responsive ──────────────────────────────────────────────────────── */
+  @media (max-width: 960px) {
+    .nav-search {
+      flex: 1 1 auto;
+      max-width: none;
     }
 
-    .category-pill {
-      padding: 0.5rem 0.7rem;
-    }
-
-    .category-search {
-      flex: 0 1 11rem;
+    .cm-btn-label {
+      max-width: 7rem;
     }
   }
 
   @media (max-width: 640px) {
-    .category-bar {
-      background: transparent;
-      border-bottom: none;
-      box-shadow: none;
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
-      padding: 0.55rem 0.6rem 0 0.6rem;
-      pointer-events: none;
-    }
-
-    .category-bar.is-visible {
-      pointer-events: none;
-    }
-
     .category-frame {
-      max-width: none;
-      margin: 0;
-      padding: 0;
-      gap: 0.4rem;
-      flex-wrap: wrap;
+      padding: 0.45rem 0.75rem;
+      gap: 0.45rem;
     }
 
-    .category-menu {
-      pointer-events: auto;
-      flex-shrink: 0;
-    }
-
-    .category-menu-btn {
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      background: rgba(12, 16, 26, 0.92);
-    }
-
-    .category-menu-btn[aria-expanded='true'] {
-      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    .nav-search {
+      height: 38px;
     }
 
     .cm-btn-label {
-      max-width: 7.5rem;
+      max-width: 5.5rem;
     }
 
-    .category-actions {
-      pointer-events: auto;
-      flex: 1 1 12rem;
-      min-width: 0;
-      margin-left: 0;
-      justify-content: flex-end;
-    }
-
-    .category-search {
-      flex: 1 1 7rem;
-      min-width: 5.5rem;
+    .ns-submit {
+      width: 30px;
+      height: 30px;
+      margin-right: 3px;
     }
 
     .cm-search-drop {
       width: auto;
+      left: 0;
       right: 0;
     }
 
     .category-panel {
       top: calc(100% + 0.5rem);
-      left: 0;
       width: min(30rem, calc(100vw - 1.2rem));
       max-height: min(70vh, 32rem);
       overflow-y: auto;
@@ -850,15 +830,11 @@ const hueOf = (index: number) => (index * 43) % 360;
 
   @media (max-width: 380px) {
     .category-menu-btn {
-      padding: 0.5rem 0.7rem;
+      padding: 0 0.5rem 0 0.6rem;
     }
 
     .cm-btn-label {
       display: none;
-    }
-
-    .category-actions {
-      flex: 1 1 9rem;
     }
   }
 </style>
@@ -867,31 +843,10 @@ const hueOf = (index: number) => (index * 43) % 360;
   const bar = document.getElementById('categoryBar');
 
   if (bar) {
-    const frame = document.getElementById('categoryFrame');
     const menuBtn = bar.querySelector<HTMLButtonElement>('[data-cm-menu-btn]');
     const menuPanel = bar.querySelector<HTMLElement>('[data-cm-panel]');
 
-    const headerEl = document.querySelector('.site-header');
-    const mainNavEl = document.getElementById('mainNav');
-    const navToggleEl = document.querySelector('.nav-toggle-btn');
-
-    const mq = window.matchMedia('(max-width: 640px)');
-
-    let isVisible = false;
-
-    const applyOffset = () => {
-      const offset = isVisible && !mq.matches ? bar.offsetHeight : 0;
-      document.documentElement.style.setProperty('--category-bar-offset', `${offset}px`);
-    };
-
-    const applyLayout = () => {
-      applyOffset();
-      headerEl?.classList.toggle('is-hidden', isVisible && mq.matches);
-      if (isVisible && mq.matches && mainNavEl?.classList.contains('is-open')) {
-        mainNavEl.classList.remove('is-open');
-        navToggleEl?.setAttribute('aria-expanded', 'false');
-      }
-    };
+    /* ── Desplegable de categorías ───────────────────────────────────── */
 
     const setMenuOpen = (open: boolean) => {
       if (!menuPanel || !menuBtn) return;
@@ -900,44 +855,6 @@ const hueOf = (index: number) => (index * 43) % 360;
     };
 
     const closePanel = () => setMenuOpen(false);
-
-    const targets = Array.from(document.querySelectorAll<HTMLElement>('.section-header'));
-
-    if (targets.length > 0 && 'IntersectionObserver' in window) {
-      const visible = new Set<Element>();
-
-      const applyShow = () => {
-        // La barra aparece en cuanto una cabecera de sección entra en pantalla:
-        // la portada ya no tiene panel hero por encima del catálogo.
-        const show = visible.size > 0;
-        isVisible = show;
-        bar.classList.toggle('is-visible', show);
-        if (!show) closePanel();
-        applyLayout();
-      };
-
-      const observer = new IntersectionObserver(
-        (entries) => {
-          for (const entry of entries) {
-            if (entry.isIntersecting) visible.add(entry.target);
-            else visible.delete(entry.target);
-          }
-          applyShow();
-        },
-        { rootMargin: '-72px 0px 0px 0px' }
-      );
-      targets.forEach((target) => observer.observe(target));
-    }
-
-    window.addEventListener('resize', applyLayout);
-
-    if ('ResizeObserver' in window) {
-      new ResizeObserver(() => {
-        if (isVisible) applyOffset();
-      }).observe(bar);
-    }
-
-    /* ── Desplegable de categorías ───────────────────────────────────── */
 
     menuBtn?.addEventListener('click', () => {
       setMenuOpen(Boolean(menuPanel?.hidden));
@@ -955,20 +872,12 @@ const hueOf = (index: number) => (index * 43) % 360;
       if (!target.closest('.category-menu')) closePanel();
     });
 
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        closePanel();
-        closeDrop();
-      }
-    });
-
-    /* ── Buscador en cascada + pills de perfil y Mi Radar ──────────────── */
+    /* ── Buscador unificado: cascada + envío al catálogo ──────────────── */
 
     const searchForm = bar.querySelector<HTMLFormElement>('[data-cm-search]');
     const searchInput = bar.querySelector<HTMLInputElement>('[data-cm-search-input]');
     const searchDrop = bar.querySelector<HTMLElement>('[data-cm-search-drop]');
-    const perfilLink = bar.querySelector<HTMLAnchorElement>('[data-cm-perfil]');
-    const radarCount = bar.querySelector<HTMLElement>('[data-cm-radar-count]');
+    const clearBtn = bar.querySelector<HTMLButtonElement>('[data-cm-clear]');
 
     const escapeHtml = (value: string): string =>
       value.replace(/[&<>"']/g, (ch) => {
@@ -984,6 +893,46 @@ const hueOf = (index: number) => (index * 43) % 360;
     const closeDrop = () => {
       if (searchDrop) searchDrop.hidden = true;
     };
+
+    // La X sólo aparece cuando hay texto escrito.
+    const syncClearBtn = () => {
+      if (clearBtn) clearBtn.hidden = (searchInput?.value ?? '').length === 0;
+    };
+
+    // URL del catálogo conservando la categoría activa; ?q= vacío = ver todo.
+    const catalogUrl = (query: string) => {
+      const category = new URLSearchParams(window.location.search).get('category');
+      const term = query.trim();
+      const params = new URLSearchParams();
+      if (category) params.set('category', category);
+      if (term) params.set('q', term);
+      const qs = params.toString();
+      return `/${qs ? `?${qs}` : ''}#catalogo`;
+    };
+
+    // Enter o botón de la lupa: el catálogo filtra por el término (SSR).
+    const goToCatalog = (query: string) => {
+      closeDrop();
+      window.location.href = catalogUrl(query);
+    };
+
+    searchForm?.addEventListener('submit', (event) => {
+      event.preventDefault();
+      goToCatalog(searchInput?.value ?? '');
+    });
+
+    // X: borra lo escrito y quita el filtro del catálogo si estaba aplicado.
+    clearBtn?.addEventListener('click', () => {
+      if (searchInput) searchInput.value = '';
+      syncClearBtn();
+      const hasQuery = new URLSearchParams(window.location.search).has('q');
+      if (hasQuery) {
+        window.location.href = catalogUrl('');
+      } else {
+        closeDrop();
+        searchInput?.focus();
+      }
+    });
 
     let dropTimer: number | undefined;
     let lastQuery = '';
@@ -1039,91 +988,30 @@ const hueOf = (index: number) => (index * 43) % 360;
     };
 
     searchInput?.addEventListener('input', () => {
+      syncClearBtn();
       window.clearTimeout(dropTimer);
       const value = searchInput.value;
       dropTimer = window.setTimeout(() => void runCascade(value), 280);
     });
 
-    searchForm?.addEventListener('submit', (event) => {
-      event.preventDefault();
-      const first = searchDrop?.querySelector<HTMLAnchorElement>('.cm-drop-item');
-      if (first) {
-        window.location.href = first.href;
-        return;
-      }
-      void runCascade(searchInput?.value ?? '');
-    });
-
-    // Cerrar la cascada al pulsar fuera o al cambiar de pestaña.
+    // Cerrar la cascada al pulsar fuera.
     document.addEventListener('click', (event) => {
       if (!searchDrop || searchDrop.hidden) return;
       const target = event.target as Element | null;
       if (!target || typeof target.closest !== 'function') return;
-      if (!target.closest('.category-search')) closeDrop();
+      if (!target.closest('.nav-search')) closeDrop();
     });
-    document.addEventListener('visibilitychange', closeDrop);
 
-    // Contador de Mi Radar: se actualiza con los cambios del store (LocalStorage
-    // y sync con la nube comparten onRadarChange).
-    const updateRadarCount = (products?: number) => {
-      if (!radarCount) return;
-      if (typeof products === 'number') {
-        radarCount.textContent = String(products);
-        radarCount.hidden = products === 0;
-        return;
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        closePanel();
+        closeDrop();
       }
-      void import('../utils/radarStore')
-        .then(({ getRadarProducts }) => {
-          const count = getRadarProducts().length;
-          radarCount.textContent = String(count);
-          radarCount.hidden = count === 0;
-        })
-        .catch(() => { radarCount.hidden = true; });
-    };
-
-    // Badge de perfil: con sesión → /perfil (cuenta Mi Radar); sin sesión →
-    // el perfilador de la metodología.
-    const updatePerfilBadge = (hasSession?: boolean) => {
-      if (!perfilLink) return;
-      if (typeof hasSession === 'boolean') {
-        perfilLink.href = hasSession ? '/perfil' : '/metodologia';
-        return;
-      }
-      void import('../utils/auth')
-        .then(async ({ getSession }) => {
-          const session = await getSession();
-          perfilLink.href = session?.user ? '/perfil' : '/metodologia';
-        })
-        .catch(() => { perfilLink.href = '/metodologia'; });
-    };
-
-    updateRadarCount();
-    updatePerfilBadge();
-
-    void import('../utils/radarStore')
-      .then(({ onRadarChange, getRadarProducts }) => {
-        onRadarChange(() => updateRadarCount(getRadarProducts().length));
-      })
-      .catch(() => {
-        // Sin bundling del store (no debería pasar): refrescar en cambios destorage.
-        window.addEventListener('storage', (event) => {
-          if (event.key === 'tradylor-radar-v1') updateRadarCount();
-        });
-      });
-
-    void import('../utils/auth')
-      .then(({ onAuthChange, getCachedSession }) => {
-        onAuthChange((user) => updatePerfilBadge(Boolean(user)));
-        // Si initAuth ya resolvió, reflejar el estado actual.
-        updatePerfilBadge(Boolean(getCachedSession()?.user));
-      })
-      .catch(() => { /* badge queda con el valor inicial. */ });
-
-    applyLayout();
-
-    mq.addEventListener('change', () => {
-      closePanel();
-      applyLayout();
     });
+
+    // Hidrata el buscador con ?q= (al volver al catálogo o recargar).
+    const initialQuery = new URLSearchParams(window.location.search).get('q') ?? '';
+    if (searchInput && initialQuery) searchInput.value = initialQuery;
+    syncClearBtn();
   }
 </script>

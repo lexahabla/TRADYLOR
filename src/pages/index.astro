@@ -1,7 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import ProductCard from '../components/ProductCard.astro';
-import CategoryMenu from '../components/CategoryMenu.astro';
 import TrustMetrics from '../components/common/TrustMetrics.astro';
 import TransparencyDashboard from '../components/TransparencyDashboard.astro';
 import SmartMatcherWizard from '../components/SmartMatcherWizard.astro';
@@ -30,15 +29,27 @@ const belowCatalogSections = publishedSections.filter((s) => s.position !== 'abo
 const categoryParam = (Astro.url.searchParams.get('category') ?? '').toLowerCase().trim();
 const activeCategory = categoryParam ? getCategoryById(categoryParam) ?? null : null;
 
+// Búsqueda del catalogo: ?q= (Enter o lupa en la barra fija #categoryBar).
+const queryParam = (Astro.url.searchParams.get('q') ?? '').trim();
+const queryTerm = queryParam.toLowerCase();
+
 const categoryMatches = (productCategory: string, slug: string) =>
   getCategoryById(productCategory)?.slug === slug;
 
-const visibleProducts = activeCategory
-  ? allProducts.filter((p) => categoryMatches(String(p.category ?? ''), activeCategory.slug))
-  : allProducts;
+const matchesQuery = (p: typeof allProducts[number]) =>
+  queryTerm.length > 0 &&
+  [p.title, p.description, p.merchant, p.brand]
+    .some((field) => String(field ?? '').toLowerCase().includes(queryTerm));
+
+const visibleProducts = allProducts.filter((p) => {
+  const byCategory = activeCategory
+    ? categoryMatches(String(p.category ?? ''), activeCategory.slug)
+    : true;
+  return byCategory && matchesQuery(p);
+});
 
 const pageHref = (page: number) =>
-  `/?${activeCategory ? `category=${encodeURIComponent(activeCategory.slug)}&` : ''}page=${page}#catalogo`;
+  `/?${activeCategory ? `category=${encodeURIComponent(activeCategory.slug)}&` : ''}${queryTerm ? `q=${encodeURIComponent(queryParam)}&` : ''}page=${page}#catalogo`;
 
 // ─── Recommendation Score: rating(60%) + reviews(30%) + discount(10%) ───────
 const scoreOf = (p: typeof allProducts[0]) => {
@@ -146,13 +157,23 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
             Filtrando por <strong>{activeCategory.name}</strong> · <a href="/">Ver todo el catálogo</a>
           </p>
         )}
+        {queryTerm && (
+          <p class="filter-note">
+            Resultados para <strong>«{queryParam}»</strong> ({sorted.length}) ·{' '}
+            <a href={activeCategory ? `/?category=${encodeURIComponent(activeCategory.slug)}#catalogo` : '/#catalogo'}>Quitar filtro</a>
+          </p>
+        )}
       </div>
 
       <div class="products-grid">
         {sorted.length === 0 ? (
           <div class="empty-state">
             <span class="empty-icon" aria-hidden="true">🔍</span>
-            <p>No hay productos disponibles en «{activeCategory?.name}» todavía.</p>
+            <p>
+              {queryParam
+                ? <>No hay productos que coincidan con «{queryParam}»{activeCategory ? ` en «${activeCategory.name}»` : ''}.</>
+                : <>No hay productos disponibles en «{activeCategory?.name}» todavía.</>}
+            </p>
             <a href="/">Ver todo el catálogo</a>
           </div>
         ) : paginatedProducts.map((item) => (
@@ -417,8 +438,6 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       </div>
     </div>
   </section>
-
-  <CategoryMenu activeSlug={activeCategory?.slug} />
 
   <!-- ============================================================
        SECCIONES DINÁMICAS POR DEBAJO DEL CATÁLOGO (carrusel deslizable)
