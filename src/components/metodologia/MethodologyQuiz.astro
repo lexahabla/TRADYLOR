@@ -637,8 +637,8 @@ const recommendations: Record<string, Recommendation> = {
           .join('');
       }
 
-      // El hero (HeroSearchRadar) escucha este evento para guardar el perfil en
-      // LocalStorage y abrir el modal de registro con contexto 'quiz-complete'.
+      // Aviso de cuestionario completado: quien escuche 'quiz:complete' guarda
+      // el perfil en LocalStorage y abre el modal de registro 'quiz-complete'.
       document.dispatchEvent(
         new CustomEvent('quiz:complete', {
           detail: {

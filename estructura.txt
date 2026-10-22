@@ -35,7 +35,6 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\CategoryNav.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\common\TrustMetrics.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\comparativa\ProductComparator.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\ComparisonTable.astro
-D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\HeroSearchRadar.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\metodologia\MethodologyQuiz.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\PriceHistoryChart.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\ProductCard.astro

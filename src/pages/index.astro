@@ -2,7 +2,6 @@
 import Layout from '../layouts/Layout.astro';
 import ProductCard from '../components/ProductCard.astro';
 import CategoryMenu from '../components/CategoryMenu.astro';
-import HeroSearchRadar from '../components/HeroSearchRadar.astro';
 import TrustMetrics from '../components/common/TrustMetrics.astro';
 import TransparencyDashboard from '../components/TransparencyDashboard.astro';
 import SmartMatcherWizard from '../components/SmartMatcherWizard.astro';
@@ -52,17 +51,6 @@ const scoreOf = (p: typeof allProducts[0]) => {
 };
 
 const sorted = [...visibleProducts].sort((a, b) => scoreOf(b) - scoreOf(a));
-
-// ─── Top ofertas: mayor descuento real (para el carrusel del hero) ──────────
-const discountRatioOf = (p: typeof allProducts[0]) =>
-  p.originalPrice && p.originalPrice > p.price
-    ? (p.originalPrice - p.price) / p.originalPrice
-    : 0;
-
-const dealProducts = allProducts
-  .filter((p) => discountRatioOf(p) > 0)
-  .sort((a, b) => discountRatioOf(b) - discountRatioOf(a) || scoreOf(b) - scoreOf(a))
-  .slice(0, 10);
 
 // ─── Pagination for "Todos los Productos" ────────────────────────────────────
 const PRODUCTS_PER_PAGE = 40;
@@ -117,9 +105,6 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
-  <!-- Panel de ofertas/asistente: a ancho completo, justo debajo del header -->
-  <HeroSearchRadar deals={dealProducts} />
-
   <!-- ============================================================
        SECCIONES DINÁMICAS POR ENCIMA DEL CATÁLOGO (carrusel deslizable)
        ============================================================ -->
