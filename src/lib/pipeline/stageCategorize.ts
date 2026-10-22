@@ -254,13 +254,20 @@ export async function runStageCategorize(
   }
 
   if (enriched.title?.trim()) next.title = enriched.title.trim();
-  if (enriched.description?.trim()) next.description = enriched.description;
-  if (enriched.pros.length) next.pros = enriched.pros;
-  if (enriched.cons.length) next.cons = enriched.cons;
-  if (enriched.verdict) next.verdict = enriched.verdict;
-  if (enriched.techSheet?.trim() && !next.techSheet) next.techSheet = enriched.techSheet;
-  if (enriched.specs && Object.keys(enriched.specs).length) {
-    next.specs = { ...(next.specs ?? {}), ...enriched.specs };
+  // Si la IA NO pudo enriquecer (sin cuota, sin clave, error del proveedor…) NO se
+  // pisa una ficha que ya tenía texto de IA: se conserva el contenido anterior.
+  // Antes, un simple re-proceso sin cuota degradaba las fichas buenas y las
+  // dejaba con la plantilla local, perdiendo la redacción editorial.
+  const preservePreviousText = !aiEnriched && product.ai_enriched === true;
+  if (!preservePreviousText) {
+    if (enriched.description?.trim()) next.description = enriched.description;
+    if (enriched.pros.length) next.pros = enriched.pros;
+    if (enriched.cons.length) next.cons = enriched.cons;
+    if (enriched.verdict) next.verdict = enriched.verdict;
+    if (enriched.techSheet?.trim() && !next.techSheet) next.techSheet = enriched.techSheet;
+    if (enriched.specs && Object.keys(enriched.specs).length) {
+      next.specs = { ...(next.specs ?? {}), ...enriched.specs };
+    }
   }
   if (!next.category && enriched.category) next.category = enriched.category;
 

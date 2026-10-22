@@ -83,6 +83,25 @@ export function hasImageCredentials(): boolean {
   return imageProvider() === 'flux' ? Boolean(env('FLUX_API_KEY')) : Boolean(env('OPENAI_API_KEY'));
 }
 
+/**
+ * Cabeceras de la API de Anthropic.
+ *
+ * `ANTHROPIC_WORKSPACE_ID` es opcional: sólo hace falta cuando la clave NO está
+ * vinculada a un workspace (claves de administración de la organización). En ese
+ * caso Anthropic responde 400 con "This API key is not scoped to a workspace,
+ * so this request must include the anthropic-workspace-id header".
+ */
+function anthropicHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'x-api-key': env('ANTHROPIC_API_KEY'),
+    'anthropic-version': '2023-06-01',
+  };
+  const workspace = env('ANTHROPIC_WORKSPACE_ID').trim();
+  if (workspace) headers['anthropic-workspace-id'] = workspace;
+  return headers;
+}
+
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 60_000): Promise<Response> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -173,11 +192,7 @@ export async function enrichProductText(input: {
       'https://api.anthropic.com/v1/messages',
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': env('ANTHROPIC_API_KEY'),
-          'anthropic-version': '2023-06-01',
-        },
+        headers: anthropicHeaders(),
         body: JSON.stringify({
           model,
           max_tokens: 1200,
@@ -465,11 +480,7 @@ export async function extractProductPageFields(input: {
       'https://api.anthropic.com/v1/messages',
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': env('ANTHROPIC_API_KEY'),
-          'anthropic-version': '2023-06-01',
-        },
+        headers: anthropicHeaders(),
         body: JSON.stringify({ model, max_tokens: 1000, temperature: 0.2, system: PAGE_EXTRACT_SYSTEM_PROMPT, messages: [{ role: 'user', content: userContext }] }),
       },
       55_000
@@ -479,8 +490,7 @@ export async function extractProductPageFields(input: {
     }
     const payload = await response.json();
     raw = parseLooseJson((payload?.content ?? []).map((block: any) => block?.text ?? '').join(''));
-  } else if (provider === 'groq') {
-    const response = await fetchWithTimeout(
+  } else if (provider === 'groq') {    const response = await fetchWithTimeout(
       'https://api.groq.com/openai/v1/chat/completions',
       {
         method: 'POST',
@@ -658,11 +668,7 @@ export async function synthesizeProductTitle(input: {
       'https://api.anthropic.com/v1/messages',
       {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': env('ANTHROPIC_API_KEY'),
-          'anthropic-version': '2023-06-01',
-        },
+        headers: anthropicHeaders(),
         body: JSON.stringify({
           model,
           max_tokens: 150,

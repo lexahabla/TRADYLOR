@@ -238,6 +238,12 @@ function isRateLimitError(message: string): boolean {
 /** Bucle del job: procesa el lote y persiste el avance tras cada producto. */
 async function runJob(state: PipelineJobState, targets: any[]): Promise<void> {
   const delay = jobDelayMs();
+  // El proveedor se estrecha al tipo que entiende la IA: si el estado guarda
+  // otra cosa (fichero editado a mano) se usa el proveedor por defecto.
+  const provider: 'openai' | 'anthropic' | 'groq' | undefined =
+    state.provider === 'openai' || state.provider === 'anthropic' || state.provider === 'groq'
+      ? state.provider
+      : undefined;
 
   try {
     for (const product of targets) {
@@ -254,7 +260,7 @@ async function runJob(state: PipelineJobState, targets: any[]): Promise<void> {
       let result = await runProductPipeline(product, {
         ignoreId: product.id,
         enrich: state.enrich,
-        provider: state.provider ?? undefined,
+        provider,
         dryRun: state.dryRun,
       });
 
@@ -267,7 +273,7 @@ async function runJob(state: PipelineJobState, targets: any[]): Promise<void> {
           result = await runProductPipeline(product, {
             ignoreId: product.id,
             enrich: state.enrich,
-            provider: state.provider ?? undefined,
+            provider,
             dryRun: state.dryRun,
           });
         }

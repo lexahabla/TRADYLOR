@@ -135,6 +135,9 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   proveedor por defecto en producción y tiene un límite de peticiones bajo**:
   si se agota, la ficha se queda con la plantilla local. Para esa situación el
   reproceso acepta `provider: 'openai' | 'anthropic' | 'groq'` por tanda).
+  `ANTHROPIC_WORKSPACE_ID` es opcional: sólo hace falta si la clave de Anthropic
+  NO está vinculada a un workspace (las claves de administración de la organización
+  lo exigen en la cabecera `anthropic-workspace-id`; sin él la API responde 400).
 - Claves de cada red de afiliación (opcional; activa los conectores correspondientes).
   `EBAY_COMMISSION_RATE` (opcional): % base de comisión EPN que usa el catálogo de
   eBay para la columna "Comisión %" (4-6%; por defecto 5).

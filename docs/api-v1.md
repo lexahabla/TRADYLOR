@@ -664,6 +664,22 @@ espera 20 s y **reintenta el producto una vez** antes de darlo por perdido
 (marcado con `ai_error`). Entre producto y producto hay una pausa de
 `PIPELINE_JOB_DELAY_MS` (por defecto `500` ms) para no saturar al proveedor.
 
+### Un fallo de IA no destruye una ficha ya enriquecida
+
+Si la Etapa 3 **no** consigue texto de IA (sin cuota, sin clave, error del
+proveedor) pero el producto ya tenía `ai_enriched:true`, se **conserva** su
+descripción, pros, contras, veredicto y ficha técnica: la plantilla local no
+pisa la redacción editorial anterior. El fallo queda registrado en `ai_error`
+(visible en el panel) y se limpia solo en el siguiente enriquecimiento exitoso.
+
+### Proveedores y credenciales
+
+| Proveedor | Variable | Notas |
+|---|---|---|
+| `openai` | `OPENAI_API_KEY` (+ `OPENAI_MODEL`) | Requiere saldo en la cuenta: sin créditos responde `429 insufficient_quota`. |
+| `anthropic` | `ANTHROPIC_API_KEY` (+ `ANTHROPIC_MODEL`) | Si la clave **no** está vinculada a un workspace, hace falta además `ANTHROPIC_WORKSPACE_ID` (cabecera `anthropic-workspace-id`); si falta, la API responde `400`. |
+| `groq` | `GROQ_API_KEY` | Plan gratuito con **límite diario de tokens** (`TPD`): al agotarse responde `429` y el lote se queda sin enriquecer. |
+
 ---
 
 ## 6. Reclasificación de productos por categoría (admin, interno)
