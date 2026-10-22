@@ -630,7 +630,8 @@ function smartSort(groups: Array<CrossMerchantGroup & { category: string; subcat
 // ─── Paso 7: Construcción de Product + stamping pipeline + upsert atómico ────
 async function buildAndUpsertProducts(
   groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }>,
-  dryRun: boolean
+  dryRun: boolean,
+  enrich = true
 ): Promise<{ upserted: number; updated: number; wouldUpsert: number; wouldUpdate: number; aiEnrichedText: number; aiEnrichedImages: number }> {
   const existingProducts = readProductsFromFile();
   const existingIds = new Set(existingProducts.map((p) => p.id));
@@ -763,7 +764,9 @@ async function buildAndUpsertProducts(
 
     // ─── Enriquecimiento con IA (texto + imagen) ────────────────────────────────
     // Solo enriquecer productos NUEVOS (no actualizaciones) y solo si hay credenciales
-    if (existingIndex === -1) {
+    // Con `?enrich=0` se publica el catálogo sin llamar a la IA (publicación
+    // rápida); el enriquecimiento se hace después por lotes con el pipeline.
+    if (existingIndex === -1 && enrich) {
       const hasTextAI = hasTextCredentials();
       const hasImageAI = hasImageCredentials();
 
@@ -876,6 +879,9 @@ export const POST: APIRoute = async ({ request, url }) => {
   if (!isValidApiToken(request)) return unauthorizedApiResponse();
 
   const dryRun = url.searchParams.get('dryRun') === '1';
+  // `?enrich=0` publica el catálogo sin llamar a la IA (muchos productos nuevos
+  // = muchos minutos de llamadas y límites de peticiones del proveedor).
+  const enrich = url.searchParams.get('enrich') !== '0';
 
   const startedAt = new Date().toISOString();
   const startTime = Date.now();
@@ -937,7 +943,7 @@ export const POST: APIRoute = async ({ request, url }) => {
     const sortedGroups = smartSort(withHSR);
 
     // 7. Build + upsert con stamping pipeline
-    const { upserted, updated, wouldUpsert, wouldUpdate, aiEnrichedText, aiEnrichedImages } = await buildAndUpsertProducts(sortedGroups, dryRun);
+    const { upserted, updated, wouldUpsert, wouldUpdate, aiEnrichedText, aiEnrichedImages } = await buildAndUpsertProducts(sortedGroups, dryRun, enrich);
     report.upserted = upserted;
     report.updated = updated;
     report.aiEnrichedText = aiEnrichedText;

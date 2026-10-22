@@ -80,6 +80,11 @@ export function getCatalogProducts(): Product[] {
     if (!probe) continue;
     // Respetar tombstones: un producto borrado desde el admin no debe reaparecer.
     if (deletedIds.has(probe.id)) continue;
+    // Auditoría "Test & Proof": un producto RECHAZADO no se publica en la web
+    // pública (sigue en el catálogo y en el panel con sus motivos, para que el
+    // curador lo arregle). Antes se publicaban igual y tylos llegaron a la
+    // portada ("Besos y abrazos mochila negra").
+    if (String((entry as Product).audit_status || '').trim() === 'rejected') continue;
 
     const live = entry as Product;
     const curated = staticProducts.find((sp) => sp.id === probe.id);

@@ -153,6 +153,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\normalize-tags.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\pipeline\index.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\sections.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\synthesize-title.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\tombstones\index.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\upload-image.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\users\[id].ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\users\[id]\avatar.ts

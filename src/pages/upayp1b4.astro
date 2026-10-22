@@ -582,6 +582,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
         <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
         <button type="button" class="btn-danger btn-sm" id="btnProdDeleteAll" title="Elimina TODOS los productos del catálogo (purga completa). Úsalo para resincronizar desde cero.">🗑️ Vaciar Catálogo</button>
+        <button type="button" class="btn-secondary btn-sm" id="btnProdClearTombstones" title="Limpia los tombstones (ids bloqueados) para que los productos borrados puedan volver a publicarse">🧹 Limpiar Tombstones</button>
       </div>
 
 
@@ -6622,6 +6623,23 @@ function renderTableRows(products) {
           showAlert('success', 'Catálogo vaciado', `${data.deleted} producto(s) eliminados. El catálogo está vacío.`);
         } else {
           showAlert('warning', 'Catálogo vaciado', data.message || 'No se pudo vaciar el catálogo.');
+        }
+      } catch {
+        showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');
+      }
+    });
+
+    // ── Limpiar tombstones (deshacer un vaciado de catálogo) ────────────────
+    document.getElementById('btnProdClearTombstones')?.addEventListener('click', async () => {
+      if (!confirm('¿Limpiar los tombstones del catálogo? Los productos borrados (por ejemplo tras un "Vaciar Catálogo") volverían a poder publicarse en el build del catálogo.')) return;
+      showAlert('loading', 'Limpiando tombstones...', 'Quitando los ids bloqueados del catálogo.');
+      try {
+        const res = await fetch('/api/admin/tombstones', { method: 'DELETE' });
+        const data = await res.json();
+        if (data.success) {
+          showAlert('success', 'Tombstones limpiados', data.message || `${data.cleared || 0} tombstone(s) eliminados.`);
+        } else {
+          showAlert('warning', 'Tombstones', data.message || 'No se pudieron limpiar los tombstones.');
         }
       } catch {
         showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');

@@ -312,8 +312,20 @@ de `/api/v1/*`).
 | Query param | Tipo | Descripción |
 |---|---|---|
 | `dryRun` | `1` | Modo simulación: recorre todo el proceso y devuelve el reporte **sin escribir** en `products.json`. |
+| `enrich` | `0` | Publica el catálogo **sin llamar a la IA** (texto e imagen). Con muchos productos nuevos, el enriquecimiento puede tardar minutos y chocar con los límites de peticiones del proveedor; con `enrich=0` la publicación es inmediata y el enriquecimiento se hace después por lotes con `POST /api/admin/pipeline` (`mode:'reprocess'`). |
 
 No acepta body. Devuelve `200` con el reporte del proceso o `500` si falla.
+
+> **Tombstones.** Los productos borrados desde el panel quedan bloqueados para
+> siempre (tombstone en `deleted-product-ids.json`): el build no puede volver a
+> publicarlos. Para deshacer un vaciado de catálogo hay que limpiar los
+> tombstones (`DELETE /api/admin/tombstones`, sesión de admin) —si no, el
+> catálogo se queda bloqueado y no crece.
+>
+> **Productos rechazados.** Los productos con `audit_status:'rejected'` se
+> persisten (alimentan las métricas de transparencia y el panel) pero **no se
+> publican en la web pública**: el catálogo público sólo muestra los aprobados
+> (y los que aún no han pasado por la auditoría).
 
 ### Proceso
 
@@ -519,6 +531,25 @@ Respuesta (dedupe): `{ success, mode, dryRun, groups, removed, removedIds[], det
 La purga conserva la ficha **más completa** de cada grupo (y, a igualdad, el id
 canónico sin sufijo `-2`, para no romper las URLs ya publicadas) y deja
 tombstone en `deleted-product-ids.json` para que no reaparezcan.
+
+> La purga deja tombstones: si luego se limpia el catálogo con «Vaciar
+> Catálogo» hay que limpiar también los tombstones (§5.1) o el catálogo no
+> podrá volver a publicar esos productos.
+
+---
+
+## 5.1 Tombstones del catálogo (admin, interno)
+
+Endpoint **protegido por sesión de administrador** (cookie
+`tradylor_admin_session`).
+
+| Método | Descripción |
+|---|---|
+| `GET /api/admin/tombstones` | `{ success, count, ids }` — ids bloqueados para el build/import. |
+| `DELETE /api/admin/tombstones` | `{ success, cleared, message }` — limpia los tombstones (conserva los ids integrados). |
+
+También disponible desde el panel admin (`/upayp1b4` → botón «🧹 Limpiar
+Tombstones»).
 
 ---
 

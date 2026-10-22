@@ -47,3 +47,18 @@ export function removeDeletedId(id: string): void {
   if (next.length === ids.length) return;
   writeJsonArrayFile(DELETED_FILE, next);
 }
+
+/**
+ * Limpia los tombstones (ids de productos que ya no deben reaparecer).
+ * Se usa para "deshacer" un vaciado de catálogo: sin esto, los productos
+ * borrados quedan bloqueados para siempre y el build del catálogo vuelve a
+ * publicarlos. Los ids integrados (`BUILTIN_DELETED`) se conservan siempre.
+ * Devuelve cuántos tombstones se han quitado.
+ */
+export function clearDeletedIds(): number {
+  const ids = readDeletedIds();
+  const removable = ids.filter((id) => !BUILTIN_DELETED.includes(id));
+  if (!removable.length) return 0;
+  writeJsonArrayFile(DELETED_FILE, BUILTIN_DELETED.slice());
+  return removable.length;
+}
