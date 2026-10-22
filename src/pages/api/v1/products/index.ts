@@ -2,7 +2,7 @@
  * ==============================================================================
  * TRADYLOR - API PÚBLICA v1: FEED DEL CATÁLOGO (para n8n y automatizaciones)
  * ==============================================================================
- * GET /api/v1/products?category=...&minPrice=...&maxPrice=...&limit=...
+ * GET /api/v1/products?category=...&minPrice=...&maxPrice=...&limit=...&page=...
  *
  * Autenticación: header  Authorization: Bearer <TRADYLOR_API_TOKEN>
  * (configurar TRADYLOR_API_TOKEN en el archivo .env del servidor)
@@ -10,6 +10,10 @@
  * Respuesta: catálogo activo con URLs internas de detalle y de salida
  * enmascarada (/out/[id]), listo para que n8n evalúe rentabilidad y decida
  * qué promocionar o retirar.
+ * 
+ * Paginación: 
+ *   - page: número de página (1-indexed, default: 1)
+ *   - limit: productos por página (default: 24, max: 100)
  * ==============================================================================
  */
 
@@ -27,15 +31,22 @@ export const GET: APIRoute = ({ request, url }) => {
   const category = url.searchParams.get('category')?.toLowerCase();
   const minPrice = Number(url.searchParams.get('minPrice')) || undefined;
   const maxPrice = Number(url.searchParams.get('maxPrice')) || undefined;
-  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 50, 1), 200);
+  const limit = Math.min(Math.max(Number(url.searchParams.get('limit')) || 24, 1), 100);
+  const page = Math.max(Number(url.searchParams.get('page')) || 1, 1);
 
   let products = getCatalogProducts();
   if (category) products = products.filter((p) => (p.category ?? '').toLowerCase() === category);
   if (minPrice != null) products = products.filter((p) => p.price >= minPrice);
   if (maxPrice != null) products = products.filter((p) => p.price <= maxPrice);
 
+  const totalProducts = products.length;
+  const totalPages = Math.ceil(totalProducts / limit);
+  const startIndex = (page - 1) * limit;
+  const endIndex = Math.min(startIndex + limit, totalProducts);
+  const paginatedProducts = products.slice(startIndex, endIndex);
+
   const origin = new URL(request.url).origin;
-  const feed = products.slice(0, limit).map((p) => ({
+  const feed = paginatedProducts.map((p) => ({
     id: p.id,
     title: p.title,
     description: p.description,
@@ -53,7 +64,15 @@ export const GET: APIRoute = ({ request, url }) => {
   }));
 
   return new Response(
-    JSON.stringify({ success: true, total: feed.length, generatedAt: new Date().toISOString(), products: feed }),
+    JSON.stringify({ 
+      success: true, 
+      total: totalProducts,
+      page,
+      limit,
+      totalPages,
+      generatedAt: new Date().toISOString(), 
+      products: feed 
+    }),
     { status: 200, headers: jsonHeaders },
   );
 };

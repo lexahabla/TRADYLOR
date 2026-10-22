@@ -66,7 +66,8 @@ const BUILD_CONFIG = {
     'patinete electrico',
   ],
 
-  PER_NETWORK_LIMIT: 50,
+  // Sin límite por red: ingerir todo lo disponible
+  PER_NETWORK_LIMIT: 1000,
 
   MIN_PRICE: 1,
   MIN_TITLE_LENGTH: 5,
@@ -78,10 +79,25 @@ const BUILD_CONFIG = {
 
   TITLE_SIMILARITY_THRESHOLD: 0.75,
   // Sin límite duro; se reporta truncated si hay muchos
-  MAX_CROSS_MERCHANT_GROUPS: 1000,
+  MAX_CROSS_MERCHANT_GROUPS: 2000,
+
+  // Categorías que se consideran "purgadas" o sin valor comercial
+  EXCLUDED_CATEGORIES: [
+    'recambios para electrodomésticos',
+    'recambios electrodomesticos',
+    'repuestos electrodomésticos',
+    'repuestos electrodomesticos',
+  ],
 } as const;
 
 // ─── Interfaces internas ────────────────────────────────────────────────────
+interface CategoryBreakdown {
+  category: string;
+  categoryId: string;
+  subcategories: Record<string, { name: string; id: string; count: number }>;
+  total: number;
+}
+
 interface BuildReport {
   success: boolean;
   startedAt: string;
@@ -103,6 +119,10 @@ interface BuildReport {
   wouldUpsert?: number;
   wouldUpdate?: number;
   errors: string[];
+  // Nuevo: desglose detallado por categorías
+  categoryBreakdown: CategoryBreakdown[];
+  // Productos filtrados por motivo
+  filteredByReason: Record<string, number>;
 }
 
 interface CanonicalWithMeta extends CanonicalAffiliateProduct {
@@ -327,11 +347,26 @@ async function ingestAllNetworks(): Promise<{
 }
 
 // ─── Paso 2: Filtro de calidad ─────────────────────────────────────────────
-function qualityFilter(products: CanonicalWithMeta[]): CanonicalWithMeta[] {
+function qualityFilter(products: CanonicalWithMeta[], filterStats: Record<string, number>): CanonicalWithMeta[] {
   return products.filter((p) => {
-    if (!isValidTitle(p.title)) return false;
-    if (!isValidPrice(p.price)) return false;
-    if (BUILD_CONFIG.REQUIRE_IMAGE && !hasValidImage(p.mainImage)) return false;
+    if (!isValidTitle(p.title)) {
+      filterStats.invalid_title = (filterStats.invalid_title || 0) + 1;
+      return false;
+    }
+    if (!isValidPrice(p.price)) {
+      filterStats.invalid_price = (filterStats.invalid_price || 0) + 1;
+      return false;
+    }
+    if (BUILD_CONFIG.REQUIRE_IMAGE && !hasValidImage(p.mainImage)) {
+      filterStats.no_image = (filterStats.no_image || 0) + 1;
+      return false;
+    }
+    // Filtrar categorías excluidas (purgadas sin valor comercial)
+    const catLower = (p.category || '').toLowerCase().trim();
+    if (catLower && BUILD_CONFIG.EXCLUDED_CATEGORIES.some((ex) => catLower.includes(ex))) {
+      filterStats.excluded_category = (filterStats.excluded_category || 0) + 1;
+      return false;
+    }
     // Limpiar guiones
     if (p.description?.trim() === '—' || p.description?.trim() === '-') p.description = '';
     if (p.brand?.trim() === '—' || p.brand?.trim() === '-') p.brand = undefined;
@@ -439,11 +474,15 @@ function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantG
 async function autoCategorize(groups: CrossMerchantGroup[]): Promise<{
   uncategorized: number;
   categorizedGroups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string }>;
+  categoryBreakdown: CategoryBreakdown[];
 }> {
   const existingCategories = getCategories();
   const rootCategories = existingCategories.filter((c) => !c.parentId);
   const categorizedGroups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string }> = [];
   let uncategorized = 0;
+
+  // Mapa para construir el breakdown: categoryId -> { categoryName, subcategories: Map<subId, {name, count}> }
+  const breakdownMap = new Map<string, { category: string; categoryId: string; subcategories: Map<string, { name: string; id: string; count: number }> }>();
 
   for (const group of groups) {
     const text = `${group.canonical.title} ${group.canonical.description} ${group.canonical.category}`.toLowerCase();
@@ -459,6 +498,11 @@ async function autoCategorize(groups: CrossMerchantGroup[]): Promise<{
     if (matchedRoot) {
       categoryName = matchedRoot.name;
       categoryId = matchedRoot.id;
+
+      // Inicializar en breakdown si no existe
+      if (!breakdownMap.has(categoryId)) {
+        breakdownMap.set(categoryId, { category: categoryName, categoryId, subcategories: new Map() });
+      }
 
       // 2) Buscar mejor subcategoría existente bajo esta root por keywords
       const subs = existingCategories.filter((c) => c.parentId === categoryId);
@@ -478,6 +522,14 @@ async function autoCategorize(groups: CrossMerchantGroup[]): Promise<{
           subcategoryId = bestSub.cat.id;
         }
       }
+
+      // Si no hay subcategoría específica, usar "General" o la primera disponible
+      const subKey = subcategoryId || 'general';
+      const subName = subcategoryName || 'General';
+      const catBreakdown = breakdownMap.get(categoryId)!;
+      const existing = catBreakdown.subcategories.get(subKey) || { name: subName, id: subcategoryId || '', count: 0 };
+      existing.count++;
+      catBreakdown.subcategories.set(subKey, existing);
     }
 
     // 3) Si no hay match de root → sin categoría
@@ -495,7 +547,27 @@ async function autoCategorize(groups: CrossMerchantGroup[]): Promise<{
     });
   }
 
-  return { uncategorized, categorizedGroups };
+  // Convertir breakdownMap a array CategoryBreakdown[]
+  const categoryBreakdown: CategoryBreakdown[] = [];
+  for (const [catId, data] of breakdownMap.entries()) {
+    const subcategories: Record<string, { name: string; id: string; count: number }> = {};
+    let total = 0;
+    for (const [subKey, subData] of data.subcategories.entries()) {
+      subcategories[subKey] = subData;
+      total += subData.count;
+    }
+    categoryBreakdown.push({
+      category: data.category,
+      categoryId: data.categoryId,
+      subcategories,
+      total,
+    });
+  }
+
+  // Ordenar por total descendente
+  categoryBreakdown.sort((a, b) => b.total - a.total);
+
+  return { uncategorized, categorizedGroups, categoryBreakdown };
 }
 
 // ─── Paso 5: Detección ofertas estrella (HSR) ───────────────────────────────
@@ -779,6 +851,8 @@ export const POST: APIRoute = async ({ request, url }) => {
     aiEnrichedText: 0,
     aiEnrichedImages: 0,
     errors: [],
+    categoryBreakdown: [],
+    filteredByReason: {},
   };
 
   try {
@@ -789,9 +863,11 @@ export const POST: APIRoute = async ({ request, url }) => {
     report.rawTotal = canonicalProducts.length;
     report.errors.push(...ingestErrors);
 
-    // 2. Filtro calidad
-    const qualityProducts = qualityFilter(canonicalProducts);
+    // 2. Filtro calidad con estadísticas
+    const filterStats: Record<string, number> = {};
+    const qualityProducts = qualityFilter(canonicalProducts, filterStats);
     report.afterQualityFilter = qualityProducts.length;
+    report.filteredByReason = filterStats;
 
     // 3. Deduplicación cross-merchant
     const groups = deduplicateCrossMerchant(qualityProducts);
@@ -801,9 +877,10 @@ export const POST: APIRoute = async ({ request, url }) => {
       report.truncated = groups.length - BUILD_CONFIG.MAX_CROSS_MERCHANT_GROUPS;
     }
 
-    // 4. Categorización (solo existentes)
-    const { uncategorized, categorizedGroups } = await autoCategorize(groups);
+    // 4. Categorización (solo existentes) con breakdown
+    const { uncategorized, categorizedGroups, categoryBreakdown } = await autoCategorize(groups);
     report.uncategorized = uncategorized;
+    report.categoryBreakdown = categoryBreakdown;
 
     // 5. HSR
     const withHSR = detectHSR(categorizedGroups);
@@ -832,6 +909,25 @@ export const POST: APIRoute = async ({ request, url }) => {
         // no romper si fallan métricas
       }
     }
+
+    // Log resumen estructurado en consola
+    console.log('[BuildCatalog] ===== BUILD SUMMARY REPORT =====');
+    console.log(`[BuildCatalog] Total productos procesados: ${report.rawTotal}`);
+    console.log(`[BuildCatalog] Tras filtro calidad: ${report.afterQualityFilter}`);
+    console.log(`[BuildCatalog] Filtrados:`, filterStats);
+    console.log(`[BuildCatalog] Grupos cross-merchant: ${report.crossMerchantGroups} (duplicados resueltos: ${report.duplicatesResolved})`);
+    console.log(`[BuildCatalog] Sin categoría: ${report.uncategorized}`);
+    console.log(`[BuildCatalog] Ofertas estrella (HSR): ${report.hsrDetected}`);
+    console.log(`[BuildCatalog] Nuevos: ${report.upserted} · Actualizados: ${report.updated}`);
+    console.log(`[BuildCatalog] IA - Texto: ${report.aiEnrichedText} · Imágenes: ${report.aiEnrichedImages}`);
+    console.log('[BuildCatalog] --- Distribución por categorías ---');
+    for (const cat of categoryBreakdown) {
+      console.log(`[BuildCatalog]   ${cat.category} (${cat.total}):`);
+      for (const [subKey, subData] of Object.entries(cat.subcategories)) {
+        console.log(`[BuildCatalog]     - ${subData.name}: ${subData.count}`);
+      }
+    }
+    console.log('[BuildCatalog] =================================');
 
     report.success = true;
   } catch (error) {

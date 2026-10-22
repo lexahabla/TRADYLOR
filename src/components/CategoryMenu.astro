@@ -641,27 +641,43 @@ const hueOf = (index: number) => (index * 43) % 360;
     display: flex;
     align-items: center;
     gap: 0.65rem;
-    padding: 0.45rem 0.55rem;
-    border-radius: 10px;
-    border: 1px solid transparent;
+    padding: 0.5rem 0.6rem;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
     text-decoration: none;
     color: #e5e7eb;
-    transition: background 0.15s ease, border-color 0.15s ease;
+    background: rgba(255, 255, 255, 0.03);
+    transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
   }
 
   .cm-drop-item:hover {
-    background: rgba(59, 130, 246, 0.14);
-    border-color: rgba(96, 165, 250, 0.28);
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.18) 0%, rgba(37, 99, 235, 0.12) 100%);
+    border-color: rgba(96, 165, 250, 0.4);
+    transform: translateX(2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  }
+
+  .cm-drop-item:focus-visible {
+    outline: none;
+    border-color: rgba(96, 165, 250, 0.6);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
   }
 
   .cm-drop-item img {
-    width: 42px;
-    height: 42px;
-    border-radius: 9px;
-    object-fit: cover;
-    background: #f8fafc;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    object-fit: contain;
+    object-position: center;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
     border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.35rem;
     flex-shrink: 0;
+    transition: transform 0.25s ease;
+  }
+
+  .cm-drop-item:hover img {
+    transform: scale(1.03);
   }
 
   .cm-drop-body {
@@ -671,13 +687,14 @@ const hueOf = (index: number) => (index * 43) % 360;
 
   .cm-drop-title {
     display: block;
-    font-size: 0.78rem;
+    font-size: 0.8rem;
     font-weight: 700;
-    line-height: 1.3;
+    line-height: 1.35;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: color 0.15s ease;
+    color: #f1f5f9;
+    transition: color 0.18s ease;
   }
 
   .cm-drop-item:hover .cm-drop-title {
@@ -687,8 +704,8 @@ const hueOf = (index: number) => (index * 43) % 360;
   .cm-drop-meta {
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    margin-top: 0.12rem;
+    gap: 0.4rem;
+    margin-top: 0.15rem;
     font-size: 0.7rem;
     line-height: 1.3;
   }
@@ -697,10 +714,14 @@ const hueOf = (index: number) => (index * 43) % 360;
     font-family: var(--font-heading, inherit);
     font-weight: 800;
     color: #60a5fa;
+    background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 
   .cm-drop-sep {
-    color: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.2);
   }
 
   .cm-drop-merchant {
@@ -709,17 +730,19 @@ const hueOf = (index: number) => (index * 43) % 360;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 8rem;
   }
 
   .cm-drop-discount {
-    padding: 0.12rem 0.5rem;
-    font-size: 0.66rem;
+    padding: 0.15rem 0.55rem;
+    font-size: 0.68rem;
     font-weight: 800;
     color: #34d399;
-    background: rgba(16, 185, 129, 0.14);
-    border: 1px solid rgba(52, 211, 153, 0.3);
+    background: rgba(16, 185, 129, 0.16);
+    border: 1px solid rgba(52, 211, 153, 0.35);
     border-radius: 999px;
     flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
   }
 
   /* Etiquetas de los accesos: se ocultan cuando la barra queda muy justa */

@@ -69,8 +69,8 @@ try {
 // primera pintura de la tabla; el cliente recalcula con cada recarga vía API.
 initialProducts = enrichProductsForAdmin(initialProducts as Product[]);
 
-// Paginación SSR: 50 productos por página
-const PRODUCTS_PER_PAGE = 50;
+// Paginación SSR: 25 productos por página
+const PRODUCTS_PER_PAGE = 25;
 const initialTotalProducts = initialProducts.length;
 const initialTotalPages = Math.ceil(initialTotalProducts / PRODUCTS_PER_PAGE);
 const initialPageProducts = initialProducts.slice(0, PRODUCTS_PER_PAGE);
@@ -584,6 +584,34 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <button type="button" class="btn-danger btn-sm" id="btnProdDeleteAll" title="Elimina TODOS los productos del catálogo (purga completa). Úsalo para resincronizar desde cero.">🗑️ Vaciar Catálogo</button>
       </div>
 
+
+      <!-- Paginación superior de la tabla de productos -->
+      <div id="productsPaginationTop" class="products-pagination" {initialTotalPages <= 1 ? 'hidden' : ''}>
+        <div class="pagination-info">
+          <span id="paginationTotalTop">{initialTotalProducts} producto{initialTotalProducts !== 1 ? 's' : ''} (página 1 de {initialTotalPages})</span>
+        </div>
+        <nav class="pagination-controls" aria-label="Paginación del catálogo">
+          <button type="button" id="paginationPrevTop" class="btn-secondary btn-sm" disabled aria-label="Página anterior">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            Anterior
+          </button>
+          <div class="pagination-pages" id="paginationPagesTop" role="group" aria-label="Números de página">
+            {Array.from({ length: Math.min(initialTotalPages, 5) }, (_, i) => i + 1).map((pageNum) => (
+              <button type="button" class={`pagination-page${pageNum === 1 ? ' active' : ''}`} data-page={pageNum} aria-label={`Página ${pageNum}`} aria-current={pageNum === 1 ? 'page' : undefined}>{pageNum}</button>
+            ))}
+            {initialTotalPages > 5 && (
+              <>
+                <span class="pagination-ellipsis" aria-hidden="true">…</span>
+                <button type="button" class="pagination-page" data-page={initialTotalPages} aria-label={`Página ${initialTotalPages}`}>{initialTotalPages}</button>
+              </>
+            )}
+          </div>
+          <button type="button" id="paginationNextTop" class="btn-secondary btn-sm" {initialTotalPages <= 1 ? 'disabled' : ''} aria-label="Página siguiente">
+            Siguiente
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
+          </button>
+        </nav>
+      </div>
 
       <div class="products-table-responsive">
         <table class="products-table" id="productsTable">
@@ -1448,6 +1476,34 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   )}
 </Layout>
 
+<!-- Modal para crear sección con productos seleccionados -->
+<div class="admin-modal" id="createSectionModal" hidden role="dialog" aria-modal="true" aria-labelledby="createSectionModalTitle">
+  <div class="admin-modal-backdrop" data-create-section-close></div>
+  <div class="admin-modal-dialog">
+    <button type="button" class="admin-modal-close" data-create-section-close aria-label="Cerrar modal">×</button>
+    <h2 class="admin-modal-title" id="createSectionModalTitle">Crear nueva sección</h2>
+    <p class="admin-modal-text">Agrupa los productos seleccionados en una sección temática para mostrar en la web.</p>
+    <div class="admin-modal-field">
+      <span>Título de la sección <span aria-hidden="true">*</span></span>
+      <input type="text" id="createSectionTitle" placeholder="Ej: Mejores Auriculares Bluetooth 2024" maxlength="80" required />
+    </div>
+    <div class="admin-modal-field">
+      <span>Descripción (opcional)</span>
+      <textarea id="createSectionDescription" placeholder="Breve descripción que aparecerá en la sección (máx. 200 caracteres)" maxlength="200" rows="3"></textarea>
+    </div>
+    <div class="admin-modal-field">
+      <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:600;">
+        <input type="checkbox" id="createSectionPublished" checked /> Publicar en la web inmediatamente
+      </label>
+    </div>
+    <div class="admin-modal-status" id="createSectionStatus" hidden></div>
+    <div class="admin-modal-actions">
+      <button type="button" class="btn-secondary btn-sm" data-create-section-close>Cancelar</button>
+      <button type="button" class="btn-primary btn-sm" id="createSectionConfirm">Crear sección</button>
+    </div>
+  </div>
+</div>
+
 <!-- Client-side Script para interacción dinámica del panel -->
 <script is:inline define:vars={{ associateTag: getAmazonAssociateTag(), apiToken: import.meta.env.TRADYLOR_API_TOKEN ?? process.env.TRADYLOR_API_TOKEN }}>
   window.TRADYLOR_ASSOCIATE_TAG = associateTag;
@@ -1669,7 +1725,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     let currentProducts = [];
     // Paginación del catálogo de productos
     let currentPage = 1;
-    const PRODUCTS_PER_PAGE = 50;
+    const PRODUCTS_PER_PAGE = 25;
     let filteredProducts = [];
     /**
      * Caché de `externalId → estado de importación` del catálogo AliExpress
@@ -3182,66 +3238,85 @@ function renderTableRows(products) {
 
     // ─── Paginación del catálogo de productos ─────────────────────────────────
     function updatePaginationControls() {
+      // Controles de paginación inferior (existentes)
       const paginationEl = document.getElementById('productsPagination');
       const paginationPages = document.getElementById('paginationPages');
       const paginationPrev = document.getElementById('paginationPrev');
       const paginationNext = document.getElementById('paginationNext');
 
-      if (!paginationEl || !paginationPages || !paginationPrev || !paginationNext) return;
+      // Controles de paginación superior (nuevos)
+      const paginationElTop = document.getElementById('productsPaginationTop');
+      const paginationPagesTop = document.getElementById('paginationPagesTop');
+      const paginationPrevTop = document.getElementById('paginationPrevTop');
+      const paginationNextTop = document.getElementById('paginationNextTop');
 
       const totalProducts = filteredProducts.length;
       const totalPages = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
 
       if (totalPages <= 1) {
-        paginationEl.hidden = true;
+        if (paginationEl) paginationEl.hidden = true;
+        if (paginationElTop) paginationElTop.hidden = true;
         return;
       }
 
-      paginationEl.hidden = false;
+      // Mostrar ambos
+      if (paginationEl) paginationEl.hidden = false;
+      if (paginationElTop) paginationElTop.hidden = false;
 
-      // Botones prev/next
-      paginationPrev.disabled = currentPage <= 1;
-      paginationNext.disabled = currentPage >= totalPages;
+      // Función para actualizar un conjunto de controles
+      const updateControls = (pagesEl, prevEl, nextEl, totalElId) => {
+        if (!pagesEl || !prevEl || !nextEl) return;
 
-      // Generar números de página
-      let pagesHtml = '';
-      const maxVisiblePages = 5;
-      let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-      let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+        prevEl.disabled = currentPage <= 1;
+        nextEl.disabled = currentPage >= totalPages;
 
-      if (endPage - startPage + 1 < maxVisiblePages) {
-        startPage = Math.max(1, endPage - maxVisiblePages + 1);
-      }
+        let pagesHtml = '';
+        const maxVisiblePages = 5;
+        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
-      if (startPage > 1) {
-        pagesHtml += `<button type="button" class="pagination-page" data-page="1" aria-label="Página 1">1</button>`;
-        if (startPage > 2) {
-          pagesHtml += `<span class="pagination-ellipsis" aria-hidden="true">…</span>`;
+        if (endPage - startPage + 1 < maxVisiblePages) {
+          startPage = Math.max(1, endPage - maxVisiblePages + 1);
         }
-      }
 
-      for (let i = startPage; i <= endPage; i++) {
-        pagesHtml += `<button type="button" class="pagination-page${i === currentPage ? ' active' : ''}" data-page="${i}" aria-label="Página ${i}"${i === currentPage ? ' aria-current="page"' : ''}>${i}</button>`;
-      }
-
-      if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-          pagesHtml += `<span class="pagination-ellipsis" aria-hidden="true">…</span>`;
-        }
-        pagesHtml += `<button type="button" class="pagination-page" data-page="${totalPages}" aria-label="Página ${totalPages}">${totalPages}</button>`;
-      }
-
-      paginationPages.innerHTML = pagesHtml;
-
-      // Event listeners para botones de página
-      paginationPages.querySelectorAll('.pagination-page').forEach((btn) => {
-        btn.addEventListener('click', () => {
-          const page = parseInt(btn.getAttribute('data-page'), 10);
-          if (!Number.isNaN(page) && page !== currentPage) {
-            goToPage(page);
+        if (startPage > 1) {
+          pagesHtml += `<button type="button" class="pagination-page" data-page="1" aria-label="Página 1">1</button>`;
+          if (startPage > 2) {
+            pagesHtml += `<span class="pagination-ellipsis" aria-hidden="true">…</span>`;
           }
+        }
+
+        for (let i = startPage; i <= endPage; i++) {
+          pagesHtml += `<button type="button" class="pagination-page${i === currentPage ? ' active' : ''}" data-page="${i}" aria-label="Página ${i}"${i === currentPage ? ' aria-current="page"' : ''}>${i}</button>`;
+        }
+
+        if (endPage < totalPages) {
+          if (endPage < totalPages - 1) {
+            pagesHtml += `<span class="pagination-ellipsis" aria-hidden="true">…</span>`;
+          }
+          pagesHtml += `<button type="button" class="pagination-page" data-page="${totalPages}" aria-label="Página ${totalPages}">${totalPages}</button>`;
+        }
+
+        pagesEl.innerHTML = pagesHtml;
+
+        pagesEl.querySelectorAll('.pagination-page').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const page = parseInt(btn.getAttribute('data-page'), 10);
+            if (!Number.isNaN(page) && page !== currentPage) {
+              goToPage(page);
+            }
+          });
         });
-      });
+
+        // Actualizar texto informativo
+        const totalEl = document.getElementById(totalElId);
+        if (totalEl) {
+          totalEl.textContent = `${totalProducts} producto${totalProducts !== 1 ? 's' : ''} (página ${currentPage} de ${totalPages})`;
+        }
+      };
+
+      updateControls(paginationPages, paginationPrev, paginationNext, 'paginationTotal');
+      updateControls(paginationPagesTop, paginationPrevTop, paginationNextTop, 'paginationTotalTop');
     }
 
     function goToPage(page) {
@@ -3256,11 +3331,16 @@ function renderTableRows(products) {
       }
     }
 
-    // Event listeners para botones prev/next
+    // Event listeners para botones prev/next (ambos conjuntos)
     const paginationPrev = document.getElementById('paginationPrev');
     const paginationNext = document.getElementById('paginationNext');
+    const paginationPrevTop = document.getElementById('paginationPrevTop');
+    const paginationNextTop = document.getElementById('paginationNextTop');
+
     paginationPrev?.addEventListener('click', () => goToPage(currentPage - 1));
     paginationNext?.addEventListener('click', () => goToPage(currentPage + 1));
+    paginationPrevTop?.addEventListener('click', () => goToPage(currentPage - 1));
+    paginationNextTop?.addEventListener('click', () => goToPage(currentPage + 1));
     prodFCat?.addEventListener('change', () => {
       // El filtro de subcategoría se repliega sobre la categoría elegida.
       syncSubcatFilter();
@@ -3464,29 +3544,84 @@ function renderTableRows(products) {
       showAlert(failed ? 'warning' : 'success', 'Enriquecimiento masivo finalizado', `${ok} actualizado${ok===1?'':'s'} · ${failed} con error.`);
     });
 
-    btnProdMakeSection?.addEventListener('click', async () => {
+    btnProdMakeSection?.addEventListener('click', () => {
       const ids = Array.from(selectedProductIds);
       if (!ids.length) { showAlert('warning', 'Sin selección', 'Selecciona al menos un producto del catálogo.'); return; }
-      const title = window.prompt('Título de la nueva sección:');
-      if (!title || !title.trim()) return;
-      const description = window.prompt('Descripción opcional (vacío para omitir):') || '';
-      const published = window.confirm('¿Publicar en la web ahora?');
+      openCreateSectionModal(ids);
+    });
+
+    // Modal crear sección
+    const createSectionModal = document.getElementById('createSectionModal');
+    const createSectionTitle = document.getElementById('createSectionTitle');
+    const createSectionDescription = document.getElementById('createSectionDescription');
+    const createSectionPublished = document.getElementById('createSectionPublished');
+    const createSectionConfirm = document.getElementById('createSectionConfirm');
+    const createSectionStatus = document.getElementById('createSectionStatus');
+    let createSectionProductIds: string[] = [];
+
+    function openCreateSectionModal(productIds: string[]) {
+      if (!createSectionModal) return;
+      createSectionProductIds = productIds;
+      createSectionTitle.value = '';
+      createSectionDescription.value = '';
+      createSectionPublished.checked = true;
+      createSectionStatus.hidden = true;
+      createSectionStatus.textContent = '';
+      createSectionStatus.className = 'admin-modal-status';
+      createSectionModal.hidden = false;
+      createSectionTitle.focus();
+    }
+
+    function closeCreateSectionModal() {
+      if (!createSectionModal) return;
+      createSectionModal.hidden = true;
+      createSectionProductIds = [];
+    }
+
+    createSectionModal?.querySelectorAll('[data-create-section-close]').forEach((el) => {
+      el.addEventListener('click', closeCreateSectionModal);
+    });
+
+    createSectionConfirm?.addEventListener('click', async () => {
+      const title = createSectionTitle.value.trim();
+      if (!title) {
+        createSectionStatus.textContent = 'El título es obligatorio';
+        createSectionStatus.className = 'admin-modal-status is-error';
+        createSectionStatus.hidden = false;
+        createSectionTitle.focus();
+        return;
+      }
+      const description = createSectionDescription.value.trim();
+      const published = createSectionPublished.checked;
+
+      createSectionConfirm.disabled = true;
+      createSectionConfirm.textContent = 'Creando…';
+      createSectionStatus.hidden = true;
+
       try {
         const res = await fetch('/api/admin/sections', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'create', title: title.trim(), description: description.trim(), productIds: ids, published }),
+          body: JSON.stringify({ action: 'create', title, description, productIds: createSectionProductIds, published }),
         });
         const data = await res.json();
         if (data.success) {
           selectedProductIds.clear();
           updateProdSelCount();
           await loadSectionsAdmin();
-          showAlert('success', 'Sección creada', `${title.trim()} añadida a las secciones de la web.`);
+          closeCreateSectionModal();
+          showAlert('success', 'Sección creada', `${title} añadida a las secciones de la web.`);
         } else {
-          showAlert('error', 'Error', data.message || 'No se pudo crear la sección.');
+          createSectionStatus.textContent = data.message || 'No se pudo crear la sección.';
+          createSectionStatus.className = 'admin-modal-status is-error';
+          createSectionStatus.hidden = false;
         }
       } catch {
-        showAlert('error', 'Error de red', 'No se pudo crear la sección.');
+        createSectionStatus.textContent = 'Error de red. No se pudo crear la sección.';
+        createSectionStatus.className = 'admin-modal-status is-error';
+        createSectionStatus.hidden = false;
+      } finally {
+        createSectionConfirm.disabled = false;
+        createSectionConfirm.textContent = 'Crear sección';
       }
     });
 

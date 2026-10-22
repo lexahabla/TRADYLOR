@@ -307,6 +307,11 @@ const radarPayload = {
   <!-- Columna de imagen: sólo la imagen principal (única con enlace a ficha). -->
   <div class="image-col">
   <div class="image-wrapper">
+    {discountPercent !== null && discountPercent > 0 && (
+      <span class="discount-pill" aria-label={`Descuento del ${discountPercent}%`}>
+        -{discountPercent}%
+      </span>
+    )}
     <a
       href={`/producto/${product.slug ?? product.id}`}
       class="image-link"
@@ -324,11 +329,6 @@ const radarPayload = {
         height="400"
       />
     </a>
-    {discountPercent !== null && discountPercent > 0 && (
-      <span class="discount-pill" aria-label={`Descuento del ${discountPercent}%`}>
-        -{discountPercent}%
-      </span>
-    )}
   </div>
   </div>
 
