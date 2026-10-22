@@ -1498,6 +1498,8 @@ export const POST: APIRoute = async ({ request }) => {
           audit_reasons: existingProduct.audit_reasons,
           pipeline_version: existingProduct.pipeline_version,
           pipeline_run_at: existingProduct.pipeline_run_at,
+          ai_enriched: existingProduct.ai_enriched,
+          ai_error: existingProduct.ai_error,
         };
         currentProducts[existingIndex] = productToSave;
       } else {

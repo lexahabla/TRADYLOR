@@ -5,16 +5,24 @@
  * GET  /api/admin/pipeline
  *   -> Métricas de transparencia derivadas de products.json + pipeline-metrics.json
  *      { approved, rejected, pending, avg_audit_score, by_reason,
- *        duplicates_discarded, duplicate_groups, duplicate_products, last_run }
+ *        duplicates_discarded, duplicate_groups, duplicate_products, last_run,
+ *        ai_enriched, ai_failed, ai_pending, job }
  *
  * POST /api/admin/pipeline
  *   -> { mode: 'reprocess', ids?: string[], scope?: 'ids'|'all', dryRun?: boolean,
- *        enrich?: boolean, confirm?: boolean }
+ *        enrich?: boolean, provider?: 'openai'|'anthropic'|'groq', confirm?: boolean,
+ *        background?: boolean }
  *      Re-ejecuta las 4 etapas sobre productos existentes del catálogo.
  *      Para escribir sobre TODO el catálogo hacen falta `scope:'all'` + `confirm:true`.
+ *      Con `background:true` la tarea se lanza en SEGUNDO PLANO (devuelve al
+ *      instante) y el avance se consulta con GET (clave `job`): es la única
+ *      forma viable de reprocesar el catálogo entero con IA (una petición
+ *      síncrona moría por timeout del proxy a mitad).
  *   -> { mode: 'dedupe', dryRun?: boolean }
  *      Detecta (y opcionalmente purga) los duplicados reales del catálogo.
  *      Sin `dryRun:false` es una SIMULACIÓN: no se escribe nada.
+ *   -> { mode: 'cancel' }
+ *      Detiene el reproceso en segundo plano que esté en marcha.
  *
  * Protegido por sesión de administrador (requireAdminAuth).
  * ==============================================================================
@@ -25,6 +33,11 @@ import { requireAdminAuth } from '../../../../lib/adminAuth';
 import { readProductsFromFile } from '../../../../lib/productStore';
 import { readPipelineMetrics } from '../../../../lib/pipeline/metrics';
 import { reprocessCatalog } from '../../../../lib/pipeline';
+import {
+  cancelPipelineJob,
+  getPipelineJob,
+  startPipelineJob,
+} from '../../../../lib/pipeline/job';
 import { findDuplicateGroups, purgeDuplicateProducts } from '../../../../lib/curation';
 
 export const prerender = false;
@@ -49,6 +62,9 @@ function buildMetrics() {
   let pending = 0;
   let scoreSum = 0;
   let scored = 0;
+  let aiEnriched = 0;
+  let aiFailed = 0;
+  let aiPending = 0;
   const byReason: Record<string, number> = {};
 
   for (const product of products) {
@@ -62,6 +78,13 @@ function buildMetrics() {
       scoreSum += score;
       scored += 1;
     }
+
+    // Estado del enriquecimiento con IA (Etapa 3). Antes esto no se guardaba y
+    // el fallo era silencioso: media parte del catálogo se quedaba con la
+    // plantilla local sin que nadie lo notase.
+    if (product.ai_error) aiFailed += 1;
+    else if (product.ai_enriched === true) aiEnriched += 1;
+    else aiPending += 1;
 
     for (const reason of product.audit_reasons || []) {
       const key = String(reason || '').trim();
@@ -86,6 +109,10 @@ function buildMetrics() {
     last_run: counters.lastRun || null,
     runs: counters.runs,
     productsProcessed: counters.productsProcessed,
+    ai_enriched: aiEnriched,
+    ai_failed: aiFailed,
+    ai_pending: aiPending,
+    job: getPipelineJob(),
   };
 }
 
@@ -117,6 +144,15 @@ export const POST: APIRoute = async ({ request }) => {
 
   const mode = String(body.mode || 'reprocess').trim();
 
+  // ── Modo parada del reproceso en segundo plano ────────────────────────────
+  if (mode === 'cancel') {
+    const result = cancelPipelineJob();
+    return new Response(
+      JSON.stringify({ success: result.ok, mode: 'cancel', message: result.message, job: getPipelineJob() }),
+      { status: result.ok ? 200 : 409, headers: jsonHeaders },
+    );
+  }
+
   // ── Modo purga de duplicados ───────────────────────────────────────────────
   if (mode === 'dedupe') {
     const dryRun = body.dryRun !== false; // por defecto SIMULACIÓN (no escribe)
@@ -141,7 +177,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   if (mode !== 'reprocess') {
-    return errorResponse(`Modo desconocido: "${mode}". Usa "reprocess" o "dedupe".`);
+    return errorResponse(`Modo desconocido: "${mode}". Usa "reprocess", "dedupe" o "cancel".`);
   }
 
   const ids = Array.isArray(body.ids)
@@ -171,6 +207,31 @@ export const POST: APIRoute = async ({ request }) => {
       ? providerRaw
       : undefined;
 
+    // ── Segundo plano ────────────────────────────────────────────────────────
+    // Reprocesar el catálogo entero con IA tarda minutos: dentro de la petición
+    // HTTP el proxy la cortaba a mitad. Con `background:true` la tarea sigue
+    // en el servidor y el panel consulta el avance con GET (clave `job`).
+    if (body.background === true) {
+      const started = startPipelineJob({ ids, scope, dryRun, enrich: body.enrich !== false, provider });
+      if (!started.ok) {
+        return errorResponse(started.message || 'No se pudo lanzar el reproceso en segundo plano.', 409);
+      }
+      return new Response(
+        JSON.stringify({
+          success: true,
+          mode: 'reprocess',
+          background: true,
+          scope,
+          dryRun,
+          provider: provider ?? null,
+          total: started.state?.total ?? 0,
+          job: started.state,
+          message: 'Reproceso lanzado en segundo plano. El avance se consulta con GET /api/admin/pipeline.',
+        }),
+        { status: 202, headers: jsonHeaders },
+      );
+    }
+
     const { total, results } = await reprocessCatalog(ids, {
       dryRun,
       enrich: body.enrich !== false,
@@ -178,6 +239,8 @@ export const POST: APIRoute = async ({ request }) => {
     });
 
     const okCount = results.filter((result) => result.ok).length;
+    const aiEnrichedCount = results.filter((result) => result.ai_enriched === true).length;
+    const aiFailedCount = results.filter((result) => Boolean(result.ai_error)).length;
     return new Response(
       JSON.stringify({
         success: true,
@@ -187,6 +250,8 @@ export const POST: APIRoute = async ({ request }) => {
         total,
         processed: okCount,
         failed: results.length - okCount,
+        ai_enriched: aiEnrichedCount,
+        ai_failed: aiFailedCount,
         results: results.map((result) => ({
           id: result.product?.id ?? null,
           title: result.product?.title ?? null,
@@ -197,6 +262,8 @@ export const POST: APIRoute = async ({ request }) => {
           audit_status: result.audit_status,
           audit_score: result.audit_score,
           audit_reasons: result.product?.audit_reasons ?? [],
+          ai_enriched: result.ai_enriched ?? false,
+          ai_error: result.ai_error ?? null,
           message: result.message,
         })),
       }),

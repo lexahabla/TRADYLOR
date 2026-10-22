@@ -90,6 +90,10 @@ export interface Product {
   pipeline_version?: number;
   /** Timestamp ISO de la última ejecución del pipeline sobre el producto. */
   pipeline_run_at?: string;
+  /** `true` si la IA de texto enriquecido la ficha (Etapa 3 del pipeline). */
+  ai_enriched?: boolean;
+  /** Motivo por el que la IA de texto no pudo enriquecer la ficha. */
+  ai_error?: string;
 }
 
 // Ruta al archivo de persistencia JSON

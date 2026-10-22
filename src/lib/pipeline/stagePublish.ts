@@ -24,6 +24,8 @@ function extractPipelineFields(product: PipelineProduct): PipelineFields {
     audit_reasons: product.audit_reasons,
     pipeline_version: product.pipeline_version,
     pipeline_run_at: product.pipeline_run_at,
+    ai_enriched: product.ai_enriched,
+    ai_error: product.ai_error,
   };
 }
 

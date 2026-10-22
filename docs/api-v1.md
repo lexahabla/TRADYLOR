@@ -119,7 +119,7 @@ sólo añade información):
 | **1. Ingesta** | Normaliza el contrato n8n y detecta **duplicados** (sourceId → URL canónica → título limpio). Un duplicado **no se persiste** y se informa con `duplicate:true`. |
 | **2. Auditoría "Test & Proof"** | Score 0-100 sobre 3 bloques ponderados (procedencia 50 + reseñas 30 + descuento verificado 20). `audit_reasons` sólo recoge **defectos**; la ausencia de dato en la fuente no penaliza. |
 | **3. Categorización** | Autasocia `category_id` + `subcategory_id` (crea la subcategoría si no existe), enriquece el texto (local + IA si hay claves) y calcula `conversion_score` y `normalized_tags`. |
-| **4. Publicación** | Persiste en `products.json` (tombstones, `buyNowUrl` de Amazon) y estampa `audit_status`, `audit_score`, `audit_reasons` y `pipeline_version`. |
+| **4. Publicación** | Persiste en `products.json` (tombstones, `buyNowUrl` de Amazon) y estampa `audit_status`, `audit_score`, `audit_reasons`, `pipeline_version`, `ai_enriched` y `ai_error`. |
 
 Los productos rechazados **sí se persisten** (con `audit_status:'rejected'`) para
 alimentar las métricas de transparencia.
@@ -489,13 +489,27 @@ Métricas de transparencia derivadas de `products.json` + `pipeline-metrics.json
   "duplicate_products": 0,
   "last_run": "2026-10-22T11:25:18.858Z",
   "runs": 314,
-  "productsProcessed": 1086
+  "productsProcessed": 1086,
+  "ai_enriched": 51,
+  "ai_failed": 211,
+  "ai_pending": 0,
+  "job": null
 }
 ```
 
 `duplicate_groups` / `duplicate_products` son los duplicados **reales que siguen
 en el catálogo** (mismo `sourceId` o misma URL canónica), no el contador
 histórico de descartes.
+
+`ai_enriched` / `ai_failed` / `ai_pending` miden el **enriquecimiento con IA**
+de la Etapa 3: productos con `ai_enriched:true`, productos con `ai_error` (la IA
+se intentó y falló) y productos aún sin ese dato. Antes este dato no se
+guardaba y el fallo era **silencioso**: con el proveedor por defecto (Groq, límite
+de peticiones bajo) media parte del catálogo se quedaba con la plantilla local
+sin que nadie lo notase.
+
+`job` describe el último reproceso en segundo plano (§5.2): `null` si no hay
+ninguno.
 
 ### POST /api/admin/pipeline
 
@@ -516,17 +530,18 @@ reprocesa el catálogo por defecto). Hay dos modos:
 
 | Campo | Tipo | Descripción |
 |---|---|---|
-| `mode` | string | `reprocess` (default) o `dedupe`. Cualquier otro valor → `400`. |
+| `mode` | string | `reprocess` (default), `dedupe` o `cancel`. Cualquier otro valor → `400`. |
 | `ids` | string[] | Sólo con `mode:'reprocess'`. Ámbito `ids`: reprocesa esos productos. |
 | `scope` | string | `ids` (por defecto si hay `ids`) o `all`. |
 | `confirm` | boolean | **Obligatorio** (`true`) para escribir sobre todo el catálogo (`scope:'all'` sin `dryRun`). Sin él → `400`. |
 | `dryRun` | boolean | `true` = ingest → audit → categorize **sin persistir**. En `mode:'dedupe'` es la simulación (default: simulación). |
 | `enrich` | boolean | `false` desactiva la IA de texto (default `true`). |
 | `provider` | string | Fuerza el proveedor de IA para esta tanda: `openai`, `anthropic` o `groq`. Útil cuando el proveedor por defecto (`TEXT_AI_PROVIDER`) agota su límite de peticiones y hay otro con claves configuradas. |
+| `background` | boolean | `true` lanza el reproceso en **segundo plano** y responde al instante con `202` (§5.2). Es la única forma viable de reprocesar el catálogo entero con IA. |
 
-Respuesta (reprocess): `{ success, mode, scope, dryRun, total, processed, failed, results[] }`
+Respuesta (reprocess síncrono): `{ success, mode, scope, dryRun, total, processed, failed, ai_enriched, ai_failed, results[] }`
 con el mismo detalle por producto que la importación (`stage`, `duplicate`,
-`audit_status`, `audit_score`, `audit_reasons`).
+`audit_status`, `audit_score`, `audit_reasons`, `ai_enriched`, `ai_error`).
 
 Respuesta (dedupe): `{ success, mode, dryRun, groups, removed, removedIds[], details[], total, remaining }`.
 La purga conserva la ficha **más completa** de cada grupo (y, a igualdad, el id
@@ -538,6 +553,7 @@ tombstone en `deleted-product-ids.json` para que no reaparezcan.
 > podrá volver a publicar esos productos.
 
 ---
+
 
 ## 5.1 Tombstones del catálogo (admin, interno)
 
@@ -551,6 +567,102 @@ Endpoint **protegido por sesión de administrador** (cookie
 
 También disponible desde el panel admin (`/upayp1b4` → botón «🧹 Limpiar
 Tombstones»).
+
+---
+
+## 5.2 Reproceso en segundo plano (jobs)
+
+Reprocesar el catálogo entero con la IA de texto es una operación LENTA: cada
+producto tarda ~10-20 s en la llamada al proveedor (262 productos ≈ 1 hora).
+Dentro de una petición HTTP síncrona el proxy la cortaba a mitad y **el trabajo
+se perdía**. Por eso el reproceso puede lanzarse **en segundo plano**: la tarea
+sigue en el proceso SSR (Node standalone) y el avance se consulta con `GET`.
+
+### Lanzar un job
+
+```json
+{
+  "mode": "reprocess",
+  "scope": "all",
+  "confirm": true,
+  "enrich": true,
+  "provider": "openai",
+  "background": true
+}
+```
+
+Responde `202 Accepted` de inmediato:
+
+```json
+{
+  "success": true,
+  "mode": "reprocess",
+  "background": true,
+  "scope": "all",
+  "dryRun": false,
+  "provider": "openai",
+  "total": 262,
+  "job": { "id": "2026-10-22T14:02:11.004Z", "status": "running", "total": 262, "processed": 0, "...": "..." },
+  "message": "Reproceso lanzado en segundo plano. El avance se consulta con GET /api/admin/pipeline."
+}
+```
+
+- Si ya hay un job en marcha → `409` con `{"success":false,"message":"Ya hay un reproceso en marcha…"}`.
+- Si el ámbito no contiene productos → `409` con `{"success":false,"message":"No hay productos que reprocesar con ese ámbito."}`.
+
+### Consultar el avance
+
+`GET /api/admin/pipeline` → clave `job`:
+
+```json
+{
+  "id": "2026-10-22T14:02:11.004Z",
+  "status": "running",
+  "scope": "all",
+  "total": 262,
+  "processed": 87,
+  "failed": 0,
+  "aiFailed": 3,
+  "aiEnriched": 84,
+  "current": "auriculares-inalambricos-modelo-destacado-7-amazon",
+  "currentTitle": "Auriculares inalámbricos — modelo destacado 7",
+  "provider": "openai",
+  "enrich": true,
+  "dryRun": false,
+  "startedAt": "2026-10-22T14:02:11.004Z",
+  "finishedAt": null,
+  "message": "Procesados 87 de 262…",
+  "errors": [{ "id": "…", "title": "…", "message": "Sin credenciales de IA para el proveedor \"openai\"" }],
+  "recent": [{ "id": "…", "title": "…", "ok": true, "stage": "publish", "audit_status": "approved", "audit_score": 88, "ai_enriched": true }]
+}
+```
+
+| `status` | Significado |
+|---|---|
+| `running` | En marcha. |
+| `done` | Terminado correctamente. |
+| `cancelled` | Detenido a petición del operador. |
+| `interrupted` | El servidor se reinició a mitad (el lote quedó incompleto). |
+| `error` | Error inesperado. |
+
+El estado se persiste en `DATA_DIR/pipeline-job.json` (volumen en prod) y se
+sobrevive a un reinicio del servidor: si el proceso se cae, la siguiente
+lectura lo marca como `interrupted` en vez de mostrar un progreso fantasma.
+
+### Detener el job
+
+```json
+{ "mode": "cancel" }
+```
+
+Termina tras el producto en curso (`409` si no hay ningún job en marcha).
+
+### Reintentos ante límite de peticiones
+
+Si el proveedor responde con un error de límite de peticiones (429), el job
+espera 20 s y **reintenta el producto una vez** antes de darlo por perdido
+(marcado con `ai_error`). Entre producto y producto hay una pausa de
+`PIPELINE_JOB_DELAY_MS` (por defecto `500` ms) para no saturar al proveedor.
 
 ---
 

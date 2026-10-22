@@ -76,6 +76,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `api/redirect.ts` - Salida registrada (302) al enlace de afiliado del checkout
   - `api/health.ts` - Healthcheck público para Docker / Easy Panel (sin auth)
   - `api/admin/add-product.ts` - Alta/actualización de producto con IA (texto + imagen)
+  - `api/admin/pipeline/index.ts` - Métricas de auditoría y reproceso del catálogo
+    (síncrono o en segundo plano con `background:true`; `mode:'cancel'` lo detiene)
   - `api/admin/users/` - CRUD de usuarios del backend (`index`, `[id]`, `[id]/avatar`)
   - `api/radar/` - Mi Radar: `auth/` (register, login, logout, session, forgot, reset, google/),
     sync de datos (`index.ts`) y Return Flow (`exits.ts`, `projects.ts`)
@@ -89,6 +91,10 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `productStore.ts` - Persistencia de `products.json` (lectura/escritura/upsert)
   - `ai.ts` - Enriquecimiento de texto y generación de imágenes con IA
   - `categories.ts` - Categorías
+  - `pipeline/` - Pipeline de automatización de productos en 4 etapas
+    (`index.ts` orquestador · `stageIngest/audit/categorize/publish.ts` ·
+    `config.ts` umbrales · `metrics.ts` contadores · `job.ts` reproceso en
+    segundo plano)
   - `networks/` - Conectores con las redes de afiliación (registry, connectors, credentials, types)
 - `src/types/radar.ts` - Tipos compartidos cliente/servidor de Mi Radar
 - `src/utils/` - Lógica de navegador (bundled por Astro)
@@ -125,6 +131,10 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 - **IA (opcional)**: `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` para el texto y
   `OPENAI_API_KEY` / `FLUX_API_KEY` para las imágenes; selectores
   `TEXT_AI_PROVIDER` y `IMAGE_AI_PROVIDER` (`openai` por defecto, `anthropic`/`flux`).
+  También `GROQ_API_KEY` + `TEXT_AI_PROVIDER=groq` (plan gratuito; **es el
+  proveedor por defecto en producción y tiene un límite de peticiones bajo**:
+  si se agota, la ficha se queda con la plantilla local. Para esa situación el
+  reproceso acepta `provider: 'openai' | 'anthropic' | 'groq'` por tanda).
 - Claves de cada red de afiliación (opcional; activa los conectores correspondientes).
   `EBAY_COMMISSION_RATE` (opcional): % base de comisión EPN que usa el catálogo de
   eBay para la columna "Comisión %" (4-6%; por defecto 5).

@@ -20,6 +20,16 @@ export interface PipelineFields {
   audit_reasons?: string[];
   pipeline_version?: number;
   pipeline_run_at?: string;
+  /**
+   * `true` si la Etapa 3 pudo aplicar el enriquecimiento de texto con IA.
+   * `false` significa que la ficha se quedó con la plantilla local (el
+   * proveedor por defecto agotó su límite de peticiones, sin clave, etc.).
+   * Antes este dato no se guardaba y el fallo era silencioso: media parte del
+   * catálogo se quedaba sin enriquecer sin que nadie lo notase.
+   */
+  ai_enriched?: boolean;
+  /** Motivo por el que falló el enriquecimiento con IA (truncado a 200 chars). */
+  ai_error?: string;
 }
 
 /** Producto interno del pipeline: el modelo canónico + los campos nuevos. */
@@ -70,6 +80,10 @@ export interface StageResult {
   duplicate_reason?: string;
   audit_status?: AuditStatus;
   audit_score?: number;
+  /** `true` si la IA de texto enriquenció la ficha (Etapa 3). */
+  ai_enriched?: boolean;
+  /** Motivo del fallo del enriquecimiento con IA (si lo hubo). */
+  ai_error?: string;
   product?: PipelineProduct;
 }
 

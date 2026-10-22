@@ -1274,6 +1274,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <div class="tp-metric"><span class="tp-metric-value" id="tpScore">–</span><span class="tp-metric-label">Score medio</span></div>
           <div class="tp-metric"><span class="tp-metric-value" id="tpDupes">–</span><span class="tp-metric-label">Duplicados descartados</span></div>
           <div class="tp-metric"><span class="tp-metric-value is-warn" id="tpDupGroups">–</span><span class="tp-metric-label">Duplicados en el catálogo</span></div>
+          <div class="tp-metric"><span class="tp-metric-value is-ok" id="tpAiEnriched">–</span><span class="tp-metric-label">Enriquecidos con IA</span></div>
+          <div class="tp-metric"><span class="tp-metric-value is-warn" id="tpAiFailed">–</span><span class="tp-metric-label">Sin IA (plantilla local)</span></div>
           <div class="tp-metric"><span class="tp-metric-value is-small" id="tpLastRun">–</span><span class="tp-metric-label">Última ejecución</span></div>
         </div>
 
@@ -1300,6 +1302,26 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </label>
         </div>
 
+        <div class="tp-options tp-run-options">
+          <label class="tp-provider" for="tpProvider">
+            <span class="tp-provider-label">Proveedor de IA</span>
+            <select id="tpProvider" title="Proveedor de IA de texto para esta tanda. Útil cuando el de por defecto (TEXT_AI_PROVIDER) agota su límite de peticiones.">
+              <option value="">Automático (TEXT_AI_PROVIDER)</option>
+              <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic</option>
+              <option value="groq">Groq</option>
+            </select>
+          </label>
+          <button type="button" id="btnPipelineStop" class="btn-secondary btn-sm" hidden title="Detiene el reproceso en curso tras el producto actual">
+            <span class="btn-text">⏹ Detener</span>
+          </button>
+        </div>
+
+        <div class="tp-progress" id="tpProgress" hidden>
+          <div class="tp-progress-bar"><span class="tp-progress-fill" id="tpProgressFill"></span></div>
+          <p class="tp-progress-text" id="tpProgressText">Sin ejecuciones en marcha.</p>
+        </div>
+
         <div id="tpStatus" class="status-alert" hidden>
           <div class="alert-icon" id="tpStatusIcon">ℹ️</div>
           <div class="alert-content">
@@ -1315,6 +1337,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <th scope="col">Producto</th>
                 <th scope="col" style="width: 120px;">Estado</th>
                 <th scope="col" style="width: 70px; text-align: right;">Score</th>
+                <th scope="col" style="width: 60px; text-align: center;">IA</th>
                 <th scope="col" style="width: 180px;">Motivo</th>
               </tr>
             </thead>
@@ -6962,9 +6985,16 @@ function renderTableRows(products) {
     const tpStatusTitle = document.getElementById('tpStatusTitle');
     const tpStatusText = document.getElementById('tpStatusText');
     const tpEnrich = document.getElementById('tpEnrich');
+    const tpProvider = document.getElementById('tpProvider');
+    const tpAiEnriched = document.getElementById('tpAiEnriched');
+    const tpAiFailed = document.getElementById('tpAiFailed');
+    const tpProgress = document.getElementById('tpProgress');
+    const tpProgressFill = document.getElementById('tpProgressFill');
+    const tpProgressText = document.getElementById('tpProgressText');
     const btnPipelineRefresh = document.getElementById('btnPipelineRefresh');
     const btnPipelineDryRun = document.getElementById('btnPipelineDryRun');
     const btnPipelineRun = document.getElementById('btnPipelineRun');
+    const btnPipelineStop = document.getElementById('btnPipelineStop');
     const btnDedupeScan = document.getElementById('btnDedupeScan');
     const btnDedupePurge = document.getElementById('btnDedupePurge');
     const tpDupGroups = document.getElementById('tpDupGroups');
@@ -7004,7 +7034,11 @@ function renderTableRows(products) {
         if (tpScore) tpScore.textContent = data.avg_audit_score ?? 0;
         if (tpDupes) tpDupes.textContent = data.duplicates_discarded ?? 0;
         if (tpDupGroups) tpDupGroups.textContent = data.duplicate_products ?? 0;
+        if (tpAiEnriched) tpAiEnriched.textContent = data.ai_enriched ?? 0;
+        if (tpAiFailed) tpAiFailed.textContent = data.ai_failed ?? 0;
         if (tpLastRun) tpLastRun.textContent = tpFormatDate(data.last_run);
+        tpRenderJob(data.job);
+        if (data.job && data.job.status === 'running') tpSchedulePoll();
         const reasons = data.by_reason || {};
         const entries = Object.entries(reasons);
         if (tpReasons && tpReasonsList) {
@@ -7026,8 +7060,12 @@ function renderTableRows(products) {
       const original = text ? text.textContent : '';
       if (btn) btn.disabled = true;
       if (spinner) spinner.hidden = false;
-      if (text) text.textContent = dryRun ? 'Simulando…' : 'Reprocesando…';
+      if (text) text.textContent = 'Lanzando…';
       try {
+        // El reproceso va en SEGUNDO PLANO: reprocesar el catálogo entero con
+        // IA tarda minutos y dentro de la petición HTTP el proxy la cortaba
+        // a mitad (el trabajo se perdía). El avance se consulta con GET.
+        const provider = tpProvider ? String(tpProvider.value || '').trim().toLowerCase() : '';
         const res = await fetch('/api/admin/pipeline', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -7037,37 +7075,19 @@ function renderTableRows(products) {
             confirm: true,
             dryRun: dryRun === true,
             enrich: tpEnrich ? tpEnrich.checked : false,
+            provider: provider || undefined,
+            background: true,
           }),
         });
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.message || 'El pipeline no pudo ejecutarse.');
-        const rows = Array.isArray(data.results) ? data.results : [];
-        if (tpResultsBody) {
-          tpResultsBody.innerHTML = rows
-            .map((row) => {
-              const status = row.audit_status || (row.duplicate ? 'duplicado' : '—');
-              const reasons = Array.isArray(row.audit_reasons) ? row.audit_reasons : [];
-              const reasonText = reasons.map((code) => TP_REASON_LABELS[code] || code).join(' · ');
-              const reason = row.duplicate_reason
-                ? `Duplicado (${row.duplicate_reason})`
-                : (reasonText || row.message || '');
-              return `<tr>
-                <td>${escapeHtml(row.title || row.id || '—')}</td>
-                <td><span class="tp-badge is-${escapeHtml(status)}">${escapeHtml(status)}</span></td>
-                <td class="text-right">${row.audit_score != null ? escapeHtml(row.audit_score) : '—'}</td>
-                <td>${escapeHtml(reason)}</td>
-              </tr>`;
-            })
-            .join('');
-        }
-        if (tpResults) tpResults.hidden = rows.length === 0;
         tpShowStatus(
-          'ok',
-          dryRun ? 'Simulación terminada (no se ha escrito nada)' : 'Catálogo reprocesado',
-          `${data.processed ?? 0} de ${data.total ?? 0} productos procesados${data.failed ? ` · ${data.failed} con error` : ''}.`
+          'info',
+          dryRun ? 'Simulación en marcha' : 'Reproceso en marcha',
+          data.message || 'El proceso continúa en segundo plano; el avance se actualiza solo.'
         );
-        await tpLoadMetrics();
-        if (!dryRun) await reloadProductsTable();
+        tpRenderJob(data.job);
+        tpSchedulePoll();
       } catch (err) {
         tpShowStatus('error', 'Error al ejecutar el pipeline', err?.message || 'Fallo de red.');
       } finally {
@@ -7077,10 +7097,117 @@ function renderTableRows(products) {
       }
     }
 
+    // ── Tabla de resultados (síncrona o del job en segundo plano) ───────────
+    function tpRenderRows(rows) {
+      if (!tpResultsBody) return;
+      tpResultsBody.innerHTML = rows
+        .map((row) => {
+          const status = row.audit_status || (row.duplicate ? 'duplicado' : '—');
+          const reasons = Array.isArray(row.audit_reasons) ? row.audit_reasons : [];
+          const reasonText = reasons.map((code) => TP_REASON_LABELS[code] || code).join(' · ');
+          const aiError = row.ai_error ? String(row.ai_error).slice(0, 120) : '';
+          const reason = row.duplicate_reason
+            ? `Duplicado (${row.duplicate_reason})`
+            : (aiError || reasonText || row.message || '');
+          const aiBadge = row.ai_enriched === true
+            ? '<span class="tp-badge is-approved">sí</span>'
+            : (row.ai_enriched === false ? '<span class="tp-badge is-rejected">no</span>' : '—');
+          return `<tr>
+            <td>${escapeHtml(row.title || row.id || '—')}</td>
+            <td><span class="tp-badge is-${escapeHtml(status)}">${escapeHtml(status)}</span></td>
+            <td class="text-right">${row.audit_score != null ? escapeHtml(row.audit_score) : '—'}</td>
+            <td class="text-center">${aiBadge}</td>
+            <td>${escapeHtml(reason)}</td>
+          </tr>`;
+        })
+        .join('');
+      if (tpResults) tpResults.hidden = rows.length === 0;
+    }
+
+    // ── Avance del job en segundo plano ─────────────────────────────────────
+    let tpPollTimer = null;
+
+    function tpRenderJob(job) {
+      if (btnPipelineStop) btnPipelineStop.hidden = !(job && job.status === 'running');
+      if (!tpProgress) return;
+      if (!job || !job.id) {
+        tpProgress.hidden = true;
+        return;
+      }
+      tpProgress.hidden = false;
+      const total = Number(job.total) || 0;
+      const processed = Number(job.processed) || 0;
+      const pct = total ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+      if (tpProgressFill) tpProgressFill.style.width = pct + '%';
+      if (tpProgressText) {
+        const bits = [`${processed}/${total} (${pct}%)`];
+        if (job.currentTitle) bits.push(`en curso: ${job.currentTitle}`);
+        if (job.aiFailed) bits.push(`${job.aiFailed} sin IA`);
+        if (job.failed) bits.push(`${job.failed} con error`);
+        if (job.provider) bits.push(`proveedor: ${job.provider}`);
+        tpProgressText.textContent = `${job.message || ''} ${bits.join(' · ')}`.trim();
+        tpProgressText.className = 'tp-progress-text'
+          + (job.status === 'error' ? ' is-error' : job.status === 'done' ? ' is-ok' : '');
+      }
+      const recent = Array.isArray(job.recent) ? job.recent : [];
+      if (recent.length) tpRenderRows(recent);
+    }
+
+    function tpSchedulePoll() {
+      if (tpPollTimer) return;
+      tpPollTimer = setInterval(async () => {
+        try {
+          const res = await fetch('/api/admin/pipeline', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+          const data = await res.json();
+          if (!res.ok || !data.success) return;
+          const job = data.job || null;
+          tpRenderJob(job);
+          if (!job || job.status !== 'running') {
+            clearInterval(tpPollTimer);
+            tpPollTimer = null;
+            await tpLoadMetrics();
+            await reloadProductsTable();
+            tpShowStatus('ok', 'Reproceso terminado', job && job.message ? job.message : 'El proceso ha terminado.');
+          }
+        } catch {
+          // Fallo de red al consultar el avance: se reintenta en el siguiente tick.
+        }
+      }, 3000);
+    }
+
+    async function tpStopPipeline() {
+      if (!btnPipelineStop) return;
+      btnPipelineStop.disabled = true;
+      try {
+        const res = await fetch('/api/admin/pipeline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'cancel' }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'No se pudo detener el reproceso.');
+        tpShowStatus('info', 'Deteniendo', data.message || 'El reproceso se detendrá tras el producto en curso.');
+        tpRenderJob(data.job);
+      } catch (err) {
+        tpShowStatus('error', 'Error al detener el reproceso', err?.message || 'Fallo de red.');
+      } finally {
+        btnPipelineStop.disabled = false;
+      }
+    }
+
     btnPipelineRefresh?.addEventListener('click', () => tpLoadMetrics());
     btnPipelineDryRun?.addEventListener('click', () => tpRunPipeline(true));
+    btnPipelineStop?.addEventListener('click', () => tpStopPipeline());
     btnPipelineRun?.addEventListener('click', () => {
-      const ok = window.confirm('Se reprocesará todo el catálogo (auditoría, tags y score). ¿Continuar?');
+      const provider = tpProvider ? String(tpProvider.value || '').trim() : '';
+      const enrich = !!(tpEnrich && tpEnrich.checked);
+      const detalle = enrich
+        ? ` (con enriquecimiento de IA; proveedor: ${provider || 'automático'})`
+        : ' (sin enriquecimiento de IA)';
+      const ok = window.confirm(
+        `Se reprocesará todo el catálogo (auditoría, tags y score)${detalle}. ` +
+        'La tarea sigue en segundo plano aunque cierres esta pestaña. ¿Continuar?'
+      );
       if (ok) tpRunPipeline(false);
     });
 
@@ -7615,6 +7742,17 @@ function renderTableRows(products) {
   .tp-reason-chip { display: inline-flex; align-items: center; gap: .3rem; padding: .22rem .55rem; color: #bae6fd; background: rgba(56, 189, 248, .1); border: 1px solid rgba(56, 189, 248, .28); border-radius: 999px; font-size: .68rem; font-weight: 600; }
   .tp-reason-chip strong { color: #e0f2fe; font-weight: 800; }
   .tp-options { margin-top: .9rem; }
+  .tp-run-options { display: flex; align-items: flex-end; gap: .8rem; flex-wrap: wrap; }
+  .tp-provider { display: flex; flex-direction: column; gap: .25rem; }
+  .tp-provider-label { color: var(--color-text-dim); font-size: .64rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+  .tp-provider select { width: auto; min-width: 230px; padding: .45rem .6rem; font-size: .78rem; }
+  .tp-progress { margin-top: .9rem; }
+  .tp-progress[hidden] { display: none; }
+  .tp-progress-bar { height: 6px; border-radius: 999px; background: rgba(255, 255, 255, .07); overflow: hidden; }
+  .tp-progress-fill { display: block; height: 100%; width: 0; border-radius: 999px; background: linear-gradient(90deg, #38bdf8, #6ee7b7); transition: width .3s ease; }
+  .tp-progress-text { margin: .45rem 0 0; color: var(--color-text-dim); font-size: .72rem; }
+  .tp-progress-text.is-error { color: #fca5a5; }
+  .tp-progress-text.is-ok { color: #6ee7b7; }
   .tp-results { margin-top: .9rem; max-height: 22rem; overflow: auto; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); }
   .tp-results[hidden] { display: none; }
   .tp-table { width: 100%; border-collapse: collapse; font-size: .72rem; }

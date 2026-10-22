@@ -11,7 +11,7 @@
  */
 
 import { enrichProductLocally } from '../localEnrich';
-import { enrichProductText, hasTextCredentials, type EnrichedText } from '../ai';
+import { enrichProductText, hasTextCredentials, textProvider, type EnrichedText } from '../ai';
 import {
   createCategory,
   getCategories,
@@ -218,7 +218,18 @@ export async function runStageCategorize(
   });
 
   let enriched = local;
-  if (options.enrich !== false && hasTextCredentials(options.provider)) {
+  // Resultado del enriquecimiento con IA: se estampa en el producto para que el
+  // operador vea qué fichas se quedaron con la plantilla local (antes el fallo
+  // era silencioso y media parte del catálogo quedaba sin enriquecer).
+  let aiEnriched = false;
+  let aiError: string | undefined;
+
+  if (options.enrich === false) {
+    // El operador desactivó el enriquecimiento: no es un fallo, no se marca error.
+  } else if (!hasTextCredentials(options.provider)) {
+    aiError = `Sin credenciales de IA para el proveedor "${options.provider ?? textProvider()}"`;
+    console.warn(`[Pipeline] ${aiError}: "${next.title}"`);
+  } else {
     try {
       const ai = await enrichProductText(
         {
@@ -232,10 +243,12 @@ export async function runStageCategorize(
         options.provider ? { provider: options.provider } : {},
       );
       enriched = overlayText(local, ai);
+      aiEnriched = true;
     } catch (error) {
       // Sin IA disponible: se mantiene la ficha local (no destructivo), pero se
       // deja rastro: en producción el fallo era silencioso (límite de peticiones
       // de Groq) y media parte del catálogo se quedaba sin enriquecer.
+      aiError = error instanceof Error ? error.message : String(error);
       console.warn(`[Pipeline] Sin enriquecimiento de IA para "${next.title}":`, error);
     }
   }
@@ -261,5 +274,10 @@ export async function runStageCategorize(
   next.ia_status = status.ia_status === 'completed' || hasCompletedSheet(next) ? 'completed' : status.ia_status;
   next.link_status = status.link_status;
 
-  return { ok: true, stage: 'categorize', product: next };
+  // Rastro del enriquecimiento con IA (visible en el panel y en la API).
+  next.ai_enriched = aiEnriched;
+  if (aiError) next.ai_error = aiError.slice(0, 200);
+  else delete next.ai_error;
+
+  return { ok: true, stage: 'categorize', product: next, ai_enriched: aiEnriched, ai_error: aiError };
 }

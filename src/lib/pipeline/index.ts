@@ -86,6 +86,8 @@ export async function runProductPipeline(
 
   const auditStatus = product.audit_status;
   const auditScore = product.audit_score;
+  const aiEnriched = categorize.ai_enriched;
+  const aiError = categorize.ai_error;
 
   // Modo dry-run: no se persiste nada.
   if (options.dryRun) {
@@ -95,6 +97,8 @@ export async function runProductPipeline(
       product,
       audit_status: auditStatus,
       audit_score: auditScore,
+      ai_enriched: aiEnriched,
+      ai_error: aiError,
       pipeline: makeTrace({ ingest: true, audit: true, categorize: true }),
     };
   }
@@ -106,6 +110,8 @@ export async function runProductPipeline(
       ...publish,
       audit_status: auditStatus,
       audit_score: auditScore,
+      ai_enriched: aiEnriched,
+      ai_error: aiError,
       pipeline: makeTrace({ ingest: true, audit: true, categorize: true }),
     };
   }
@@ -119,6 +125,8 @@ export async function runProductPipeline(
     product: publish.product,
     audit_status: auditStatus,
     audit_score: auditScore,
+    ai_enriched: aiEnriched,
+    ai_error: aiError,
     pipeline: makeTrace({ ingest: true, audit: true, categorize: true, publish: true }),
   };
 }

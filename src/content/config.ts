@@ -134,6 +134,10 @@ const productSchema = z.object({
   pipeline_version: z.number().optional(),
   /** Timestamp ISO de la última ejecución del pipeline sobre el producto. */
   pipeline_run_at: z.string().optional(),
+  /** `true` si la IA de texto enriquecido la ficha (Etapa 3 del pipeline). */
+  ai_enriched: z.boolean().optional(),
+  /** Motivo por el que la IA de texto no pudo enriquecer la ficha. */
+  ai_error: z.string().optional(),
 
   // ─── Media & Visual ────────────────────────────────────────────────────────
   image: z.string().default('/images/placeholder-product.jpg'),

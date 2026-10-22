@@ -370,7 +370,7 @@ export const POST: APIRoute = async ({ request }) => {
           'normalized_tags', 'alternative_product_ids', 'alternatives',
           'conversion_score', 'commissionEstimate', 'sales30d',
           'audit_status', 'audit_score', 'audit_reasons',
-          'pipeline_version', 'pipeline_run_at',
+          'pipeline_version', 'pipeline_run_at', 'ai_enriched', 'ai_error',
         ] as const;
         for (const field of CURATION_FIELDS) {
           if ((existing as any)[field] !== undefined) {

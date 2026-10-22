@@ -75,6 +75,9 @@ src/data/affiliate-catalog.json
 # contadores del pipeline de importación (se generan en local/volumen)
 src/data/pipeline-metrics.json
 
+# estado del reproceso en segundo plano (se genera en local/volumen)
+src/data/pipeline-job.json
+
 # tombstones de productos eliminados (se generan en local/volumen)
 src/data/deleted-product-ids.json
 

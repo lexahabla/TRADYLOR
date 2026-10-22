@@ -140,6 +140,10 @@ export interface Product {
   pipeline_version?: number;
   /** Timestamp ISO de la última ejecución del pipeline sobre el producto. */
   pipeline_run_at?: string;
+  /** `true` si la IA de texto enriquecido la ficha (Etapa 3 del pipeline). */
+  ai_enriched?: boolean;
+  /** Motivo por el que la IA de texto no pudo enriquecer la ficha. */
+  ai_error?: string;
   /** Métricas del vendedor y calidad de reseñas. */
   metrics?: {
     sellerRating?: number;
@@ -227,6 +231,8 @@ export function toStructuredProduct(flat: Product): ProductSchema {
     audit_reasons: flat.audit_reasons,
     pipeline_version: flat.pipeline_version,
     pipeline_run_at: flat.pipeline_run_at,
+    ai_enriched: flat.ai_enriched,
+    ai_error: flat.ai_error,
     image: flat.image,
     gallery: flat.gallery,
     badge: flat.badge,

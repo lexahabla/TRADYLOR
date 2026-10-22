@@ -108,6 +108,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\networks\types.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\paths.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\pipeline\config.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\pipeline\index.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\pipeline\job.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\pipeline\metrics.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\pipeline\stageAudit.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\pipeline\stageCategorize.ts
