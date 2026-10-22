@@ -26,6 +26,8 @@ export interface PipelineOptions {
   ignoreId?: string;
   /** Desactiva la llamada a la IA de texto en la Etapa 3 (default: activada). */
   enrich?: boolean;
+  /** Fuerza el proveedor de IA de texto para esta ejecución. */
+  provider?: 'openai' | 'anthropic' | 'groq';
   /** No persiste: sólo ejecuta ingest → audit → categorize. */
   dryRun?: boolean;
 }
@@ -67,7 +69,10 @@ export async function runProductPipeline(
   else incrementMetric('rejected');
 
   // ── Etapa 3: categorización + enriquecimiento ───────────────────────────
-  const categorize = await runStageCategorize(product, config, { enrich: options.enrich });
+  const categorize = await runStageCategorize(product, config, {
+    enrich: options.enrich,
+    provider: options.provider,
+  });
   if (!categorize.ok) {
     return { ...categorize, pipeline: makeTrace({ ingest: true, audit: true }) };
   }
@@ -141,7 +146,7 @@ export interface ReprocessResult {
  */
 export async function reprocessCatalog(
   ids?: string[],
-  options: { dryRun?: boolean; enrich?: boolean } = {},
+  options: { dryRun?: boolean; enrich?: boolean; provider?: 'openai' | 'anthropic' | 'groq' } = {},
 ): Promise<ReprocessResult> {
   const products = readProductsFromFile();
   const targets = ids && ids.length ? products.filter((p) => ids.includes(p.id)) : products;
@@ -152,6 +157,7 @@ export async function reprocessCatalog(
       await runProductPipeline(product as PipelineInput, {
         ignoreId: product.id,
         enrich: options.enrich,
+        provider: options.provider,
         dryRun: options.dryRun,
       }),
     );

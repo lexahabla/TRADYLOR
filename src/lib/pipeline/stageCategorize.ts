@@ -188,7 +188,7 @@ function hasCompletedSheet(product: PipelineProduct): boolean {
 export async function runStageCategorize(
   product: PipelineProduct,
   config: PipelineConfig,
-  options: { enrich?: boolean } = {},
+  options: { enrich?: boolean; provider?: 'openai' | 'anthropic' | 'groq' } = {},
 ): Promise<StageResult> {
   const haystack = buildHaystack(product);
   const { category: root, categoryId, subcategoryId } = resolveCategories(product, haystack, config);
@@ -218,16 +218,19 @@ export async function runStageCategorize(
   });
 
   let enriched = local;
-  if (options.enrich !== false && hasTextCredentials()) {
+  if (options.enrich !== false && hasTextCredentials(options.provider)) {
     try {
-      const ai = await enrichProductText({
-        title: next.title,
-        description: next.description,
-        category: next.category,
-        url: next.affiliateUrl,
-        price: next.price,
-        originalPrice: next.originalPrice,
-      });
+      const ai = await enrichProductText(
+        {
+          title: next.title,
+          description: next.description,
+          category: next.category,
+          url: next.affiliateUrl,
+          price: next.price,
+          originalPrice: next.originalPrice,
+        },
+        options.provider ? { provider: options.provider } : {},
+      );
       enriched = overlayText(local, ai);
     } catch (error) {
       // Sin IA disponible: se mantiene la ficha local (no destructivo), pero se

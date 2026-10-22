@@ -72,8 +72,8 @@ export function imageProvider(): ImageProvider {
   return env('IMAGE_AI_PROVIDER').toLowerCase() === 'flux' ? 'flux' : 'openai';
 }
 
-export function hasTextCredentials(): boolean {
-  const provider = textProvider();
+export function hasTextCredentials(providerOverride?: TextProvider): boolean {
+  const provider = providerOverride ?? textProvider();
   if (provider === 'anthropic') return Boolean(env('ANTHROPIC_API_KEY'));
   if (provider === 'groq') return Boolean(env('GROQ_API_KEY'));
   return Boolean(env('OPENAI_API_KEY'));
@@ -142,13 +142,17 @@ export async function enrichProductText(input: {
   /** Precio de oferta de referencia (si el scraping/usuario ya lo conoce). */
   price?: number;
   originalPrice?: number;
-}): Promise<EnrichedText> {
-  const provider = textProvider();
-  if (!hasTextCredentials()) {
+}, options: { provider?: TextProvider } = {}): Promise<EnrichedText> {
+  // El proveedor se puede forzar por petición (p. ej. cuando el proveedor por
+  // defecto agota su límite de peticiones y hay otro con claves configuradas).
+  const provider = options.provider ?? textProvider();
+  if (!hasTextCredentials(provider)) {
     throw new Error(
       provider === 'anthropic'
         ? 'Falta ANTHROPIC_API_KEY para enriquecer el texto'
-        : 'Falta OPENAI_API_KEY para enriquecer el texto'
+        : provider === 'groq'
+          ? 'Falta GROQ_API_KEY para enriquecer el texto'
+          : 'Falta OPENAI_API_KEY para enriquecer el texto'
     );
   }
 

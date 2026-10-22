@@ -522,6 +522,7 @@ reprocesa el catálogo por defecto). Hay dos modos:
 | `confirm` | boolean | **Obligatorio** (`true`) para escribir sobre todo el catálogo (`scope:'all'` sin `dryRun`). Sin él → `400`. |
 | `dryRun` | boolean | `true` = ingest → audit → categorize **sin persistir**. En `mode:'dedupe'` es la simulación (default: simulación). |
 | `enrich` | boolean | `false` desactiva la IA de texto (default `true`). |
+| `provider` | string | Fuerza el proveedor de IA para esta tanda: `openai`, `anthropic` o `groq`. Útil cuando el proveedor por defecto (`TEXT_AI_PROVIDER`) agota su límite de peticiones y hay otro con claves configuradas. |
 
 Respuesta (reprocess): `{ success, mode, scope, dryRun, total, processed, failed, results[] }`
 con el mismo detalle por producto que la importación (`stage`, `duplicate`,
