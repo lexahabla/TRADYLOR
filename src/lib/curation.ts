@@ -152,7 +152,19 @@ export function detectDuplicates(products: Product[]): Map<string, DuplicateFlag
     if (previous === undefined) {
       bySource.set(source, product.id);
     } else {
-      register(product.id, `src:${source}`, 'sourceId', false);
+      // OJO: `register()` NO marcaba el producto actual cuando la clave era
+      // nueva en `firstOfGroup` (el primer miembro del grupo nunca pasaba por
+      // `register`), así que la mitad de los duplicados se quedaban sin marcar.
+      // Aquí se marcan los DOS miembros del grupo.
+      const current = flags.get(product.id);
+      if (!current || reasonRank('sourceId') < reasonRank(current.duplicate_reason)) {
+        flags.set(product.id, {
+          is_duplicate: true,
+          duplicate_reason: 'sourceId',
+          duplicate_group: `src:${source}`,
+          duplicate_of: previous,
+        });
+      }
       if (!flags.has(previous)) {
         flags.set(previous, { is_duplicate: true, duplicate_reason: 'sourceId', duplicate_group: `src:${source}`, duplicate_of: product.id });
       }
@@ -168,7 +180,15 @@ export function detectDuplicates(products: Product[]): Map<string, DuplicateFlag
     if (previous === undefined) {
       byUrl.set(canonical, product.id);
     } else if (!flags.has(product.id) || flags.get(product.id)?.duplicate_reason !== 'sourceId') {
-      register(product.id, `url:${canonical}`, 'canonicalUrl', false);
+      const current = flags.get(product.id);
+      if (!current || reasonRank('canonicalUrl') < reasonRank(current.duplicate_reason)) {
+        flags.set(product.id, {
+          is_duplicate: true,
+          duplicate_reason: 'canonicalUrl',
+          duplicate_group: `url:${canonical}`,
+          duplicate_of: previous,
+        });
+      }
       if (!flags.has(previous)) {
         flags.set(previous, { is_duplicate: true, duplicate_reason: 'canonicalUrl', duplicate_group: `url:${canonical}`, duplicate_of: product.id });
       }
@@ -323,6 +343,145 @@ export function deleteAllProducts(): { deletedCount: number } {
     for (const id of allIds) addDeletedId(id);
   }
   return { deletedCount };
+}
+
+// ─── Purga de duplicados reales ───────────────────────────────────────────────
+
+export interface DuplicateGroup {
+  /** Clave del grupo (`src:…`, `url:…` o `title:…`). */
+  group: string;
+  /** Motivo por el que se agruparon los productos. */
+  reason: DuplicateReason;
+  /** ID del producto que se conserva (el más completo). */
+  keepId: string;
+  /** IDs de los productos que son copias y se pueden purgar. */
+  duplicateIds: string[];
+}
+
+/**
+ * Agrupa los duplicados REALES del catálogo (mismo `sourceId` o misma URL
+ * canónica). Los coincidencias sólo por título limpio se ignoran: son sólo
+ * "posibles duplicados" (dos productos con el mismo título genérico pueden ser
+ * artículos distintos) y no se purgan.
+ */
+export function findDuplicateGroups(products: Product[]): DuplicateGroup[] {
+  const flags = detectDuplicates(products);
+  const byGroup = new Map<string, string[]>();
+
+  for (const product of products) {
+    const flag = flags.get(product.id);
+    if (!flag?.is_duplicate || !flag.duplicate_group) continue;
+    if (flag.duplicate_reason !== 'sourceId' && flag.duplicate_reason !== 'canonicalUrl') continue;
+    const list = byGroup.get(flag.duplicate_group) ?? [];
+    list.push(product.id);
+    byGroup.set(flag.duplicate_group, list);
+  }
+
+  const groups: DuplicateGroup[] = [];
+  for (const [group, ids] of byGroup) {
+    if (ids.length < 2) continue;
+    const flag = flags.get(ids[1]);
+    groups.push({
+      group,
+      reason: flag?.duplicate_reason ?? 'sourceId',
+      keepId: ids[0],
+      duplicateIds: ids.slice(1),
+    });
+  }
+  return groups;
+}
+
+/**
+ * Rango del id a la hora de elegir la ficha conservada: los ids "bonitos"
+ * (sin sufijo numérico) son los que están publicados en la web y en los
+ * enlaces de afiliado, así que se conservan antes que sus copias "-2".
+ */
+function canonicalIdRank(id: string): number {
+  const match = /^(.*)-(\d+)$/.exec(String(id || ''));
+  return match ? Number(match[2]) : 1;
+}
+
+/** Puntúa la completitud de una ficha para elegir cuál de las copias se conserva. */
+function completenessScore(product: Product): number {
+  let score = 0;
+  if (String(product.category_id || '').trim()) score += 4;
+  if (String(product.subcategory_id || '').trim()) score += 3;
+  score += Math.min(String(product.description || '').trim().length / 120, 3);
+  if (String(product.verdict || '').trim()) score += 2;
+  if (String(product.techSheet || '').trim()) score += 2;
+  if (product.specs && Object.keys(product.specs).length > 0) score += 2;
+  if (Array.isArray(product.gallery) && product.gallery.length > 1) score += 1;
+  if (Number(product.audit_score) > 0) score += 1;
+  if (Number(product.conversion_score) > 0) score += 1;
+  return score;
+}
+
+export interface PurgeDuplicatesResult {
+  /** Grupos de duplicados detectados. */
+  groups: DuplicateGroup[];
+  /** IDs que se han eliminado (o que se eliminarían en modo simulación). */
+  removed: string[];
+  /** Detalle de cada purga: grupo, motivo y ficha conservada. */
+  details: Array<{ group: string; reason: DuplicateReason; keepId: string; removedIds: string[] }>;
+  /** Productos en el catálogo antes de la purga. */
+  total: number;
+  /** Productos que quedan en el catálogo. */
+  remaining: number;
+  /** `true` si no se ha escrito nada (simulación). */
+  dryRun: boolean;
+}
+
+/**
+ * Purga los duplicados reales del catálogo: conserva la ficha más completa de
+ * cada grupo y elimina el resto (dejando tombstone, como el borrado masivo).
+ * En modo simulación (`dryRun`) no se escribe nada.
+ */
+export function purgeDuplicateProducts(options: { dryRun?: boolean } = {}): PurgeDuplicatesResult {
+  const dryRun = options.dryRun !== false;
+  const products = readProductsFromFile();
+  const groups = findDuplicateGroups(products);
+
+  const byId = new Map(products.map((product) => [product.id, product]));
+  const removed = new Set<string>();
+  const details: Array<{ group: string; reason: DuplicateReason; keepId: string; removedIds: string[] }> = [];
+
+  for (const group of groups) {
+    // Se conserva la ficha más completa (curada, con categoría o ficha técnica).
+    // A igualdad, el id canónico (sin sufijo "-2"): sus URLs públicas siguen
+    // siendo válidas y no se rompen los enlaces ya indexados.
+    const candidates = [group.keepId, ...group.duplicateIds]
+      .map((id) => byId.get(id))
+      .filter((product): product is Product => Boolean(product));
+    if (candidates.length < 2) continue;
+
+    const keep = [...candidates].sort((a, b) => {
+      const byCompleteness = completenessScore(b) - completenessScore(a);
+      if (byCompleteness !== 0) return byCompleteness;
+      return canonicalIdRank(a.id) - canonicalIdRank(b.id);
+    })[0];
+    const removedIds = candidates
+      .filter((product) => product.id !== keep.id)
+      .map((product) => product.id)
+      .filter((id) => !removed.has(id));
+    if (!removedIds.length) continue;
+
+    for (const id of removedIds) removed.add(id);
+    details.push({ group: group.group, reason: group.reason, keepId: keep.id, removedIds });
+  }
+
+  const removedIds = [...removed];
+  if (!dryRun && removedIds.length) {
+    bulkDeleteProducts(removedIds);
+  }
+
+  return {
+    groups,
+    removed: removedIds,
+    details,
+    total: products.length,
+    remaining: products.length - removedIds.length,
+    dryRun,
+  };
 }
 
 // ─── Tags técnicos normalizados (matriz de atributos) ────────────────────────

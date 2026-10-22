@@ -117,12 +117,27 @@ sólo añade información):
 | Etapa | Qué hace |
 |---|---|
 | **1. Ingesta** | Normaliza el contrato n8n y detecta **duplicados** (sourceId → URL canónica → título limpio). Un duplicado **no se persiste** y se informa con `duplicate:true`. |
-| **2. Auditoría "Test & Proof"** | Score 0-100 (descuento verificado 40 + vendedor de confianza 30 + reseñas 30). `≥ 60` ⇒ `approved`; si no ⇒ `rejected` + motivos. |
+| **2. Auditoría "Test & Proof"** | Score 0-100 sobre 3 bloques ponderados (procedencia 50 + reseñas 30 + descuento verificado 20). `audit_reasons` sólo recoge **defectos**; la ausencia de dato en la fuente no penaliza. |
 | **3. Categorización** | Autasocia `category_id` + `subcategory_id` (crea la subcategoría si no existe), enriquece el texto (local + IA si hay claves) y calcula `conversion_score` y `normalized_tags`. |
 | **4. Publicación** | Persiste en `products.json` (tombstones, `buyNowUrl` de Amazon) y estampa `audit_status`, `audit_score`, `audit_reasons` y `pipeline_version`. |
 
 Los productos rechazados **sí se persisten** (con `audit_status:'rejected'`) para
 alimentar las métricas de transparencia.
+
+### Etapa 2: auditoría "Test & Proof" (v2)
+
+| Bloque | Peso | Evalúa | Motivo de rechazo |
+|---|---|---|---|
+| **Procedencia** | 50 | Marketplace/red con canal de confianza (Amazon, eBay, AliExpress, Etsy…) **o** marca de confianza (PCComponentes, MediaMarkt…). El `merchant` puede ser un vendedor individual: la compra la protege el marketplace. | `vendedor-no-verificado` (el vendedor existe pero no es de confianza) |
+| **Reseñas** | 30 | Valoración (0-5) + volumen (escala log). Con los umbrales cumplidos (`rating ≥ 4`, `reviews ≥ 20`) el bloque vale completo. | `rating-insuficiente`, `pocas-resenas` |
+| **Descuento verificado** | 20 | `originalPrice > price` con descuento ≥ 5 % y precio no por encima del máximo histórico. | `sin-descuento-verificado`, `precio-por-encima-del-historico` |
+
+Estados: `approved` (sin defectos y con evidencia), `rejected` (con defectos) y
+`pending` (sin datos suficientes para juzgar → `sin-datos-suficientes`).
+
+> Si la fuente **no aporta** el dato (p.ej. un marketplace sin reseñas), el
+> bloque no penaliza y no genera motivo: `audit_reasons` refleja defectos
+> reales, no la ausencia de información.
 
 ### Body — producto individual
 
@@ -435,32 +450,58 @@ Métricas de transparencia derivadas de `products.json` + `pipeline-metrics.json
 ```json
 {
   "success": true,
-  "approved": 12,
-  "rejected": 3,
-  "pending": 40,
-  "avg_audit_score": 58.4,
-  "by_reason": { "sin-descuento-verificado": 3, "vendedor-no-verificado": 1 },
-  "duplicates_discarded": 2,
-  "last_run": "2026-10-20T22:22:38.814Z",
-  "runs": 24,
-  "productsProcessed": 27
+  "approved": 201,
+  "rejected": 53,
+  "pending": 0,
+  "avg_audit_score": 77.3,
+  "by_reason": { "pocas-resenas": 40, "sin-descuento-verificado": 10, "rating-insuficiente": 3 },
+  "duplicates_discarded": 217,
+  "duplicate_groups": 0,
+  "duplicate_products": 0,
+  "last_run": "2026-10-22T11:25:18.858Z",
+  "runs": 314,
+  "productsProcessed": 1086
 }
 ```
 
+`duplicate_groups` / `duplicate_products` son los duplicados **reales que siguen
+en el catálogo** (mismo `sourceId` o misma URL canónica), no el contador
+histórico de descartes.
+
 ### POST /api/admin/pipeline
+
+El cuerpo **siempre** tiene que ser JSON válido (si no, responde `400`; nunca
+reprocesa el catálogo por defecto). Hay dos modos:
 
 ```json
 { "mode": "reprocess", "ids": ["roborock-q-revo"], "dryRun": false }
 ```
 
+```json
+{ "mode": "reprocess", "scope": "all", "confirm": true, "dryRun": false, "enrich": false }
+```
+
+```json
+{ "mode": "dedupe", "dryRun": true }
+```
+
 | Campo | Tipo | Descripción |
 |---|---|---|
-| `ids` | string[] | Opcional; vacío/ausente = todo el catálogo. |
-| `dryRun` | boolean | `true` ejecuta ingest → audit → categorize **sin persistir** (etapa 4 omitida). |
+| `mode` | string | `reprocess` (default) o `dedupe`. Cualquier otro valor → `400`. |
+| `ids` | string[] | Sólo con `mode:'reprocess'`. Ámbito `ids`: reprocesa esos productos. |
+| `scope` | string | `ids` (por defecto si hay `ids`) o `all`. |
+| `confirm` | boolean | **Obligatorio** (`true`) para escribir sobre todo el catálogo (`scope:'all'` sin `dryRun`). Sin él → `400`. |
+| `dryRun` | boolean | `true` = ingest → audit → categorize **sin persistir**. En `mode:'dedupe'` es la simulación (default: simulación). |
 | `enrich` | boolean | `false` desactiva la IA de texto (default `true`). |
 
-Respuesta: `{ success, mode, total, processed, failed, results[] }` con el mismo
-detalle por producto que la importación.
+Respuesta (reprocess): `{ success, mode, scope, dryRun, total, processed, failed, results[] }`
+con el mismo detalle por producto que la importación (`stage`, `duplicate`,
+`audit_status`, `audit_score`, `audit_reasons`).
+
+Respuesta (dedupe): `{ success, mode, dryRun, groups, removed, removedIds[], details[], total, remaining }`.
+La purga conserva la ficha **más completa** de cada grupo (y, a igualdad, el id
+canónico sin sufijo `-2`, para no romper las URLs ya publicadas) y deja
+tombstone en `deleted-product-ids.json` para que no reaparezcan.
 
 ---
 

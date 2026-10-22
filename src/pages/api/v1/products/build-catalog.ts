@@ -221,6 +221,10 @@ async function ingestAllNetworks(): Promise<{
   const networksQueried = [...connected];
   const errors: string[] = [];
   const byNetwork: Record<string, number> = {};
+  // Dedupe GLOBAL (no sólo por red): el mismo producto puede llegar desde dos
+  // fuentes distintas (API nativa y catálogo sincronizado) y no debe entrar dos
+  // veces en el catálogo.
+  const seenGlobal = new Set<string>();
 
   const results = await Promise.allSettled(
     connected.map(async (networkId) => {
@@ -243,8 +247,14 @@ async function ingestAllNetworks(): Promise<{
               const networkProducts = results.byNetwork.find((r) => r.network === networkId)?.products ?? [];
               for (const up of networkProducts) {
                 if (allCanonical.length >= BUILD_CONFIG.PER_NETWORK_LIMIT) break;
-                const dedupeKey = canonicalProductUrl(up.productUrl) || extractSourceId({ ...up, affiliateUrl: up.productUrl } as any) || cleanTitleKey(up.title);
-                if (seenInNetwork.has(dedupeKey)) continue;
+                // La clave más fuerte es el `sourceId` externo (ASIN / Item ID):
+                // dos búsquedas del mismo producto traen la MISMA id aunque
+                // cambien los parámetros del enlace. Con la URL canónica como
+                // clave principal, el mismo producto entraba dos veces.
+                const sourceId = extractSourceId({ sourceId: up.externalId, affiliateUrl: up.productUrl } as any);
+                const dedupeKey = sourceId || canonicalProductUrl(up.productUrl) || cleanTitleKey(up.title);
+                if (seenGlobal.has(dedupeKey) || seenInNetwork.has(dedupeKey)) continue;
+                seenGlobal.add(dedupeKey);
                 seenInNetwork.add(dedupeKey);
 
                 const upgraded = upgradeImages({ mainImage: up.image, gallery: up.gallery });
@@ -302,8 +312,11 @@ async function ingestAllNetworks(): Promise<{
             });
             for (const product of batch) {
               if (networkCanonical.length >= BUILD_CONFIG.PER_NETWORK_LIMIT) break;
-              const dedupeKey = canonicalProductUrl(product.affiliateUrl) || extractSourceId({ sourceId: product.externalId, affiliateUrl: product.affiliateUrl }) || cleanTitleKey(product.title);
-              if (seenInNetwork.has(dedupeKey)) continue;
+              // `sourceId` primero (misma clave que el pipeline y que la Etapa 1).
+              const sourceId = extractSourceId({ sourceId: product.externalId, affiliateUrl: product.affiliateUrl });
+              const dedupeKey = sourceId || canonicalProductUrl(product.affiliateUrl) || cleanTitleKey(product.title);
+              if (seenGlobal.has(dedupeKey) || seenInNetwork.has(dedupeKey)) continue;
+              seenGlobal.add(dedupeKey);
               seenInNetwork.add(dedupeKey);
               networkCanonical.push(product);
             }
@@ -634,35 +647,50 @@ async function buildAndUpsertProducts(
 
   for (const group of groups) {
     const canonical = group.canonical;
-    const baseId = generateProductId(canonical.title, existingIds);
+    const affiliateUrl = group.allAffiliateUrls[group.allNetworks[0]] || canonical.affiliateUrl;
+    const merchantName = cleanMerchant(group.allMerchantNames[group.allNetworks[0]]) || canonical.merchantName;
+
+    // Identidad del producto: el `sourceId` externo (ASIN / Item ID) es la clave
+    // más fuerte; si no hay, se usa la URL canónica.
+    const sourceId = String(canonical.externalId || '').trim()
+      || extractSourceId({ sourceId: canonical.externalId, affiliateUrl } as any);
+    const canonicalUrl = canonicalProductUrl(affiliateUrl);
+
+    // ¿Este producto YA está en el catálogo? Si lo está, se ACTUALIZA (con su
+    // id) en vez de crear una copia "-2" con el mismo sourceId.
+    let existingIndex = -1;
+    if (sourceId) {
+      existingIndex = existingProducts.findIndex((p) => extractSourceId(p) === sourceId);
+    }
+    if (existingIndex === -1 && canonicalUrl) {
+      existingIndex = existingProducts.findIndex(
+        (p) => canonicalProductUrl(p.affiliateUrl) === canonicalUrl || canonicalProductUrl(p.buyNowUrl) === canonicalUrl,
+      );
+    }
+
+    // Id destino: el del producto existente o, si es nuevo, uno generado.
+    const baseId = existingIndex >= 0 ? existingProducts[existingIndex].id : generateProductId(canonical.title, existingIds);
+    existingIds.add(baseId);
 
     // Saltar tombstones
     if (deletedIds.has(baseId)) {
       continue;
     }
 
-    // Duplicado contra catálogo existente (reutiliza stageIngest)
+    // Duplicado contra catálogo existente (reutiliza stageIngest).
+    // El `sourceId` se pasa explícitamente: si no, `extractSourceId` no puede
+    // compararlo con el del catálogo y el duplicado se escapaba.
     const duplicateHit = findIngestDuplicate(existingProducts, {
       ...canonical,
       id: baseId,
+      sourceId,
       category: group.category || 'Tecnología',
-      merchant: cleanMerchant(group.allMerchantNames[group.allNetworks[0]]) || canonical.merchantName,
-      affiliateUrl: group.allAffiliateUrls[group.allNetworks[0]] || canonical.affiliateUrl,
+      merchant: merchantName,
+      affiliateUrl,
     } as any, baseId);
 
-    let existingIndex = -1;
-    if (duplicateHit) {
+    if (duplicateHit && existingIndex === -1) {
       existingIndex = existingProducts.findIndex((p) => p.id === duplicateHit.duplicateOf);
-    } else {
-      // Buscar por id generado
-      existingIndex = existingProducts.findIndex((p) => p.id === baseId);
-      if (existingIndex === -1) {
-        // Buscar por URL canónica
-        existingIndex = existingProducts.findIndex((p) =>
-          canonical.affiliateUrl && p.affiliateUrl &&
-          canonicalProductUrl(canonical.affiliateUrl) === canonicalProductUrl(p.affiliateUrl)
-        );
-      }
     }
 
     const discountPct = calculateDiscountPercentage(group.bestOriginalPrice, group.bestPrice);

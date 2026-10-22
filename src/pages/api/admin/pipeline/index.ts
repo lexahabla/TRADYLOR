@@ -5,11 +5,16 @@
  * GET  /api/admin/pipeline
  *   -> Métricas de transparencia derivadas de products.json + pipeline-metrics.json
  *      { approved, rejected, pending, avg_audit_score, by_reason,
- *        duplicates_discarded, last_run }
+ *        duplicates_discarded, duplicate_groups, duplicate_products, last_run }
  *
  * POST /api/admin/pipeline
- *   -> { mode: 'reprocess', ids?: string[], dryRun?: boolean }
+ *   -> { mode: 'reprocess', ids?: string[], scope?: 'ids'|'all', dryRun?: boolean,
+ *        enrich?: boolean, confirm?: boolean }
  *      Re-ejecuta las 4 etapas sobre productos existentes del catálogo.
+ *      Para escribir sobre TODO el catálogo hacen falta `scope:'all'` + `confirm:true`.
+ *   -> { mode: 'dedupe', dryRun?: boolean }
+ *      Detecta (y opcionalmente purga) los duplicados reales del catálogo.
+ *      Sin `dryRun:false` es una SIMULACIÓN: no se escribe nada.
  *
  * Protegido por sesión de administrador (requireAdminAuth).
  * ==============================================================================
@@ -20,6 +25,7 @@ import { requireAdminAuth } from '../../../../lib/adminAuth';
 import { readProductsFromFile } from '../../../../lib/productStore';
 import { readPipelineMetrics } from '../../../../lib/pipeline/metrics';
 import { reprocessCatalog } from '../../../../lib/pipeline';
+import { findDuplicateGroups, purgeDuplicateProducts } from '../../../../lib/curation';
 
 export const prerender = false;
 
@@ -27,6 +33,11 @@ const jsonHeaders = {
   'Content-Type': 'application/json; charset=utf-8',
   'Cache-Control': 'no-store',
 };
+
+/** Respuesta JSON de error con el código indicado. */
+function errorResponse(message: string, status = 400): Response {
+  return new Response(JSON.stringify({ success: false, message }), { status, headers: jsonHeaders });
+}
 
 /** Métricas de transparencia: estado de auditoría + contadores del pipeline. */
 function buildMetrics() {
@@ -59,6 +70,10 @@ function buildMetrics() {
     }
   }
 
+  // Duplicados REALES que siguen en el catálogo (mismo sourceId o URL canónica).
+  const duplicateGroups = findDuplicateGroups(products);
+  const duplicateProducts = duplicateGroups.reduce((sum, group) => sum + group.duplicateIds.length, 0);
+
   return {
     approved,
     rejected,
@@ -66,6 +81,8 @@ function buildMetrics() {
     avg_audit_score: scored ? Math.round((scoreSum / scored) * 10) / 10 : 0,
     by_reason: byReason,
     duplicates_discarded: counters.duplicatesDiscarded,
+    duplicate_groups: duplicateGroups.length,
+    duplicate_products: duplicateProducts,
     last_run: counters.lastRun || null,
     runs: counters.runs,
     productsProcessed: counters.productsProcessed,
@@ -86,28 +103,79 @@ export const POST: APIRoute = async ({ request }) => {
   const unauthorizedResponse = requireAdminAuth(request);
   if (unauthorizedResponse) return unauthorizedResponse;
 
-  let body: any = {};
+  // El cuerpo SIEMPRE tiene que ser JSON válido: si no, se rechaza (antes un
+  // cuerpo inválido se traducía en `{}` y reprocesaba el catálogo entero).
+  let body: any;
   try {
     body = await request.json();
   } catch {
-    body = {};
+    return errorResponse('Cuerpo JSON inválido: se esperaba { mode: "reprocess" | "dedupe", ... }.');
+  }
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    return errorResponse('Cuerpo JSON inválido: se esperaba un objeto.');
   }
 
-  const ids = Array.isArray(body?.ids)
+  const mode = String(body.mode || 'reprocess').trim();
+
+  // ── Modo purga de duplicados ───────────────────────────────────────────────
+  if (mode === 'dedupe') {
+    const dryRun = body.dryRun !== false; // por defecto SIMULACIÓN (no escribe)
+    const result = purgeDuplicateProducts({ dryRun });
+    return new Response(
+      JSON.stringify({
+        success: true,
+        mode: 'dedupe',
+        dryRun: result.dryRun,
+        groups: result.details.length,
+        removed: result.removed.length,
+        removedIds: result.removed,
+        details: result.details,
+        total: result.total,
+        remaining: result.remaining,
+        message: result.dryRun
+          ? `Simulación: ${result.removed.length} producto(s) duplicado(s) de ${result.details.length} grupo(s) se eliminarían.`
+          : `${result.removed.length} producto(s) duplicado(s) eliminados de ${result.details.length} grupo(s).`,
+      }),
+      { status: 200, headers: jsonHeaders },
+    );
+  }
+
+  if (mode !== 'reprocess') {
+    return errorResponse(`Modo desconocido: "${mode}". Usa "reprocess" o "dedupe".`);
+  }
+
+  const ids = Array.isArray(body.ids)
     ? body.ids.map((value: unknown) => String(value || '').trim()).filter(Boolean)
     : undefined;
+  const dryRun = body.dryRun === true;
+  const scope = String(body.scope || (ids && ids.length ? 'ids' : 'all')).trim();
+
+  if (scope !== 'ids' && scope !== 'all') {
+    return errorResponse(`Ámbito desconocido: "${scope}". Usa "ids" o "all".`);
+  }
+  if (scope === 'ids' && !ids?.length) {
+    return errorResponse('Ámbito "ids" sin lista de IDs: se esperaba { ids: [...] }.');
+  }
+  // Escribir sobre TODO el catálogo exige confirmación explícita.
+  if (scope === 'all' && !dryRun && body.confirm !== true) {
+    return errorResponse(
+      'Para reprocesar y escribir TODO el catálogo hay que enviar { scope: "all", confirm: true }.',
+    );
+  }
 
   try {
     const { total, results } = await reprocessCatalog(ids, {
-      dryRun: body?.dryRun === true,
-      enrich: body?.enrich !== false,
+      dryRun,
+      enrich: body.enrich !== false,
     });
 
     const okCount = results.filter((result) => result.ok).length;
     return new Response(
       JSON.stringify({
         success: true,
-        mode: body?.mode || 'reprocess',
+        mode: 'reprocess',
+        scope,
+        dryRun,
         total,
         processed: okCount,
         failed: results.length - okCount,
@@ -120,15 +188,13 @@ export const POST: APIRoute = async ({ request }) => {
           duplicate_reason: result.duplicate_reason,
           audit_status: result.audit_status,
           audit_score: result.audit_score,
+          audit_reasons: result.product?.audit_reasons ?? [],
           message: result.message,
         })),
       }),
       { status: 200, headers: jsonHeaders },
     );
   } catch (error: any) {
-    return new Response(
-      JSON.stringify({ success: false, message: error?.message || 'Error al reprocesar el catálogo.' }),
-      { status: 500, headers: jsonHeaders },
-    );
+    return errorResponse(error?.message || 'Error al reprocesar el catálogo.', 500);
   }
 };

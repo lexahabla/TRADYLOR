@@ -1272,7 +1272,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <div class="tp-metric"><span class="tp-metric-value" id="tpPending">–</span><span class="tp-metric-label">Sin auditar</span></div>
           <div class="tp-metric"><span class="tp-metric-value" id="tpScore">–</span><span class="tp-metric-label">Score medio</span></div>
           <div class="tp-metric"><span class="tp-metric-value" id="tpDupes">–</span><span class="tp-metric-label">Duplicados descartados</span></div>
+          <div class="tp-metric"><span class="tp-metric-value is-warn" id="tpDupGroups">–</span><span class="tp-metric-label">Duplicados en el catálogo</span></div>
           <div class="tp-metric"><span class="tp-metric-value is-small" id="tpLastRun">–</span><span class="tp-metric-label">Última ejecución</span></div>
+        </div>
+
+        <div class="tp-options">
+          <button type="button" id="btnDedupeScan" class="btn-secondary btn-sm" title="Detecta los productos duplicados del catálogo SIN borrar nada">
+            <span class="btn-text">🔍 Buscar duplicados</span>
+            <div class="btn-spinner" hidden></div>
+          </button>
+          <button type="button" id="btnDedupePurge" class="btn-danger btn-sm" title="Elimina del catálogo los productos duplicados (conserva la ficha más completa de cada grupo)">
+            <span class="btn-text">🧹 Purgar duplicados</span>
+            <div class="btn-spinner" hidden></div>
+          </button>
         </div>
 
         <div class="tp-reasons" id="tpReasons" hidden>
@@ -6935,11 +6947,15 @@ function renderTableRows(products) {
     const btnPipelineRefresh = document.getElementById('btnPipelineRefresh');
     const btnPipelineDryRun = document.getElementById('btnPipelineDryRun');
     const btnPipelineRun = document.getElementById('btnPipelineRun');
+    const btnDedupeScan = document.getElementById('btnDedupeScan');
+    const btnDedupePurge = document.getElementById('btnDedupePurge');
+    const tpDupGroups = document.getElementById('tpDupGroups');
 
     const TP_REASON_LABELS = {
       'rating-insuficiente': 'Valoración insuficiente',
       'pocas-resenas': 'Pocas reseñas',
       'sin-descuento-verificado': 'Sin descuento verificado',
+      'precio-por-encima-del-historico': 'Precio por encima del histórico',
       'vendedor-no-verificado': 'Vendedor no verificado',
       'sin-datos-suficientes': 'Sin datos suficientes',
     };
@@ -6969,6 +6985,7 @@ function renderTableRows(products) {
         if (tpPending) tpPending.textContent = data.pending ?? 0;
         if (tpScore) tpScore.textContent = data.avg_audit_score ?? 0;
         if (tpDupes) tpDupes.textContent = data.duplicates_discarded ?? 0;
+        if (tpDupGroups) tpDupGroups.textContent = data.duplicate_products ?? 0;
         if (tpLastRun) tpLastRun.textContent = tpFormatDate(data.last_run);
         const reasons = data.by_reason || {};
         const entries = Object.entries(reasons);
@@ -6996,7 +7013,13 @@ function renderTableRows(products) {
         const res = await fetch('/api/admin/pipeline', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: 'reprocess', dryRun: dryRun === true, enrich: tpEnrich ? tpEnrich.checked : false }),
+          body: JSON.stringify({
+            mode: 'reprocess',
+            scope: 'all',
+            confirm: true,
+            dryRun: dryRun === true,
+            enrich: tpEnrich ? tpEnrich.checked : false,
+          }),
         });
         const data = await res.json();
         if (!res.ok || !data.success) throw new Error(data.message || 'El pipeline no pudo ejecutarse.');
@@ -7005,7 +7028,11 @@ function renderTableRows(products) {
           tpResultsBody.innerHTML = rows
             .map((row) => {
               const status = row.audit_status || (row.duplicate ? 'duplicado' : '—');
-              const reason = row.duplicate_reason ? `Duplicado (${row.duplicate_reason})` : (row.message || '');
+              const reasons = Array.isArray(row.audit_reasons) ? row.audit_reasons : [];
+              const reasonText = reasons.map((code) => TP_REASON_LABELS[code] || code).join(' · ');
+              const reason = row.duplicate_reason
+                ? `Duplicado (${row.duplicate_reason})`
+                : (reasonText || row.message || '');
               return `<tr>
                 <td>${escapeHtml(row.title || row.id || '—')}</td>
                 <td><span class="tp-badge is-${escapeHtml(status)}">${escapeHtml(status)}</span></td>
@@ -7038,6 +7065,46 @@ function renderTableRows(products) {
       const ok = window.confirm('Se reprocesará todo el catálogo (auditoría, tags y score). ¿Continuar?');
       if (ok) tpRunPipeline(false);
     });
+
+    // ── Purgado de duplicados ────────────────────────────────────────────────
+    async function tpRunDedupe(purge) {
+      const btn = purge ? btnDedupePurge : btnDedupeScan;
+      const spinner = btn ? btn.querySelector('.btn-spinner') : null;
+      const text = btn ? btn.querySelector('.btn-text') : null;
+      const original = text ? text.textContent : '';
+      if (btn) btn.disabled = true;
+      if (spinner) spinner.hidden = false;
+      if (text) text.textContent = purge ? 'Purgando…' : 'Buscando…';
+      try {
+        const res = await fetch('/api/admin/pipeline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: 'dedupe', dryRun: !purge }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'No se pudo ejecutar la purga.');
+        tpShowStatus(
+          purge ? 'ok' : 'info',
+          purge ? 'Duplicados purgados' : 'Duplicados detectados',
+          `${data.removed ?? 0} producto(s) duplicado(s) en ${data.groups ?? 0} grupo(s). ${data.total ?? 0} productos en el catálogo, quedan ${data.remaining ?? 0}.`,
+        );
+        await tpLoadMetrics();
+        if (purge) await reloadProductsTable();
+      } catch (err) {
+        tpShowStatus('error', 'Error en la purga de duplicados', err?.message || 'Fallo de red.');
+      } finally {
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.hidden = true;
+        if (text) text.textContent = original;
+      }
+    }
+
+    btnDedupeScan?.addEventListener('click', () => tpRunDedupe(false));
+    btnDedupePurge?.addEventListener('click', () => {
+      const ok = window.confirm('Se eliminarán del catálogo los productos duplicados (se conserva la ficha más completa de cada grupo y se deja tombstone para que no vuelvan). ¿Continuar?');
+      if (ok) tpRunDedupe(true);
+    });
+
     if (btnPipelineRefresh) tpLoadMetrics();
   });
 </script>

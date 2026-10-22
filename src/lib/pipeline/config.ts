@@ -19,6 +19,14 @@ export interface PipelineConfig {
   minReviewsCount: number;
   /** Substrings (minúsculas) de marketplaces de confianza. */
   trustedMerchants: string[];
+  /** Marketplaces/redes con canal de confianza (pago protegido y devoluciones). */
+  trustedNetworks: string[];
+  /** Peso del bloque de procedencia (vendedor/red de confianza). */
+  weightProvenance: number;
+  /** Peso del bloque de reseñas (valoración + volumen). */
+  weightReviews: number;
+  /** Peso del bloque de descuento verificado. */
+  weightDiscount: number;
   /** Mapa subcategoría → keywords para inferir la subcategoría hija. */
   subcategoryKeywords: Record<string, string[]>;
   /** Versión del pipeline estampada en `pipeline_version`. */
@@ -61,6 +69,29 @@ export const TRUSTED_MERCHANTS = [
   'tienda oficial',
 ];
 
+/**
+ * Marketplaces y redes con canal de confianza: la compra está protegida por la
+ * propia plataforma (pago, devoluciones y reputación del vendedor), aunque el
+ * `merchant` sea un vendedor individual. Sin esta lista, TODO el catálogo de
+ * eBay/AliExpress salía como "vendedor-no-verificado".
+ */
+export const TRUSTED_NETWORKS = [
+  'amazon',
+  'ebay',
+  'aliexpress',
+  'etsy',
+  'awin',
+  'cj',
+  'admitad',
+  'tradedoubler',
+  'kwanko',
+  'pccomponentes',
+  'mediamarkt',
+  'fnac',
+  'carrefour',
+  'elcorteingles',
+];
+
 /** Mapa de keywords → nombre de subcategoría hija (se crea si no existe). */
 export const SUBCATEGORY_KEYWORDS: Record<string, string[]> = {
   'Auriculares': ['auricular', 'auriculares', 'earbuds', 'cascos', 'headphone', 'headset'],
@@ -88,7 +119,11 @@ export function getPipelineConfig(): PipelineConfig {
     minRating: envNumber('PIPELINE_MIN_RATING', 4),
     minReviewsCount: envNumber('PIPELINE_MIN_REVIEWS', 20),
     trustedMerchants: TRUSTED_MERCHANTS,
+    trustedNetworks: TRUSTED_NETWORKS,
+    weightProvenance: envNumber('PIPELINE_WEIGHT_PROVENANCE', 50),
+    weightReviews: envNumber('PIPELINE_WEIGHT_REVIEWS', 30),
+    weightDiscount: envNumber('PIPELINE_WEIGHT_DISCOUNT', 20),
     subcategoryKeywords: SUBCATEGORY_KEYWORDS,
-    version: envNumber('PIPELINE_VERSION', 1),
+    version: envNumber('PIPELINE_VERSION', 2),
   };
 }
