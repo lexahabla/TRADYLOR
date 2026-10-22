@@ -1,5 +1,6 @@
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\docs\api-v1.md
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\docs\deploy-easypanel.md
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\scripts\check-inline-scripts.mjs
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\scripts\reset-admin-password.mjs
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\DateRangeFilter.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\components\admin\FinancialHeaderCards.astro

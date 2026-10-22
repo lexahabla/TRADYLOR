@@ -155,9 +155,9 @@ const productsJson = JSON.stringify(approvedProducts);
 
 <script type="application/json" id="smw-products-data" set:html={productsJson}></script>
 <script is:inline>
-  declare global {
-    interface Window { __smartMatcherProducts: unknown[] }
-  }
+  // OJO: `is:inline` no lo procesa Vite → aquí sólo JavaScript puro.
+  // La declaración de tipos de `window.__smartMatcherProducts` vive en
+  // src/env.d.ts (no se puede poner aquí porque rompería la sintaxis).
   window.__smartMatcherProducts = JSON.parse(document.getElementById('smw-products-data')?.textContent || '[]');
 </script>
 

@@ -136,7 +136,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 ## Comandos
 
 - `npm run dev` - Servidor de desarrollo (http://localhost:4321)
-- `npm run build` - Compilar a `dist/` (build standalone de Node)
+- `npm run build` - Compilar a `dist/` (build standalone de Node). Ejecuta antes `check:inline`.
+- `npm run check:inline` - Valida la sintaxis de los `<script is:inline>` de los `.astro`
 - `npm start` - Arrancar el build de producción (`node dist/server/entry.mjs`)
 - `npm run preview` - Previsualizar el build
 - `npm run astro` - CLI de Astro
@@ -156,6 +157,13 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 
 ## Convenciones y avisos
 
+- **`<script is:inline>` NO admite TypeScript**: Astro no procesa esos bloques
+  (no pasan por Vite), así que una anotación de tipo (`let x: string[] = []`,
+  `function f(a: number)`, `as any`, `declare global`) provoca un **error de
+  sintaxis que mata el script entero**: la página se queda sin JS (filtros que
+  no se pintan, paginación muerta, botones que no responden) sin aviso en el
+  HTML. Escribe JavaScript puro ahí y valida con `npm run check:inline` (se
+  ejecuta también en `npm run build`).
 - **Seguridad**: `src/data/credentials.json` y `.env` están en `.gitignore`. Nunca
   añadir credenciales reales, tokens ni claves de API al código ni a los commits.
 - El panel admin y las rutas `/api/*` requieren autenticación; respetar `adminAuth.ts`

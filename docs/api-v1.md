@@ -37,7 +37,25 @@ listo para que n8n evalúe rentabilidad y decida qué promocionar o retirar.
 | `category` | string | Filtra por nombre exacto de categoría (ej. `Audio y Sonido`) |
 | `minPrice` | number | Precio mínimo en EUR |
 | `maxPrice` | number | Precio máximo en EUR |
-| `limit` | number | Máximo de resultados (1–200, por defecto 50) |
+| `limit` | number | Productos por página (1–100, por defecto **24**) |
+| `page` | number | Número de página (1-indexed, por defecto **1**) |
+
+### Paginación
+
+El feed se devuelve **paginado**: `total` es el número de productos que casan
+con los filtros (antes de paginar) y `totalPages` el número de páginas con el
+`limit` aplicado.
+
+| Clave | Descripción |
+|---|---|
+| `total` | Productos que casan con los filtros (sin contar la paginación). |
+| `page` | Página servida (1-indexed). |
+| `limit` | Productos por página aplicados en la respuesta. |
+| `totalPages` | Páginas totales (`ceil(total / limit)`). |
+| `products` | Productos de la página actual. |
+
+Para recorrerlo entero con n8n: `page = 1..totalPages` (o `limit=100` y
+paginar mientras `page < totalPages`).
 
 ### Respuesta 200
 
@@ -45,6 +63,9 @@ listo para que n8n evalúe rentabilidad y decida qué promocionar o retirar.
 {
   "success": true,
   "total": 11,
+  "page": 1,
+  "limit": 24,
+  "totalPages": 1,
   "generatedAt": "2026-09-16T10:30:00.000Z",
   "products": [
     {
@@ -74,7 +95,7 @@ listo para que n8n evalúe rentabilidad y decida qué promocionar o retirar.
 
 ```
 Method: GET
-URL: https://tradylor.com/api/v1/products?limit=100
+URL: https://tradylor.com/api/v1/products?limit=100&page=1
 Authentication: Generic Credential Type → Header Auth
   Name: Authorization
   Value: Bearer {{$env.TRADYLOR_API_TOKEN}}
@@ -246,7 +267,105 @@ Schedule Trigger (cada 6h)
 
 ---
 
-## 3. Flujo de Compra Delegada (Delegated Checkout)
+## 3. POST /api/v1/products/build-catalog — Construcción automática del catálogo
+
+Construye (o reconstruye) el catálogo completo `products.json` consultando
+**todas las redes de afiliados conectadas**, sin pasar por n8n. Es el mismo
+proceso que lanza el botón «🏗️ Construir Catálogo» del panel admin
+(`/upayp1b4` → Afiliados y Multi-Catálogo).
+
+Autenticación: `Authorization: Bearer <TRADYLOR_API_TOKEN>` (igual que el resto
+de `/api/v1/*`).
+
+| Query param | Tipo | Descripción |
+|---|---|---|
+| `dryRun` | `1` | Modo simulación: recorre todo el proceso y devuelve el reporte **sin escribir** en `products.json`. |
+
+No acepta body. Devuelve `200` con el reporte del proceso o `500` si falla.
+
+### Proceso
+
+1. **Ingesta paralela** de todas las redes conectadas (con las keywords del
+   catálogo) y normalización canónica.
+2. **Filtro de calidad**: título válido, precio ≥ 1 € e imagen presente.
+   Las categorías purgadas (recambios) se descartan.
+3. **Deduplicación cross-merchant**: `sourceId` → URL canónica → similitud de
+   título (Jaccard ≥ 0,75) → marca + título (≥ 0,6). Se queda el mejor precio,
+   comisión, valoración y ventas, y se agrupan las URLs de cada red.
+4. **Categorización**: sólo en categorías **existentes** (raíces + subcategorías
+   con keywords). Los productos sin categoría válida quedan sin categoría.
+5. **Ofertas estrella (HSR)**: descuento ≥ 15 %, comisión ≥ 3 % y score ≥ 50.
+6. **Ordenación inteligente**: primero las HSR, luego por
+   `ventas × comisión / precio`.
+7. **Stamping del pipeline**: `audit_status`, `audit_score`, `audit_reasons`,
+   `ia_status`, `link_status`, `normalized_tags`, `conversion_score`,
+   `pipeline_version` y `pipeline_run_at`.
+8. **Upsert atómico** en `products.json` (fichero temporal + `rename`).
+
+Los productos **nuevos** se enriquecen con IA (texto y, si no tienen imagen,
+imagen) cuando hay credenciales configuradas (`TEXT_AI_PROVIDER` /
+`IMAGE_AI_PROVIDER`).
+
+### Respuesta 200 (reporte)
+
+```json
+{
+  "success": true,
+  "startedAt": "2026-10-22T10:00:00.000Z",
+  "finishedAt": "2026-10-22T10:01:12.000Z",
+  "durationMs": 72000,
+  "networksQueried": ["aliexpress", "ebay"],
+  "productsByNetwork": { "aliexpress": 240, "ebay": 104 },
+  "rawTotal": 344,
+  "afterQualityFilter": 318,
+  "crossMerchantGroups": 296,
+  "duplicatesResolved": 48,
+  "uncategorized": 12,
+  "hsrDetected": 9,
+  "upserted": 210,
+  "updated": 86,
+  "truncated": 0,
+  "aiEnrichedText": 198,
+  "aiEnrichedImages": 24,
+  "wouldUpsert": 210,
+  "wouldUpdate": 86,
+  "errors": [],
+  "categoryBreakdown": [
+    {
+      "category": "Audio y Sonido",
+      "categoryId": "audio-y-sonido",
+      "subcategories": {
+        "auriculares": { "name": "Auriculares", "id": "audio-y-sonido--auriculares", "count": 96 }
+      },
+      "total": 96
+    }
+  ],
+  "filteredByReason": { "no_image": 14, "excluded_category": 12 }
+}
+```
+
+| Clave | Descripción |
+|---|---|
+| `rawTotal` | Productos brutos ingeridos de las redes. |
+| `afterQualityFilter` | Productos que superan el filtro de calidad. |
+| `crossMerchantGroups` / `duplicatesResolved` | Grupos tras deduplicar / duplicados resueltos. |
+| `uncategorized` | Productos sin categoría válida (no salen en el filtro por categoría). |
+| `hsrDetected` | Ofertas estrella detectadas. |
+| `upserted` / `updated` | Productos nuevos / actualizados (en `dryRun` van a `wouldUpsert` / `wouldUpdate`). |
+| `aiEnrichedText` / `aiEnrichedImages` | Enriquecimientos con IA aplicados. |
+| `categoryBreakdown` | Reparto por categoría y subcategoría. |
+| `filteredByReason` | Descartes por motivo: `invalid_title`, `invalid_price`, `no_image`, `excluded_category`. |
+| `errors` | Errores no fatales (red que no responde, producto descartado…). |
+
+> Tras un build, los productos con `audit_status: 'approved'` +
+> `ia_status: 'completed'` + `link_status: 'active'` son los que aparecen en el
+> preset «⭐ Listos para Publicar» del panel. Los umbrales de auditoría se
+> ajustan por entorno: `PIPELINE_MIN_AUDIT_SCORE`, `PIPELINE_MIN_RATING`,
+> `PIPELINE_MIN_REVIEWS`, `PIPELINE_MIN_DISCOUNT_PERCENT`.
+
+---
+
+## 4. Flujo de Compra Delegada (Delegated Checkout)
 
 Rutas internas del frontend (no requieren token; son parte de la experiencia de
 usuario). El enlace de afiliado jamás se expone en el HTML ni en el JS.
@@ -303,7 +422,7 @@ por Slack/Telegram o actualizar una hoja de cálculo de comisiones.
 
 ---
 
-## 4. Reproceso del pipeline (admin, interno)
+## 5. Reproceso del pipeline (admin, interno)
 
 Endpoint **protegido por sesión de administrador** (cookie
 `tradylor_admin_session`; NO usa el token de la API v1). Re-ejecuta las 4
@@ -345,7 +464,7 @@ detalle por producto que la importación.
 
 ---
 
-## 5. Reclasificación de productos por categoría (admin, interno)
+## 6. Reclasificación de productos por categoría (admin, interno)
 
 Endpoint **protegido por sesión de administrador** (cookie `tradylor_admin_session`).
 Reasigna los productos a la taxonomía **actual** del catálogo (las categorías raíz y
@@ -426,7 +545,7 @@ Es **idempotente**: al repetirla no vuelve a reasignar ni a podar nada.
 
 ---
 
-## 6. Categorías y subcategorías (admin, interno)
+## 7. Categorías y subcategorías (admin, interno)
 
 CRUD de la taxonomía del catálogo. **Protegido por sesión de administrador**
 (cookie `tradylor_admin_session`) en los métodos de escritura.
