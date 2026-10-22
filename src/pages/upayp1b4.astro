@@ -2814,14 +2814,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
     }
 
-function renderTableRows(products) {
+function renderTableRows(products, resetPage = true) {
       if (!productsTableBody) return;
 
       // Guardar productos filtrados para paginación
       filteredProducts = products;
 
-      // Resetear a la primera página al cambiar filtros
-      currentPage = 1;
+      // Resetear a la primera página al cambiar filtros (salvo en paginación)
+      if (resetPage) currentPage = 1;
 
       // Actualizar controles de paginación
       updatePaginationControls();
@@ -3363,7 +3363,8 @@ function renderTableRows(products) {
       const totalPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
       if (page < 1 || page > totalPages) return;
       currentPage = page;
-      renderTableRows(filteredProducts);
+      updatePaginationControls();
+      renderTableRows(filteredProducts, false);
       // Scroll suave al inicio de la tabla
       const tableEl = document.getElementById('productsTable');
       if (tableEl) {
