@@ -126,6 +126,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\middleware.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\add-product.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\aliexpress\catalog.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\alternatives.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\enrich-bulk.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\analytics\export.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\analytics\months.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\analytics\reset.ts

@@ -186,5 +186,6 @@ function normalizeToProduct(schema: Product): FlatProduct {
     pipeline_run_at: schema.pipeline_run_at,
     ai_enriched: schema.ai_enriched,
     ai_error: schema.ai_error,
+    title_short: schema.title_short,
   };
 }

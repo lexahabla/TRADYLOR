@@ -144,6 +144,8 @@ export interface Product {
   ai_enriched?: boolean;
   /** Motivo por el que la IA de texto no pudo enriquecer la ficha. */
   ai_error?: string;
+  /** Título sintetizado y corto (para product-cards). Si falta, se usa `title`. */
+  title_short?: string;
   /** Métricas del vendedor y calidad de reseñas. */
   metrics?: {
     sellerRating?: number;
@@ -233,6 +235,7 @@ export function toStructuredProduct(flat: Product): ProductSchema {
     pipeline_run_at: flat.pipeline_run_at,
     ai_enriched: flat.ai_enriched,
     ai_error: flat.ai_error,
+    title_short: flat.title_short,
     image: flat.image,
     gallery: flat.gallery,
     badge: flat.badge,

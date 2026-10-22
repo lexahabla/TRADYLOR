@@ -1516,13 +1516,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   )}
 </Layout>
 
-<!-- Modal para crear sección con productos seleccionados -->
+<!-- Modal para crear/editar sección con productos seleccionados -->
 <div class="admin-modal" id="createSectionModal" hidden role="dialog" aria-modal="true" aria-labelledby="createSectionModalTitle">
   <div class="admin-modal-backdrop" data-create-section-close></div>
   <div class="admin-modal-dialog">
     <button type="button" class="admin-modal-close" data-create-section-close aria-label="Cerrar modal">×</button>
     <h2 class="admin-modal-title" id="createSectionModalTitle">Crear nueva sección</h2>
-    <p class="admin-modal-text">Agrupa los productos seleccionados en una sección temática para mostrar en la web.</p>
+    <p class="admin-modal-text" id="createSectionModalDesc">Agrupa los productos seleccionados en una sección temática para mostrar en la web.</p>
+    <input type="hidden" id="createSectionId" />
+    <input type="hidden" id="createSectionMode" value="create" />
     <div class="admin-modal-field">
       <span>Título de la sección <span aria-hidden="true">*</span></span>
       <input type="text" id="createSectionTitle" placeholder="Ej: Mejores Auriculares Bluetooth 2024" maxlength="80" required />
@@ -3549,47 +3551,89 @@ function renderTableRows(products, resetPage = true) {
       });
       updateProdSelCount();
     });
-    btnProdEnrich?.addEventListener('click', async () => {
-      const ids = Array.from(selectedProductIds);
-      if (!ids.length) return;
-      showAlert('loading', 'Enriqueciendo con IA...', `Procesando ${ids.length} producto(s).`);
-      let ok = 0, failed = 0;
-      for (const id of ids) {
-        const product = (currentProducts || []).find((p) => p.id === id);
-        if (!product) { failed++; continue; }
-        try {
-          const res = await fetch('/api/admin/add-product', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: product.id,
-              title: product.title,
-              description: product.description,
-              category: product.category,
-              price: product.price,
-              originalPrice: product.originalPrice,
-              image: product.image,
-              gallery: product.gallery,
-              affiliateUrl: product.affiliateUrl,
-              merchant: product.merchant,
-              url: product.affiliateUrl,
-              brand: product.merchant,
-              rating: product.rating,
-              reviewsCount: product.reviewsCount,
-              pros: product.pros,
-              cons: product.cons,
-              techSheet: product.techSheet,
-              badge: product.badge,
-              options: { text: true, image: !product.image, save: true },
-            }),
-          });
-          const data = await res.json();
-          if (data && data.success) ok++; else failed++;
-        } catch { failed++; }
+    // ── Indicador de progreso del enriquecimiento masivo (inyectado en el DOM) ──
+    let enrichProgressEl = null;
+    let enrichProgressBar = null;
+    let enrichProgressText = null;
+    function ensureEnrichProgress() {
+      if (enrichProgressEl) return;
+      enrichProgressEl = document.createElement('div');
+      enrichProgressEl.className = 'status-alert alert-loading';
+      enrichProgressEl.style.padding = '1rem';
+      enrichProgressEl.style.marginTop = '0.75rem';
+      enrichProgressEl.style.borderRadius = '10px';
+      enrichProgressEl.style.background = 'rgba(59, 130, 246, 0.12)';
+      enrichProgressEl.style.border = '1px solid rgba(59, 130, 246, 0.35)';
+      enrichProgressEl.style.color = '#ffffff';
+      enrichProgressEl.innerHTML = `
+        <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem;">
+          <span style="font-size:1.5rem;">⏳</span>
+          <strong id="enrichProgressTitle">Enriqueciendo con IA…</strong>
+        </div>
+        <div id="enrichProgressBarWrap" style="width:100%;height:8px;background:rgba(255,255,255,0.15);border-radius:4px;overflow:hidden;margin-bottom:0.5rem;">
+          <div id="enrichProgressBar" style="width:0%;height:100%;background:linear-gradient(90deg,#3b82f6,#60a5fa);transition:width 0.3s ease;"></div>
+        </div>
+        <div id="enrichProgressText" style="font-size:0.9rem;color:rgba(255,255,255,0.9);">0 / 0 productos procesados</div>
+      `;
+      const productSelBar = document.getElementById('productSelBar');
+      if (productSelBar) productSelBar.parentNode.insertBefore(enrichProgressEl, productSelBar.nextSibling);
+      enrichProgressBar = document.getElementById('enrichProgressBar');
+      enrichProgressText = document.getElementById('enrichProgressText');
+    }
+    function removeEnrichProgress() {
+      if (enrichProgressEl && enrichProgressEl.parentNode) {
+        enrichProgressEl.parentNode.removeChild(enrichProgressEl);
       }
-      selectedProductIds.clear();
-      updateProdSelCount();
-      await reloadProductsTable();
-      showAlert(failed ? 'warning' : 'success', 'Enriquecimiento masivo finalizado', `${ok} actualizado${ok===1?'':'s'} · ${failed} con error.`);
+      enrichProgressEl = null; enrichProgressBar = null; enrichProgressText = null;
+    }
+
+    btnProdEnrich?.addEventListener('click', async () => {
+      const sel = Array.from(selectedProductIds);
+      // Si no hay selección, se aplica a TODOS los productos del catálogo visible.
+      const ids = sel.length ? sel : (currentProducts || []).map((p) => p.id);
+      if (!ids.length) {
+        showAlert('warning', 'Sin productos', 'No hay productos en el catálogo para enriquecer.');
+        return;
+      }
+
+      ensureEnrichProgress();
+      enrichProgressEl.hidden = false;
+      const total = ids.length;
+      let done = 0;
+
+      try {
+        const res = await fetch('/api/admin/enrich-bulk', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids, forceImage: false, save: true }),
+        });
+        const data = await res.json();
+
+        // Barra de progreso al 100 % cuando termina.
+        if (enrichProgressBar) enrichProgressBar.style.width = '100%';
+        if (enrichProgressText) enrichProgressText.textContent = `${total} / ${total} productos procesados`;
+
+        selectedProductIds.clear();
+        updateProdSelCount();
+        await reloadProductsTable();
+
+        const ok = data.processed || 0;
+        const failed = data.failed || 0;
+        removeEnrichProgress();
+
+        if (data.success) {
+          showAlert(
+            failed ? 'warning' : 'success',
+            'Enriquecimiento masivo finalizado',
+            `${ok} producto${ok === 1 ? '' : 's'} procesado${ok === 1 ? '' : 's'}${failed ? ` · ${failed} con error` : ''}.`
+          );
+        } else {
+          showAlert('error', 'Error en enriquecimiento masivo', data.message || 'No se pudo completar el enriquecimiento.');
+        }
+      } catch (err) {
+        removeEnrichProgress();
+        console.error(err);
+        showAlert('error', 'Error de red', 'No se pudo contactar con /api/admin/enrich-bulk.');
+      }
     });
 
     btnProdMakeSection?.addEventListener('click', () => {
@@ -3615,11 +3659,35 @@ function renderTableRows(products, resetPage = true) {
 
     function openCreateSectionModal(productIds) {
       if (!createSectionModal) return;
+      createSectionMode = 'create';
+      createSectionId.value = '';
       createSectionProductIds = productIds;
       createSectionTitle.value = '';
       createSectionDescription.value = '';
       createSectionPublished.checked = true;
       if (createSectionPosition) createSectionPosition.value = 'below';
+      createSectionModalTitle.textContent = 'Crear nueva sección';
+      createSectionModalDesc.textContent = 'Agrupa los productos seleccionados en una sección temática para mostrar en la web.';
+      createSectionConfirm.textContent = 'Crear sección';
+      createSectionStatus.hidden = true;
+      createSectionStatus.textContent = '';
+      createSectionStatus.className = 'admin-modal-status';
+      createSectionModal.hidden = false;
+      createSectionTitle.focus();
+    }
+
+    function openEditSectionModal(section) {
+      if (!createSectionModal) return;
+      createSectionMode = 'edit';
+      createSectionId.value = section.id || '';
+      createSectionProductIds = Array.isArray(section.productIds) ? section.productIds.slice() : [];
+      createSectionTitle.value = section.title || '';
+      createSectionDescription.value = section.description || '';
+      createSectionPublished.checked = section.published !== false;
+      if (createSectionPosition) createSectionPosition.value = section.position === 'above' ? 'above' : 'below';
+      createSectionModalTitle.textContent = 'Editar sección';
+      createSectionModalDesc.textContent = 'Modifica los datos de la sección y guarda los cambios.';
+      createSectionConfirm.textContent = 'Guardar cambios';
       createSectionStatus.hidden = true;
       createSectionStatus.textContent = '';
       createSectionStatus.className = 'admin-modal-status';
@@ -3649,15 +3717,25 @@ function renderTableRows(products, resetPage = true) {
       const description = createSectionDescription.value.trim();
       const published = createSectionPublished.checked;
       const position = createSectionPosition ? createSectionPosition.value : 'below';
+      const isEdit = createSectionMode === 'edit';
+      const sectionId = createSectionId.value.trim();
 
       createSectionConfirm.disabled = true;
-      createSectionConfirm.textContent = 'Creando…';
+      createSectionConfirm.textContent = isEdit ? 'Guardando…' : 'Creando…';
       createSectionStatus.hidden = true;
 
       try {
         const res = await fetch('/api/admin/sections', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'create', title, description, productIds: createSectionProductIds, published, position }),
+          body: JSON.stringify({
+            action: isEdit ? 'update' : 'create',
+            ...(isEdit ? { id: sectionId } : {}),
+            title,
+            description,
+            productIds: isEdit ? createSectionProductIds : createSectionProductIds,
+            published,
+            position,
+          }),
         });
         const data = await res.json();
         if (data.success) {
@@ -3665,19 +3743,19 @@ function renderTableRows(products, resetPage = true) {
           updateProdSelCount();
           await loadSectionsAdmin();
           closeCreateSectionModal();
-          showAlert('success', 'Sección creada', `${title} añadida a las secciones de la web.`);
+          showAlert('success', isEdit ? 'Sección actualizada' : 'Sección creada', `${title} ${isEdit ? 'actualizada' : 'añadida'} a las secciones de la web.`);
         } else {
-          createSectionStatus.textContent = data.message || 'No se pudo crear la sección.';
+          createSectionStatus.textContent = data.message || `No se pudo ${isEdit ? 'actualizar' : 'crear'} la sección.`;
           createSectionStatus.className = 'admin-modal-status is-error';
           createSectionStatus.hidden = false;
         }
       } catch {
-        createSectionStatus.textContent = 'Error de red. No se pudo crear la sección.';
+        createSectionStatus.textContent = 'Error de red. No se pudo guardar la sección.';
         createSectionStatus.className = 'admin-modal-status is-error';
         createSectionStatus.hidden = false;
       } finally {
         createSectionConfirm.disabled = false;
-        createSectionConfirm.textContent = 'Crear sección';
+        createSectionConfirm.textContent = isEdit ? 'Guardar cambios' : 'Crear sección';
       }
     });
 
@@ -3695,6 +3773,7 @@ function renderTableRows(products, resetPage = true) {
             <strong>${escapeHtml ? escapeHtml(s.title) : s.title}</strong> <span class="admin-tag-pill">${s.published ? 'publicada' : 'oculta'}</span>
             <span class="admin-tag-pill">${s.position === 'above' ? 'encima catálogo' : 'debajo catálogo'}</span>
             <span class="muted">${(s.productIds || []).length} producto(s)</span>
+            <button type="button" class="btn-secondary btn-sm" data-section-edit="${s.id}" title="Editar sección">✏️ Editar</button>
             <button type="button" class="btn-secondary btn-sm" data-section-toggle="${s.id}" data-published="${!s.published}">${s.published ? 'Ocultar' : 'Publicar'}</button>
             <button type="button" class="btn-danger-ghost btn-sm" data-section-delete="${s.id}">Eliminar</button>
           </div>
@@ -3714,9 +3793,101 @@ function renderTableRows(products, resetPage = true) {
             await loadSectionsAdmin();
           };
         });
+
+        // Editar sección existente: abre el modal con los datos cargados.
+        host.querySelectorAll('[data-section-edit]').forEach((btn) => {
+          btn.onclick = async () => {
+            const id = btn.getAttribute('data-section-edit');
+            const section = sections.find((s) => s.id === id);
+            if (!section) return;
+            openEditSectionModal(section);
+          };
+        });
+
+        // Drag-and-drop para reordenar secciones (actualiza el campo `order`).
+        initSectionDragAndDrop(host, sections);
       } catch {
         host.innerHTML = '<p class="text-muted">Error de red.</p>';
       }
+    }
+
+    /** Hace que las filas de sección se puedan arrastrar para reordenar. */
+    function initSectionDragAndDrop(host, sections) {
+      const rows = host.querySelectorAll('.section-admin-row');
+      let draggedId = null;
+      let targetId = null;
+
+      rows.forEach((row) => {
+        const id = row.getAttribute('data-section-id') || row.querySelector('[data-section-edit]')?.getAttribute('data-section-edit') || '';
+        if (!id) return;
+        row.setAttribute('data-section-id', id);
+        row.setAttribute('draggable', 'true');
+        row.style.cursor = 'grab';
+
+        row.addEventListener('dragstart', (e) => {
+          draggedId = id;
+          row.classList.add('is-dragging');
+          if (e.dataTransfer) {
+            e.dataTransfer.effectAllowed = 'move';
+            e.dataTransfer.setData('text/plain', id);
+          }
+        });
+
+        row.addEventListener('dragend', () => {
+          row.classList.remove('is-dragging');
+          host.querySelectorAll('.section-admin-row').forEach((r) => {
+            r.classList.remove('drag-over', 'drag-before', 'drag-after');
+          });
+          draggedId = null;
+          targetId = null;
+        });
+
+        row.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+          host.querySelectorAll('.section-admin-row').forEach((r) => r.classList.remove('drag-over', 'drag-before', 'drag-after'));
+          row.classList.add('drag-over');
+          const rect = row.getBoundingClientRect();
+          const after = e.clientY - rect.top >= rect.height / 2;
+          row.classList.toggle('drag-after', after);
+          row.classList.toggle('drag-before', !after);
+          targetId = id;
+        });
+
+        row.addEventListener('dragleave', () => {
+          row.classList.remove('drag-over', 'drag-before', 'drag-after');
+        });
+
+        row.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          if (!draggedId || draggedId === targetId) return;
+          host.querySelectorAll('.section-admin-row').forEach((r) => r.classList.remove('drag-over', 'drag-before', 'drag-after'));
+
+          const dragged = sections.find((s) => s.id === draggedId);
+          const target = sections.find((s) => s.id === targetId);
+          if (!dragged || !target) return;
+
+          // Intercambiar órdenes.
+          const draggedOrder = dragged.order ?? 0;
+          const targetOrder = target.order ?? 0;
+
+          try {
+            await Promise.all([
+              fetch('/api/admin/sections', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'update', id: draggedId, order: targetOrder }),
+              }),
+              fetch('/api/admin/sections', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'update', id: targetId, order: draggedOrder }),
+              }),
+            ]);
+            await loadSectionsAdmin();
+          } catch {
+            showAlert('error', 'Error al reordenar', 'No se pudo guardar el nuevo orden de la sección.');
+          }
+        });
+      });
     }
     if (typeof loadSectionsAdmin === 'function') loadSectionsAdmin();
     attachRowActions();
@@ -9499,4 +9670,32 @@ function renderTableRows(products, resetPage = true) {
   :global(.link-alt-item-price) { font-size: .7rem; font-weight: 700; color: #7dd3fc; white-space: nowrap; }
   :global(.link-alt-roles) { display: grid; grid-template-columns: repeat(3, 1fr); gap: .6rem; margin-top: .6rem; }
   @media (max-width: 720px) { :global(.link-alt-roles) { grid-template-columns: 1fr; } }
+
+/* ── Drag-and-drop de secciones (admin) ───────────────────────────────── */
+.section-admin-row.is-dragging {
+  opacity: 0.5;
+  background: rgba(59, 130, 246, 0.2);
+  border: 2px dashed #3b82f6;
+}
+.section-admin-row.drag-over {
+  background: rgba(59, 130, 246, 0.15);
+}
+.section-admin-row.drag-after {
+  border-bottom: 3px solid #3b82f6;
+}
+.section-admin-row.drag-before {
+  border-top: 3px solid #3b82f6;
+}
+.section-admin-row {
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+.section-admin-row:active {
+  cursor: grabbing;
+}
+
+/* ── Indicador de progreso del enriquecimiento masivo ─────────────────── */
+.status-alert.alert-loading {
+  border-left: 4px solid #3b82f6;
+}
 </style>

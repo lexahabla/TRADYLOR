@@ -116,6 +116,9 @@ const productTypeLabel: Record<string, string> = {
 };
 const buildTitle = () => {
   if (!product) return directTitle;
+  // En product-cards se muestra el título sintetizado (title_short) si existe;
+  // en la ficha pública (producto/[slug]) se usa siempre el title original.
+  if (product.title_short) return product.title_short;
   if (product.productType && product.brand && product.model) {
     const typeLabel = productTypeLabel[product.productType] ?? product.productType;
     return `${typeLabel} ${product.brand} ${product.model}`;

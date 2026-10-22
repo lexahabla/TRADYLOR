@@ -96,6 +96,8 @@ export interface Product {
   ai_enriched?: boolean;
   /** Motivo por el que la IA de texto no pudo enriquecer la ficha. */
   ai_error?: string;
+  /** Título sintetizado y corto (para product-cards). Si falta, se usa `title`. */
+  title_short?: string;
 }
 
 // Ruta al archivo de persistencia JSON
