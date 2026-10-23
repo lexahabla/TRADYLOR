@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../lib/adminAuth';
-import { ensureAlternativeRoles, linkAlternatives, roleIdsOf, suggestAlternatives } from '../../../lib/curation';
+import { ensureAlternativeRoles, linkAlternatives, linkCatalogAlternativesAuto, roleIdsOf, suggestAlternatives } from '../../../lib/curation';
 import { readProductsFromFile } from '../../../lib/productStore';
 
 export const prerender = false;
@@ -96,6 +96,14 @@ export const POST: APIRoute = async ({ request }) => {
     return new Response(
       JSON.stringify({ success: false, message: 'Cuerpo JSON inválido.' }),
       { status: 400, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
+    );
+  }
+
+  if (body?.action === 'link-all') {
+    const result = linkCatalogAlternativesAuto();
+    return new Response(
+      JSON.stringify(result),
+      { status: 200, headers: { 'Content-Type': 'application/json; charset=utf-8' } }
     );
   }
 

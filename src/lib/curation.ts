@@ -866,3 +866,100 @@ export function ensureAlternativeRoles(productId: string): {
     auto: false,
   };
 }
+
+/**
+ * Recorre todo el catálogo y asigna automáticamente productos alternativos en
+ * la ficha de cada producto basándose en el mismo tipo/naturaleza de producto:
+ *   - Más barato (cheaperOptionIds / cheaperOptionId)
+ *   - Mejor valorado (premiumOptionId)
+ *   - Más vendido / mayor conversión (similarOptionIds / similarOptionId)
+ *
+ * Si no existen otros productos del mismo tipo dentro del catálogo actual,
+ * deja el apartado de alternativas vacío.
+ */
+export function linkCatalogAlternativesAuto(): {
+  success: boolean;
+  total: number;
+  updated: number;
+  emptyCount: number;
+} {
+  const products = readProductsFromFile();
+  if (!products.length) return { success: true, total: 0, updated: 0, emptyCount: 0 };
+
+  let updated = 0;
+  let emptyCount = 0;
+
+  for (const base of products) {
+    // Buscar candidatos del mismo tipo de producto:
+    const candidates = products.filter((p) => {
+      if (p.id === base.id) return false;
+      // 1) Si comparten subcategoría
+      if (base.subcategory_id && p.subcategory_id) {
+        return p.subcategory_id === base.subcategory_id;
+      }
+      // 2) Misma categoría normalizada
+      const catA = String(base.category || '').toLowerCase().trim();
+      const catB = String(p.category || '').toLowerCase().trim();
+      if (catA && catB && catA === catB) return true;
+      if (base.category_id && p.category_id && base.category_id === p.category_id) return true;
+      // 3) Similitud léxica de títulos si falta categoría
+      return titleSimilarity(base.title, p.title) >= 0.35;
+    });
+
+    if (!candidates.length) {
+      base.alternative_product_ids = [];
+      base.alternatives = {
+        premiumOptionId: undefined,
+        cheaperOptionId: undefined,
+        similarOptionId: undefined,
+        cheaperOptionIds: [],
+        similarOptionIds: [],
+      };
+      emptyCount++;
+      continue;
+    }
+
+    // 1. Más barato
+    const basePrice = Number(base.price) || 0;
+    const cheaperPool = basePrice > 0
+      ? candidates.filter((p) => Number(p.price) > 0 && Number(p.price) < basePrice)
+      : [];
+    cheaperPool.sort((a, b) => Number(a.price) - Number(b.price));
+    const cheaperCand = cheaperPool.length
+      ? cheaperPool[0]
+      : [...candidates].sort((a, b) => Number(a.price) - Number(b.price))[0];
+
+    // 2. Mejor valorado
+    const ratingOf = (p: Product) => (Number.isFinite(Number(p.rating)) ? Number(p.rating) : 0);
+    const reviewsOf = (p: Product) => (Number.isFinite(Number(p.reviewsCount)) ? Number(p.reviewsCount) : 0);
+    const bestRatedPool = [...candidates].sort(
+      (a, b) => ratingOf(b) - ratingOf(a) || reviewsOf(b) - reviewsOf(a) || Number(b.price) - Number(a.price)
+    );
+    const bestRatedCand = bestRatedPool[0];
+
+    // 3. Más vendido (ventas 30d, reseñas o conversion_score)
+    const salesOf = (p: Product) =>
+      Number(p.sales30d) || Number(p.reviewsCount) || Number(p.conversion_score) || 0;
+    const topSellerPool = [...candidates].sort((a, b) => salesOf(b) - salesOf(a));
+    const topSellerCand =
+      topSellerPool.find((p) => p.id !== cheaperCand?.id && p.id !== bestRatedCand?.id) ||
+      topSellerPool[0];
+
+    const selectedIds = [
+      ...new Set([cheaperCand?.id, bestRatedCand?.id, topSellerCand?.id].filter(Boolean) as string[]),
+    ];
+
+    base.alternative_product_ids = selectedIds;
+    base.alternatives = {
+      cheaperOptionId: cheaperCand?.id,
+      cheaperOptionIds: cheaperCand ? [cheaperCand.id] : [],
+      premiumOptionId: bestRatedCand?.id,
+      similarOptionId: topSellerCand?.id,
+      similarOptionIds: topSellerCand ? [topSellerCand.id] : [],
+    };
+    updated++;
+  }
+
+  writeProductsToFile(products);
+  return { success: true, total: products.length, updated, emptyCount };
+}

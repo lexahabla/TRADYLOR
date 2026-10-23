@@ -721,7 +721,7 @@ const productSchema = {
     <!-- ======================================================
          ALTERNATIVAS / CROSS-SELLING (Recomendaciones cruzadas)
          ====================================================== -->
-    {hasAlternatives && (
+    {hasAlternatives ? (
       <section class="cross-selling-section container">
         <div class="cross-selling-header">
           <span class="cross-selling-tag">También te puede interesar</span>
@@ -851,6 +851,21 @@ const productSchema = {
               <span class="alt-cta">Consultar análisis →</span>
             </a>
           ))}
+        </div>
+      </section>
+    ) : (
+      <section class="cross-selling-section container">
+        <div class="cross-selling-header">
+          <span class="cross-selling-tag">Alternativas</span>
+          <h2 class="cross-selling-title">Alternativas a este producto</h2>
+        </div>
+        <div class="alternatives-empty-notice">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <p>Sin alternativas en el catálogo</p>
         </div>
       </section>
     )}
@@ -1804,8 +1819,8 @@ const productSchema = {
     background: rgba(16, 185, 129, 0.03);
   }
   .cons-card {
-    border-color: rgba(248, 113, 113, 0.2);
-    background: rgba(248, 113, 113, 0.03);
+    border-color: rgba(249, 115, 22, 0.25);
+    background: rgba(249, 115, 22, 0.04);
   }
   .verdict-card {
     grid-column: 1 / -1;
@@ -1828,7 +1843,7 @@ const productSchema = {
     margin-bottom: 1.1rem;
   }
   .pros-h2 { color: #10b981; }
-  .cons-h2 { color: #f87171; }
+  .cons-h2 { color: #f97316; }
   .verdict-h2 { color: #60a5fa; }
 
   .analysis-list {
@@ -1852,7 +1867,7 @@ const productSchema = {
     margin-top: 2px;
   }
   .pro-bullet { color: #10b981; }
-  .con-bullet { color: #f87171; }
+  .con-bullet { color: #f97316; }
 
   /* ---- Hidden Drawbacks Card ---- */
   .drawbacks-card {
@@ -2004,6 +2019,26 @@ const productSchema = {
     font-size: 0.9rem;
     color: var(--color-text-muted);
     margin: 0;
+  }
+
+  .alternatives-empty-notice {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.25rem 1.5rem;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1px dashed rgba(255, 255, 255, 0.15);
+    border-radius: var(--border-radius-md, 12px);
+    color: var(--color-text-muted, #94a3b8);
+    font-size: 0.95rem;
+  }
+  .alternatives-empty-notice svg {
+    color: #f97316;
+    flex-shrink: 0;
+  }
+  .alternatives-empty-notice p {
+    margin: 0;
+    font-weight: 500;
   }
 
   .alternatives-grid {

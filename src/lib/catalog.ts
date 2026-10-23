@@ -111,7 +111,7 @@ export function getCatalogProducts(): Product[] {
  * Se usa en /producto/[slug], /checkout/[id] y /api/redirect?id=.
  */
 export function productKey(product: Product): string {
-  return product.slug ?? product.id;
+  return (product.slug && product.slug.trim()) || product.id;
 }
 
 /**
@@ -120,13 +120,17 @@ export function productKey(product: Product): string {
  * nuevas basadas en slug (/producto/auriculares-wireless-pro).
  */
 export function findCatalogProduct(key?: string | null): Product | undefined {
-  const needle = (key ?? '').trim().toLowerCase();
-  if (!needle) return undefined;
+  const raw = (key ?? '').trim();
+  if (!raw) return undefined;
+  const needle = raw.toLowerCase();
+  const decodedNeedle = decodeURIComponent(needle);
 
   const products = getCatalogProducts();
 
   return (
+    products.find((p) => (p.slug ?? '').toLowerCase() === needle) ??
     products.find((p) => p.id.toLowerCase() === needle) ??
-    products.find((p) => (p.slug ?? '').toLowerCase() === needle)
+    products.find((p) => (p.slug ?? '').toLowerCase() === decodedNeedle) ??
+    products.find((p) => p.id.toLowerCase() === decodedNeedle)
   );
 }

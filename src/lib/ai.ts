@@ -136,9 +136,9 @@ const TEXT_SYSTEM_PROMPT = [
   'Reglas estrictas:',
   '- Nunca inventes especificaciones ni números de ventas que no puedas deducir del texto de entrada.',
   '- Tono divulgativo y directo, sin superlativos comerciales ("lo mejor del mercado", "imbatible") y sin llamadas a la acción de compra.',
-  '- title: título SINTETIZADO en español, máximo 70 caracteres, que diga solo qué es el producto (tipo + marca + modelo) y, si cabe, una única característica diferencial importante (ej. "Auriculares Sony WH-1000XM5 con cancelación de ruido"). Sin precios, sin descuentos, sin argumentos de venta, sin el nombre del comercio ni sufijos tipo "| Amazon.es" o "- PcComponentes". Debe leerse bien en una tarjeta de producto.',
-  '- pros: 3 a 5 puntos concretos y verificables.',
-  '- cons: 2 a 4 puntos reales o de contexto (disponibilidad, garantía, accesorios), no relleno.',
+  '- title: título SINTETIZADO en español, de 35 a 70 caracteres. REGLA OBLIGATORIA: Debe especificar explícitamente la categoría o naturaleza del producto al inicio o de forma clara (ejemplos: transformar "SSD 1TB" en "Disco duro SSD 1TB", "Power bank 10000mAh" en "Batería portátil Power bank 10000mAh", "Crucial P3 Plus 1TB" en "Disco duro SSD Crucial P3 Plus 1TB", "Cecotec Conga" en "Robot aspirador Cecotec Conga"). Estructura: [Categoría/Naturaleza del producto] + [Marca / Modelo] + [Capacidad o rasgo clave]. Sin precios ni argumentos comerciales.',
+  '- pros: 3 a 5 puntos concretos, verificables y de alto valor para el comprador.',
+  '- cons: 2 a 3 contras o matices comerciales constructivos y poco disuasorios (puntos menores como "Disponible en pocas opciones de color", "Cable de carga de longitud estándar", "Requiere configuración inicial sencilla", "Manual en formato digital"), evitando siempre aspectos graves o disuasorios que desinteresen al usuario o perjudiquen la conversión de compra.',
   '- verdict: 1 o 2 frases neutras indicando para quién encaja el producto.',
   '- specs: entre 4 y 8 pares clave/valor cortos (p. ej. "Autonomía": "Hasta 30 horas"). Omite las que no conozcas.',
   '- techSheet: párrafo de 3 a 6 líneas en español con datos objetivos de la ficha técnica (materiales, medidas, peso, conectividad, compatibilidades, garantía, contenido de la caja). Usa " · " para separar datos. No inventes cifras que no conozcas.',
@@ -600,6 +600,17 @@ export function synthesizeTitleLocally(title: string): string {
 
   t = t.replace(MARKETPLACE_SUFFIX_RE, '').trim();
 
+  // Anteponer explícitamente categoría o naturaleza del producto si inicia abreviado
+  if (/^\b(?:nvme|m\.?2\s+ssd|ssd)\b/i.test(t) && !/^\bdisco\s+duro\b/i.test(t)) {
+    t = `Disco duro ${t}`;
+  } else if (/^\bpower\s*bank\b/i.test(t) && !/^\bbater[íi]a\b/i.test(t)) {
+    t = `Batería portátil ${t}`;
+  } else if (/^\b(?:tws|earbuds?)\b/i.test(t) && !/^\bauriculares\b/i.test(t)) {
+    t = `Auriculares inalámbricos ${t}`;
+  } else if (/^\bsmartwatch\b/i.test(t) && !/^\breloj\b/i.test(t)) {
+    t = `Reloj inteligente ${t}`;
+  }
+
   // Si el título usa separadores ("Marca - modelo - features..."), conserva
   // la parte principal (tipo + marca + modelo) y una característica corta.
   const parts = t.split(/\s+[\-–—|]\s+/).map((p) => p.trim()).filter(Boolean);
@@ -624,10 +635,11 @@ export function synthesizeTitleLocally(title: string): string {
 
 const TITLE_SYSTEM_PROMPT = [
   'Eres el equipo editorial de Tradylor, un portal de análisis y recomendación de productos.',
-  'Sintetiza el título del producto para que quepa y se lea bien en una tarjeta de producto.',
+  'Sintetiza y optimiza el título del producto para tarjetas y tablas de productos.',
   'Reglas estrictas:',
-  `- Máximo ${MAX_TITLE_LENGTH} caracteres.`,
-  '- Di SOLO qué es el producto: tipo + marca + modelo y, como mucho, una única característica diferencial importante.',
+  `- Máximo ${MAX_TITLE_LENGTH} caracteres (entre 35 y 70 caracteres).`,
+  '- REGLA OBLIGATORIA: Debe especificar explícitamente la categoría o naturaleza del producto al inicio o de forma clara (ejemplos: transformar "SSD 1TB" en "Disco duro SSD 1TB", "Power bank 10000mAh" en "Batería portátil Power bank 10000mAh", "Crucial P3 Plus 1TB" en "Disco duro SSD Crucial P3 Plus 1TB", "Air Fryer 5L" en "Freidora de aire Cecotec 5L").',
+  '- Estructura: [Categoría/Naturaleza del producto] + [Marca / Modelo] + [Capacidad o rasgo clave].',
   '- Sin precios, sin descuentos, sin argumentos de venta ni superlativos.',
   '- Sin el nombre del comercio ni sufijos de marketplace ("| Amazon.es", "- PcComponentes", "Envío gratis...").',
   '- Conserva las mayúsculas naturales de marca y modelo.',

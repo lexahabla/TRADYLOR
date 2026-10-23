@@ -540,10 +540,13 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
           let isVisible = true;
           let rafId: number | null = null;
           let lastTime: number | null = null;
+          let scrollPos = track.scrollLeft;
 
           pauseAutoScroll = () => {
             isPaused = true;
+            scrollPos = track.scrollLeft;
             track.style.scrollSnapType = ''; // Permite snap nativo durante la interacción
+            track.style.scrollBehavior = '';
             if (resumeTimer) {
               clearTimeout(resumeTimer);
               resumeTimer = null;
@@ -555,6 +558,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
             resumeTimer = setTimeout(() => {
               isPaused = false;
               lastTime = null;
+              scrollPos = track.scrollLeft;
             }, delay);
           };
 
@@ -566,19 +570,23 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
             const maxScroll = track.scrollWidth - track.clientWidth;
             if (isVisible && !isPaused && !isResetting && maxScroll > 8) {
               track.style.scrollSnapType = 'none'; // Evita fricción del snap mientras se desplaza
+              track.style.scrollBehavior = 'auto'; // Evita colisiones con scroll-behavior global
               if (track.scrollLeft >= maxScroll - 3) {
                 // Fin del carrusel: pausar y volver suavemente al inicio
                 isResetting = true;
                 track.style.scrollSnapType = '';
+                track.style.scrollBehavior = 'smooth';
                 setTimeout(() => {
                   track.scrollTo({ left: 0, behavior: 'smooth' });
                   setTimeout(() => {
                     isResetting = false;
                     lastTime = null;
+                    scrollPos = 0;
                   }, 1000);
                 }, 1400);
               } else {
-                track.scrollLeft += pixelsPerSecond * dt;
+                scrollPos += pixelsPerSecond * dt;
+                track.scrollLeft = scrollPos;
               }
             }
             rafId = requestAnimationFrame(tick);
@@ -600,6 +608,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
               pauseAutoScroll();
             } else {
               lastTime = null;
+              scrollPos = track.scrollLeft;
               resumeAutoScroll(300);
             }
           });
@@ -611,6 +620,8 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
                 isVisible = entry.isIntersecting;
                 if (!isVisible) {
                   lastTime = null;
+                } else {
+                  scrollPos = track.scrollLeft;
                 }
               });
             }, { threshold: 0.05 });
