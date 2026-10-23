@@ -511,9 +511,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <div class="product-sel-bar" id="productSelBar">
         <label class="product-sel-title">ADMINISTRAR PRODUCTOS</label>
 
-        <div class="product-sel-groups grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="product-sel-groups">
           <!-- Categoría funcional: Selección -->
-          <div class="product-sel-group flex flex-row items-center gap-2" data-group="selection">
+          <div class="product-sel-group" data-group="selection">
             <span class="product-sel-group-label">Selección:</span>
             <span id="productSelCount">0 seleccionados</span>
             <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll" title="Seleccionar todo el catálogo completo">Catálogo</button>
@@ -521,7 +521,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
 
           <!-- Categoría funcional: IA -->
-          <div class="product-sel-group flex flex-row items-center gap-2" data-group="ai">
+          <div class="product-sel-group" data-group="ai">
             <span class="product-sel-group-label">IA:</span>
             <button type="button" class="btn-ai btn-sm" id="btnProdEnrich">Enriquecer</button>
             <button type="button" class="btn-ai btn-sm" id="btnLinkAllAlternatives" title="Recorrer todo el catálogo y asignar automáticamente productos alternativos (más barato, mejor valorado y más vendido)">Vincular alternativas</button>
@@ -529,7 +529,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
 
           <!-- Categoría funcional: Categorías y Secciones -->
-          <div class="product-sel-group flex flex-row items-center gap-2" data-group="categories">
+          <div class="product-sel-group" data-group="categories">
             <span class="product-sel-group-label">Categorías y Secciones:</span>
             <select id="prodCatAssign" class="sel-cat-assign" aria-label="Categoría destino">
               <option value="">Categoría destino…</option>
@@ -543,7 +543,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
 
           <!-- Categoría funcional: Etiquetas -->
-          <div class="product-sel-group flex flex-row items-center gap-2" data-group="tags">
+          <div class="product-sel-group" data-group="tags">
             <span class="product-sel-group-label">Etiquetas:</span>
             <select id="prodBadgeAssign" class="sel-cat-assign" aria-label="Etiqueta destacada destino">
               <option value="">Etiqueta destacada…</option>
@@ -553,7 +553,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
 
           <!-- Categoría funcional: Borrado y Gestión de IDs -->
-          <div class="product-sel-group flex flex-row items-center gap-2" data-group="deletion">
+          <div class="product-sel-group" data-group="deletion">
             <span class="product-sel-group-label">Borrado y Gestión de IDs:</span>
             <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
             <button type="button" class="btn-danger btn-sm" id="btnProdDeleteAll" title="Elimina TODOS los productos del catálogo (purga completa). Úsalo para resincronizar desde cero.">🗑️ Vaciar Catálogo</button>
@@ -7848,8 +7848,8 @@ function renderTableRows(products, resetPage = true) {
   .ali-range-track input[type="range"]::-moz-range-thumb { pointer-events: auto; width: 11px; height: 11px; border: 2px solid #0b1220; border-radius: 50%; background: #38bdf8; cursor: grab; box-shadow: 0 0 5px rgba(56, 189, 248, .5); }
   /* Barra de filtros del Catálogo de Productos Registrados (misma estética) */
   .prod-filters { margin-top: 0; margin-bottom: .8rem; }
-  .prod-filters .filter-field select { max-width: 160px; }
-  .prod-filters .ali-sort-group select { max-width: 140px; min-width: 90px; }
+  .prod-filters .filter-field select { min-width: 180px; width: auto; max-width: 100%; }
+  .prod-filters .ali-sort-group select { min-width: 150px; width: auto; max-width: 100%; }
   :global(.btn-danger-ghost.btn-sm) { padding: .3rem .55rem; font-size: .68rem; gap: .25rem; }
   /* Barra de selección masiva */
   .ali-selection { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; margin-bottom: .6rem; padding: .5rem .7rem; color: #7dd3fc; background: rgba(56, 189, 248, .08); border: 1px solid rgba(56, 189, 248, .3); border-radius: 10px; font-size: .74rem; font-weight: 700; }
@@ -7868,40 +7868,40 @@ function renderTableRows(products, resetPage = true) {
     border-radius: 10px;
     font-size: .74rem;
     color: var(--color-text-dim);
+    overflow-x: hidden;
   }
   .product-sel-bar .btn-sm { padding: .3rem .6rem; font-size: .68rem; white-space: nowrap; flex-shrink: 0; }
   .product-sel-groups {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 1rem;
-    align-items: stretch;
-  }
-  @media (min-width: 768px) {
-    .product-sel-groups {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-  }
-  .product-sel-group {
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
-    flex-wrap: nowrap;
-    gap: .5rem;
-    padding: .4rem .65rem;
+    gap: .55rem;
+    overflow-x: hidden;
+    width: 100%;
+  }
+  .product-sel-group {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .45rem;
+    padding: .35rem .65rem;
     background: rgba(15, 23, 42, .45);
     border: 1px solid rgba(255, 255, 255, .06);
     border-radius: 8px;
     min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: thin;
+    max-width: 100%;
+    overflow-x: hidden;
   }
   .product-sel-group > * {
     flex-shrink: 0;
   }
   .product-sel-group select {
-    flex-shrink: 1;
-    min-width: 80px;
-    max-width: 150px;
+    flex-shrink: 0;
+    min-width: 170px;
+    max-width: 100%;
+    width: auto;
   }
   .product-sel-group-label {
     font-size: .68rem;
@@ -7955,24 +7955,23 @@ function renderTableRows(products, resetPage = true) {
      de controles bajan a la línea siguiente. */
   .product-sel-title { flex: 1 0 100%; margin-right: 0; color: #93c5fd; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
   .sel-cat-assign {
-    padding: .3rem .45rem;
-    font-size: .68rem;
+    padding: .32rem .55rem;
+    font-size: .72rem;
     color: var(--color-text-main);
     background: #0b1220;
     border: 1px solid var(--color-border);
     border-radius: 6px;
-    max-width: 150px;
-    min-width: 80px;
-    width: 100%;
-    text-overflow: ellipsis;
+    min-width: 170px;
+    max-width: 100%;
+    width: auto;
   }
   .product-sel-bar select,
   .product-sel-group select {
-    max-width: 150px;
-    min-width: 80px;
-    font-size: .68rem;
-    padding: .3rem .45rem;
-    text-overflow: ellipsis;
+    min-width: 170px;
+    max-width: 100%;
+    width: auto;
+    font-size: .72rem;
+    padding: .32rem .55rem;
   }
   :global(.unified-import) { flex-shrink: 0; white-space: nowrap; }
   :global(.unified-import.is-done) { background: rgba(16, 185, 129, .2); border-color: rgba(16, 185, 129, .4); pointer-events: none; }

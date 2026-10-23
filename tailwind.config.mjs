@@ -17,13 +17,6 @@ export default {
     'rounded-full',
     'items-start',
     'justify-start',
-    'grid',
-    'grid-cols-1',
-    'md:grid-cols-2',
-    'gap-4',
-    'flex-row',
-    'items-center',
-    'gap-2',
   ],
   theme: {
     extend: {

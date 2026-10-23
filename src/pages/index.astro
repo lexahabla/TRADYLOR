@@ -540,11 +540,6 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
         let lastTime: number | null = null;
         let scrollPos = track.scrollLeft;
 
-        // Si al montar el carrusel el puntero ya está encima, iniciar en pausa
-        if (carouselContainer.matches && carouselContainer.matches(':hover')) {
-          isPaused = true;
-        }
-
         pauseAutoScroll = () => {
           isPaused = true;
           scrollPos = track.scrollLeft;
@@ -556,13 +551,9 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
           }
         };
 
-        resumeAutoScroll = (delay = 500) => {
+        resumeAutoScroll = (delay = 2000) => {
           if (resumeTimer) clearTimeout(resumeTimer);
           resumeTimer = setTimeout(() => {
-            // No reanudar si el cursor sigue posicionado sobre el carrusel
-            if (carouselContainer.matches && carouselContainer.matches(':hover')) {
-              return;
-            }
             isPaused = false;
             lastTime = null;
             scrollPos = track.scrollLeft;
@@ -606,17 +597,75 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
           rafId = requestAnimationFrame(tick);
         };
 
-        // Pausar al pasar el ratón (desktop) o al tocar la pantalla (móvil)
-        carouselContainer.addEventListener('mouseenter', pauseAutoScroll);
-        carouselContainer.addEventListener('mouseleave', () => resumeAutoScroll(500));
-        carouselContainer.addEventListener('touchstart', pauseAutoScroll, { passive: true });
-        carouselContainer.addEventListener('touchend', () => resumeAutoScroll(1500), { passive: true });
-        carouselContainer.addEventListener('focusin', pauseAutoScroll);
-        carouselContainer.addEventListener('focusout', () => resumeAutoScroll(800));
+        // =====================================================================
+        // INTERACCIÓN MANUAL Y CONTROL DE PAUSA
+        // El carrusel NO se pausa en hover (mouseenter/mouseleave).
+        // La animación continúa ininterrumpidamente y solo se pausa/detiene si el usuario:
+        // 1. Toca las flechas de navegación
+        // 2. Hace clic
+        // 3. Arrastra manualmente (mouse drag o touch swipe)
+        // =====================================================================
+
+        // Pausar en clic
+        track.addEventListener('click', () => {
+          pauseAutoScroll();
+          resumeAutoScroll(2500);
+        });
+
+        // Arrastre táctil en móvil / tablets
+        track.addEventListener('touchstart', pauseAutoScroll, { passive: true });
+        track.addEventListener('touchend', () => resumeAutoScroll(2000), { passive: true });
+
+        // Rueda del ratón
         track.addEventListener('wheel', () => {
           pauseAutoScroll();
-          resumeAutoScroll(1800);
+          resumeAutoScroll(2000);
         }, { passive: true });
+
+        // Arrastre manual con ratón en escritorio
+        let isPointerDown = false;
+        let startX = 0;
+        let startScrollLeft = 0;
+        let hasDragged = false;
+
+        track.addEventListener('pointerdown', (e: PointerEvent) => {
+          if (e.button !== 0) return;
+          if ((e.target as HTMLElement)?.closest('button, [data-radar-toggle]')) return;
+          isPointerDown = true;
+          hasDragged = false;
+          startX = e.pageX;
+          startScrollLeft = track.scrollLeft;
+          pauseAutoScroll();
+        });
+
+        window.addEventListener('pointermove', (e: PointerEvent) => {
+          if (!isPointerDown) return;
+          const diff = e.pageX - startX;
+          if (Math.abs(diff) > 4) {
+            hasDragged = true;
+            track.classList.add('is-dragging-track');
+            track.scrollLeft = startScrollLeft - diff;
+            scrollPos = track.scrollLeft;
+          }
+        });
+
+        const onPointerUp = () => {
+          if (!isPointerDown) return;
+          isPointerDown = false;
+          track.classList.remove('is-dragging-track');
+          if (hasDragged) {
+            const blockClick = (ev: MouseEvent) => {
+              ev.preventDefault();
+              ev.stopPropagation();
+            };
+            track.addEventListener('click', blockClick, { capture: true, once: true });
+            setTimeout(() => track.removeEventListener('click', blockClick, { capture: true }), 100);
+          }
+          resumeAutoScroll(2500);
+        };
+
+        window.addEventListener('pointerup', onPointerUp);
+        window.addEventListener('pointercancel', onPointerUp);
 
         // Pausar si la pestaña pasa a segundo plano
         document.addEventListener('visibilitychange', () => {
@@ -972,6 +1021,17 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     margin-top: -0.75rem;
     scrollbar-width: thin;
     scrollbar-color: rgba(96, 165, 250, 0.45) transparent;
+    cursor: grab;
+  }
+
+  .feed-carousel-track.is-dragging-track {
+    cursor: grabbing;
+    scroll-behavior: auto !important;
+    user-select: none;
+  }
+
+  .feed-carousel-track.is-dragging-track a {
+    pointer-events: none;
   }
 
   .feed-carousel-track::-webkit-scrollbar {
