@@ -447,6 +447,45 @@ const resolvedImage = toAbsolute(image);
         cursor: pointer;
         font-size: 16px; /* evita el zoom automático al enfocar en iOS */
       }
+
+      /* ── Buscador en cabecera (dentro de .container.header-inner, centrado) ── */
+      .container.header-inner .nav-search {
+        flex: 1 1 auto;
+        max-width: 560px;
+        justify-content: center;
+        height: 42px;
+      }
+
+      /* En móvil el buscador se acorta para dejar espacio al logo y los botones */
+      @media (max-width: 640px) {
+        .container.header-inner .nav-search {
+          max-width: none;
+          flex: 1 1 14rem;
+        }
+      }
+
+      /* Logo solo estrella en móvil */
+      @media (max-width: 640px) {
+        .brand-text {
+          display: none;
+        }
+      }
+
+      /* Botones del header-actions más pequeños en móvil */
+      @media (max-width: 640px) {
+        .header-actions .header-radar-btn,
+        .header-actions .header-user-area,
+        .header-actions .header-translate {
+          width: 36px;
+          height: 36px;
+        }
+        .header-actions .header-radar-btn svg,
+        .header-actions .header-translate svg {
+          width: 18px;
+          height: 18px;
+        }
+      }
+
       .header-user {
         position: relative;
         display: flex;
@@ -1063,6 +1102,7 @@ const resolvedImage = toAbsolute(image);
         height: 40px;
         flex-shrink: 0;
         padding: 0;
+        margin-left: auto;
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 10px;
@@ -1698,6 +1738,25 @@ const resolvedImage = toAbsolute(image);
 
         {!isBackend && (
           <>
+            <!-- Buscador unificado centrado en la cabecera -->
+            <form class="nav-search" role="search" autocomplete="off">
+              <input type="search" class="ns-input cm-search-input" placeholder="Buscar productos…" aria-label="Buscar productos" />
+              <button type="button" class="ns-clear" aria-label="Borrar la búsqueda" hidden>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+              <button type="submit" class="ns-submit" aria-label="Buscar">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              </button>
+              <!-- Sugerencias en vivo (vía /api/search) -->
+              <div class="cm-search-drop" data-cm-search-drop hidden></div>
+            </form>
+
             <div class="header-actions">
               <!-- Carrito / Mi Radar (icono radar animado + badge contador) -->
               <button
@@ -2077,6 +2136,145 @@ const resolvedImage = toAbsolute(image);
           toggleBackToTop();
           backToTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
         }
+      })();
+    </script>
+
+    <!-- Buscador en cabecera: lógica de cascada, envío y sugerencias -->
+    <script>
+      (function () {
+        'use strict';
+
+        const searchForm = document.querySelector('form.nav-search');
+        if (!searchForm) return;
+
+        const searchInput = searchForm.querySelector('.ns-input');
+        const searchDrop = searchForm.querySelector('.cm-search-drop');
+        const clearBtn = searchForm.querySelector('.ns-clear');
+
+        const escapeHtml = (value) =>
+          value.replace(/[&<>"']/g, (ch) => {
+            switch (ch) {
+              case '&': return '&amp;';
+              case '<': return '&lt;';
+              case '>': return '&gt;';
+              case '"': return '&quot;';
+              default: return '&#39;';
+            }
+          });
+
+        const closeDrop = () => {
+          if (searchDrop) searchDrop.hidden = true;
+        };
+
+        const syncClearBtn = () => {
+          if (clearBtn) clearBtn.hidden = (searchInput?.value ?? '').length === 0;
+        };
+
+        const catalogUrl = (query) => {
+          const category = new URLSearchParams(window.location.search).get('category');
+          const term = query.trim();
+          const params = new URLSearchParams();
+          if (category) params.set('category', category);
+          if (term) params.set('q', term);
+          const qs = params.toString();
+          return `/${qs ? `?${qs}` : ''}#catalogo`;
+        };
+
+        const goToCatalog = (query) => {
+          closeDrop();
+          window.location.href = catalogUrl(query);
+        };
+
+        searchForm.addEventListener('submit', (event) => {
+          event.preventDefault();
+          goToCatalog(searchInput?.value ?? '');
+        });
+
+        clearBtn.addEventListener('click', () => {
+          if (searchInput) searchInput.value = '';
+          syncClearBtn();
+          const hasQuery = new URLSearchParams(window.location.search).has('q');
+          if (hasQuery) {
+            window.location.href = catalogUrl('');
+          } else {
+            closeDrop();
+            searchInput?.focus();
+          }
+        });
+
+        let dropTimer;
+        let lastQuery = '';
+
+        const renderDropStatus = (message) => {
+          if (!searchDrop) return;
+          searchDrop.innerHTML = `<p class="cm-drop-status">${escapeHtml(message)}</p>`;
+          searchDrop.hidden = false;
+        };
+
+        const runCascade = async (raw) => {
+          const q = raw.trim();
+          if (q.length < 2) {
+            closeDrop();
+            return;
+          }
+          if (q === lastQuery && searchDrop && !searchDrop.hidden) return;
+          lastQuery = q;
+          renderDropStatus('Buscando…');
+          try {
+            const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=5`);
+            const data = await res.json();
+            if (!data?.success) throw new Error('search failed');
+            const hits = data.products ?? [];
+            if (!searchDrop) return;
+            if (hits.length === 0) {
+              renderDropStatus(`Sin resultados para «${q}»`);
+              return;
+            }
+            searchDrop.innerHTML = hits
+              .map(
+                (hit) => `
+                  <a class="cm-drop-item" href="${escapeHtml(hit.url)}">
+                    <img src="${escapeHtml(hit.image)}" alt="" loading="lazy" width="42" height="42" />
+                    <span class="cm-drop-body">
+                      <span class="cm-drop-title">${escapeHtml(hit.title)}</span>
+                      <span class="cm-drop-meta">
+                        <span class="cm-drop-price">${escapeHtml(hit.price)}</span>
+                        ${hit.merchant ? `<span class="cm-drop-sep" aria-hidden="true">·</span><span class="cm-drop-merchant">${escapeHtml(hit.merchant)}</span>` : ''}
+                      </span>
+                    </span>
+                    ${hit.discountPct ? `<span class="cm-drop-discount">-${hit.discountPct}%</span>` : ''}
+                  </a>`,
+              )
+              .join('');
+            searchDrop.hidden = false;
+          } catch {
+            renderDropStatus('El buscador no está disponible ahora mismo.');
+          }
+        };
+
+        searchInput.addEventListener('input', () => {
+          syncClearBtn();
+          clearTimeout(dropTimer);
+          const value = searchInput.value;
+          dropTimer = setTimeout(() => runCascade(value), 280);
+        });
+
+        document.addEventListener('click', (event) => {
+          if (!searchDrop || searchDrop.hidden) return;
+          const target = event.target;
+          if (!target || typeof target.closest !== 'function') return;
+          if (!target.closest('.nav-search')) closeDrop();
+        });
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+            closeDrop();
+          }
+        });
+
+        const initialQuery = new URLSearchParams(window.location.search).get('q') ?? '';
+        if (searchInput && initialQuery) searchInput.value = initialQuery;
+        syncClearBtn();
       })();
     </script>
     {!isBackend && (

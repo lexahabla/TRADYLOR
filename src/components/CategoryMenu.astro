@@ -35,116 +35,7 @@ const hueOf = (index: number) => (index * 43) % 360;
   <div class="category-frame" id="categoryFrame">
     <!-- Buscador unificado (estilo Amazon #nav-search, adaptado a Tradylor):
          [Categorías ▾] | [input] [x] [lupa] en una sola pastilla. -->
-    <form class="nav-search" data-cm-search role="search" autocomplete="off">
-      <div class="category-menu" data-cm-menu>
-        <button
-          type="button"
-          class:list={['category-menu-btn', { 'has-active': Boolean(activeCategory) }]}
-          data-cm-menu-btn
-          aria-label="Explorar categorías"
-          aria-expanded="false"
-          aria-controls="categoryPanel"
-        >
-          {activeCategory ? (
-            <span class="cm-btn-icon" aria-hidden="true">{activeCategory.icon}</span>
-          ) : (
-            <svg class="cm-btn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
-              <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
-              <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
-              <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
-            </svg>
-          )}
-          <span class="cm-btn-label">{activeCategory ? activeCategory.name : 'Categorías'}</span>
-          <svg class="cm-btn-caret" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <polyline points="6 9 12 15 18 9"></polyline>
-          </svg>
-        </button>
-
-        <div class="category-panel" id="categoryPanel" data-cm-panel hidden>
-          <div class="cat-panel-head">
-            <span class="cat-panel-title">Explora por categoría</span>
-            <a class:list={['cat-panel-all', { 'is-active': !activeSlugResolved }]} href="/#catalogo">Ver todo</a>
-          </div>
-
-          <div class="cat-panel-grid">
-            <a
-              class:list={['cat-card', 'is-todos', { 'is-active': !activeSlugResolved }]}
-              href="/#catalogo"
-              aria-current={!activeSlugResolved ? 'true' : undefined}
-            >
-              <span class="cat-card-icon" aria-hidden="true">🛍️</span>
-              <span class="cat-card-text">
-                <span class="cat-card-name">Todos</span>
-                <span class="cat-card-meta">Catálogo completo</span>
-              </span>
-            </a>
-
-            {roots.map((cat, index) => {
-              const subs = subsByParent.get(cat.id) ?? [];
-              return (
-                <div class="cat-group">
-                  <a
-                    class:list={['cat-card', { 'is-active': isRootActive(cat) }]}
-                    href={`/?category=${encodeURIComponent(cat.slug)}#catalogo`}
-                    aria-current={activeSlugResolved === cat.slug ? 'true' : undefined}
-                    style={`--h: ${hueOf(index)}`}
-                  >
-                    <span class="cat-card-icon" aria-hidden="true">{cat.icon}</span>
-                    <span class="cat-card-text">
-                      <span class="cat-card-name">{cat.name}</span>
-                      <span class="cat-card-meta">
-                        {subs.length > 0 ? `${subs.length} subcategoría${subs.length > 1 ? 's' : ''}` : 'Ver productos'}
-                      </span>
-                    </span>
-                    <svg class="cat-card-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                      <polyline points="9 18 15 12 9 6"></polyline>
-                    </svg>
-                  </a>
-
-                  {subs.length > 0 && (
-                    <div class="cat-subs">
-                      {subs.map((sub) => (
-                        <a
-                          class:list={['cat-sub', { 'is-active': activeSlugResolved === sub.slug }]}
-                          href={`/?category=${encodeURIComponent(sub.slug)}#catalogo`}
-                          aria-current={activeSlugResolved === sub.slug ? 'true' : undefined}
-                          style={`--h: ${hueOf(index)}`}
-                        >
-                          <span class="cat-sub-icon" aria-hidden="true">{sub.icon}</span>
-                          <span>{sub.name}</span>
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      <span class="ns-sep" aria-hidden="true"></span>
-
-      <input type="search" class="ns-input cm-search-input" data-cm-search-input placeholder="Buscar productos…" aria-label="Buscar productos" />
-
-      <button type="button" class="ns-clear" data-cm-clear aria-label="Borrar la búsqueda" hidden>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-
-      <button type="submit" class="ns-submit" aria-label="Buscar">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="11" cy="11" r="8"></circle>
-          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-        </svg>
-      </button>
-
-      <!-- Sugerencias en vivo (vía /api/search) -->
-      <div class="cm-search-drop" data-cm-search-drop hidden></div>
-    </form>
+    <!-- El buscador (nav-search) se trasladó al header-inner de Layout.astro -->
 
     <!-- Hamburguesa del menú principal (móvil) -->
     <button type="button" class="nav-toggle-btn" aria-label="Abrir menú" aria-controls="mainNav" aria-expanded="false">
@@ -175,7 +66,7 @@ const hueOf = (index: number) => (index * 43) % 360;
     left: 0;
     right: 0;
     z-index: 90;
-    background: #000000;
+    background: #111827;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   }
@@ -187,6 +78,15 @@ const hueOf = (index: number) => (index * 43) % 360;
     max-width: var(--max-width);
     margin: 0 auto;
     padding: 0.5rem 1.5rem;
+  }
+
+  /* Main nav centrado dentro de la barra de categorías */
+  #mainNav {
+    flex: 1;
+  }
+  #mainNav .nav-list {
+    justify-content: center;
+    gap: 1.75rem;
   }
 
   /* ── Buscador unificado (estilo Amazon, colores Tradylor) ─────────────── */
@@ -872,146 +772,5 @@ const hueOf = (index: number) => (index * 43) % 360;
       if (!target.closest('.category-menu')) closePanel();
     });
 
-    /* ── Buscador unificado: cascada + envío al catálogo ──────────────── */
-
-    const searchForm = bar.querySelector<HTMLFormElement>('[data-cm-search]');
-    const searchInput = bar.querySelector<HTMLInputElement>('[data-cm-search-input]');
-    const searchDrop = bar.querySelector<HTMLElement>('[data-cm-search-drop]');
-    const clearBtn = bar.querySelector<HTMLButtonElement>('[data-cm-clear]');
-
-    const escapeHtml = (value: string): string =>
-      value.replace(/[&<>"']/g, (ch) => {
-        switch (ch) {
-          case '&': return '&amp;';
-          case '<': return '&lt;';
-          case '>': return '&gt;';
-          case '"': return '&quot;';
-          default: return '&#39;';
-        }
-      });
-
-    const closeDrop = () => {
-      if (searchDrop) searchDrop.hidden = true;
-    };
-
-    // La X sólo aparece cuando hay texto escrito.
-    const syncClearBtn = () => {
-      if (clearBtn) clearBtn.hidden = (searchInput?.value ?? '').length === 0;
-    };
-
-    // URL del catálogo conservando la categoría activa; ?q= vacío = ver todo.
-    const catalogUrl = (query: string) => {
-      const category = new URLSearchParams(window.location.search).get('category');
-      const term = query.trim();
-      const params = new URLSearchParams();
-      if (category) params.set('category', category);
-      if (term) params.set('q', term);
-      const qs = params.toString();
-      return `/${qs ? `?${qs}` : ''}#catalogo`;
-    };
-
-    // Enter o botón de la lupa: el catálogo filtra por el término (SSR).
-    const goToCatalog = (query: string) => {
-      closeDrop();
-      window.location.href = catalogUrl(query);
-    };
-
-    searchForm?.addEventListener('submit', (event) => {
-      event.preventDefault();
-      goToCatalog(searchInput?.value ?? '');
-    });
-
-    // X: borra lo escrito y quita el filtro del catálogo si estaba aplicado.
-    clearBtn?.addEventListener('click', () => {
-      if (searchInput) searchInput.value = '';
-      syncClearBtn();
-      const hasQuery = new URLSearchParams(window.location.search).has('q');
-      if (hasQuery) {
-        window.location.href = catalogUrl('');
-      } else {
-        closeDrop();
-        searchInput?.focus();
-      }
-    });
-
-    let dropTimer: number | undefined;
-    let lastQuery = '';
-
-    const renderDropStatus = (message: string) => {
-      if (!searchDrop) return;
-      searchDrop.innerHTML = `<p class="cm-drop-status">${escapeHtml(message)}</p>`;
-      searchDrop.hidden = false;
-    };
-
-    const runCascade = async (raw: string) => {
-      const q = raw.trim();
-      if (q.length < 2) {
-        closeDrop();
-        return;
-      }
-      if (q === lastQuery && searchDrop && !searchDrop.hidden) return;
-      lastQuery = q;
-      renderDropStatus('Buscando…');
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=5`);
-        const data = await res.json();
-        if (!data?.success) throw new Error('search failed');
-        const hits: {
-          slug: string; title: string; price: string; image: string;
-          discountPct: number | null; url: string; merchant?: string;
-        }[] = data.products ?? [];
-        if (!searchDrop) return;
-        if (hits.length === 0) {
-          renderDropStatus(`Sin resultados para «${q}»`);
-          return;
-        }
-        searchDrop.innerHTML = hits
-          .map(
-            (hit) => `
-              <a class="cm-drop-item" href="${escapeHtml(hit.url)}">
-                <img src="${escapeHtml(hit.image)}" alt="" loading="lazy" width="42" height="42" />
-                <span class="cm-drop-body">
-                  <span class="cm-drop-title">${escapeHtml(hit.title)}</span>
-                  <span class="cm-drop-meta">
-                    <span class="cm-drop-price">${escapeHtml(hit.price)}</span>
-                    ${hit.merchant ? `<span class="cm-drop-sep" aria-hidden="true">·</span><span class="cm-drop-merchant">${escapeHtml(hit.merchant)}</span>` : ''}
-                  </span>
-                </span>
-                ${hit.discountPct ? `<span class="cm-drop-discount">-${hit.discountPct}%</span>` : ''}
-              </a>`,
-          )
-          .join('');
-        searchDrop.hidden = false;
-      } catch {
-        renderDropStatus('El buscador no está disponible ahora mismo.');
-      }
-    };
-
-    searchInput?.addEventListener('input', () => {
-      syncClearBtn();
-      window.clearTimeout(dropTimer);
-      const value = searchInput.value;
-      dropTimer = window.setTimeout(() => void runCascade(value), 280);
-    });
-
-    // Cerrar la cascada al pulsar fuera.
-    document.addEventListener('click', (event) => {
-      if (!searchDrop || searchDrop.hidden) return;
-      const target = event.target as Element | null;
-      if (!target || typeof target.closest !== 'function') return;
-      if (!target.closest('.nav-search')) closeDrop();
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        closePanel();
-        closeDrop();
-      }
-    });
-
-    // Hidrata el buscador con ?q= (al volver al catálogo o recargar).
-    const initialQuery = new URLSearchParams(window.location.search).get('q') ?? '';
-    if (searchInput && initialQuery) searchInput.value = initialQuery;
-    syncClearBtn();
   }
 </script>
