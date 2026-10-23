@@ -123,14 +123,39 @@ export function findCatalogProduct(key?: string | null): Product | undefined {
   const raw = (key ?? '').trim();
   if (!raw) return undefined;
   const needle = raw.toLowerCase();
-  const decodedNeedle = decodeURIComponent(needle);
+  let decodedNeedle = needle;
+  try {
+    decodedNeedle = decodeURIComponent(needle);
+  } catch {}
 
   const products = getCatalogProducts();
 
-  return (
+  const found = (
     products.find((p) => (p.slug ?? '').toLowerCase() === needle) ??
     products.find((p) => p.id.toLowerCase() === needle) ??
     products.find((p) => (p.slug ?? '').toLowerCase() === decodedNeedle) ??
     products.find((p) => p.id.toLowerCase() === decodedNeedle)
   );
+  if (found) return found;
+
+  // Fallback: búsqueda tolerante directa en products.json para que los productos
+  // en borrador o pendientes de auditoría puedan visualizarse individualmente
+  // desde el panel de administración.
+  try {
+    const rawJson = readJsonArrayFile<any>(DATA_FILE_PATH);
+    const rawMatch = rawJson.find((p) => {
+      if (!p || typeof p !== 'object') return false;
+      const pid = String(p.id ?? '').toLowerCase();
+      const pslug = String(p.slug ?? '').toLowerCase();
+      return pslug === needle || pid === needle || pslug === decodedNeedle || pid === decodedNeedle;
+    });
+    if (rawMatch) {
+      const probe = validateSingleProduct(rawMatch);
+      return (probe ?? rawMatch) as Product;
+    }
+  } catch (err) {
+    console.warn('[Catalog] Error en fallback de findCatalogProduct:', err);
+  }
+
+  return undefined;
 }

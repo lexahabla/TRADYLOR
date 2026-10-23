@@ -582,13 +582,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <div class="ali-sort-group">
               <select id="prodFSort">
                 <option value="default" selected>Por defecto</option>
+                <option value="score">Mejor rentabilidad (Score)</option>
+                <option value="ventas">Más vendidos</option>
+                <option value="valoracion">Mejor valorados</option>
                 <option value="precio">Precio</option>
                 <option value="nombre">Nombre</option>
                 <option value="categoria">Categoría</option>
                 <option value="comercio">Comerciante</option>
                 <option value="descuento">Mayor descuento</option>
-                <option value="valoracion">Mejor valoración</option>
-                <option value="score">Conversión (score)</option>
               </select>
               <button type="button" id="prodFSortDir" class="btn-secondary btn-sm ali-sort-dir" title="Invertir el orden (mayor a menor / menor a mayor)">↓</button>
             </div>
@@ -603,7 +604,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <!-- Presets editoriales (filtros de 1 clic) - situado en la última fila dentro de div#prodFilters -->
         <div id="prodPresets" class="prod-presets" role="group" aria-label="Presets editoriales">
           <span class="prod-presets-label">Presets:</span>
-          <button type="button" class="preset-chip" data-prod-preset="sin-subcategoria" title="Productos sin subcategoría asignada">📂 Sin Subcategoría</button>
+          <button type="button" class="preset-chip" data-prod-preset="sin-categoria" title="Productos sin ninguna categoría asignada">📂 Sin Categoria</button>
+          <button type="button" class="preset-chip" data-prod-preset="segunda-mano" title="Productos de segunda mano, reacondicionados o usados">♻️ Segunda Mano</button>
           <button type="button" class="preset-chip" data-prod-preset="sin-ia" title="Productos cuya ficha no está completada con IA">⚠️ Sin Enriquecer IA</button>
           <button type="button" class="preset-chip" data-prod-preset="duplicados" title="Duplicados por sourceId, URL canónica o título limpio">♻️ Duplicados</button>
           <button type="button" class="preset-chip" data-prod-preset="alta-rentabilidad" title="conversion_score ≥ 75">🔥 Alta Rentabilidad</button>
@@ -669,7 +671,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                     <img src={p.image} alt={p.title} class="thumb-img" loading="lazy" />
                   </td>
                   <td class="col-details">
-                    <a href={`/producto/${encodeURIComponent((p.slug && p.slug.trim()) || p.id)}`} class="row-title" target="_blank" rel="noopener" title="Ver ficha pública del producto">{p.title_short || p.title}</a>
+                    <a href={`/producto/${encodeURIComponent((p.slug && p.slug.trim()) || p.id)}`} class="row-title" data-id={p.id} data-slug={p.slug || ''} target="_blank" rel="noopener" title="Ver ficha pública del producto">{p.title_short || p.title}</a>
                     <div class="row-meta">
                       <span class="pill-category">{p.category}</span>
                       {p.badge && <span class="pill-badge">{p.badge}</span>}
@@ -2943,7 +2945,7 @@ function renderTableRows(products, resetPage = true) {
               ${(() => {
                 const targetSlug = (p.slug && p.slug.trim() && p.slug !== 'undefined' && p.slug !== 'null') ? p.slug.trim() : p.id;
                 const displayTitle = p.title_short || p.title;
-                return `<a href="/producto/${encodeURIComponent(targetSlug)}" class="row-title" target="_blank" rel="noopener" title="Ver ficha pública del producto">${escapeHtml ? escapeHtml(displayTitle) : displayTitle}</a>`;
+                return `<a href="/producto/${encodeURIComponent(targetSlug)}" class="row-title" data-id="${p.id}" data-slug="${p.slug || ''}" target="_blank" rel="noopener" title="Ver ficha pública del producto">${escapeHtml ? escapeHtml(displayTitle) : displayTitle}</a>`;
               })()}
               <div class="row-meta">
                 <span class="pill-category">${p.category || '—'}</span>
@@ -3033,6 +3035,7 @@ function renderTableRows(products, resetPage = true) {
               ${p.techSheet ? `<div class="aff-detail-item"><dt>Ficha técnica</dt><dd>${escapeHtml ? escapeHtml(p.techSheet) : p.techSheet}</dd></div>` : ''}
               ${p.shippingInfo ? `<div class="aff-detail-item"><dt>Envío</dt><dd>${p.shippingInfo}${p.shippingDays != null ? ` (${p.shippingDays} d)` : ''}${p.freeShipping ? ' · gratis' : ''}</dd></div>` : ''}
               ${p.buyNowUrl ? `<div class="aff-detail-item"><dt>Compra directa</dt><dd><a href="${p.buyNowUrl}" target="_blank" rel="nofollow noopener" class="test-link">Abrir Buy Now</a></dd></div>` : ''}
+              <div class="aff-detail-item aff-detail-url"><dt>Enlace Afiliado</dt><dd><a href="${p.affiliateUrl || '#'}" target="_blank" rel="nofollow noopener noreferrer" class="test-link" style="word-break:break-all;">${p.affiliateUrl ? (escapeHtml ? escapeHtml(p.affiliateUrl) : p.affiliateUrl) : '— Sin enlace de afiliado —'}</a></dd></div>
               ${p.specs && Object.keys(p.specs).length ? `<div class="aff-detail-item"><dt>Especificaciones</dt><dd>${Object.entries(p.specs).map(([k, v]) => `${escapeHtml ? escapeHtml(k) : k}: ${escapeHtml ? escapeHtml(String(v)) : v}`).join(' · ')}</dd></div>` : ''}
               ${Array.isArray(p.pros) && p.pros.length ? `<div class="aff-detail-item"><dt>Pros</dt><dd>${p.pros.join(' · ')}</dd></div>` : ''}
               ${Array.isArray(p.cons) && p.cons.length ? `<div class="aff-detail-item"><dt>Contras</dt><dd>${p.cons.join(' · ')}</dd></div>` : ''}
@@ -3277,6 +3280,107 @@ function renderTableRows(products, resetPage = true) {
       };
     }
 
+    function getProdModelKey(p) {
+      if (!p) return '';
+      if (p.duplicate_group) return 'dg:' + p.duplicate_group;
+      if (p.sourceId) return 'src:' + String(p.sourceId).trim().toLowerCase();
+      if (p.asin) return 'asin:' + String(p.asin).trim().toLowerCase();
+      const norm = String(p.title_short || p.title || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim();
+      const tokens = norm.split(/\s+/).filter(Boolean).slice(0, 5).join(' ');
+      return tokens ? 'tok:' + tokens : 'id:' + String(p.id || '');
+    }
+
+    function getProdTypeKey(p) {
+      if (!p) return 'otros';
+      return String(p.subcategory_id || p.category || p.category_id || 'otros').trim().toLowerCase();
+    }
+
+    function applyCatalogDiversity(products) {
+      if (!Array.isArray(products) || products.length <= 1) return products;
+
+      const pool = products.slice();
+      const result = [];
+      const pageSize = typeof PRODUCTS_PER_PAGE === 'number' ? PRODUCTS_PER_PAGE : 50;
+      let currentPageModels = new Set();
+
+      while (pool.length > 0) {
+        const nextIdx = result.length;
+        if (nextIdx > 0 && nextIdx % pageSize === 0) {
+          currentPageModels.clear();
+        }
+
+        const prev = result[result.length - 1];
+        const prevModel = prev ? getProdModelKey(prev) : null;
+        const prevType = prev ? getProdTypeKey(prev) : null;
+
+        let bestIndex = -1;
+
+        // Prioridad 1: Modelo distinto al anterior + modelo no repetido en esta página + tipo alternado
+        for (let i = 0; i < pool.length; i++) {
+          const item = pool[i];
+          const mKey = getProdModelKey(item);
+          const tKey = getProdTypeKey(item);
+          if (mKey !== prevModel && !currentPageModels.has(mKey) && tKey !== prevType) {
+            bestIndex = i;
+            break;
+          }
+        }
+
+        // Prioridad 2: Modelo distinto al anterior + modelo no repetido en esta página
+        if (bestIndex === -1) {
+          for (let i = 0; i < pool.length; i++) {
+            const item = pool[i];
+            const mKey = getProdModelKey(item);
+            if (mKey !== prevModel && !currentPageModels.has(mKey)) {
+              bestIndex = i;
+              break;
+            }
+          }
+        }
+
+        // Prioridad 3: Modelo distinto al anterior + tipo alternado respecto a la fila previa
+        if (bestIndex === -1) {
+          for (let i = 0; i < pool.length; i++) {
+            const item = pool[i];
+            const mKey = getProdModelKey(item);
+            const tKey = getProdTypeKey(item);
+            if (mKey !== prevModel && tKey !== prevType) {
+              bestIndex = i;
+              break;
+            }
+          }
+        }
+
+        // Prioridad 4: Modelo distinto al anterior (no repetir en la misma línea/fila contigua)
+        if (bestIndex === -1) {
+          for (let i = 0; i < pool.length; i++) {
+            const item = pool[i];
+            const mKey = getProdModelKey(item);
+            if (mKey !== prevModel) {
+              bestIndex = i;
+              break;
+            }
+          }
+        }
+
+        // Fallback: siguiente disponible en el pool (cuando todos los restantes son del mismo modelo)
+        if (bestIndex === -1) {
+          bestIndex = 0;
+        }
+
+        const chosen = pool.splice(bestIndex, 1)[0];
+        result.push(chosen);
+        currentPageModels.add(getProdModelKey(chosen));
+      }
+
+      return result;
+    }
+
     function prodFilterApply() {
       const q = (inputFilterList?.value || '').trim().toLowerCase();
       const cat = prodFCat?.value || '';
@@ -3338,6 +3442,7 @@ function renderTableRows(products, resetPage = true) {
           categoria: (p) => String(p.category || ''),
           comercio: (p) => String(p.merchant || ''),
           score: (p) => Number(p.conversion_score) || 0,
+          ventas: (p) => Number(p.sales30d != null ? p.sales30d : (p.popularity != null ? p.popularity : (p.extra && p.extra['Ventas (30 días)'] != null ? p.extra['Ventas (30 días)'] : (p.reviewsCount || 0)))),
         };
         filtered.sort((a, b) => {
           if (sortKey === 'nombre') return dir * String(a.title).localeCompare(String(b.title), 'es');
@@ -3348,7 +3453,8 @@ function renderTableRows(products, resetPage = true) {
           return dir * (av - bv);
         });
       }
-      renderTableRows(filtered);
+      const diversified = applyCatalogDiversity(filtered);
+      renderTableRows(diversified);
     }
 
     // ─── Paginación del catálogo de productos ─────────────────────────────────
@@ -3457,6 +3563,14 @@ function renderTableRows(products, resetPage = true) {
     paginationNext?.addEventListener('click', () => goToPage(currentPage + 1));
     paginationPrevTop?.addEventListener('click', () => goToPage(currentPage - 1));
     paginationNextTop?.addEventListener('click', () => goToPage(currentPage + 1));
+    inputFilterList?.addEventListener('input', prodFilterApply);
+    inputFilterList?.addEventListener('search', prodFilterApply);
+    inputFilterList?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        prodFilterApply();
+      }
+    });
     prodFCat?.addEventListener('change', () => {
       // El filtro de subcategoría se repliega sobre la categoría elegida.
       syncSubcatFilter();
@@ -6701,8 +6815,28 @@ function renderTableRows(products, resetPage = true) {
 
     function prodMatchesPreset(product, preset) {
       switch (preset) {
-        case 'sin-subcategoria':
-          return !product.subcategory_id;
+        case 'sin-categoria':
+        case 'sin-subcategoria': {
+          const cat = String(product.category || '').trim();
+          const catId = String(product.category_id || '').trim();
+          const hasCat = Boolean(
+            (cat && cat !== '—' && cat.toLowerCase() !== 'sin categoría' && cat.toLowerCase() !== 'sin categoria') ||
+            (catId && catId !== '—')
+          );
+          return !hasCat;
+        }
+        case 'segunda-mano': {
+          const cond = String(
+            (product.extra && (product.extra.Condition || product.extra.condition || product.extra.Estado)) ||
+            product.condition ||
+            (product.specs && (product.specs['Estado'] || product.specs['Condición'] || product.specs['Condition'])) ||
+            product.badge ||
+            ''
+          ).toLowerCase();
+          if (/used|pre-owned|refurbished|reacondicionado|segunda mano|para desguace|for parts|open box|devoluci[oó]n|usado/i.test(cond)) return true;
+          const text = `${product.title || ''} ${product.description || ''}`.toLowerCase();
+          return /\b(segunda\s+mano|reacondicionad[oa]s?|refurbished|pre-owned|usad[oa]s?|open\s*box|km\s*0|ex-demo|seminuev[oa]s?)\b/i.test(text);
+        }
         case 'sin-ia':
           return (product.ia_status || ((product.description || '').trim().length >= 60 ? 'completed' : 'pending')) !== 'completed';
         case 'duplicados':
@@ -6711,7 +6845,6 @@ function renderTableRows(products, resetPage = true) {
           return (Number(product.conversion_score) || 0) >= 75;
         case 'listos':
           return Boolean(product.category)
-            && Boolean(product.subcategory_id)
             && (product.ia_status || ((product.description || '').trim().length >= 60 ? 'completed' : 'pending')) === 'completed'
             && (product.link_status || ((product.affiliateUrl || '').trim() ? 'active' : 'pending')) === 'active';
         default:
@@ -6722,7 +6855,8 @@ function renderTableRows(products, resetPage = true) {
     function setProdPreset(preset) {
       activeProdPreset = preset || '';
       document.querySelectorAll('.preset-chip[data-prod-preset]').forEach((chip) => {
-        chip.classList.toggle('is-active', Boolean(activeProdPreset) && chip.getAttribute('data-prod-preset') === activeProdPreset);
+        const isCurrent = Boolean(activeProdPreset) && chip.getAttribute('data-prod-preset') === activeProdPreset;
+        chip.setAttribute('aria-pressed', String(isCurrent));
       });
       const clearBtn = document.getElementById('btnProdPresetClear');
       if (clearBtn) clearBtn.hidden = !activeProdPreset;
@@ -7032,21 +7166,26 @@ function renderTableRows(products, resetPage = true) {
       }
     });
 
-    // ── Vista previa (👁️ Preview Card): abre la ficha PÚBLICA en target=_blank ──
+    // ── Enlaces a la ficha individual del producto (botón del ojo 👁️ y nombre del producto) ──
     document.addEventListener('click', (event) => {
-      const btn = event.target.closest?.('.btn-preview-card');
-      if (!btn) return;
-      if (btn.tagName === 'A' && btn.getAttribute('href')) {
-        return; // Navegación nativa garantizada
-      }
-      event.preventDefault();
-      event.stopPropagation();
-      const id = btn.getAttribute('data-id');
-      const rawSlug = btn.getAttribute('data-slug');
+      const trigger = event.target.closest?.('.btn-preview-card, .row-title');
+      if (!trigger) return;
+
+      const rawHref = trigger.getAttribute('href');
+      const id = trigger.getAttribute('data-id');
+      const rawSlug = trigger.getAttribute('data-slug');
       const slug = (rawSlug && rawSlug.trim() && rawSlug !== 'undefined' && rawSlug !== 'null') ? rawSlug.trim() : '';
       const target = slug || id;
-      if (!target) return;
-      window.open(`/producto/${encodeURIComponent(target)}`, '_blank', 'noopener');
+      const targetUrl = (rawHref && rawHref.startsWith('/producto/')) ? rawHref : (target ? `/producto/${encodeURIComponent(target)}` : '');
+
+      if (!targetUrl) return;
+
+      // Navegación fiable a la ficha individual del producto
+      if (trigger.tagName !== 'A' || !trigger.getAttribute('href')) {
+        event.preventDefault();
+        event.stopPropagation();
+        window.open(targetUrl, '_blank', 'noopener');
+      }
     });
 
     // ── Vincular alternativas en todo el catálogo (botón en #productSelBar) ──
@@ -9384,6 +9523,7 @@ function renderTableRows(products, resetPage = true) {
   :global(a.row-title) {
     display: inline-block;
     text-decoration: none;
+    cursor: pointer;
     transition: color 0.2s ease;
   }
 
@@ -9737,11 +9877,6 @@ function renderTableRows(products, resetPage = true) {
     transition: all .18s ease;
   }
   :global(.preset-chip:hover) { color: var(--color-text-main); border-color: rgba(96, 165, 250, .45); }
-  :global(.preset-chip.is-active) {
-    color: #93c5fd;
-    background: rgba(59, 130, 246, .16);
-    border-color: rgba(96, 165, 250, .55);
-  }
   :global(.preset-chip-clear) { color: #fca5a5; border-color: rgba(239, 68, 68, .3); }
   :global(.preset-chip-action) { color: #86efac; border-color: rgba(34, 197, 94, .3); }
 
