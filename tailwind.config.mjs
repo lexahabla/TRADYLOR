@@ -10,6 +10,11 @@ export default {
     // Mi Radar (panel del usuario final): se usa Tailwind para layout básico.
     './src/pages/mi-radar.astro',
   ],
+  safelist: [
+    'hidden',
+    'md:inline',
+    'md:flex',
+  ],
   theme: {
     extend: {
       colors: {

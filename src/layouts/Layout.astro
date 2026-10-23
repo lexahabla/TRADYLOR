@@ -202,7 +202,7 @@ const headerCategoryPanelHtml = `
         display: flex;
         flex-direction: column;
         line-height: 1.6;
-        overflow-x: hidden;
+        overflow-x: clip;
       }
 
       .container {
@@ -222,12 +222,17 @@ const headerCategoryPanelHtml = `
         z-index: 100;
         background: #000000;
         border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        transform: translateY(0);
         /* El header se oculta al hacer scroll hacia abajo y aparece al
            subir. Se controla con JS toggleando la clase .scroll-hidden. */
-        transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s ease;
+        will-change: transform;
       }
       .site-header.scroll-hidden {
-        transform: translateY(-102%);
+        transform: translateY(-100%);
+      }
+      .site-header.is-scrolled {
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
       }
       .header-inner {
         display: flex;
@@ -980,13 +985,11 @@ const headerCategoryPanelHtml = `
 
       /* Botones del header-actions más pequeños en móvil */
       @media (max-width: 640px) {
-        .header-actions .header-radar-btn,
         .header-actions .header-user-area,
         .header-actions .header-translate {
           width: 36px;
           height: 36px;
         }
-        .header-actions .header-radar-btn svg,
         .header-actions .header-translate svg {
           width: 18px;
           height: 18px;
@@ -1866,25 +1869,24 @@ const headerCategoryPanelHtml = `
           width: 24px;
           height: 24px;
         }
-        /* Botón categorías en responsive: muestra icono y texto Categorías */
+        /* Botón categorías en responsive: solo icono de flecha, texto oculto */
         .container.header-inner .category-menu-btn {
           display: inline-flex !important;
           align-items: center;
-          gap: 0.25rem;
+          justify-content: center;
+          gap: 0;
           padding: 0 0.55rem;
           border-radius: 9px 0 0 9px;
-          font-size: 0.78rem;
-          font-weight: 600;
-          color: #e2e8f0;
+          font-size: 0.85rem;
+          color: #60a5fa;
           background: rgba(255, 255, 255, 0.06);
           border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
         .container.header-inner .category-menu-btn .cm-btn-label {
-          display: inline-block !important;
-          white-space: nowrap;
+          display: none !important;
         }
         .container.header-inner .category-menu-btn .cm-btn-icon {
-          font-size: 0.82rem;
+          font-size: 0.9rem;
           color: #60a5fa;
         }
         /* Panel de categorías desplegable en responsive */
@@ -1911,15 +1913,15 @@ const headerCategoryPanelHtml = `
           display: block !important;
         }
 
-        /* Selector de idiomas visible en responsive */
+        /* Selector de idiomas en responsive: sólo icono del globo terráqueo */
         .header-translate {
           display: inline-flex !important;
           position: relative;
           align-items: center;
           justify-content: center;
-          gap: 0.3rem;
+          width: 36px;
           height: 36px;
-          padding: 0 0.5rem;
+          padding: 0;
           background: rgba(255, 255, 255, 0.06);
           border: 1px solid rgba(255, 255, 255, 0.14);
           border-radius: 9px;
@@ -1933,18 +1935,15 @@ const headerCategoryPanelHtml = `
         .header-translate-icon {
           display: flex;
           align-items: center;
+          justify-content: center;
         }
         .header-translate-icon svg {
-          width: 15px;
-          height: 15px;
+          width: 17px;
+          height: 17px;
           color: #93c5fd;
         }
         .header-translate-code {
-          display: inline-block !important;
-          font-size: 0.72rem;
-          font-weight: 700;
-          color: #e2e8f0;
-          letter-spacing: 0.03em;
+          display: none !important;
         }
         .header-translate-native {
           position: absolute;
@@ -1954,6 +1953,11 @@ const headerCategoryPanelHtml = `
           height: 100%;
           cursor: pointer;
           z-index: 5;
+        }
+
+        /* Botón de radar: oculto por completo en responsive */
+        .header-radar-btn {
+          display: none !important;
         }
 
         /* Botón de usuario en responsive */
@@ -2007,16 +2011,6 @@ const headerCategoryPanelHtml = `
           min-width: 240px;
           max-width: calc(100vw - 1rem);
           z-index: 500;
-        }
-        .header-radar-btn {
-          width: 36px;
-          height: 36px;
-          padding: 0;
-          border-radius: 9px;
-        }
-        .header-radar-btn svg {
-          width: 16px;
-          height: 16px;
         }
 
         /* mainNav oculto por defecto; se abre con el hamburguesa como drawer a pantalla completa */
@@ -2155,17 +2149,15 @@ const headerCategoryPanelHtml = `
           margin: 0 0.25rem;
         }
         .container.header-inner .category-menu-btn {
-          padding: 0 0.4rem;
-        }
-        .container.header-inner .category-menu-btn .cm-btn-label {
-          font-size: 0.72rem;
+          padding: 0 0.5rem;
         }
         .header-translate {
+          width: 34px;
           height: 34px;
-          padding: 0 0.35rem;
-        }
-        .header-translate-code {
-          font-size: 0.68rem;
+          padding: 0;
+          display: inline-flex !important;
+          align-items: center;
+          justify-content: center;
         }
         .nav-toggle-btn-header,
         .header-cta-btn,
@@ -2187,17 +2179,15 @@ const headerCategoryPanelHtml = `
           margin: 0 0.2rem;
         }
         .container.header-inner .category-menu-btn {
-          padding: 0 0.35rem;
-        }
-        .container.header-inner .category-menu-btn .cm-btn-label {
-          font-size: 0.68rem;
+          padding: 0 0.45rem;
         }
         .header-translate {
+          width: 32px;
           height: 32px;
-          padding: 0 0.3rem;
-        }
-        .header-translate-code {
-          font-size: 0.65rem;
+          padding: 0;
+          display: inline-flex !important;
+          align-items: center;
+          justify-content: center;
         }
         .nav-toggle-btn-header,
         .header-cta-btn,
@@ -2499,7 +2489,7 @@ const headerCategoryPanelHtml = `
               <!-- Desplegable de categorías a la izquierda del input -->
               <button type="button" class="category-menu-btn" aria-label="Categorías" aria-expanded="false" aria-controls="header-category-panel">
                 <span class="cm-btn-icon">▾</span>
-                <span class="cm-btn-label">Categorías</span>
+                <span class="cm-btn-label hidden md:inline">Categorías</span>
               </button>
               <input type="search" class="ns-input cm-search-input" placeholder="Buscar productos…" aria-label="Buscar productos" />
               <button type="button" class="ns-clear" aria-label="Borrar la búsqueda" hidden>
@@ -2524,7 +2514,7 @@ const headerCategoryPanelHtml = `
               <!-- Carrito / Mi Radar (icono radar animado + badge contador) -->
               <button
                 type="button"
-                class="header-radar-btn"
+                class="header-radar-btn hidden md:flex"
                 data-header-radar-btn
                 data-radar-drawer-toggle
                 aria-label="Abrir carrito de productos guardados"
@@ -2606,7 +2596,7 @@ const headerCategoryPanelHtml = `
                   </svg>
                   <img class="header-translate-flag" data-translate-flag alt="" hidden />
                 </span>
-                <span class="header-translate-code" data-translate-code>ES</span>
+                <span class="header-translate-code hidden md:inline" data-translate-code>ES</span>
                 <select class="header-translate-native" data-translate-select aria-label="Idioma de la página">
                   <option value="">Español</option>
                   {GOOGLE_TRANSLATE_LANGS.filter((item) => item.code !== 'es').map((item) => (
@@ -2826,10 +2816,16 @@ const headerCategoryPanelHtml = `
 
     <script is:inline>
       (() => {
+        const siteHeader = document.querySelector('.site-header');
+        if (!siteHeader) return;
+
         const navToggleBtn = document.querySelector('.nav-toggle-btn-header');
         const mainNav = document.getElementById('mainNav');
-        const siteHeader = document.querySelector('.site-header');
-        if (navToggleBtn && mainNav && siteHeader) {
+        const headerCatBtn = document.querySelector('.container.header-inner .category-menu-btn');
+        const headerCatPanel = document.getElementById('header-category-panel');
+        const radarDrawer = document.getElementById('radarDrawer');
+
+        if (navToggleBtn && mainNav) {
           const closeNav = () => {
             mainNav.classList.remove('is-open');
             navToggleBtn.setAttribute('aria-expanded', 'false');
@@ -2839,6 +2835,9 @@ const headerCategoryPanelHtml = `
             const open = mainNav.classList.toggle('is-open');
             navToggleBtn.setAttribute('aria-expanded', String(open));
             navToggleBtn.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
+            if (open) {
+              siteHeader.classList.remove('scroll-hidden');
+            }
           });
           const mobileCloseBtn = mainNav.querySelector('[data-mobile-menu-close]');
           if (mobileCloseBtn) {
@@ -2858,42 +2857,88 @@ const headerCategoryPanelHtml = `
             if (target.closest('.category-menu-btn')) closeNav();
             else if (!target.closest('.site-header')) closeNav();
           });
+        }
 
-          // --- Desplegable de categorías del buscador de cabecera ---
-          const headerCatBtn = document.querySelector('.container.header-inner .category-menu-btn');
-          const headerCatPanel = document.getElementById('header-category-panel');
-          if (headerCatBtn && headerCatPanel) {
-            const setCatPanelOpen = (open) => {
-              headerCatPanel.hidden = !open;
-              headerCatBtn.setAttribute('aria-expanded', String(open));
-            };
-            headerCatBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              setCatPanelOpen(!headerCatPanel.hidden);
-            });
-            document.addEventListener('click', (event) => {
-              const t = event.target;
-              if (!(t instanceof Element)) return;
-              if (!t.closest('.container.header-inner .nav-search')) setCatPanelOpen(false);
-            });
-            navToggleBtn.addEventListener('click', () => setCatPanelOpen(false));
-          }
-
-          // --- Scroll: ocultar header al bajar, mostrar al subir ---
-          let lastScrollY = window.scrollY;
-          const handleScroll = () => {
-            const currentScrollY = window.scrollY;
-            const scrollingDown = currentScrollY > lastScrollY;
-            const pastHeader = currentScrollY > 80;
-            if (scrollingDown && pastHeader) {
-              siteHeader.classList.add('scroll-hidden');
-            } else {
+        // --- Desplegable de categorías del buscador de cabecera ---
+        if (headerCatBtn && headerCatPanel) {
+          const setCatPanelOpen = (open) => {
+            headerCatPanel.hidden = !open;
+            headerCatBtn.setAttribute('aria-expanded', String(open));
+            if (open) {
               siteHeader.classList.remove('scroll-hidden');
             }
-            lastScrollY = currentScrollY;
           };
-          window.addEventListener('scroll', handleScroll, { passive: true });
+          headerCatBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setCatPanelOpen(!headerCatPanel.hidden);
+          });
+          document.addEventListener('click', (event) => {
+            const t = event.target;
+            if (!(t instanceof Element)) return;
+            if (!t.closest('.container.header-inner .nav-search')) setCatPanelOpen(false);
+          });
+          if (navToggleBtn) {
+            navToggleBtn.addEventListener('click', () => setCatPanelOpen(false));
+          }
         }
+
+        // --- Scroll dinámico: ocultar header al bajar, mostrar al subir con rAF ---
+        let lastScrollY = Math.max(0, window.pageYOffset || document.documentElement.scrollTop || 0);
+        let ticking = false;
+
+        const updateHeaderOnScroll = () => {
+          const currentScrollY = Math.max(0, window.pageYOffset || document.documentElement.scrollTop || 0);
+
+          // Si el menú responsive o drawer está abierto, mantener visible el header
+          const isNavOpen = mainNav && mainNav.classList.contains('is-open');
+          const isDrawerOpen = radarDrawer && radarDrawer.classList.contains('is-open');
+
+          if (isNavOpen || isDrawerOpen) {
+            siteHeader.classList.remove('scroll-hidden');
+            lastScrollY = currentScrollY;
+            ticking = false;
+            return;
+          }
+
+          // Si el panel de categorías estaba abierto y se hace scroll, cerrarlo
+          if (headerCatPanel && !headerCatPanel.hidden && Math.abs(currentScrollY - lastScrollY) > 8) {
+            headerCatPanel.hidden = true;
+            if (headerCatBtn) headerCatBtn.setAttribute('aria-expanded', 'false');
+          }
+
+          // Inicio de página (top = 0 o <= 10px): integrado normalmente sin sombras ni desplazamientos extraños
+          if (currentScrollY <= 10) {
+            siteHeader.classList.remove('scroll-hidden');
+            siteHeader.classList.remove('is-scrolled');
+          } else {
+            siteHeader.classList.add('is-scrolled');
+            const delta = currentScrollY - lastScrollY;
+
+            // Umbral para evitar parpadeos por micro-scrolls
+            if (Math.abs(delta) > 5) {
+              if (delta > 0 && currentScrollY > 70) {
+                // Scroll down: ocultar deslizándose hacia arriba fuera de la pantalla
+                siteHeader.classList.add('scroll-hidden');
+              } else if (delta < 0) {
+                // Scroll up: aparecer suavemente deslizándose hacia abajo fijándose en su posición
+                siteHeader.classList.remove('scroll-hidden');
+              }
+            }
+          }
+
+          lastScrollY = currentScrollY;
+          ticking = false;
+        };
+
+        window.addEventListener('scroll', () => {
+          if (!ticking) {
+            window.requestAnimationFrame(updateHeaderOnScroll);
+            ticking = true;
+          }
+        }, { passive: true });
+
+        // Ajustar estado inicial en carga
+        updateHeaderOnScroll();
 
         // --- Analítica: sesión, visitor id, duración y beacons ---------------
         const crearId = () =>
