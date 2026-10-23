@@ -127,6 +127,8 @@ export interface ProductFilterParams {
   hotCommissionOnly?: boolean;
   /** Sólo productos con stock (`en_stock`). Lo usan los presets. */
   inStockOnly?: boolean;
+  /** Sólo productos de segunda mano o reacondicionados. */
+  secondHandOnly?: boolean;
   /** Campo de ordenación. */
   sortBy?: AliSortKey;
   /** Dirección del orden. */
@@ -201,6 +203,12 @@ export const ALI_PRESETS: AliPreset[] = [
     icon: '⚡',
     label: 'Envío Exprés',
     params: { freeShippingOnly: true, choiceOnly: true, salesMin: 50 },
+  },
+  {
+    id: 'segunda-mano',
+    icon: '♻️',
+    label: 'Segunda Mano',
+    params: { secondHandOnly: true },
   },
   { id: 'clear', icon: '🗑️', label: 'Limpiar Filtros', params: {} },
 ];
@@ -355,6 +363,34 @@ export function imageCount(product: UnifiedProduct): number {
   return 0;
 }
 
+/**
+ * Determina si un producto es de segunda mano, reacondicionado o usado
+ * (soporta campos de condición de eBay/redes, technicalSpecs y texto).
+ */
+export function isSecondHand(product: UnifiedProduct): boolean {
+  const cond = String(
+    extra(product, 'Condition') ??
+    extra(product, 'condition') ??
+    extra(product, 'Estado') ??
+    (product as unknown as { condition?: string }).condition ??
+    (product.technicalSpecs && product.technicalSpecs['Estado']) ??
+    ''
+  ).toLowerCase();
+
+  if (cond) {
+    if (/used|pre-owned|refurbished|reacondicionado|segunda mano|para desguace|for parts|open box|devoluci[oó]n|usado/i.test(cond)) {
+      return true;
+    }
+  }
+
+  const title = String(product.title || '').toLowerCase();
+  const desc = String(product.description || '').toLowerCase();
+  const text = `${title} ${desc}`;
+  const secondHandPattern = /\b(segunda\s+mano|reacondicionad[oa]s?|refurbished|pre-owned|usad[oa]s?|open\s*box|km\s*0|ex-demo|seminuev[oa]s?)\b/i;
+
+  return secondHandPattern.test(text);
+}
+
 /* ────────────────────────────── PRESETS ──────────────────────────────────── */
 
 /** Columnas de las que hay datos reales en la caché cargada. */
@@ -362,6 +398,7 @@ export interface AliFilterAvailability {
   freeShipping: boolean;
   choice: boolean;
   hotCommission: boolean;
+  secondHand: boolean;
 }
 
 export function computeAvailability(products: UnifiedProduct[]): AliFilterAvailability {
@@ -369,18 +406,20 @@ export function computeAvailability(products: UnifiedProduct[]): AliFilterAvaila
     freeShipping: products.some(hasFreeShipping),
     choice: products.some(isChoice),
     hotCommission: products.some((product) => (hotCommissionPct(product) ?? 0) > 0),
+    secondHand: products.some(isSecondHand),
   };
 }
 
 /** Condiciones «booleanas» de la capa 3 que dependen de que la caché traiga la columna. */
 const COLUMN_CONDITIONS: Array<{
-  key: 'freeShippingOnly' | 'choiceOnly' | 'hotCommissionOnly';
+  key: 'freeShippingOnly' | 'choiceOnly' | 'hotCommissionOnly' | 'secondHandOnly';
   column: keyof AliFilterAvailability;
   label: string;
 }> = [
   { key: 'freeShippingOnly', column: 'freeShipping', label: 'envío gratis' },
   { key: 'choiceOnly', column: 'choice', label: 'Choice / Almacén local' },
   { key: 'hotCommissionOnly', column: 'hotCommission', label: 'comisión Hot' },
+  { key: 'secondHandOnly', column: 'secondHand', label: 'segunda mano' },
 ];
 
 /**
@@ -485,6 +524,7 @@ export function filterAliCatalog(
     if (params.freeShippingOnly && !hasFreeShipping(product)) return false;
     if (params.choiceOnly && !isChoice(product)) return false;
     if (params.hotCommissionOnly && (hotCommissionPct(product) ?? 0) <= 0) return false;
+    if (params.secondHandOnly && !isSecondHand(product)) return false;
     if (params.inStockOnly && product.inStock === false) return false;
 
     // Texto libre: título + descripción + categoría + tienda
@@ -646,6 +686,7 @@ function buildChips(params: ProductFilterParams): AliChip[] {
   if (params.freeShippingOnly) chips.push({ key: 'free', label: 'Envío gratis', clear: (p) => { p.freeShippingOnly = false; } });
   if (params.choiceOnly) chips.push({ key: 'choice', label: 'Choice / Almacén local', clear: (p) => { p.choiceOnly = false; } });
   if (params.hotCommissionOnly) chips.push({ key: 'hot', label: 'Comisión Hot', clear: (p) => { p.hotCommissionOnly = false; } });
+  if (params.secondHandOnly) chips.push({ key: 'secondHand', label: 'Segunda mano', clear: (p) => { p.secondHandOnly = false; } });
   if (params.inStockOnly) chips.push({ key: 'stock', label: 'En stock', clear: (p) => { p.inStockOnly = false; } });
   return chips;
 }
@@ -656,6 +697,7 @@ function advancedCount(params: ProductFilterParams): number {
     params.freeShippingOnly,
     params.choiceOnly,
     params.hotCommissionOnly,
+    params.secondHandOnly,
     params.imagesMin != null,
     params.discountMin != null,
     params.shop,
@@ -673,6 +715,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
   if (mounted) return mounted;
 
   const el = byId(
+    'affiliateFilters',
     'aliFilters',
     'aliFQ',
     'aliFCount',
@@ -693,13 +736,14 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     'aliFFreeShip',
     'aliFChoice',
     'aliFHot',
+    'aliFSecondHand',
     'aliFImages',
     'aliFDiscMin',
     'aliFShop',
     'aliFNetwork',
     'aliFChips',
   );
-  const root = el.aliFilters;
+  const root = el.affiliateFilters || el.aliFilters;
   if (!root) {
     const noop: AliFiltersController = {
       getParams: () => defaultAliFilters(),
@@ -721,7 +765,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
   /** Aviso del preset activo cuando se aplicó sin alguna condición por falta de datos. */
   let presetNotice: string | null = null;
   let products: UnifiedProduct[] = [];
-  let availability: AliFilterAvailability = { freeShipping: false, choice: false, hotCommission: false };
+  let availability: AliFilterAvailability = { freeShipping: false, choice: false, hotCommission: false, secondHand: false };
 
   /* ── lectura de la UI → estado ─────────────────────────────────────────── */
 
@@ -766,6 +810,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     next.freeShippingOnly = Boolean((el.aliFFreeShip as HTMLInputElement | null)?.checked);
     next.choiceOnly = Boolean((el.aliFChoice as HTMLInputElement | null)?.checked);
     next.hotCommissionOnly = Boolean((el.aliFHot as HTMLInputElement | null)?.checked);
+    next.secondHandOnly = Boolean((el.aliFSecondHand as HTMLInputElement | null)?.checked);
 
     // Orden (capa conservada del diseño original)
     next.sortBy = ((el.aliFSort as HTMLSelectElement | null)?.value ?? 'ventas') as AliSortKey;
@@ -820,6 +865,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
       [el.aliFFreeShip as HTMLInputElement | null, availability.freeShipping, 'Sin datos de envío en la caché'],
       [el.aliFChoice as HTMLInputElement | null, availability.choice, 'Sin productos marcados como Choice en la caché'],
       [el.aliFHot as HTMLInputElement | null, availability.hotCommission, 'Ningún producto con comisión Hot en la caché'],
+      [el.aliFSecondHand as HTMLInputElement | null, availability.secondHand, 'Sin productos de segunda mano en la caché'],
     ];
     for (const [node, ok, hint] of map) {
       if (!node) continue;
@@ -873,6 +919,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     (el.aliFFreeShip as HTMLInputElement | null)!.checked = Boolean(params.freeShippingOnly);
     (el.aliFChoice as HTMLInputElement | null)!.checked = Boolean(params.choiceOnly);
     (el.aliFHot as HTMLInputElement | null)!.checked = Boolean(params.hotCommissionOnly);
+    if (el.aliFSecondHand) (el.aliFSecondHand as HTMLInputElement).checked = Boolean(params.secondHandOnly);
     (el.aliFShop as HTMLSelectElement | null)!.value = params.shop ?? '';
     (el.aliFNetwork as HTMLSelectElement | null)!.value = params.network ?? '';
 
@@ -970,7 +1017,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
   for (const id of [
     'aliFQ', 'aliFCat2', 'aliFState', 'aliFPriceMin', 'aliFPriceMax', 'aliFCommMin', 'aliFCommUnit',
     'aliFSalesMin', 'aliFRatingMin', 'aliFDiscMin', 'aliFImages', 'aliFFreeShip', 'aliFChoice',
-    'aliFHot', 'aliFShop', 'aliFNetwork', 'aliFSort',
+    'aliFHot', 'aliFSecondHand', 'aliFShop', 'aliFNetwork', 'aliFSort',
   ] as const) {
     const node = el[id];
     if (!node) continue;
@@ -1043,6 +1090,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
       if (!availability.freeShipping) params.freeShippingOnly = false;
       if (!availability.choice) params.choiceOnly = false;
       if (!availability.hotCommission) params.hotCommissionOnly = false;
+      if (!availability.secondHand) params.secondHandOnly = false;
       writeToDom();
       paintIndicators();
     },

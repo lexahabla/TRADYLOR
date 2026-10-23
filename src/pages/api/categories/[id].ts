@@ -11,32 +11,98 @@ import { requireAdminAuth } from '../../../lib/adminAuth';
 export const prerender = false;
 
 /**
- * Reapunta en el catálogo los productos que apuntaban a los ids anteriores
- * de las categorías (el id deriva del nombre: al renombrarlas cambia).
+ * Reasigna y actualiza automáticamente todos los productos asociados a una categoría
+ * cuando ésta es editada o actualizada (nombre, id, jerarquía raíz/subcategoría).
+ * Garantiza que adopten la nueva categoría y no conserven el nombre o id antiguo.
  */
-function remapProductsInProducts(pairs: { from: string; to: string }[]): number {
-  if (!pairs.length) return 0;
+function updateProductsOnCategoryChange(
+  previousCategory: { id: string; name: string; slug?: string; parentId?: string | null },
+  updatedCategory: { id: string; name: string; slug?: string; parentId?: string | null },
+  remappedChildren: { from: string; to: string }[] = []
+): number {
   try {
     const products = readProductsFromFile();
     let changed = 0;
+    const allCategories = getCategories();
+    const categoriesById = new Map(allCategories.map((c) => [c.id, c]));
+
+    const oldIds = new Set<string>([previousCategory.id, previousCategory.slug].filter((x): x is string => Boolean(x)));
+    const oldNameNormalized = previousCategory.name ? previousCategory.name.trim().toLowerCase() : '';
+
+    const childMap = new Map<string, string>();
+    for (const pair of remappedChildren) {
+      if (pair.from && pair.to) childMap.set(pair.from, pair.to);
+    }
+
     for (const product of products) {
       let touched = false;
-      for (const pair of pairs) {
-        if (product.category_id === pair.from) {
-          product.category_id = pair.to;
-          touched = true;
-        }
-        if (product.subcategory_id === pair.from) {
-          product.subcategory_id = pair.to;
-          touched = true;
+
+      // 1. ¿Está asociado el producto por ID de categoría o subcategoría?
+      const matchesCategoryById = Boolean(product.category_id && oldIds.has(product.category_id));
+      const matchesSubcategoryById = Boolean(product.subcategory_id && oldIds.has(product.subcategory_id));
+
+      // 2. ¿Está asociado el producto por el nombre antiguo de la categoría?
+      const prodCatNormalized = String(product.category || '').trim().toLowerCase();
+      const matchesByName = Boolean(oldNameNormalized && prodCatNormalized === oldNameNormalized);
+
+      // 3. ¿Tiene una subcategoría hija que fue remapeada al cambiar el slug del padre?
+      const matchesChildSub = Boolean(product.subcategory_id && childMap.has(product.subcategory_id));
+
+      if (matchesCategoryById || matchesSubcategoryById || matchesByName || matchesChildSub) {
+        if (updatedCategory.parentId) {
+          // La categoría actualizada es ahora una SUBCATEGORÍA
+          const parent = categoriesById.get(updatedCategory.parentId) || getCategoryById(updatedCategory.parentId);
+          const rootName = parent ? parent.name : updatedCategory.name;
+
+          if (product.category !== rootName) {
+            product.category = rootName;
+            touched = true;
+          }
+          if (product.category_id !== updatedCategory.parentId) {
+            product.category_id = updatedCategory.parentId;
+            touched = true;
+          }
+          if (product.subcategory_id !== updatedCategory.id) {
+            product.subcategory_id = updatedCategory.id;
+            touched = true;
+          }
+        } else {
+          // La categoría actualizada es una CATEGORÍA RAÍZ
+          if (product.category !== updatedCategory.name) {
+            product.category = updatedCategory.name;
+            touched = true;
+          }
+          if (product.category_id !== updatedCategory.id) {
+            product.category_id = updatedCategory.id;
+            touched = true;
+          }
+
+          // Si el producto tenía en `subcategory_id` el id antiguo de esta categoría que ahora es raíz:
+          if (product.subcategory_id && oldIds.has(product.subcategory_id)) {
+            delete product.subcategory_id;
+            touched = true;
+          }
+
+          // Si tenía una subcategoría hija remapeada:
+          if (product.subcategory_id && childMap.has(product.subcategory_id)) {
+            const nextSub = childMap.get(product.subcategory_id)!;
+            if (product.subcategory_id !== nextSub) {
+              product.subcategory_id = nextSub;
+              touched = true;
+            }
+          }
         }
       }
+
       if (touched) changed++;
     }
-    if (changed) writeProductsToFile(products);
+
+    if (changed > 0) {
+      writeProductsToFile(products);
+    }
     return changed;
   } catch (error) {
-    console.error('[API Categories] Error reapuntando productos:', error);
+    console.error('[API Categories] Error actualizando productos tras cambio de categoría:', error);
     return 0;
   }
 }
@@ -167,17 +233,16 @@ export const PUT: APIRoute = async ({ params, request }) => {
       );
     }
 
-    // Si el id de la categoría cambió (renombrada o movida de rama) los
-    // productos que la tenían asignada se reapuntan al id nuevo. Lo mismo con
-    // las subcategorías, cuyo id lleva el prefijo del padre.
-    const previousId = current?.id;
-    const pairs = [
-      ...(previousId && result.category && previousId !== result.category.id
-        ? [{ from: previousId, to: result.category.id }]
-        : []),
-      ...(result.remapped ?? []),
-    ];
-    const repointed = remapProductsInProducts(pairs);
+    // Reasigna automáticamente todos los productos asociados para que adopten
+    // la nueva categoría (nombre, IDs jerárquicos) sin conservar la antigua.
+    let repointed = 0;
+    if (current && result.category) {
+      repointed = updateProductsOnCategoryChange(
+        current,
+        result.category,
+        result.remapped ?? []
+      );
+    }
 
     return new Response(
       JSON.stringify({

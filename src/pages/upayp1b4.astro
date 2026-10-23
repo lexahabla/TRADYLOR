@@ -872,7 +872,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
         <!-- Filtros y ordenación del catálogo (3 capas; aplican ANTES de paginar)
              Lógica y estado: src/utils/aliCatalogFilters.ts (ProductFilterParams) -->
-        <div id="aliFilters" class="ali-filters" hidden>
+        <div id="affiliateFilters" class="ali-filters" hidden>
           <!-- CAPA 1 · Buscador + presets rápidos de 1 clic -->
           <div class="ali-f-top">
             <div class="filter-field ali-f-search">
@@ -890,6 +890,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <button type="button" class="ali-preset" data-ali-preset="top-ventas" aria-pressed="false"><span class="ali-preset-ico">🔥</span> Top Ventas</button>
               <button type="button" class="ali-preset" data-ali-preset="alto-margen" aria-pressed="false"><span class="ali-preset-ico">💰</span> Alto Margen</button>
               <button type="button" class="ali-preset" data-ali-preset="envio-express" aria-pressed="false"><span class="ali-preset-ico">⚡</span> Envío Exprés</button>
+              <button type="button" class="ali-preset" data-ali-preset="segunda-mano" aria-pressed="false" title="Filtra exclusivamente productos de segunda mano o reacondicionados"><span class="ali-preset-ico">♻️</span> Segunda Mano</button>
               <button type="button" class="ali-preset ali-preset-clear" data-ali-preset="clear" aria-pressed="false"><span class="ali-preset-ico">🗑️</span> Limpiar Filtros</button>
             </div>
           </div>
@@ -978,6 +979,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <label class="ali-check"><input type="checkbox" id="aliFFreeShip" /> <span>Solo envío gratis</span></label>
             <label class="ali-check"><input type="checkbox" id="aliFChoice" /> <span>Solo AliExpress Choice / Almacén Local</span></label>
             <label class="ali-check"><input type="checkbox" id="aliFHot" /> <span>Solo con Comisión Hot (&gt; 0 %)</span></label>
+            <label class="ali-check"><input type="checkbox" id="aliFSecondHand" /> <span>Solo segunda mano / reacondicionado</span></label>
             <div class="filter-field ali-f-mini">
               <label for="aliFImages">Mín. imágenes</label>
               <input type="number" id="aliFImages" min="0" step="1" placeholder="0" inputmode="numeric" />
@@ -4974,7 +4976,7 @@ function renderTableRows(products, resetPage = true) {
     const btnAliSync = document.getElementById('btnAliSync');
     const btnAliSyncHeader = document.getElementById('btnAliSyncHeader');
     const btnAliMore = document.getElementById('btnAliMore');
-    const aliFilters = document.getElementById('aliFilters');
+    const aliFilters = document.getElementById('affiliateFilters') || document.getElementById('aliFilters');
     const aliSelectionBar = document.getElementById('aliSelectionBar');
     const aliSelCount = document.getElementById('aliSelCount');
     const btnAliSelAllFiltered = document.getElementById('aliSelAllFiltered');
@@ -5170,6 +5172,8 @@ function renderTableRows(products, resetPage = true) {
         if (img && !img.includes('unsplash')) imageCount.set(img, (imageCount.get(img) || 0) + 1);
       }
 
+      // Precomputación optimizada de tokens (Sets únicos sin allocs en el bucle interno)
+      const catalogTokenSets = [];
       for (const item of currentProducts) {
         for (const rawId of [item.sourceId, item.asin]) {
           const key = aliIdKey(rawId);
@@ -5186,7 +5190,10 @@ function renderTableRows(products, resetPage = true) {
         const titleKey = aliNormTitle(item.title);
         if (titleKey) {
           titleKeys.add(`t:${titleKey}`);
-          catalogTokens.push(aliTitleTokens(titleKey));
+          const toks = aliTitleTokens(titleKey);
+          if (toks.length >= 3) {
+            catalogTokenSets.push({ tokens: toks, set: new Set(toks), len: toks.length });
+          }
         }
       }
 
@@ -5218,22 +5225,21 @@ function renderTableRows(products, resetPage = true) {
           const aliTitleKey = aliNormTitle(product.title);
           if (aliTitleKey && titleKeys.has(`t:${aliTitleKey}`)) {
             imported = true;
-          } else if (aliTitleKey && catalogTokens.length && currentProducts.length <= 20000) {
+          } else if (aliTitleKey && catalogTokenSets.length && currentProducts.length <= 20000) {
             // Último recurso: el título de la ficha fue reescrito por la IA de
             // enriquecimiento y ya no coincide literalmente con el de la tabla.
             const aliTokens = aliTitleTokens(aliTitleKey);
             const aliLen = aliTokens.length;
             if (aliLen >= 3) {
-              const aliSet = new Set(aliTokens);
-              for (const tokens of catalogTokens) {
-                // Filtro barato: si las longitudes no pueden solaparse ≥60 %, no sigue.
-                if (Math.abs(tokens.length - aliLen) / Math.max(tokens.length, aliLen) > 0.4) continue;
+              for (let i = 0; i < catalogTokenSets.length; i++) {
+                const catItem = catalogTokenSets[i];
+                if (Math.abs(catItem.len - aliLen) / Math.max(catItem.len, aliLen) > 0.4) continue;
                 let common = 0;
-                const small = tokens.length <= aliTokens.length ? tokens : aliTokens;
-                const big = tokens.length <= aliTokens.length ? aliTokens : tokens;
-                const bigSet = big === aliTokens ? aliSet : new Set(big);
-                for (const tok of small) if (bigSet.has(tok)) common++;
-                if (common >= 3 && common / small.length >= 0.6) {
+                for (let j = 0; j < aliTokens.length; j++) {
+                  if (catItem.set.has(aliTokens[j])) common++;
+                }
+                const minLen = Math.min(aliLen, catItem.len);
+                if (common >= 3 && common / minLen >= 0.6) {
                   imported = true;
                   break;
                 }
@@ -5471,16 +5477,54 @@ function renderTableRows(products, resetPage = true) {
       if (aliCatalogDanger) aliCatalogDanger.hidden = false;
     }
 
-    /** GET de la caché: sólo lectura de disco en el servidor. */
+    /** GET de la caché: ultra-rápido con sesión local + ETag en servidor. */
     async function loadAliCatalog() {
+      // 1. Hidratación instantánea desde caché de sesión local (render en 0 ms)
+      if (!aliProducts || aliProducts.length === 0) {
+        try {
+          const cachedRaw = sessionStorage.getItem('tradylor_aff_catalog_cache');
+          if (cachedRaw) {
+            const cachedData = JSON.parse(cachedRaw);
+            if (cachedData && Array.isArray(cachedData.products)) {
+              aliProducts = cachedData.products;
+              aliPage = 1;
+              aliInvalidateEstado();
+              aliFilterPanel?.refresh();
+              setAliMeta(cachedData);
+              renderAliCatalog();
+            }
+          }
+        } catch (_) {}
+      }
+
       try {
-        const res = await fetch('/api/admin/catalog', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+        const res = await fetch('/api/admin/catalog', {
+          headers: { Accept: 'application/json' },
+          cache: 'default',
+        });
+        if (res.status === 304) {
+          // El catálogo no ha cambiado en el servidor
+          return;
+        }
         const data = await res.json();
         if (!res.ok || !data.success) {
-          if (aliCatalogHost) aliCatalogHost.innerHTML = '<div class="empty-dashboard">No se pudo leer la caché del catálogo.</div>';
+          if (!aliProducts || aliProducts.length === 0) {
+            if (aliCatalogHost) aliCatalogHost.innerHTML = '<div class="empty-dashboard">No se pudo leer la caché del catálogo.</div>';
+          }
           return data;
         }
+
         aliProducts = Array.isArray(data.products) ? data.products : [];
+        try {
+          sessionStorage.setItem('tradylor_aff_catalog_cache', JSON.stringify({
+            count: data.count,
+            syncedAt: data.syncedAt,
+            stale: data.stale,
+            networks: data.networks,
+            products: aliProducts,
+          }));
+        } catch (_) {}
+
         aliPage = 1;
         aliInvalidateEstado();
         aliFilterPanel?.refresh();
@@ -5506,7 +5550,9 @@ function renderTableRows(products, resetPage = true) {
         else showAliStatus('success', 'Caché al día', `${data.count} productos guardados, sincronizados ${aliRelTime(data.syncedAt)}.`);
         return data;
       } catch {
-        if (aliCatalogHost) aliCatalogHost.innerHTML = '<div class="empty-dashboard">Fallo de red al leer la caché del catálogo.</div>';
+        if (!aliProducts || aliProducts.length === 0) {
+          if (aliCatalogHost) aliCatalogHost.innerHTML = '<div class="empty-dashboard">Fallo de red al leer la caché del catálogo.</div>';
+        }
         return null;
       }
     }
@@ -5968,8 +6014,26 @@ function renderTableRows(products, resetPage = true) {
       }
     });
 
-    // Primera carga: sólo lectura de la caché (sin llamadas a la API)
-    loadAliCatalog();
+    // Carga diferida o instantánea según pestaña inicial o conmutación
+    const isAffiliatesInitial = document.querySelector('section[data-admin-view="affiliates"]')?.classList.contains('is-visible');
+    if (isAffiliatesInitial) {
+      loadAliCatalog();
+    } else {
+      if ('requestIdleCallback' in window) {
+        requestIdleCallback(() => loadAliCatalog(), { timeout: 800 });
+      } else {
+        setTimeout(loadAliCatalog, 120);
+      }
+    }
+
+    // Al conmutar a la pestaña de Afiliados, asegurar carga inmediata
+    document.addEventListener('click', (e) => {
+      if (e.target.closest?.('[data-admin-tab="affiliates"]')) {
+        if (!aliProducts || aliProducts.length === 0) {
+          loadAliCatalog();
+        }
+      }
+    });
 
 // =========================================================================
     // 6. GESTIÓN DE CATEGORÍAS — tabla jerárquica
@@ -6314,6 +6378,9 @@ function renderTableRows(products, resetPage = true) {
           showCategoryStatus('success', successTitle, data.message);
           resetCategoryForm();
           await loadCategories();
+          if (isEdit && typeof reloadProductsTable === 'function') {
+            await reloadProductsTable();
+          }
         } else {
           showCategoryStatus('error', isEdit ? 'Error al actualizar' : 'Error al crear', data.message || 'No se pudo guardar la categoría.');
         }
@@ -9405,6 +9472,8 @@ function renderTableRows(products, resetPage = true) {
     align-items: center;
     justify-content: center;
     margin-left: 0.25rem;
+    cursor: pointer;
+    text-decoration: none;
   }
 
   :global(.btn-icon-action:hover) {

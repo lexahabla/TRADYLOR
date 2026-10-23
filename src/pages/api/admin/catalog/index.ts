@@ -19,7 +19,6 @@ import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../../lib/adminAuth';
 import {
   ALI_CATALOG_STALE_MS,
-  getAliCatalogState,
   readAliCatalog,
   syncAliCatalog,
 } from '../../../../lib/aliexpressCatalog';
@@ -63,10 +62,24 @@ export function readAffiliateCatalog(): AffiliateCatalogSnapshot | null {
   return readAffiliateCatalogFromLib() as AffiliateCatalogSnapshot | null;
 }
 
+interface CatalogCacheEntry {
+  mtimeMs: number;
+  size: number;
+  jsonString: string;
+  etag: string;
+}
+
+let catalogMemoryCache: CatalogCacheEntry | null = null;
+
+export function invalidateCatalogMemoryCache() {
+  catalogMemoryCache = null;
+}
+
 function writeAffiliateCatalog(snapshot: AffiliateCatalogSnapshot): boolean {
   try {
     fs.mkdirSync(path.dirname(CATALOG_FILE), { recursive: true });
     fs.writeFileSync(CATALOG_FILE, JSON.stringify(snapshot), 'utf-8');
+    invalidateCatalogMemoryCache();
     return true;
   } catch {
     return false;
@@ -74,17 +87,18 @@ function writeAffiliateCatalog(snapshot: AffiliateCatalogSnapshot): boolean {
 }
 
 function currentStatePayload() {
-  const state = getAliCatalogState();
   const snapshot = readAffiliateCatalog();
   const connected = getConnectedNetworkIds();
-  // La UI del panel consume UnifiedProduct: se proyecta canónico → unificado
+  const syncedAt = snapshot?.syncedAt || null;
+  const syncedAtDate = syncedAt ? new Date(syncedAt) : null;
+  const stale = !syncedAtDate || Number.isNaN(syncedAtDate.getTime()) || Date.now() - syncedAtDate.getTime() > ALI_CATALOG_STALE_MS;
   const products: UnifiedProduct[] = snapshot ? snapshot.products.map(canonicalToUnified) : [];
   return {
     success: true,
     connected,
     staleMs: ALI_CATALOG_STALE_MS,
-    syncedAt: state.syncedAt,
-    stale: state.stale,
+    syncedAt,
+    stale,
     count: products.length,
     products,
     networks: connected,
@@ -94,6 +108,54 @@ function currentStatePayload() {
 export const GET: APIRoute = async ({ request }) => {
   const unauthorizedResponse = requireAdminAuth(request);
   if (unauthorizedResponse) return unauthorizedResponse;
+
+  try {
+    if (fs.existsSync(CATALOG_FILE)) {
+      const stat = fs.statSync(CATALOG_FILE);
+      if (catalogMemoryCache && catalogMemoryCache.mtimeMs === stat.mtimeMs && catalogMemoryCache.size === stat.size) {
+        const clientEtag = request.headers.get('if-none-match');
+        if (clientEtag && clientEtag === catalogMemoryCache.etag) {
+          return new Response(null, {
+            status: 304,
+            headers: {
+              'ETag': catalogMemoryCache.etag,
+              'Cache-Control': 'private, no-cache',
+            },
+          });
+        }
+        return new Response(catalogMemoryCache.jsonString, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'ETag': catalogMemoryCache.etag,
+            'Cache-Control': 'private, no-cache',
+          },
+        });
+      }
+
+      const payload = currentStatePayload();
+      const jsonString = JSON.stringify(payload);
+      const etag = `W/"cat-${stat.mtimeMs.toString(36)}-${stat.size.toString(36)}"`;
+      catalogMemoryCache = {
+        mtimeMs: stat.mtimeMs,
+        size: stat.size,
+        jsonString,
+        etag,
+      };
+
+      return new Response(jsonString, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'ETag': etag,
+          'Cache-Control': 'private, no-cache',
+        },
+      });
+    }
+  } catch (error) {
+    console.warn('[API admin/catalog] Error leyendo caché rápida:', error);
+  }
+
   return new Response(JSON.stringify(currentStatePayload()), { status: 200, headers: jsonHeaders });
 };
 
@@ -113,6 +175,7 @@ export const DELETE: APIRoute = async ({ request }) => {
     const deletedCount = previous.products.length;
     const newSnapshot: AffiliateCatalogSnapshot = { syncedAt: '', products: [] };
     const saved = writeAffiliateCatalog(newSnapshot);
+    invalidateCatalogMemoryCache();
 
     if (!saved) {
       return new Response(
