@@ -521,115 +521,130 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       // =========================================================================
       // AUTO-SCROLL DE CARRUSELES (Desktop & Responsive, velocidad configurable)
       // =========================================================================
-      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-      if (!prefersReducedMotion) {
-        const speedAttr = (root.getAttribute('data-section-speed') || 'normal').toLowerCase();
+      const speedAttr = (root.getAttribute('data-section-speed') || 'normal').toLowerCase();
 
-        let pixelsPerSecond = 36; // 'normal' por defecto (~36 px/s)
-        if (speedAttr === 'slow') pixelsPerSecond = 20; // 'slow': desplazamiento sutil y lento
-        else if (speedAttr === 'fast') pixelsPerSecond = 65; // 'fast': desplazamiento ágil
-        else if (speedAttr === 'none') pixelsPerSecond = 0; // 'none': desactivado (manual)
-        else if (!isNaN(Number(speedAttr)) && Number(speedAttr) >= 0) {
-          pixelsPerSecond = Number(speedAttr);
+      let pixelsPerSecond = 36; // 'normal' por defecto (~36 px/s)
+      if (speedAttr === 'slow') pixelsPerSecond = 20; // 'slow': desplazamiento sutil y lento
+      else if (speedAttr === 'fast') pixelsPerSecond = 65; // 'fast': desplazamiento ágil
+      else if (speedAttr === 'none') pixelsPerSecond = 0; // 'none': desactivado (manual)
+      else if (!isNaN(Number(speedAttr)) && Number(speedAttr) >= 0) {
+        pixelsPerSecond = Number(speedAttr);
+      }
+
+      if (pixelsPerSecond > 0) {
+        let isPaused = false;
+        let isResetting = false;
+        let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+        let isVisible = true;
+        let rafId: number | null = null;
+        let lastTime: number | null = null;
+        let scrollPos = track.scrollLeft;
+
+        // Si al montar el carrusel el puntero ya está encima, iniciar en pausa
+        if (carouselContainer.matches && carouselContainer.matches(':hover')) {
+          isPaused = true;
         }
 
-        if (pixelsPerSecond > 0) {
-          let isPaused = false;
-          let isResetting = false;
-          let resumeTimer: ReturnType<typeof setTimeout> | null = null;
-          let isVisible = true;
-          let rafId: number | null = null;
-          let lastTime: number | null = null;
-          let scrollPos = track.scrollLeft;
-
-          pauseAutoScroll = () => {
-            isPaused = true;
-            scrollPos = track.scrollLeft;
-            track.style.scrollSnapType = ''; // Permite snap nativo durante la interacción
-            track.style.scrollBehavior = '';
-            if (resumeTimer) {
-              clearTimeout(resumeTimer);
-              resumeTimer = null;
-            }
-          };
-
-          resumeAutoScroll = (delay = 700) => {
-            if (resumeTimer) clearTimeout(resumeTimer);
-            resumeTimer = setTimeout(() => {
-              isPaused = false;
-              lastTime = null;
-              scrollPos = track.scrollLeft;
-            }, delay);
-          };
-
-          const tick = (now: number) => {
-            if (!lastTime) lastTime = now;
-            const dt = Math.min((now - lastTime) / 1000, 0.1);
-            lastTime = now;
-
-            const maxScroll = track.scrollWidth - track.clientWidth;
-            if (isVisible && !isPaused && !isResetting && maxScroll > 8) {
-              track.style.scrollSnapType = 'none'; // Evita fricción del snap mientras se desplaza
-              track.style.scrollBehavior = 'auto'; // Evita colisiones con scroll-behavior global
-              if (track.scrollLeft >= maxScroll - 3) {
-                // Fin del carrusel: pausar y volver suavemente al inicio
-                isResetting = true;
-                track.style.scrollSnapType = '';
-                track.style.scrollBehavior = 'smooth';
-                setTimeout(() => {
-                  track.scrollTo({ left: 0, behavior: 'smooth' });
-                  setTimeout(() => {
-                    isResetting = false;
-                    lastTime = null;
-                    scrollPos = 0;
-                  }, 1000);
-                }, 1400);
-              } else {
-                scrollPos += pixelsPerSecond * dt;
-                track.scrollLeft = scrollPos;
-              }
-            }
-            rafId = requestAnimationFrame(tick);
-          };
-
-          // Pausar al pasar el ratón (desktop) o al tocar la pantalla (móvil)
-          carouselContainer.addEventListener('mouseenter', pauseAutoScroll);
-          carouselContainer.addEventListener('mouseleave', () => resumeAutoScroll(600));
-          carouselContainer.addEventListener('touchstart', pauseAutoScroll, { passive: true });
-          carouselContainer.addEventListener('touchend', () => resumeAutoScroll(1800), { passive: true });
-          track.addEventListener('wheel', () => {
-            pauseAutoScroll();
-            resumeAutoScroll(2000);
-          }, { passive: true });
-
-          // Pausar si la pestaña pasa a segundo plano
-          document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-              pauseAutoScroll();
-            } else {
-              lastTime = null;
-              scrollPos = track.scrollLeft;
-              resumeAutoScroll(300);
-            }
-          });
-
-          // Optimización: solo animar si el carrusel está dentro del viewport visible
-          if ('IntersectionObserver' in window) {
-            const observer = new IntersectionObserver((entries) => {
-              entries.forEach((entry) => {
-                isVisible = entry.isIntersecting;
-                if (!isVisible) {
-                  lastTime = null;
-                } else {
-                  scrollPos = track.scrollLeft;
-                }
-              });
-            }, { threshold: 0.05 });
-            observer.observe(carouselContainer);
+        pauseAutoScroll = () => {
+          isPaused = true;
+          scrollPos = track.scrollLeft;
+          track.style.scrollSnapType = ''; // Permite snap nativo durante la interacción manual
+          track.style.scrollBehavior = '';
+          if (resumeTimer) {
+            clearTimeout(resumeTimer);
+            resumeTimer = null;
           }
+        };
 
+        resumeAutoScroll = (delay = 500) => {
+          if (resumeTimer) clearTimeout(resumeTimer);
+          resumeTimer = setTimeout(() => {
+            // No reanudar si el cursor sigue posicionado sobre el carrusel
+            if (carouselContainer.matches && carouselContainer.matches(':hover')) {
+              return;
+            }
+            isPaused = false;
+            lastTime = null;
+            scrollPos = track.scrollLeft;
+          }, delay);
+        };
+
+        // Si el usuario desplaza manualmente el carrusel (rueda, touch, arrastre), sincronizar scrollPos
+        track.addEventListener('scroll', () => {
+          if (isPaused) {
+            scrollPos = track.scrollLeft;
+          }
+        }, { passive: true });
+
+        const tick = (now: number) => {
+          if (!lastTime) lastTime = now;
+          const dt = Math.min((now - lastTime) / 1000, 0.1);
+          lastTime = now;
+
+          const maxScroll = track.scrollWidth - track.clientWidth;
+          if (isVisible && !isPaused && !isResetting && maxScroll > 8) {
+            track.style.scrollSnapType = 'none'; // Evita fricción del snap mientras se desplaza automáticamente
+            track.style.scrollBehavior = 'auto'; // Evita colisiones con scroll-behavior global
+            if (scrollPos >= maxScroll - 3 || track.scrollLeft >= maxScroll - 3) {
+              // Fin del carrusel: pausar y volver suavemente al inicio
+              isResetting = true;
+              track.style.scrollSnapType = '';
+              track.style.scrollBehavior = 'smooth';
+              setTimeout(() => {
+                track.scrollTo({ left: 0, behavior: 'smooth' });
+                setTimeout(() => {
+                  isResetting = false;
+                  lastTime = null;
+                  scrollPos = 0;
+                }, 1000);
+              }, 1200);
+            } else {
+              scrollPos += pixelsPerSecond * dt;
+              track.scrollLeft = scrollPos;
+            }
+          }
           rafId = requestAnimationFrame(tick);
+        };
+
+        // Pausar al pasar el ratón (desktop) o al tocar la pantalla (móvil)
+        carouselContainer.addEventListener('mouseenter', pauseAutoScroll);
+        carouselContainer.addEventListener('mouseleave', () => resumeAutoScroll(500));
+        carouselContainer.addEventListener('touchstart', pauseAutoScroll, { passive: true });
+        carouselContainer.addEventListener('touchend', () => resumeAutoScroll(1500), { passive: true });
+        carouselContainer.addEventListener('focusin', pauseAutoScroll);
+        carouselContainer.addEventListener('focusout', () => resumeAutoScroll(800));
+        track.addEventListener('wheel', () => {
+          pauseAutoScroll();
+          resumeAutoScroll(1800);
+        }, { passive: true });
+
+        // Pausar si la pestaña pasa a segundo plano
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) {
+            pauseAutoScroll();
+          } else {
+            lastTime = null;
+            scrollPos = track.scrollLeft;
+            resumeAutoScroll(300);
+          }
+        });
+
+        // Optimización: solo animar si el carrusel está dentro del viewport visible
+        if ('IntersectionObserver' in window) {
+          const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+              isVisible = entry.isIntersecting;
+              if (!isVisible) {
+                lastTime = null;
+              } else {
+                scrollPos = track.scrollLeft;
+              }
+            });
+          }, { threshold: 0.05 });
+          observer.observe(carouselContainer);
         }
+
+        rafId = requestAnimationFrame(tick);
       }
     });
   };
@@ -950,6 +965,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     overscroll-behavior-x: contain;
     scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
+    will-change: scroll-position;
     /* Margen superior para que el hover (translateY -8px) no lo recorte
        el contenedor con scroll; el inferior deja sitio a la sombra. */
     padding: 0.75rem 0 1rem;
