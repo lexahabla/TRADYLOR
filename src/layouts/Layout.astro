@@ -593,20 +593,7 @@ const headerCategoryPanelHtml = `
         animation: cm-panel-in 0.18s ease;
       }
 
-      /* En móvil el buscador se acorta para dejar espacio al logo y los botones */
-      @media (max-width: 640px) {
-        .container.header-inner .nav-search {
-          max-width: none;
-          flex: 1 1 14rem;
-        }
-        /* En móvil se usa el desplegable de la barra de categorías; se oculta el duplicado de cabecera */
-        .container.header-inner .category-menu-btn {
-          display: none !important;
-        }
-        .container.header-inner .category-panel {
-          display: none !important;
-        }
-      }
+
 
       /* ── Input del buscador (cabecera) ── */
       .container.header-inner .ns-input {
@@ -1812,9 +1799,9 @@ const headerCategoryPanelHtml = `
         #categoryBar {
           display: none !important;
         }
-        /* Header inner y contenedores */
+        /* Header inner: altura de 60px en responsive según solicitud */
         .header-inner {
-          height: 44px;
+          height: 60px;
         }
         .header-inner .brand-logo {
           display: none;
@@ -1822,7 +1809,7 @@ const headerCategoryPanelHtml = `
         .header-actions {
           display: flex;
           align-items: center;
-          gap: 0.4rem;
+          gap: 0.45rem;
           flex-shrink: 0;
         }
 
@@ -1834,9 +1821,9 @@ const headerCategoryPanelHtml = `
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
+          width: 36px;
+          height: 36px;
+          border-radius: 9px;
           background: rgba(255, 255, 255, 0.05);
           border: 1px solid rgba(255, 255, 255, 0.12);
           color: #e5e7eb;
@@ -1845,118 +1832,187 @@ const headerCategoryPanelHtml = `
           flex-shrink: 0;
         }
         .nav-toggle-btn-header svg {
-          width: 15px;
-          height: 15px;
+          width: 17px;
+          height: 17px;
         }
 
-        /* Buscador más compacto en responsive */
+        /* Buscador más corto en responsive para que quepa el selector de idioma y el avatar */
         .container.header-inner .nav-search {
-          height: 32px;
+          height: 38px;
           flex: 1 1 auto;
           min-width: 0;
-          max-width: none;
-          border-radius: 8px;
-          margin: 0 0.4rem;
+          max-width: 240px;
+          border-radius: 9px;
+          margin: 0 0.35rem;
         }
         .container.header-inner .ns-input {
-          font-size: 0.78rem;
-          padding: 0 0.35rem;
+          font-size: 0.8rem;
+          padding: 0 0.4rem;
         }
         .container.header-inner .ns-input::placeholder {
-          font-size: 0.74rem;
+          font-size: 0.76rem;
         }
         .container.header-inner .ns-submit {
-          width: 26px;
-          height: 26px;
-          border-radius: 6px;
+          width: 28px;
+          height: 28px;
+          border-radius: 7px;
           margin-right: 3px;
         }
         .container.header-inner .ns-submit svg {
-          width: 12px;
-          height: 12px;
+          width: 13px;
+          height: 13px;
         }
         .container.header-inner .ns-clear {
-          width: 22px;
-          height: 22px;
+          width: 24px;
+          height: 24px;
         }
-        /* Botón categorías en responsive: solo icono flecha hacia abajo */
+        /* Botón categorías en responsive: muestra icono y texto Categorías */
         .container.header-inner .category-menu-btn {
           display: inline-flex !important;
-          padding: 0 0.45rem;
-          border-radius: 8px 0 0 8px;
+          align-items: center;
+          gap: 0.25rem;
+          padding: 0 0.55rem;
+          border-radius: 9px 0 0 9px;
+          font-size: 0.78rem;
+          font-weight: 600;
+          color: #e2e8f0;
+          background: rgba(255, 255, 255, 0.06);
+          border-right: 1px solid rgba(255, 255, 255, 0.1);
         }
         .container.header-inner .category-menu-btn .cm-btn-label {
-          display: none;
+          display: inline-block !important;
+          white-space: nowrap;
         }
         .container.header-inner .category-menu-btn .cm-btn-icon {
-          font-size: 0.85rem;
+          font-size: 0.82rem;
+          color: #60a5fa;
         }
+        /* Panel de categorías desplegable en responsive */
         .container.header-inner .category-panel {
-          display: block !important;
-          width: min(30rem, calc(100vw - 1rem));
-          left: -0.5rem;
+          position: fixed;
+          top: 64px;
+          left: 0.5rem;
+          right: 0.5rem;
+          width: auto;
+          max-width: calc(100vw - 1rem);
+          max-height: calc(100vh - 80px);
+          overflow-y: auto;
+          z-index: 600;
+          padding: 0.85rem;
+          background: rgba(12, 16, 26, 0.99);
+          border: 1px solid rgba(255, 255, 255, 0.15);
+          border-radius: 16px;
+          box-shadow: 0 24px 60px rgba(0, 0, 0, 0.75);
         }
         .container.header-inner .category-panel[hidden] {
           display: none !important;
         }
+        .container.header-inner .category-panel:not([hidden]) {
+          display: block !important;
+        }
+
+        /* Selector de idiomas visible en responsive */
+        .header-translate {
+          display: inline-flex !important;
+          position: relative;
+          align-items: center;
+          justify-content: center;
+          gap: 0.3rem;
+          height: 36px;
+          padding: 0 0.5rem;
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          border-radius: 9px;
+          cursor: pointer;
+          flex-shrink: 0;
+        }
+        .header-translate:hover {
+          background: rgba(59, 130, 246, 0.15);
+          border-color: rgba(96, 165, 250, 0.4);
+        }
+        .header-translate-icon {
+          display: flex;
+          align-items: center;
+        }
+        .header-translate-icon svg {
+          width: 15px;
+          height: 15px;
+          color: #93c5fd;
+        }
+        .header-translate-code {
+          display: inline-block !important;
+          font-size: 0.72rem;
+          font-weight: 700;
+          color: #e2e8f0;
+          letter-spacing: 0.03em;
+        }
+        .header-translate-native {
+          position: absolute;
+          inset: 0;
+          opacity: 0;
+          width: 100%;
+          height: 100%;
+          cursor: pointer;
+          z-index: 5;
+        }
 
         /* Botón de usuario en responsive */
         .header-cta-btn {
-          width: 32px;
-          height: 32px;
+          width: 36px;
+          height: 36px;
           padding: 0;
           justify-content: center;
-          border-radius: 8px;
+          border-radius: 9px;
           flex-shrink: 0;
         }
         .header-cta-icon {
           display: block;
         }
         .header-cta-icon svg {
-          width: 15px;
-          height: 15px;
+          width: 16px;
+          height: 16px;
         }
         .header-cta-text {
           display: none;
         }
         .header-user-area {
-          width: 32px;
-          height: 32px;
+          width: 36px;
+          height: 36px;
           border-radius: 50%;
           flex-shrink: 0;
-          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+          box-shadow: 0 2px 10px rgba(37, 99, 235, 0.4);
+          cursor: pointer;
         }
         .header-user-area .header-radar-avatar {
           width: 100%;
           height: 100%;
-          font-size: 0.75rem;
+          font-size: 0.8rem;
           border-radius: 50%;
           overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         .header-user-area .header-radar-avatar img {
           width: 100%;
           height: 100%;
           object-fit: cover;
           border-radius: 50%;
+          display: block;
         }
         .header-user-menu {
           position: absolute;
           top: calc(100% + 8px);
           right: -4px;
-          min-width: 230px;
+          min-width: 240px;
           max-width: calc(100vw - 1rem);
-          z-index: 400;
-        }
-
-        /* Oculta traductor suelto en móvil para dejar aire al buscador y acciones */
-        .header-translate {
-          display: none !important;
+          z-index: 500;
         }
         .header-radar-btn {
-          width: 32px;
-          height: 32px;
+          width: 36px;
+          height: 36px;
           padding: 0;
-          border-radius: 8px;
+          border-radius: 9px;
         }
         .header-radar-btn svg {
           width: 16px;
@@ -2084,36 +2140,70 @@ const headerCategoryPanelHtml = `
       }
       @media (max-width: 480px) {
         .site-header .container {
-          padding-left: 0.6rem;
-          padding-right: 0.6rem;
+          padding-left: 0.5rem;
+          padding-right: 0.5rem;
         }
         .header-inner {
-          height: 42px;
+          height: 60px;
         }
         .header-actions {
           gap: 0.35rem;
         }
         .container.header-inner .nav-search {
-          height: 32px;
+          height: 36px;
+          max-width: 180px;
           margin: 0 0.25rem;
         }
-      }
-      @media (max-width: 370px) {
-        .header-inner {
-          height: 40px;
+        .container.header-inner .category-menu-btn {
+          padding: 0 0.4rem;
+        }
+        .container.header-inner .category-menu-btn .cm-btn-label {
+          font-size: 0.72rem;
+        }
+        .header-translate {
+          height: 34px;
+          padding: 0 0.35rem;
+        }
+        .header-translate-code {
+          font-size: 0.68rem;
         }
         .nav-toggle-btn-header,
         .header-cta-btn,
         .header-user-area {
-          width: 30px;
-          height: 30px;
+          width: 34px;
+          height: 34px;
+        }
+      }
+      @media (max-width: 370px) {
+        .header-inner {
+          height: 60px;
         }
         .header-actions {
           gap: 0.25rem;
         }
         .container.header-inner .nav-search {
-          height: 30px;
+          height: 34px;
+          max-width: 140px;
           margin: 0 0.2rem;
+        }
+        .container.header-inner .category-menu-btn {
+          padding: 0 0.35rem;
+        }
+        .container.header-inner .category-menu-btn .cm-btn-label {
+          font-size: 0.68rem;
+        }
+        .header-translate {
+          height: 32px;
+          padding: 0 0.3rem;
+        }
+        .header-translate-code {
+          font-size: 0.65rem;
+        }
+        .nav-toggle-btn-header,
+        .header-cta-btn,
+        .header-user-area {
+          width: 32px;
+          height: 32px;
         }
       }
 
@@ -3102,6 +3192,7 @@ const headerCategoryPanelHtml = `
         const headerUsername = $('[data-header-username]');
         const headerEmail = $('[data-header-email]');
         const headerAvatarWrap = $('[data-header-avatar]');
+        const headerAvatarMenu = $('[data-header-avatar-menu]');
         function renderHeaderAuth(user: UserProfile | null) {
           if (!headerAnon || !headerUserArea) return;
           if (user) {
@@ -3112,12 +3203,13 @@ const headerCategoryPanelHtml = `
             if (headerUsername) headerUsername.textContent = displayName;
             if (headerEmail) headerEmail.textContent = user.email;
             const v = user.updatedAt ? `?v=${encodeURIComponent(user.updatedAt)}` : '';
+            const initial = displayName ? displayName.charAt(0).toUpperCase() : 'U';
             for (const wrap of [headerAvatarWrap, headerAvatarMenu]) {
               if (!wrap) continue;
               if (user.avatar) {
-                wrap.innerHTML = `<img src="/api/radar/auth/avatar${v}" alt="" />`;
+                wrap.innerHTML = `<img src="/api/radar/auth/avatar${v}" alt="${displayName}" onerror="this.onerror=null;this.parentElement.textContent='${initial}'" />`;
               } else {
-                wrap.textContent = displayName.charAt(0).toUpperCase();
+                wrap.textContent = initial;
               }
             }
           } else {
