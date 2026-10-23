@@ -508,6 +508,60 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </div>
       </div>
 
+      <div class="product-sel-bar" id="productSelBar">
+        <label class="product-sel-title">ADMINISTRAR PRODUCTOS</label>
+
+        <div class="product-sel-groups grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Categoría funcional: Selección -->
+          <div class="product-sel-group flex flex-row items-center gap-2" data-group="selection">
+            <span class="product-sel-group-label">Selección:</span>
+            <span id="productSelCount">0 seleccionados</span>
+            <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll" title="Seleccionar todo el catálogo completo">Catálogo</button>
+            <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear">Limpiar</button>
+          </div>
+
+          <!-- Categoría funcional: IA -->
+          <div class="product-sel-group flex flex-row items-center gap-2" data-group="ai">
+            <span class="product-sel-group-label">IA:</span>
+            <button type="button" class="btn-ai btn-sm" id="btnProdEnrich">Enriquecer</button>
+            <button type="button" class="btn-ai btn-sm" id="btnLinkAllAlternatives" title="Recorrer todo el catálogo y asignar automáticamente productos alternativos (más barato, mejor valorado y más vendido)">Vincular alternativas</button>
+            <button type="button" class="btn-ai btn-sm" id="btnProdOpenCode" title="Asistente OpenCode: redacta prompts en lenguaje natural para curar el catálogo">🤖 Asistente IA</button>
+          </div>
+
+          <!-- Categoría funcional: Categorías y Secciones -->
+          <div class="product-sel-group flex flex-row items-center gap-2" data-group="categories">
+            <span class="product-sel-group-label">Categorías y Secciones:</span>
+            <select id="prodCatAssign" class="sel-cat-assign" aria-label="Categoría destino">
+              <option value="">Categoría destino…</option>
+            </select>
+            <select id="prodSubcatDest" class="sel-cat-assign" aria-label="Subcategoría destino">
+              <option value="">Subcategoría destino…</option>
+            </select>
+            <button type="button" class="btn-secondary btn-sm" id="btnProdCreateSubcat" title="Crear una subcategoría vinculada a la categoría destino">➕ Subcat</button>
+            <button type="button" class="btn-secondary btn-sm" id="btnProdAssignCat">Asignar categoría</button>
+            <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección</button>
+          </div>
+
+          <!-- Categoría funcional: Etiquetas -->
+          <div class="product-sel-group flex flex-row items-center gap-2" data-group="tags">
+            <span class="product-sel-group-label">Etiquetas:</span>
+            <select id="prodBadgeAssign" class="sel-cat-assign" aria-label="Etiqueta destacada destino">
+              <option value="">Etiqueta destacada…</option>
+            </select>
+            <button type="button" class="btn-secondary btn-sm" id="btnProdBulkBadge" title="Aplica la etiqueta destacada (badge) a todos los productos seleccionados">🏷️ Asignar Badge</button>
+            <button type="button" class="btn-ai btn-sm" id="btnProdNormalizeTags" title="Extraer tags técnicos normalizados (normalized_tags)">🏷️ Normalizar Tags</button>
+          </div>
+
+          <!-- Categoría funcional: Borrado y Gestión de IDs -->
+          <div class="product-sel-group flex flex-row items-center gap-2" data-group="deletion">
+            <span class="product-sel-group-label">Borrado y Gestión de IDs:</span>
+            <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
+            <button type="button" class="btn-danger btn-sm" id="btnProdDeleteAll" title="Elimina TODOS los productos del catálogo (purga completa). Úsalo para resincronizar desde cero.">🗑️ Vaciar Catálogo</button>
+            <button type="button" class="btn-secondary btn-sm" id="btnProdClearTombstones" title="Los productos que habían sido eliminados podrán volver a ser publicados o insertados">🧹 Eliminar registros de borrado</button>
+          </div>
+        </div>
+      </div>
+
       <!-- Filtros, ordenación y barras de rango de la tabla -->
       <div id="prodFilters" class="ali-filters prod-filters">
         <div class="ali-filters-row">
@@ -556,60 +610,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <button type="button" class="preset-chip" data-prod-preset="listos" title="Categoría + subcategoría + IA completada + enlace activo">⭐ Listos para Publicar</button>
           <button type="button" id="btnProdRecalcScores" class="preset-chip preset-chip-action" title="Recalcula y guarda el conversion_score de todo el catálogo">⇅ Recalcular scores</button>
           <button type="button" id="btnProdPresetClear" class="preset-chip preset-chip-clear" hidden>✕ Quitar preset</button>
-        </div>
-      </div>
-
-      <div class="product-sel-bar" id="productSelBar">
-        <label class="product-sel-title">ADMINISTRAR PRODUCTOS</label>
-
-        <div class="product-sel-groups">
-          <!-- Categoría funcional: Selección -->
-          <div class="product-sel-group" data-group="selection">
-            <span class="product-sel-group-label">Selección:</span>
-            <span id="productSelCount">0 seleccionados</span>
-            <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll">Seleccionar todos los visibles</button>
-            <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear">Limpiar selección</button>
-          </div>
-
-          <!-- Categoría funcional: IA -->
-          <div class="product-sel-group" data-group="ai">
-            <span class="product-sel-group-label">IA:</span>
-            <button type="button" class="btn-ai btn-sm" id="btnProdEnrich">Enriquecer con IA (texto + imagen)</button>
-            <button type="button" class="btn-ai btn-sm" id="btnLinkAllAlternatives" title="Recorrer todo el catálogo y asignar automáticamente productos alternativos (más barato, mejor valorado y más vendido)">Vincular alternativas</button>
-            <button type="button" class="btn-ai btn-sm" id="btnProdOpenCode" title="Asistente OpenCode: redacta prompts en lenguaje natural para curar el catálogo">🤖 Asistente IA</button>
-          </div>
-
-          <!-- Categoría funcional: Categorías y Secciones -->
-          <div class="product-sel-group" data-group="categories">
-            <span class="product-sel-group-label">Categorías y Secciones:</span>
-            <select id="prodCatAssign" class="sel-cat-assign" aria-label="Categoría destino">
-              <option value="">Categoría destino…</option>
-            </select>
-            <select id="prodSubcatDest" class="sel-cat-assign" aria-label="Subcategoría destino">
-              <option value="">Subcategoría destino…</option>
-            </select>
-            <button type="button" class="btn-secondary btn-sm" id="btnProdCreateSubcat" title="Crear una subcategoría vinculada a la categoría destino">➕ Subcat</button>
-            <button type="button" class="btn-secondary btn-sm" id="btnProdAssignCat">Asignar categoría</button>
-            <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección con los seleccionados</button>
-          </div>
-
-          <!-- Categoría funcional: Etiquetas -->
-          <div class="product-sel-group" data-group="tags">
-            <span class="product-sel-group-label">Etiquetas:</span>
-            <select id="prodBadgeAssign" class="sel-cat-assign" aria-label="Etiqueta destacada destino">
-              <option value="">Etiqueta destacada…</option>
-            </select>
-            <button type="button" class="btn-secondary btn-sm" id="btnProdBulkBadge" title="Aplica la etiqueta destacada (badge) a todos los productos seleccionados">🏷️ Asignar Badge</button>
-            <button type="button" class="btn-ai btn-sm" id="btnProdNormalizeTags" title="Extraer tags técnicos normalizados (normalized_tags)">🏷️ Normalizar Tags</button>
-          </div>
-
-          <!-- Categoría funcional: Borrado y Gestión de IDs -->
-          <div class="product-sel-group" data-group="deletion">
-            <span class="product-sel-group-label">Borrado y Gestión de IDs:</span>
-            <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
-            <button type="button" class="btn-danger btn-sm" id="btnProdDeleteAll" title="Elimina TODOS los productos del catálogo (purga completa). Úsalo para resincronizar desde cero.">🗑️ Vaciar Catálogo</button>
-            <button type="button" class="btn-secondary btn-sm" id="btnProdClearTombstones" title="Los productos que habían sido eliminados podrán volver a ser publicados o insertados">🧹 Eliminar registros de borrado</button>
-          </div>
         </div>
       </div>
 
@@ -3494,17 +3494,27 @@ function renderTableRows(products, resetPage = true) {
     }
     updateProdSelCount();
 
-    btnProdSelAll?.addEventListener('click', () => {
+    btnProdSelAll?.addEventListener('click', async () => {
+      if (!currentProducts || !currentProducts.length) {
+        try {
+          const res = await fetch('/api/products/add');
+          const data = await res.json();
+          if (data && data.success && Array.isArray(data.products)) currentProducts = data.products;
+        } catch {}
+      }
+      (currentProducts || []).forEach((p) => {
+        if (p && p.id) selectedProductIds.add(p.id);
+      });
       document.querySelectorAll('[data-prod-check]').forEach((box) => {
         box.checked = true;
-        const id = box.getAttribute('data-id');
-        if (id) selectedProductIds.add(id);
       });
+      if (prodCheckAll) prodCheckAll.checked = true;
       updateProdSelCount();
     });
     btnProdSelClear?.addEventListener('click', () => {
       selectedProductIds.clear();
       document.querySelectorAll('[data-prod-check]').forEach((box) => (box.checked = false));
+      if (prodCheckAll) prodCheckAll.checked = false;
       updateProdSelCount();
     });
 
@@ -7837,7 +7847,9 @@ function renderTableRows(products, resetPage = true) {
   .ali-range-track input[type="range"]::-moz-range-track { background: transparent; height: 3px; }
   .ali-range-track input[type="range"]::-moz-range-thumb { pointer-events: auto; width: 11px; height: 11px; border: 2px solid #0b1220; border-radius: 50%; background: #38bdf8; cursor: grab; box-shadow: 0 0 5px rgba(56, 189, 248, .5); }
   /* Barra de filtros del Catálogo de Productos Registrados (misma estética) */
-  .prod-filters { margin-top: 1.1rem; }
+  .prod-filters { margin-top: 0; margin-bottom: .8rem; }
+  .prod-filters .filter-field select { max-width: 160px; }
+  .prod-filters .ali-sort-group select { max-width: 140px; min-width: 90px; }
   :global(.btn-danger-ghost.btn-sm) { padding: .3rem .55rem; font-size: .68rem; gap: .25rem; }
   /* Barra de selección masiva */
   .ali-selection { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; margin-bottom: .6rem; padding: .5rem .7rem; color: #7dd3fc; background: rgba(56, 189, 248, .08); border: 1px solid rgba(56, 189, 248, .3); border-radius: 10px; font-size: .74rem; font-weight: 700; }
@@ -7857,22 +7869,39 @@ function renderTableRows(products, resetPage = true) {
     font-size: .74rem;
     color: var(--color-text-dim);
   }
-  .product-sel-bar .btn-sm { padding: .3rem .6rem; font-size: .68rem; }
+  .product-sel-bar .btn-sm { padding: .3rem .6rem; font-size: .68rem; white-space: nowrap; flex-shrink: 0; }
   .product-sel-groups {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
     align-items: stretch;
-    gap: .55rem;
+  }
+  @media (min-width: 768px) {
+    .product-sel-groups {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
   }
   .product-sel-group {
-    display: inline-flex;
+    display: flex;
+    flex-direction: row;
     align-items: center;
-    flex-wrap: wrap;
-    gap: .45rem;
-    padding: .35rem .6rem;
+    flex-wrap: nowrap;
+    gap: .5rem;
+    padding: .4rem .65rem;
     background: rgba(15, 23, 42, .45);
     border: 1px solid rgba(255, 255, 255, .06);
     border-radius: 8px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .product-sel-group > * {
+    flex-shrink: 0;
+  }
+  .product-sel-group select {
+    flex-shrink: 1;
+    min-width: 80px;
+    max-width: 150px;
   }
   .product-sel-group-label {
     font-size: .68rem;
@@ -7882,6 +7911,7 @@ function renderTableRows(products, resetPage = true) {
     color: #93c5fd;
     white-space: nowrap;
     margin-right: .2rem;
+    flex-shrink: 0;
   }
   .product-sel-group[data-group="ai"] {
     border-color: rgba(168, 85, 247, .25);
@@ -7925,13 +7955,24 @@ function renderTableRows(products, resetPage = true) {
      de controles bajan a la línea siguiente. */
   .product-sel-title { flex: 1 0 100%; margin-right: 0; color: #93c5fd; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
   .sel-cat-assign {
-    padding: .32rem .5rem;
-    font-size: .7rem;
+    padding: .3rem .45rem;
+    font-size: .68rem;
     color: var(--color-text-main);
     background: #0b1220;
     border: 1px solid var(--color-border);
     border-radius: 6px;
-    max-width: 230px;
+    max-width: 150px;
+    min-width: 80px;
+    width: 100%;
+    text-overflow: ellipsis;
+  }
+  .product-sel-bar select,
+  .product-sel-group select {
+    max-width: 150px;
+    min-width: 80px;
+    font-size: .68rem;
+    padding: .3rem .45rem;
+    text-overflow: ellipsis;
   }
   :global(.unified-import) { flex-shrink: 0; white-space: nowrap; }
   :global(.unified-import.is-done) { background: rgba(16, 185, 129, .2); border-color: rgba(16, 185, 129, .4); pointer-events: none; }
