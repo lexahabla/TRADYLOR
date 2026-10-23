@@ -56,6 +56,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\env.d.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\layouts\Layout.astro
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\adminAuth.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\adminDashboard.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\affiliateCatalog.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\ai.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\aliCatalogMerge.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\aliexpressCatalog.ts
