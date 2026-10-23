@@ -242,7 +242,7 @@ const radarPayload = {
       {badge && <span class="aff-badge">{badge}</span>}
     </div>
     <div class="aff-body">
-      <h3 class="aff-title"><a href={`/producto/${(product?.slug && product?.slug.trim()) || product?.id || '#'}`} title={`Ver ficha de ${catalogTitle}`}>{catalogTitle}</a></h3>
+      <h3 class="aff-title"><a href={`/producto/${encodeURIComponent((product?.slug && product?.slug.trim()) || product?.id || '#')}`} title={`Ver ficha de ${catalogTitle}`}>{catalogTitle}</a></h3>
       {flatRating && (
         <div class="aff-rating" aria-label={`Puntuación: ${flatRating} sobre 5`}>
           <span class="aff-star" aria-hidden="true">★</span>
@@ -299,8 +299,8 @@ const radarPayload = {
        "Comprar ya" y "Mi Radar") quedan por encima (z-index). -->
   <a
     class="card-link-overlay"
-    href={`/producto/${(product.slug && product.slug.trim()) || product.id}`}
-    aria-label={`Ver ficha de ${product.title}`}
+    href={`/producto/${encodeURIComponent((product.slug && product.slug.trim()) || product.id)}`}
+    aria-label={`Ver ficha de ${catalogTitle}`}
     tabindex="-1"
   ></a>
   <!-- Contenedor Visual del Producto
@@ -316,10 +316,10 @@ const radarPayload = {
       </span>
     )}
     <a
-      href={`/producto/${(product.slug && product.slug.trim()) || product.id}`}
+      href={`/producto/${encodeURIComponent((product.slug && product.slug.trim()) || product.id)}`}
       class="image-link"
-      aria-label={`Ver ficha de ${product.title}`}
-      title={`Ver ficha de ${product.title}`}
+      aria-label={`Ver ficha de ${catalogTitle}`}
+      title={`Ver ficha de ${catalogTitle}`}
       target="_blank"
       rel="noopener"
     >
@@ -354,8 +354,8 @@ const radarPayload = {
 
     <h3 class="product-title">
       <a
-        href={`/producto/${(product.slug && product.slug.trim()) || product.id}`}
-        title={`Análisis completo de ${product.title}`}
+        href={`/producto/${encodeURIComponent((product.slug && product.slug.trim()) || product.id)}`}
+        title={`Análisis completo de ${catalogTitle}`}
         target="_blank"
         rel="noopener"
       >
@@ -1262,6 +1262,14 @@ const radarPayload = {
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     overflow: hidden;
+  }
+  .aff-title a {
+    color: inherit;
+    text-decoration: none;
+    transition: color 0.15s ease;
+  }
+  .aff-title a:hover {
+    color: var(--color-primary-light, #38bdf8);
   }
 
   .aff-rating {

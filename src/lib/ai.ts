@@ -136,7 +136,7 @@ const TEXT_SYSTEM_PROMPT = [
   'Reglas estrictas:',
   '- Nunca inventes especificaciones ni números de ventas que no puedas deducir del texto de entrada.',
   '- Tono divulgativo y directo, sin superlativos comerciales ("lo mejor del mercado", "imbatible") y sin llamadas a la acción de compra.',
-  '- title: título SINTETIZADO en español, de 35 a 70 caracteres. REGLA OBLIGATORIA: Debe especificar explícitamente la categoría o naturaleza del producto al inicio o de forma clara (ejemplos: transformar "SSD 1TB" en "Disco duro SSD 1TB", "Power bank 10000mAh" en "Batería portátil Power bank 10000mAh", "Crucial P3 Plus 1TB" en "Disco duro SSD Crucial P3 Plus 1TB", "Cecotec Conga" en "Robot aspirador Cecotec Conga"). Estructura: [Categoría/Naturaleza del producto] + [Marca / Modelo] + [Capacidad o rasgo clave]. Sin precios ni argumentos comerciales.',
+  '- title: título SINTETIZADO en español, de 35 a 70 caracteres. REGLA OBLIGATORIA: Debe especificar explícitamente la categoría o naturaleza del producto al inicio o de forma clara (ejemplos: transformar "SSD 1TB" en "Disco duro SSD 1TB", "Power bank 10000mAh" en "Batería portátil Power bank 10000mAh", "Crucial P3 Plus 1TB" en "Disco duro SSD Crucial P3 Plus 1TB", "Cecotec Conga" en "Robot aspirador Cecotec Conga", "Air Fryer 5L" en "Freidora de aire Cecotec 5L"). Estructura: [Categoría/Naturaleza del producto] + [Marca / Modelo] + [Capacidad o rasgo clave]. Sin precios ni argumentos comerciales.',
   '- pros: 3 a 5 puntos concretos, verificables y de alto valor para el comprador.',
   '- cons: 2 a 3 contras o matices comerciales constructivos y poco disuasorios (puntos menores como "Disponible en pocas opciones de color", "Cable de carga de longitud estándar", "Requiere configuración inicial sencilla", "Manual en formato digital"), evitando siempre aspectos graves o disuasorios que desinteresen al usuario o perjudiquen la conversión de compra.',
   '- verdict: 1 o 2 frases neutras indicando para quién encaja el producto.',
@@ -603,12 +603,18 @@ export function synthesizeTitleLocally(title: string): string {
   // Anteponer explícitamente categoría o naturaleza del producto si inicia abreviado
   if (/^\b(?:nvme|m\.?2\s+ssd|ssd)\b/i.test(t) && !/^\bdisco\s+duro\b/i.test(t)) {
     t = `Disco duro ${t}`;
+  } else if (/^\b(?:crucial|samsung\s+9[89]0|kingston|wd_black|sandisk)\b/i.test(t) && /\b(?:ssd|nvme|1tb|2tb|500gb)\b/i.test(t) && !/^\bdisco\s+duro\b/i.test(t)) {
+    t = `Disco duro SSD ${t}`;
   } else if (/^\bpower\s*bank\b/i.test(t) && !/^\bbater[íi]a\b/i.test(t)) {
     t = `Batería portátil ${t}`;
   } else if (/^\b(?:tws|earbuds?)\b/i.test(t) && !/^\bauriculares\b/i.test(t)) {
     t = `Auriculares inalámbricos ${t}`;
   } else if (/^\bsmartwatch\b/i.test(t) && !/^\breloj\b/i.test(t)) {
     t = `Reloj inteligente ${t}`;
+  } else if (/^\b(?:air\s*fryer|airfryer)\b/i.test(t) && !/^\bfreidora\b/i.test(t)) {
+    t = `Freidora de aire ${t.replace(/^\b(?:air\s*fryer|airfryer)\b\s*/i, '')}`.trim();
+  } else if (/^\b(?:conga|roomba)\b/i.test(t) && !/^\brobot\s+aspirador\b/i.test(t)) {
+    t = `Robot aspirador ${t}`;
   }
 
   // Si el título usa separadores ("Marca - modelo - features..."), conserva

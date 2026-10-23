@@ -868,6 +868,76 @@ export function ensureAlternativeRoles(productId: string): {
 }
 
 /**
+ * Determina si dos productos son del mismo tipo o naturaleza para ser alternativas válidas.
+ */
+function areSameProductType(base: Product, candidate: Product): boolean {
+  if (base.id === candidate.id) return false;
+
+  // 1) Si ambos tienen subcategoría asignada:
+  if (base.subcategory_id && candidate.subcategory_id) {
+    return base.subcategory_id === candidate.subcategory_id;
+  }
+
+  // 2) Categoría principal normalizada
+  const catA = String(base.category || '').toLowerCase().trim();
+  const catB = String(candidate.category || '').toLowerCase().trim();
+  const sameCategory =
+    Boolean(catA && catB && catA === catB) ||
+    Boolean(base.category_id && candidate.category_id && base.category_id === candidate.category_id);
+
+  // Palabras clave de naturaleza / tipo de producto
+  const extractNatureTokens = (title: string): string[] => {
+    const t = String(title || '').toLowerCase();
+    const tokenGroups: string[][] = [
+      ['ssd', 'nvme', 'm.2', 'disco duro'],
+      ['power bank', 'powerbank', 'bateria portatil', 'batería portátil'],
+      ['auricular', 'auriculares', 'cascos', 'earbuds', 'headphone', 'tws'],
+      ['smartwatch', 'reloj inteligente', 'smart band', 'pulsera actividad'],
+      ['aspirador', 'aspiradora', 'robot aspirador', 'conga', 'roomba'],
+      ['freidora', 'air fryer', 'airfryer'],
+      ['cafetera', 'espresso'],
+      ['raton', 'ratón', 'mouse'],
+      ['teclado', 'keyboard'],
+      ['monitor', 'pantalla gaming'],
+      ['televisor', 'smart tv', 'tv'],
+      ['portatil', 'portátil', 'laptop'],
+      ['smartphone', 'móvil', 'movil', 'telefono', 'teléfono'],
+      ['altavoz', 'speaker', 'soundbar', 'barra de sonido'],
+      ['taladro', 'atornillador'],
+    ];
+
+    const matched: string[] = [];
+    for (let i = 0; i < tokenGroups.length; i++) {
+      const group = tokenGroups[i];
+      if (group.some((tok) => t.includes(tok))) {
+        matched.push(`group_${i}`);
+      }
+    }
+    return matched;
+  };
+
+  const natureA = extractNatureTokens(base.title);
+  const natureB = extractNatureTokens(candidate.title);
+
+  // Si ambos tienen grupo de naturaleza identificado:
+  if (natureA.length > 0 && natureB.length > 0) {
+    return natureA.some((group) => natureB.includes(group));
+  }
+
+  // Si uno tiene grupo de naturaleza pero el otro tiene otro grupo distinto:
+  if (natureA.length > 0 && natureB.length > 0 && !natureA.some((group) => natureB.includes(group))) {
+    return false;
+  }
+
+  // Si ambos comparten categoría y la similitud léxica es relevante:
+  if (sameCategory) {
+    return titleSimilarity(base.title, candidate.title) >= 0.25;
+  }
+
+  return titleSimilarity(base.title, candidate.title) >= 0.40;
+}
+
+/**
  * Recorre todo el catálogo y asigna automáticamente productos alternativos en
  * la ficha de cada producto basándose en el mismo tipo/naturaleza de producto:
  *   - Más barato (cheaperOptionIds / cheaperOptionId)
@@ -891,20 +961,7 @@ export function linkCatalogAlternativesAuto(): {
 
   for (const base of products) {
     // Buscar candidatos del mismo tipo de producto:
-    const candidates = products.filter((p) => {
-      if (p.id === base.id) return false;
-      // 1) Si comparten subcategoría
-      if (base.subcategory_id && p.subcategory_id) {
-        return p.subcategory_id === base.subcategory_id;
-      }
-      // 2) Misma categoría normalizada
-      const catA = String(base.category || '').toLowerCase().trim();
-      const catB = String(p.category || '').toLowerCase().trim();
-      if (catA && catB && catA === catB) return true;
-      if (base.category_id && p.category_id && base.category_id === p.category_id) return true;
-      // 3) Similitud léxica de títulos si falta categoría
-      return titleSimilarity(base.title, p.title) >= 0.35;
-    });
+    const candidates = products.filter((p) => areSameProductType(base, p));
 
     if (!candidates.length) {
       base.alternative_product_ids = [];

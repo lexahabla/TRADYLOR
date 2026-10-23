@@ -545,7 +545,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <button type="button" id="prodFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
           </div>
           <div class="filter-field ali-action-btn-field">
-            <button type="button" id="btnLinkAllAlternatives" class="btn-ai btn-sm" title="Recorrer todo el catálogo y asignar automáticamente productos alternativos (más barato, mejor valorado y más vendido)">🔗 Vincular Alternativas</button>
+            <button type="button" id="btnLinkAllAlternatives" class="btn-ai btn-sm" title="Recorrer todo el catálogo y asignar automáticamente productos alternativos (más barato, mejor valorado y más vendido)">Vincular Alternativas</button>
           </div>
         </div>
       </div>
@@ -644,7 +644,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                     <img src={p.image} alt={p.title} class="thumb-img" loading="lazy" />
                   </td>
                   <td class="col-details">
-                    <a href={`/producto/${p.slug ?? p.id}`} class="row-title" target="_blank" rel="noopener" title="Ver ficha pública del producto">{p.title}</a>
+                    <a href={`/producto/${encodeURIComponent((p.slug && p.slug.trim()) || p.id)}`} class="row-title" target="_blank" rel="noopener" title="Ver ficha pública del producto">{p.title_short || p.title}</a>
                     <div class="row-meta">
                       <span class="pill-category">{p.category}</span>
                       {p.badge && <span class="pill-badge">{p.badge}</span>}
@@ -689,6 +689,26 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                     </a>
                   </td>
                   <td class="col-actions text-right">
+                    <a
+                      href={`/producto/${encodeURIComponent((p.slug && p.slug.trim()) || p.id)}`}
+                      class="btn-icon-action btn-preview-card"
+                      data-id={p.id}
+                      data-slug={p.slug || ''}
+                      target="_blank"
+                      rel="noopener"
+                      title="👁️ Ver ficha del producto"
+                      aria-label="Ver ficha del producto"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    </a>
+                    <button
+                      type="button"
+                      class="btn-icon-action btn-link-alternatives"
+                      data-id={p.id}
+                      title="🔗 Vincular Alternativas"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                    </button>
                     <button
                       type="button"
                       class="btn-icon-action btn-edit-row"
@@ -2895,7 +2915,8 @@ function renderTableRows(products, resetPage = true) {
             <td class="col-details">
               ${(() => {
                 const targetSlug = (p.slug && p.slug.trim() && p.slug !== 'undefined' && p.slug !== 'null') ? p.slug.trim() : p.id;
-                return `<a href="/producto/${encodeURIComponent(targetSlug)}" class="row-title" target="_blank" rel="noopener" title="Ver ficha pública del producto">${p.title}</a>`;
+                const displayTitle = p.title_short || p.title;
+                return `<a href="/producto/${encodeURIComponent(targetSlug)}" class="row-title" target="_blank" rel="noopener" title="Ver ficha pública del producto">${escapeHtml ? escapeHtml(displayTitle) : displayTitle}</a>`;
               })()}
               <div class="row-meta">
                 <span class="pill-category">${p.category || '—'}</span>
@@ -2925,9 +2946,12 @@ function renderTableRows(products, resetPage = true) {
               <a href="${p.affiliateUrl}" target="_blank" rel="nofollow noopener noreferrer" class="test-link">Probar Enlace</a>
             </td>
             <td class="col-actions text-right">
-              <button type="button" class="btn-icon-action btn-preview-card" data-id="${p.id}" data-slug="${p.slug || ''}" title="👁️ Ver ficha del producto (abre en pestaña nueva)">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-              </button>
+              ${(() => {
+                const targetSlug = (p.slug && p.slug.trim() && p.slug !== 'undefined' && p.slug !== 'null') ? p.slug.trim() : p.id;
+                return `<a href="/producto/${encodeURIComponent(targetSlug)}" class="btn-icon-action btn-preview-card" data-id="${p.id}" data-slug="${p.slug || ''}" target="_blank" rel="noopener" title="👁️ Ver ficha del producto" aria-label="Ver ficha del producto">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                </a>`;
+              })()}
               <button type="button" class="btn-icon-action btn-link-alternatives" data-id="${p.id}" title="🔗 Vincular Alternativas">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
               </button>
@@ -6910,6 +6934,9 @@ function renderTableRows(products, resetPage = true) {
     document.addEventListener('click', (event) => {
       const btn = event.target.closest?.('.btn-preview-card');
       if (!btn) return;
+      if (btn.tagName === 'A' && btn.getAttribute('href')) {
+        return; // Navegación nativa garantizada
+      }
       event.preventDefault();
       event.stopPropagation();
       const id = btn.getAttribute('data-id');
@@ -6948,7 +6975,7 @@ function renderTableRows(products, resetPage = true) {
         showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');
       } finally {
         btnLinkAllAlternatives.disabled = false;
-        btnLinkAllAlternatives.textContent = '🔗 Vincular Alternativas';
+        btnLinkAllAlternatives.textContent = 'Vincular Alternativas';
       }
     });
 
@@ -9280,6 +9307,12 @@ function renderTableRows(products, resetPage = true) {
   :global(.btn-icon-action:hover) {
     background: rgba(255, 255, 255, 0.1);
     color: var(--color-text-main);
+  }
+
+  :global(.btn-preview-card:hover) {
+    background: rgba(56, 189, 248, 0.15);
+    border-color: rgba(56, 189, 248, 0.4);
+    color: #38bdf8;
   }
 
   :global(.btn-delete-row:hover) {
