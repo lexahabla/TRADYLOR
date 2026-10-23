@@ -36,8 +36,9 @@ const queryTerm = queryParam.toLowerCase();
 const categoryMatches = (productCategory: string, slug: string) =>
   getCategoryById(productCategory)?.slug === slug;
 
+// Sin ?q= no hay filtro de texto: todo el catálogo es visible.
 const matchesQuery = (p: typeof allProducts[number]) =>
-  queryTerm.length > 0 &&
+  queryTerm.length === 0 ||
   [p.title, p.description, p.merchant, p.brand]
     .some((field) => String(field ?? '').toLowerCase().includes(queryTerm));
 
@@ -172,7 +173,9 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
             <p>
               {queryParam
                 ? <>No hay productos que coincidan con «{queryParam}»{activeCategory ? ` en «${activeCategory.name}»` : ''}.</>
-                : <>No hay productos disponibles en «{activeCategory?.name}» todavía.</>}
+                : activeCategory
+                  ? <>No hay productos disponibles en «{activeCategory.name}» todavía.</>
+                  : <>No hay productos disponibles todavía.</>}
             </p>
             <a href="/">Ver todo el catálogo</a>
           </div>
