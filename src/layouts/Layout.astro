@@ -16,6 +16,7 @@ export interface Props {
 import ReturnBanner from '../components/ReturnBanner.astro';
 import AuthModal from '../components/AuthModal.astro';
 import { GOOGLE_TRANSLATE_LANGS } from '../utils/translate';
+import { getCategories, type Category } from '../lib/categories';
 
 const {
   title = "Tradylor | Portal de Curación, Recomendaciones y Comparativas de Productos",
@@ -42,6 +43,42 @@ const resolvedCanonical = canonicalUrl
   ? toAbsolute(canonicalUrl)
   : new URL(Astro.url.pathname + Astro.url.search, siteOrigin).href;
 const resolvedImage = toAbsolute(image);
+
+// Categorías para el desplegable del buscador de cabecera (misma taxonomía que la barra de categorías).
+const headerCategories = getCategories();
+const headerRoots = headerCategories.filter((cat) => !cat.parentId);
+const headerSubsByParent = new Map<string, Category[]>();
+for (const cat of headerCategories) {
+  if (!cat.parentId) continue;
+  const list = headerSubsByParent.get(cat.parentId) ?? [];
+  list.push(cat);
+  headerSubsByParent.set(cat.parentId, list);
+}
+const headerHueOf = (index: number) => (index * 43) % 360;
+
+// HTML del panel de categorías del buscador de cabecera (inyectado con set:html).
+const headerCategoryPanelHtml = `
+  <div class="cat-panel-head">
+    <span class="cat-panel-title">Categorías</span>
+    <a href="/#catalogo" class="cat-panel-all">Ver todo</a>
+  </div>
+  <div class="cat-panel-grid">
+    ${headerRoots.map((root, i) => {
+      const subs = headerSubsByParent.get(root.id) ?? [];
+      return `
+        <a href="/?category=${root.slug}" class="cat-card" style="--h: ${headerHueOf(i)}">
+          <span class="cat-card-icon">${root.icon}</span>
+          <div class="cat-card-text">
+            <span class="cat-card-name">${root.name}</span>
+            ${subs.length ? `<span class="cat-card-meta">${subs.length} subcategoría${subs.length > 1 ? 'ías' : ''}</span>` : ''}
+          </div>
+          <span class="cat-card-arrow">›</span>
+        </a>
+        ${subs.map((sub) => `<a href="/?category=${sub.slug}" class="cat-sub"><span class="cat-sub-icon">${sub.icon}</span>${sub.name}</span></a>`).join('')}
+      `;
+    }).join('')}
+  </div>
+`;
 ---
 
 <!DOCTYPE html>
@@ -249,6 +286,26 @@ const resolvedImage = toAbsolute(image);
       @media (min-width: 961px) {
         .site-header:hover #mainNav {
           display: block;
+        }
+        /* Desplegado vertical, a todo el ancho de la página, de arriba a abajo */
+        .site-header:hover #mainNav .nav-list {
+          flex-direction: column;
+          align-items: stretch;
+          gap: 0;
+          padding: 1rem 1.5rem;
+        }
+        .site-header:hover #mainNav .nav-link {
+          display: block;
+          width: 100%;
+          padding: 0.75rem 1.5rem;
+          font-size: 0.95rem;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .site-header:hover #mainNav .nav-list li:last-child .nav-link {
+          border-bottom: none;
+        }
+        .site-header:hover #mainNav .nav-link::after {
+          display: none;
         }
       }
       .nav-list {
@@ -485,10 +542,82 @@ const resolvedImage = toAbsolute(image);
 
       /* ── Buscador en cabecera (dentro de .container.header-inner, centrado) ── */
       .container.header-inner .nav-search {
+        position: relative; /* contenedor del panel de categorías y sugerencias */
+        display: flex;
+        align-items: center;
         flex: 1 1 auto;
         max-width: 560px;
-        justify-content: center;
         height: 42px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 10px;
+        transition:
+          border-color 0.2s ease,
+          box-shadow 0.2s ease,
+          background 0.2s ease;
+      }
+      .container.header-inner .nav-search:focus-within {
+        background: rgba(2, 6, 23, 0.85);
+        border-color: rgba(96, 165, 250, 0.55);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
+      }
+
+      /* Desplegable de categorías a la izquierda del input (cabecera) */
+      .container.header-inner .category-menu-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        height: 100%;
+        padding: 0 0.7rem 0 0.85rem;
+        background: transparent;
+        border: none;
+        border-radius: 10px 0 0 10px;
+        color: rgba(255, 255, 255, 0.85);
+        font-family: var(--font-body, inherit);
+        font-size: 0.8rem;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+        transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+      }
+      .container.header-inner .category-menu-btn:hover,
+      .container.header-inner .category-menu-btn[aria-expanded='true'] {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: #ffffff;
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
+      }
+      .container.header-inner .category-menu-btn .cm-btn-icon {
+        font-size: 1rem;
+        line-height: 1;
+        flex-shrink: 0;
+      }
+      .container.header-inner .category-menu-btn .cm-btn-label {
+        max-width: 11rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      /* Panel de categorías desplegado bajo el buscador de la cabecera */
+      .container.header-inner .category-panel {
+        position: absolute;
+        top: calc(100% + 0.6rem);
+        left: 0;
+        z-index: 200;
+        width: min(38rem, calc(100vw - 3rem));
+        padding: 0.8rem;
+        background: rgba(12, 16, 26, 0.99);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 18px;
+        box-shadow: 0 26px 60px rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+      }
+      .container.header-inner .category-panel[hidden] {
+        display: none;
+      }
+      .container.header-inner .category-panel:not([hidden]) {
+        animation: cm-panel-in 0.18s ease;
       }
 
       /* En móvil el buscador se acorta para dejar espacio al logo y los botones */
@@ -496,6 +625,13 @@ const resolvedImage = toAbsolute(image);
         .container.header-inner .nav-search {
           max-width: none;
           flex: 1 1 14rem;
+        }
+        /* En móvil se usa el desplegable de la barra de categorías; se oculta el duplicado de cabecera */
+        .container.header-inner .category-menu-btn {
+          display: none !important;
+        }
+        .container.header-inner .category-panel {
+          display: none !important;
         }
       }
 
@@ -1907,8 +2043,13 @@ const resolvedImage = toAbsolute(image);
 
         {!isBackend && (
           <>
-            <!-- Buscador unificado centrado en la cabecera -->
+            <!-- Buscador unificado centrado en la cabecera con desplegable de categorías -->
             <form class="nav-search" role="search" autocomplete="off">
+              <!-- Desplegable de categorías a la izquierda del input -->
+              <button type="button" class="category-menu-btn" aria-label="Categorías" aria-expanded="false" aria-controls="header-category-panel">
+                <span class="cm-btn-icon">▾</span>
+                <span class="cm-btn-label">Categorías</span>
+              </button>
               <input type="search" class="ns-input cm-search-input" placeholder="Buscar productos…" aria-label="Buscar productos" />
               <button type="button" class="ns-clear" aria-label="Borrar la búsqueda" hidden>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1924,6 +2065,8 @@ const resolvedImage = toAbsolute(image);
               </button>
               <!-- Sugerencias en vivo (vía /api/search) -->
               <div class="cm-search-drop" data-cm-search-drop hidden></div>
+              <!-- Panel de categorías (desplegable bajo el botón) -->
+              <div id="header-category-panel" class="category-panel" hidden set:html={headerCategoryPanelHtml}></div>
             </form>
 
             <div class="header-actions">
@@ -2268,6 +2411,26 @@ const resolvedImage = toAbsolute(image);
             if (target.closest('.category-menu-btn')) closeNav();
             else if (!target.closest('.site-header')) closeNav();
           });
+
+          // --- Desplegable de categorías del buscador de cabecera ---
+          const headerCatBtn = document.querySelector('.container.header-inner .category-menu-btn');
+          const headerCatPanel = document.getElementById('header-category-panel');
+          if (headerCatBtn && headerCatPanel) {
+            const setCatPanelOpen = (open) => {
+              headerCatPanel.hidden = !open;
+              headerCatBtn.setAttribute('aria-expanded', String(open));
+            };
+            headerCatBtn.addEventListener('click', (e) => {
+              e.stopPropagation();
+              setCatPanelOpen(!headerCatPanel.hidden);
+            });
+            document.addEventListener('click', (event) => {
+              const t = event.target;
+              if (!(t instanceof Element)) return;
+              if (!t.closest('.container.header-inner .nav-search')) setCatPanelOpen(false);
+            });
+            navToggleBtn.addEventListener('click', () => setCatPanelOpen(false));
+          }
 
           // --- Desplegable de usuario móvil (radar, idioma, sesión) ---
           const userMobileBtn = document.querySelector('[data-header-user-mobile-toggle]');
