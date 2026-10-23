@@ -14,6 +14,7 @@ export default {
     'hidden',
     'md:inline',
     'md:flex',
+    'rounded-full',
   ],
   theme: {
     extend: {
