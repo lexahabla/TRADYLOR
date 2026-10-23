@@ -1622,27 +1622,32 @@ const headerCategoryPanelHtml = `
         text-decoration: underline;
       }
 
-      /* Botón hamburguesa (móvil): vive en #categoryBar, a la derecha del buscador */
+      /* Botón hamburguesa (móvil): borde azul y estilo visual coherente con los elementos del header */
       .nav-toggle-btn {
         display: none;
         align-items: center;
         justify-content: center;
-        width: 40px;
-        height: 40px;
+        width: 38px;
+        height: 38px;
         flex-shrink: 0;
         padding: 0;
         margin-left: auto;
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(59, 130, 246, 0.08);
+        border: 1px solid rgba(59, 130, 246, 0.35);
         border-radius: 10px;
-        color: #e5e7eb;
+        color: #93c5fd;
         cursor: pointer;
-        transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+        transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
       }
       .nav-toggle-btn:hover {
-        background: rgba(59, 130, 246, 0.12);
-        border-color: rgba(59, 130, 246, 0.4);
+        background: rgba(59, 130, 246, 0.18);
+        border-color: rgba(96, 165, 250, 0.6);
         color: #ffffff;
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
+        transform: scale(1.03);
+      }
+      .nav-toggle-btn:active {
+        transform: scale(0.96);
       }
 
       /* Contenido Principal */
@@ -1825,13 +1830,17 @@ const headerCategoryPanelHtml = `
           padding-left: 0.75rem;
           padding-right: 0.75rem;
         }
-        /* Header inner: altura de 60px en responsive, alineado para dar máximo espacio al buscador */
+        /* Header inner: altura con padding vertical extra (+10px) para dar mayor holgura a los elementos */
         .header-inner {
-          height: 60px;
+          min-height: 68px;
+          height: auto;
+          padding-top: 5px;
+          padding-bottom: 5px;
           display: flex;
           align-items: center;
           justify-content: flex-start;
           gap: 0.5rem;
+          box-sizing: border-box;
         }
         .header-inner .brand-logo {
           display: none;
@@ -1845,7 +1854,7 @@ const headerCategoryPanelHtml = `
           flex-shrink: 0;
         }
 
-        /* Hamburguesa en el header (estrictamente a la izquierda) */
+        /* Hamburguesa en el header (estrictamente a la izquierda, borde azul y estilo coherente) */
         .nav-toggle-btn {
           display: inline-flex;
         }
@@ -1858,16 +1867,34 @@ const headerCategoryPanelHtml = `
           height: 36px;
           margin: 0;
           border-radius: 9px;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          color: #e5e7eb;
+          background: rgba(59, 130, 246, 0.08);
+          border: 1px solid rgba(59, 130, 246, 0.35);
+          color: #93c5fd;
           padding: 0;
           cursor: pointer;
           flex-shrink: 0;
+          transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
         }
         .nav-toggle-btn-header svg {
-          width: 17px;
-          height: 17px;
+          width: 18px;
+          height: 18px;
+          stroke: currentColor;
+        }
+        .nav-toggle-btn-header:hover {
+          background: rgba(59, 130, 246, 0.18);
+          border-color: rgba(96, 165, 250, 0.6);
+          color: #ffffff;
+          box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
+          transform: scale(1.03);
+        }
+        .nav-toggle-btn-header:active {
+          transform: scale(0.95);
+        }
+        .nav-toggle-btn-header[aria-expanded='true'] {
+          background: rgba(59, 130, 246, 0.22);
+          border-color: #60a5fa;
+          color: #ffffff;
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
         }
 
         /* Buscador en responsive: se expande ocupando todo el espacio central disponible */
@@ -1961,15 +1988,17 @@ const headerCategoryPanelHtml = `
           width: 36px;
           height: 36px;
           padding: 0;
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.14);
+          background: rgba(59, 130, 246, 0.08);
+          border: 1px solid rgba(59, 130, 246, 0.35);
           border-radius: 9999px;
           cursor: pointer;
           flex-shrink: 0;
+          transition: background 0.2s ease, border-color 0.2s ease, transform 0.18s ease;
         }
         .header-translate:hover {
-          background: rgba(59, 130, 246, 0.15);
-          border-color: rgba(96, 165, 250, 0.4);
+          background: rgba(59, 130, 246, 0.18);
+          border-color: rgba(96, 165, 250, 0.6);
+          transform: scale(1.04);
         }
         .header-translate-icon {
           display: flex;
@@ -2079,6 +2108,7 @@ const headerCategoryPanelHtml = `
           display: flex !important;
           flex-direction: column !important;
           align-items: stretch !important;
+          justify-content: flex-start !important;
           width: 100% !important;
           min-height: 100% !important;
           padding: 0 !important;
@@ -2150,15 +2180,17 @@ const headerCategoryPanelHtml = `
           display: flex !important;
           flex-direction: column !important;
           align-items: stretch !important;
+          justify-content: flex-start !important;
           gap: 0 !important;
           padding: 0.75rem 1.25rem !important;
           margin: 0 !important;
           list-style: none !important;
-          flex: 1 1 auto !important;
+          flex: 0 0 auto !important;
         }
         #mainNav.is-open .nav-link {
           display: flex !important;
           align-items: center !important;
+          justify-content: flex-start !important;
           padding: 1.05rem 0.6rem !important;
           font-size: 1.05rem !important;
           font-weight: 600 !important;
@@ -2195,6 +2227,10 @@ const headerCategoryPanelHtml = `
         }
         .header-inner {
           gap: 0.35rem;
+          min-height: 66px;
+          padding-top: 5px;
+          padding-bottom: 5px;
+          box-sizing: border-box;
         }
         .header-actions {
           gap: 0.35rem;
@@ -2224,6 +2260,10 @@ const headerCategoryPanelHtml = `
       @media (max-width: 370px) {
         .header-inner {
           gap: 0.25rem;
+          min-height: 64px;
+          padding-top: 5px;
+          padding-bottom: 5px;
+          box-sizing: border-box;
         }
         .header-actions {
           gap: 0.25rem;
@@ -2684,7 +2724,7 @@ const headerCategoryPanelHtml = `
                 </svg>
               </button>
             </div>
-            <ul class="nav-list">
+            <ul class="nav-list items-start justify-start md:items-center md:justify-center">
               <li><a href="/#destacados" class="nav-link">Top Selecciones</a></li>
               <li><a href="/#metodologia" class="nav-link">Metodología</a></li>
               <li><a href="/#comparativas" class="nav-link">Comparativas</a></li>

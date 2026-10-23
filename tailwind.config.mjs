@@ -15,6 +15,8 @@ export default {
     'md:inline',
     'md:flex',
     'rounded-full',
+    'items-start',
+    'justify-start',
   ],
   theme: {
     extend: {

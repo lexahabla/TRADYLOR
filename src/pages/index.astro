@@ -478,6 +478,8 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       // Solo inicializar secciones dinámicas
       if (!root.hasAttribute('data-dynamic-section')) return;
       root.dataset.carouselInit = '1';
+
+      const carouselContainer = (track.closest('.feed-carousel') as HTMLElement | null) || track;
       const prevBtn = root.querySelector<HTMLButtonElement>('[data-carousel-prev]');
       const nextBtn = root.querySelector<HTMLButtonElement>('[data-carousel-next]');
 
@@ -496,11 +498,94 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
         if (nextBtn) nextBtn.disabled = !scrollable || track.scrollLeft >= maxScroll - 4;
       };
 
-      prevBtn?.addEventListener('click', () => track.scrollBy({ left: -step(), behavior: 'smooth' }));
-      nextBtn?.addEventListener('click', () => track.scrollBy({ left: step(), behavior: 'smooth' }));
+      let pauseAutoScroll = (): void => {};
+      let resumeAutoScroll = (_delay?: number): void => {};
+
+      prevBtn?.addEventListener('click', () => {
+        pauseAutoScroll();
+        track.scrollBy({ left: -step(), behavior: 'smooth' });
+        resumeAutoScroll(1800);
+      });
+
+      nextBtn?.addEventListener('click', () => {
+        pauseAutoScroll();
+        track.scrollBy({ left: step(), behavior: 'smooth' });
+        resumeAutoScroll(1800);
+      });
+
       track.addEventListener('scroll', syncArrows, { passive: true });
       window.addEventListener('resize', syncArrows);
       syncArrows();
+
+      // =========================================================================
+      // AUTO-SCROLL SUTIL EN CARRUSEL (Pausa al interactuar con el mouse / hover)
+      // =========================================================================
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (!prefersReducedMotion) {
+        let isPaused = false;
+        let isResetting = false;
+        let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+        let isVisible = true;
+        let rafId: number | null = null;
+
+        const scrollSpeed = 0.55; // Píxeles por frame (~33px/segundo), desplazamiento suave y sutil
+
+        pauseAutoScroll = () => {
+          isPaused = true;
+          if (resumeTimer) {
+            clearTimeout(resumeTimer);
+            resumeTimer = null;
+          }
+        };
+
+        resumeAutoScroll = (delay = 700) => {
+          if (resumeTimer) clearTimeout(resumeTimer);
+          resumeTimer = setTimeout(() => {
+            isPaused = false;
+          }, delay);
+        };
+
+        const tick = () => {
+          const maxScroll = track.scrollWidth - track.clientWidth;
+          if (isVisible && !isPaused && !isResetting && maxScroll > 8) {
+            if (track.scrollLeft >= maxScroll - 3) {
+              // Fin del carrusel: pausar y volver suavemente al inicio
+              isResetting = true;
+              setTimeout(() => {
+                track.scrollTo({ left: 0, behavior: 'smooth' });
+                setTimeout(() => {
+                  isResetting = false;
+                }, 1000);
+              }, 1400);
+            } else {
+              track.scrollLeft += scrollSpeed;
+            }
+          }
+          rafId = requestAnimationFrame(tick);
+        };
+
+        // Pausar completamente al pasar el ratón (mouseenter) o al interactuar
+        carouselContainer.addEventListener('mouseenter', pauseAutoScroll);
+        carouselContainer.addEventListener('mouseleave', () => resumeAutoScroll(600));
+        carouselContainer.addEventListener('touchstart', pauseAutoScroll, { passive: true });
+        carouselContainer.addEventListener('touchend', () => resumeAutoScroll(1800), { passive: true });
+        track.addEventListener('wheel', () => {
+          pauseAutoScroll();
+          resumeAutoScroll(2000);
+        }, { passive: true });
+
+        // Optimización: solo animar si el carrusel está dentro del viewport
+        if ('IntersectionObserver' in window) {
+          const observer = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+              isVisible = entry.isIntersecting;
+            });
+          }, { threshold: 0.05 });
+          observer.observe(carouselContainer);
+        }
+
+        rafId = requestAnimationFrame(tick);
+      }
     });
   };
 
@@ -811,15 +896,14 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   }
 
   /* Pista del carrusel: una sola fila, deslizable en horizontal
-     (gesto nativo en móvil, flechas en escritorio). */
+     (gesto nativo en móvil, flechas en escritorio, auto-scroll sutil). */
   .feed-carousel-track {
     display: flex;
     align-items: stretch;
     gap: 1rem;
     overflow-x: auto;
     overscroll-behavior-x: contain;
-    scroll-snap-type: x mandatory;
-    scroll-behavior: smooth;
+    scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
     /* Margen superior para que el hover (translateY -8px) no lo recorte
        el contenedor con scroll; el inferior deja sitio a la sombra. */
