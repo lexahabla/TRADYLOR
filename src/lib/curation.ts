@@ -274,13 +274,26 @@ export function computeEditorialStatus(product: Product): { ia_status: string; l
   return { ia_status: ia, link_status: link };
 }
 
+let cachedEnrichedResult: {
+  productsRef: Product[];
+  result: Array<Product & DuplicateFlag & { ia_status: string; link_status: string; conversion_score: number; network: string; network_label: string }>;
+} | null = null;
+
+export function invalidateEnrichProductsCache(): void {
+  cachedEnrichedResult = null;
+}
+
 /**
  * Enriquece una copia de los productos con los campos de curación que usa el
  * panel admin: conversion_score, is_duplicate (+motivo), ia_status y link_status.
  */
 export function enrichProductsForAdmin(products: Product[]): Array<Product & DuplicateFlag & { ia_status: string; link_status: string; conversion_score: number; network: string; network_label: string }> {
+  if (cachedEnrichedResult && cachedEnrichedResult.productsRef === products) {
+    return cachedEnrichedResult.result;
+  }
+
   const duplicates = detectDuplicates(products);
-  return products.map((product) => {
+  const result = products.map((product) => {
     const status = computeEditorialStatus(product);
     const flag = duplicates.get(product.id);
     const score = Number.isFinite(Number(product.conversion_score)) && Number(product.conversion_score) > 0
@@ -302,6 +315,9 @@ export function enrichProductsForAdmin(products: Product[]): Array<Product & Dup
       possible_duplicate: flag?.possible_duplicate,
     };
   });
+
+  cachedEnrichedResult = { productsRef: products, result };
+  return result;
 }
 
 /** Recalcula y PERSISTE conversion_score en products.json. */

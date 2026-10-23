@@ -79,6 +79,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\analyticsMonths.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\analyticsOptimo.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\apiAuth.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\catalog.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\catalogDiversity.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\catalogStore.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\categories.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\curation.ts

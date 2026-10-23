@@ -7,6 +7,7 @@ import SmartMatcherWizard from '../components/SmartMatcherWizard.astro';
 import { getCatalogProducts } from '../lib/catalog';
 import { readSections } from '../lib/sections';
 import { getCategoryById } from '../lib/categories';
+import { applyCatalogDiversity } from '../lib/catalogDiversity';
 
 export const prerender = false;
 
@@ -50,28 +51,69 @@ const visibleProducts = allProducts.filter((p) => {
   return byCategory && matchesQuery(p);
 });
 
-const pageHref = (page: number) =>
-  `/?${activeCategory ? `category=${encodeURIComponent(activeCategory.slug)}&` : ''}${queryTerm ? `q=${encodeURIComponent(queryParam)}&` : ''}page=${page}#catalogo`;
+// Ordenación del catálogo: ?sort=score (por defecto) | ventas | valoracion
+const sortParam = (Astro.url.searchParams.get('sort') ?? 'score').toLowerCase().trim();
+const currentSort = ['score', 'ventas', 'valoracion'].includes(sortParam) ? sortParam : 'score';
 
-// ─── Recommendation Score: rating(60%) + reviews(30%) + discount(10%) ───────
+const pageHref = (page: number) =>
+  `/?${activeCategory ? `category=${encodeURIComponent(activeCategory.slug)}&` : ''}${queryTerm ? `q=${encodeURIComponent(queryParam)}&` : ''}${currentSort !== 'score' ? `sort=${encodeURIComponent(currentSort)}&` : ''}page=${page}#catalogo`;
+
+// ─── Criterios de ordenación ───────────────────────────────────────────────
+// 1. Rentabilidad / Score de recomendación
 const scoreOf = (p: typeof allProducts[0]) => {
+  const convScore = Number(p.conversion_score);
+  if (Number.isFinite(convScore) && convScore > 0) return convScore;
   const ratingScore = (p.rating ?? 0) / 5;
   const reviewScore = Math.min(Math.log10((p.reviewsCount ?? 0) + 1) / 4, 1);
   const discountScore = p.originalPrice && p.originalPrice > p.price
     ? ((p.originalPrice - p.price) / p.originalPrice)
     : 0;
-  return ratingScore * 0.6 + reviewScore * 0.3 + discountScore * 0.1;
+  return (ratingScore * 0.6 + reviewScore * 0.3 + discountScore * 0.1) * 100;
 };
 
-const sorted = [...visibleProducts].sort((a, b) => scoreOf(b) - scoreOf(a));
+// 2. Más vendidos (ventas estimadas a 30 días, popularidad o volumen de reseñas)
+const salesOf = (p: typeof allProducts[0]) => {
+  const s30 = Number(p.sales30d);
+  if (Number.isFinite(s30) && s30 > 0) return s30;
+  const pop = Number(p.popularity);
+  if (Number.isFinite(pop) && pop > 0) return pop;
+  if (p.extra && typeof p.extra === 'object') {
+    const rawSales = (p.extra as Record<string, unknown>)['Ventas (30 días)'];
+    const numSales = Number(rawSales);
+    if (Number.isFinite(numSales) && numSales > 0) return numSales;
+  }
+  return Number(p.reviewsCount ?? 0);
+};
+
+// 3. Mejor valorados (estrellas/rating con desempate por número de valoraciones)
+const ratingOf = (p: typeof allProducts[0]) => {
+  const r = Number(p.rating ?? 0);
+  const rc = Number(p.reviewsCount ?? 0);
+  return r * 100000 + rc;
+};
+
+const sorted = [...visibleProducts].sort((a, b) => {
+  if (currentSort === 'ventas') {
+    return salesOf(b) - salesOf(a);
+  }
+  if (currentSort === 'valoracion') {
+    return ratingOf(b) - ratingOf(a);
+  }
+  return scoreOf(b) - scoreOf(a);
+});
+
+// ─── Regla de Alternancia y Diversidad ─────────────────────────────────────
+// 1. Alterna tipos de producto y nunca repite el mismo modelo en la misma fila (4 col)
+// 2. Si la variedad lo permite, distribuye los modelos para evitar duplicidades en la página
+const diversified = applyCatalogDiversity(sorted, { rowSize: 4, pageSize: 40 });
 
 // ─── Pagination for "Todos los Productos" ────────────────────────────────────
 const PRODUCTS_PER_PAGE = 40;
 const pageParam = Astro.url.searchParams.get('page');
-const totalPages = Math.max(1, Math.ceil(sorted.length / PRODUCTS_PER_PAGE));
+const totalPages = Math.max(1, Math.ceil(diversified.length / PRODUCTS_PER_PAGE));
 const requestedPage = parseInt(pageParam ?? '1', 10) || 1;
 const currentPage = Math.min(Math.max(1, requestedPage), totalPages);
-const paginatedProducts = sorted.slice(
+const paginatedProducts = diversified.slice(
   (currentPage - 1) * PRODUCTS_PER_PAGE,
   currentPage * PRODUCTS_PER_PAGE
 );
@@ -148,23 +190,49 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
        ============================================================ -->
   <section class="catalog-section" id="catalogo">
     <div class="container">
-      <div class="section-header">
-        <div class="section-tag">Catálogo Completo</div>
-        <h2 class="section-title">Todos los Productos Analizados</h2>
-        <p class="section-desc">
-          Explora nuestra selección completa ordenada por puntuación de recomendación. {sorted.length} productos verificados y en constante actualización.
-        </p>
-        {activeCategory && (
-          <p class="filter-note">
-            Filtrando por <strong>{activeCategory.name}</strong> · <a href="/">Ver todo el catálogo</a>
+      <div class="catalog-header-bar">
+        <div class="section-header">
+          <div class="section-tag">Catálogo Completo</div>
+          <h2 class="section-title">Todos los Productos Analizados</h2>
+          <p class="section-desc">
+            Explora nuestra selección completa ordenada por puntuación de recomendación. {diversified.length} productos verificados y en constante actualización.
           </p>
-        )}
-        {queryTerm && (
-          <p class="filter-note">
-            Resultados para <strong>«{queryParam}»</strong> ({sorted.length}) ·{' '}
-            <a href={activeCategory ? `/?category=${encodeURIComponent(activeCategory.slug)}#catalogo` : '/#catalogo'}>Quitar filtro</a>
-          </p>
-        )}
+          {activeCategory && (
+            <p class="filter-note">
+              Filtrando por <strong>{activeCategory.name}</strong> · <a href="/">Ver todo el catálogo</a>
+            </p>
+          )}
+          {queryTerm && (
+            <p class="filter-note">
+              Resultados para <strong>«{queryParam}»</strong> ({diversified.length}) ·{' '}
+              <a href={activeCategory ? `/?category=${encodeURIComponent(activeCategory.slug)}#catalogo` : '/#catalogo'}>Quitar filtro</a>
+            </p>
+          )}
+        </div>
+
+        <div class="catalog-toolbar" role="toolbar" aria-label="Controles de ordenación del catálogo">
+          <div class="catalog-sort-group">
+            <label for="catalogSortSelect" class="catalog-sort-label">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="21" y1="10" x2="3" y2="10"></line>
+                <line x1="21" y1="6" x2="7" y2="6"></line>
+                <line x1="21" y1="14" x2="11" y2="14"></line>
+                <line x1="21" y1="18" x2="15" y2="18"></line>
+              </svg>
+              <span>Ordenar por:</span>
+            </label>
+            <div class="catalog-sort-select-wrapper">
+              <select id="catalogSortSelect" class="catalog-sort-select" aria-label="Ordenar catálogo por">
+                <option value="score" selected={currentSort === 'score'}>Mejor rentabilidad (Score)</option>
+                <option value="ventas" selected={currentSort === 'ventas'}>Más vendidos</option>
+                <option value="valoracion" selected={currentSort === 'valoracion'}>Mejor valorados</option>
+              </select>
+              <svg class="catalog-sort-select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="products-grid">
@@ -705,6 +773,25 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   }
 </script>
 
+<script is:inline>
+  (() => {
+    const sortSelect = document.getElementById('catalogSortSelect');
+    if (!sortSelect) return;
+    sortSelect.addEventListener('change', () => {
+      const selected = sortSelect.value;
+      const url = new URL(window.location.href);
+      if (selected && selected !== 'score') {
+        url.searchParams.set('sort', selected);
+      } else {
+        url.searchParams.delete('sort');
+      }
+      url.searchParams.delete('page');
+      url.hash = 'catalogo';
+      window.location.href = url.toString();
+    });
+  })();
+</script>
+
 <style>
   /* ============ DESIGN TOKENS & BASE ============ */
   :root {
@@ -879,6 +966,123 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
 
   .catalog-section {
     padding-top: 0;
+  }
+
+  .catalog-header-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .catalog-header-bar .section-header {
+    margin-bottom: 0;
+    max-width: 720px;
+  }
+
+  .catalog-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .catalog-sort-group {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    background: rgba(17, 24, 39, 0.9);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    padding: 0.45rem 0.85rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+  }
+
+  .catalog-sort-group:hover,
+  .catalog-sort-group:focus-within {
+    border-color: #3b82f6;
+    background: rgba(17, 24, 39, 1);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+
+  .catalog-sort-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--color-text-muted);
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .catalog-sort-label svg {
+    color: #38bdf8;
+    flex-shrink: 0;
+  }
+
+  .catalog-sort-select-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .catalog-sort-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    border: 0;
+    color: #f3f4f6;
+    font-family: inherit;
+    font-size: 0.88rem;
+    font-weight: 700;
+    padding: 0.35rem 1.6rem 0.35rem 0.3rem;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .catalog-sort-select option {
+    background: #0f172a;
+    color: #f3f4f6;
+    padding: 0.4rem;
+  }
+
+  .catalog-sort-select-chevron {
+    position: absolute;
+    right: 0.2rem;
+    pointer-events: none;
+    color: var(--color-text-dim);
+    transition: color 0.2s ease, transform 0.2s ease;
+  }
+
+  .catalog-sort-group:hover .catalog-sort-select-chevron {
+    color: #38bdf8;
+  }
+
+  @media (max-width: 768px) {
+    .catalog-header-bar {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1.25rem;
+    }
+    .catalog-toolbar {
+      width: 100%;
+    }
+    .catalog-sort-group {
+      width: 100%;
+      justify-content: space-between;
+    }
+    .catalog-sort-select-wrapper {
+      flex: 1;
+      justify-content: flex-end;
+    }
+    .catalog-sort-select {
+      text-align: right;
+      width: 100%;
+    }
   }
 
   .section-header {

@@ -11,6 +11,7 @@ import type { Product } from './api/products/add';
 import { authenticateUser, clearAdminSession, createAdminSession, getSessionUser } from '../lib/adminAuth';
 import { getAmazonAssociateTag } from '../utils/amazon';
 import { enrichProductsForAdmin } from '../lib/curation';
+import { applyCatalogDiversity } from '../lib/catalogDiversity';
 
 const sessionUser = getSessionUser(Astro.request);
 const isAuthenticated = sessionUser !== null;
@@ -19,8 +20,16 @@ let loginError = '';
 if (Astro.request.method === 'POST') {
   const formData = await Astro.request.formData();
   const action = String(formData.get('action') ?? 'login');
+  const isAjax = Astro.request.headers.get('accept')?.includes('application/json') ||
+    Astro.request.headers.get('x-requested-with') === 'XMLHttpRequest';
 
   if (action === 'logout' && isAuthenticated) {
+    if (isAjax) {
+      return new Response(JSON.stringify({ success: true, redirect: '/upayp1b4' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'Set-Cookie': clearAdminSession() },
+      });
+    }
     return new Response(null, {
       status: 303,
       headers: { Location: '/upayp1b4', 'Set-Cookie': clearAdminSession() },
@@ -32,14 +41,30 @@ if (Astro.request.method === 'POST') {
     : null;
 
   if (login) {
+    const redirectUrl = login.role === 'admin' ? '/upayp1b4' : '/upayp1b4/perfil';
+    const cookieHeader = createAdminSession(login);
+    if (isAjax) {
+      return new Response(JSON.stringify({ success: true, redirect: redirectUrl }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'Set-Cookie': cookieHeader },
+      });
+    }
     // Los usuarios sin rol admin sólo acceden a su perfil
     return new Response(null, {
       status: 303,
-      headers: { Location: login.role === 'admin' ? '/upayp1b4' : '/upayp1b4/perfil', 'Set-Cookie': createAdminSession(login) },
+      headers: { Location: redirectUrl, 'Set-Cookie': cookieHeader },
     });
   }
 
-  if (!isAuthenticated) loginError = 'El usuario o la contraseña no son correctos.';
+  if (!isAuthenticated) {
+    loginError = 'El usuario o la contraseña no son correctos.';
+    if (isAjax) {
+      return new Response(JSON.stringify({ success: false, message: loginError }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
 }
 
 // Un usuario sin rol admin no puede ver el catálogo: va a su perfil
@@ -51,29 +76,32 @@ if (sessionUser && sessionUser.role !== 'admin') {
 Astro.response.headers.set('Cache-Control', 'no-store');
 
 // Leer productos almacenados para renderizar inicialmente en el servidor (SSR)
-const DATA_FILE_PATH = dataFile('products.json');
-// El enriquecimiento añade score, flags de duplicado y la RED de afiliados
-// (`network` / `network_label`) que pinta la columna «Comercio».
+// SOLO si está autenticado como administrador para que la pantalla de login responda en 1 ms
 type EnrichedProduct = ReturnType<typeof enrichProductsForAdmin>[number];
 let initialProducts: EnrichedProduct[] = [];
-
-try {
-  if (fs.existsSync(DATA_FILE_PATH)) {
-    const raw = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
-    initialProducts = JSON.parse(raw);
-  }
-} catch (error) {
-  console.error('Error cargando products.json en admin:', error);
-}
-// Enriquecimiento SSR de curación (score de conversión + duplicados) para la
-// primera pintura de la tabla; el cliente recalcula con cada recarga vía API.
-initialProducts = enrichProductsForAdmin(initialProducts as Product[]);
-
-// Paginación SSR: 50 productos por página
 const PRODUCTS_PER_PAGE = 50;
+
+if (isAuthenticated && sessionUser?.role === 'admin') {
+  const DATA_FILE_PATH = dataFile('products.json');
+  try {
+    if (fs.existsSync(DATA_FILE_PATH)) {
+      const raw = fs.readFileSync(DATA_FILE_PATH, 'utf-8');
+      initialProducts = JSON.parse(raw);
+    }
+  } catch (error) {
+    console.error('Error cargando products.json en admin:', error);
+  }
+  // Enriquecimiento SSR de curación
+  initialProducts = enrichProductsForAdmin(initialProducts as Product[]);
+}
+
 const initialTotalProducts = initialProducts.length;
 const initialTotalPages = Math.ceil(initialTotalProducts / PRODUCTS_PER_PAGE);
-const initialPageProducts = initialProducts.slice(0, PRODUCTS_PER_PAGE);
+// Aplicar alternancia y diversidad en la pintura inicial de SSR
+const initialDiversified = initialProducts.length > 0
+  ? applyCatalogDiversity(initialProducts, { rowSize: 4, pageSize: PRODUCTS_PER_PAGE })
+  : [];
+const initialPageProducts = initialDiversified.slice(0, PRODUCTS_PER_PAGE);
 
 const pageTitle = "Panel de Administración | Tradylor";
 const pageDescription = "Gestión, scraping de metadatos y alta de productos con enlaces de afiliación en Tradylor.";
@@ -1284,7 +1312,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <a class="guide-link" href="/upayp1b4/trafico-ventas/guia">Guía y Glosario <span aria-hidden="true">→</span></a>
         </div>
       </div>
-      <TrafficSalesDashboard />
+      {initialSection === 'analytics' && <TrafficSalesDashboard />}
     </section>
 
     <section data-admin-view="transparency" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'transparency' }]}>
@@ -1556,18 +1584,74 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <h1 id="admin-login-title" class="admin-login-title">Accede a tu panel</h1>
         <p class="admin-login-description">Gestiona el catálogo, analiza enlaces y publica recomendaciones desde el centro de curación de Tradylor.</p>
         {loginError && <p class="admin-login-error" role="alert">{loginError}</p>}
-        <form method="post" class="admin-login-form">
+        <form method="post" class="admin-login-form" id="adminLoginForm">
           <label class="login-field"><span>Usuario</span><input name="username" type="text" autocomplete="username" required autofocus /></label>
           <label class="login-field"><span>Contraseña</span><input name="password" type="password" autocomplete="current-password" required /></label>
-          <button type="submit" class="admin-login-submit">Entrar al panel <span aria-hidden="true">-&gt;</span></button>
+          <button type="submit" class="admin-login-submit" id="adminLoginBtn">
+            <span class="login-btn-spinner" hidden aria-hidden="true"></span>
+            <span class="login-btn-text">Entrar al panel</span>
+            <span class="login-btn-arrow" aria-hidden="true">-&gt;</span>
+          </button>
         </form>
         <p class="admin-login-footer"><span class="status-indicator"></span> Conexión privada protegida</p>
       </section>
       <aside class="admin-login-aside" aria-hidden="true"><span class="aside-index">01 / 03</span><strong>Curación<br />sin ruido.</strong><span class="aside-line"></span></aside>
     </main>
+    <script is:inline>
+      (() => {
+        const form = document.getElementById('adminLoginForm');
+        const btn = document.getElementById('adminLoginBtn');
+        if (!form || !btn) return;
+
+        form.addEventListener('submit', async (e) => {
+          btn.disabled = true;
+          btn.classList.add('is-loading');
+          const spinner = btn.querySelector('.login-btn-spinner');
+          const textEl = btn.querySelector('.login-btn-text');
+          const arrowEl = btn.querySelector('.login-btn-arrow');
+          if (spinner) spinner.hidden = false;
+          if (arrowEl) arrowEl.hidden = true;
+          if (textEl) textEl.textContent = 'Accediendo al panel…';
+
+          try {
+            e.preventDefault();
+            const fd = new FormData(form);
+            const res = await fetch('/upayp1b4', {
+              method: 'POST',
+              body: fd,
+              headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+            const data = await res.json().catch(() => null);
+            if (res.ok && data && data.success && data.redirect) {
+              window.location.replace(data.redirect);
+              return;
+            }
+            let errEl = document.querySelector('.admin-login-error');
+            if (!errEl) {
+              errEl = document.createElement('p');
+              errEl.className = 'admin-login-error';
+              errEl.setAttribute('role', 'alert');
+              form.insertAdjacentElement('beforebegin', errEl);
+            }
+            errEl.textContent = (data && data.message) || 'El usuario o la contraseña no son correctos.';
+            btn.disabled = false;
+            btn.classList.remove('is-loading');
+            if (spinner) spinner.hidden = true;
+            if (arrowEl) arrowEl.hidden = false;
+            if (textEl) textEl.textContent = 'Entrar al panel';
+          } catch (err) {
+            form.submit();
+          }
+        });
+      })();
+    </script>
   )}
 </Layout>
 
+{isAuthenticated && sessionUser && sessionUser.role === 'admin' && (
 <!-- Modal para crear/editar sección con productos seleccionados -->
 <div class="admin-modal" id="createSectionModal" hidden role="dialog" aria-modal="true" aria-labelledby="createSectionModalTitle">
   <div class="admin-modal-backdrop" data-create-section-close></div>
@@ -1615,9 +1699,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 </div>
 
 <!-- Client-side Script para interacción dinámica del panel -->
-<script is:inline define:vars={{ associateTag: getAmazonAssociateTag(), apiToken: import.meta.env.TRADYLOR_API_TOKEN ?? process.env.TRADYLOR_API_TOKEN }}>
+<script is:inline define:vars={{
+  associateTag: getAmazonAssociateTag(),
+  apiToken: import.meta.env.TRADYLOR_API_TOKEN ?? process.env.TRADYLOR_API_TOKEN,
+  initialProductsJson: JSON.stringify(initialDiversified)
+}}>
   window.TRADYLOR_ASSOCIATE_TAG = associateTag;
   window.TRADYLOR_API_TOKEN = apiToken;
+  try {
+    window.__INITIAL_PRODUCTS__ = JSON.parse(initialProductsJson);
+  } catch (_) {
+    window.__INITIAL_PRODUCTS__ = [];
+  }
 </script>
 <!--
   Módulo de filtros del catálogo AliExpress (TypeScript, bundled por Astro).
@@ -1832,7 +1925,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const prodCatAssign = document.getElementById('prodCatAssign');
     const btnProdAssignCat = document.getElementById('btnProdAssignCat');
     let selectedProductIds = new Set();
-    let currentProducts = [];
+    let currentProducts = (typeof window !== 'undefined' && Array.isArray(window.__INITIAL_PRODUCTS__) && window.__INITIAL_PRODUCTS__.length > 0)
+      ? window.__INITIAL_PRODUCTS__
+      : [];
     // Paginación del catálogo de productos
     let currentPage = 1;
     const PRODUCTS_PER_PAGE = 50;
@@ -3305,6 +3400,7 @@ function renderTableRows(products, resetPage = true) {
 
       const pool = products.slice();
       const result = [];
+      const rowSize = 4;
       const pageSize = typeof PRODUCTS_PER_PAGE === 'number' ? PRODUCTS_PER_PAGE : 50;
       let currentPageModels = new Set();
 
@@ -3318,45 +3414,66 @@ function renderTableRows(products, resetPage = true) {
         const prevModel = prev ? getProdModelKey(prev) : null;
         const prevType = prev ? getProdTypeKey(prev) : null;
 
+        const currentPosInRow = nextIdx % rowSize;
+        const recentWindowSize = currentPosInRow > 0 ? currentPosInRow : 0;
+        const recentRowModels = new Set();
+        if (recentWindowSize > 0) {
+          for (let k = result.length - recentWindowSize; k < result.length; k++) {
+            if (k >= 0) recentRowModels.add(getProdModelKey(result[k]));
+          }
+        }
+
         let bestIndex = -1;
 
-        // Prioridad 1: Modelo distinto al anterior + modelo no repetido en esta página + tipo alternado
+        // Prioridad 1: No en la misma fila + modelo no repetido en esta página + tipo alternado
         for (let i = 0; i < pool.length; i++) {
           const item = pool[i];
           const mKey = getProdModelKey(item);
           const tKey = getProdTypeKey(item);
-          if (mKey !== prevModel && !currentPageModels.has(mKey) && tKey !== prevType) {
+          if (!recentRowModels.has(mKey) && mKey !== prevModel && !currentPageModels.has(mKey) && tKey !== prevType) {
             bestIndex = i;
             break;
           }
         }
 
-        // Prioridad 2: Modelo distinto al anterior + modelo no repetido en esta página
+        // Prioridad 2: No en la misma fila + modelo no repetido en esta página
         if (bestIndex === -1) {
           for (let i = 0; i < pool.length; i++) {
             const item = pool[i];
             const mKey = getProdModelKey(item);
-            if (mKey !== prevModel && !currentPageModels.has(mKey)) {
+            if (!recentRowModels.has(mKey) && mKey !== prevModel && !currentPageModels.has(mKey)) {
               bestIndex = i;
               break;
             }
           }
         }
 
-        // Prioridad 3: Modelo distinto al anterior + tipo alternado respecto a la fila previa
+        // Prioridad 3: No en la misma fila + tipo alternado respecto a la posición anterior
         if (bestIndex === -1) {
           for (let i = 0; i < pool.length; i++) {
             const item = pool[i];
             const mKey = getProdModelKey(item);
             const tKey = getProdTypeKey(item);
-            if (mKey !== prevModel && tKey !== prevType) {
+            if (!recentRowModels.has(mKey) && mKey !== prevModel && tKey !== prevType) {
               bestIndex = i;
               break;
             }
           }
         }
 
-        // Prioridad 4: Modelo distinto al anterior (no repetir en la misma línea/fila contigua)
+        // Prioridad 4: No en la misma fila (estricto: no repetir en la misma línea/fila)
+        if (bestIndex === -1) {
+          for (let i = 0; i < pool.length; i++) {
+            const item = pool[i];
+            const mKey = getProdModelKey(item);
+            if (!recentRowModels.has(mKey) && mKey !== prevModel) {
+              bestIndex = i;
+              break;
+            }
+          }
+        }
+
+        // Prioridad 5: Modelo distinto al anterior
         if (bestIndex === -1) {
           for (let i = 0; i < pool.length; i++) {
             const item = pool[i];
@@ -3368,7 +3485,7 @@ function renderTableRows(products, resetPage = true) {
           }
         }
 
-        // Fallback: siguiente disponible en el pool (cuando todos los restantes son del mismo modelo)
+        // Fallback: siguiente disponible en el pool
         if (bestIndex === -1) {
           bestIndex = 0;
         }
@@ -4090,7 +4207,16 @@ function renderTableRows(products, resetPage = true) {
     }
     if (typeof loadSectionsAdmin === 'function') loadSectionsAdmin();
     attachRowActions();
-    if (typeof reloadProductsTable === 'function') reloadProductsTable();
+    if (currentProducts.length > 0) {
+      aliInvalidateEstado();
+      prodBuildRanges();
+      prodFilterApply();
+      try {
+        if (aliFilterPanel) aliFilterPanel.refresh();
+      } catch (_) {}
+    } else if (typeof reloadProductsTable === 'function') {
+      reloadProductsTable();
+    }
 
     // Handler para btnBuildCatalog (construcción automática del catálogo multi-comerciante)
     const btnBuildCatalog = document.getElementById('btnBuildCatalog');
@@ -6134,9 +6260,9 @@ function renderTableRows(products, resetPage = true) {
       loadAliCatalog();
     } else {
       if ('requestIdleCallback' in window) {
-        requestIdleCallback(() => loadAliCatalog(), { timeout: 800 });
+        requestIdleCallback(() => loadAliCatalog(), { timeout: 3500 });
       } else {
-        setTimeout(loadAliCatalog, 120);
+        setTimeout(loadAliCatalog, 1500);
       }
     }
 
@@ -7771,6 +7897,7 @@ function renderTableRows(products, resetPage = true) {
     if (btnPipelineRefresh) tpLoadMetrics();
   });
 </script>
+)}
 
 <style>
   .admin-dashboard-view { flex-direction: column; gap: 1.5rem; }
@@ -8380,8 +8507,11 @@ function renderTableRows(products, resetPage = true) {
   .login-field { display: grid; gap: .5rem; color: var(--color-text-main); font-size: .8rem; font-weight: 700; }
   .login-field input { width: 100%; box-sizing: border-box; padding: .9rem 1rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; outline: none; }
   .login-field input:focus { border-color: #38bdf8; box-shadow: 0 0 0 3px rgba(56, 189, 248, .14); }
-  .admin-login-submit { display: inline-flex; align-items: center; justify-content: center; gap: .7rem; width: 100%; margin-top: .65rem; padding: .95rem 1.25rem; color: #07111f; background: #38bdf8; border: 0; border-radius: var(--border-radius-sm); cursor: pointer; font: inherit; font-weight: 800; }
+  .admin-login-submit { display: inline-flex; align-items: center; justify-content: center; gap: .7rem; width: 100%; margin-top: .65rem; padding: .95rem 1.25rem; color: #07111f; background: #38bdf8; border: 0; border-radius: var(--border-radius-sm); cursor: pointer; font: inherit; font-weight: 800; transition: background .15s ease, opacity .15s ease; }
   .admin-login-submit:hover { background: #7dd3fc; }
+  .admin-login-submit.is-loading { opacity: .85; cursor: wait; pointer-events: none; }
+  .login-btn-spinner { display: inline-block; width: 15px; height: 15px; border: 2.5px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: adminSpin .6s linear infinite; flex-shrink: 0; }
+  @keyframes adminSpin { to { transform: rotate(360deg); } }
   .admin-login-error { margin: 0 0 1.25rem; padding: .8rem 1rem; color: #fecaca; background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); border-radius: var(--border-radius-sm); font-size: .85rem; }
   .admin-login-footer { display: flex; align-items: center; gap: .5rem; margin: 2rem 0 0; color: var(--color-text-dim); font-size: .75rem; }
   .admin-login-aside { display: flex; flex-direction: column; gap: 1.5rem; color: var(--color-text-main); }

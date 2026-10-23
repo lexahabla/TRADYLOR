@@ -95,7 +95,7 @@ function assertPasswordStrength(password: string): void {
 /* ---------------------------------------------------------------- persistencia */
 
 function ensureSeed(users: AdminUser[]): { users: AdminUser[]; changed: boolean } {
-  const seedUsername = ((process.env.ADMIN_USERNAME ?? import.meta.env.ADMIN_USERNAME) || 'lexahabla').trim();
+  const seedUsername = ((process.env.ADMIN_USERNAME ?? (typeof import.meta !== 'undefined' ? import.meta.env?.ADMIN_USERNAME : undefined)) || 'lexahabla').trim();
   const master = users.find((u) => u.master);
 
   if (master) return { users, changed: false };
@@ -108,7 +108,7 @@ function ensureSeed(users: AdminUser[]): { users: AdminUser[]; changed: boolean 
     return { users, changed: true };
   }
 
-  const seedPassword = (process.env.ADMIN_PASSWORD ?? import.meta.env.ADMIN_PASSWORD) || 'Upayp1b4';
+  const seedPassword = (process.env.ADMIN_PASSWORD ?? (typeof import.meta !== 'undefined' ? import.meta.env?.ADMIN_PASSWORD : undefined)) || 'Upayp1b4';
   const { salt, hash } = createPassword(seedPassword);
   const now = new Date().toISOString();
   users.push({
@@ -128,6 +128,12 @@ function ensureSeed(users: AdminUser[]): { users: AdminUser[]; changed: boolean 
   return { users, changed: true };
 }
 
+let cachedUsersMemory: { mtimeMs: number; users: AdminUser[] } | null = null;
+
+export function invalidateUsersCache(): void {
+  cachedUsersMemory = null;
+}
+
 function readUsers(): AdminUser[] {
   if (!fs.existsSync(USERS_FILE)) {
     // Primer arranque: crear el archivo con el usuario master para que el id
@@ -137,13 +143,23 @@ function readUsers(): AdminUser[] {
     return seeded.users;
   }
   try {
+    const stat = fs.statSync(USERS_FILE);
+    if (cachedUsersMemory && cachedUsersMemory.mtimeMs === stat.mtimeMs) {
+      return cachedUsersMemory.users;
+    }
+
     const raw = fs.readFileSync(USERS_FILE, 'utf-8');
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) throw new Error('users.json inválido');
     const result = ensureSeed(parsed as AdminUser[]);
-    if (result.changed) writeUsers(result.users);
+    if (result.changed) {
+      writeUsers(result.users);
+      return result.users;
+    }
+    cachedUsersMemory = { mtimeMs: stat.mtimeMs, users: result.users };
     return result.users;
   } catch (error) {
+    if (cachedUsersMemory) return cachedUsersMemory.users;
     console.error('Error cargando users.json:', error);
     throw new UserError('No se pudo leer el archivo de usuarios.', 500);
   }
@@ -154,6 +170,12 @@ function writeUsers(users: AdminUser[]): void {
   const tmp = `${USERS_FILE}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(users, null, 2), 'utf-8');
   fs.renameSync(tmp, USERS_FILE);
+  try {
+    const stat = fs.statSync(USERS_FILE);
+    cachedUsersMemory = { mtimeMs: stat.mtimeMs, users };
+  } catch {
+    cachedUsersMemory = null;
+  }
 }
 
 /* ----------------------------------------------------------------- lecturas */
