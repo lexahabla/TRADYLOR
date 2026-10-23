@@ -233,8 +233,8 @@ const headerCategoryPanelHtml = `
         display: flex;
         align-items: center;
         justify-content: space-between;
-        height: 72px;
-        position: relative; /* contenedor de posicionamiento para #mainNav absoluto */
+        height: 46px;
+        position: relative;
       }
       .brand-logo {
         display: flex;
@@ -247,10 +247,10 @@ const headerCategoryPanelHtml = `
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 36px;
-        height: 36px;
+        width: 34px;
+        height: 34px;
         background: linear-gradient(135deg, var(--color-primary) 0%, #60a5fa 100%);
-        border-radius: 10px;
+        border-radius: 9px;
         color: #ffffff;
         box-shadow: 0 4px 15px rgba(59, 130, 246, 0.4);
         flex-shrink: 0;
@@ -265,64 +265,37 @@ const headerCategoryPanelHtml = `
         color: var(--color-primary);
       }
 
-      /* Navegación Principal */
+      /* Navegación Principal — barra estática horizontal debajo del header */
       .main-nav {
-        /* En escritorio queda oculto bajo el header y se revela al pasar el
-           mouse por encima del header (ver .site-header:hover #mainNav). */
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        display: none;
-        background: rgba(10, 14, 23, 0.97);
+        display: block;
+        background: rgba(10, 14, 23, 0.95);
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
-        padding: 0.5rem 1.5rem 1rem;
-        z-index: 95;
+        padding: 0;
       }
-      /* En escritorio, #mainNav se revela al pasar el mouse sobre el header */
-      @media (min-width: 961px) {
-        .site-header:hover #mainNav {
-          display: block;
-        }
-        /* Desplegado vertical, a todo el ancho de la página, de arriba a abajo */
-        .site-header:hover #mainNav .nav-list {
-          flex-direction: column;
-          align-items: stretch;
-          gap: 0;
-          padding: 1rem 1.5rem;
-        }
-        .site-header:hover #mainNav .nav-link {
-          display: block;
-          width: 100%;
-          padding: 0.75rem 1.5rem;
-          font-size: 0.95rem;
-          border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-        }
-        .site-header:hover #mainNav .nav-list li:last-child .nav-link {
-          border-bottom: none;
-        }
-        .site-header:hover #mainNav .nav-link::after {
-          display: none;
-        }
+      .main-nav-container {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+      }
+      /* Cabecera del menú móvil: oculta en escritorio */
+      .mobile-menu-header,
+      .mobile-menu-close,
+      .mobile-menu-logo {
+        display: none;
       }
       .nav-list {
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 2rem;
+        gap: 2.2rem;
         list-style: none;
         flex-wrap: wrap;
-      }
-      /* Logo del menú móvil: oculto por defecto, se muestra solo en #mainNav.is-open */
-      .mobile-menu-logo {
-        display: none;
-      }
-      /* Botón de usuario móvil: oculto en escritorio, se muestra en móvil */
-      .header-user-mobile {
-        display: none;
+        padding: 0.35rem 1.5rem;
+        margin: 0;
       }
       .nav-link {
         color: var(--color-text-muted);
@@ -1839,14 +1812,158 @@ const headerCategoryPanelHtml = `
         #categoryBar {
           display: none !important;
         }
+        /* Header inner y contenedores */
+        .header-inner {
+          height: 44px;
+        }
+        .header-inner .brand-logo {
+          display: none;
+        }
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 0.4rem;
+          flex-shrink: 0;
+        }
+
         /* Hamburguesa en el header (izquierda) */
         .nav-toggle-btn {
           display: inline-flex;
         }
         .nav-toggle-btn-header {
           display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          color: #e5e7eb;
+          padding: 0;
+          cursor: pointer;
+          flex-shrink: 0;
         }
-        /* mainNav oculto por defecto; se abre con el hamburguesa */
+        .nav-toggle-btn-header svg {
+          width: 15px;
+          height: 15px;
+        }
+
+        /* Buscador más compacto en responsive */
+        .container.header-inner .nav-search {
+          height: 32px;
+          flex: 1 1 auto;
+          min-width: 0;
+          max-width: none;
+          border-radius: 8px;
+          margin: 0 0.4rem;
+        }
+        .container.header-inner .ns-input {
+          font-size: 0.78rem;
+          padding: 0 0.35rem;
+        }
+        .container.header-inner .ns-input::placeholder {
+          font-size: 0.74rem;
+        }
+        .container.header-inner .ns-submit {
+          width: 26px;
+          height: 26px;
+          border-radius: 6px;
+          margin-right: 3px;
+        }
+        .container.header-inner .ns-submit svg {
+          width: 12px;
+          height: 12px;
+        }
+        .container.header-inner .ns-clear {
+          width: 22px;
+          height: 22px;
+        }
+        /* Botón categorías en responsive: solo icono flecha hacia abajo */
+        .container.header-inner .category-menu-btn {
+          display: inline-flex !important;
+          padding: 0 0.45rem;
+          border-radius: 8px 0 0 8px;
+        }
+        .container.header-inner .category-menu-btn .cm-btn-label {
+          display: none;
+        }
+        .container.header-inner .category-menu-btn .cm-btn-icon {
+          font-size: 0.85rem;
+        }
+        .container.header-inner .category-panel {
+          display: block !important;
+          width: min(30rem, calc(100vw - 1rem));
+          left: -0.5rem;
+        }
+        .container.header-inner .category-panel[hidden] {
+          display: none !important;
+        }
+
+        /* Botón de usuario en responsive */
+        .header-cta-btn {
+          width: 32px;
+          height: 32px;
+          padding: 0;
+          justify-content: center;
+          border-radius: 8px;
+          flex-shrink: 0;
+        }
+        .header-cta-icon {
+          display: block;
+        }
+        .header-cta-icon svg {
+          width: 15px;
+          height: 15px;
+        }
+        .header-cta-text {
+          display: none;
+        }
+        .header-user-area {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          flex-shrink: 0;
+          box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+        }
+        .header-user-area .header-radar-avatar {
+          width: 100%;
+          height: 100%;
+          font-size: 0.75rem;
+          border-radius: 50%;
+          overflow: hidden;
+        }
+        .header-user-area .header-radar-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          border-radius: 50%;
+        }
+        .header-user-menu {
+          position: absolute;
+          top: calc(100% + 8px);
+          right: -4px;
+          min-width: 230px;
+          max-width: calc(100vw - 1rem);
+          z-index: 400;
+        }
+
+        /* Oculta traductor suelto en móvil para dejar aire al buscador y acciones */
+        .header-translate {
+          display: none !important;
+        }
+        .header-radar-btn {
+          width: 32px;
+          height: 32px;
+          padding: 0;
+          border-radius: 8px;
+        }
+        .header-radar-btn svg {
+          width: 16px;
+          height: 16px;
+        }
+
+        /* mainNav oculto por defecto; se abre con el hamburguesa como drawer a pantalla completa */
         #mainNav {
           display: none;
           position: fixed;
@@ -1860,36 +1977,93 @@ const headerCategoryPanelHtml = `
           backdrop-filter: blur(20px);
           -webkit-backdrop-filter: blur(20px);
           padding: 0;
-          z-index: 200;
+          z-index: 500;
           overflow-y: auto;
         }
         #mainNav.is-open {
           display: block;
         }
-        #mainNav.is-open .nav-list {
+        #mainNav.is-open .main-nav-container {
+          display: flex;
           flex-direction: column;
           align-items: stretch;
-          gap: 0;
-          padding: 2rem 1.5rem 1rem;
+          width: 100%;
+          padding: 0;
         }
-        /* Logo en la parte superior del menú móvil desplegado */
-        #mainNav.is-open .mobile-menu-logo {
+        /* Cabecera del menú móvil: logo alineado + botón cerrar con flecha */
+        .mobile-menu-header {
           display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0.75rem 1.25rem;
+          height: 52px;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+          box-sizing: border-box;
+        }
+        .mobile-menu-logo {
+          display: flex !important;
           align-items: center;
           gap: 0.6rem;
           text-decoration: none;
           color: #ffffff;
-          margin-bottom: 1.5rem;
-          padding-left: 1.5rem;
         }
-        #mainNav.is-open .mobile-menu-logo .brand-text {
-          display: block;
-          font-size: 1.25rem;
+        .mobile-menu-logo .logo-symbol {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 30px;
+          height: 30px;
+          border-radius: 8px;
+          background: linear-gradient(135deg, var(--color-primary) 0%, #60a5fa 100%);
+        }
+        .mobile-menu-logo .logo-symbol svg {
+          width: 16px;
+          height: 16px;
+        }
+        .mobile-menu-logo .brand-text {
+          display: inline-block !important;
+          font-family: var(--font-heading);
+          font-size: 1.15rem;
+          font-weight: 800;
+          color: #ffffff;
+          letter-spacing: 0.02em;
+        }
+        .mobile-menu-logo .brand-text span {
+          color: var(--color-primary);
+        }
+        /* Botón cerrar con flecha */
+        .mobile-menu-close {
+          display: inline-flex !important;
+          align-items: center;
+          justify-content: center;
+          width: 34px;
+          height: 34px;
+          background: rgba(255, 255, 255, 0.06);
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 8px;
+          color: #e5e7eb;
+          cursor: pointer;
+          transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+          flex-shrink: 0;
+          padding: 0;
+        }
+        .mobile-menu-close:hover {
+          background: rgba(59, 130, 246, 0.18);
+          border-color: rgba(59, 130, 246, 0.4);
+          color: #ffffff;
+        }
+        #mainNav.is-open .nav-list {
+          display: flex;
+          flex-direction: column;
+          align-items: stretch;
+          gap: 0;
+          padding: 0.5rem 1rem;
         }
         #mainNav.is-open .nav-link {
           display: block;
-          padding: 0.9rem 1.5rem;
+          padding: 0.9rem 1rem;
           font-size: 0.95rem;
+          color: #e2e8f0;
           border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
         #mainNav.is-open .nav-list li:last-child .nav-link {
@@ -1897,169 +2071,6 @@ const headerCategoryPanelHtml = `
         }
         #mainNav.is-open .nav-link::after {
           display: none;
-        }
-        /* Login: icono de usuario en cuanto el menú se colapsa */
-        .header-cta-btn {
-          width: 44px;
-          height: 44px;
-          padding: 0;
-          justify-content: center;
-          border-radius: 12px;
-        }
-        .header-cta-icon {
-          display: block;
-        }
-        .header-cta-text {
-          display: none;
-        }
-        /* En móvil el logo del header se oculta: el hamburguesa ocupa la izquierda;
-           el logo aparece dentro del menú desplegado (#mainNav.is-open) */
-        .header-inner .brand-logo {
-          display: none;
-        }
-        /* Oculta botones individuales en móvil: se unifican en el desplegable de usuario */
-        .header-radar-btn,
-        .header-auth-actions,
-        .header-user-area,
-        .header-translate {
-          display: none !important;
-        }
-        /* Botón de usuario móvil visible */
-        .header-user-mobile {
-          display: block;
-        }
-        .header-user-mobile-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 44px;
-          height: 44px;
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.12);
-          border-radius: 12px;
-          color: #e5e7eb;
-          cursor: pointer;
-        }
-        .header-user-mobile-btn:hover {
-          background: rgba(59, 130, 246, 0.12);
-          border-color: rgba(59, 130, 246, 0.4);
-          color: #ffffff;
-        }
-        /* Desplegable de usuario móvil (absoluto bajo el botón de usuario) */
-        .header-user-mobile {
-          position: relative;
-        }
-        .header-user-mobile-menu {
-          position: absolute;
-          top: calc(100% + 8px);
-          right: 0;
-          min-width: 220px;
-          background: linear-gradient(160deg, #131b2c, #0d1422);
-          border: 1px solid rgba(96, 165, 250, 0.22);
-          border-radius: 12px;
-          box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
-          padding: 0.5rem;
-          z-index: 200;
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-        }
-        .header-user-mobile-menu[hidden] {
-          display: none;
-        }
-        .header-user-mobile-btn-item {
-          display: flex;
-          align-items: center;
-          gap: 0.6rem;
-          width: 100%;
-          padding: 0.5rem 0.75rem;
-          font-family: var(--font-body);
-          font-size: 0.85rem;
-          font-weight: 600;
-          color: var(--color-text-muted);
-          text-align: left;
-          text-decoration: none;
-          background: transparent;
-          border: 1px solid transparent;
-          border-radius: 8px;
-          cursor: pointer;
-        }
-        .header-user-mobile-btn-item:hover {
-          background: rgba(59, 130, 246, 0.14);
-          color: #ffffff;
-        }
-        .header-user-mobile-icon {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          width: 30px;
-          height: 30px;
-          border-radius: 8px;
-          background: rgba(59, 130, 246, 0.12);
-          border: 1px solid rgba(59, 130, 246, 0.3);
-          color: #93c5fd;
-          flex-shrink: 0;
-        }
-        .header-user-mobile-label {
-          flex: 1;
-          min-width: 0;
-        }
-        /* En móvil las siglas del idioma desaparecen: solo icono */
-        .header-translate-code {
-          display: none !important;
-        }
-      }
-      @media (max-width: 640px) {
-        /* Móvil: menos aire lateral para que el logo central quepa más grande
-           sin chocar con los botones de los extremos. */
-        .site-header .container {
-          padding-left: 1.25rem;
-          padding-right: 1.25rem;
-        }
-        .nav-toggle-btn {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-        }
-        .nav-toggle-btn svg {
-          width: 22px;
-          height: 22px;
-        }
-        .header-actions {
-          gap: 0.6rem;
-        }
-        /* Login: botón cuadrado con icono de usuario (mismo lenguaje que el
-           resto de iconos de cabecera: tinte azul + radio 12px) */
-        .header-cta-btn {
-          width: 44px;
-          height: 44px;
-          padding: 0;
-          justify-content: center;
-          border-radius: 12px;
-        }
-        .header-cta-icon {
-          display: block;
-        }
-        .header-cta-text {
-          display: none;
-        }
-        .header-user-area {
-          width: 44px;
-          height: 44px;
-        }
-        .header-translate {
-          height: 44px;
-        }
-        .brand-text {
-          font-size: 1.15rem;
-        }
-        .logo-symbol {
-          width: 34px;
-          height: 34px;
-        }
-        .logo-symbol svg {
-          width: 20px;
-          height: 20px;
         }
       }
       @media (max-width: 600px) {
@@ -2073,62 +2084,36 @@ const headerCategoryPanelHtml = `
       }
       @media (max-width: 480px) {
         .site-header .container {
-          padding-left: 1rem;
-          padding-right: 1rem;
+          padding-left: 0.6rem;
+          padding-right: 0.6rem;
         }
-        .brand-text {
-          font-size: 1.1rem;
+        .header-inner {
+          height: 42px;
         }
         .header-actions {
-          gap: 0.55rem;
+          gap: 0.35rem;
         }
-        .header-cta-btn {
-          padding: 0;
-        }
-        .main-nav.is-open {
-          padding: 0.5rem 1rem 0.75rem;
-        }
-      }
-      @media (max-width: 430px) {
-        .brand-text {
-          font-size: 1.05rem;
-        }
-        .logo-symbol {
-          width: 32px;
+        .container.header-inner .nav-search {
           height: 32px;
-        }
-        .logo-symbol svg {
-          width: 19px;
-          height: 19px;
+          margin: 0 0.25rem;
         }
       }
       @media (max-width: 370px) {
-        .brand-text {
-          font-size: 0.95rem;
-        }
-        .logo-symbol {
-          width: 28px;
-          height: 28px;
-        }
-        .logo-symbol svg {
-          width: 16px;
-          height: 16px;
-        }
-        .nav-toggle-btn,
-        .header-cta-btn,
-        .header-user-area {
-          width: 40px;
+        .header-inner {
           height: 40px;
         }
-        .header-translate {
-          height: 36px;
-          padding: 0 0.55rem;
-        }
-        .header-translate-code {
-          font-size: 0.68rem;
+        .nav-toggle-btn-header,
+        .header-cta-btn,
+        .header-user-area {
+          width: 30px;
+          height: 30px;
         }
         .header-actions {
-          gap: 0.4rem;
+          gap: 0.25rem;
+        }
+        .container.header-inner .nav-search {
+          height: 30px;
+          margin: 0 0.2rem;
         }
       }
 
@@ -2540,57 +2525,43 @@ const headerCategoryPanelHtml = `
                 </select>
               </div>
 
-              {/* Móvil: usuario, radar e idioma en un desplegable desde el icono de usuario */}
-              <div class="header-user-mobile" data-header-user-mobile>
-                <button type="button" class="header-user-mobile-btn" data-header-user-mobile-toggle aria-label="Menú de usuario" aria-haspopup="true" aria-expanded="false">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                    <circle cx="12" cy="7" r="4"></circle>
-                  </svg>
-                </button>
-                <div class="header-user-mobile-menu" data-header-user-mobile-menu hidden>
-                  <nav class="header-user-mobile-list" aria-label="Cuenta">
-                    <!-- Idioma: solo icono en móvil (sin siglas) -->
-                    <button type="button" class="header-user-mobile-btn-item" data-header-translate-mobile>
-                      <span class="header-user-mobile-icon" aria-hidden="true">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                          <circle cx="12" cy="12" r="10"></circle>
-                          <line x1="2" y1="12" x2="22" y2="12"></line>
-                          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                        </svg>
-                      </span>
-                      <span class="header-user-mobile-label">Idioma</span>
-                    </button>
-                    {/* Opciones de sesión: se rellenan por JS según autenticado/anónimo */}
-                  </nav>
-                </div>
-              </div>
             </div>
           </>
         )}
 
-        {/* mainNav: se despliega bajando de detrás del header al pasar el mouse */}
-        <nav id="mainNav" class="main-nav" aria-label="Navegación Principal">
-          {/* Logo visible solo en el menú móvil desplegado (oculto por CSS) */}
-          <a href="/" class="brand-logo mobile-menu-logo" aria-label="Tradylor - Inicio">
-            <span class="logo-symbol">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-              </svg>
-            </span>
-            <span class="brand-text">TRADY<span>LOR</span></span>
-          </a>
-          <ul class="nav-list">
-            <li><a href="/#destacados" class="nav-link">Top Selecciones</a></li>
-            <li><a href="/#metodologia" class="nav-link">Metodología</a></li>
-            <li><a href="/#comparativas" class="nav-link">Comparativas</a></li>
-            <li><a href="#aviso-legal" class="nav-link">Aviso de Afiliación</a></li>
-          </ul>
-        </nav>
-
         <!-- Backend: las páginas /admin colocan aquí su menú de usuario (alineado a la derecha) -->
         <slot name="header-end" />
       </div>
+
+      {/* mainNav: barra horizontal estática debajo del header en escritorio; drawer en móvil */}
+      {!isBackend && (
+        <nav id="mainNav" class="main-nav" aria-label="Navegación Principal">
+          <div class="container main-nav-container">
+            {/* Cabecera del menú móvil: logo + botón cerrar con flecha */}
+            <div class="mobile-menu-header">
+              <a href="/" class="brand-logo mobile-menu-logo" aria-label="Tradylor - Inicio">
+                <span class="logo-symbol">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                  </svg>
+                </span>
+                <span class="brand-text">TRADY<span>LOR</span></span>
+              </a>
+              <button type="button" class="mobile-menu-close" aria-label="Cerrar menú" data-mobile-menu-close>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+              </button>
+            </div>
+            <ul class="nav-list">
+              <li><a href="/#destacados" class="nav-link">Top Selecciones</a></li>
+              <li><a href="/#metodologia" class="nav-link">Metodología</a></li>
+              <li><a href="/#comparativas" class="nav-link">Comparativas</a></li>
+              <li><a href="#aviso-legal" class="nav-link">Aviso de Afiliación</a></li>
+            </ul>
+          </div>
+        </nav>
+      )}
     </header>
 
     <!-- Drawer lateral del Carrito / Mi Radar (solo páginas públicas) -->
@@ -2772,18 +2743,28 @@ const headerCategoryPanelHtml = `
           const closeNav = () => {
             mainNav.classList.remove('is-open');
             navToggleBtn.setAttribute('aria-expanded', 'false');
+            navToggleBtn.setAttribute('aria-label', 'Abrir menú');
           };
           navToggleBtn.addEventListener('click', () => {
             const open = mainNav.classList.toggle('is-open');
             navToggleBtn.setAttribute('aria-expanded', String(open));
             navToggleBtn.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
           });
+          const mobileCloseBtn = mainNav.querySelector('[data-mobile-menu-close]');
+          if (mobileCloseBtn) {
+            mobileCloseBtn.addEventListener('click', (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              closeNav();
+            });
+          }
           mainNav.addEventListener('click', (event) => {
             if (event.target.closest('a')) closeNav();
           });
           document.addEventListener('click', (event) => {
             const target = event.target;
             if (target.closest('.nav-toggle-btn-header')) return;
+            if (target.closest('[data-mobile-menu-close]')) return;
             if (target.closest('.category-menu-btn')) closeNav();
             else if (!target.closest('.site-header')) closeNav();
           });
@@ -2806,28 +2787,6 @@ const headerCategoryPanelHtml = `
               if (!t.closest('.container.header-inner .nav-search')) setCatPanelOpen(false);
             });
             navToggleBtn.addEventListener('click', () => setCatPanelOpen(false));
-          }
-
-          // --- Desplegable de usuario móvil (radar, idioma, sesión) ---
-          const userMobileBtn = document.querySelector('[data-header-user-mobile-toggle]');
-          const userMobileMenu = document.querySelector('[data-header-user-mobile-menu]');
-          if (userMobileBtn && userMobileMenu) {
-            const closeUserMobile = () => userMenuMobileSet(false);
-            const userMenuMobileSet = (open) => {
-              userMobileMenu.hidden = !open;
-              userMobileBtn.setAttribute('aria-expanded', String(open));
-            };
-            userMobileBtn.addEventListener('click', (e) => {
-              e.stopPropagation();
-              userMenuMobileSet(!userMobileMenu.hidden);
-            });
-            document.addEventListener('click', (event) => {
-              const t = event.target;
-              if (!(t instanceof Element)) return;
-              if (!t.closest('[data-header-user-mobile]')) closeUserMobile();
-            });
-            navToggleBtn.addEventListener('click', () => closeUserMobile());
-            window.addEventListener('scroll', () => closeUserMobile(), { passive: true });
           }
 
           // --- Scroll: ocultar header al bajar, mostrar al subir ---
@@ -3143,67 +3102,8 @@ const headerCategoryPanelHtml = `
         const headerUsername = $('[data-header-username]');
         const headerEmail = $('[data-header-email]');
         const headerAvatarWrap = $('[data-header-avatar]');
-        const headerAvatarMenu = $('[data-header-avatar-menu]');
-        const headerUserMobileMenu = $('[data-header-user-mobile-menu]');
-        const headerUserMobileList = $('.header-user-mobile-list');
-
-        function renderHeaderUserMobile(user: UserProfile | null) {
-          if (!headerUserMobileMenu || !headerUserMobileList) return;
-          // Mantener el botón Idioma (ya está en el HTML); rellenar opciones de sesión.
-          const sessionNode = headerUserMobileList.querySelector('[data-user-mobile-session]');
-          if (sessionNode) sessionNode.remove();
-          const sessionWrap = document.createDocumentFragment();
-          if (user) {
-            const displayName = user.name || user.email.split('@')[0];
-            // Mi Radar
-            const miRadar = document.createElement('a');
-            miRadar.href = '/mi-radar';
-            miRadar.className = 'header-user-mobile-btn-item';
-            miRadar.innerHTML = `
-              <span class="header-user-mobile-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
-              <span class="header-user-mobile-label">Mi Radar</span>
-            `;
-            sessionWrap.appendChild(miRadar);
-            // Perfil
-            const perfil = document.createElement('a');
-            perfil.href = '/perfil';
-            perfil.className = 'header-user-mobile-btn-item';
-            perfil.innerHTML = `
-              <span class="header-user-mobile-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
-              <span class="header-user-mobile-label">Perfil</span>
-            `;
-            sessionWrap.appendChild(perfil);
-            // Cerrar sesión
-            const logout = document.createElement('button');
-            logout.type = 'button';
-            logout.className = 'header-user-mobile-btn-item';
-            logout.dataset.userLogout = '';
-            logout.innerHTML = `
-              <span class="header-user-mobile-icon" aria-hidden="true"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></span>
-              <span class="header-user-mobile-label">Cerrar sesión</span>
-            `;
-            sessionWrap.appendChild(logout);
-          } else {
-            // Iniciar sesión
-            const login = document.createElement('button');
-            login.type = 'button';
-            login.className = 'header-user-mobile-btn-item';
-            login.dataset.openAuth = 'login';
-            login.innerHTML = `
-              <span class="header-user-mobile-icon" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg></span>
-              <span class="header-user-mobile-label">Iniciar sesión</span>
-            `;
-            sessionWrap.appendChild(login);
-          }
-          const sessionNodeWrapper = document.createElement('div');
-          sessionNodeWrapper.dataset.userMobileSession = '';
-          sessionNodeWrapper.appendChild(sessionWrap);
-          headerUserMobileList.appendChild(sessionNodeWrapper);
-        }
-
         function renderHeaderAuth(user: UserProfile | null) {
           if (!headerAnon || !headerUserArea) return;
-          renderHeaderUserMobile(user);
           if (user) {
             headerAnon.hidden = true;
             headerUserArea.hidden = false;
@@ -3449,6 +3349,11 @@ const headerCategoryPanelHtml = `
         }
 
         userMenuToggle?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          toggleUserMenu();
+        });
+        headerUserArea?.addEventListener('click', (e) => {
+          if (e.target.closest('[data-user-menu]')) return;
           e.stopPropagation();
           toggleUserMenu();
         });

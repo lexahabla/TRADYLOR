@@ -22,6 +22,8 @@ pnpm-debug.log*
 
 # configuración local de opencode (contiene claves de proveedores IA)
 opencode.json
+opencode.json.bak
+*.bak
 
 # credenciales de redes de afiliación (panel admin)
 src/data/credentials.json
