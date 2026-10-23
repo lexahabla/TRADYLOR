@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../lib/adminAuth';
-import { readSections, upsertSection, deleteSection, slugifySection, type WebSection } from '../../../lib/sections';
+import { readSections, upsertSection, deleteSection, findSection, slugifySection, type WebSection, type SectionSpeed } from '../../../lib/sections';
 
 export const prerender = false;
 
@@ -19,21 +19,29 @@ export const POST: APIRoute = async ({ request }) => {
   const action = String(body?.action || 'create');
 
   if (action === 'create' || action === 'update') {
-    const title = String(body?.title || '').trim();
+    const rawId = body?.id ? String(body.id).trim() : '';
+    const existing = rawId ? findSection(rawId) : undefined;
+    const title = String(body?.title !== undefined ? body.title : (existing?.title || '')).trim();
     if (!title) {
       return new Response(JSON.stringify({ success: false, message: 'El título es obligatorio' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
-    const id = body?.id ? String(body.id) : slugifySection(title);
-    const position = body?.position === 'above' ? 'above' : 'below';
+    const id = rawId || slugifySection(title);
+    const position = body?.position ? (body.position === 'above' ? 'above' : 'below') : (existing?.position || 'below');
+    const rawSpeed = body?.speed !== undefined ? String(body.speed).toLowerCase().trim() : (existing?.speed || 'normal');
+    const speed: SectionSpeed = ['slow', 'normal', 'fast', 'none'].includes(rawSpeed)
+      ? (rawSpeed as SectionSpeed)
+      : 'normal';
+
     const section: WebSection = {
       id,
       title,
-      description: body?.description ? String(body.description) : undefined,
-      productIds: Array.isArray(body?.productIds) ? body.productIds.map((x: unknown) => String(x)) : [],
-      published: body?.published !== false,
-      order: typeof body?.order === 'number' ? body.order : readSections().length,
+      description: body?.description !== undefined ? (body.description ? String(body.description) : undefined) : existing?.description,
+      productIds: Array.isArray(body?.productIds) ? body.productIds.map((x: unknown) => String(x)) : (existing?.productIds || []),
+      published: typeof body?.published === 'boolean' ? body.published : (existing ? existing.published : true),
+      order: typeof body?.order === 'number' ? body.order : (existing?.order ?? readSections().length),
       position,
-      createdAt: body?.createdAt ? String(body.createdAt) : new Date().toISOString(),
+      speed,
+      createdAt: existing?.createdAt || (body?.createdAt ? String(body.createdAt) : new Date().toISOString()),
     };
     const ok = upsertSection(section);
     return new Response(JSON.stringify({ success: ok, section }), {

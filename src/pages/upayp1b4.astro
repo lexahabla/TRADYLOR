@@ -1541,6 +1541,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       </select>
     </div>
     <div class="admin-modal-field">
+      <span>Velocidad de desplazamiento del carrusel</span>
+      <select id="createSectionSpeed" style="width:100%;padding:.5rem;border-radius:8px;border:1px solid var(--color-border);background:var(--color-surface);color:var(--color-text);">
+        <option value="slow">Lento (suave ~20 px/s)</option>
+        <option value="normal" selected>Normal (~36 px/s)</option>
+        <option value="fast">Rápido (~65 px/s)</option>
+        <option value="none">Desactivado (sin auto-scroll)</option>
+      </select>
+    </div>
+    <div class="admin-modal-field">
       <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;font-weight:600;">
         <input type="checkbox" id="createSectionPublished" checked /> Publicar en la web inmediatamente
       </label>
@@ -3648,6 +3657,7 @@ function renderTableRows(products, resetPage = true) {
     const createSectionDescription = document.getElementById('createSectionDescription');
     const createSectionPublished = document.getElementById('createSectionPublished');
     const createSectionPosition = document.getElementById('createSectionPosition');
+    const createSectionSpeed = document.getElementById('createSectionSpeed');
     const createSectionConfirm = document.getElementById('createSectionConfirm');
     const createSectionStatus = document.getElementById('createSectionStatus');
     // OJO: este bloque es un <script is:inline>, es decir NO lo procesa Vite:
@@ -3666,6 +3676,7 @@ function renderTableRows(products, resetPage = true) {
       createSectionDescription.value = '';
       createSectionPublished.checked = true;
       if (createSectionPosition) createSectionPosition.value = 'below';
+      if (createSectionSpeed) createSectionSpeed.value = 'normal';
       createSectionModalTitle.textContent = 'Crear nueva sección';
       createSectionModalDesc.textContent = 'Agrupa los productos seleccionados en una sección temática para mostrar en la web.';
       createSectionConfirm.textContent = 'Crear sección';
@@ -3685,6 +3696,7 @@ function renderTableRows(products, resetPage = true) {
       createSectionDescription.value = section.description || '';
       createSectionPublished.checked = section.published !== false;
       if (createSectionPosition) createSectionPosition.value = section.position === 'above' ? 'above' : 'below';
+      if (createSectionSpeed) createSectionSpeed.value = section.speed || 'normal';
       createSectionModalTitle.textContent = 'Editar sección';
       createSectionModalDesc.textContent = 'Modifica los datos de la sección y guarda los cambios.';
       createSectionConfirm.textContent = 'Guardar cambios';
@@ -3717,6 +3729,7 @@ function renderTableRows(products, resetPage = true) {
       const description = createSectionDescription.value.trim();
       const published = createSectionPublished.checked;
       const position = createSectionPosition ? createSectionPosition.value : 'below';
+      const speed = createSectionSpeed ? createSectionSpeed.value : 'normal';
       const isEdit = createSectionMode === 'edit';
       const sectionId = createSectionId.value.trim();
 
@@ -3735,6 +3748,7 @@ function renderTableRows(products, resetPage = true) {
             productIds: isEdit ? createSectionProductIds : createSectionProductIds,
             published,
             position,
+            speed,
           }),
         });
         const data = await res.json();
@@ -3768,16 +3782,20 @@ function renderTableRows(products, resetPage = true) {
         if (!res.ok || !data.success) { host.innerHTML = '<p class="text-muted">No se pudieron cargar las secciones.</p>'; return; }
         const sections = Array.isArray(data.sections) ? data.sections : [];
         if (!sections.length) { host.innerHTML = '<p class="text-muted">Aún no hay secciones creadas.</p>'; return; }
-        host.innerHTML = sections.map((s) => `
+        host.innerHTML = sections.map((s) => {
+          const speedLabel = s.speed === 'slow' ? 'vel: lenta' : (s.speed === 'fast' ? 'vel: rápida' : (s.speed === 'none' ? 'vel: manual' : 'vel: normal'));
+          return `
           <div class="section-admin-row">
             <strong>${escapeHtml ? escapeHtml(s.title) : s.title}</strong> <span class="admin-tag-pill">${s.published ? 'publicada' : 'oculta'}</span>
             <span class="admin-tag-pill">${s.position === 'above' ? 'encima catálogo' : 'debajo catálogo'}</span>
+            <span class="admin-tag-pill">${speedLabel}</span>
             <span class="muted">${(s.productIds || []).length} producto(s)</span>
             <button type="button" class="btn-secondary btn-sm" data-section-edit="${s.id}" title="Editar sección">✏️ Editar</button>
             <button type="button" class="btn-secondary btn-sm" data-section-toggle="${s.id}" data-published="${!s.published}">${s.published ? 'Ocultar' : 'Publicar'}</button>
             <button type="button" class="btn-danger-ghost btn-sm" data-section-delete="${s.id}">Eliminar</button>
           </div>
-        `).join('');
+        `;
+        }).join('');
         host.querySelectorAll('[data-section-delete]').forEach((btn) => {
           btn.onclick = async () => {
             if (!confirm('¿Eliminar esta sección?')) return;

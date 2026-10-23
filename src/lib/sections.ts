@@ -4,6 +4,8 @@ import { dataFile } from './paths';
 
 const FILE = dataFile('sections.json');
 
+export type SectionSpeed = 'slow' | 'normal' | 'fast' | 'none';
+
 export interface WebSection {
   id: string;
   title: string;
@@ -13,6 +15,8 @@ export interface WebSection {
   order: number;
   /** 'above' = por encima del catálogo principal; 'below' = por debajo. */
   position?: 'above' | 'below';
+  /** Velocidad de desplazamiento automático: 'slow' (~20px/s), 'normal' (~36px/s), 'fast' (~65px/s), 'none' (pausado). */
+  speed?: SectionSpeed;
   createdAt: string;
 }
 

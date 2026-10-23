@@ -19,6 +19,7 @@ const publishedSections = (readSections() || [])
   .map((s) => ({
     ...s,
     position: s.position === 'above' ? 'above' : 'below',
+    speed: s.speed || 'normal',
     products: s.productIds.map((id) => allProducts.find((p) => p.id === id)).filter(Boolean),
   }))
   .filter((s) => s.products.length > 0);
@@ -121,7 +122,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
        SECCIONES DINÁMICAS POR ENCIMA DEL CATÁLOGO (carrusel deslizable)
        ============================================================ -->
   {aboveCatalogSections.map((section) => (
-    <section class="feed-section" data-dynamic-section={section.id} aria-label={section.title}>
+    <section class="feed-section" data-dynamic-section={section.id} data-section-speed={section.speed || 'normal'} aria-label={section.title}>
       <div class="container">
         <div class="section-header">
           <h2 class="section-title">{section.title}</h2>
@@ -446,7 +447,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
        SECCIONES DINÁMICAS POR DEBAJO DEL CATÁLOGO (carrusel deslizable)
        ============================================================ -->
   {belowCatalogSections.map((section) => (
-    <section class="feed-section" data-dynamic-section={section.id} aria-label={section.title}>
+    <section class="feed-section" data-dynamic-section={section.id} data-section-speed={section.speed || 'normal'} aria-label={section.title}>
       <div class="container">
         <div class="section-header">
           <h2 class="section-title">{section.title}</h2>
@@ -518,73 +519,106 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       syncArrows();
 
       // =========================================================================
-      // AUTO-SCROLL SUTIL EN CARRUSEL (Pausa al interactuar con el mouse / hover)
+      // AUTO-SCROLL DE CARRUSELES (Desktop & Responsive, velocidad configurable)
       // =========================================================================
       const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       if (!prefersReducedMotion) {
-        let isPaused = false;
-        let isResetting = false;
-        let resumeTimer: ReturnType<typeof setTimeout> | null = null;
-        let isVisible = true;
-        let rafId: number | null = null;
+        const speedAttr = (root.getAttribute('data-section-speed') || 'normal').toLowerCase();
 
-        const scrollSpeed = 0.55; // Píxeles por frame (~33px/segundo), desplazamiento suave y sutil
-
-        pauseAutoScroll = () => {
-          isPaused = true;
-          if (resumeTimer) {
-            clearTimeout(resumeTimer);
-            resumeTimer = null;
-          }
-        };
-
-        resumeAutoScroll = (delay = 700) => {
-          if (resumeTimer) clearTimeout(resumeTimer);
-          resumeTimer = setTimeout(() => {
-            isPaused = false;
-          }, delay);
-        };
-
-        const tick = () => {
-          const maxScroll = track.scrollWidth - track.clientWidth;
-          if (isVisible && !isPaused && !isResetting && maxScroll > 8) {
-            if (track.scrollLeft >= maxScroll - 3) {
-              // Fin del carrusel: pausar y volver suavemente al inicio
-              isResetting = true;
-              setTimeout(() => {
-                track.scrollTo({ left: 0, behavior: 'smooth' });
-                setTimeout(() => {
-                  isResetting = false;
-                }, 1000);
-              }, 1400);
-            } else {
-              track.scrollLeft += scrollSpeed;
-            }
-          }
-          rafId = requestAnimationFrame(tick);
-        };
-
-        // Pausar completamente al pasar el ratón (mouseenter) o al interactuar
-        carouselContainer.addEventListener('mouseenter', pauseAutoScroll);
-        carouselContainer.addEventListener('mouseleave', () => resumeAutoScroll(600));
-        carouselContainer.addEventListener('touchstart', pauseAutoScroll, { passive: true });
-        carouselContainer.addEventListener('touchend', () => resumeAutoScroll(1800), { passive: true });
-        track.addEventListener('wheel', () => {
-          pauseAutoScroll();
-          resumeAutoScroll(2000);
-        }, { passive: true });
-
-        // Optimización: solo animar si el carrusel está dentro del viewport
-        if ('IntersectionObserver' in window) {
-          const observer = new IntersectionObserver((entries) => {
-            entries.forEach((entry) => {
-              isVisible = entry.isIntersecting;
-            });
-          }, { threshold: 0.05 });
-          observer.observe(carouselContainer);
+        let pixelsPerSecond = 36; // 'normal' por defecto (~36 px/s)
+        if (speedAttr === 'slow') pixelsPerSecond = 20; // 'slow': desplazamiento sutil y lento
+        else if (speedAttr === 'fast') pixelsPerSecond = 65; // 'fast': desplazamiento ágil
+        else if (speedAttr === 'none') pixelsPerSecond = 0; // 'none': desactivado (manual)
+        else if (!isNaN(Number(speedAttr)) && Number(speedAttr) >= 0) {
+          pixelsPerSecond = Number(speedAttr);
         }
 
-        rafId = requestAnimationFrame(tick);
+        if (pixelsPerSecond > 0) {
+          let isPaused = false;
+          let isResetting = false;
+          let resumeTimer: ReturnType<typeof setTimeout> | null = null;
+          let isVisible = true;
+          let rafId: number | null = null;
+          let lastTime: number | null = null;
+
+          pauseAutoScroll = () => {
+            isPaused = true;
+            track.style.scrollSnapType = ''; // Permite snap nativo durante la interacción
+            if (resumeTimer) {
+              clearTimeout(resumeTimer);
+              resumeTimer = null;
+            }
+          };
+
+          resumeAutoScroll = (delay = 700) => {
+            if (resumeTimer) clearTimeout(resumeTimer);
+            resumeTimer = setTimeout(() => {
+              isPaused = false;
+              lastTime = null;
+            }, delay);
+          };
+
+          const tick = (now: number) => {
+            if (!lastTime) lastTime = now;
+            const dt = Math.min((now - lastTime) / 1000, 0.1);
+            lastTime = now;
+
+            const maxScroll = track.scrollWidth - track.clientWidth;
+            if (isVisible && !isPaused && !isResetting && maxScroll > 8) {
+              track.style.scrollSnapType = 'none'; // Evita fricción del snap mientras se desplaza
+              if (track.scrollLeft >= maxScroll - 3) {
+                // Fin del carrusel: pausar y volver suavemente al inicio
+                isResetting = true;
+                track.style.scrollSnapType = '';
+                setTimeout(() => {
+                  track.scrollTo({ left: 0, behavior: 'smooth' });
+                  setTimeout(() => {
+                    isResetting = false;
+                    lastTime = null;
+                  }, 1000);
+                }, 1400);
+              } else {
+                track.scrollLeft += pixelsPerSecond * dt;
+              }
+            }
+            rafId = requestAnimationFrame(tick);
+          };
+
+          // Pausar al pasar el ratón (desktop) o al tocar la pantalla (móvil)
+          carouselContainer.addEventListener('mouseenter', pauseAutoScroll);
+          carouselContainer.addEventListener('mouseleave', () => resumeAutoScroll(600));
+          carouselContainer.addEventListener('touchstart', pauseAutoScroll, { passive: true });
+          carouselContainer.addEventListener('touchend', () => resumeAutoScroll(1800), { passive: true });
+          track.addEventListener('wheel', () => {
+            pauseAutoScroll();
+            resumeAutoScroll(2000);
+          }, { passive: true });
+
+          // Pausar si la pestaña pasa a segundo plano
+          document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+              pauseAutoScroll();
+            } else {
+              lastTime = null;
+              resumeAutoScroll(300);
+            }
+          });
+
+          // Optimización: solo animar si el carrusel está dentro del viewport visible
+          if ('IntersectionObserver' in window) {
+            const observer = new IntersectionObserver((entries) => {
+              entries.forEach((entry) => {
+                isVisible = entry.isIntersecting;
+                if (!isVisible) {
+                  lastTime = null;
+                }
+              });
+            }, { threshold: 0.05 });
+            observer.observe(carouselContainer);
+          }
+
+          rafId = requestAnimationFrame(tick);
+        }
       }
     });
   };
