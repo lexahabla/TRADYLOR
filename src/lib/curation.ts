@@ -16,7 +16,7 @@ import {
   writeProductsToFile,
   type Product,
 } from './productStore';
-import { addDeletedId } from './deletedProducts';
+import { addDeletedId, clearDeletedIds } from './deletedProducts';
 import { getProductNetwork } from './productNetwork';
 
 // ─── Parámetros de tracking/afiliación que se ignoran al comparar URLs ───────
@@ -354,17 +354,22 @@ export function bulkDeleteProducts(ids: string[]): { deleted: string[]; missing:
 }
 
 /**
- * Vacía completamente el catálogo (products.json) y deja tombstones de todos los IDs
- * para que no reaparecen en imports futuros. Devuelve el número de productos eliminados.
+ * Vacía completamente el catálogo (products.json) para resincronizar desde
+ * cero (uso previsto del botón «Vaciar Catálogo»). A diferencia del borrado
+ * individual/masivo (`bulkDeleteProducts`), NO deja tombstones de los ids
+ * vaciados —y limpia los que ya hubiera— porque dejarlos bloqueados
+ * impediría que el siguiente «Construir Catálogo» recuperase justo esos
+ * productos, contradiciendo el propio "resincronizar desde cero". Los ids
+ * integrados (`BUILTIN_DELETED`) se conservan siempre. Devuelve el número de
+ * productos eliminados.
  */
 export function deleteAllProducts(): { deletedCount: number } {
   const products = readProductsFromFile();
   const deletedCount = products.length;
   if (deletedCount > 0) {
-    const allIds = products.map((p) => p.id);
     writeProductsToFile([]);
-    for (const id of allIds) addDeletedId(id);
   }
+  clearDeletedIds();
   return { deletedCount };
 }
 

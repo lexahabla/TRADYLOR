@@ -4485,8 +4485,11 @@ function renderTableRows(products, resetPage = true) {
       if (btnSpinner) btnSpinner.hidden = false;
       if (btnText) btnText.textContent = dryRun ? 'Simulando…' : 'Construyendo…';
 
-      showAlert('loading', dryRun ? 'Simulando construcción de catálogo…' : 'Construyendo catálogo multi-comerciante…',
-        'Consultando APIs de todas las redes conectadas, normalizando, deduplicando cross-merchant, autoclasificando y detectando ofertas estrella. Esto puede tardar 30-120 segundos.');
+      // Feedback en el cuadro de ESTA sección (aliCatalogStatus, junto al botón),
+      // no en el de «Extracción & Alta» (showAlert queda arriba del todo, fuera
+      // de la vista: el aviso se pintaba pero nadie lo veía sin subir la página).
+      showAliStatus('loading', dryRun ? 'Simulando construcción de catálogo…' : 'Construyendo catálogo multi-comerciante…',
+        'Consultando APIs de todas las redes conectadas, normalizando, deduplicando cross-merchant, autoclasificando y detectando ofertas estrella. Esto puede tardar bastante más de 30-120 segundos si hay enriquecimiento con IA de por medio.');
 
       try {
         const apiToken = window.TRADYLOR_API_TOKEN;
@@ -4515,13 +4518,13 @@ function renderTableRows(products, resetPage = true) {
               : `Nuevos: ${data.upserted} · Actualizados: ${data.updated}`,
             `Duración: ${Math.round(data.durationMs / 1000)}s`,
           ];
-          showAlert('success', dryRun ? '✅ Simulación completada' : '✅ Catálogo construido con éxito', lines.join('\n'));
+          showAliStatus('success', dryRun ? '✅ Simulación completada' : '✅ Catálogo construido con éxito', lines.join(' · '));
         } else {
-          showAlert('error', dryRun ? 'Error en simulación' : 'Error construyendo catálogo', data.errors?.join('\n') || 'Error desconocido');
+          showAliStatus('error', dryRun ? 'Error en simulación' : 'Error construyendo catálogo', data.errors?.join('\n') || 'Error desconocido');
         }
       } catch (err) {
         console.error(err);
-        showAlert('error', 'Error de red', 'No se pudo contactar con /api/v1/products/build-catalog');
+        showAliStatus('error', 'Error de red', 'No se pudo contactar con /api/v1/products/build-catalog');
       } finally {
         if (btn) {
           btn.disabled = false;
