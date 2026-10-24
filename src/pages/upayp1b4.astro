@@ -8718,9 +8718,9 @@ function renderTableRows(products, resetPage = true) {
   .ali-filters .filter-field { min-width: 90px; flex: 0 1 auto; }
   .ali-filters .filter-field.ali-f-search { flex: 1 1 180px; min-width: 150px; }
   .ali-filters .btn-secondary { flex-shrink: 0; padding: .5rem .8rem; font-size: .72rem; }
-  .ali-sort-group { display: flex; gap: .3rem; }
-  .ali-sort-group select { flex: 1; min-width: 130px; }
-  .ali-sort-dir { min-width: 34px; font-size: .9rem; font-weight: 800; line-height: 1; }
+  .ali-sort-group { display: flex; gap: .3rem; align-items: center; }
+  .ali-sort-group select { flex: 0 0 auto; min-width: 120px; max-width: 170px; }
+  .ali-sort-dir { flex-shrink: 0; min-width: 34px; font-size: .9rem; font-weight: 800; line-height: 1; }
 
   /* ── Catálogo AliExpress: barra de filtros en 3 capas ─────────────────
      (clases nuevas; .ali-filters / .ali-filters-row / .ali-sort-group /
@@ -8769,6 +8769,8 @@ function renderTableRows(products, resetPage = true) {
   /* Columna fija (minmax(0,1fr)): con la columna `auto` el grid se dimensionaba
      por el max-content de los inputs y el par Mín/Máx se salía del campo
      (404px dentro de 156px) =&gt; se solapaba con Descuento y con el botón. */
+  .prod-filters :global(.filter-field.prod-range-field[data-range-field="rating"]) { flex: 0 1 105px; min-width: 95px; }
+  .prod-filters :global(.filter-field.prod-range-field[data-range-field="rating"] select) { max-width: 100px; width: auto; }
   .prod-filters :global(.filter-field.prod-range-field) { display: grid; grid-template-columns: minmax(0, 1fr); gap: .3rem; flex: 0 1 156px; min-width: 138px; }
   /* Precio lleva dos casillas: necesita algo más de ancho para que no se
      compriman. */
@@ -8842,7 +8844,7 @@ function renderTableRows(products, resetPage = true) {
   /* Barra de filtros del Catálogo de Productos Registrados (misma estética) */
   .prod-filters { margin-top: 0; margin-bottom: .8rem; }
   .prod-filters .filter-field select { min-width: 180px; width: auto; max-width: 100%; }
-  .prod-filters .ali-sort-group select { min-width: 150px; width: auto; max-width: 100%; }
+  .prod-filters .ali-sort-group select { min-width: 120px; width: auto; max-width: 170px; }
   :global(.btn-danger-ghost.btn-sm) { padding: .3rem .55rem; font-size: .68rem; gap: .25rem; }
   /* Barra de selección masiva */
   .ali-selection { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; margin-bottom: .6rem; padding: .5rem .7rem; color: #7dd3fc; background: rgba(56, 189, 248, .08); border: 1px solid rgba(56, 189, 248, .3); border-radius: 10px; font-size: .74rem; font-weight: 700; }
