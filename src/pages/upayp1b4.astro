@@ -108,28 +108,27 @@ const initialTotalProducts = initialProducts.length;
 const initialTotalPages = Math.ceil(initialTotalProducts / PRODUCTS_PER_PAGE);
 // Página actual en el render inicial del servidor (la tabla arranca en la 1)
 const pagerCurrentPage = 1;
-const pagerMaxVisible = 5;
-// Calcula qué páginas pintar (igual que updateControls del cliente): primeras,
-// centradas en la página actual, gaps «…» y última. Oculta las páginas centrales.
+// Calcula qué páginas pintar (igual que updateControls del cliente): hasta 7 consecutivas;
+// si hay más de 7: primera (1), anterior, actual, posterior, última y (...) en los huecos.
 const pagerPages = (totalPages, currentPage) => {
   if (totalPages <= 1) return [];
+  if (totalPages <= 7) {
+    const pages = [];
+    for (let i = 1; i <= totalPages; i++) {
+      pages.push({ num: i, gap: false, current: i === currentPage });
+    }
+    return pages;
+  }
+  const wanted = [...new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1])]
+    .filter((n) => n >= 1 && n <= totalPages)
+    .sort((a, b) => a - b);
   const pages = [];
-  let startPage = Math.max(1, currentPage - Math.floor(pagerMaxVisible / 2));
-  let endPage = Math.min(totalPages, startPage + pagerMaxVisible - 1);
-  if (endPage - startPage + 1 < pagerMaxVisible) {
-    startPage = Math.max(1, endPage - pagerMaxVisible + 1);
-  }
-  if (startPage > 1) {
-    pages.push({ num: 1, gap: false });
-    if (startPage > 2) pages.push({ num: null, gap: true });
-  }
-  for (let i = startPage; i <= endPage; i++) {
-    pages.push({ num: i, gap: false, current: i === currentPage });
-  }
-  if (endPage < totalPages) {
-    if (endPage < totalPages - 1) pages.push({ num: null, gap: true });
-    pages.push({ num: totalPages, gap: false });
-  }
+  wanted.forEach((n, index) => {
+    if (index > 0 && n - wanted[index - 1] > 1) {
+      pages.push({ num: null, gap: true });
+    }
+    pages.push({ num: n, gap: false, current: n === currentPage });
+  });
   return pages;
 };
 // Aplicar alternancia y diversidad en la pintura inicial de SSR
@@ -710,7 +709,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </label>
         <div class="ac-page-nav" id="paginationNavTop" role="group" aria-label="Navegación de páginas">
           <button type="button" id="paginationPrevTop" class="ac-page-btn" disabled aria-label="Página anterior">‹</button>
-          <div id="paginationPagesTop" class="ac-page-nums" role="group" aria-label="Números de página" set:html={pagerPages(initialTotalPages, pagerCurrentPage).map(p => p.gap ? '<span class="ac-page-gap" aria-hidden="true">…</span>' : `<button type="button" class="ac-page-btn${p.current ? ' is-current' : ''}" data-ac-page="${p.num}" aria-label="Página ${p.num}"${p.current ? ' aria-current="page"' : ''}>${p.num}</button>`).join('')}></div>
+          <div id="paginationPagesTop" class="ac-page-nums" role="group" aria-label="Números de página" set:html={pagerPages(initialTotalPages, pagerCurrentPage).map(p => p.gap ? '<span class="ac-page-gap" aria-hidden="true">...</span>' : `<button type="button" class="ac-page-btn${p.current ? ' is-current' : ''}" data-ac-page="${p.num}" aria-label="Página ${p.num}"${p.current ? ' aria-current="page"' : ''}>${p.num}</button>`).join('')}></div>
           <button type="button" id="paginationNextTop" class="ac-page-btn" aria-label="Página siguiente">›</button>
           <button type="button" id="paginationEndTop" class="ac-page-btn" data-ac-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
         </div>
@@ -771,7 +770,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </label>
         <div class="ac-page-nav" id="paginationNav" role="group" aria-label="Navegación de páginas">
           <button type="button" id="paginationPrev" class="ac-page-btn" disabled aria-label="Página anterior">‹</button>
-          <div id="paginationPages" class="ac-page-nums" role="group" aria-label="Números de página" set:html={pagerPages(initialTotalPages, pagerCurrentPage).map(p => p.gap ? '<span class="ac-page-gap" aria-hidden="true">…</span>' : `<button type="button" class="ac-page-btn${p.current ? ' is-current' : ''}" data-ac-page="${p.num}" aria-label="Página ${p.num}"${p.current ? ' aria-current="page"' : ''}>${p.num}</button>`).join('')}></div>
+          <div id="paginationPages" class="ac-page-nums" role="group" aria-label="Números de página" set:html={pagerPages(initialTotalPages, pagerCurrentPage).map(p => p.gap ? '<span class="ac-page-gap" aria-hidden="true">...</span>' : `<button type="button" class="ac-page-btn${p.current ? ' is-current' : ''}" data-ac-page="${p.num}" aria-label="Página ${p.num}"${p.current ? ' aria-current="page"' : ''}>${p.num}</button>`).join('')}></div>
           <button type="button" id="paginationNext" class="ac-page-btn" aria-label="Página siguiente">›</button>
           <button type="button" id="paginationEnd" class="ac-page-btn" data-ac-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
         </div>
@@ -3633,6 +3632,8 @@ function renderTableRows(products, resetPage = true) {
       const paginationPagesTop = document.getElementById('paginationPagesTop');
       const paginationPrevTop = document.getElementById('paginationPrevTop');
       const paginationNextTop = document.getElementById('paginationNextTop');
+      const paginationEndTop = document.getElementById('paginationEndTop');
+      const paginationEnd = document.getElementById('paginationEnd');
 
       const totalProducts = filteredProducts.length;
       const totalPages = Math.ceil(totalProducts / PRODUCTS_PER_PAGE);
@@ -3648,37 +3649,30 @@ function renderTableRows(products, resetPage = true) {
       if (paginationElTop) paginationElTop.hidden = false;
 
       // Función para actualizar un conjunto de controles
-      const updateControls = (pagesEl, prevEl, nextEl, totalElId) => {
+      const updateControls = (pagesEl, prevEl, nextEl, totalElId, endEl) => {
         if (!pagesEl || !prevEl || !nextEl) return;
 
         prevEl.disabled = currentPage <= 1;
         nextEl.disabled = currentPage >= totalPages;
+        if (endEl) endEl.disabled = currentPage >= totalPages;
 
         let pagesHtml = '';
-        const maxVisiblePages = 5;
-        let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-        let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
 
-        if (endPage - startPage + 1 < maxVisiblePages) {
-          startPage = Math.max(1, endPage - maxVisiblePages + 1);
-        }
-
-        if (startPage > 1) {
-          pagesHtml += `<button type="button" class="ac-page-btn" data-ac-page="1" aria-label="Página 1">1</button>`;
-          if (startPage > 2) {
-            pagesHtml += `<span class="ac-page-gap" aria-hidden="true">…</span>`;
+        if (totalPages <= 7) {
+          for (let i = 1; i <= totalPages; i++) {
+            pagesHtml += `<button type="button" class="ac-page-btn${i === currentPage ? ' is-current' : ''}" data-ac-page="${i}" aria-label="Página ${i}"${i === currentPage ? ' aria-current="page"' : ''}>${i}</button>`;
           }
-        }
+        } else {
+          const wanted = [...new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1])]
+            .filter((n) => n >= 1 && n <= totalPages)
+            .sort((a, b) => a - b);
 
-        for (let i = startPage; i <= endPage; i++) {
-          pagesHtml += `<button type="button" class="ac-page-btn${i === currentPage ? ' is-current' : ''}" data-ac-page="${i}" aria-label="Página ${i}"${i === currentPage ? ' aria-current="page"' : ''}>${i}</button>`;
-        }
-
-        if (endPage < totalPages) {
-          if (endPage < totalPages - 1) {
-            pagesHtml += `<span class="ac-page-gap" aria-hidden="true">…</span>`;
-          }
-          pagesHtml += `<button type="button" class="ac-page-btn" data-ac-page="${totalPages}" aria-label="Página ${totalPages}">${totalPages}</button>`;
+          wanted.forEach((n, index) => {
+            if (index > 0 && n - wanted[index - 1] > 1) {
+              pagesHtml += '<span class="ac-page-gap" aria-hidden="true">...</span>';
+            }
+            pagesHtml += `<button type="button" class="ac-page-btn${n === currentPage ? ' is-current' : ''}" data-ac-page="${n}" aria-label="Página ${n}"${n === currentPage ? ' aria-current="page"' : ''}>${n}</button>`;
+          });
         }
 
         pagesEl.innerHTML = pagesHtml;
@@ -3695,14 +3689,18 @@ function renderTableRows(products, resetPage = true) {
         // Actualizar texto informativo (formato unificado: "Mostrando X–Y de Z")
         const totalEl = document.getElementById(totalElId);
         if (totalEl) {
-          const startShown = (currentPage - 1) * PRODUCTS_PER_PAGE + 1;
-          const endShown = Math.min(startShown + PRODUCTS_PER_PAGE - 1, totalProducts);
-          totalEl.textContent = `Mostrando ${startShown}–${endShown} de ${totalProducts}`;
+          if (totalProducts === 0) {
+            totalEl.textContent = 'Mostrando 0–0 de 0';
+          } else {
+            const startShown = (currentPage - 1) * PRODUCTS_PER_PAGE + 1;
+            const endShown = Math.min(startShown + PRODUCTS_PER_PAGE - 1, totalProducts);
+            totalEl.textContent = `Mostrando ${startShown}–${endShown} de ${totalProducts}`;
+          }
         }
       };
 
-      updateControls(paginationPages, paginationPrev, paginationNext, 'paginationTotal');
-      updateControls(paginationPagesTop, paginationPrevTop, paginationNextTop, 'paginationTotalTop');
+      updateControls(paginationPages, paginationPrev, paginationNext, 'paginationTotal', paginationEnd);
+      updateControls(paginationPagesTop, paginationPrevTop, paginationNextTop, 'paginationTotalTop', paginationEndTop);
     }
 
     function goToPage(page) {
@@ -9156,7 +9154,7 @@ function renderTableRows(products, resetPage = true) {
     white-space: nowrap;
   }
   :global(.ac-per-page select) {
-    padding: .1rem .25rem;
+    padding: 0;
     background: #0b1220;
     border: 1px solid rgba(148, 163, 184, .32);
     border-radius: 6px;
