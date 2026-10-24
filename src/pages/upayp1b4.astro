@@ -702,16 +702,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
 
     <section data-admin-view="affiliates" class:list={['admin-card', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'affiliates' }]}>
-      <div class="list-header-row">
-        <div>
-          <h2 class="card-title">2. Catálogo de Afiliados</h2>
-          <p class="card-desc">Tabla amplia de todos los productos sincronizados con las redes conectadas (AliExpress, eBay…), guardados en el servidor. Usa «Sincronizar» para refrescarlo contra las APIs; se avisa si la caché supera las 6 horas.</p>
-        </div>
-        <button type="button" id="btnAliSyncHeader" class="btn-primary btn-sm" style="flex-shrink: 0;" title="Sincroniza el catálogo contra las APIs de las redes conectadas (AliExpress, eBay…)">
-          <span class="btn-text">🔄 Sincronizar</span>
-          <div class="btn-spinner" hidden></div>
-        </button>
-      </div>
 
       <div class="affiliates-layout">
         <!-- Columna 1: Gestor de credenciales multi-red -->
@@ -730,6 +720,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
           <div id="networkList" class="network-list">
             <div class="loading-panel">Cargando redes...</div>
+          </div>
+
+          <div class="list-header-row">
+            <div>
+              <h2 class="card-title">2. Catálogo de Afiliados</h2>
+              <p class="card-desc">Tabla amplia de todos los productos sincronizados con las redes conectadas (AliExpress, eBay…), guardados en el servidor. Usa «Sincronizar» para refrescarlo contra las APIs; se avisa si la caché supera las 6 horas.</p>
+            </div>
           </div>
           <div id="searchStatus" class="status-alert" hidden>
             <div class="alert-icon">ℹ️</div>
@@ -5303,7 +5300,6 @@ function renderTableRows(products, resetPage = true) {
     const aliCatalogStatusTitle = document.getElementById('aliCatalogStatusTitle');
     const aliCatalogStatusText = document.getElementById('aliCatalogStatusText');
     const btnAliSync = document.getElementById('btnAliSync');
-    const btnAliSyncHeader = document.getElementById('btnAliSyncHeader');
     const btnAliMore = document.getElementById('btnAliMore');
     const aliFilters = document.getElementById('affiliateFilters') || document.getElementById('aliFilters');
     const aliSelectionBar = document.getElementById('aliSelectionBar');
@@ -5900,14 +5896,9 @@ function renderTableRows(products, resetPage = true) {
       aliSyncing = true;
       const spinner = btnAliSync ? btnAliSync.querySelector('.btn-spinner') : null;
       const text = btnAliSync ? btnAliSync.querySelector('.btn-text') : null;
-      const spinnerHeader = btnAliSyncHeader ? btnAliSyncHeader.querySelector('.btn-spinner') : null;
-      const textHeader = btnAliSyncHeader ? btnAliSyncHeader.querySelector('.btn-text') : null;
       if (btnAliSync) btnAliSync.disabled = true;
-      if (btnAliSyncHeader) btnAliSyncHeader.disabled = true;
       if (spinner) spinner.hidden = false;
-      if (spinnerHeader) spinnerHeader.hidden = false;
       if (text) text.textContent = 'Sincronizando...';
-      if (textHeader) textHeader.textContent = 'Sincronizando...';
       try {
         // Auto-validación solo si NO se ha seleccionado una red específica (comportamiento legacy)
         // Si se elige una red concreta, solo validamos esa red.
@@ -5963,16 +5954,12 @@ function renderTableRows(products, resetPage = true) {
       } finally {
         aliSyncing = false;
         if (btnAliSync) btnAliSync.disabled = false;
-        if (btnAliSyncHeader) btnAliSyncHeader.disabled = false;
         if (spinner) spinner.hidden = true;
-        if (spinnerHeader) spinnerHeader.hidden = true;
         if (text) text.textContent = 'Sincronizar';
-        if (textHeader) textHeader.textContent = '🔄 Sincronizar';
       }
     }
 
     btnAliSync?.addEventListener('click', () => syncAliCatalogUI(aliSyncNetwork?.value || undefined));
-    btnAliSyncHeader?.addEventListener('click', () => syncAliCatalogUI(aliSyncNetwork?.value || undefined));
 
 /** «Cargar más»: pide al servidor las páginas 2-3 de cada keyword y
      *  amplía la caché (POST { append: true }); los rangos se recalculan. */
@@ -5981,8 +5968,7 @@ function renderTableRows(products, resetPage = true) {
       aliSyncing = true;
       if (btnAliMore) btnAliMore.disabled = true;
       if (btnAliSync) btnAliSync.disabled = true;
-      if (btnAliSyncHeader) btnAliSyncHeader.disabled = true;
-        showAliStatus('loading', 'Ampliando catálogo', 'Descargando más páginas de las redes conectadas (puede tardar)...');
+      showAliStatus('loading', 'Ampliando catálogo', 'Descargando más páginas de las redes conectadas (puede tardar)...');
         try {
           const targetNetwork = aliSyncNetwork?.value || '';
           const res = await fetch('/api/admin/catalog', {
@@ -6005,7 +5991,6 @@ function renderTableRows(products, resetPage = true) {
         aliSyncing = false;
         if (btnAliMore) btnAliMore.disabled = false;
         if (btnAliSync) btnAliSync.disabled = false;
-        if (btnAliSyncHeader) btnAliSyncHeader.disabled = false;
       }
     });
 
