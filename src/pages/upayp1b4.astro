@@ -697,12 +697,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       </div>
 
 
-      <!-- Paginación superior de la tabla de productos (estilo ac-pager unificado) -->
-      <div id="productsPaginationTop" class="ac-pager" {initialTotalPages <= 1 ? 'hidden' : ''}>
-        <span id="paginationTotalTop" class="ac-page-info">{initialTotalProducts} producto{initialTotalProducts !== 1 ? 's' : ''} (página 1 de {initialTotalPages})</span>
+      <div id="productsCatalogHost" class="products-table-responsive ac-table-host">
+        <!-- Paginación superior de la tabla de productos (estilo ac-pager unificado) -->
+        <div id="productsPaginationTop" class="ac-pager" {initialTotalPages <= 1 ? 'hidden' : ''}>
+        <span id="paginationTotalTop" class="ac-page-info">Mostrando 1–{Math.min(initialPageProducts.length, initialTotalProducts)} de {initialTotalProducts}</span>
         <label class="ac-per-page" title="Elige cuántos productos quieres ver por página">
           Por página
-          <select data-prod-per-page aria-label="Productos por página">
+          <select data-ac-per-page aria-label="Productos por página">
             <option value="25">25</option>
             <option value="50" selected>50</option>
             <option value="75">75</option>
@@ -714,15 +715,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           {pagerPages(initialTotalPages, pagerCurrentPage).map((p) => p.gap ? (
             <span class="ac-page-gap" aria-hidden="true">…</span>
           ) : (
-            <button type="button" class={`ac-page-btn${p.current ? ' is-current' : ''}`} data-page={p.num} aria-label={`Página ${p.num}`} aria-current={p.current ? 'page' : undefined}>{p.num}</button>
+            <button type="button" class={`ac-page-btn${p.current ? ' is-current' : ''}`} data-ac-page={p.num} aria-label={`Página ${p.num}`} aria-current={p.current ? 'page' : undefined}>{p.num}</button>
           ))}
         </div>
           <button type="button" id="paginationNextTop" class="ac-page-btn" aria-label="Página siguiente">›</button>
-          <button type="button" id="paginationEndTop" class="ac-page-btn" data-prod-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
+          <button type="button" id="paginationEndTop" class="ac-page-btn" data-ac-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
         </div>
       </div>
 
-      <div class="products-table-responsive">
+      <div class="aff-table-wrap">
         <table class="products-table" id="productsTable">
             <thead>
               <tr>
@@ -849,10 +850,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
       <!-- Paginación del Catálogo de Productos (estilo ac-pager unificado) -->
       <div id="productsPagination" class="ac-pager" {initialTotalPages <= 1 ? 'hidden' : ''}>
-        <span id="paginationTotal" class="ac-page-info">{initialTotalProducts} producto{initialTotalProducts !== 1 ? 's' : ''} (página 1 de {initialTotalPages})</span>
+        <span id="paginationTotal" class="ac-page-info">Mostrando 1–{Math.min(initialPageProducts.length, initialTotalProducts)} de {initialTotalProducts}</span>
         <label class="ac-per-page" title="Elige cuántos productos quieres ver por página">
           Por página
-          <select data-prod-per-page aria-label="Productos por página">
+          <select data-ac-per-page aria-label="Productos por página">
             <option value="25">25</option>
             <option value="50" selected>50</option>
             <option value="75">75</option>
@@ -864,13 +865,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           {pagerPages(initialTotalPages, pagerCurrentPage).map((p) => p.gap ? (
             <span class="ac-page-gap" aria-hidden="true">…</span>
           ) : (
-            <button type="button" class={`ac-page-btn${p.current ? ' is-current' : ''}`} data-page={p.num} aria-label={`Página ${p.num}`} aria-current={p.current ? 'page' : undefined}>{p.num}</button>
+            <button type="button" class={`ac-page-btn${p.current ? ' is-current' : ''}`} data-ac-page={p.num} aria-label={`Página ${p.num}`} aria-current={p.current ? 'page' : undefined}>{p.num}</button>
           ))}
         </div>
           <button type="button" id="paginationNext" class="ac-page-btn" aria-label="Página siguiente">›</button>
-          <button type="button" id="paginationEnd" class="ac-page-btn" data-prod-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
+          <button type="button" id="paginationEnd" class="ac-page-btn" data-ac-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
         </div>
       </div>
+    </div>
 
       <div class="sections-admin">
         <div class="list-header-row">
@@ -3123,9 +3125,12 @@ function renderTableRows(products, resetPage = true) {
 
       // Actualizar info de total
       const paginationTotal = document.getElementById('paginationTotal');
-      if (paginationTotal) {
-        paginationTotal.textContent = `${totalProducts} producto${totalProducts !== 1 ? 's' : ''} (página ${currentPage} de ${totalPages || 1})`;
-      }
+      const paginationTotalTop = document.getElementById('paginationTotalTop');
+      const startShown = startIndex + 1;
+      const endShown = endIndex;
+      const infoText = `Mostrando ${startShown}–${endShown} de ${totalProducts}`;
+      if (paginationTotal) paginationTotal.textContent = infoText;
+      if (paginationTotalTop) paginationTotalTop.textContent = infoText;
 
       if (pageProducts.length === 0) {
         productsTableBody.innerHTML = `
@@ -3765,38 +3770,40 @@ function renderTableRows(products, resetPage = true) {
         }
 
         if (startPage > 1) {
-          pagesHtml += `<button type="button" class="ac-page-btn" data-page="1" aria-label="Página 1">1</button>`;
+          pagesHtml += `<button type="button" class="ac-page-btn" data-ac-page="1" aria-label="Página 1">1</button>`;
           if (startPage > 2) {
             pagesHtml += `<span class="ac-page-gap" aria-hidden="true">…</span>`;
           }
         }
 
         for (let i = startPage; i <= endPage; i++) {
-          pagesHtml += `<button type="button" class="ac-page-btn${i === currentPage ? ' is-current' : ''}" data-page="${i}" aria-label="Página ${i}"${i === currentPage ? ' aria-current="page"' : ''}>${i}</button>`;
+          pagesHtml += `<button type="button" class="ac-page-btn${i === currentPage ? ' is-current' : ''}" data-ac-page="${i}" aria-label="Página ${i}"${i === currentPage ? ' aria-current="page"' : ''}>${i}</button>`;
         }
 
         if (endPage < totalPages) {
           if (endPage < totalPages - 1) {
             pagesHtml += `<span class="ac-page-gap" aria-hidden="true">…</span>`;
           }
-          pagesHtml += `<button type="button" class="ac-page-btn" data-page="${totalPages}" aria-label="Página ${totalPages}">${totalPages}</button>`;
+          pagesHtml += `<button type="button" class="ac-page-btn" data-ac-page="${totalPages}" aria-label="Página ${totalPages}">${totalPages}</button>`;
         }
 
         pagesEl.innerHTML = pagesHtml;
 
         pagesEl.querySelectorAll('.ac-page-btn').forEach((btn) => {
           btn.addEventListener('click', () => {
-            const page = parseInt(btn.getAttribute('data-page'), 10);
+            const page = parseInt(btn.getAttribute('data-ac-page'), 10);
             if (!Number.isNaN(page) && page !== currentPage) {
               goToPage(page);
             }
           });
         });
 
-        // Actualizar texto informativo
+        // Actualizar texto informativo (formato unificado: "Mostrando X–Y de Z")
         const totalEl = document.getElementById(totalElId);
         if (totalEl) {
-          totalEl.textContent = `${totalProducts} producto${totalProducts !== 1 ? 's' : ''} (página ${currentPage} de ${totalPages})`;
+          const startShown = (currentPage - 1) * PRODUCTS_PER_PAGE + 1;
+          const endShown = Math.min(startShown + PRODUCTS_PER_PAGE - 1, totalProducts);
+          totalEl.textContent = `Mostrando ${startShown}–${endShown} de ${totalProducts}`;
         }
       };
 
@@ -3830,20 +3837,20 @@ function renderTableRows(products, resetPage = true) {
 
     // Select «Por página» (25 / 50 / 75) de ambas barras de paginación:
     // cambiarlo repinta la tabla con el nuevo tamaño y sincroniza los selects.
-    document.querySelectorAll('[data-prod-per-page]').forEach((sel) => {
+    document.querySelectorAll('[data-ac-per-page]').forEach((sel) => {
       sel.value = String(PRODUCTS_PER_PAGE);
       sel.addEventListener('change', () => {
         const value = Number(sel.value);
         if (![25, 50, 75].includes(value)) return;
         PRODUCTS_PER_PAGE = value;
-        document.querySelectorAll('[data-prod-per-page]').forEach((other) => { other.value = String(value); });
+        document.querySelectorAll('[data-ac-per-page]').forEach((other) => { other.value = String(value); });
         currentPage = 1;
         prodFilterApply();
       });
     });
 
     // Botón «Final»: salto directo a la última página de la tabla.
-    document.querySelectorAll('[data-prod-last]').forEach((btn) => {
+    document.querySelectorAll('[data-ac-last]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
         goToPage(totalPages);
@@ -9200,8 +9207,8 @@ function renderTableRows(products, resetPage = true) {
   :global(.ac-page-btn:disabled) { opacity: .4; cursor: not-allowed; }
   :global(.ac-page-btn.is-current) { background: rgba(96, 165, 250, .2); border-color: #60a5fa; color: #bfdbfe; }
   :global(.ac-page-gap) { align-self: center; padding: 0 .2rem; }
-  :global(.ac-per-page) { display: inline-flex; align-items: center; gap: .4rem; min-width: 210px; font-size: .74rem; color: var(--color-text-dim); }
-  :global(.ac-per-page select) { padding: .12rem .28rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, .32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: .62rem; }
+  :global(.ac-per-page) { display: inline-flex; align-items: center; gap: .5rem; min-width: 260px; font-size: .76rem; color: var(--color-text-dim); }
+  :global(.ac-per-page select) { padding: .15rem .35rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, .32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: .7rem; min-width: 55px; max-width: 70px; }
   /* Select «Por página» de las barras de paginación de productos */
   .pagination-per-page { display: inline-flex; align-items: center; gap: .35rem; font-size: .76rem; color: var(--color-text-muted); }
   .pagination-per-page select { padding: .3rem .45rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-main); font: inherit; font-size: .76rem; }
