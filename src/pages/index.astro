@@ -51,12 +51,30 @@ const visibleProducts = allProducts.filter((p) => {
   return byCategory && matchesQuery(p);
 });
 
-// Ordenación del catálogo: ?sort=score (por defecto) | ventas | valoracion
+// Ordenación del catálogo: ?sort=score (por defecto) | ventas | valoracion | precio_desc | precio_asc
 const sortParam = (Astro.url.searchParams.get('sort') ?? 'score').toLowerCase().trim();
-const currentSort = ['score', 'ventas', 'valoracion'].includes(sortParam) ? sortParam : 'score';
+const normalizedSort = sortParam === 'precio-desc' ? 'precio_desc' : (sortParam === 'precio-asc' ? 'precio_asc' : (sortParam === 'precio' ? 'precio_desc' : sortParam));
+const validSorts = ['score', 'ventas', 'valoracion', 'precio_desc', 'precio_asc', 'descuento', 'nombre', 'categoria', 'comercio', 'default', 'publicados'];
+const currentSort = validSorts.includes(normalizedSort) ? normalizedSort : 'score';
 
-const pageHref = (page: number) =>
-  `/?${activeCategory ? `category=${encodeURIComponent(activeCategory.slug)}&` : ''}${queryTerm ? `q=${encodeURIComponent(queryParam)}&` : ''}${currentSort !== 'score' ? `sort=${encodeURIComponent(currentSort)}&` : ''}page=${page}#catalogo`;
+const sortHref = (sortKey: string) => {
+  const params = new URLSearchParams();
+  if (activeCategory) params.set('category', activeCategory.slug);
+  if (queryTerm) params.set('q', queryParam);
+  if (sortKey !== 'score') params.set('sort', sortKey);
+  const qStr = params.toString();
+  return `/${qStr ? `?${qStr}` : ''}#catalogo`;
+};
+
+const pageHref = (page: number) => {
+  const params = new URLSearchParams();
+  if (activeCategory) params.set('category', activeCategory.slug);
+  if (queryTerm) params.set('q', queryParam);
+  if (currentSort !== 'score') params.set('sort', currentSort);
+  if (page > 1) params.set('page', String(page));
+  const qStr = params.toString();
+  return `/${qStr ? `?${qStr}` : ''}#catalogo`;
+};
 
 // ─── Criterios de ordenación ───────────────────────────────────────────────
 // 1. Rentabilidad / Score de recomendación
@@ -92,12 +110,45 @@ const ratingOf = (p: typeof allProducts[0]) => {
   return r * 100000 + rc;
 };
 
+const priceOf = (p: typeof allProducts[0]) => Number(p.price) || 0;
+const discountPctOf = (p: typeof allProducts[0]) => {
+  const orig = Number(p.originalPrice) || 0;
+  const curr = Number(p.price) || 0;
+  if (orig <= 0 || curr <= 0 || orig <= curr) return 0;
+  return Math.round(((orig - curr) / orig) * 100);
+};
+
 const sorted = [...visibleProducts].sort((a, b) => {
   if (currentSort === 'ventas') {
     return salesOf(b) - salesOf(a);
   }
   if (currentSort === 'valoracion') {
     return ratingOf(b) - ratingOf(a);
+  }
+  if (currentSort === 'precio_desc') {
+    return priceOf(b) - priceOf(a);
+  }
+  if (currentSort === 'precio_asc') {
+    return priceOf(a) - priceOf(b);
+  }
+  if (currentSort === 'descuento') {
+    return discountPctOf(b) - discountPctOf(a);
+  }
+  if (currentSort === 'nombre') {
+    return String(a.title).localeCompare(String(b.title), 'es');
+  }
+  if (currentSort === 'categoria') {
+    return String(a.category || '').localeCompare(String(b.category || ''), 'es');
+  }
+  if (currentSort === 'comercio') {
+    return String(a.merchant || (a as any).network_label || '').localeCompare(String(b.merchant || (b as any).network_label || ''), 'es');
+  }
+  if (currentSort === 'publicados') {
+    const isPub = (p: typeof allProducts[0]) => (p.category_id || p.category) ? 1 : 0;
+    return (isPub(b) - isPub(a)) || (scoreOf(b) - scoreOf(a));
+  }
+  if (currentSort === 'default') {
+    return 0;
   }
   return scoreOf(b) - scoreOf(a);
 });
@@ -208,6 +259,53 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
               <a href={activeCategory ? `/?category=${encodeURIComponent(activeCategory.slug)}#catalogo` : '/#catalogo'}>Quitar filtro</a>
             </p>
           )}
+        </div>
+      </div>
+
+      <!-- Controles de ordenación rápida del catálogo -->
+      <div class="catalog-sort-bar" role="toolbar" aria-label="Ordenación rápida del catálogo">
+        <span class="catalog-sort-label">Ordenar:</span>
+        <div class="catalog-sort-pills">
+          <a
+            href={sortHref('precio_desc')}
+            class:list={['catalog-sort-pill', { 'is-active': currentSort === 'precio_desc' }]}
+            data-sort-btn="precio_desc"
+            title="Ordenar de mayor a menor precio"
+          >
+            ↓ Precio mayor a menor
+          </a>
+          <a
+            href={sortHref('precio_asc')}
+            class:list={['catalog-sort-pill', { 'is-active': currentSort === 'precio_asc' }]}
+            data-sort-btn="precio_asc"
+            title="Ordenar de menor a mayor precio"
+          >
+            ↑ Precio menor a mayor
+          </a>
+          <a
+            href={sortHref('valoracion')}
+            class:list={['catalog-sort-pill', { 'is-active': currentSort === 'valoracion' }]}
+            data-sort-btn="valoracion"
+            title="Ordenar por mejor valoración"
+          >
+            ★ Más valorados
+          </a>
+          <a
+            href={sortHref('ventas')}
+            class:list={['catalog-sort-pill', { 'is-active': currentSort === 'ventas' }]}
+            data-sort-btn="ventas"
+            title="Ordenar por volumen de ventas"
+          >
+            🔥 Más vendidos
+          </a>
+          <a
+            href={sortHref('score')}
+            class:list={['catalog-sort-pill', { 'is-active': currentSort === 'score' }]}
+            data-sort-btn="score"
+            title="Ordenar por recomendación algorítmica"
+          >
+            Recomendados
+          </a>
         </div>
       </div>
 
@@ -751,19 +849,14 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
 
 <script is:inline>
   (() => {
-    // El toolbar de ordenación (.catalog-toolbar) se trasladó al panel de
-    // administración (#productSelBar). El orden por URL (?sort=) sigue activo.
-
-    // Aplica la ordenación guardada desde el panel de administración
-    // (localStorage 'tradylor_public_sort') al catálogo público del frontend.
-    // Si el usuario eligió un orden en el panel y la URL no tiene ?sort=,
-    // se redirige añadiendo el parámetro para que el SSR renderice con ese orden.
+    // Sincronización del orden guardado desde el panel de administración
+    // (localStorage 'tradylor_public_sort') con el catálogo público del frontend.
     (function applySavedPublicSort() {
       try {
         const saved = localStorage.getItem('tradylor_public_sort');
         if (!saved) return;
         const url = new URL(window.location.href);
-        const allowed = ['score', 'ventas', 'valoracion', 'precio', 'nombre', 'categoria', 'comercio', 'descuento', 'default', 'publicados'];
+        const allowed = ['score', 'ventas', 'valoracion', 'precio', 'precio_desc', 'precio-desc', 'precio_asc', 'precio-asc', 'nombre', 'categoria', 'comercio', 'descuento', 'default', 'publicados'];
         if (!allowed.includes(saved)) return;
         if (url.searchParams.has('sort')) return;
         url.searchParams.set('sort', saved);
@@ -771,6 +864,16 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
         window.location.replace(url.toString());
       } catch (_) { /* localStorage no disponible o error silencioso */ }
     })();
+
+    // Al hacer clic en un control de ordenación rápida del frontend, persistir en localStorage
+    document.querySelectorAll('[data-sort-btn]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-sort-btn');
+        if (key) {
+          try { localStorage.setItem('tradylor_public_sort', key); } catch (_) {}
+        }
+      });
+    });
   })();
 </script>
 
@@ -957,6 +1060,60 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     justify-content: space-between;
     gap: 1.5rem;
     margin-bottom: 2.5rem;
+  }
+
+  .catalog-sort-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin: -1.25rem 0 2rem;
+    padding: 0.65rem 1rem;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    flex-wrap: wrap;
+    backdrop-filter: blur(8px);
+  }
+  .catalog-sort-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--color-text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+  .catalog-sort-pills {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    flex-wrap: wrap;
+  }
+  .catalog-sort-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.35rem 0.8rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(148, 163, 184, 0.2);
+    border-radius: 9999px;
+    text-decoration: none;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .catalog-sort-pill:hover {
+    color: #fff;
+    border-color: #60a5fa;
+    background: rgba(96, 165, 250, 0.12);
+  }
+  .catalog-sort-pill.is-active {
+    color: #93c5fd;
+    background: rgba(59, 130, 246, 0.22);
+    border-color: #3b82f6;
+    font-weight: 700;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
   }
 
   .catalog-header-bar .section-header {
