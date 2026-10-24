@@ -3955,34 +3955,5 @@ const headerCategoryPanelHtml = `
     </script>
   )}
 
-  {isBackend && (
-    <script is:inline>
-      // Seguridad del backend: al cerrar la pestaña/navegador se cierra la
-      // sesión del panel (beacon de logout). Se omite si la salida es una
-      // navegación interna (enlaces, forms de login/logout, bfcache) para no
-      // cortar la sesión por error.
-      (() => {
-        let internalNav = false;
-        document.addEventListener('click', (event) => {
-          const anchor = event.target && event.target.closest ? event.target.closest('a[href]') : null;
-          if (!anchor) return;
-          try {
-            const url = new URL(anchor.getAttribute('href') || '', location.href);
-            if (url.origin === location.origin) internalNav = true;
-          } catch { /* href no parseable */ }
-        }, true);
-        document.addEventListener('submit', () => { internalNav = true; }, true);
-        window.addEventListener('pagehide', (event) => {
-          if (event.persisted || internalNav) return;
-          try {
-            navigator.sendBeacon(
-              '/upayp1b4',
-              new Blob(['action=logout'], { type: 'application/x-www-form-urlencoded' })
-            );
-          } catch { /* beacon no disponible */ }
-        });
-      })();
-    </script>
-  )}
   </body>
 </html>

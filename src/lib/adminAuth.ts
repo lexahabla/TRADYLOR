@@ -4,12 +4,28 @@ import { findUserById, findValidCredentials, toPublicUser, type AdminUser, type 
 const SESSION_COOKIE_NAME = 'tradylor_admin_session';
 
 /**
- * Sesión multiusuario del backend. La cookie vale `userId.token` y el token es
- * sha256(id + passwordHash + fijo): al cambiar la contraseña se invalidan todas
- * las sesiones de esa cuenta (la propia petición de cambio recibe cookie nueva).
+ * Duración máxima de una sesión del panel desde que se inicia, pase lo que
+ * pase (tareas largas incluidas: Construir Catálogo, Pipeline, Enriquecer en
+ * lote...). Antes la sesión sólo caducaba cuando el navegador cerraba la
+ * pestaña (beacon de `pagehide`), pero ese evento también salta si la pestaña
+ * se queda en segundo plano, el móvil cambia de app o el SO la descarta por
+ * memoria — cortando la sesión A MITAD de una operación larga y dejando el
+ * panel con 401 en todo en cuanto se vuelve a mirar. Ahora caduca sólo por
+ * tiempo; cerrar sesión manualmente sigue funcionando igual.
  */
-function getSessionToken(user: AdminUser): string {
-  return createHash('sha256').update(`${user.id}:${user.passwordHash}:tradylor-admin-session`).digest('hex');
+const SESSION_TTL_SECONDS = 60 * 60 * 12; // 12 horas
+
+/**
+ * Sesión multiusuario del backend. La cookie vale `userId.issuedAt.token` y el
+ * token es sha256(id + passwordHash + issuedAt + fijo): al cambiar la
+ * contraseña se invalidan todas las sesiones de esa cuenta (la propia
+ * petición de cambio recibe cookie nueva). `issuedAt` viaja también en el
+ * hash para que no se pueda alargar una sesión cambiando sólo ese campo.
+ */
+function getSessionToken(user: AdminUser, issuedAt: number): string {
+  return createHash('sha256')
+    .update(`${user.id}:${user.passwordHash}:${issuedAt}:tradylor-admin-session`)
+    .digest('hex');
 }
 
 function getCookies(request: Request): Record<string, string> {
@@ -22,17 +38,18 @@ function safeEqual(a: string, b: string): boolean {
   return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
 }
 
-/** Usuario autenticado de la petición, o null. */
+/** Usuario autenticado de la petición, o null (también si la sesión caducó). */
 export function getSessionUser(request: Request): PublicUser | null {
   const raw = getCookies(request)[SESSION_COOKIE_NAME];
   if (!raw) return null;
-  const separator = raw.indexOf('.');
-  if (separator <= 0) return null;
-  const userId = raw.slice(0, separator);
-  const token = raw.slice(separator + 1);
+  const parts = raw.split('.');
+  if (parts.length !== 3) return null;
+  const [userId, issuedAtRaw, token] = parts;
+  const issuedAt = Number(issuedAtRaw);
+  if (!Number.isFinite(issuedAt) || Date.now() - issuedAt > SESSION_TTL_SECONDS * 1000) return null;
   const user = findUserById(userId);
   if (!user || !token) return null;
-  return safeEqual(token, getSessionToken(user)) ? toPublicUser(user) : null;
+  return safeEqual(token, getSessionToken(user, issuedAt)) ? toPublicUser(user) : null;
 }
 
 export function isAdminAuthenticated(request: Request): boolean {
@@ -50,9 +67,10 @@ export function areValidCredentials(username: string, password: string): boolean
 }
 
 export function createAdminSession(user: AdminUser): string {
-  // Cookie de sesión (sin Max-Age): el navegador la elimina al cerrarse.
-  // Además, el panel envía un beacon de logout al cerrar la pestaña.
-  return `${SESSION_COOKIE_NAME}=${user.id}.${getSessionToken(user)}; Path=/; HttpOnly; SameSite=Lax`;
+  const issuedAt = Date.now();
+  const token = getSessionToken(user, issuedAt);
+  // Max-Age en vez de cookie de sesión del navegador: ver SESSION_TTL_SECONDS.
+  return `${SESSION_COOKIE_NAME}=${user.id}.${issuedAt}.${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}`;
 }
 
 export function clearAdminSession(): string {
