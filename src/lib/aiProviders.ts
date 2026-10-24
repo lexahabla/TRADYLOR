@@ -69,7 +69,6 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
     envKey: 'NVIDIA_API_KEY',
     defaultModel: 'meta/llama-3.3-70b-instruct',
     freeModels: [
-      'meta/llama-3.1-8b-instruct',
       'meta/llama-3.3-70b-instruct',
       'mistralai/mistral-7b-instruct-v0.3',
       'mistralai/mistral-large-2-instruct',

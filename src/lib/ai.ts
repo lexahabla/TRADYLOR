@@ -22,6 +22,14 @@ import { storedKeyForEnv } from './aiKeysStore';
 export type TextProvider = 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter';
 export type ImageProvider = 'openai' | 'flux';
 
+/**
+ * Proveedores de texto con modelos gratuitos, en orden de preferencia para el
+ * fallback automático. Cuando un proveedor gratuito responde 410 Gone o 404
+ * Not Found (modelo obsoleto/desactivado), el sistema conmuta al siguiente
+ * de esta lista que tenga clave configurada.
+ */
+export const FREE_TEXT_PROVIDERS: TextProvider[] = ['groq', 'nvidia', 'openrouter'];
+
 export interface EnrichedPricing {
   /** Precio de oferta (el que ve el usuario como precio actual). */
   price: number;
@@ -219,41 +227,73 @@ export async function chatComplete(
   messages: ChatMessage[],
   opts: { provider?: TextProvider; model?: string; temperature?: number; timeoutMs?: number } = {}
 ): Promise<string> {
-  const provider = opts.provider ?? textProvider();
-  if (!hasTextCredentials(provider)) {
-    throw new Error(`Falta ${textKeyEnvName(provider)} (entorno o claves del panel) para conversar con ${provider}`);
+  const requested = opts.provider ?? textProvider();
+  if (!hasTextCredentials(requested)) {
+    throw new Error(`Falta ${textKeyEnvName(requested)} (entorno o claves del panel) para conversar con ${requested}`);
   }
-  if (provider === 'anthropic') {
-    const model = opts.model?.trim() || env('ANTHROPIC_MODEL') || 'claude-3-5-sonnet-latest';
-    const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
-    const turns = messages.filter((m) => m.role !== 'system');
-    const response = await fetchWithTimeout(
-      'https://api.anthropic.com/v1/messages',
-      {
-        method: 'POST',
-        headers: anthropicHeaders(),
-        body: JSON.stringify({
-          model,
-          max_tokens: 1500,
-          temperature: opts.temperature ?? 0.6,
-          ...(system ? { system } : {}),
-          messages: turns.map((m) => ({ role: m.role, content: m.content })),
-        }),
-      },
-      opts.timeoutMs ?? 90_000
-    );
-    if (!response.ok) {
-      throw new Error(`Anthropic respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
+
+  /** Intenta una llamada real a un proveedor; relanza si el error NO es 410/404. */
+  const tryProvider = async (provider: TextProvider, model: string | undefined): Promise<string> => {
+    if (!hasTextCredentials(provider)) {
+      throw new Error(`Falta ${textKeyEnvName(provider)} (entorno o claves del panel) para conversar con ${provider}`);
     }
-    const payload = await response.json();
-    return (payload?.content ?? []).map((block: any) => block?.text ?? '').join('');
+    if (provider === 'anthropic') {
+      const modelName = model?.trim() || env('ANTHROPIC_MODEL') || 'claude-3-5-sonnet-latest';
+      const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
+      const turns = messages.filter((m) => m.role !== 'system');
+      const response = await fetchWithTimeout(
+        'https://api.anthropic.com/v1/messages',
+        {
+          method: 'POST',
+          headers: anthropicHeaders(),
+          body: JSON.stringify({
+            model: modelName,
+            max_tokens: 1500,
+            temperature: opts.temperature ?? 0.6,
+            ...(system ? { system } : {}),
+            messages: turns.map((m) => ({ role: m.role, content: m.content })),
+          }),
+        },
+        opts.timeoutMs ?? 90_000
+      );
+      if (!response.ok) {
+        throw new Error(`Anthropic respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
+      }
+      const payload = await response.json();
+      return (payload?.content ?? []).map((block: any) => block?.text ?? '').join('');
+    }
+    return callOpenAiCompat(provider, {
+      messages,
+      temperature: opts.temperature ?? 0.6,
+      forcedModel: model?.trim() || undefined,
+      timeoutMs: opts.timeoutMs ?? 90_000,
+    });
+  };
+
+  /** Candidatos para fallback: el proveedor solicitado primero, luego los
+   *  gratuitos restantes que tengan clave, en orden de preferencia. */
+  const isFree = FREE_TEXT_PROVIDERS.includes(requested);
+  const candidates: TextProvider[] = isFree
+    ? [requested, ...FREE_TEXT_PROVIDERS.filter((p) => p !== requested)]
+    : [requested];
+
+  let lastError: unknown;
+  for (const provider of candidates) {
+    if (!hasTextCredentials(provider)) continue;
+    // Sólo se reenvía el modelo explícito al proveedor solicitado; los demás
+    // usan su modelo por defecto (los modelos son específicos de cada proveedor).
+    const modelToUse = provider === requested ? opts.model : undefined;
+    try {
+      return await tryProvider(provider, modelToUse);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      const isGoneOrNotFound = /respondió (410|404)\b/.test(msg);
+      if (!isGoneOrNotFound) throw error;
+      lastError = error;
+      // continuar con el siguiente candidato (fallback automático)
+    }
   }
-  return callOpenAiCompat(provider, {
-    messages,
-    temperature: opts.temperature ?? 0.6,
-    forcedModel: opts.model?.trim() || undefined,
-    timeoutMs: opts.timeoutMs ?? 90_000,
-  });
+  throw lastError;
 }
 
 export function hasImageCredentials(): boolean {
