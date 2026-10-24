@@ -27,6 +27,7 @@ opencode.json.bak
 
 # credenciales de redes de afiliación (panel admin)
 src/data/credentials.json
+src/data/ai-keys.json
 
 # usuarios y avatares del backend (se generan en el volumen, nunca en el repo)
 src/data/users.json

@@ -188,7 +188,7 @@ function hasCompletedSheet(product: PipelineProduct): boolean {
 export async function runStageCategorize(
   product: PipelineProduct,
   config: PipelineConfig,
-  options: { enrich?: boolean; provider?: 'openai' | 'anthropic' | 'groq'; model?: string } = {},
+  options: { enrich?: boolean; provider?: 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter'; model?: string } = {},
 ): Promise<StageResult> {
   const haystack = buildHaystack(product);
   const { category: root, categoryId, subcategoryId } = resolveCategories(product, haystack, config);

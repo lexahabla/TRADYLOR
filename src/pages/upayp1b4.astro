@@ -93,6 +93,15 @@ if (isAuthenticated && sessionUser?.role === 'admin') {
   }
   // Enriquecimiento SSR de curación
   initialProducts = enrichProductsForAdmin(initialProducts as Product[]);
+  // Orden inicial de la tabla: prioriza los productos «publicados» (listos
+  // para la web: categoría + IA completada + enlace activo); a igualdad,
+  // mejor conversion_score. Mismo criterio que el toolbar #prodToolbarSort.
+  const publishedRank = (p: EnrichedProduct) =>
+    ((p as any).ia_status === 'completed' && (p as any).link_status === 'active' && Boolean((p as any).category_id || p.category)) ? 1 : 0;
+  initialProducts = initialProducts
+    .slice()
+    .sort((a, b) => (publishedRank(b) - publishedRank(a))
+      || ((Number((b as any).conversion_score) || 0) - (Number((a as any).conversion_score) || 0)));
 }
 
 const initialTotalProducts = initialProducts.length;
@@ -123,7 +132,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     <header class="admin-header">
       <div class="admin-header-main">
         <div class="admin-tag-pill">Panel de control</div>
-        <h1 class="admin-title">Panel de Administración de Productos</h1>
         <p class="admin-subtitle">
           Pega el enlace de cualquier comercio para autocompletar metadatos OpenGraph (título, imagen, precio). Edita y afina la ficha antes de guardarla de forma persistente.
         </p>
@@ -540,50 +548,68 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <label class="product-sel-title">ADMINISTRAR PRODUCTOS</label>
 
         <div class="product-sel-groups">
+          <!-- Toolbar de ordenación de la tabla (trasladada desde la portada):
+               prioriza los productos publicados/listos -->
+          <div class="product-sel-group" data-group="toolbar">
+            <span class="product-sel-group-label">Ordenar tabla:</span>
+            <select id="prodToolbarSort" class="sel-cat-assign" aria-label="Ordenar la tabla de productos" title="Ordena la tabla de productos registrados. Por defecto se muestran primero los productos publicados (listos: categoría + IA completada + enlace activo).">
+              <option value="publicados" selected>⭐ Publicados primero</option>
+              <option value="score">Mejor rentabilidad (Score)</option>
+              <option value="ventas">Más vendidos</option>
+              <option value="valoracion">Mejor valorados</option>
+              <option value="precio">Precio</option>
+              <option value="nombre">Nombre</option>
+              <option value="categoria">Categoría</option>
+              <option value="comercio">Comerciante</option>
+              <option value="descuento">Mayor descuento</option>
+              <option value="default">Por defecto (como se guardan)</option>
+            </select>
+          </div>
+
           <!-- Categoría funcional: Selección -->
           <div class="product-sel-group" data-group="selection">
             <span class="product-sel-group-label">Selección:</span>
             <span id="productSelCount">0 seleccionados</span>
             <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll" title="Seleccionar todo el catálogo completo">Catálogo</button>
-            <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear">Limpiar</button>
+            <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear" title="Vacía la selección actual de productos">Limpiar</button>
           </div>
 
           <!-- Categoría funcional: IA -->
           <div class="product-sel-group" data-group="ai">
             <span class="product-sel-group-label">IA:</span>
-            <button type="button" class="btn-ai btn-sm" id="btnProdEnrich">Enriquecer</button>
+            <button type="button" class="btn-ai btn-sm" id="btnProdEnrich" title="Enriquece con IA los productos seleccionados (o todos si no hay selección): ficha técnica, pros/contras, veredicto y texto optimizado">Enriquecer</button>
             <button type="button" class="btn-ai btn-sm" id="btnLinkAllAlternatives" title="Recorrer todo el catálogo y asignar automáticamente productos alternativos (más barato, mejor valorado y más vendido)">Vincular alternativas</button>
-            <button type="button" class="btn-ai btn-sm" id="btnProdOpenCode" title="Asistente OpenCode: redacta prompts en lenguaje natural para curar el catálogo">🤖 Asistente IA</button>
+            <button type="button" class="btn-ai btn-sm" id="btnProdOpenCode" title="Asistente IA: consola de chat para curar el catálogo con instrucciones en lenguaje natural (usa los proveedores conectados y el CLI local)">🤖 Asistente IA</button>
           </div>
 
           <!-- Categoría funcional: Categorías y Secciones -->
           <div class="product-sel-group" data-group="categories">
             <span class="product-sel-group-label">Categorías y Secciones:</span>
-            <select id="prodCatAssign" class="sel-cat-assign" aria-label="Categoría destino">
+            <select id="prodCatAssign" class="sel-cat-assign" aria-label="Categoría destino" title="Categoría raíz donde asignar los productos seleccionados">
               <option value="">Categoría destino…</option>
             </select>
-            <select id="prodSubcatDest" class="sel-cat-assign" aria-label="Subcategoría destino">
+            <select id="prodSubcatDest" class="sel-cat-assign" aria-label="Subcategoría destino" title="Subcategoría (hija) donde asignar los productos seleccionados">
               <option value="">Subcategoría destino…</option>
             </select>
             <button type="button" class="btn-secondary btn-sm" id="btnProdCreateSubcat" title="Crear una subcategoría vinculada a la categoría destino">➕ Subcat</button>
-            <button type="button" class="btn-secondary btn-sm" id="btnProdAssignCat">Asignar categoría</button>
-            <button type="button" class="btn-success btn-sm" id="btnProdMakeSection">Crear sección</button>
+            <button type="button" class="btn-secondary btn-sm" id="btnProdAssignCat" title="Asigna la categoría y subcategoría elegidas a todos los productos seleccionados">Asignar categoría</button>
+            <button type="button" class="btn-success btn-sm" id="btnProdMakeSection" title="Crea una sección temática de la portada con los productos seleccionados">Crear sección</button>
           </div>
 
           <!-- Categoría funcional: Etiquetas -->
           <div class="product-sel-group" data-group="tags">
             <span class="product-sel-group-label">Etiquetas:</span>
-            <select id="prodBadgeAssign" class="sel-cat-assign" aria-label="Etiqueta destacada destino">
+            <select id="prodBadgeAssign" class="sel-cat-assign" aria-label="Etiqueta destacada destino" title="Etiqueta (badge) que se mostrará en la tarjeta del producto">
               <option value="">Etiqueta destacada…</option>
             </select>
             <button type="button" class="btn-secondary btn-sm" id="btnProdBulkBadge" title="Aplica la etiqueta destacada (badge) a todos los productos seleccionados">🏷️ Asignar Badge</button>
-            <button type="button" class="btn-ai btn-sm" id="btnProdNormalizeTags" title="Extraer tags técnicos normalizados (normalized_tags)">🏷️ Normalizar Tags</button>
+            <button type="button" class="btn-ai btn-sm" id="btnProdNormalizeTags" title="Extrae con IA los tags técnicos normalizados (normalized_tags) de los productos seleccionados">🏷️ Normalizar Tags</button>
           </div>
 
           <!-- Categoría funcional: Borrado y Gestión de IDs -->
           <div class="product-sel-group" data-group="deletion">
             <span class="product-sel-group-label">Borrado y Gestión de IDs:</span>
-            <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete">🗑️ Eliminar Seleccionados</button>
+            <button type="button" class="btn-danger-ghost btn-sm" id="btnProdBulkDelete" title="Elimina del catálogo todos los productos seleccionados (quedan registrados para no reaparecer)">🗑️ Eliminar Seleccionados</button>
             <button type="button" class="btn-danger btn-sm" id="btnProdDeleteAll" title="Elimina TODOS los productos del catálogo (purga completa). Úsalo para resincronizar desde cero.">🗑️ Vaciar Catálogo</button>
             <button type="button" class="btn-secondary btn-sm" id="btnProdClearTombstones" title="Los productos que habían sido eliminados podrán volver a ser publicados o insertados">🧹 Eliminar registros de borrado</button>
           </div>
@@ -610,6 +636,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <div class="ali-sort-group">
               <select id="prodFSort">
                 <option value="default" selected>Por defecto</option>
+                <option value="publicados">⭐ Publicados primero</option>
                 <option value="score">Mejor rentabilidad (Score)</option>
                 <option value="ventas">Más vendidos</option>
                 <option value="valoracion">Mejor valorados</option>
@@ -669,6 +696,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             Siguiente
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </button>
+          <button type="button" id="paginationEndTop" class="btn-secondary btn-sm" data-prod-last title="Ir directamente al final de la tabla (última página)" aria-label="Ir a la última página">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 4 15 12 5 20"></polyline><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+            Final
+          </button>
+          <label class="pagination-per-page" title="Elige cuántos productos quieres ver por página">
+            Por página
+            <select data-prod-per-page aria-label="Productos por página">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="75">75</option>
+            </select>
+          </label>
         </nav>
       </div>
 
@@ -822,6 +861,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             Siguiente
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
           </button>
+          <button type="button" id="paginationEnd" class="btn-secondary btn-sm" data-prod-last title="Ir directamente al final de la tabla (última página)" aria-label="Ir a la última página">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 4 15 12 5 20"></polyline><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+            Final
+          </button>
+          <label class="pagination-per-page" title="Elige cuántos productos quieres ver por página">
+            Por página
+            <select data-prod-per-page aria-label="Productos por página">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="75">75</option>
+            </select>
+          </label>
         </nav>
       </div>
 
@@ -900,9 +951,53 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
         </div>
 
+        <!-- Acciones del catálogo: Construir Catálogo (multi-red) + alta directa
+             en categorías/subcategorías existentes. -->
+        <div id="aliImportActions" class="ali-import-actions">
+          <div id="aliImportTools" class="ali-import-tools" hidden>
+            <span class="ali-import-title">Añadir al catálogo</span>
+            <br />
+            <select id="aliCatAssign" class="sel-cat-assign" aria-label="Categoría destino" title="Categoría raíz donde añadir los productos marcados de la tabla">
+              <option value="">Categoría destino…</option>
+            </select>
+            <select id="aliSubcatAssign" class="sel-cat-assign" aria-label="Subcategoría destino" title="Subcategoría (hija) donde añadir los productos marcados">
+              <option value="">Subcategoría destino…</option>
+            </select>
+            <button type="button" class="btn-ai btn-sm" id="btnBuildCatalog" title="Construye el catálogo completo consultando TODAS las redes conectadas (eBay, AliExpress, etc.): descarta segunda mano y sin stock, normaliza, deduplica cross-merchant, autoclasifica, enriquece con IA y guarda en products.json. Proceso completo de un solo clic.">
+              <span class="btn-text">🏗️ Construir Catálogo</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <button type="button" id="btnBuildCatalogDryRun" class="btn-secondary btn-sm" title="Ejecuta la construcción del catálogo en modo simulación (dry-run): no guarda cambios, sólo muestra qué haría (incluidos los descartes de segunda mano y sin stock).">
+              <span class="btn-text">🔍 Simular (Dry-run)</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <button type="button" id="btnAliImportCat" class="btn-success btn-sm" title="Añade los productos marcados a la categoría elegida y los enriquece con IA (ficha completa: especificaciones, pros/contras y veredicto), igual que el botón «Enriquecer»">📥 Añadir a categoría</button>
+          </div>
+          <div id="aliCatalogDanger" class="ali-catalog-danger" hidden>
+            <button type="button" id="btnAliDeleteSelected" class="btn-danger btn-sm" title="Elimina definitivamente los productos seleccionados del catálogo de afiliados (no se pueden recuperar salvo volviendo a sincronizar)">🗑️ Borrar seleccionados</button>
+            <button type="button" id="btnAliDeleteAll" class="btn-danger btn-sm" title="Vacía completamente el catálogo de afiliados de TODAS las redes (no se puede recuperar salvo volviendo a sincronizar)">🗑️ Borrar TODO el catálogo</button>
+          </div>
+        </div>
+
         <!-- Filtros y ordenación del catálogo (3 capas; aplican ANTES de paginar)
-             Lógica y estado: src/utils/aliCatalogFilters.ts (ProductFilterParams) -->
-        <div id="affiliateFilters" class="ali-filters" hidden>
+             Lógica y estado: src/utils/aliCatalogFilters.ts (ProductFilterParams).
+             La primera fila reúne el meta del catálogo y los controles de
+             sincronización (antes en #aliImportActions). -->
+        <div id="affiliateFilters" class="ali-filters">
+          <!-- CAPA 0 · Estado del catálogo + sincronización (una sola fila) -->
+          <div class="ali-f-sync-row">
+            <span id="aliCatalogMeta" class="ali-catalog-meta">Cargando…</span>
+            <select id="aliSyncNetwork" class="sel-cat-assign" aria-label="Red a sincronizar" title="Elige qué red de afiliados sincronizar. 'Todas' sincroniza todas las conectadas.">
+              <option value="">Todas las conectadas</option>
+            </select>
+            <button type="button" id="btnAliSync" class="btn-primary btn-sm" title="Descarga o refresca el catálogo de afiliados contra las APIs de las redes conectadas (AliExpress, eBay…)">
+              <span class="btn-text">Sincronizar</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <button type="button" id="btnAliMore" class="btn-secondary btn-sm" hidden title="Descarga más páginas del catálogo de AliExpress sin borrar los productos ya guardados">+ Cargar más productos</button>
+            <button type="button" id="btnAliHideSel" class="btn-danger-ghost btn-sm" title="Oculta los productos marcados: no se verán en la tabla ni se añadirán al catálogo. Recupéralos con «En catálogo › Descartados»">🙈 Ocultar seleccionados</button>
+          </div>
+
           <!-- CAPA 1 · Buscador + presets rápidos de 1 clic -->
           <div class="ali-f-top">
             <div class="filter-field ali-f-search">
@@ -1026,47 +1121,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
           <!-- Chips: filtros activos, quítalos de uno en uno -->
           <div id="aliFChips" class="ali-chips" hidden></div>
-        </div>
-
-        <!-- Acciones del catálogo: alta directa en categorías/subcategorías
-             existentes + sincronización (derecha). -->
-        <div id="aliImportActions" class="ali-import-actions">
-          <div id="aliImportTools" class="ali-import-tools" hidden>
-            <span class="ali-import-title">Añadir al catálogo</span>
-            <select id="aliCatAssign" class="sel-cat-assign" aria-label="Categoría destino">
-              <option value="">Categoría destino…</option>
-            </select>
-            <select id="aliSubcatAssign" class="sel-cat-assign" aria-label="Subcategoría destino">
-              <option value="">Subcategoría destino…</option>
-            </select>
-            <button type="button" id="btnAliImportCat" class="btn-success btn-sm" title="Importa los productos marcados en la tabla dentro de la categoría y subcategoría elegidas">📥 Añadir seleccionados a categoría</button>
-            <button type="button" id="btnAliHideSel" class="btn-danger-ghost btn-sm" title="Oculta los productos marcados: no se verán en la tabla ni se añadirán al catálogo. Recupéralos con «En catálogo › Descartados»">🙈 Ocultar seleccionados</button>
-          </div>
-          <div class="ali-catalog-head-actions">
-            <span id="aliCatalogMeta" class="ali-catalog-meta">Cargando…</span>
-            <div class="ali-sync-controls" style="display: flex; align-items: center; gap: 0.5rem;">
-              <select id="aliSyncNetwork" class="sel-cat-assign" aria-label="Red a sincronizar" title="Elige qué red de afiliados sincronizar. 'Todas' sincroniza todas las conectadas.">
-                <option value="">Todas las conectadas</option>
-              </select>
-              <button type="button" id="btnAliSync" class="btn-primary btn-sm">
-                <span class="btn-text">Sincronizar</span>
-                <div class="btn-spinner" hidden></div>
-              </button>
-              <button type="button" id="btnAliMore" class="btn-secondary btn-sm" hidden title="Descarga más páginas del catálogo de AliExpress sin borrar los productos ya guardados">+ Cargar más productos</button>
-              <button type="button" class="btn-ai btn-sm" id="btnBuildCatalog" title="Construye el catálogo completo consultando TODAS las redes conectadas (eBay, AliExpress, etc.), normaliza, deduplica cross-merchant, autoclasifica, detecta ofertas estrella (hsr) y guarda en products.json. Proceso completo de un solo clic.">
-                <span class="btn-text">🏗️ Construir Catálogo</span>
-                <div class="btn-spinner" hidden></div>
-              </button>
-              <button type="button" id="btnBuildCatalogDryRun" class="btn-secondary btn-sm" title="Ejecuta el proceso en modo simulación (dry-run): no guarda cambios, solo muestra qué haría.">
-                <span class="btn-text">🔍 Simular (Dry-run)</span>
-                <div class="btn-spinner" hidden></div>
-              </button>
-            </div>
-          </div>
-          <div id="aliCatalogDanger" class="ali-catalog-danger" hidden>
-            <button type="button" id="btnAliDeleteSelected" class="btn-danger btn-sm" title="Elimina definitivamente los productos seleccionados del catálogo de AliExpress (no se pueden recuperar salvo volviendo a sincronizar)">🗑️ Borrar seleccionados</button>
-            <button type="button" id="btnAliDeleteAll" class="btn-danger btn-sm" title="Vacía completamente el catálogo de afiliados de TODAS las redes (no se puede recuperar salvo volviendo a sincronizar)">🗑️ Borrar TODO el catálogo</button>
-          </div>
         </div>
 
         <!-- Selección masiva: la casilla de la cabecera marca la página actual;
@@ -1390,6 +1444,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic</option>
               <option value="groq">Groq</option>
+              <option value="nvidia">NVIDIA (NIM)</option>
+              <option value="openrouter">OpenRouter</option>
             </select>
           </label>
           <label class="tp-provider" for="tpModel">
@@ -1399,6 +1455,45 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <button type="button" id="btnPipelineStop" class="btn-secondary btn-sm" hidden title="Detiene el reproceso en curso tras el producto actual">
             <span class="btn-text">⏹ Detener</span>
           </button>
+        </div>
+
+        <!-- Conectividad de IA: estado de conexión, modelos gratuitos y
+             disponibilidad/consumo de tokens de cada proveedor. -->
+        <div class="tp-options tp-ai-connect" id="tpAiConnect">
+          <div class="tp-ai-head">
+            <span class="tp-reasons-title">Conectividad de IA y tokens</span>
+            <button type="button" id="btnAiStatusRefresh" class="btn-secondary btn-sm" title="Comprueba la conexión REAL con cada proveedor (contra su endpoint de modelos) y refresca el estado">
+              <span class="btn-text">↻ Probar conexión</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <button type="button" id="btnAiConsoleOpen2" class="btn-ai btn-sm" title="Abre la consola de IA interactiva (chat con los proveedores conectados y ejecución del asistente local opencode)">🤖 Consola IA</button>
+          </div>
+          <div id="tpAiProviders" class="tp-ai-providers">
+            <div class="loading-panel">Cargando estado de la IA…</div>
+          </div>
+
+          <!-- API keys: se guardan en el volumen (ai-keys.json) y quedan
+               conectadas para TODOS los botones de IA del panel. -->
+          <div class="tp-ai-keys">
+            <label class="tp-provider" for="aiKeyProvider">
+              <span class="tp-provider-label">Proveedor</span>
+              <select id="aiKeyProvider" title="Proveedor de IA al que guardar la API key">
+                <option value="openai">OpenAI</option>
+                <option value="nvidia">NVIDIA (NIM)</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="groq">Groq</option>
+              </select>
+            </label>
+            <label class="tp-provider tp-ai-key-field" for="aiKeyValue">
+              <span class="tp-provider-label">API Key</span>
+              <input id="aiKeyValue" type="password" placeholder="Pega aquí la API key…" autocomplete="off" spellcheck="false" title="La clave se guarda en el servidor (volumen) y nunca se devuelve completa al navegador" />
+            </label>
+            <button type="button" id="btnAiKeyTest" class="btn-secondary btn-sm" title="Comprueba la clave contra el proveedor ANTES de guardarla (sin consumir tokens)">🧪 Probar</button>
+            <button type="button" id="btnAiKeySave" class="btn-success btn-sm" title="Guarda la clave en el servidor: queda conectada para Enriquecer, Construir Catálogo, Pipeline y la consola IA">💾 Guardar clave</button>
+            <button type="button" id="btnAiKeyDelete" class="btn-danger-ghost btn-sm" title="Elimina la clave guardada de este proveedor (desconecta la IA del panel para ese proveedor)">🗑️ Borrar clave</button>
+            <span id="aiKeyStatus" class="tp-ai-key-status" role="status"></span>
+          </div>
         </div>
 
         <div class="tp-progress" id="tpProgress" hidden>
@@ -1440,6 +1535,35 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     </svg>
     <span>Secciones</span>
   </button>
+
+  <!-- Botón flotante + consola interactiva de IA (chat con los proveedores
+       conectados y ejecución del asistente local opencode). -->
+  <button type="button" id="adminAiConsoleBtn" class="admin-ai-console-btn" title="Consola de IA: chat con los proveedores conectados (OpenAI, NVIDIA, OpenRouter, Anthropic, Groq) o con el asistente local opencode" aria-label="Abrir la consola de IA" aria-expanded="false" aria-controls="adminAiConsole">
+    🤖 <span>IA</span>
+  </button>
+
+  <div id="adminAiConsole" class="admin-ai-console" hidden role="dialog" aria-modal="false" aria-labelledby="adminAiConsoleTitle">
+    <div class="aic-head">
+      <strong id="adminAiConsoleTitle">🤖 Consola de IA</strong>
+      <button type="button" id="adminAiConsoleClose" class="aic-close" title="Cerrar la consola" aria-label="Cerrar la consola">×</button>
+    </div>
+    <div class="aic-controls">
+      <select id="aicProvider" title="Proveedor con el que conversar. «opencode (local)» ejecuta el asistente instalado en el servidor.">
+        <option value="">Automático (proveedor configurado)</option>
+      </select>
+      <input id="aicModel" type="text" placeholder="modelo (auto)" title="Modelo a usar (opcional). Los modelos gratuitos de cada proveedor están indicados en Transparencia › Conectividad de IA." />
+    </div>
+    <div id="aicMessages" class="aic-messages" aria-live="polite">
+      <div class="aic-msg is-system">Conversa con la IA del panel o pídele tareas de curación del catálogo. Con «opencode (local)» se ejecuta el asistente instalado en el servidor.</div>
+    </div>
+    <form id="aicForm" class="aic-input-row">
+      <input id="aicInput" type="text" placeholder="Escribe aquí tu mensaje o instrucción…" autocomplete="off" />
+      <button type="submit" id="aicSend" class="btn-primary btn-sm" title="Enviar el mensaje a la consola de IA">
+        <span class="btn-text">Enviar</span>
+        <div class="btn-spinner" hidden></div>
+      </button>
+    </form>
+  </div>
 
   <!-- Modal de vídeo: se abre centrado desde la galería o la vista previa -->
   <div id="videoModal" class="video-modal" hidden>
@@ -1581,7 +1705,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <section class="admin-login-panel" aria-labelledby="admin-login-title">
         <div class="admin-login-mark"><span class="status-indicator"></span><span>TRADYLOR / ADMIN</span></div>
         <p class="admin-login-kicker">Área privada de gestión</p>
-        <h1 id="admin-login-title" class="admin-login-title">Accede a tu panel</h1>
+        <h2 id="admin-login-title" class="admin-login-title">Administración</h2>
         <p class="admin-login-description">Gestiona el catálogo, analiza enlaces y publica recomendaciones desde el centro de curación de Tradylor.</p>
         {loginError && <p class="admin-login-error" role="alert">{loginError}</p>}
         <form method="post" class="admin-login-form" id="adminLoginForm">
@@ -1930,7 +2054,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       : [];
     // Paginación del catálogo de productos
     let currentPage = 1;
-    const PRODUCTS_PER_PAGE = 50;
+    // Productos por página: ajustable con el select de las barras de
+    // paginación (25 / 50 / 75).
+    let PRODUCTS_PER_PAGE = 50;
     let filteredProducts = [];
     /**
      * Caché de `externalId → estado de importación` del catálogo AliExpress
@@ -3551,7 +3677,14 @@ function renderTableRows(products, resetPage = true) {
         return true;
       });
 
-      if (sortKey !== 'default') {
+      if (sortKey === 'publicados') {
+        // Prioriza los productos «publicados» (listos para la web): categoría
+        // + IA completada + enlace activo; a igualdad, mejor score primero.
+        const rank = (p) => ((p.ia_status === 'completed' && p.link_status === 'active' && (p.category_id || p.category)) ? 1 : 0);
+        filtered.sort((a, b) => (rank(b) - rank(a))
+          || ((Number(b.conversion_score) || 0) - (Number(a.conversion_score) || 0))
+          || String(a.title).localeCompare(String(b.title), 'es'));
+      } else if (sortKey !== 'default') {
         const sorters = {
           precio: (p) => Number(p.price) || 0,
           descuento: (p) => prodDiscountPct(p),
@@ -3570,7 +3703,8 @@ function renderTableRows(products, resetPage = true) {
           return dir * (av - bv);
         });
       }
-      const diversified = applyCatalogDiversity(filtered);
+      // La prioridad «publicados» exige orden estricto: sin diversificación.
+      const diversified = sortKey === 'publicados' ? filtered : applyCatalogDiversity(filtered);
       renderTableRows(diversified);
     }
 
@@ -3680,6 +3814,28 @@ function renderTableRows(products, resetPage = true) {
     paginationNext?.addEventListener('click', () => goToPage(currentPage + 1));
     paginationPrevTop?.addEventListener('click', () => goToPage(currentPage - 1));
     paginationNextTop?.addEventListener('click', () => goToPage(currentPage + 1));
+
+    // Select «Por página» (25 / 50 / 75) de ambas barras de paginación:
+    // cambiarlo repinta la tabla con el nuevo tamaño y sincroniza los selects.
+    document.querySelectorAll('[data-prod-per-page]').forEach((sel) => {
+      sel.value = String(PRODUCTS_PER_PAGE);
+      sel.addEventListener('change', () => {
+        const value = Number(sel.value);
+        if (![25, 50, 75].includes(value)) return;
+        PRODUCTS_PER_PAGE = value;
+        document.querySelectorAll('[data-prod-per-page]').forEach((other) => { other.value = String(value); });
+        currentPage = 1;
+        prodFilterApply();
+      });
+    });
+
+    // Botón «Final»: salto directo a la última página de la tabla.
+    document.querySelectorAll('[data-prod-last]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const totalPages = Math.max(1, Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE));
+        goToPage(totalPages);
+      });
+    });
     inputFilterList?.addEventListener('input', prodFilterApply);
     inputFilterList?.addEventListener('search', prodFilterApply);
     inputFilterList?.addEventListener('keydown', (e) => {
@@ -3694,7 +3850,24 @@ function renderTableRows(products, resetPage = true) {
       prodFilterApply();
     });
     prodSubcatFilter?.addEventListener('change', prodFilterApply);
-    prodFSort?.addEventListener('change', prodFilterApply);
+    // Toolbar de ordenación (#prodToolbarSort, trasladada desde la portada
+    // pública): espejo de #prodFSort; cambiar uno sincroniza el otro y
+    // repinta la tabla. El valor inicial del toolbar («Publicados primero»)
+    // es también el estado inicial del filtro.
+    const prodToolbarSort = document.getElementById('prodToolbarSort');
+    if (prodToolbarSort && prodFSort && 'value' in prodFSort) {
+      prodFSort.value = prodToolbarSort.value;
+    }
+    prodToolbarSort?.addEventListener('change', () => {
+      if (prodFSort && 'value' in prodFSort) prodFSort.value = prodToolbarSort.value;
+      prodFilterApply();
+    });
+    prodFSort?.addEventListener('change', () => {
+      if (prodToolbarSort && prodFSort && 'value' in prodFSort && prodToolbarSort.value !== prodFSort.value) {
+        prodToolbarSort.value = prodFSort.value;
+      }
+      prodFilterApply();
+    });
     prodFSortDir?.addEventListener('click', () => {
       prodSortDir = prodSortDir === 'desc' ? 'asc' : 'desc';
       prodFSortDir.textContent = prodSortDir === 'desc' ? '↓' : '↑';
@@ -5295,11 +5468,12 @@ function renderTableRows(products, resetPage = true) {
     aliCatAssign?.addEventListener('change', syncAliSubcatAssign);
     bindSubcatDestCascade(aliCatAssign, aliSubcatAssign);
 
-    const ALI_PAGE_SIZE = 50;
     // Columnas de la tabla de afiliados (la columna «Tienda» se eliminó).
     const ALI_COLS = 13;
     let aliProducts = [];
     let aliVisible = [];
+    /** Productos por página de la tabla de afiliados (25 / 50 / 75). */
+    let aliPageSize = 50;
     let aliPage = 1;
     let aliSyncing = false;
     let aliImportingSelection = false;
@@ -5590,9 +5764,13 @@ function renderTableRows(products, resetPage = true) {
     function aliPagerHtml(page, pages, total, start, shown) {
       if (total === 0) return '';
       const info = `<span class="ac-page-info">Mostrando ${start + 1}–${start + shown} de ${total}</span>`;
-      if (pages <= 1) return `<div class="ac-pager">${info}</div>`;
+      const perPage = `<label class="ac-per-page" title="Elige cuántos productos quieres ver por página">Por página
+        <select data-ac-per-page aria-label="Productos por página">
+          ${[25, 50, 75].map((n) => `<option value="${n}"${n === aliPageSize ? ' selected' : ''}>${n}</option>`).join('')}
+        </select></label>`;
+      if (pages <= 1) return `<div class="ac-pager">${info}${perPage}</div>`;
       const btn = (label, target, opts = {}) =>
-        `<button type="button" class="ac-page-btn${opts.current ? ' is-current' : ''}" data-ac-page="${target}"${opts.disabled ? ' disabled' : ''}>${label}</button>`;
+        `<button type="button" class="ac-page-btn${opts.current ? ' is-current' : ''}" data-ac-page="${target}"${opts.disabled ? ' disabled' : ''}${opts.title ? ` title="${opts.title}"` : ''}>${label}</button>`;
       const wanted = [...new Set([1, pages, page - 1, page, page + 1])]
         .filter((n) => n >= 1 && n <= pages)
         .sort((a, b) => a - b);
@@ -5601,12 +5779,14 @@ function renderTableRows(products, resetPage = true) {
         if (index > 0 && n - wanted[index - 1] > 1) nums.push('<span class="ac-page-gap">…</span>');
         nums.push(btn(String(n), n, { current: n === page }));
       });
-      return `<div class="ac-pager">${info}<div class="ac-page-nav">${btn('‹', page - 1, { disabled: page <= 1 })}${nums.join('')}${btn('›', page + 1, { disabled: page >= pages })}</div></div>`;
+      return `<div class="ac-pager">${info}${perPage}<div class="ac-page-nav">${btn('‹', page - 1, { disabled: page <= 1, title: 'Página anterior' })}${nums.join('')}${btn('›', page + 1, { disabled: page >= pages, title: 'Página siguiente' })}${btn('⏭', pages, { disabled: page >= pages, title: 'Ir al final de la tabla' })}</div></div>`;
     }
 
     function renderAliCatalog() {
       if (!aliCatalogHost) return;
-      if (aliFilters) aliFilters.hidden = aliProducts.length === 0;
+      // #affiliateFilters nunca se oculta: su primera fila (meta + Sincronizar)
+      // debe estar siempre accesible, también con la caché vacía, para poder
+      // lanzar la primera sincronización.
       // La barra de acciones sólo oculta su bloque de alta: la derecha
       // (meta + Sincronizar) debe estar siempre accesible, también con
       // la caché vacía, para poder lanzar la primera sincronización.
@@ -5629,13 +5809,14 @@ function renderTableRows(products, resetPage = true) {
         aliUpdateSelectionUI([]);
         return;
       }
-      const pages = Math.max(1, Math.ceil(filtered.length / ALI_PAGE_SIZE));
+      const pages = Math.max(1, Math.ceil(filtered.length / aliPageSize));
       if (aliPage > pages) aliPage = pages;
-      const start = (aliPage - 1) * ALI_PAGE_SIZE;
-      const slice = filtered.slice(start, start + ALI_PAGE_SIZE);
+      const start = (aliPage - 1) * aliPageSize;
+      const slice = filtered.slice(start, start + aliPageSize);
       aliVisible = slice;
       const pageIds = slice.map((product) => product.externalId);
       aliCatalogHost.innerHTML = `
+        ${aliPagerHtml(aliPage, pages, filtered.length, start, slice.length)}
         <div class="aff-table-wrap">
           <table class="aff-table">
             <thead>
@@ -5912,6 +6093,17 @@ function renderTableRows(products, resetPage = true) {
       }
     });
 
+    // Interacción de la tabla 3: «productos por página» (select 25/50/75)
+    aliCatalogHost?.addEventListener('change', (event) => {
+      const perPageSel = event.target.closest('[data-ac-per-page]');
+      if (!perPageSel) return;
+      const value = Number(perPageSel.value);
+      if (![25, 50, 75].includes(value)) return;
+      aliPageSize = value;
+      aliPage = 1;
+      renderAliCatalog();
+    });
+
     // Interacción de la tabla 3: paginación, selección, desplegable,
     // importación y fila
     aliCatalogHost?.addEventListener('click', async (event) => {
@@ -6056,6 +6248,21 @@ function renderTableRows(products, resetPage = true) {
             if (id) createdIds.push(id);
           }
         } else failed++;
+      }
+      // Enriquecimiento con IA (paridad con el botón «Enriquecer» del catálogo
+      // registrado): los productos recién añadidos quedan con la ficha
+      // COMPLETA (ficha técnica, especificaciones, pros/contras y veredicto)
+      // y el texto editorial curado. Best-effort: si la IA falla, el alta
+      // sigue siendo válida.
+      if (createdIds.length) {
+        showAliStatus('loading', 'Enriqueciendo con IA', `${createdIds.length} producto${createdIds.length === 1 ? '' : 's'} añadido${createdIds.length === 1 ? '' : 's'}: completando ficha y texto con IA...`);
+        try {
+          await fetch('/api/admin/enrich-bulk', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: createdIds, forceImage: false, save: true }),
+          }).then((r) => r.json()).catch(() => null);
+        } catch { /* el enriquecimiento no debe invalidar el alta */ }
       }
       let categorized = 0;
       if (chosen && chosen.categoryId && createdIds.length) {
@@ -7895,6 +8102,301 @@ function renderTableRows(products, resetPage = true) {
     });
 
     if (btnPipelineRefresh) tpLoadMetrics();
+
+    // ── Transparencia › Conectividad de IA: estado, claves y consola ─────────
+    const AI_PROVIDER_NAMES = {
+      opencode: 'OpenCode (local)',
+      openai: 'OpenAI',
+      nvidia: 'NVIDIA (NIM)',
+      openrouter: 'OpenRouter',
+      anthropic: 'Anthropic',
+      groq: 'Groq',
+    };
+
+    const tpAiProviders = document.getElementById('tpAiProviders');
+    const btnAiStatusRefresh = document.getElementById('btnAiStatusRefresh');
+
+    function aiBadgeClass(status) {
+      if (status === 'connected') return 'is-ok';
+      if (status === 'no-key' || status === 'unavailable' || status === 'unknown') return 'is-warn';
+      return 'is-err';
+    }
+
+    function aiBadgeLabel(status) {
+      if (status === 'connected') return 'Conectado';
+      if (status === 'no-key') return 'Sin clave';
+      if (status === 'unknown') return 'Sin probar';
+      if (status === 'unavailable') return 'No disponible';
+      return 'Error';
+    }
+
+    function renderAiProviders(providers) {
+      if (!tpAiProviders) return;
+      if (!Array.isArray(providers) || !providers.length) {
+        tpAiProviders.innerHTML = '<div class="loading-panel">Sin datos de proveedores.</div>';
+        return;
+      }
+      tpAiProviders.innerHTML = providers.map((p) => {
+        const free = (p.freeModels || []).length
+          ? `<div class="tp-ai-free">Gratuitos: ${(p.freeModels || []).join(' · ')}</div>`
+          : '<div class="tp-ai-free">Sin modelos gratuitos.</div>';
+        const key = p.keyMasked
+          ? `<div class="tp-ai-free">Clave: ${p.keyMasked} (${p.keySource === 'env' ? 'entorno' : 'panel'})</div>`
+          : '';
+        const usage = p.usage && Object.keys(p.usage).length
+          ? `<div class="tp-ai-usage">Cuota / uso: ${Object.entries(p.usage).map((e) => `${e[0]}=${e[1]}`).join(' · ')}</div>`
+          : '';
+        const note = p.pricingNote ? `<div class="tp-ai-free">${p.pricingNote}</div>` : '';
+        const docs = p.docsUrl ? `<div class="tp-ai-free"><a href="${p.docsUrl}" target="_blank" rel="noopener noreferrer">Documentación ↗</a></div>` : '';
+        return `<div class="tp-ai-card">
+          <div class="tp-ai-card-head"><span>${p.name || p.id}</span><span class="tp-ai-badge ${aiBadgeClass(p.status)}">${aiBadgeLabel(p.status)}</span></div>
+          <div class="tp-ai-card-detail">${p.detail || ''}</div>
+          ${key}${free}${note}${docs}${usage}
+        </div>`;
+      }).join('');
+    }
+
+    async function tpLoadAiStatus(live) {
+      if (!tpAiProviders) return;
+      const btn = btnAiStatusRefresh;
+      const spinner = btn ? btn.querySelector('.btn-spinner') : null;
+      const text = btn ? btn.querySelector('.btn-text') : null;
+      const original = text ? text.textContent : '';
+      if (btn) btn.disabled = true;
+      if (spinner) spinner.hidden = false;
+      if (text) text.textContent = 'Comprobando…';
+      if (live) tpAiProviders.innerHTML = '<div class="loading-panel">Comprobando la conexión real con cada proveedor…</div>';
+      try {
+        // live=false → estado local instantáneo (sin red); live=true → test real.
+        const res = await fetch(live ? '/api/admin/ai-status' : '/api/admin/ai-keys', { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'No se pudo obtener el estado de la IA.');
+        renderAiProviders(data.providers);
+      } catch (err) {
+        tpAiProviders.innerHTML = `<div class="loading-panel">No se pudo cargar el estado: ${(err && err.message) || 'error de red'}.</div>`;
+      } finally {
+        if (btn) btn.disabled = false;
+        if (spinner) spinner.hidden = true;
+        if (text) text.textContent = original;
+      }
+    }
+
+    btnAiStatusRefresh?.addEventListener('click', () => tpLoadAiStatus(true));
+
+    // ── API keys del panel (probar / guardar / borrar) ───────────────────────
+    const aiKeyProvider = document.getElementById('aiKeyProvider');
+    const aiKeyValue = document.getElementById('aiKeyValue');
+    const aiKeyStatus = document.getElementById('aiKeyStatus');
+
+    function setAiKeyStatus(kind, message) {
+      if (!aiKeyStatus) return;
+      aiKeyStatus.textContent = message || '';
+      aiKeyStatus.style.color = kind === 'ok' ? '#6ee7b7' : kind === 'error' ? '#fca5a5' : '';
+    }
+
+    async function aiKeyRequest(url, method, body) {
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.success === false) throw new Error(data.message || `Error ${res.status}`);
+      return data;
+    }
+
+    document.getElementById('btnAiKeyTest')?.addEventListener('click', async () => {
+      const provider = aiKeyProvider ? aiKeyProvider.value : '';
+      const key = aiKeyValue ? aiKeyValue.value.trim() : '';
+      if (!provider) return;
+      setAiKeyStatus('info', 'Probando conexión…');
+      try {
+        const data = await aiKeyRequest('/api/admin/ai-keys/test', 'POST', { provider, key });
+        setAiKeyStatus('ok', data.message || 'Conectado.');
+      } catch (err) {
+        setAiKeyStatus('error', (err && err.message) || 'Sin conexión.');
+      }
+    });
+
+    document.getElementById('btnAiKeySave')?.addEventListener('click', async () => {
+      const provider = aiKeyProvider ? aiKeyProvider.value : '';
+      const key = aiKeyValue ? aiKeyValue.value.trim() : '';
+      if (!provider || !key) {
+        setAiKeyStatus('error', 'Elige un proveedor y pega su API key.');
+        return;
+      }
+      setAiKeyStatus('info', 'Guardando…');
+      try {
+        const data = await aiKeyRequest('/api/admin/ai-keys', 'POST', { provider, key });
+        setAiKeyStatus('ok', data.message || 'Clave guardada.');
+        if (aiKeyValue) aiKeyValue.value = '';
+        await tpLoadAiStatus(true);
+        await aiConsoleLoadProviders();
+      } catch (err) {
+        setAiKeyStatus('error', (err && err.message) || 'No se pudo guardar.');
+      }
+    });
+
+    document.getElementById('btnAiKeyDelete')?.addEventListener('click', async () => {
+      const provider = aiKeyProvider ? aiKeyProvider.value : '';
+      if (!provider) return;
+      if (!window.confirm(`¿Borrar la API key guardada de ${AI_PROVIDER_NAMES[provider] || provider}?`)) return;
+      setAiKeyStatus('info', 'Borrando…');
+      try {
+        const data = await aiKeyRequest('/api/admin/ai-keys', 'DELETE', { provider });
+        setAiKeyStatus('ok', data.message || 'Clave borrada.');
+        await tpLoadAiStatus(true);
+        await aiConsoleLoadProviders();
+      } catch (err) {
+        setAiKeyStatus('error', (err && err.message) || 'No se pudo borrar.');
+      }
+    });
+
+    // ── Consola interactiva de IA (drawer flotante) ─────────────────────────
+    const aicConsole = document.getElementById('adminAiConsole');
+    const aicConsoleBtn = document.getElementById('adminAiConsoleBtn');
+    const aicProvider = document.getElementById('aicProvider');
+    const aicModel = document.getElementById('aicModel');
+    const aicMessages = document.getElementById('aicMessages');
+    const aicForm = document.getElementById('aicForm');
+    const aicInput = document.getElementById('aicInput');
+    const aicSend = document.getElementById('aicSend');
+    const aicHistory = [];
+
+    function aicAppend(role, text) {
+      if (!aicMessages) return;
+      const div = document.createElement('div');
+      div.className = 'aic-msg is-' + role;
+      div.textContent = text;
+      aicMessages.appendChild(div);
+      aicMessages.scrollTop = aicMessages.scrollHeight;
+    }
+
+    function aicSetOpen(open) {
+      if (!aicConsole) return;
+      aicConsole.hidden = !open;
+      if (aicConsoleBtn) aicConsoleBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (open) {
+        aicInput?.focus();
+        aiConsoleLoadProviders();
+      }
+    }
+
+    aicConsoleBtn?.addEventListener('click', () => aicSetOpen(aicConsole ? aicConsole.hidden : false));
+    document.getElementById('adminAiConsoleClose')?.addEventListener('click', () => aicSetOpen(false));
+    document.getElementById('btnAiConsoleOpen2')?.addEventListener('click', () => aicSetOpen(true));
+
+    async function aiConsoleLoadProviders() {
+      if (!aicProvider) return;
+      try {
+        const res = await fetch('/api/admin/ai-console', { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'No se pudo cargar la consola.');
+        const previous = aicProvider.value;
+        let html = `<option value="">Automático (${AI_PROVIDER_NAMES[data.defaultProvider] || data.defaultProvider || 'proveedor configurado'})</option>`;
+        (data.providers || []).forEach((p) => {
+          if (!p.configured) return;
+          html += `<option value="${p.id}">${AI_PROVIDER_NAMES[p.id] || p.id}</option>`;
+        });
+        if (data.opencode && data.opencode.available) html += '<option value="opencode">OpenCode (local, en el servidor)</option>';
+        aicProvider.innerHTML = html;
+        if (previous && aicProvider.querySelector('option[value="' + previous + '"]')) aicProvider.value = previous;
+      } catch {
+        /* el select queda como está; el envío mostrará el error */
+      }
+    }
+
+    aicForm?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const prompt = aicInput ? aicInput.value.trim() : '';
+      if (!prompt || (aicSend && aicSend.disabled)) return;
+      const provider = aicProvider ? aicProvider.value : '';
+      const model = aicModel ? aicModel.value.trim() : '';
+
+      aicAppend('user', prompt);
+      if (aicInput) aicInput.value = '';
+      if (aicSend) aicSend.disabled = true;
+      const spinner = aicSend ? aicSend.querySelector('.btn-spinner') : null;
+      if (spinner) spinner.hidden = false;
+
+      try {
+        let res;
+        if (provider === 'opencode') {
+          // Ejecución del asistente local (CLI opencode del contenedor).
+          res = await fetch('/api/admin/ai-console', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'opencode', prompt, model }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.message || 'opencode devolvió un error.');
+          aicAppend('assistant', data.output || '(sin salida)');
+        } else {
+          // Chat vía API con el proveedor seleccionado (o el automático).
+          const messages = aicHistory.concat([{ role: 'user', content: prompt }]);
+          res = await fetch('/api/admin/ai-console', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode: 'chat', messages, provider, model }),
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.message || 'El proveedor devolvió un error.');
+          aicHistory.push({ role: 'user', content: prompt });
+          aicHistory.push({ role: 'assistant', content: data.reply || '' });
+          while (aicHistory.length > 20) aicHistory.shift();
+          aicAppend('assistant', data.reply || '(sin respuesta)');
+        }
+      } catch (err) {
+        aicAppend('error', (err && err.message) || 'Error de red al contactar con la consola.');
+      } finally {
+        if (aicSend) aicSend.disabled = false;
+        if (spinner) spinner.hidden = true;
+        aicInput?.focus();
+      }
+    });
+
+    // Estado inicial: información local instantánea (el test de red real se
+    // lanza con «↻ Probar conexión» o tras guardar una clave).
+    tpLoadAiStatus(false);
+    aiConsoleLoadProviders();
+
+    // ── Tooltip global del panel (mejora visual de los `title` nativos) ─────
+    const adminTooltipEl = document.createElement('div');
+    adminTooltipEl.className = 'admin-tooltip';
+    adminTooltipEl.hidden = true;
+    document.body.appendChild(adminTooltipEl);
+    let adminTooltipTarget = null;
+    let adminTooltipTimer = null;
+
+    document.addEventListener('mouseover', (event) => {
+      const target = event.target && event.target.closest ? event.target.closest('[title]') : null;
+      if (!target || target === adminTooltipTarget) return;
+      const text = target.getAttribute('title');
+      if (!text) return;
+      adminTooltipTarget = target;
+      target.setAttribute('data-tooltip-text', text);
+      target.removeAttribute('title');
+      clearTimeout(adminTooltipTimer);
+      adminTooltipTimer = setTimeout(() => {
+        const rect = target.getBoundingClientRect();
+        adminTooltipEl.textContent = text;
+        adminTooltipEl.hidden = false;
+        const top = rect.top - adminTooltipEl.offsetHeight - 8;
+        adminTooltipEl.style.top = (top >= 8 ? top : rect.bottom + 8) + 'px';
+        adminTooltipEl.style.left = Math.min(Math.max(8, rect.left), window.innerWidth - adminTooltipEl.offsetWidth - 8) + 'px';
+      }, 350);
+    });
+
+    document.addEventListener('mouseout', (event) => {
+      const target = event.target && event.target.closest ? event.target.closest('[data-tooltip-text]') : null;
+      if (!target) return;
+      if (event.relatedTarget && target.contains(event.relatedTarget)) return;
+      clearTimeout(adminTooltipTimer);
+      adminTooltipEl.hidden = true;
+      if (!target.getAttribute('title')) target.setAttribute('title', target.getAttribute('data-tooltip-text') || '');
+      target.removeAttribute('data-tooltip-text');
+      if (adminTooltipTarget === target) adminTooltipTarget = null;
+    });
   });
 </script>
 )}
@@ -8260,10 +8762,10 @@ function renderTableRows(products, resetPage = true) {
   .product-sel-group[data-group="deletion"] .product-sel-group-label {
     color: #fca5a5;
   }
-  /* Botón flotante: volver al menú de secciones (esquina inferior derecha) */
+  /* Botón flotante: volver al menú de secciones (alineado a la izquierda) */
   .admin-back-to-top {
     position: fixed;
-    right: 1.1rem;
+    left: 1.1rem;
     bottom: 1.1rem;
     z-index: 70;
     display: inline-flex;
@@ -8284,6 +8786,79 @@ function renderTableRows(products, resetPage = true) {
   }
   .admin-back-to-top:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(56, 189, 248, .5); }
   .admin-back-to-top svg { display: block; }
+
+  /* Botón flotante de la consola de IA (encima del botón «Secciones») */
+  .admin-ai-console-btn {
+    position: fixed;
+    left: 1.1rem;
+    bottom: 4.3rem;
+    z-index: 71;
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .55rem .85rem;
+    color: #0a1a12;
+    background: linear-gradient(135deg, #34d399, #22d3ee);
+    border: 0;
+    border-radius: 999px;
+    box-shadow: 0 10px 26px rgba(52, 211, 153, .32);
+    cursor: pointer;
+    font: inherit;
+    font-size: .78rem;
+    font-weight: 800;
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .admin-ai-console-btn:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(52, 211, 153, .45); }
+
+  /* Consola interactiva de IA (drawer inferior derecha) */
+  .admin-ai-console {
+    position: fixed;
+    right: 1.1rem;
+    bottom: 1.1rem;
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    width: min(430px, calc(100vw - 2.2rem));
+    height: min(60vh, 520px);
+    background: rgba(13, 19, 33, .98);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, .55);
+    overflow: hidden;
+  }
+  .aic-head { display: flex; align-items: center; justify-content: space-between; gap: .6rem; padding: .65rem .85rem; background: rgba(59, 130, 246, .12); border-bottom: 1px solid var(--color-border); font-size: .82rem; }
+  .aic-close { background: transparent; border: 0; color: var(--color-text-muted); font-size: 1.2rem; line-height: 1; cursor: pointer; padding: .1rem .35rem; }
+  .aic-close:hover { color: var(--color-text-main); }
+  .aic-controls { display: flex; gap: .4rem; padding: .55rem .65rem; border-bottom: 1px solid rgba(255, 255, 255, .06); }
+  .aic-controls select, .aic-controls input { flex: 1; min-width: 0; padding: .35rem .5rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-main); font: inherit; font-size: .76rem; }
+  .aic-messages { flex: 1; overflow-y: auto; padding: .7rem; display: flex; flex-direction: column; gap: .5rem; font-size: .78rem; }
+  .aic-msg { max-width: 92%; padding: .5rem .65rem; border-radius: 10px; white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+  .aic-msg.is-user { align-self: flex-end; background: rgba(59, 130, 246, .22); color: #dbeafe; }
+  .aic-msg.is-assistant { align-self: flex-start; background: rgba(255, 255, 255, .06); color: var(--color-text-main); }
+  .aic-msg.is-system { align-self: center; background: transparent; color: var(--color-text-dim); font-size: .72rem; text-align: center; }
+  .aic-msg.is-error { align-self: flex-start; background: rgba(239, 68, 68, .15); color: #fecaca; }
+  .aic-input-row { display: flex; gap: .4rem; padding: .6rem .65rem; border-top: 1px solid var(--color-border); }
+  .aic-input-row input { flex: 1; min-width: 0; padding: .45rem .6rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-main); font: inherit; font-size: .78rem; }
+
+  /* Conectividad de IA (Transparencia) */
+  .tp-ai-connect { display: block; }
+  .tp-ai-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .55rem; }
+  .tp-ai-providers { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .55rem; }
+  .tp-ai-card { padding: .6rem .7rem; background: rgba(255, 255, 255, .03); border: 1px solid var(--color-border); border-radius: 10px; font-size: .74rem; }
+  .tp-ai-card-head { display: flex; align-items: center; justify-content: space-between; gap: .4rem; margin-bottom: .3rem; font-weight: 800; }
+  .tp-ai-badge { padding: .1rem .45rem; border-radius: 999px; font-size: .64rem; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
+  .tp-ai-badge.is-ok { background: rgba(16, 185, 129, .18); color: #6ee7b7; }
+  .tp-ai-badge.is-warn { background: rgba(245, 158, 11, .18); color: #fcd34d; }
+  .tp-ai-badge.is-err { background: rgba(239, 68, 68, .18); color: #fca5a5; }
+  .tp-ai-card-detail { color: var(--color-text-muted); margin-bottom: .25rem; }
+  .tp-ai-free { color: var(--color-text-dim); font-size: .68rem; }
+  .tp-ai-usage { margin-top: .25rem; padding-top: .25rem; border-top: 1px dashed rgba(148, 163, 184, .18); color: #93c5fd; font-size: .66rem; word-break: break-all; }
+  .tp-ai-keys { display: flex; align-items: flex-end; gap: .55rem; flex-wrap: wrap; margin-top: .75rem; padding-top: .7rem; border-top: 1px dashed rgba(148, 163, 184, .18); }
+  .tp-ai-key-field { flex: 1; min-width: 220px; }
+  .tp-ai-key-status { font-size: .72rem; color: var(--color-text-muted); }
+
+  /* Tooltip global del panel (mejora los `title` nativos) */
+  .admin-tooltip { position: fixed; z-index: 120; max-width: 300px; padding: .45rem .6rem; background: #0b1220; border: 1px solid rgba(96, 165, 250, .35); border-radius: 8px; box-shadow: 0 12px 28px rgba(0, 0, 0, .45); color: #e5e7eb; font-size: .72rem; line-height: 1.4; pointer-events: none; white-space: pre-line; }
   /* El título ocupa una fila entera: actúa como cabecera del div y el resto
      de controles bajan a la línea siguiente. */
   .product-sel-title { flex: 1 0 100%; margin-right: 0; color: #93c5fd; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
@@ -8416,6 +8991,9 @@ function renderTableRows(products, resetPage = true) {
   .ali-import-tools { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; }
   .ali-import-tools[hidden] { display: none; }
   .ali-import-title { color: #93c5fd; font-size: .72rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }
+  /* Fila única con el meta del catálogo y los controles de sincronización */
+  .ali-f-sync-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; padding-bottom: .65rem; margin-bottom: .35rem; border-bottom: 1px dashed rgba(148, 163, 184, .18); }
+  .ali-f-sync-row .ali-catalog-meta { font-size: .74rem; color: var(--color-text-dim); }
   .ali-import-actions .btn-sm { padding: .32rem .6rem; font-size: .68rem; }
   .ali-catalog-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; margin-left: auto; flex-wrap: wrap; }
   .ali-catalog-meta { color: var(--color-text-dim); font-size: .72rem; white-space: nowrap; }
@@ -8437,6 +9015,11 @@ function renderTableRows(products, resetPage = true) {
   :global(.ac-page-btn:disabled) { opacity: .4; cursor: not-allowed; }
   :global(.ac-page-btn.is-current) { background: rgba(96, 165, 250, .2); border-color: #60a5fa; color: #bfdbfe; }
   :global(.ac-page-gap) { align-self: center; padding: 0 .2rem; }
+  :global(.ac-per-page) { display: inline-flex; align-items: center; gap: .35rem; font-size: .74rem; color: var(--color-text-dim); }
+  :global(.ac-per-page select) { padding: .25rem .4rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, .32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: .74rem; }
+  /* Select «Por página» de las barras de paginación de productos */
+  .pagination-per-page { display: inline-flex; align-items: center; gap: .35rem; font-size: .76rem; color: var(--color-text-muted); }
+  .pagination-per-page select { padding: .3rem .45rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-main); font: inherit; font-size: .76rem; }
 
   .text-right { text-align: right; }
 
@@ -8500,7 +9083,7 @@ function renderTableRows(products, resetPage = true) {
   .admin-login-page { min-height: calc(100vh - 9rem); max-width: var(--max-width); margin: 0 auto; padding: 4rem 1.25rem 5rem; display: grid; grid-template-columns: minmax(0, 500px) minmax(240px, 1fr); align-items: center; gap: clamp(3rem, 10vw, 9rem); }
   .admin-login-panel { padding: clamp(2rem, 5vw, 3.5rem); background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); box-shadow: 0 24px 70px rgba(0, 0, 0, .24); }
   .admin-login-mark { display: inline-flex; align-items: center; gap: .6rem; color: #60a5fa; font-size: .72rem; font-weight: 800; letter-spacing: .12em; }
-  .admin-login-kicker { margin: 3.5rem 0 .75rem; color: var(--color-text-dim); font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .admin-login-kicker { margin: 15px 0 .75rem; color: var(--color-text-dim); font-size: .78rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
   .admin-login-title { color: var(--color-text-main); font-family: var(--font-heading); font-size: clamp(2rem, 5vw, 3.1rem); line-height: 1.05; margin: 0; }
   .admin-login-description { max-width: 390px; margin: 1.25rem 0 2.25rem; color: var(--color-text-muted); line-height: 1.65; }
   .admin-login-form { display: grid; gap: 1.15rem; }
@@ -8529,7 +9112,7 @@ function renderTableRows(products, resetPage = true) {
     padding: 2.5rem 1.25rem 5rem;
     display: flex;
     flex-direction: column;
-    gap: 2.5rem;
+    gap: 30px;
   }
 
   /* 1. Header del Admin */

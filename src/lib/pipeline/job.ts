@@ -81,7 +81,7 @@ export interface StartJobOptions {
   scope?: 'all' | 'ids';
   dryRun?: boolean;
   enrich?: boolean;
-  provider?: 'openai' | 'anthropic' | 'groq';
+  provider?: 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter';
   /** Modelo de IA para esta tanda (los límites de Groq son por modelo). */
   model?: string;
 }
@@ -246,8 +246,8 @@ async function runJob(state: PipelineJobState, targets: any[]): Promise<void> {
   const delay = jobDelayMs();
   // El proveedor se estrecha al tipo que entiende la IA: si el estado guarda
   // otra cosa (fichero editado a mano) se usa el proveedor por defecto.
-  const provider: 'openai' | 'anthropic' | 'groq' | undefined =
-    state.provider === 'openai' || state.provider === 'anthropic' || state.provider === 'groq'
+  const provider: 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter' | undefined =
+    state.provider === 'openai' || state.provider === 'anthropic' || state.provider === 'groq' || state.provider === 'nvidia' || state.provider === 'openrouter'
       ? state.provider
       : undefined;
   // Modelo forzado para la tanda (los límites de Groq son por modelo).

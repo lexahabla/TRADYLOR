@@ -203,7 +203,7 @@ export const POST: APIRoute = async ({ request }) => {
     // Proveedor de IA opcional para esta tanda (p. ej. 'openai' cuando el
     // proveedor por defecto ha agotado su límite de peticiones).
     const providerRaw = String(body.provider || '').trim().toLowerCase();
-    const provider = providerRaw === 'openai' || providerRaw === 'anthropic' || providerRaw === 'groq'
+    const provider = providerRaw === 'openai' || providerRaw === 'anthropic' || providerRaw === 'groq' || providerRaw === 'nvidia' || providerRaw === 'openrouter'
       ? providerRaw
       : undefined;
 

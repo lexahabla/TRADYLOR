@@ -93,6 +93,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\adminAuth.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\adminDashboard.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\affiliateCatalog.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\ai.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\aiKeysStore.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\aliCatalogMerge.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\aliexpressCatalog.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\analytics.ts
@@ -159,6 +160,10 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\userProfiles.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\userStore.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\validateProducts.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\middleware.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\ai-console.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\ai-keys\index.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\ai-keys\test.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\ai-status.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\add-product.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\aliexpress\catalog.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\alternatives.ts

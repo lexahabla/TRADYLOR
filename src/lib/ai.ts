@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { CLIENT_IMAGES_DIR, IMAGES_DIR } from './paths';
+import { storedKeyForEnv } from './aiKeysStore';
 
 /**
  * Integración de IA para Compra Delegada.
@@ -18,7 +19,7 @@ import { CLIENT_IMAGES_DIR, IMAGES_DIR } from './paths';
  *   FLUX_API_KEY / FLUX_ENDPOINT
  */
 
-export type TextProvider = 'openai' | 'anthropic' | 'groq';
+export type TextProvider = 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter';
 export type ImageProvider = 'openai' | 'flux';
 
 export interface EnrichedPricing {
@@ -53,18 +54,38 @@ export interface ImageGenerationResult {
   sourceUrl?: string;
 }
 
+/** Variables de IA cuyo valor puede venir también del almacén del panel. */
+const AI_KEY_ENVS = new Set([
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'GROQ_API_KEY',
+  'NVIDIA_API_KEY',
+  'OPENROUTER_API_KEY',
+]);
+
 /** Lee variables de entorno con el patrón del proyecto (process.env ?? import.meta.env). */
 export function env(name: string): string {
   const fromProcess = process.env[name];
   if (fromProcess !== undefined && fromProcess !== '') return fromProcess;
   const fromAstro = (import.meta.env as Record<string, string | undefined>)[name];
-  return fromAstro ?? '';
+  if (fromAstro !== undefined && fromAstro !== '') return fromAstro;
+  // Fallback: claves guardadas desde el panel (Transparencia › Conectividad IA).
+  if (AI_KEY_ENVS.has(name)) {
+    try {
+      return storedKeyForEnv(name);
+    } catch {
+      return '';
+    }
+  }
+  return '';
 }
 
 export function textProvider(): TextProvider {
   const value = env('TEXT_AI_PROVIDER').toLowerCase();
   if (value === 'anthropic') return 'anthropic';
   if (value === 'groq') return 'groq';
+  if (value === 'nvidia') return 'nvidia';
+  if (value === 'openrouter') return 'openrouter';
   return 'openai';
 }
 
@@ -76,7 +97,163 @@ export function hasTextCredentials(providerOverride?: TextProvider): boolean {
   const provider = providerOverride ?? textProvider();
   if (provider === 'anthropic') return Boolean(env('ANTHROPIC_API_KEY'));
   if (provider === 'groq') return Boolean(env('GROQ_API_KEY'));
+  if (provider === 'nvidia') return Boolean(env('NVIDIA_API_KEY'));
+  if (provider === 'openrouter') return Boolean(env('OPENROUTER_API_KEY'));
   return Boolean(env('OPENAI_API_KEY'));
+}
+
+/** Clave de entorno que necesita cada proveedor de texto (para mensajes de error). */
+function textKeyEnvName(provider: TextProvider): string {
+  if (provider === 'anthropic') return 'ANTHROPIC_API_KEY';
+  if (provider === 'groq') return 'GROQ_API_KEY';
+  if (provider === 'nvidia') return 'NVIDIA_API_KEY';
+  if (provider === 'openrouter') return 'OPENROUTER_API_KEY';
+  return 'OPENAI_API_KEY';
+}
+
+/**
+ * Configuración de los proveedores compatibles con la API de OpenAI
+ * (openai, groq, nvidia, openrouter): mismo contrato, distinto endpoint,
+ * clave y modelo por defecto. NVIDIA y OpenRouter no admiten
+ * `response_format: json_object` en todos sus modelos, así que `jsonMode`
+ * sólo se activa donde es seguro (OpenAI y Groq).
+ */
+interface OpenAiCompatConfig {
+  url: string;
+  key: string;
+  model: string;
+  label: string;
+  jsonMode: boolean;
+  extraHeaders?: Record<string, string>;
+}
+
+function openAiCompat(provider: TextProvider, forcedModel?: string): OpenAiCompatConfig {
+  if (provider === 'groq') {
+    return {
+      url: 'https://api.groq.com/openai/v1/chat/completions',
+      key: env('GROQ_API_KEY'),
+      model: forcedModel || env('GROQ_MODEL') || 'openai/gpt-oss-120b',
+      label: 'Groq',
+      jsonMode: true,
+    };
+  }
+  if (provider === 'nvidia') {
+    return {
+      url: 'https://integrate.api.nvidia.com/v1/chat/completions',
+      key: env('NVIDIA_API_KEY'),
+      model: forcedModel || env('NVIDIA_MODEL') || 'meta/llama-3.3-70b-instruct',
+      label: 'NVIDIA',
+      jsonMode: false,
+    };
+  }
+  if (provider === 'openrouter') {
+    return {
+      url: 'https://openrouter.ai/api/v1/chat/completions',
+      key: env('OPENROUTER_API_KEY'),
+      model: forcedModel || env('OPENROUTER_MODEL') || 'deepseek/deepseek-chat-v3-0324:free',
+      label: 'OpenRouter',
+      jsonMode: false,
+      extraHeaders: { 'HTTP-Title': 'Tradylor' },
+    };
+  }
+  return {
+    url: 'https://api.openai.com/v1/chat/completions',
+    key: env('OPENAI_API_KEY'),
+    model: forcedModel || env('OPENAI_MODEL') || 'gpt-4o-mini',
+    label: 'OpenAI',
+    jsonMode: true,
+  };
+}
+
+/** Mensaje de chat estándar (compatible con OpenAI y Anthropic). */
+export interface ChatMessage {
+  role: 'system' | 'user' | 'assistant';
+  content: string;
+}
+
+/** Llamada de chat a un proveedor compatible con OpenAI. */
+async function callOpenAiCompat(
+  provider: TextProvider,
+  opts: {
+    messages: ChatMessage[];
+    temperature?: number;
+    maxTokens?: number;
+    forcedModel?: string;
+    timeoutMs?: number;
+  }
+): Promise<string> {
+  const compat = openAiCompat(provider, opts.forcedModel);
+  const body: Record<string, unknown> = {
+    model: compat.model,
+    temperature: opts.temperature ?? 0.4,
+    messages: opts.messages,
+  };
+  if (compat.jsonMode) body.response_format = { type: 'json_object' };
+  if (opts.maxTokens) body.max_tokens = opts.maxTokens;
+  const response = await fetchWithTimeout(
+    compat.url,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${compat.key}`,
+        ...(compat.extraHeaders || {}),
+      },
+      body: JSON.stringify(body),
+    },
+    opts.timeoutMs ?? 60_000
+  );
+  if (!response.ok) {
+    throw new Error(`${compat.label} respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
+  }
+  const payload = await response.json();
+  return payload?.choices?.[0]?.message?.content ?? '';
+}
+
+/**
+ * Chat multi-turno con el proveedor de IA configurado (o uno forzado).
+ * Lo usa la consola del panel (`/api/admin/ai-console`); lanza si no hay
+ * credenciales o el proveedor responde con error.
+ */
+export async function chatComplete(
+  messages: ChatMessage[],
+  opts: { provider?: TextProvider; model?: string; temperature?: number; timeoutMs?: number } = {}
+): Promise<string> {
+  const provider = opts.provider ?? textProvider();
+  if (!hasTextCredentials(provider)) {
+    throw new Error(`Falta ${textKeyEnvName(provider)} (entorno o claves del panel) para conversar con ${provider}`);
+  }
+  if (provider === 'anthropic') {
+    const model = opts.model?.trim() || env('ANTHROPIC_MODEL') || 'claude-3-5-sonnet-latest';
+    const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
+    const turns = messages.filter((m) => m.role !== 'system');
+    const response = await fetchWithTimeout(
+      'https://api.anthropic.com/v1/messages',
+      {
+        method: 'POST',
+        headers: anthropicHeaders(),
+        body: JSON.stringify({
+          model,
+          max_tokens: 1500,
+          temperature: opts.temperature ?? 0.6,
+          ...(system ? { system } : {}),
+          messages: turns.map((m) => ({ role: m.role, content: m.content })),
+        }),
+      },
+      opts.timeoutMs ?? 90_000
+    );
+    if (!response.ok) {
+      throw new Error(`Anthropic respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
+    }
+    const payload = await response.json();
+    return (payload?.content ?? []).map((block: any) => block?.text ?? '').join('');
+  }
+  return callOpenAiCompat(provider, {
+    messages,
+    temperature: opts.temperature ?? 0.6,
+    forcedModel: opts.model?.trim() || undefined,
+    timeoutMs: opts.timeoutMs ?? 90_000,
+  });
 }
 
 export function hasImageCredentials(): boolean {
@@ -169,13 +346,7 @@ export async function enrichProductText(input: {
   // quedarse sin TPD en un modelo no implica quedarse sin cuota en todos.
   const forcedModel = options.model?.trim();
   if (!hasTextCredentials(provider)) {
-    throw new Error(
-      provider === 'anthropic'
-        ? 'Falta ANTHROPIC_API_KEY para enriquecer el texto'
-        : provider === 'groq'
-          ? 'Falta GROQ_API_KEY para enriquecer el texto'
-          : 'Falta OPENAI_API_KEY para enriquecer el texto'
-    );
+    throw new Error(`Falta ${textKeyEnvName(provider)} para enriquecer el texto`);
   }
 
   const userContext = [
@@ -214,66 +385,17 @@ export async function enrichProductText(input: {
     return normalizeEnrichedText(parseLooseJson(text));
   }
 
-  if (provider === 'groq') {
-    // Groq es compatible con la API de OpenAI; nivel gratuito para desarrolladores.
-    // El modelo se puede forzar por petición: los límites diarios de tokens
-    // (TPD) son POR MODELO, así que agotar uno no agota los demás.
-    // Por defecto: openai/gpt-oss-120b (disponible en el plan free).
-    const model = forcedModel || env('GROQ_MODEL') || 'openai/gpt-oss-120b';
-    const response = await fetchWithTimeout(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${env('GROQ_API_KEY')}`,
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0.4,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: TEXT_SYSTEM_PROMPT },
-            { role: 'user', content: userContext },
-          ],
-        }),
-      },
-      60_000
-    );
-    if (!response.ok) {
-      throw new Error(`Groq respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
-    }
-    const payload = await response.json();
-    const text = payload?.choices?.[0]?.message?.content ?? '';
-    return normalizeEnrichedText(parseLooseJson(text));
-  }
-
-  const model = forcedModel || env('OPENAI_MODEL') || 'gpt-4o-mini';
-  const response = await fetchWithTimeout(
-    'https://api.openai.com/v1/chat/completions',
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${env('OPENAI_API_KEY')}`,
-      },
-      body: JSON.stringify({
-        model,
-        temperature: 0.4,
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: TEXT_SYSTEM_PROMPT },
-          { role: 'user', content: userContext },
-        ],
-      }),
-    },
-    60_000
-  );
-  if (!response.ok) {
-    throw new Error(`OpenAI respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
-  }
-  const payload = await response.json();
-  const text = payload?.choices?.[0]?.message?.content ?? '';
+  // Compatibles con OpenAI: openai, groq (plan gratuito), nvidia (NIM) y
+  // openrouter (modelos ":free"). Mismo contrato, distinto endpoint/modelo.
+  const text = await callOpenAiCompat(provider, {
+    messages: [
+      { role: 'system', content: TEXT_SYSTEM_PROMPT },
+      { role: 'user', content: userContext },
+    ],
+    temperature: 0.4,
+    forcedModel,
+    timeoutMs: 60_000,
+  });
   return normalizeEnrichedText(parseLooseJson(text));
 }
 
@@ -470,11 +592,6 @@ export async function extractProductPageFields(input: {
     .filter((line) => line !== undefined)
     .join('\n');
 
-  const messages = [
-    { role: 'system', content: PAGE_EXTRACT_SYSTEM_PROMPT },
-    { role: 'user', content: userContext },
-  ];
-
   const provider = textProvider();
   let raw: any;
 
@@ -494,46 +611,15 @@ export async function extractProductPageFields(input: {
     }
     const payload = await response.json();
     raw = parseLooseJson((payload?.content ?? []).map((block: any) => block?.text ?? '').join(''));
-  } else if (provider === 'groq') {    const response = await fetchWithTimeout(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env('GROQ_API_KEY')}` },
-        body: JSON.stringify({
-          model: 'openai/gpt-oss-120b',
-          temperature: 0.2,
-          response_format: { type: 'json_object' },
-          messages,
-        }),
-      },
-      55_000
-    );
-    if (!response.ok) {
-      throw new Error(`Groq respondió ${response.status}`);
-    }
-    const payload = await response.json();
-    raw = parseLooseJson(payload?.choices?.[0]?.message?.content ?? '');
   } else {
-    const model = env('OPENAI_MODEL') || 'gpt-4o-mini';
-    const response = await fetchWithTimeout(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env('OPENAI_API_KEY')}` },
-        body: JSON.stringify({
-          model,
-          temperature: 0.2,
-          response_format: { type: 'json_object' },
-          messages,
-        }),
-      },
-      55_000
-    );
-    if (!response.ok) {
-      throw new Error(`OpenAI respondió ${response.status}`);
-    }
-    const payload = await response.json();
-    raw = parseLooseJson(payload?.choices?.[0]?.message?.content ?? '');
+    raw = parseLooseJson(await callOpenAiCompat(provider, {
+      messages: [
+        { role: 'system', content: PAGE_EXTRACT_SYSTEM_PROMPT },
+        { role: 'user', content: userContext },
+      ],
+      temperature: 0.2,
+      timeoutMs: 55_000,
+    }));
   }
 
   return normalizePageFields(raw, images);
@@ -664,13 +750,7 @@ export async function synthesizeProductTitle(input: {
 }): Promise<string> {
   const provider = textProvider();
   if (!hasTextCredentials()) {
-    throw new Error(
-      provider === 'anthropic'
-        ? 'Falta ANTHROPIC_API_KEY para sintetizar el título'
-        : provider === 'groq'
-          ? 'Falta GROQ_API_KEY para sintetizar el título'
-          : 'Falta OPENAI_API_KEY para sintetizar el título'
-    );
+    throw new Error(`Falta ${textKeyEnvName(provider)} para sintetizar el título`);
   }
 
   const userContext = [
@@ -706,59 +786,16 @@ export async function synthesizeProductTitle(input: {
     }
     const payload = await response.json();
     text = (payload?.content ?? []).map((block: any) => block?.text ?? '').join('');
-  } else if (provider === 'groq') {
-    const response = await fetchWithTimeout(
-      'https://api.groq.com/openai/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${env('GROQ_API_KEY')}`,
-        },
-        body: JSON.stringify({
-          model: 'openai/gpt-oss-120b',
-          temperature: 0.3,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: TITLE_SYSTEM_PROMPT },
-            { role: 'user', content: userContext },
-          ],
-        }),
-      },
-      45_000
-    );
-    if (!response.ok) {
-      throw new Error(`Groq respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
-    }
-    const payload = await response.json();
-    text = payload?.choices?.[0]?.message?.content ?? '';
   } else {
-    const model = env('OPENAI_MODEL') || 'gpt-4o-mini';
-    const response = await fetchWithTimeout(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${env('OPENAI_API_KEY')}`,
-        },
-        body: JSON.stringify({
-          model,
-          temperature: 0.3,
-          response_format: { type: 'json_object' },
-          messages: [
-            { role: 'system', content: TITLE_SYSTEM_PROMPT },
-            { role: 'user', content: userContext },
-          ],
-        }),
-      },
-      45_000
-    );
-    if (!response.ok) {
-      throw new Error(`OpenAI respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
-    }
-    const payload = await response.json();
-    text = payload?.choices?.[0]?.message?.content ?? '';
+    text = await callOpenAiCompat(provider, {
+      messages: [
+        { role: 'system', content: TITLE_SYSTEM_PROMPT },
+        { role: 'user', content: userContext },
+      ],
+      temperature: 0.3,
+      maxTokens: 150,
+      timeoutMs: 45_000,
+    });
   }
 
   const parsed = parseLooseJson(text);

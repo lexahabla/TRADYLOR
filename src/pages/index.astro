@@ -209,30 +209,6 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
             </p>
           )}
         </div>
-
-        <div class="catalog-toolbar" role="toolbar" aria-label="Controles de ordenación del catálogo">
-          <div class="catalog-sort-group">
-            <label for="catalogSortSelect" class="catalog-sort-label">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <line x1="21" y1="10" x2="3" y2="10"></line>
-                <line x1="21" y1="6" x2="7" y2="6"></line>
-                <line x1="21" y1="14" x2="11" y2="14"></line>
-                <line x1="21" y1="18" x2="15" y2="18"></line>
-              </svg>
-              <span>Ordenar por:</span>
-            </label>
-            <div class="catalog-sort-select-wrapper">
-              <select id="catalogSortSelect" class="catalog-sort-select" aria-label="Ordenar catálogo por">
-                <option value="score" selected={currentSort === 'score'}>Mejor rentabilidad (Score)</option>
-                <option value="ventas" selected={currentSort === 'ventas'}>Más vendidos</option>
-                <option value="valoracion" selected={currentSort === 'valoracion'}>Mejor valorados</option>
-              </select>
-              <svg class="catalog-sort-select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div class="products-grid">
@@ -775,20 +751,8 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
 
 <script is:inline>
   (() => {
-    const sortSelect = document.getElementById('catalogSortSelect');
-    if (!sortSelect) return;
-    sortSelect.addEventListener('change', () => {
-      const selected = sortSelect.value;
-      const url = new URL(window.location.href);
-      if (selected && selected !== 'score') {
-        url.searchParams.set('sort', selected);
-      } else {
-        url.searchParams.delete('sort');
-      }
-      url.searchParams.delete('page');
-      url.hash = 'catalogo';
-      window.location.href = url.toString();
-    });
+    // El toolbar de ordenación (.catalog-toolbar) se trasladó al panel de
+    // administración (#productSelBar). El orden por URL (?sort=) sigue activo.
   })();
 </script>
 
@@ -982,106 +946,11 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     max-width: 720px;
   }
 
-  .catalog-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.25rem;
-  }
-
-  .catalog-sort-group {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.55rem;
-    background: rgba(17, 24, 39, 0.9);
-    border: 1px solid var(--color-border);
-    border-radius: var(--border-radius-sm);
-    padding: 0.45rem 0.85rem;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
-  }
-
-  .catalog-sort-group:hover,
-  .catalog-sort-group:focus-within {
-    border-color: #3b82f6;
-    background: rgba(17, 24, 39, 1);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
-  }
-
-  .catalog-sort-label {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.45rem;
-    color: var(--color-text-muted);
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
-    white-space: nowrap;
-    user-select: none;
-  }
-
-  .catalog-sort-label svg {
-    color: #38bdf8;
-    flex-shrink: 0;
-  }
-
-  .catalog-sort-select-wrapper {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .catalog-sort-select {
-    appearance: none;
-    -webkit-appearance: none;
-    background: transparent;
-    border: 0;
-    color: #f3f4f6;
-    font-family: inherit;
-    font-size: 0.88rem;
-    font-weight: 700;
-    padding: 0.35rem 1.6rem 0.35rem 0.3rem;
-    cursor: pointer;
-    outline: none;
-  }
-
-  .catalog-sort-select option {
-    background: #0f172a;
-    color: #f3f4f6;
-    padding: 0.4rem;
-  }
-
-  .catalog-sort-select-chevron {
-    position: absolute;
-    right: 0.2rem;
-    pointer-events: none;
-    color: var(--color-text-dim);
-    transition: color 0.2s ease, transform 0.2s ease;
-  }
-
-  .catalog-sort-group:hover .catalog-sort-select-chevron {
-    color: #38bdf8;
-  }
-
   @media (max-width: 768px) {
     .catalog-header-bar {
       flex-direction: column;
       align-items: flex-start;
       gap: 1.25rem;
-    }
-    .catalog-toolbar {
-      width: 100%;
-    }
-    .catalog-sort-group {
-      width: 100%;
-      justify-content: space-between;
-    }
-    .catalog-sort-select-wrapper {
-      flex: 1;
-      justify-content: flex-end;
-    }
-    .catalog-sort-select {
-      text-align: right;
-      width: 100%;
     }
   }
 

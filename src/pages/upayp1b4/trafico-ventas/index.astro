@@ -94,6 +94,24 @@ const registrosIniciales = registrosVentas.filter((v) => v.fecha >= desdeISO && 
     <script type="application/json" id="ventas-registros-json" set:html={JSON.stringify(registrosVentas)} />
     <script type="application/json" id="ventas-serie-json" set:html={JSON.stringify(serieIngresos)} />
   </div>
+
+  <!-- Botón flotante: volver al menú de secciones del backend -->
+  <button type="button" id="adminBackToTop" class="admin-back-to-top" title="Volver al menú de secciones" aria-label="Volver al menú de secciones">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <line x1="12" y1="19" x2="12" y2="5"></line>
+      <polyline points="5 12 12 5 19 12"></polyline>
+    </svg>
+    <span>Secciones</span>
+  </button>
+
+  <script is:inline>
+    const adminBackToTop = document.getElementById('adminBackToTop');
+    if (adminBackToTop) {
+      adminBackToTop.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    }
+  </script>
 </Layout>
 
 <style>
@@ -107,6 +125,30 @@ const registrosIniciales = registrosVentas.filter((v) => v.fecha >= desdeISO && 
   .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
   .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
   .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
+  /* Botón flotante: volver al menú de secciones (alineado a la izquierda) */
+  .admin-back-to-top {
+    position: fixed;
+    left: 1.1rem;
+    bottom: 1.1rem;
+    z-index: 70;
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .65rem .95rem;
+    color: #04121f;
+    background: linear-gradient(135deg, #38bdf8, #22d3ee);
+    border: 0;
+    border-radius: 999px;
+    box-shadow: 0 10px 26px rgba(56, 189, 248, .35);
+    cursor: pointer;
+    font: inherit;
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: .02em;
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+  .admin-back-to-top:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(56, 189, 248, .5); }
+  .admin-back-to-top svg { display: block; }
   .module-heading-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.6rem; margin-top: 0.9rem; }
   .data-example-pill { padding: 0.35rem 0.85rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
   .guide-link { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.55rem 1rem; color: #06121f; background: #38bdf8; border-radius: 9999px; font-size: 0.78rem; font-weight: 800; text-decoration: none; transition: background 0.2s ease; }

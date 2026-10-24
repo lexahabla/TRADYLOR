@@ -37,6 +37,7 @@ import { findIngestDuplicate } from '../../../../lib/pipeline/stageIngest';
 import { runStageAudit } from '../../../../lib/pipeline/stageAudit';
 import { getPipelineConfig } from '../../../../lib/pipeline/config';
 import { computeEditorialStatus, extractNormalizedTags, computeConversionScore } from '../../../../lib/curation';
+import { isSecondHand } from '../../../../utils/aliCatalogFilters';
 import { incrementMetric, touchMetrics } from '../../../../lib/pipeline/metrics';
 import { enrichProductText, generateProductImage, hasTextCredentials, hasImageCredentials } from '../../../../lib/ai';
 import fs from 'fs';
@@ -369,6 +370,21 @@ function qualityFilter(products: CanonicalWithMeta[], filterStats: Record<string
     }
     if (!isValidPrice(p.price)) {
       filterStats.invalid_price = (filterStats.invalid_price || 0) + 1;
+      return false;
+    }
+    // Segunda mano / reacondicionados: nunca entran en el catálogo público
+    // (mismo detector que el preset «Segunda Mano» del panel).
+    const secondHand = (p as any)._sourceUnified
+      ? isSecondHand((p as any)._sourceUnified)
+      : /\b(segunda\s+mano|reacondicionad[oa]s?|refurbished|pre-owned|usad[oa]s?|open\s*box|km\s*0|ex-demo|seminuev[oa]s?)\b/i
+          .test(`${p.title} ${p.description || ''} ${p.category || ''}`);
+    if (secondHand) {
+      filterStats.second_hand = (filterStats.second_hand || 0) + 1;
+      return false;
+    }
+    // Sin stock: el conector lo marca explícitamente (nunca se asume true).
+    if (p.inStock === false) {
+      filterStats.out_of_stock = (filterStats.out_of_stock || 0) + 1;
       return false;
     }
     if (BUILD_CONFIG.REQUIRE_IMAGE && !hasValidImage(p.mainImage)) {
