@@ -701,7 +701,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <span id="paginationTotalTop" class="ac-page-info">Mostrando 1–{Math.min(initialPageProducts.length, initialTotalProducts)} de {initialTotalProducts}</span>
         <label class="ac-per-page" title="Elige cuántos productos quieres ver por página">
           Por página
-          <select data-ac-per-page aria-label="Productos por página">
+          <select data-ac-per-page aria-label="Productos por página" style="padding: 0px;">
             <option value="25">25</option>
             <option value="50" selected>50</option>
             <option value="75">75</option>
@@ -762,7 +762,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <span id="paginationTotal" class="ac-page-info">Mostrando 1–{Math.min(initialPageProducts.length, initialTotalProducts)} de {initialTotalProducts}</span>
         <label class="ac-per-page" title="Elige cuántos productos quieres ver por página">
           Por página
-          <select data-ac-per-page aria-label="Productos por página">
+          <select data-ac-per-page aria-label="Productos por página" style="padding: 0px;">
             <option value="25">25</option>
             <option value="50" selected>50</option>
             <option value="75">75</option>
@@ -5767,7 +5767,7 @@ function renderTableRows(products, resetPage = true) {
       if (total === 0) return '';
       const info = `<span class="ac-page-info">Mostrando ${start + 1}–${start + shown} de ${total}</span>`;
       const perPage = `<label class="ac-per-page" title="Elige cuántos productos quieres ver por página">Por página
-        <select data-ac-per-page aria-label="Productos por página">
+        <select data-ac-per-page aria-label="Productos por página" style="padding: 0px;">
           ${[25, 50, 75].map((n) => `<option value="${n}"${n === aliPageSize ? ' selected' : ''}>${n}</option>`).join('')}
         </select></label>`;
       if (pages <= 1) return `<div class="ac-pager">${info}${perPage}</div>`;
@@ -9153,8 +9153,10 @@ function renderTableRows(products, resetPage = true) {
     color: var(--color-text-dim);
     white-space: nowrap;
   }
+  #productsPaginationTop .ac-per-page select,
+  #productsPagination .ac-per-page select,
   :global(.ac-per-page select) {
-    padding: 0;
+    padding: 0px !important;
     background: #0b1220;
     border: 1px solid rgba(148, 163, 184, .32);
     border-radius: 6px;
