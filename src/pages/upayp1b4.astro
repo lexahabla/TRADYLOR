@@ -8721,6 +8721,8 @@ function renderTableRows(products, resetPage = true) {
   .ali-sort-group { display: flex; gap: .3rem; align-items: center; }
   .ali-sort-group select { flex: 0 0 auto; min-width: 120px; max-width: 170px; }
   .ali-sort-dir { flex-shrink: 0; min-width: 34px; font-size: .9rem; font-weight: 800; line-height: 1; }
+  /* Select de valoración mínima del catálogo: más estrecho para no solaparse con el botón de dirección de ordenación */
+  #prodFRatingMin { min-width: 110px; width: 110px; max-width: 110px; padding: .2rem .35rem; font-size: .72rem; }
 
   /* ── Catálogo AliExpress: barra de filtros en 3 capas ─────────────────
      (clases nuevas; .ali-filters / .ali-filters-row / .ali-sort-group /
@@ -9180,8 +9182,8 @@ function renderTableRows(products, resetPage = true) {
   :global(.ac-page-btn:disabled) { opacity: .4; cursor: not-allowed; }
   :global(.ac-page-btn.is-current) { background: rgba(96, 165, 250, .2); border-color: #60a5fa; color: #bfdbfe; }
   :global(.ac-page-gap) { align-self: center; padding: 0 .2rem; }
-  :global(.ac-per-page) { display: inline-flex; align-items: center; gap: .35rem; min-width: 170px; font-size: .74rem; color: var(--color-text-dim); }
-  :global(.ac-per-page select) { padding: .18rem .35rem; min-width: 4.6rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, .32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: .68rem; }
+  :global(.ac-per-page) { display: inline-flex; align-items: center; gap: .4rem; min-width: 210px; font-size: .74rem; color: var(--color-text-dim); }
+  :global(.ac-per-page select) { padding: .12rem .28rem; min-width: 3.4rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, .32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: .62rem; }
   /* Select «Por página» de las barras de paginación de productos */
   .pagination-per-page { display: inline-flex; align-items: center; gap: .35rem; font-size: .76rem; color: var(--color-text-muted); }
   .pagination-per-page select { padding: .3rem .45rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-main); font: inherit; font-size: .76rem; }
