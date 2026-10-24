@@ -765,16 +765,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </tbody>
         </table>
       </div>
-      <div class="sections-admin">
-        <div class="list-header-row">
-          <div>
-            <h3 class="card-title">Secciones de la web</h3>
-            <p class="card-desc">Crea secciones que se mostrarán en la portada con los productos que elijas (arrastra desde el catálogo con la selección).</p>
-          </div>
-        </div>
-        <div id="sectionsListAdmin" class="sections-list-admin"></div>
-      </div>
-
       <div id="productsPagination" class="ac-pager" {initialTotalPages <= 1 ? 'hidden' : ''}>
         <span id="paginationTotal" class="ac-page-info">Mostrando 1–{Math.min(initialPageProducts.length, initialTotalProducts)} de {initialTotalProducts}</span>
         <label class="ac-per-page" title="Elige cuántos productos quieres ver por página">
@@ -803,7 +793,17 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     </section>
 
-
+    <section class="admin-card products-list-card hidden-section">
+      <div class="sections-admin">
+        <div class="list-header-row">
+          <div>
+            <h3 class="card-title">Secciones de la web</h3>
+            <p class="card-desc">Crea secciones que se mostrarán en la portada con los productos que elijas (arrastra desde el catálogo con la selección).</p>
+          </div>
+        </div>
+        <div id="sectionsListAdmin" class="sections-list-admin"></div>
+      </div>
+    </section>
 
     <section data-admin-view="affiliates" class:list={['admin-card', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'affiliates' }]}>
 
