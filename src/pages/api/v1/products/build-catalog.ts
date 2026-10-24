@@ -739,7 +739,7 @@ async function buildAndUpsertProducts(
         ...(group.bestCommissionRate > 0 ? [`Comisión ${group.bestCommissionRate}%`] : []),
       ],
       cons: group.variants.length > 0 ? [`Comparar precios en ${group.allNetworks.join(', ')}`] : [],
-      badge: hsrBadge || computeBadge(product as Product & { hsrScore?: number }),
+      badge: hsrBadge,
       rating: group.bestRating > 0 ? group.bestRating : undefined,
       reviewsCount: canonical.reviewCount > 0 ? canonical.reviewCount : undefined,
       brand: canonical.brand,
@@ -777,6 +777,14 @@ async function buildAndUpsertProducts(
         },
       },
     };
+
+    // `computeBadge` lee precio/rating/ventas/etc. del propio producto, así que
+    // necesita que `product` ya exista: no se puede llamar dentro de su propio
+    // literal (eso lanzaba "Cannot access 'product' before initialization" y
+    // abortaba TODO el build en el primer producto no marcado como HSR).
+    if (!product.badge) {
+      product.badge = computeBadge(product as Product & { hsrScore?: number });
+    }
 
     // ─── Enriquecimiento con IA (texto + imagen) ────────────────────────────────
     // Solo enriquecer productos NUEVOS (no actualizaciones) y solo si hay credenciales
