@@ -1551,7 +1551,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <select id="aicProvider" title="Proveedor con el que conversar. «opencode (local)» ejecuta el asistente instalado en el servidor.">
         <option value="">Automático (proveedor configurado)</option>
       </select>
-      <input id="aicModel" type="text" placeholder="modelo (auto)" title="Modelo a usar (opcional). Los modelos gratuitos de cada proveedor están indicados en Transparencia › Conectividad de IA." />
+      <select id="aicModel" title="Modelo gratuito del proveedor seleccionado. Se pobla con los modelos gratuitos de cada proveedor de Transparencia.">
+        <option value="">auto (modelo del proveedor)</option>
+      </select>
     </div>
     <div id="aicMessages" class="aic-messages" aria-live="polite">
       <div class="aic-msg is-system">Conversa con la IA del panel o pídele tareas de curación del catálogo. Con «opencode (local)» se ejecuta el asistente instalado en el servidor.</div>
@@ -3256,7 +3258,7 @@ function renderTableRows(products, resetPage = true) {
               ${p.techSheet ? `<div class="aff-detail-item"><dt>Ficha técnica</dt><dd>${escapeHtml ? escapeHtml(p.techSheet) : p.techSheet}</dd></div>` : ''}
               ${p.shippingInfo ? `<div class="aff-detail-item"><dt>Envío</dt><dd>${p.shippingInfo}${p.shippingDays != null ? ` (${p.shippingDays} d)` : ''}${p.freeShipping ? ' · gratis' : ''}</dd></div>` : ''}
               ${p.buyNowUrl ? `<div class="aff-detail-item"><dt>Compra directa</dt><dd><a href="${p.buyNowUrl}" target="_blank" rel="nofollow noopener" class="test-link">Abrir Buy Now</a></dd></div>` : ''}
-              <div class="aff-detail-item aff-detail-url"><dt>Enlace Afiliado</dt><dd><a href="${p.affiliateUrl || '#'}" target="_blank" rel="nofollow noopener noreferrer" class="test-link" style="word-break:break-all;">${p.affiliateUrl ? (escapeHtml ? escapeHtml(p.affiliateUrl) : p.affiliateUrl) : '— Sin enlace de afiliado —'}</a></dd></div>
+              <div class="aff-detail-item aff-detail-url"><dt>Enlace Afiliado</dt><dd><span class="url-chip"><a href="${p.affiliateUrl || '#'}" target="_blank" rel="nofollow noopener noreferrer" class="url-chip-text" title="${p.affiliateUrl || ''}" style="word-break:break-all;">${p.affiliateUrl ? (escapeHtml ? escapeHtml(p.affiliateUrl) : p.affiliateUrl) : '— Sin enlace de afiliado —'}</a><button type="button" class="url-chip-btn url-chip-copy" data-url="${p.affiliateUrl || ''}" title="Copiar enlace" aria-label="Copiar enlace"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button type="button" class="url-chip-btn url-chip-toggle" title="Mostrar u ocultar la URL completa" aria-label="Desplegar URL"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button></span></dd></div>
               ${p.specs && Object.keys(p.specs).length ? `<div class="aff-detail-item"><dt>Especificaciones</dt><dd>${Object.entries(p.specs).map(([k, v]) => `${escapeHtml ? escapeHtml(k) : k}: ${escapeHtml ? escapeHtml(String(v)) : v}`).join(' · ')}</dd></div>` : ''}
               ${Array.isArray(p.pros) && p.pros.length ? `<div class="aff-detail-item"><dt>Pros</dt><dd>${p.pros.join(' · ')}</dd></div>` : ''}
               ${Array.isArray(p.cons) && p.cons.length ? `<div class="aff-detail-item"><dt>Contras</dt><dd>${p.cons.join(' · ')}</dd></div>` : ''}
@@ -3366,7 +3368,22 @@ function renderTableRows(products, resetPage = true) {
                   : undefined;
                 prodSubcategory.value = sub?.name || '';
               }
-              prodMerchant.value = product.merchant || 'Amazon';
+              // Auto-selecciona el comerciante del producto en el select del formulario.
+              // Si el comerciante no está entre las opciones fijas, se añade como opción personalizada.
+              const merchantValue = product.merchant || 'Amazon';
+              if (prodMerchant) {
+                let found = false;
+                for (const opt of prodMerchant.options) {
+                  if (opt.value === merchantValue) { found = true; break; }
+                }
+                if (!found && merchantValue) {
+                  const customOpt = document.createElement('option');
+                  customOpt.value = merchantValue;
+                  customOpt.textContent = merchantValue;
+                  prodMerchant.appendChild(customOpt);
+                }
+                prodMerchant.value = merchantValue;
+              }
               prodAffiliateUrl.value = product.affiliateUrl || '';
               prodBuyNowUrl.value = product.buyNowUrl || '';
               prodImage.value = product.image || '';
@@ -3860,8 +3877,19 @@ function renderTableRows(products, resetPage = true) {
     }
     prodToolbarSort?.addEventListener('change', () => {
       if (prodFSort && 'value' in prodFSort) prodFSort.value = prodToolbarSort.value;
+      // Persiste la ordenación elegida para que el catálogo público del frontend
+      // la aplique a los usuarios finales.
+      try { localStorage.setItem('tradylor_public_sort', prodToolbarSort.value); } catch {}
       prodFilterApply();
     });
+    // Al arrancar, restaura la ordenación guardada (si existe) sobre el toolbar y el filtro.
+    try {
+      const savedSort = localStorage.getItem('tradylor_public_sort');
+      if (savedSort && prodToolbarSort && prodToolbarSort.value !== savedSort) {
+        prodToolbarSort.value = savedSort;
+        if (prodFSort && 'value' in prodFSort) prodFSort.value = savedSort;
+      }
+    } catch {}
     prodFSort?.addEventListener('change', () => {
       if (prodToolbarSort && prodFSort && 'value' in prodFSort && prodToolbarSort.value !== prodFSort.value) {
         prodToolbarSort.value = prodFSort.value;
@@ -3969,6 +3997,45 @@ function renderTableRows(products, resetPage = true) {
         if (data.success) {
           showAlert('success', 'Categoría asignada', `${ids.length} producto(s) en «${categoryName}» (${data.updated} cambiados).`);
           await reloadProductsTable();
+
+          // Enriquecer cada producto asignado con la misma lógica de IA que btnAiEnrich
+          // (texto + ficha + imagen vía /api/admin/add-product).
+          let enrichedCount = 0;
+          for (const id of ids) {
+            const product = (currentProducts || []).find((p) => p.id === id);
+            if (!product) continue;
+            try {
+              const res = await fetch('/api/admin/add-product', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  id: product.id,
+                  title: product.title || '',
+                  description: product.description || '',
+                  category: product.category || undefined,
+                  price: product.price ? Number(product.price) : undefined,
+                  originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
+                  image: product.image || undefined,
+                  affiliateUrl: product.affiliateUrl || undefined,
+                  merchant: product.merchant || undefined,
+                  url: product.affiliateUrl || undefined,
+                  brand: product.brand || undefined,
+                  rating: product.rating != null ? Number(product.rating) : undefined,
+                  reviewsCount: product.reviewsCount != null ? Number(product.reviewsCount) : undefined,
+                  specs: product.specs && typeof product.specs === 'object' ? product.specs : undefined,
+                  pros: Array.isArray(product.pros) ? product.pros : undefined,
+                  cons: Array.isArray(product.cons) ? product.cons : undefined,
+                  techSheet: product.techSheet || undefined,
+                  options: { text: true, image: true, save: true },
+                }),
+              });
+              const data2 = await res.json();
+              if (data2.success) enrichedCount++;
+            } catch { /* enriquecimiento individual: no falla el alta de categoría */ }
+          }
+          if (enrichedCount) {
+            await reloadProductsTable();
+            showAlert('success', 'Categoría + IA aplicada', `${ids.length} producto(s) categorizados y ${enrichedCount} enriquecido${enrichedCount === 1 ? '' : 's'} con IA.`);
+          }
         } else {
           showAlert('error', 'Error al asignar', data.message || 'No se pudo actualizar la categoría.');
         }
@@ -4080,39 +4147,80 @@ function renderTableRows(products, resetPage = true) {
       enrichProgressEl.hidden = false;
       const total = ids.length;
       let done = 0;
+      let okCount = 0;
+      let failCount = 0;
+      const warnings = [];
 
+      // Enriquece cada producto con la misma lógica de IA que btnAiEnrich:
+      // POST /api/admin/add-product con options { text: true, image: true, save: true }
       try {
-        const res = await fetch('/api/admin/enrich-bulk', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids, forceImage: false, save: true }),
-        });
-        const data = await res.json();
+        for (let i = 0; i < ids.length; i++) {
+          const id = ids[i];
+          const product = (currentProducts || []).find((p) => p.id === id);
+          if (!product) continue;
 
-        // Barra de progreso al 100 % cuando termina.
-        if (enrichProgressBar) enrichProgressBar.style.width = '100%';
-        if (enrichProgressText) enrichProgressText.textContent = `${total} / ${total} productos procesados`;
+          const payload = {
+            id: product.id,
+            title: product.title || '',
+            description: product.description || '',
+            category: product.category || undefined,
+            price: product.price ? Number(product.price) : undefined,
+            originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
+            image: product.image || undefined,
+            affiliateUrl: product.affiliateUrl || undefined,
+            merchant: product.merchant || undefined,
+            url: product.affiliateUrl || undefined,
+            brand: product.brand || undefined,
+            rating: product.rating != null ? Number(product.rating) : undefined,
+            reviewsCount: product.reviewsCount != null ? Number(product.reviewsCount) : undefined,
+            specs: product.specs && typeof product.specs === 'object' ? product.specs : undefined,
+            pros: Array.isArray(product.pros) ? product.pros : undefined,
+            cons: Array.isArray(product.cons) ? product.cons : undefined,
+            techSheet: product.techSheet || undefined,
+            options: { text: true, image: true, save: true },
+          };
+
+          try {
+            const res = await fetch('/api/admin/add-product', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (data.success) {
+              okCount++;
+              if (Array.isArray(data.enrichment?.warnings)) {
+                warnings.push(...data.enrichment.warnings);
+              }
+            } else {
+              failCount++;
+              warnings.push(`${product.title || id}: ${data.message || 'error'}`);
+            }
+          } catch (err) {
+            failCount++;
+            warnings.push(`${product.title || id}: error de red`);
+          }
+
+          done++;
+          if (enrichProgressBar) enrichProgressBar.style.width = `${Math.round((done / total) * 100)}%`;
+          if (enrichProgressText) enrichProgressText.textContent = `${done} / ${total} productos procesados`;
+        }
 
         selectedProductIds.clear();
         updateProdSelCount();
         await reloadProductsTable();
 
-        const ok = data.processed || 0;
-        const failed = data.failed || 0;
         removeEnrichProgress();
 
-        if (data.success) {
-          showAlert(
-            failed ? 'warning' : 'success',
-            'Enriquecimiento masivo finalizado',
-            `${ok} producto${ok === 1 ? '' : 's'} procesado${ok === 1 ? '' : 's'}${failed ? ` · ${failed} con error` : ''}.`
-          );
+        if (failCount === 0) {
+          showAlert('success', 'Enriquecimiento masivo finalizado', `${okCount} producto${okCount === 1 ? '' : 's'} enriquecido${okCount === 1 ? '' : 's'} con IA.`);
         } else {
-          showAlert('error', 'Error en enriquecimiento masivo', data.message || 'No se pudo completar el enriquecimiento.');
+          const warnText = warnings.length ? ` · Avisos: ${warnings.slice(0, 5).join(' | ')}` : '';
+          showAlert('warning', 'Enriquecimiento masivo finalizado con errores', `${okCount} producto${okCount === 1 ? '' : 's'} OK · ${failCount} con error${warnText}.`);
         }
       } catch (err) {
         removeEnrichProgress();
         console.error(err);
-        showAlert('error', 'Error de red', 'No se pudo contactar con /api/admin/enrich-bulk.');
+        showAlert('error', 'Error de red', 'No se pudo completar el enriquecimiento masivo.');
       }
     });
 
@@ -8149,11 +8257,33 @@ function renderTableRows(products, resetPage = true) {
         const note = p.pricingNote ? `<div class="tp-ai-free">${p.pricingNote}</div>` : '';
         const docs = p.docsUrl ? `<div class="tp-ai-free"><a href="${p.docsUrl}" target="_blank" rel="noopener noreferrer">Documentación ↗</a></div>` : '';
         return `<div class="tp-ai-card">
-          <div class="tp-ai-card-head"><span>${p.name || p.id}</span><span class="tp-ai-badge ${aiBadgeClass(p.status)}">${aiBadgeLabel(p.status)}</span></div>
-          <div class="tp-ai-card-detail">${p.detail || ''}</div>
-          ${key}${free}${note}${docs}${usage}
+          <div class="tp-ai-card-head" role="button" tabindex="0" aria-expanded="false" aria-controls="ai-detail-${p.id}" title="Desplegar detalles de ${p.name || p.id}">
+            <span>${p.name || p.id}</span>
+            <span class="tp-ai-badge ${aiBadgeClass(p.status)}">${aiBadgeLabel(p.status)}</span>
+            <span class="tp-ai-chevron" aria-hidden="true">▸</span>
+          </div>
+          <div id="ai-detail-${p.id}" class="tp-ai-card-body" hidden>
+            <div class="tp-ai-card-detail">${p.detail || ''}</div>
+            ${key}${free}${note}${docs}${usage}
+          </div>
         </div>`;
       }).join('');
+
+      // Acordeón: desplegar/ocultar el cuerpo de cada tarjeta de proveedor de IA.
+      tpAiProviders.querySelectorAll('.tp-ai-card-head').forEach((head) => {
+        const targetId = head.getAttribute('aria-controls');
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (!target) return;
+        const chevron = head.querySelector('.tp-ai-chevron');
+        const toggle = () => {
+          const open = !target.hidden;
+          target.hidden = open;
+          head.setAttribute('aria-expanded', String(!open));
+          if (chevron) chevron.textContent = open ? '▸' : '▾';
+        };
+        head.addEventListener('click', toggle);
+        head.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+      });
     }
 
     async function tpLoadAiStatus(live) {
@@ -8279,6 +8409,7 @@ function renderTableRows(products, resetPage = true) {
       if (open) {
         aicInput?.focus();
         aiConsoleLoadProviders();
+        aicLoadFreeModels();
       }
     }
 
@@ -8304,6 +8435,28 @@ function renderTableRows(products, resetPage = true) {
       } catch {
         /* el select queda como está; el envío mostrará el error */
       }
+    }
+
+    /** Pobla el <select> #aicModel con los modelos gratuitos de cada proveedor
+     *  que tiene API Key configurada (datos de Transparencia › Conectividad de IA). */
+    async function aicLoadFreeModels() {
+      if (!aicModel) return;
+      try {
+        const res = await fetch('/api/admin/ai-keys', { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || !data.success) return;
+        const providers = Array.isArray(data.providers) ? data.providers : [];
+        const current = aicModel.value;
+        let html = '<option value="">auto (modelo del proveedor)</option>';
+        providers.forEach((p) => {
+          if (!p.configured) return;
+          (p.freeModels || []).forEach((model) => {
+            html += `<option value="${escapeHtml(String(model))}">${AI_PROVIDER_NAMES[p.id] || p.id} · ${escapeHtml(String(model))}</option>`;
+          });
+        });
+        aicModel.innerHTML = html;
+        if (current && Array.from(aicModel.options).some((o) => o.value === current)) aicModel.value = current;
+      } catch { /* el select queda con la opción "auto" por defecto */ }
     }
 
     aicForm?.addEventListener('submit', async (event) => {
@@ -8845,7 +8998,12 @@ function renderTableRows(products, resetPage = true) {
   .tp-ai-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .55rem; }
   .tp-ai-providers { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .55rem; }
   .tp-ai-card { padding: .6rem .7rem; background: rgba(255, 255, 255, .03); border: 1px solid var(--color-border); border-radius: 10px; font-size: .74rem; }
-  .tp-ai-card-head { display: flex; align-items: center; justify-content: space-between; gap: .4rem; margin-bottom: .3rem; font-weight: 800; }
+  .tp-ai-card-head { display: flex; align-items: center; justify-content: space-between; gap: .4rem; margin-bottom: .3rem; font-weight: 800; cursor: pointer; }
+  .tp-ai-card-head:hover { background: rgba(255, 255, 255, .04); border-radius: 8px; }
+  .tp-ai-card-head[aria-expanded="true"] .tp-ai-chevron { transform: rotate(90deg); }
+  .tp-ai-chevron { font-size: .65rem; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; transition: transform .2s ease; flex-shrink: 0; }
+  .tp-ai-card-body { padding: .5rem .7rem .7rem; border-top: 1px dashed rgba(148, 163, 184, .18); animation: tpAiSlideDown .22s ease; }
+  @keyframes tpAiSlideDown { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
   .tp-ai-badge { padding: .1rem .45rem; border-radius: 999px; font-size: .64rem; font-weight: 800; letter-spacing: .03em; text-transform: uppercase; }
   .tp-ai-badge.is-ok { background: rgba(16, 185, 129, .18); color: #6ee7b7; }
   .tp-ai-badge.is-warn { background: rgba(245, 158, 11, .18); color: #fcd34d; }
@@ -9020,6 +9178,8 @@ function renderTableRows(products, resetPage = true) {
   /* Select «Por página» de las barras de paginación de productos */
   .pagination-per-page { display: inline-flex; align-items: center; gap: .35rem; font-size: .76rem; color: var(--color-text-muted); }
   .pagination-per-page select { padding: .3rem .45rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-main); font: inherit; font-size: .76rem; }
+  /* Paginación superior del catálogo de productos: mismo estilo que ac-pager + padding */
+  #productsPaginationTop { padding: 8px; }
 
   .text-right { text-align: right; }
 

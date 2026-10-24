@@ -753,6 +753,24 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   (() => {
     // El toolbar de ordenación (.catalog-toolbar) se trasladó al panel de
     // administración (#productSelBar). El orden por URL (?sort=) sigue activo.
+
+    // Aplica la ordenación guardada desde el panel de administración
+    // (localStorage 'tradylor_public_sort') al catálogo público del frontend.
+    // Si el usuario eligió un orden en el panel y la URL no tiene ?sort=,
+    // se redirige añadiendo el parámetro para que el SSR renderice con ese orden.
+    (function applySavedPublicSort() {
+      try {
+        const saved = localStorage.getItem('tradylor_public_sort');
+        if (!saved) return;
+        const url = new URL(window.location.href);
+        const allowed = ['score', 'ventas', 'valoracion', 'precio', 'nombre', 'categoria', 'comercio', 'descuento', 'default', 'publicados'];
+        if (!allowed.includes(saved)) return;
+        if (url.searchParams.has('sort')) return;
+        url.searchParams.set('sort', saved);
+        // Mantener el ancla #catalogo si existía
+        window.location.replace(url.toString());
+      } catch (_) { /* localStorage no disponible o error silencioso */ }
+    })();
   })();
 </script>
 
