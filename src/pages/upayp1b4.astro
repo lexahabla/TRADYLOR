@@ -570,8 +570,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </div>
       </div>
 
-      <div class="product-sel-bar" id="productSelBar">
-        <label class="product-sel-title">ADMINISTRAR PRODUCTOS</label>
+      <div class="catalog-products-wrap">
+        <div class="product-sel-bar" id="productSelBar">
+          <label class="product-sel-title">ADMINISTRAR PRODUCTOS</label>
 
         <div class="product-sel-groups">
           <!-- Toolbar de ordenación de la tabla (trasladada desde la portada):
@@ -796,6 +797,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <button type="button" id="paginationNext" class="ac-page-btn" aria-label="Página siguiente">›</button>
           <button type="button" id="paginationEnd" class="ac-page-btn" data-ac-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
         </div>
+      </div>
       </div>
 
 
@@ -9091,16 +9093,92 @@ function renderTableRows(products, resetPage = true) {
   /* Estado «ya en el catálogo»: botón inactivo con texto y color propios */
   :global(.ali-import.is-added) { background: rgba(16, 185, 129, .14); color: #34d399; cursor: not-allowed; box-shadow: none; }
   :global(.ali-import.is-added):hover { background: rgba(16, 185, 129, .14); color: #34d399; transform: none; box-shadow: none; }
-  :global(.ac-pager) { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; padding: 8px; font-size: .76rem; color: var(--color-text-muted); }
-  :global(.ac-page-info) { color: var(--color-text-dim); font-size: .74rem; }
-  :global(.ac-page-nav) { display: flex; gap: .3rem; flex-wrap: wrap; }
-  :global(.ac-page-btn) { appearance: none; min-width: 2rem; height: 2rem; padding: 0 .6rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, .32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: .76rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+  /* ── Contenedor común: Catálogo de Productos Registrados ── */
+  .catalog-products-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .catalog-products-wrap #productSelBar,
+  .catalog-products-wrap #prodFilters,
+  .catalog-products-wrap .aff-table-wrap,
+  .catalog-products-wrap #productsPaginationTop,
+  .catalog-products-wrap #productsPagination {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  /* Paginación: izquierda «Mostrando X–Y de Z» · centro «Por página» + select · derecha botonera integrada */
+  :global(.ac-pager) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .8rem;
+    flex-wrap: wrap;
+    padding: .6rem 1rem;
+    width: 100%;
+    box-sizing: border-box;
+    font-size: .76rem;
+    color: var(--color-text-muted);
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+  }
+  :global(.ac-page-info) {
+    color: var(--color-text-dim);
+    font-size: .74rem;
+    white-space: nowrap;
+  }
+  :global(.ac-page-nav) {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    flex-wrap: nowrap;
+  }
+  :global(.ac-page-btn) {
+    appearance: none;
+    min-width: 1.85rem;
+    height: 1.85rem;
+    padding: 0 .5rem;
+    background: #0b1220;
+    border: 1px solid rgba(148, 163, 184, .32);
+    border-radius: 6px;
+    color: #e5e7eb;
+    font: inherit;
+    font-size: .72rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
   :global(.ac-page-btn:hover:not(:disabled)) { border-color: #60a5fa; }
   :global(.ac-page-btn:disabled) { opacity: .4; cursor: not-allowed; }
   :global(.ac-page-btn.is-current) { background: rgba(96, 165, 250, .2); border-color: #60a5fa; color: #bfdbfe; }
-  :global(.ac-page-gap) { align-self: center; padding: 0 .2rem; }
-  :global(.ac-per-page) { display: inline-flex; align-items: center; gap: .5rem; min-width: 260px; font-size: .76rem; color: var(--color-text-dim); }
-  :global(.ac-per-page select) { padding: .15rem .35rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, .32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: .7rem; min-width: 55px; max-width: 70px; }
+  :global(.ac-page-gap) { align-self: center; padding: 0 .15rem; color: var(--color-text-dim); font-size: .74rem; }
+  :global(.ac-per-page) {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+    font-size: .76rem;
+    color: var(--color-text-dim);
+    white-space: nowrap;
+  }
+  :global(.ac-per-page select) {
+    padding: .12rem .3rem;
+    background: #0b1220;
+    border: 1px solid rgba(148, 163, 184, .32);
+    border-radius: 6px;
+    color: #e5e7eb;
+    font: inherit;
+    font-size: .7rem;
+    min-width: 45px;
+    max-width: 60px;
+    cursor: pointer;
+  }
   /* Select «Por página» de las barras de paginación de productos */
   .pagination-per-page { display: inline-flex; align-items: center; gap: .35rem; font-size: .76rem; color: var(--color-text-muted); }
   .pagination-per-page select { padding: .3rem .45rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-main); font: inherit; font-size: .76rem; }
@@ -10899,3 +10977,4 @@ function renderTableRows(products, resetPage = true) {
   border-left: 4px solid #3b82f6;
 }
 </style>
+
