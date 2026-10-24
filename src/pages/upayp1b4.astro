@@ -562,7 +562,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     </section>
 
     <!-- 3. LISTADO RÁPIDO DE PRODUCTOS EXISTENTES -->
-    <section id="catalogProducts" data-admin-view="products" class:list={['admin-card', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'products' }]}>
+    <section data-admin-view="products" class:list={['admin-card', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'products' }]}>
        <div class="list-header-row">
         <div>
           <h2 class="card-title">2. Catálogo de Productos Registrados</h2>
@@ -884,11 +884,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </div>
       </div>
 
-    <section data-admin-view="affiliates" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'affiliates' }]}>
-      <div class="view-heading">
-        <span class="admin-tag-pill">Integraciones de monetización</span>
-        <h2 class="admin-title">Afiliados y Multi-Catálogo</h2>
-            <p class="admin-subtitle">Conecta redes de afiliación con sus credenciales y valida la conexión. El catálogo multi-red se sincroniza contra las APIs de todas las redes conectadas y se filtra con barras de rango calculadas sobre los datos reales (precio, descuento, comisión, ventas, valoración y envío).</p>
+    <section data-admin-view="affiliates" class:list={['admin-card', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'affiliates' }]}>
+      <div class="list-header-row">
+        <div>
+          <h2 class="card-title">2. Catálogo de Afiliados</h2>
+          <p class="card-desc">Tabla amplia de todos los productos sincronizados con las redes conectadas (AliExpress, eBay…), guardados en el servidor. Usa «Sincronizar» para refrescarlo contra las APIs; se avisa si la caché supera las 6 horas.</p>
+        </div>
+        <button type="button" id="btnAliSyncHeader" class="btn-primary btn-sm" style="flex-shrink: 0;" title="Sincroniza el catálogo contra las APIs de las redes conectadas (AliExpress, eBay…)">
+          <span class="btn-text">🔄 Sincronizar</span>
+          <div class="btn-spinner" hidden></div>
+        </button>
       </div>
 
       <div class="affiliates-layout">
@@ -923,22 +928,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
       <!-- 3. Catálogo AliExpress desde la caché del volumen (sin llamadas API en cada carga) -->
       <div id="aliCatalogCard">
-        <div class="card-header">
-          <div class="header-icon icon-cyan">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M3 3v18h18"></path>
-              <path d="M7 14l4-4 4 4 5-6"></path>
-            </svg>
-          </div>
-          <div class="card-header-main" style="flex: 1; min-width: 0;">
-              <h2 class="card-title">2. Catálogo de Afiliados</h2>
-            <p class="card-desc">Tabla amplia de todos los productos sincronizados con las redes conectadas (AliExpress, eBay…), guardados en el servidor. Usa «Sincronizar» para refrescarlo contra las APIs; se avisa si la caché supera las 6 horas.</p>
-          </div>
-          <button type="button" id="btnAliSyncHeader" class="btn-primary btn-sm" style="flex-shrink: 0; margin-left: 1rem;" title="Sincroniza el catálogo contra las APIs de las redes conectadas (AliExpress, eBay…)">
-            <span class="btn-text">🔄 Sincronizar</span>
-            <div class="btn-spinner" hidden></div>
-          </button>
-        </div>
 
         <div id="aliCatalogStatus" class="status-alert" hidden>
           <div class="alert-icon" id="aliCatalogStatusIcon">ℹ️</div>
@@ -1122,7 +1111,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
         <!-- Selección masiva: la casilla de la cabecera marca la página actual;
              estos botones seleccionan todo lo filtrado o limpian. -->
-        <div id="aliSelectionBar" class="ali-selection" hidden>
+        <div id="aliSelectionBar" class="product-sel-bar" hidden>
           <span id="aliSelCount" class="ali-sel-count">0 seleccionados</span>
           <button type="button" id="aliSelAllFiltered" class="btn-secondary btn-sm">Seleccionar todos los filtrados</button>
           <button type="button" id="aliSelClear" class="btn-secondary btn-sm">Limpiar selección</button>
@@ -2873,7 +2862,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 result.message || 'Los cambios del producto se han guardado en el catálogo.'
               );
             } else {
-              document.getElementById('catalogProducts')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              document.querySelector('section[data-admin-view="products"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
               // Dejar el formulario preparado para un producto nuevo.
               resetProductForm();
               flashSaveButton('Guardado ✓');
@@ -5927,8 +5916,8 @@ function renderTableRows(products, resetPage = true) {
       const pageIds = slice.map((product) => product.externalId);
       aliCatalogHost.innerHTML = `
         ${aliPagerHtml(aliPage, pages, filtered.length, start, slice.length)}
-        <div class="aff-table-wrap">
-          <table class="aff-table">
+        <div class="products-table-responsive">
+          <table class="products-table">
             <thead>
               <tr>
                 <th class="ac-th-check"><input type="checkbox" data-ac-checkall aria-label="Seleccionar la página actual" /></th>
