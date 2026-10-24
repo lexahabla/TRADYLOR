@@ -9,7 +9,7 @@ import {
   type Product,
 } from '../../../lib/productStore';
 import { addDeletedId, removeDeletedId } from '../../../lib/deletedProducts';
-import { enrichProductsForAdmin, autoLinkAlternatives } from '../../../lib/curation';
+import { enrichProductsForAdmin, autoLinkAlternatives, computeBadge } from '../../../lib/curation';
 import { extractProductPageFields, hasTextCredentials, type ProductPageAiFields } from '../../../lib/ai';
 
 export const prerender = false;
@@ -1471,6 +1471,10 @@ export const POST: APIRoute = async ({ request }) => {
           ? (dataToSave.alternative_product_ids as unknown[]).map((v) => String(v ?? '').trim()).filter(Boolean)
           : existingProduct?.alternative_product_ids,
       };
+
+      // Etiqueta destacada automática basada en datos técnicos e IA.
+      // Sólo se calcula si el cliente no envió una badge explícita.
+      if (!dataToSave.badge) newProduct.badge = computeBadge(newProduct as Product & { hsrScore?: number });
 
       // Si ya existe un producto con el mismo ID, se actualiza; si no, se añade al principio.
       // Al actualizar se conservan los campos de curación que el formulario no

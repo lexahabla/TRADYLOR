@@ -1036,3 +1036,69 @@ export function linkCatalogAlternativesAuto(): {
   writeProductsToFile(products);
   return { success: true, total: products.length, updated, emptyCount };
 }
+
+/**
+ * ==============================================================================
+ * ASIGNACIÓN AUTOMÁTICA DE ETIQUETA DESTACADA (badge)
+ * ==============================================================================
+ * Selecciona y asigna la etiqueta destacada del producto basándose en los datos
+ * técnicos disponibles y en el análisis realizado por la IA.
+ *
+ * Prioridad (de mayor a menor):
+ *  1. «Oferta Estrella» — descuento ≥ 15 %, comisión ≥ 3 %, rating ≥ 4 y
+ *     hsrScore/conversion_score elevado (producto estrella editorial).
+ *  2. «Más Vendido» — sales30d elevado o conversion_score ≥ 75.
+ *  3. «Mejor Valorado» — rating ≥ 4.5 con reviewsCount ≥ 20.
+ *  4. «Envío Gratis» — freeShipping === true y shippingDays ≤ 3.
+ *  5. «Oferta X%» — descuento detectado (IA o precios) ≥ 10 %.
+ *  6. «Novedad» — sin datos suficientes para otras etiquetas, pero con ficha IA
+ *     completada (ia_status === 'completed').
+ *
+ * Devuelve `undefined` si no cumple ningún criterio (el producto no lleva
+ * badge destacada).
+ * ==============================================================================
+ */
+export function computeBadge(product: Product): string | undefined {
+  const p = product as Product & { hsrScore?: number; conversion_score?: number };
+
+  const price = Number(p.price) || 0;
+  const originalPrice = Number(p.originalPrice) || 0;
+  const discountPct = originalPrice > price
+    ? Math.round(((originalPrice - price) / originalPrice) * 100)
+    : 0;
+  const commissionRate = Number(p.commissionEstimate != null && price > 0
+    ? (p.commissionEstimate / price) * 100
+    : 0);
+  const rating = Number(p.rating) || 0;
+  const reviewsCount = Number(p.reviewsCount) || 0;
+  const sales30d = Number(p.sales30d) || 0;
+  const conversionScore = Number(p.conversion_score) || 0;
+  const hsrScore = Number(p.hsrScore) || 0;
+  const freeShipping = p.freeShipping === true;
+  const shippingDays = Number(p.shippingDays);
+  const iaCompleted = p.ia_status === 'completed';
+
+  // 1. Oferta Estrella: descuento + comisión + rating + score elevado
+  const isHSR = discountPct >= 15
+    && commissionRate >= 3
+    && rating >= 4
+    && (hsrScore >= 50 || conversionScore >= 75);
+  if (isHSR) return 'Oferta Estrella';
+
+  // 2. Más Vendido: volumen de ventas o rentabilidad muy alta
+  if (sales30d >= 50 || conversionScore >= 80) return 'Más Vendido';
+
+  // 3. Mejor Valorado: rating alto con respaldo de opiniones
+  if (rating >= 4.5 && reviewsCount >= 20) return 'Mejor Valorado';
+
+  // 4. Envío Gratis rápido
+  if (freeShipping && (shippingDays == null || shippingDays <= 3)) return 'Envío Gratis';
+
+  // 5. Oferta con descuento detectado (IA o precios)
+  if (discountPct >= 10) return `Oferta ${discountPct}%`;
+
+  // 6. Novedad: ficha IA completada sin otra etiqueta más específica
+  if (iaCompleted) return 'Novedad';
+
+  return undefined;
+}

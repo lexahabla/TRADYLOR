@@ -353,6 +353,14 @@ const productSchema = {
           )}
         </div>
 
+        <!-- Marca del producto (distribuidor/fabricante) -->
+        {product.brand && product.brand !== product.merchant && (
+          <div class="brand-row">
+            <span class="vendor-label">Marca</span>
+            <span class="vendor-name">{product.brand}</span>
+          </div>
+        )}
+
         <!-- Bloque de envío (datos del comerciante cuando están disponibles) -->
         {(shipping.shippingInfo || shipping.shippingDays != null || shipping.freeShipping) && (
           <div class="shipping-block">
@@ -1794,6 +1802,15 @@ const productSchema = {
   }
   .vendor-name[data-merchant="amazon"] { color: #f59e0b; }
   .vendor-name[data-merchant="pccomponentes"] { color: #f87171; }
+
+  .brand-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid var(--color-border);
+  }
 
   /* =====================================================
      SECCIÓN EDITORIAL: PROS, CONTRAS, VEREDICTO

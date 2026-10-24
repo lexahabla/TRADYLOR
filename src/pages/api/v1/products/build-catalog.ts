@@ -36,7 +36,7 @@ import { slugifyProduct, upsertCatalogProduct } from '../../../../lib/catalogSto
 import { findIngestDuplicate } from '../../../../lib/pipeline/stageIngest';
 import { runStageAudit } from '../../../../lib/pipeline/stageAudit';
 import { getPipelineConfig } from '../../../../lib/pipeline/config';
-import { computeEditorialStatus, extractNormalizedTags, computeConversionScore } from '../../../../lib/curation';
+import { computeEditorialStatus, extractNormalizedTags, computeConversionScore, computeBadge } from '../../../../lib/curation';
 import { isSecondHand } from '../../../../utils/aliCatalogFilters';
 import { incrementMetric, touchMetrics } from '../../../../lib/pipeline/metrics';
 import { enrichProductText, generateProductImage, hasTextCredentials, hasImageCredentials } from '../../../../lib/ai';
@@ -739,7 +739,7 @@ async function buildAndUpsertProducts(
         ...(group.bestCommissionRate > 0 ? [`Comisión ${group.bestCommissionRate}%`] : []),
       ],
       cons: group.variants.length > 0 ? [`Comparar precios en ${group.allNetworks.join(', ')}`] : [],
-      badge: hsrBadge,
+      badge: hsrBadge || computeBadge(product as Product & { hsrScore?: number }),
       rating: group.bestRating > 0 ? group.bestRating : undefined,
       reviewsCount: canonical.reviewCount > 0 ? canonical.reviewCount : undefined,
       brand: canonical.brand,

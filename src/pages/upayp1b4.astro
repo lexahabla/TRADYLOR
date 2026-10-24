@@ -671,44 +671,33 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       </div>
 
 
-      <!-- Paginación superior de la tabla de productos -->
-      <div id="productsPaginationTop" class="products-pagination" {initialTotalPages <= 1 ? 'hidden' : ''}>
-        <div class="pagination-info">
-          <span id="paginationTotalTop">{initialTotalProducts} producto{initialTotalProducts !== 1 ? 's' : ''} (página 1 de {initialTotalPages})</span>
-        </div>
-        <nav class="pagination-controls" aria-label="Paginación del catálogo">
-          <button type="button" id="paginationPrevTop" class="btn-secondary btn-sm" disabled aria-label="Página anterior">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            Anterior
-          </button>
-          <div class="pagination-pages" id="paginationPagesTop" role="group" aria-label="Números de página">
+      <!-- Paginación superior de la tabla de productos (estilo ac-pager unificado) -->
+      <div id="productsPaginationTop" class="ac-pager" {initialTotalPages <= 1 ? 'hidden' : ''}>
+        <span id="paginationTotalTop" class="ac-page-info">{initialTotalProducts} producto{initialTotalProducts !== 1 ? 's' : ''} (página 1 de {initialTotalPages})</span>
+        <label class="ac-per-page" title="Elige cuántos productos quieres ver por página">
+          Por página
+          <select data-prod-per-page aria-label="Productos por página">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="75">75</option>
+          </select>
+        </label>
+        <div class="ac-page-nav" id="paginationNavTop" role="group" aria-label="Navegación de páginas">
+          <button type="button" id="paginationPrevTop" class="ac-page-btn" disabled aria-label="Página anterior">‹</button>
+          <div id="paginationPagesTop" class="ac-page-nums" role="group" aria-label="Números de página">
             {Array.from({ length: Math.min(initialTotalPages, 5) }, (_, i) => i + 1).map((pageNum) => (
-              <button type="button" class={`pagination-page${pageNum === 1 ? ' active' : ''}`} data-page={pageNum} aria-label={`Página ${pageNum}`} aria-current={pageNum === 1 ? 'page' : undefined}>{pageNum}</button>
+              <button type="button" class={`ac-page-btn${pageNum === 1 ? ' is-current' : ''}`} data-page={pageNum} aria-label={`Página ${pageNum}`} aria-current={pageNum === 1 ? 'page' : undefined}>{pageNum}</button>
             ))}
             {initialTotalPages > 5 && (
               <>
-                <span class="pagination-ellipsis" aria-hidden="true">…</span>
-                <button type="button" class="pagination-page" data-page={initialTotalPages} aria-label={`Página ${initialTotalPages}`}>{initialTotalPages}</button>
+                <span class="ac-page-gap" aria-hidden="true">…</span>
+                <button type="button" class="ac-page-btn" data-page={initialTotalPages} aria-label={`Página ${initialTotalPages}`}>{initialTotalPages}</button>
               </>
             )}
           </div>
-          <button type="button" id="paginationNextTop" class="btn-secondary btn-sm" {initialTotalPages <= 1 ? 'disabled' : ''} aria-label="Página siguiente">
-            Siguiente
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-          </button>
-          <button type="button" id="paginationEndTop" class="btn-secondary btn-sm" data-prod-last title="Ir directamente al final de la tabla (última página)" aria-label="Ir a la última página">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 4 15 12 5 20"></polyline><line x1="19" y1="5" x2="19" y2="19"></line></svg>
-            Final
-          </button>
-          <label class="pagination-per-page" title="Elige cuántos productos quieres ver por página">
-            Por página
-            <select data-prod-per-page aria-label="Productos por página">
-              <option value="25">25</option>
-              <option value="50" selected>50</option>
-              <option value="75">75</option>
-            </select>
-          </label>
-        </nav>
+          <button type="button" id="paginationNextTop" class="ac-page-btn" aria-label="Página siguiente">›</button>
+          <button type="button" id="paginationEndTop" class="ac-page-btn" data-prod-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
+        </div>
       </div>
 
       <div class="products-table-responsive">
@@ -836,44 +825,33 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </table>
       </div>
 
-      <!-- Paginación del Catálogo de Productos -->
-      <div id="productsPagination" class="products-pagination" {initialTotalPages <= 1 ? 'hidden' : ''}>
-        <div class="pagination-info">
-          <span id="paginationTotal">{initialTotalProducts} producto{initialTotalProducts !== 1 ? 's' : ''} (página 1 de {initialTotalPages})</span>
-        </div>
-        <nav class="pagination-controls" aria-label="Paginación del catálogo">
-          <button type="button" id="paginationPrev" class="btn-secondary btn-sm" disabled aria-label="Página anterior">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
-            Anterior
-          </button>
-          <div class="pagination-pages" id="paginationPages" role="group" aria-label="Números de página">
+      <!-- Paginación del Catálogo de Productos (estilo ac-pager unificado) -->
+      <div id="productsPagination" class="ac-pager" {initialTotalPages <= 1 ? 'hidden' : ''}>
+        <span id="paginationTotal" class="ac-page-info">{initialTotalProducts} producto{initialTotalProducts !== 1 ? 's' : ''} (página 1 de {initialTotalPages})</span>
+        <label class="ac-per-page" title="Elige cuántos productos quieres ver por página">
+          Por página
+          <select data-prod-per-page aria-label="Productos por página">
+            <option value="25">25</option>
+            <option value="50" selected>50</option>
+            <option value="75">75</option>
+          </select>
+        </label>
+        <div class="ac-page-nav" id="paginationNav" role="group" aria-label="Navegación de páginas">
+          <button type="button" id="paginationPrev" class="ac-page-btn" disabled aria-label="Página anterior">‹</button>
+          <div id="paginationPages" class="ac-page-nums" role="group" aria-label="Números de página">
             {Array.from({ length: Math.min(initialTotalPages, 5) }, (_, i) => i + 1).map((pageNum) => (
-              <button type="button" class={`pagination-page${pageNum === 1 ? ' active' : ''}`} data-page={pageNum} aria-label={`Página ${pageNum}`} aria-current={pageNum === 1 ? 'page' : undefined}>{pageNum}</button>
+              <button type="button" class={`ac-page-btn${pageNum === 1 ? ' is-current' : ''}`} data-page={pageNum} aria-label={`Página ${pageNum}`} aria-current={pageNum === 1 ? 'page' : undefined}>{pageNum}</button>
             ))}
             {initialTotalPages > 5 && (
               <>
-                <span class="pagination-ellipsis" aria-hidden="true">…</span>
-                <button type="button" class="pagination-page" data-page={initialTotalPages} aria-label={`Página ${initialTotalPages}`}>{initialTotalPages}</button>
+                <span class="ac-page-gap" aria-hidden="true">…</span>
+                <button type="button" class="ac-page-btn" data-page={initialTotalPages} aria-label={`Página ${initialTotalPages}`}>{initialTotalPages}</button>
               </>
             )}
           </div>
-          <button type="button" id="paginationNext" class="btn-secondary btn-sm" {initialTotalPages <= 1 ? 'disabled' : ''} aria-label="Página siguiente">
-            Siguiente
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"></polyline></svg>
-          </button>
-          <button type="button" id="paginationEnd" class="btn-secondary btn-sm" data-prod-last title="Ir directamente al final de la tabla (última página)" aria-label="Ir a la última página">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="5 4 15 12 5 20"></polyline><line x1="19" y1="5" x2="19" y2="19"></line></svg>
-            Final
-          </button>
-          <label class="pagination-per-page" title="Elige cuántos productos quieres ver por página">
-            Por página
-            <select data-prod-per-page aria-label="Productos por página">
-              <option value="25">25</option>
-              <option value="50" selected>50</option>
-              <option value="75">75</option>
-            </select>
-          </label>
-        </nav>
+          <button type="button" id="paginationNext" class="ac-page-btn" aria-label="Página siguiente">›</button>
+          <button type="button" id="paginationEnd" class="ac-page-btn" data-prod-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
+        </div>
       </div>
 
       <div class="sections-admin">
@@ -3769,26 +3747,26 @@ function renderTableRows(products, resetPage = true) {
         }
 
         if (startPage > 1) {
-          pagesHtml += `<button type="button" class="pagination-page" data-page="1" aria-label="Página 1">1</button>`;
+          pagesHtml += `<button type="button" class="ac-page-btn" data-page="1" aria-label="Página 1">1</button>`;
           if (startPage > 2) {
-            pagesHtml += `<span class="pagination-ellipsis" aria-hidden="true">…</span>`;
+            pagesHtml += `<span class="ac-page-gap" aria-hidden="true">…</span>`;
           }
         }
 
         for (let i = startPage; i <= endPage; i++) {
-          pagesHtml += `<button type="button" class="pagination-page${i === currentPage ? ' active' : ''}" data-page="${i}" aria-label="Página ${i}"${i === currentPage ? ' aria-current="page"' : ''}>${i}</button>`;
+          pagesHtml += `<button type="button" class="pagination-page${i === currentPage ? ' is-current' : ''}" data-page="${i}" aria-label="Página ${i}"${i === currentPage ? ' aria-current="page"' : ''}>${i}</button>`;
         }
 
         if (endPage < totalPages) {
           if (endPage < totalPages - 1) {
-            pagesHtml += `<span class="pagination-ellipsis" aria-hidden="true">…</span>`;
+            pagesHtml += `<span class="ac-page-gap" aria-hidden="true">…</span>`;
           }
-          pagesHtml += `<button type="button" class="pagination-page" data-page="${totalPages}" aria-label="Página ${totalPages}">${totalPages}</button>`;
+          pagesHtml += `<button type="button" class="ac-page-btn" data-page="${totalPages}" aria-label="Página ${totalPages}">${totalPages}</button>`;
         }
 
         pagesEl.innerHTML = pagesHtml;
 
-        pagesEl.querySelectorAll('.pagination-page').forEach((btn) => {
+        pagesEl.querySelectorAll('.ac-page-btn').forEach((btn) => {
           btn.addEventListener('click', () => {
             const page = parseInt(btn.getAttribute('data-page'), 10);
             if (!Number.isNaN(page) && page !== currentPage) {
@@ -5223,7 +5201,8 @@ function renderTableRows(products, resetPage = true) {
           url: product.productUrl || affiliateLink,
           rating: product.rating,
           reviewsCount: product.reviewsCount,
-          badge: product.network,
+          // Badge asignado automáticamente por el servidor (computeBadge) a
+          // partir de los datos técnicos e IA; no se fuerza desde la fila.
           brand,
           specs,
           fulfillmentProvider,
@@ -5415,7 +5394,6 @@ function renderTableRows(products, resetPage = true) {
             pros: basic.pros,
             cons: basic.cons,
             techSheet: basic.techSheet,
-            badge: basic.badge,
             shippingInfo: basic.shippingInfo,
             shippingDays: basic.shippingDays,
             freeShipping: basic.freeShipping,
@@ -8550,6 +8528,19 @@ function renderTableRows(products, resetPage = true) {
       target.removeAttribute('data-tooltip-text');
       if (adminTooltipTarget === target) adminTooltipTarget = null;
     });
+
+    // ── Tooltips automáticos para todos los botones del backend ─────────────
+    // Cualquier botón que tenga aria-label o texto visible y no tenga title
+    // recibirá un cartel emergente explicativo al situar el ratón encima.
+    function initAdminTooltips() {
+      document.querySelectorAll('button:not([title])').forEach((btn) => {
+        const text = btn.getAttribute('aria-label') || btn.textContent?.trim() || '';
+        if (text) btn.setAttribute('title', text);
+      });
+    }
+    initAdminTooltips();
+    // Re-aplicar tooltips cuando el DOM cambie (tablas renderizadas dinámicamente)
+    new MutationObserver(initAdminTooltips).observe(document.body, { childList: true, subtree: true });
   });
 </script>
 )}
@@ -9165,7 +9156,7 @@ function renderTableRows(products, resetPage = true) {
   /* Estado «ya en el catálogo»: botón inactivo con texto y color propios */
   :global(.ali-import.is-added) { background: rgba(16, 185, 129, .14); color: #34d399; cursor: not-allowed; box-shadow: none; }
   :global(.ali-import.is-added):hover { background: rgba(16, 185, 129, .14); color: #34d399; transform: none; box-shadow: none; }
-  :global(.ac-pager) { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; padding: .7rem .1rem 0; font-size: .76rem; color: var(--color-text-muted); }
+  :global(.ac-pager) { display: flex; align-items: center; justify-content: space-between; gap: .8rem; flex-wrap: wrap; padding: 8px; font-size: .76rem; color: var(--color-text-muted); }
   :global(.ac-page-info) { color: var(--color-text-dim); font-size: .74rem; }
   :global(.ac-page-nav) { display: flex; gap: .3rem; flex-wrap: wrap; }
   :global(.ac-page-btn) { appearance: none; min-width: 2rem; height: 2rem; padding: 0 .6rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, .32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: .76rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }

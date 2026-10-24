@@ -13,7 +13,7 @@ import {
 } from '../../../lib/ai';
 import { enrichProductLocally } from '../../../lib/localEnrich';
 import { findDuplicateProduct, readProductsFromFile, slugify, upsertProduct, writeProductsToFile, type Product } from '../../../lib/productStore';
-import { autoLinkAlternatives } from '../../../lib/curation';
+import { autoLinkAlternatives, computeBadge } from '../../../lib/curation';
 import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../../../utils/amazon';
 import { complementProductFromPage } from '../products/add';
 
@@ -290,6 +290,9 @@ export const POST: APIRoute = async ({ request }) => {
       })(),
       category: String(body?.category ?? '').trim(),
       merchant: detectMerchant(body?.affiliateUrl || body?.url, body?.merchant),
+      // Marca: del body, del complemento de la página o, en último caso, el
+      // propio comerciante/red (nunca vacío en productos importados).
+      brand: String(body?.brand ?? '').trim() || undefined,
       affiliateUrl: String(body?.affiliateUrl ?? body?.url ?? '').trim(),
       // Compra directa: si no se envía una URL manual y hay ASIN, se genera la
       // cesta de Amazon con el tag de afiliado (flujo de tramitación del pedido).
@@ -302,6 +305,8 @@ export const POST: APIRoute = async ({ request }) => {
       pros: [],
       cons: [],
       techSheet: body?.techSheet ? String(body.techSheet).trim() : undefined,
+      // Badge: si el usuario lo envió explícitamente se respeta; si no, se
+      // asigna automáticamente tras construir el producto completo (ver más abajo).
       badge: body?.badge ? String(body.badge).trim() : undefined,
       rating: body?.rating ? Number(body.rating) : 4.8,
       reviewsCount: body?.reviewsCount ? Number(body.reviewsCount) : 100,
@@ -355,6 +360,12 @@ export const POST: APIRoute = async ({ request }) => {
       base.category = suggestion?.category.name || 'Tecnología';
     }
     if (!base.fulfillmentProvider) base.fulfillmentProvider = resolveFulfillment(base.merchant);
+
+    // Etiqueta destacada automática basada en datos técnicos e análisis IA.
+    // Sólo se calcula si el usuario no proporcionó una badge explícita.
+    if (!body?.badge) base.badge = computeBadge(base);
+    // Marca de respaldo: si aún falta, usa el comerciante detectado.
+    if (!base.brand) base.brand = base.merchant || 'Comercio Externo';
 
     // ------------------------------------------------------------------
     // PASO 3 — Persistencia
