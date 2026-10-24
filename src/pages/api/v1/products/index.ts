@@ -19,6 +19,7 @@
 
 import type { APIRoute } from 'astro';
 import { getCatalogProducts } from '../../../../lib/catalog';
+import { getGlobalCatalogSort, sortCatalogProducts } from '../../../../lib/catalogSort';
 import { isValidApiToken, unauthorizedApiResponse } from '../../../../lib/apiAuth';
 
 export const prerender = false;
@@ -38,6 +39,9 @@ export const GET: APIRoute = ({ request, url }) => {
   if (category) products = products.filter((p) => (p.category ?? '').toLowerCase() === category);
   if (minPrice != null) products = products.filter((p) => p.price >= minPrice);
   if (maxPrice != null) products = products.filter((p) => p.price <= maxPrice);
+
+  const sortKey = url.searchParams.get('sort') || getGlobalCatalogSort();
+  products = sortCatalogProducts(products, sortKey);
 
   const totalProducts = products.length;
   const totalPages = Math.ceil(totalProducts / limit);

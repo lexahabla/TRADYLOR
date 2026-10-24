@@ -12,6 +12,7 @@ import { authenticateUser, clearAdminSession, createAdminSession, getSessionUser
 import { getAmazonAssociateTag } from '../utils/amazon';
 import { enrichProductsForAdmin } from '../lib/curation';
 import { applyCatalogDiversity } from '../lib/catalogDiversity';
+import { getGlobalCatalogSort } from '../lib/catalogSort';
 
 const sessionUser = getSessionUser(Astro.request);
 const isAuthenticated = sessionUser !== null;
@@ -107,6 +108,8 @@ if (isAuthenticated && sessionUser?.role === 'admin') {
 const initialMerchants = Array.from(new Set(
   initialProducts.map((p) => (p.merchant || (p as any).network_label || '').trim()).filter(Boolean)
 )).sort((a, b) => a.localeCompare(b, 'es'));
+
+const globalDefaultCatalogSort = getGlobalCatalogSort();
 
 const initialTotalProducts = initialProducts.length;
 const initialTotalPages = Math.ceil(initialTotalProducts / PRODUCTS_PER_PAGE);
@@ -577,15 +580,23 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <div class="product-sel-bar" id="productSelBar" style="background: none; border-color: #1f2937;">
           <label class="product-sel-title">ADMINISTRAR PRODUCTOS</label>
 
-          <!-- Barra de ordenación del catálogo duplicada del frontend al backend -->
+          <!-- Selector Global de Ordenación del Catálogo Público (Backend) -->
           <div class="catalog-sort-bar" style="display: inline-flex; align-items: center; gap: .65rem; padding: .45rem .75rem; background: none; border: 1px solid #1f2937; border-radius: 8px;">
-            <label for="prodToolbarSort" class="catalog-sort-label">Ordenar catálogo:</label>
-            <select id="prodToolbarSort" class="catalog-sort-select sel-cat-assign" aria-label="Ordenar la tabla de productos" title="Ordena la tabla de productos y el catálogo de tradylor.com en tiempo real.">
-              <option value="precio_desc">Precio de mayor a menor</option>
-              <option value="precio_asc">Precio de menor a mayor</option>
-              <option value="valoracion" selected>Mejor valorados</option>
-              <option value="ventas">Más vendidos</option>
+            <label for="prodToolbarSort" class="catalog-sort-label" style="white-space: nowrap;">🌐 Orden por defecto de la tienda web:</label>
+            <select id="prodToolbarSort" class="catalog-sort-select sel-cat-assign" aria-label="Orden por defecto del catálogo público" title="Define el orden previamente establecido del catálogo público que ven los clientes al entrar a tradylor.com">
+              <option value="precio_desc" selected={globalDefaultCatalogSort === 'precio_desc'}>Precio de mayor a menor</option>
+              <option value="precio_asc" selected={globalDefaultCatalogSort === 'precio_asc'}>Precio de menor a mayor</option>
+              <option value="valoracion" selected={globalDefaultCatalogSort === 'valoracion'}>Mejor valorados</option>
+              <option value="ventas" selected={globalDefaultCatalogSort === 'ventas'}>Más vendidos</option>
+              <option value="publicados" selected={globalDefaultCatalogSort === 'publicados'}>Publicados primero</option>
+              <option value="score" selected={globalDefaultCatalogSort === 'score'}>Mejor rentabilidad (Score)</option>
+              <option value="nombre" selected={globalDefaultCatalogSort === 'nombre'}>Nombre</option>
+              <option value="categoria" selected={globalDefaultCatalogSort === 'categoria'}>Categoría</option>
+              <option value="comercio" selected={globalDefaultCatalogSort === 'comercio'}>Comerciante</option>
+              <option value="descuento" selected={globalDefaultCatalogSort === 'descuento'}>Mayor descuento</option>
+              <option value="default" selected={globalDefaultCatalogSort === 'default'}>Por defecto (como se guardan)</option>
             </select>
+            <span id="sortSaveStatus" style="color: #34d399; font-size: .72rem; font-weight: 700; display: none;">✓ Guardado en tienda</span>
           </div>
 
         <div class="product-sel-groups">
@@ -3786,10 +3797,7 @@ function renderTableRows(products, resetPage = true) {
       prodFilterApply();
     });
     prodSubcatFilter?.addEventListener('change', prodFilterApply);
-    // Toolbar de ordenación (#prodToolbarSort, trasladada desde la portada
-    // pública): sincronizada en tiempo real con #prodFSort y controles de dirección (↑/↓).
-    const prodToolbarSort = document.getElementById('prodToolbarSort');
-    const prodToolbarSortDir = document.getElementById('prodToolbarSortDir');
+
     const prodFMerchant = document.getElementById('prodFMerchant');
 
     function syncMerchantFilter() {
@@ -3812,61 +3820,64 @@ function renderTableRows(products, resetPage = true) {
       }
     }
 
-    function syncSortState(newSort) {
-      if (!newSort) return;
-      if (prodToolbarSort) prodToolbarSort.value = newSort;
-      if (prodFSort && 'value' in prodFSort) prodFSort.value = newSort;
-      try {
-        localStorage.setItem('tradylor_public_sort', newSort);
-        document.cookie = 'tradylor_catalog_sort=' + encodeURIComponent(newSort) + '; Path=/; Max-Age=31536000; SameSite=Lax';
-      } catch (_) {}
-      try {
-        fetch('/api/admin/catalog-sort', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sort: newSort })
-        }).catch(function () {});
-      } catch (_) {}
-      prodFilterApply();
-    }
+    // ─── Selector Global de Ordenación del Catálogo Público (Tienda Web) ──────
+    const prodToolbarSort = document.getElementById('prodToolbarSort');
+    const sortSaveStatus = document.getElementById('sortSaveStatus');
 
-    prodToolbarSort?.addEventListener('change', () => {
-      syncSortState(prodToolbarSort.value);
-    });
-
-    prodFSort?.addEventListener('change', () => {
-      syncSortState(prodFSort.value);
-    });
-
-    prodFMerchant?.addEventListener('change', prodFilterApply);
-
-    // Al arrancar, sincronizar comerciantes y restaurar la ordenación guardada
-    syncMerchantFilter();
-
+    // Cargar la configuración guardada del orden por defecto de la tienda web
     try {
       fetch('/api/admin/catalog-sort')
         .then(function (r) { return r.json(); })
         .then(function (d) {
-          if (d && d.success && d.sort) {
-            syncSortState(d.sort);
+          if (d && d.success && d.sort && prodToolbarSort) {
+            prodToolbarSort.value = d.sort;
           }
         })
         .catch(function () {});
     } catch (_) {}
 
-    try {
-      const savedSort = localStorage.getItem('tradylor_public_sort');
-      if (savedSort) {
-        syncSortState(savedSort);
+    // Guardar el orden por defecto del catálogo público
+    prodToolbarSort?.addEventListener('change', async () => {
+      const selectedVal = prodToolbarSort.value;
+      try {
+        const res = await fetch('/api/admin/catalog-sort', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sort: selectedVal })
+        });
+        if (res.ok && sortSaveStatus) {
+          sortSaveStatus.style.display = 'inline';
+          setTimeout(() => { sortSaveStatus.style.display = 'none'; }, 3000);
+        }
+      } catch (err) {
+        console.error('Error guardando orden global del catálogo:', err);
       }
-    } catch (_) {}
+    });
+
+    // ─── Ordenación interna de la tabla del panel (#prodFSort) ───────────────
+    prodFSort?.addEventListener('change', () => {
+      prodFilterApply();
+    });
+
+    prodFSortDir?.addEventListener('click', () => {
+      prodSortDir = prodSortDir === 'desc' ? 'asc' : 'desc';
+      prodFSortDir.textContent = prodSortDir === 'desc' ? '↓' : '↑';
+      prodFilterApply();
+    });
+
+    prodFMerchant?.addEventListener('change', prodFilterApply);
+
+    // Al arrancar, sincronizar comerciantes
+    syncMerchantFilter();
 
     prodFReset?.addEventListener('click', () => {
       if (inputFilterList) inputFilterList.value = '';
       if (prodFCat) prodFCat.value = '';
       syncSubcatFilter();
       if (prodFMerchant) prodFMerchant.value = '';
-      syncSortState('valoracion');
+      if (prodFSort) prodFSort.value = 'default';
+      prodSortDir = 'desc';
+      if (prodFSortDir) prodFSortDir.textContent = '↓';
       const priceMin = document.getElementById('prodFPriceMin');
       const priceMax = document.getElementById('prodFPriceMax');
       const discRange = document.getElementById('prodFDiscRange');

@@ -8,7 +8,7 @@ import { getCatalogProducts } from '../lib/catalog';
 import { readSections } from '../lib/sections';
 import { getCategoryById } from '../lib/categories';
 import { applyCatalogDiversity } from '../lib/catalogDiversity';
-import { getGlobalCatalogSort } from '../lib/catalogSort';
+import { getGlobalCatalogSort, sortCatalogProducts } from '../lib/catalogSort';
 
 export const prerender = false;
 
@@ -52,13 +52,16 @@ const visibleProducts = allProducts.filter((p) => {
   return byCategory && matchesQuery(p);
 });
 
-// Ordenación del catálogo (4 opciones: Precio desc, Precio asc, Mejor valorados, Más vendidos)
-const validSorts = ['precio_desc', 'precio_asc', 'valoracion', 'ventas'];
-const cookieSort = Astro.cookies.get('tradylor_catalog_sort')?.value;
-const globalDefaultSort = cookieSort || getGlobalCatalogSort();
-const rawSort = (Astro.url.searchParams.get('sort') ?? globalDefaultSort ?? 'valoracion').toLowerCase().trim();
-const normalizedSort = rawSort === 'precio-desc' ? 'precio_desc' : (rawSort === 'precio-asc' ? 'precio_asc' : (rawSort === 'precio' ? 'precio_desc' : rawSort));
-const currentSort = validSorts.includes(normalizedSort) ? normalizedSort : (validSorts.includes(globalDefaultSort) ? globalDefaultSort : 'valoracion');
+// ─── Ordenación del catálogo público ─────────────────────────────────────────
+// 1. Criterio por defecto configurado desde el backend (previamente establecido):
+const globalDefaultSort = getGlobalCatalogSort();
+
+// 2. Sobreescritura temporal de sesión si el comprador interactúa con los controles rápidos:
+const userSortQuery = (Astro.url.searchParams.get('sort') ?? '').toLowerCase().trim();
+const cookieSessionSort = Astro.cookies.get('tradylor_session_sort')?.value;
+const rawActiveSort = userSortQuery || cookieSessionSort || globalDefaultSort;
+const normalizedActiveSort = rawActiveSort === 'precio-desc' ? 'precio_desc' : (rawActiveSort === 'precio-asc' ? 'precio_asc' : rawActiveSort);
+const activeSort = normalizedActiveSort || 'score';
 
 const sortHref = (sortKey: string) => {
   const params = new URLSearchParams();
@@ -73,51 +76,17 @@ const pageHref = (page: number) => {
   const params = new URLSearchParams();
   if (activeCategory) params.set('category', activeCategory.slug);
   if (queryTerm) params.set('q', queryParam);
-  params.set('sort', currentSort);
+  if (activeSort) params.set('sort', activeSort);
   if (page > 1) params.set('page', String(page));
   const qStr = params.toString();
   return `/${qStr ? `?${qStr}` : ''}#catalogo`;
 };
 
-// ─── Criterios de ordenación ───────────────────────────────────────────────
-// Más vendidos (ventas estimadas a 30 días, popularidad o volumen de reseñas)
-const salesOf = (p: typeof allProducts[0]) => {
-  const s30 = Number(p.sales30d);
-  if (Number.isFinite(s30) && s30 > 0) return s30;
-  const pop = Number(p.popularity);
-  if (Number.isFinite(pop) && pop > 0) return pop;
-  if (p.extra && typeof p.extra === 'object') {
-    const rawSales = (p.extra as Record<string, unknown>)['Ventas (30 días)'];
-    const numSales = Number(rawSales);
-    if (Number.isFinite(numSales) && numSales > 0) return numSales;
-  }
-  return Number(p.reviewsCount ?? 0);
-};
+// ─── Ordenación con el motor centralizado ───────────────────────────────────
+const sorted = sortCatalogProducts(visibleProducts, activeSort);
 
-// Mejor valorados (estrellas/rating con desempate por número de valoraciones)
-const ratingOf = (p: typeof allProducts[0]) => {
-  const r = Number(p.rating ?? 0);
-  const rc = Number(p.reviewsCount ?? 0);
-  return r * 100000 + rc;
-};
-
-const priceOf = (p: typeof allProducts[0]) => Number(p.price) || 0;
-
-const sorted = [...visibleProducts].sort((a, b) => {
-  if (currentSort === 'precio_desc') {
-    return priceOf(b) - priceOf(a);
-  }
-  if (currentSort === 'precio_asc') {
-    return priceOf(a) - priceOf(b);
-  }
-  if (currentSort === 'ventas') {
-    return salesOf(b) - salesOf(a);
-  }
-  return ratingOf(b) - ratingOf(a);
-});
-
-// Cuando se ordena por precio, mantener orden estricto (sin mezclar por diversidad)
-const diversified = ['precio_desc', 'precio_asc'].includes(currentSort)
+// Regla de Alternancia y Diversidad (excepto orden numérico estricto por precio o publicados):
+const diversified = ['precio_desc', 'precio_asc', 'publicados'].includes(activeSort)
   ? sorted
   : applyCatalogDiversity(sorted, { rowSize: 4, pageSize: 40 });
 
@@ -229,10 +198,10 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       <div class="catalog-sort-bar">
         <label for="catalogSortSelect" class="catalog-sort-label">Ordenar catálogo:</label>
         <select id="catalogSortSelect" class="catalog-sort-select" aria-label="Ordenar catálogo">
-          <option value="precio_desc" selected={currentSort === 'precio_desc'}>Precio de mayor a menor</option>
-          <option value="precio_asc" selected={currentSort === 'precio_asc'}>Precio de menor a mayor</option>
-          <option value="valoracion" selected={currentSort === 'valoracion'}>Mejor valorados</option>
-          <option value="ventas" selected={currentSort === 'ventas'}>Más vendidos</option>
+          <option value="precio_desc" selected={activeSort === 'precio_desc'}>Precio de mayor a menor</option>
+          <option value="precio_asc" selected={activeSort === 'precio_asc'}>Precio de menor a mayor</option>
+          <option value="valoracion" selected={activeSort === 'valoracion'}>Mejor valorados</option>
+          <option value="ventas" selected={activeSort === 'ventas'}>Más vendidos</option>
         </select>
       </div>
 
@@ -779,7 +748,11 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     const sortSelect = document.getElementById('catalogSortSelect');
     sortSelect?.addEventListener('change', () => {
       const val = sortSelect.value;
-      try { localStorage.setItem('tradylor_public_sort', val); } catch (_) {}
+      // Sobreescribe temporalmente el orden del catálogo durante la sesión del comprador
+      try {
+        sessionStorage.setItem('tradylor_session_sort', val);
+        document.cookie = 'tradylor_session_sort=' + encodeURIComponent(val) + '; Path=/; SameSite=Lax';
+      } catch (_) {}
       const url = new URL(window.location.href);
       url.searchParams.set('sort', val);
       url.searchParams.delete('page');
@@ -787,19 +760,15 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       window.location.href = url.toString();
     });
 
-    // Sincronización del orden guardado desde el panel de administración
-    (function applySavedPublicSort() {
-      try {
-        const saved = localStorage.getItem('tradylor_public_sort');
-        if (!saved) return;
-        const url = new URL(window.location.href);
-        const allowed = ['score', 'ventas', 'valoracion', 'precio', 'precio_desc', 'precio-desc', 'precio_asc', 'precio-asc', 'nombre', 'categoria', 'comercio', 'descuento', 'default', 'publicados'];
-        if (!allowed.includes(saved)) return;
-        if (url.searchParams.has('sort')) return;
-        url.searchParams.set('sort', saved);
+    // Si el comprador interactuó previamente en esta misma sesión, mantener su ordenación temporal
+    try {
+      const sessionSort = sessionStorage.getItem('tradylor_session_sort');
+      const url = new URL(window.location.href);
+      if (sessionSort && !url.searchParams.has('sort')) {
+        url.searchParams.set('sort', sessionSort);
         window.location.replace(url.toString());
-      } catch (_) { /* localStorage no disponible o error silencioso */ }
-    })();
+      }
+    } catch (_) {}
   })();
 </script>
 
