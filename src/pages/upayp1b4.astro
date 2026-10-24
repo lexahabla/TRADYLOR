@@ -574,15 +574,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       </div>
 
       <div class="catalog-products-wrap">
-        <div class="product-sel-bar" id="productSelBar">
+        <div class="product-sel-bar" id="productSelBar" style="background: none; border-color: #1f2937;">
           <label class="product-sel-title">ADMINISTRAR PRODUCTOS</label>
 
-        <div class="product-sel-groups">
-          <!-- Toolbar de ordenación de la tabla (trasladada desde la portada):
-               prioriza los productos publicados/listos -->
-          <div class="product-sel-group" data-group="toolbar">
-            <span class="product-sel-group-label">Ordenar tabla:</span>
-            <select id="prodToolbarSort" class="sel-cat-assign" aria-label="Ordenar la tabla de productos" title="Ordena la tabla de productos registrados en tiempo real.">
+          <!-- Barra de ordenación del catálogo duplicada del frontend al backend -->
+          <div class="catalog-sort-bar" style="display: inline-flex; align-items: center; gap: .65rem; padding: .45rem .75rem; background: none; border: 1px solid #1f2937; border-radius: 8px;">
+            <label for="prodToolbarSort" class="catalog-sort-label">Ordenar catálogo:</label>
+            <select id="prodToolbarSort" class="catalog-sort-select sel-cat-assign" aria-label="Ordenar la tabla de productos" title="Ordena la tabla de productos y el catálogo del frontend en tiempo real.">
               <option value="publicados" selected>Publicados primero</option>
               <option value="score">Mejor rentabilidad (Score)</option>
               <option value="ventas">Más vendidos</option>
@@ -596,6 +594,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </select>
             <button type="button" id="prodToolbarSortDir" class="btn-secondary btn-sm ali-sort-dir" title="Invertir el orden (mayor a menor / menor a mayor)">↓</button>
           </div>
+
+        <div class="product-sel-groups">
 
           <!-- Categoría funcional: Selección -->
           <div class="product-sel-group" data-group="selection">
@@ -3391,9 +3391,9 @@ function renderTableRows(products, resetPage = true) {
         <div class="filter-field prod-range-field" data-range-field="price">
           <label for="prodFPriceMin">Precio (€)</label>
           <div class="ali-pair">
-            <input type="number" id="prodFPriceMin" min="${dataMin}" step="0.01" placeholder="Mín." inputmode="decimal" value="${escapeHtml(keepPriceMin)}" />
+            <input type="number" id="prodFPriceMin" min="${dataMin}" step="0.01" placeholder="Mín." inputmode="decimal" value="${escapeHtml(keepPriceMin)}" style="background:var(--color-bg-main) !important;color:var(--color-text-main) !important;border:1px solid var(--color-border) !important;border-radius:var(--border-radius-sm) !important;padding:.45rem .6rem !important;outline:none;" />
             <span class="ali-pair-sep" aria-hidden="true">–</span>
-            <input type="number" id="prodFPriceMax" max="${dataMax}" step="0.01" placeholder="Máx." inputmode="decimal" value="${escapeHtml(keepPriceMax)}" />
+            <input type="number" id="prodFPriceMax" max="${dataMax}" step="0.01" placeholder="Máx." inputmode="decimal" value="${escapeHtml(keepPriceMax)}" style="background:var(--color-bg-main) !important;color:var(--color-text-main) !important;border:1px solid var(--color-border) !important;border-radius:var(--border-radius-sm) !important;padding:.45rem .6rem !important;outline:none;" />
           </div>
         </div>
         <div class="filter-field prod-range-field" data-range-field="disc">
@@ -3819,10 +3819,17 @@ function renderTableRows(products, resetPage = true) {
         if (prodToolbarSortDir) prodToolbarSortDir.textContent = prodSortDir === 'desc' ? '↓' : '↑';
         if (prodFSortDir) prodFSortDir.textContent = prodSortDir === 'desc' ? '↓' : '↑';
       }
+      const currentKey = prodToolbarSort?.value || 'publicados';
+      const savedVal = currentKey === 'precio' ? (prodSortDir === 'asc' ? 'precio_asc' : 'precio_desc') : currentKey;
       try {
-        const currentKey = prodToolbarSort?.value || 'publicados';
-        const savedVal = currentKey === 'precio' ? (prodSortDir === 'asc' ? 'precio_asc' : 'precio_desc') : currentKey;
         localStorage.setItem('tradylor_public_sort', savedVal);
+      } catch (_) {}
+      try {
+        fetch('/api/admin/catalog-sort', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sort: savedVal })
+        }).catch(function () {});
       } catch (_) {}
       prodFilterApply();
     }
@@ -8757,7 +8764,21 @@ function renderTableRows(products, resetPage = true) {
   .prod-filters :global(.filter-field.prod-range-field select:focus) { border-color: #38bdf8; }
   /* El par de precios: dos campos con la misma caja que el input de búsqueda. */
   .prod-filters :global(.filter-field.prod-range-field .ali-pair) { display: flex; align-items: stretch; gap: .35rem; min-width: 0; }
-  .prod-filters :global(.filter-field.prod-range-field .ali-pair input) { flex: 1 1 0; width: auto; min-width: 0; }
+  .prod-filters :global(.filter-field.prod-range-field .ali-pair input),
+  #prodFPriceMin,
+  #prodFPriceMax,
+  :global(#prodFPriceMin),
+  :global(#prodFPriceMax) {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    background: var(--color-bg-main) !important;
+    color: var(--color-text-main) !important;
+    border: 1px solid var(--color-border) !important;
+    border-radius: var(--border-radius-sm) !important;
+    padding: .45rem .6rem !important;
+    outline: none !important;
+  }
   .prod-filters :global(.filter-field.prod-range-field .ali-pair input::placeholder) { color: var(--color-text-dim); }
   .prod-filters :global(.filter-field.prod-range-field .ali-pair-sep) { display: flex; align-items: center; color: var(--color-text-dim); font-size: .7rem; }
   /* El botón de limpiar filtros se alinea con la altura de los controles. */
@@ -8833,8 +8854,8 @@ function renderTableRows(products, resetPage = true) {
     gap: .65rem;
     margin-bottom: .8rem;
     padding: .65rem .85rem;
-    background: rgba(59, 130, 246, .07);
-    border: 1px solid rgba(96, 165, 250, .22);
+    background: none !important;
+    border: 1px solid #1f2937 !important;
     border-radius: 10px;
     font-size: .74rem;
     color: var(--color-text-dim);

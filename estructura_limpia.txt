@@ -81,6 +81,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\analyticsOptimo.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\apiAuth.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\catalog.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\catalogDiversity.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\catalogSort.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\catalogStore.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\categories.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\lib\curation.ts
@@ -151,6 +152,7 @@ D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\analytics\months.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\analytics\reset.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\auto-curate\index.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\catalog\index.ts
+D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\catalog-sort.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\data.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\enrich-bulk.ts
 D:\AXEL\WEBS\TRADYLOR\tradylor_web\src\pages\api\admin\marketing\usuarios\[id].ts
