@@ -11,7 +11,6 @@ import type { Product } from './api/products/add';
 import { authenticateUser, clearAdminSession, createAdminSession, getSessionUser } from '../lib/adminAuth';
 import { getAmazonAssociateTag } from '../utils/amazon';
 import { enrichProductsForAdmin } from '../lib/curation';
-import { applyCatalogDiversity } from '../lib/catalogDiversity';
 import { getGlobalCatalogSort } from '../lib/catalogSort';
 
 const sessionUser = getSessionUser(Astro.request);
@@ -138,10 +137,10 @@ const pagerPages = (totalPages, currentPage) => {
   });
   return pages;
 };
-// Aplicar alternancia y diversidad en la pintura inicial de SSR
-const initialDiversified = initialProducts.length > 0
-  ? applyCatalogDiversity(initialProducts, { rowSize: 4, pageSize: PRODUCTS_PER_PAGE })
-  : [];
+// El orden inicial de la tabla es siempre «publicados» (ver publishedRank arriba),
+// exento de diversidad igual que en el cliente (prodFilterApply): aplicar diversidad
+// aquí sin condición desincronizaba el primer render del panel con el de prodFilterApply.
+const initialDiversified = initialProducts;
 const initialPageProducts = initialDiversified.slice(0, PRODUCTS_PER_PAGE);
 
 const pageTitle = "Panel de Administración | Tradylor";
@@ -681,9 +680,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <select id="prodFSort">
                 <option value="precio_desc">Precio de mayor a menor</option>
                 <option value="precio_asc">Precio de menor a mayor</option>
-                <option value="valoracion" selected>Mejor valorados</option>
+                <option value="valoracion">Mejor valorados</option>
                 <option value="ventas">Más vendidos</option>
-                <option value="publicados">Publicados primero</option>
+                <option value="publicados" selected>Publicados primero</option>
                 <option value="score">Mejor rentabilidad (Score)</option>
                 <option value="nombre">Nombre</option>
                 <option value="categoria">Categoría</option>
@@ -3649,8 +3648,10 @@ function renderTableRows(products, resetPage = true) {
           return dir * (av - bv);
         });
       }
-      // Para precio o publicados, mantener orden estricto (sin mezcla)
-      const diversified = ['precio_desc', 'precio_asc', 'publicados'].includes(sortKey) ? filtered : applyCatalogDiversity(filtered);
+      // Para precio, publicados o criterios de agrupación/orden exacto, mantener
+      // orden estricto (sin mezcla). Mantener en sync con DIVERSITY_EXEMPT_SORTS
+      // de src/lib/catalogSort.ts (este script is:inline no puede importarla).
+      const diversified = ['precio_desc', 'precio_asc', 'publicados', 'nombre', 'categoria', 'comercio', 'default'].includes(sortKey) ? filtered : applyCatalogDiversity(filtered);
       renderTableRows(diversified);
     }
 

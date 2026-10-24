@@ -20,6 +20,27 @@ export const ALLOWED_CATALOG_SORTS = [
 
 export type CatalogSortOption = (typeof ALLOWED_CATALOG_SORTS)[number];
 
+/**
+ * Criterios de orden "exacto" (agrupación o tal cual se guardan) que deben librarse
+ * del motor de Diversidad (`catalogDiversity.ts`). Aplicar diversidad encima de ellos
+ * anularía el propio criterio elegido: p. ej. "Categoría" existe justamente para
+ * agrupar, y la diversidad dispersa a propósito los consecutivos de la misma categoría.
+ * Score/Ventas/Valoración/Descuento SÍ se diversifican (son rankings, no agrupaciones).
+ *
+ * Usada en `src/pages/index.astro` (tienda pública) y `src/pages/upayp1b4.astro`
+ * (tabla de productos del panel). El `<script is:inline>` del panel no puede importar
+ * este módulo: su copia local debe mantenerse en sync manualmente con esta lista.
+ */
+export const DIVERSITY_EXEMPT_SORTS: string[] = [
+  'precio_desc',
+  'precio_asc',
+  'publicados',
+  'nombre',
+  'categoria',
+  'comercio',
+  'default',
+];
+
 export function getGlobalCatalogSort(): CatalogSortOption {
   try {
     if (fs.existsSync(SORT_FILE)) {

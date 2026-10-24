@@ -8,7 +8,7 @@ import { getCatalogProducts } from '../lib/catalog';
 import { readSections } from '../lib/sections';
 import { getCategoryById } from '../lib/categories';
 import { applyCatalogDiversity } from '../lib/catalogDiversity';
-import { getGlobalCatalogSort, sortCatalogProducts } from '../lib/catalogSort';
+import { getGlobalCatalogSort, sortCatalogProducts, DIVERSITY_EXEMPT_SORTS } from '../lib/catalogSort';
 
 export const prerender = false;
 
@@ -85,8 +85,8 @@ const pageHref = (page: number) => {
 // ─── Ordenación con el motor centralizado ───────────────────────────────────
 const sorted = sortCatalogProducts(visibleProducts, activeSort);
 
-// Regla de Alternancia y Diversidad (excepto orden numérico estricto por precio o publicados):
-const diversified = ['precio_desc', 'precio_asc', 'publicados'].includes(activeSort)
+// Regla de Alternancia y Diversidad (los criterios de orden "exacto" quedan exentos):
+const diversified = DIVERSITY_EXEMPT_SORTS.includes(activeSort)
   ? sorted
   : applyCatalogDiversity(sorted, { rowSize: 4, pageSize: 40 });
 
@@ -748,9 +748,9 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     const sortSelect = document.getElementById('catalogSortSelect');
     sortSelect?.addEventListener('change', () => {
       const val = sortSelect.value;
-      // Sobreescribe temporalmente el orden del catálogo durante la sesión del comprador
+      // Cookie de sesión: el SSR la lee (Astro.cookies) para mantener el orden elegido
+      // en visitas posteriores sin `?sort=` en la URL, sin necesidad de redirigir aquí.
       try {
-        sessionStorage.setItem('tradylor_session_sort', val);
         document.cookie = 'tradylor_session_sort=' + encodeURIComponent(val) + '; Path=/; SameSite=Lax';
       } catch (_) {}
       const url = new URL(window.location.href);
@@ -759,16 +759,6 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       url.hash = 'catalogo';
       window.location.href = url.toString();
     });
-
-    // Si el comprador interactuó previamente en esta misma sesión, mantener su ordenación temporal
-    try {
-      const sessionSort = sessionStorage.getItem('tradylor_session_sort');
-      const url = new URL(window.location.href);
-      if (sessionSort && !url.searchParams.has('sort')) {
-        url.searchParams.set('sort', sessionSort);
-        window.location.replace(url.toString());
-      }
-    } catch (_) {}
   })();
 </script>
 

@@ -40,7 +40,8 @@ export const GET: APIRoute = ({ request, url }) => {
   if (minPrice != null) products = products.filter((p) => p.price >= minPrice);
   if (maxPrice != null) products = products.filter((p) => p.price <= maxPrice);
 
-  const sortKey = url.searchParams.get('sort') || getGlobalCatalogSort();
+  const rawSort = (url.searchParams.get('sort') ?? '').trim().toLowerCase();
+  const sortKey = rawSort || getGlobalCatalogSort();
   products = sortCatalogProducts(products, sortKey);
 
   const totalProducts = products.length;

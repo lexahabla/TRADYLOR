@@ -39,6 +39,11 @@ listo para que n8n evalúe rentabilidad y decida qué promocionar o retirar.
 | `maxPrice` | number | Precio máximo en EUR |
 | `limit` | number | Productos por página (1–100, por defecto **24**) |
 | `page` | number | Número de página (1-indexed, por defecto **1**) |
+| `sort` | string | Criterio de ordenación. Si se omite, usa el orden por defecto configurado en el panel (`upayp1b4` → Productos → «Orden por defecto de la tienda web»). |
+
+Valores admitidos de `sort`: `precio_desc`, `precio_asc`, `valoracion`, `ventas`,
+`publicados`, `score`, `nombre`, `categoria`, `comercio`, `descuento`, `default`
+(no distingue mayúsculas/minúsculas). Un valor no reconocido se trata como `score`.
 
 ### Paginación
 
