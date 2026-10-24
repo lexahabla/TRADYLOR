@@ -710,9 +710,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </label>
         <div class="ac-page-nav" id="paginationNavTop" role="group" aria-label="Navegación de páginas">
           <button type="button" id="paginationPrevTop" class="ac-page-btn" disabled aria-label="Página anterior">‹</button>
-          <div id="paginationPagesTop" class="ac-page-nums" role="group" aria-label="Números de página">
-          {pagerPages(initialTotalPages, pagerCurrentPage).map(p => p.gap ? '<span class="ac-page-gap" aria-hidden="true">…</span>' : `<button type="button" class="ac-page-btn${p.current ? ' is-current' : ''}" data-ac-page="${p.num}" aria-label="Página ${p.num}"${p.current ? ' aria-current="page"' : ''}>${p.num}</button>`).join('')}
-        </div>
+          <div id="paginationPagesTop" class="ac-page-nums" role="group" aria-label="Números de página" set:html={pagerPages(initialTotalPages, pagerCurrentPage).map(p => p.gap ? '<span class="ac-page-gap" aria-hidden="true">…</span>' : `<button type="button" class="ac-page-btn${p.current ? ' is-current' : ''}" data-ac-page="${p.num}" aria-label="Página ${p.num}"${p.current ? ' aria-current="page"' : ''}>${p.num}</button>`).join('')}></div>
           <button type="button" id="paginationNextTop" class="ac-page-btn" aria-label="Página siguiente">›</button>
           <button type="button" id="paginationEndTop" class="ac-page-btn" data-ac-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
         </div>
@@ -773,9 +771,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </label>
         <div class="ac-page-nav" id="paginationNav" role="group" aria-label="Navegación de páginas">
           <button type="button" id="paginationPrev" class="ac-page-btn" disabled aria-label="Página anterior">‹</button>
-          <div id="paginationPages" class="ac-page-nums" role="group" aria-label="Números de página">
-          {pagerPages(initialTotalPages, pagerCurrentPage).map(p => p.gap ? '<span class="ac-page-gap" aria-hidden="true">…</span>' : `<button type="button" class="ac-page-btn${p.current ? ' is-current' : ''}" data-ac-page="${p.num}" aria-label="Página ${p.num}"${p.current ? ' aria-current="page"' : ''}>${p.num}</button>`).join('')}
-        </div>
+          <div id="paginationPages" class="ac-page-nums" role="group" aria-label="Números de página" set:html={pagerPages(initialTotalPages, pagerCurrentPage).map(p => p.gap ? '<span class="ac-page-gap" aria-hidden="true">…</span>' : `<button type="button" class="ac-page-btn${p.current ? ' is-current' : ''}" data-ac-page="${p.num}" aria-label="Página ${p.num}"${p.current ? ' aria-current="page"' : ''}>${p.num}</button>`).join('')}></div>
           <button type="button" id="paginationNext" class="ac-page-btn" aria-label="Página siguiente">›</button>
           <button type="button" id="paginationEnd" class="ac-page-btn" data-ac-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
         </div>
@@ -785,7 +781,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
     </section>
 
-    <section class="admin-card products-list-card hidden-section">
+    <section data-admin-view="products" class:list={['admin-card', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'products' }]}>
       <div class="sections-admin">
         <div class="list-header-row">
           <div>
