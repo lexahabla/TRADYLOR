@@ -106,6 +106,32 @@ if (isAuthenticated && sessionUser?.role === 'admin') {
 
 const initialTotalProducts = initialProducts.length;
 const initialTotalPages = Math.ceil(initialTotalProducts / PRODUCTS_PER_PAGE);
+// Página actual en el render inicial del servidor (la tabla arranca en la 1)
+const pagerCurrentPage = 1;
+const pagerMaxVisible = 5;
+// Calcula qué páginas pintar (igual que updateControls del cliente): primeras,
+// centradas en la página actual, gaps «…» y última. Oculta las páginas centrales.
+const pagerPages = (totalPages, currentPage) => {
+  if (totalPages <= 1) return [];
+  const pages = [];
+  let startPage = Math.max(1, currentPage - Math.floor(pagerMaxVisible / 2));
+  let endPage = Math.min(totalPages, startPage + pagerMaxVisible - 1);
+  if (endPage - startPage + 1 < pagerMaxVisible) {
+    startPage = Math.max(1, endPage - pagerMaxVisible + 1);
+  }
+  if (startPage > 1) {
+    pages.push({ num: 1, gap: false });
+    if (startPage > 2) pages.push({ num: null, gap: true });
+  }
+  for (let i = startPage; i <= endPage; i++) {
+    pages.push({ num: i, gap: false, current: i === currentPage });
+  }
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) pages.push({ num: null, gap: true });
+    pages.push({ num: totalPages, gap: false });
+  }
+  return pages;
+};
 // Aplicar alternancia y diversidad en la pintura inicial de SSR
 const initialDiversified = initialProducts.length > 0
   ? applyCatalogDiversity(initialProducts, { rowSize: 4, pageSize: PRODUCTS_PER_PAGE })
@@ -685,16 +711,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <div class="ac-page-nav" id="paginationNavTop" role="group" aria-label="Navegación de páginas">
           <button type="button" id="paginationPrevTop" class="ac-page-btn" disabled aria-label="Página anterior">‹</button>
           <div id="paginationPagesTop" class="ac-page-nums" role="group" aria-label="Números de página">
-            {Array.from({ length: Math.min(initialTotalPages, 5) }, (_, i) => i + 1).map((pageNum) => (
-              <button type="button" class={`ac-page-btn${pageNum === 1 ? ' is-current' : ''}`} data-page={pageNum} aria-label={`Página ${pageNum}`} aria-current={pageNum === 1 ? 'page' : undefined}>{pageNum}</button>
-            ))}
-            {initialTotalPages > 5 && (
-              <>
-                <span class="ac-page-gap" aria-hidden="true">…</span>
-                <button type="button" class="ac-page-btn" data-page={initialTotalPages} aria-label={`Página ${initialTotalPages}`}>{initialTotalPages}</button>
-              </>
-            )}
-          </div>
+          {pagerPages(initialTotalPages, pagerCurrentPage).map((p) => p.gap ? (
+            <span class="ac-page-gap" aria-hidden="true">…</span>
+          ) : (
+            <button type="button" class={`ac-page-btn${p.current ? ' is-current' : ''}`} data-page={p.num} aria-label={`Página ${p.num}`} aria-current={p.current ? 'page' : undefined}>{p.num}</button>
+          ))}
+        </div>
           <button type="button" id="paginationNextTop" class="ac-page-btn" aria-label="Página siguiente">›</button>
           <button type="button" id="paginationEndTop" class="ac-page-btn" data-prod-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
         </div>
@@ -839,16 +861,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <div class="ac-page-nav" id="paginationNav" role="group" aria-label="Navegación de páginas">
           <button type="button" id="paginationPrev" class="ac-page-btn" disabled aria-label="Página anterior">‹</button>
           <div id="paginationPages" class="ac-page-nums" role="group" aria-label="Números de página">
-            {Array.from({ length: Math.min(initialTotalPages, 5) }, (_, i) => i + 1).map((pageNum) => (
-              <button type="button" class={`ac-page-btn${pageNum === 1 ? ' is-current' : ''}`} data-page={pageNum} aria-label={`Página ${pageNum}`} aria-current={pageNum === 1 ? 'page' : undefined}>{pageNum}</button>
-            ))}
-            {initialTotalPages > 5 && (
-              <>
-                <span class="ac-page-gap" aria-hidden="true">…</span>
-                <button type="button" class="ac-page-btn" data-page={initialTotalPages} aria-label={`Página ${initialTotalPages}`}>{initialTotalPages}</button>
-              </>
-            )}
-          </div>
+          {pagerPages(initialTotalPages, pagerCurrentPage).map((p) => p.gap ? (
+            <span class="ac-page-gap" aria-hidden="true">…</span>
+          ) : (
+            <button type="button" class={`ac-page-btn${p.current ? ' is-current' : ''}`} data-page={p.num} aria-label={`Página ${p.num}`} aria-current={p.current ? 'page' : undefined}>{p.num}</button>
+          ))}
+        </div>
           <button type="button" id="paginationNext" class="ac-page-btn" aria-label="Página siguiente">›</button>
           <button type="button" id="paginationEnd" class="ac-page-btn" data-prod-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
         </div>
@@ -9183,7 +9201,7 @@ function renderTableRows(products, resetPage = true) {
   :global(.ac-page-btn.is-current) { background: rgba(96, 165, 250, .2); border-color: #60a5fa; color: #bfdbfe; }
   :global(.ac-page-gap) { align-self: center; padding: 0 .2rem; }
   :global(.ac-per-page) { display: inline-flex; align-items: center; gap: .4rem; min-width: 210px; font-size: .74rem; color: var(--color-text-dim); }
-  :global(.ac-per-page select) { padding: .12rem .28rem; min-width: 3.4rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, .32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: .62rem; }
+  :global(.ac-per-page select) { padding: .12rem .28rem; background: #0b1220; border: 1px solid rgba(148, 163, 184, .32); border-radius: 8px; color: #e5e7eb; font: inherit; font-size: .62rem; }
   /* Select «Por página» de las barras de paginación de productos */
   .pagination-per-page { display: inline-flex; align-items: center; gap: .35rem; font-size: .76rem; color: var(--color-text-muted); }
   .pagination-per-page select { padding: .3rem .45rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-main); font: inherit; font-size: .76rem; }
