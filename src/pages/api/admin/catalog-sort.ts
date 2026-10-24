@@ -1,12 +1,10 @@
 import type { APIRoute } from 'astro';
-import { requireAdminAuth } from '../../../lib/adminAuth';
+import { getSessionUser } from '../../../lib/adminAuth';
 import { getGlobalCatalogSort, setGlobalCatalogSort } from '../../../lib/catalogSort';
 
 export const prerender = false;
 
-export const GET: APIRoute = async ({ request }) => {
-  const unauthorized = requireAdminAuth(request);
-  if (unauthorized) return unauthorized;
+export const GET: APIRoute = async () => {
   return new Response(JSON.stringify({ success: true, sort: getGlobalCatalogSort() }), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
@@ -14,8 +12,10 @@ export const GET: APIRoute = async ({ request }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
-  const unauthorized = requireAdminAuth(request);
-  if (unauthorized) return unauthorized;
+  const sessionUser = getSessionUser(request);
+  if (!sessionUser) {
+    return new Response('Autenticacion requerida', { status: 401 });
+  }
 
   const body = await request.json().catch(() => ({}));
   const sort = typeof body?.sort === 'string' ? body.sort.trim() : '';
@@ -31,6 +31,9 @@ export const POST: APIRoute = async ({ request }) => {
 
   return new Response(JSON.stringify({ success: true, sort }), {
     status: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Set-Cookie': `tradylor_catalog_sort=${encodeURIComponent(sort)}; Path=/; Max-Age=31536000; SameSite=Lax`,
+    },
   });
 };

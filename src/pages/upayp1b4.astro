@@ -580,19 +580,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <!-- Barra de ordenación del catálogo duplicada del frontend al backend -->
           <div class="catalog-sort-bar" style="display: inline-flex; align-items: center; gap: .65rem; padding: .45rem .75rem; background: none; border: 1px solid #1f2937; border-radius: 8px;">
             <label for="prodToolbarSort" class="catalog-sort-label">Ordenar catálogo:</label>
-            <select id="prodToolbarSort" class="catalog-sort-select sel-cat-assign" aria-label="Ordenar la tabla de productos" title="Ordena la tabla de productos y el catálogo del frontend en tiempo real.">
-              <option value="publicados" selected>Publicados primero</option>
-              <option value="score">Mejor rentabilidad (Score)</option>
+            <select id="prodToolbarSort" class="catalog-sort-select sel-cat-assign" aria-label="Ordenar la tabla de productos" title="Ordena la tabla de productos y el catálogo de tradylor.com en tiempo real.">
+              <option value="precio_desc">Precio de mayor a menor</option>
+              <option value="precio_asc">Precio de menor a mayor</option>
+              <option value="valoracion" selected>Mejor valorados</option>
               <option value="ventas">Más vendidos</option>
-              <option value="valoracion">Mejor valorados</option>
-              <option value="precio">Precio</option>
-              <option value="nombre">Nombre</option>
-              <option value="categoria">Categoría</option>
-              <option value="comercio">Comerciante</option>
-              <option value="descuento">Mayor descuento</option>
-              <option value="default">Por defecto (como se guardan)</option>
             </select>
-            <button type="button" id="prodToolbarSortDir" class="btn-secondary btn-sm ali-sort-dir" title="Invertir el orden (mayor a menor / menor a mayor)">↓</button>
           </div>
 
         <div class="product-sel-groups">
@@ -675,11 +668,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <label for="prodFSort">Ordenar por</label>
             <div class="ali-sort-group">
               <select id="prodFSort">
-                <option value="publicados" selected>Publicados primero</option>
-                <option value="score">Mejor rentabilidad (Score)</option>
+                <option value="precio_desc">Precio de mayor a menor</option>
+                <option value="precio_asc">Precio de menor a mayor</option>
+                <option value="valoracion" selected>Mejor valorados</option>
                 <option value="ventas">Más vendidos</option>
-                <option value="valoracion">Mejor valorados</option>
-                <option value="precio">Precio</option>
+                <option value="publicados">Publicados primero</option>
+                <option value="score">Mejor rentabilidad (Score)</option>
                 <option value="nombre">Nombre</option>
                 <option value="categoria">Categoría</option>
                 <option value="comercio">Comerciante</option>
@@ -3607,7 +3601,16 @@ function renderTableRows(products, resetPage = true) {
         return true;
       });
 
-      if (sortKey === 'publicados') {
+      if (sortKey === 'precio_desc') {
+        filtered.sort((a, b) => (Number(b.price) || 0) - (Number(a.price) || 0));
+      } else if (sortKey === 'precio_asc') {
+        filtered.sort((a, b) => (Number(a.price) || 0) - (Number(b.price) || 0));
+      } else if (sortKey === 'valoracion') {
+        filtered.sort((a, b) => ((b.rating != null ? Number(b.rating) : -1) - (a.rating != null ? Number(a.rating) : -1)) || ((b.reviewsCount || 0) - (a.reviewsCount || 0)));
+      } else if (sortKey === 'ventas') {
+        const getSales = (p) => Number(p.sales30d != null ? p.sales30d : (p.popularity != null ? p.popularity : (p.extra && p.extra['Ventas (30 días)'] != null ? p.extra['Ventas (30 días)'] : (p.reviewsCount || 0))));
+        filtered.sort((a, b) => getSales(b) - getSales(a));
+      } else if (sortKey === 'publicados') {
         // Prioriza los productos «publicados» (listos para la web): categoría
         // + IA completada + enlace activo; a igualdad, mejor score primero.
         const rank = (p) => ((p.ia_status === 'completed' && p.link_status === 'active' && (p.category_id || p.category)) ? 1 : 0);
@@ -3635,8 +3638,8 @@ function renderTableRows(products, resetPage = true) {
           return dir * (av - bv);
         });
       }
-      // La prioridad «publicados» exige orden estricto: sin diversificación.
-      const diversified = sortKey === 'publicados' ? filtered : applyCatalogDiversity(filtered);
+      // Para precio o publicados, mantener orden estricto (sin mezcla)
+      const diversified = ['precio_desc', 'precio_asc', 'publicados'].includes(sortKey) ? filtered : applyCatalogDiversity(filtered);
       renderTableRows(diversified);
     }
 
@@ -3809,45 +3812,30 @@ function renderTableRows(products, resetPage = true) {
       }
     }
 
-    function syncSortState(newSort, newDir) {
-      if (newSort != null) {
-        if (prodToolbarSort) prodToolbarSort.value = newSort;
-        if (prodFSort && 'value' in prodFSort) prodFSort.value = newSort;
-      }
-      if (newDir != null) {
-        prodSortDir = newDir;
-        if (prodToolbarSortDir) prodToolbarSortDir.textContent = prodSortDir === 'desc' ? '↓' : '↑';
-        if (prodFSortDir) prodFSortDir.textContent = prodSortDir === 'desc' ? '↓' : '↑';
-      }
-      const currentKey = prodToolbarSort?.value || 'publicados';
-      const savedVal = currentKey === 'precio' ? (prodSortDir === 'asc' ? 'precio_asc' : 'precio_desc') : currentKey;
+    function syncSortState(newSort) {
+      if (!newSort) return;
+      if (prodToolbarSort) prodToolbarSort.value = newSort;
+      if (prodFSort && 'value' in prodFSort) prodFSort.value = newSort;
       try {
-        localStorage.setItem('tradylor_public_sort', savedVal);
+        localStorage.setItem('tradylor_public_sort', newSort);
+        document.cookie = 'tradylor_catalog_sort=' + encodeURIComponent(newSort) + '; Path=/; Max-Age=31536000; SameSite=Lax';
       } catch (_) {}
       try {
         fetch('/api/admin/catalog-sort', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sort: savedVal })
+          body: JSON.stringify({ sort: newSort })
         }).catch(function () {});
       } catch (_) {}
       prodFilterApply();
     }
 
     prodToolbarSort?.addEventListener('change', () => {
-      syncSortState(prodToolbarSort.value, null);
+      syncSortState(prodToolbarSort.value);
     });
 
     prodFSort?.addEventListener('change', () => {
-      syncSortState(prodFSort.value, null);
-    });
-
-    prodToolbarSortDir?.addEventListener('click', () => {
-      syncSortState(null, prodSortDir === 'desc' ? 'asc' : 'desc');
-    });
-
-    prodFSortDir?.addEventListener('click', () => {
-      syncSortState(null, prodSortDir === 'desc' ? 'asc' : 'desc');
+      syncSortState(prodFSort.value);
     });
 
     prodFMerchant?.addEventListener('change', prodFilterApply);
@@ -3856,18 +3844,20 @@ function renderTableRows(products, resetPage = true) {
     syncMerchantFilter();
 
     try {
+      fetch('/api/admin/catalog-sort')
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (d && d.success && d.sort) {
+            syncSortState(d.sort);
+          }
+        })
+        .catch(function () {});
+    } catch (_) {}
+
+    try {
       const savedSort = localStorage.getItem('tradylor_public_sort');
       if (savedSort) {
-        if (savedSort === 'precio_asc' || savedSort === 'precio-asc') {
-          syncSortState('precio', 'asc');
-        } else if (savedSort === 'precio_desc' || savedSort === 'precio-desc') {
-          syncSortState('precio', 'desc');
-        } else if (prodToolbarSort) {
-          const hasOption = Array.from(prodToolbarSort.options).some((o) => o.value === savedSort);
-          if (hasOption) {
-            syncSortState(savedSort, null);
-          }
-        }
+        syncSortState(savedSort);
       }
     } catch (_) {}
 
@@ -3876,7 +3866,7 @@ function renderTableRows(products, resetPage = true) {
       if (prodFCat) prodFCat.value = '';
       syncSubcatFilter();
       if (prodFMerchant) prodFMerchant.value = '';
-      syncSortState('publicados', 'desc');
+      syncSortState('valoracion');
       const priceMin = document.getElementById('prodFPriceMin');
       const priceMax = document.getElementById('prodFPriceMax');
       const discRange = document.getElementById('prodFDiscRange');

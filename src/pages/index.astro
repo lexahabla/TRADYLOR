@@ -52,18 +52,19 @@ const visibleProducts = allProducts.filter((p) => {
   return byCategory && matchesQuery(p);
 });
 
-// Ordenación del catálogo: si viene ?sort= en la URL se usa ese; si no, se usa la ordenación global configurada desde el backend
-const globalDefaultSort = getGlobalCatalogSort();
-const sortParam = (Astro.url.searchParams.get('sort') ?? globalDefaultSort ?? 'score').toLowerCase().trim();
-const normalizedSort = sortParam === 'precio-desc' ? 'precio_desc' : (sortParam === 'precio-asc' ? 'precio_asc' : (sortParam === 'precio' ? 'precio_desc' : sortParam));
-const validSorts = ['score', 'ventas', 'valoracion', 'precio_desc', 'precio_asc', 'descuento', 'nombre', 'categoria', 'comercio', 'default', 'publicados'];
-const currentSort = validSorts.includes(normalizedSort) ? normalizedSort : 'score';
+// Ordenación del catálogo (4 opciones: Precio desc, Precio asc, Mejor valorados, Más vendidos)
+const validSorts = ['precio_desc', 'precio_asc', 'valoracion', 'ventas'];
+const cookieSort = Astro.cookies.get('tradylor_catalog_sort')?.value;
+const globalDefaultSort = cookieSort || getGlobalCatalogSort();
+const rawSort = (Astro.url.searchParams.get('sort') ?? globalDefaultSort ?? 'valoracion').toLowerCase().trim();
+const normalizedSort = rawSort === 'precio-desc' ? 'precio_desc' : (rawSort === 'precio-asc' ? 'precio_asc' : (rawSort === 'precio' ? 'precio_desc' : rawSort));
+const currentSort = validSorts.includes(normalizedSort) ? normalizedSort : (validSorts.includes(globalDefaultSort) ? globalDefaultSort : 'valoracion');
 
 const sortHref = (sortKey: string) => {
   const params = new URLSearchParams();
   if (activeCategory) params.set('category', activeCategory.slug);
   if (queryTerm) params.set('q', queryParam);
-  if (sortKey !== 'score') params.set('sort', sortKey);
+  params.set('sort', sortKey);
   const qStr = params.toString();
   return `/${qStr ? `?${qStr}` : ''}#catalogo`;
 };
@@ -72,26 +73,14 @@ const pageHref = (page: number) => {
   const params = new URLSearchParams();
   if (activeCategory) params.set('category', activeCategory.slug);
   if (queryTerm) params.set('q', queryParam);
-  if (currentSort !== 'score') params.set('sort', currentSort);
+  params.set('sort', currentSort);
   if (page > 1) params.set('page', String(page));
   const qStr = params.toString();
   return `/${qStr ? `?${qStr}` : ''}#catalogo`;
 };
 
 // ─── Criterios de ordenación ───────────────────────────────────────────────
-// 1. Rentabilidad / Score de recomendación
-const scoreOf = (p: typeof allProducts[0]) => {
-  const convScore = Number(p.conversion_score);
-  if (Number.isFinite(convScore) && convScore > 0) return convScore;
-  const ratingScore = (p.rating ?? 0) / 5;
-  const reviewScore = Math.min(Math.log10((p.reviewsCount ?? 0) + 1) / 4, 1);
-  const discountScore = p.originalPrice && p.originalPrice > p.price
-    ? ((p.originalPrice - p.price) / p.originalPrice)
-    : 0;
-  return (ratingScore * 0.6 + reviewScore * 0.3 + discountScore * 0.1) * 100;
-};
-
-// 2. Más vendidos (ventas estimadas a 30 días, popularidad o volumen de reseñas)
+// Más vendidos (ventas estimadas a 30 días, popularidad o volumen de reseñas)
 const salesOf = (p: typeof allProducts[0]) => {
   const s30 = Number(p.sales30d);
   if (Number.isFinite(s30) && s30 > 0) return s30;
@@ -105,7 +94,7 @@ const salesOf = (p: typeof allProducts[0]) => {
   return Number(p.reviewsCount ?? 0);
 };
 
-// 3. Mejor valorados (estrellas/rating con desempate por número de valoraciones)
+// Mejor valorados (estrellas/rating con desempate por número de valoraciones)
 const ratingOf = (p: typeof allProducts[0]) => {
   const r = Number(p.rating ?? 0);
   const rc = Number(p.reviewsCount ?? 0);
@@ -113,52 +102,24 @@ const ratingOf = (p: typeof allProducts[0]) => {
 };
 
 const priceOf = (p: typeof allProducts[0]) => Number(p.price) || 0;
-const discountPctOf = (p: typeof allProducts[0]) => {
-  const orig = Number(p.originalPrice) || 0;
-  const curr = Number(p.price) || 0;
-  if (orig <= 0 || curr <= 0 || orig <= curr) return 0;
-  return Math.round(((orig - curr) / orig) * 100);
-};
 
 const sorted = [...visibleProducts].sort((a, b) => {
-  if (currentSort === 'ventas') {
-    return salesOf(b) - salesOf(a);
-  }
-  if (currentSort === 'valoracion') {
-    return ratingOf(b) - ratingOf(a);
-  }
   if (currentSort === 'precio_desc') {
     return priceOf(b) - priceOf(a);
   }
   if (currentSort === 'precio_asc') {
     return priceOf(a) - priceOf(b);
   }
-  if (currentSort === 'descuento') {
-    return discountPctOf(b) - discountPctOf(a);
+  if (currentSort === 'ventas') {
+    return salesOf(b) - salesOf(a);
   }
-  if (currentSort === 'nombre') {
-    return String(a.title).localeCompare(String(b.title), 'es');
-  }
-  if (currentSort === 'categoria') {
-    return String(a.category || '').localeCompare(String(b.category || ''), 'es');
-  }
-  if (currentSort === 'comercio') {
-    return String(a.merchant || (a as any).network_label || '').localeCompare(String(b.merchant || (b as any).network_label || ''), 'es');
-  }
-  if (currentSort === 'publicados') {
-    const isPub = (p: typeof allProducts[0]) => (p.category_id || p.category) ? 1 : 0;
-    return (isPub(b) - isPub(a)) || (scoreOf(b) - scoreOf(a));
-  }
-  if (currentSort === 'default') {
-    return 0;
-  }
-  return scoreOf(b) - scoreOf(a);
+  return ratingOf(b) - ratingOf(a);
 });
 
-// ─── Regla de Alternancia y Diversidad ─────────────────────────────────────
-// 1. Alterna tipos de producto y nunca repite el mismo modelo en la misma fila (4 col)
-// 2. Si la variedad lo permite, distribuye los modelos para evitar duplicidades en la página
-const diversified = applyCatalogDiversity(sorted, { rowSize: 4, pageSize: 40 });
+// Cuando se ordena por precio, mantener orden estricto (sin mezclar por diversidad)
+const diversified = ['precio_desc', 'precio_asc'].includes(currentSort)
+  ? sorted
+  : applyCatalogDiversity(sorted, { rowSize: 4, pageSize: 40 });
 
 // ─── Pagination for "Todos los Productos" ────────────────────────────────────
 const PRODUCTS_PER_PAGE = 40;
@@ -264,21 +225,14 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
         </div>
       </div>
 
-      <!-- Selector de ordenación del catálogo -->
+      <!-- Selector de ordenación del catálogo (alineado a la derecha) -->
       <div class="catalog-sort-bar">
         <label for="catalogSortSelect" class="catalog-sort-label">Ordenar catálogo:</label>
         <select id="catalogSortSelect" class="catalog-sort-select" aria-label="Ordenar catálogo">
-          <option value="score" selected={currentSort === 'score'}>Mejor rentabilidad (Score)</option>
-          <option value="precio_desc" selected={currentSort === 'precio_desc'}>Precio: mayor a menor</option>
-          <option value="precio_asc" selected={currentSort === 'precio_asc'}>Precio: menor a mayor</option>
+          <option value="precio_desc" selected={currentSort === 'precio_desc'}>Precio de mayor a menor</option>
+          <option value="precio_asc" selected={currentSort === 'precio_asc'}>Precio de menor a mayor</option>
           <option value="valoracion" selected={currentSort === 'valoracion'}>Mejor valorados</option>
           <option value="ventas" selected={currentSort === 'ventas'}>Más vendidos</option>
-          <option value="descuento" selected={currentSort === 'descuento'}>Mayor descuento</option>
-          <option value="nombre" selected={currentSort === 'nombre'}>Nombre</option>
-          <option value="categoria" selected={currentSort === 'categoria'}>Categoría</option>
-          <option value="comercio" selected={currentSort === 'comercio'}>Comerciante</option>
-          <option value="publicados" selected={currentSort === 'publicados'}>Publicados primero</option>
-          <option value="default" selected={currentSort === 'default'}>Por defecto (como se guardan)</option>
         </select>
       </div>
 
@@ -1035,11 +989,13 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   }
 
   .catalog-sort-bar {
-    display: inline-flex;
+    display: flex;
     align-items: center;
+    justify-content: flex-end;
     gap: 0.65rem;
-    margin: -1.25rem 0 2rem;
+    margin: -1.25rem 0 2rem auto;
     padding: 0.5rem 0.85rem;
+    width: fit-content;
     background: rgba(15, 23, 42, 0.75);
     border: 1px solid var(--color-border);
     border-radius: var(--border-radius-md);
