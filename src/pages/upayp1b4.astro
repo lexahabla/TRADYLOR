@@ -711,11 +711,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <div class="ac-page-nav" id="paginationNavTop" role="group" aria-label="Navegación de páginas">
           <button type="button" id="paginationPrevTop" class="ac-page-btn" disabled aria-label="Página anterior">‹</button>
           <div id="paginationPagesTop" class="ac-page-nums" role="group" aria-label="Números de página">
-          {pagerPages(initialTotalPages, pagerCurrentPage).map((p) => p.gap ? (
-            <span class="ac-page-gap" aria-hidden="true">…</span>
-          ) : (
-            <button type="button" class={`ac-page-btn${p.current ? ' is-current' : ''}`} data-ac-page={p.num} aria-label={`Página ${p.num}`} aria-current={p.current ? 'page' : undefined}>{p.num}</button>
-          ))}
+          {pagerPages(initialTotalPages, pagerCurrentPage).map(p => p.gap ? '<span class="ac-page-gap" aria-hidden="true">…</span>' : `<button type="button" class="ac-page-btn${p.current ? ' is-current' : ''}" data-ac-page="${p.num}" aria-label="Página ${p.num}"${p.current ? ' aria-current="page"' : ''}>${p.num}</button>`).join('')}
         </div>
           <button type="button" id="paginationNextTop" class="ac-page-btn" aria-label="Página siguiente">›</button>
           <button type="button" id="paginationEndTop" class="ac-page-btn" data-ac-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
@@ -778,11 +774,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <div class="ac-page-nav" id="paginationNav" role="group" aria-label="Navegación de páginas">
           <button type="button" id="paginationPrev" class="ac-page-btn" disabled aria-label="Página anterior">‹</button>
           <div id="paginationPages" class="ac-page-nums" role="group" aria-label="Números de página">
-          {pagerPages(initialTotalPages, pagerCurrentPage).map((p) => p.gap ? (
-            <span class="ac-page-gap" aria-hidden="true">…</span>
-          ) : (
-            <button type="button" class={`ac-page-btn${p.current ? ' is-current' : ''}`} data-ac-page={p.num} aria-label={`Página ${p.num}`} aria-current={p.current ? 'page' : undefined}>{p.num}</button>
-          ))}
+          {pagerPages(initialTotalPages, pagerCurrentPage).map(p => p.gap ? '<span class="ac-page-gap" aria-hidden="true">…</span>' : `<button type="button" class="ac-page-btn${p.current ? ' is-current' : ''}" data-ac-page="${p.num}" aria-label="Página ${p.num}"${p.current ? ' aria-current="page"' : ''}>${p.num}</button>`).join('')}
         </div>
           <button type="button" id="paginationNext" class="ac-page-btn" aria-label="Página siguiente">›</button>
           <button type="button" id="paginationEnd" class="ac-page-btn" data-ac-last title="Ir al final de la tabla" aria-label="Ir a la última página">⏭</button>
@@ -9116,9 +9108,9 @@ function renderTableRows(products, resetPage = true) {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: .8rem;
-    flex-wrap: wrap;
-    padding: .6rem 1rem;
+    gap: .6rem;
+    flex-wrap: nowrap;
+    padding: .5rem .9rem;
     width: 100%;
     box-sizing: border-box;
     font-size: .76rem;
@@ -9135,20 +9127,20 @@ function renderTableRows(products, resetPage = true) {
   :global(.ac-page-nav) {
     display: flex;
     align-items: center;
-    gap: .25rem;
+    gap: .15rem;
     flex-wrap: nowrap;
   }
   :global(.ac-page-btn) {
     appearance: none;
-    min-width: 1.85rem;
-    height: 1.85rem;
-    padding: 0 .5rem;
+    min-width: 1.7rem;
+    height: 1.7rem;
+    padding: 0 .35rem;
     background: #0b1220;
     border: 1px solid rgba(148, 163, 184, .32);
     border-radius: 6px;
     color: #e5e7eb;
     font: inherit;
-    font-size: .72rem;
+    font-size: .7rem;
     font-weight: 700;
     cursor: pointer;
     display: inline-flex;
@@ -9158,25 +9150,25 @@ function renderTableRows(products, resetPage = true) {
   :global(.ac-page-btn:hover:not(:disabled)) { border-color: #60a5fa; }
   :global(.ac-page-btn:disabled) { opacity: .4; cursor: not-allowed; }
   :global(.ac-page-btn.is-current) { background: rgba(96, 165, 250, .2); border-color: #60a5fa; color: #bfdbfe; }
-  :global(.ac-page-gap) { align-self: center; padding: 0 .15rem; color: var(--color-text-dim); font-size: .74rem; }
+  :global(.ac-page-gap) { align-self: center; padding: 0 .12rem; color: var(--color-text-dim); font-size: .7rem; }
   :global(.ac-per-page) {
     display: inline-flex;
     align-items: center;
-    gap: .45rem;
+    gap: .4rem;
     font-size: .76rem;
     color: var(--color-text-dim);
     white-space: nowrap;
   }
   :global(.ac-per-page select) {
-    padding: .12rem .3rem;
+    padding: .1rem .25rem;
     background: #0b1220;
     border: 1px solid rgba(148, 163, 184, .32);
     border-radius: 6px;
     color: #e5e7eb;
     font: inherit;
     font-size: .7rem;
-    min-width: 45px;
-    max-width: 60px;
+    min-width: 40px;
+    max-width: 55px;
     cursor: pointer;
   }
   /* Select «Por página» de las barras de paginación de productos */
