@@ -9577,6 +9577,30 @@ function renderTableRows(products, resetPage = true) {
     box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
   }
 
+  /* Autorrelleno/restauración de Chrome al cargar o refrescar la página:
+     el navegador pinta el input de blanco (y mantiene ese fondo hasta que el
+     usuario escribe) aunque nuestro CSS ya le ponga fondo oscuro, porque lo
+     hace con sus propios estilos internos de mayor prioridad. Se neutraliza
+     forzando el fondo oscuro vía box-shadow (el truco estándar para Chrome/
+     Edge/Safari) y el texto del tema. `:global()` para que cubra también los
+     inputs que se repintan por JS (innerHTML) en los filtros de Catálogo e
+     Importar Productos, que no llevan el atributo de scope de Astro. */
+  :global(input:-webkit-autofill),
+  :global(input:-webkit-autofill:hover),
+  :global(input:-webkit-autofill:focus),
+  :global(input:-webkit-autofill:active) {
+    -webkit-text-fill-color: var(--color-text-main) !important;
+    -webkit-box-shadow: 0 0 0 1000px var(--color-bg-main) inset !important;
+    box-shadow: 0 0 0 1000px var(--color-bg-main) inset !important;
+    caret-color: var(--color-text-main);
+    transition: background-color 999999s ease-in-out 0s;
+  }
+
+  :global(input:autofill) {
+    background-color: var(--color-bg-main) !important;
+    color: var(--color-text-main) !important;
+  }
+
   /* Botones: base scoped para los estáticos (HTML del template) + base global
      para los botones inyectados por JS (networkList, resultados, categorías…). */
   button {
