@@ -665,15 +665,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <label for="prodSubcatAssign">Subcategoría</label>
             <select id="prodSubcatAssign"><option value="">Todas las subcategorías</option></select>
           </div>
-          <div class="filter-field">
-            <label for="prodFMerchant">Comerciante</label>
-            <select id="prodFMerchant">
-              <option value="">Todos los comerciantes</option>
-              {initialMerchants.map((m) => (
-                <option value={m}>{m}</option>
-              ))}
-            </select>
-          </div>
           <div class="filter-field ali-sort-field">
             <label for="prodFSort">Ordenar por</label>
             <div class="ali-sort-group">
@@ -893,19 +884,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
              La primera fila reúne el meta del catálogo y los controles de
              sincronización (antes en #aliImportActions). -->
         <div id="affiliateFilters" class="ali-filters">
-          <!-- CAPA 0 · Estado del catálogo + sincronización (una sola fila) -->
-          <div class="ali-f-sync-row">
-            <span id="aliCatalogMeta" class="ali-catalog-meta">Cargando…</span>
-            <select id="aliSyncNetwork" class="sel-cat-assign" aria-label="Red a sincronizar" title="Elige qué red de afiliados sincronizar. 'Todas' sincroniza todas las conectadas.">
-              <option value="">Todas las conectadas</option>
-            </select>
-            <button type="button" id="btnAliSync" class="btn-primary btn-sm" title="Descarga o refresca el catálogo de afiliados contra las APIs de las redes conectadas (AliExpress, eBay…)">
-              <span class="btn-text">Sincronizar</span>
-              <div class="btn-spinner" hidden></div>
-            </button>
-            <button type="button" id="btnAliMore" class="btn-secondary btn-sm" hidden title="Descarga más páginas del catálogo de AliExpress sin borrar los productos ya guardados">+ Cargar más productos</button>
-            <button type="button" id="btnAliHideSel" class="btn-danger-ghost btn-sm" title="Oculta los productos marcados: no se verán en la tabla ni se añadirán al catálogo. Recupéralos con «En catálogo › Descartados»">🙈 Ocultar seleccionados</button>
-          </div>
 
           <!-- CAPA 1 · Buscador + presets rápidos de 1 clic -->
           <div class="ali-f-top">
@@ -939,6 +917,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <label for="aliFCat2">Subcategoría</label>
               <select id="aliFCat2" disabled><option value="">Todas</option></select>
             </div>
+            <div class="filter-field ali-f-network">
+              <label for="aliFNetwork">Comerciante / Red</label>
+              <select id="aliFNetwork" title="Filtra por la red de afiliación (comerciante) de origen"><option value="">Todas</option></select>
+            </div>
             <div class="filter-field ali-f-state">
               <label for="aliFState">En catálogo</label>
               <select id="aliFState" title="Filtra por si el producto ya está añadido al catálogo de Tradylor o no">
@@ -947,10 +929,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <option value="IMPORTED">Añadidos al catálogo</option>
                 <option value="DISCARDED">Descartados</option>
               </select>
-            </div>
-            <div class="filter-field ali-f-network">
-              <label for="aliFNetwork">Comerciante / Red</label>
-              <select id="aliFNetwork" title="Filtra por la red de afiliación (comerciante) de origen"><option value="">Todas</option></select>
             </div>
             <div class="filter-field ali-f-pair">
               <label for="aliFPriceMin">Precio (€)</label>
@@ -1030,6 +1008,20 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
           <!-- Chips: filtros activos, quítalos de uno en uno -->
           <div id="aliFChips" class="ali-chips" hidden></div>
+
+          <!-- CAPA 0 (última fila) · Estado del catálogo + sincronización -->
+          <div class="ali-f-sync-row">
+            <span id="aliCatalogMeta" class="ali-catalog-meta">Cargando…</span>
+            <select id="aliSyncNetwork" class="sel-cat-assign" aria-label="Red a sincronizar" title="Elige qué red de afiliados sincronizar. 'Todas' sincroniza todas las conectadas.">
+              <option value="">Todas las conectadas</option>
+            </select>
+            <button type="button" id="btnAliSync" class="btn-primary btn-sm" title="Descarga o refresca el catálogo de afiliados contra las APIs de las redes conectadas (AliExpress, eBay…)">
+              <span class="btn-text">Sincronizar</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <button type="button" id="btnAliMore" class="btn-secondary btn-sm" hidden title="Descarga más páginas del catálogo de AliExpress sin borrar los productos ya guardados">+ Cargar más productos</button>
+            <button type="button" id="btnAliHideSel" class="btn-danger-ghost btn-sm" title="Oculta los productos marcados: no se verán en la tabla ni se añadirán al catálogo. Recupéralos con «En catálogo › Descartados»">🙈 Ocultar seleccionados</button>
+          </div>
         </div>
 
         <!-- Selección masiva: la casilla de la cabecera marca la página actual;
@@ -3395,9 +3387,9 @@ function renderTableRows(products, resetPage = true) {
         <div class="filter-field prod-range-field" data-range-field="price">
           <label for="prodFPriceMin">Precio (€)</label>
           <div class="ali-pair">
-            <input type="number" id="prodFPriceMin" min="${dataMin}" step="0.01" placeholder="Mín." inputmode="decimal" value="${escapeHtml(keepPriceMin)}" style="background:var(--color-bg-main) !important;color:var(--color-text-main) !important;border:1px solid var(--color-border) !important;border-radius:var(--border-radius-sm) !important;padding:.45rem .6rem !important;outline:none;" />
+            <input type="number" id="prodFPriceMin" min="${dataMin}" step="0.01" placeholder="Mín." inputmode="decimal" value="${escapeHtml(keepPriceMin)}" style="background:var(--color-bg-main);color:var(--color-text-main);border:1px solid var(--color-border);border-radius:var(--border-radius-sm);padding:.45rem .6rem;outline:none;" />
             <span class="ali-pair-sep" aria-hidden="true">–</span>
-            <input type="number" id="prodFPriceMax" max="${dataMax}" step="0.01" placeholder="Máx." inputmode="decimal" value="${escapeHtml(keepPriceMax)}" style="background:var(--color-bg-main) !important;color:var(--color-text-main) !important;border:1px solid var(--color-border) !important;border-radius:var(--border-radius-sm) !important;padding:.45rem .6rem !important;outline:none;" />
+            <input type="number" id="prodFPriceMax" max="${dataMax}" step="0.01" placeholder="Máx." inputmode="decimal" value="${escapeHtml(keepPriceMax)}" style="background:var(--color-bg-main);color:var(--color-text-main);border:1px solid var(--color-border);border-radius:var(--border-radius-sm);padding:.45rem .6rem;outline:none;" />
           </div>
         </div>
         <div class="filter-field prod-range-field" data-range-field="disc">
@@ -3853,6 +3845,10 @@ function renderTableRows(products, resetPage = true) {
       } catch (err) {
         console.error('Error guardando orden global del catálogo:', err);
       }
+      // Reflejar el orden elegido en el select de ordenación de la tabla y
+      // volver a aplicar filtros para que el catálogo del panel se reordene.
+      if (prodFSort) prodFSort.value = selectedVal;
+      prodFilterApply();
     });
 
     // ─── Ordenación interna de la tabla del panel (#prodFSort) ───────────────
@@ -7261,6 +7257,7 @@ function renderTableRows(products, resetPage = true) {
       document.querySelectorAll('.preset-chip[data-prod-preset]').forEach((chip) => {
         const isCurrent = Boolean(activeProdPreset) && chip.getAttribute('data-prod-preset') === activeProdPreset;
         chip.setAttribute('aria-pressed', String(isCurrent));
+        chip.classList.toggle('is-active', isCurrent);
       });
       const clearBtn = document.getElementById('btnProdPresetClear');
       if (clearBtn) clearBtn.hidden = !activeProdPreset;
@@ -10840,6 +10837,7 @@ function renderTableRows(products, resetPage = true) {
   :global(.preset-chip:hover) { color: var(--color-text-main); border-color: rgba(96, 165, 250, .45); }
   :global(.preset-chip-clear) { color: #fca5a5; border-color: rgba(239, 68, 68, .3); }
   :global(.preset-chip-action) { color: #86efac; border-color: rgba(34, 197, 94, .3); }
+  :global(.preset-chip.is-active) { color: #04121f; background: linear-gradient(135deg, #38bdf8, #22d3ee); border-color: transparent; box-shadow: 0 4px 12px rgba(56, 189, 248, .28); }
 
   :global(.score-badge) {
     display: inline-flex;

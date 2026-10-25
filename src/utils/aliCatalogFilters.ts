@@ -822,17 +822,18 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
 
   /* ── estado → UI ───────────────────────────────────────────────────────── */
 
-  const setOptions = (select: HTMLSelectElement | null, values: string[], anyLabel: string, keep?: string): void => {
+  const setOptions = (select: HTMLSelectElement | null, values: string[], anyLabel: string, keep?: string, labels?: string[]): void => {
     if (!select) return;
     const fragment = document.createDocumentFragment();
     const any = document.createElement('option');
     any.value = '';
     any.textContent = anyLabel;
     fragment.appendChild(any);
-    for (const value of values) {
+    for (let i = 0; i < values.length; i++) {
+      const value = values[i];
       const option = document.createElement('option');
       option.value = value;
-      option.textContent = value;
+      option.textContent = (labels && labels[i]) ? labels[i] : value;
       fragment.appendChild(option);
     }
     select.textContent = '';
@@ -841,14 +842,37 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
   };
 
   function populateFacets(): void {
-    const l1 = [...new Set(products.map(categoryL1).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
-    setOptions(el.aliFCat1 as HTMLSelectElement | null, l1, 'Todas', params.catL1);
+    // Filtrar productos por comerciante/red si hay uno seleccionado, para que
+    // las categorías y subcategorías que se ofrezcan sean solo las de ese
+    // comerciante. Cuando no hay comerciante seleccionado ("Todas"), se
+    // muestran todas las categorías precedidas del nombre del comerciante.
+    const network = params.network || '';
+    const productsForCats = network
+      ? products.filter((p) => String(p.network ?? '').trim().toLowerCase() === network.trim().toLowerCase())
+      : products;
+
+    const l1Raw = [...new Set(productsForCats.map(categoryL1).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+    const l1Labels = network
+      ? l1Raw
+      : l1Raw.map((c) => {
+          const owner = productsForCats.find((p) => categoryL1(p) === c);
+          const net = owner ? String(owner.network ?? '').trim() : '';
+          return net ? `${net} › ${c}` : c;
+        });
+    setOptions(el.aliFCat1 as HTMLSelectElement | null, l1Raw, 'Todas', params.catL1, l1Labels);
     params.catL1 = (el.aliFCat1 as HTMLSelectElement | null)?.value || '';
 
-    const l2 = params.catL1
-      ? [...new Set(products.filter((p) => categoryL1(p) === params.catL1).map(categoryL2).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
-      : [...new Set(products.map(categoryL2).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
-    setOptions(el.aliFCat2 as HTMLSelectElement | null, l2, params.catL1 ? 'Todas' : '—', params.catL2);
+    const l2Raw = params.catL1
+      ? [...new Set(productsForCats.filter((p) => categoryL1(p) === params.catL1).map(categoryL2).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
+      : [...new Set(productsForCats.map(categoryL2).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+    const l2Labels = network
+      ? l2Raw
+      : l2Raw.map((c) => {
+          const owner = productsForCats.find((p) => categoryL2(p) === c);
+          const net = owner ? String(owner.network ?? '').trim() : '';
+          return net ? `${net} › ${c}` : c;
+        });
+    setOptions(el.aliFCat2 as HTMLSelectElement | null, l2Raw, params.catL1 ? 'Todas' : '—', params.catL2, l2Labels);
     params.catL2 = (el.aliFCat2 as HTMLSelectElement | null)?.value || '';
     const l2Select = el.aliFCat2 as HTMLSelectElement | null;
     if (l2Select) {
@@ -856,7 +880,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
       l2Select.title = l2.length === 0 ? 'Esta categoría no tiene subcategorías en la caché' : '';
     }
 
-    const shops = [...new Set(products.map((p) => extra(p, 'Tienda')).filter((v): v is string => Boolean(v)))].sort();
+    const shops = [...new Set(productsForCats.map((p) => extra(p, 'Tienda')).filter((v): v is string => Boolean(v)))].sort();
     setOptions(el.aliFShop as HTMLSelectElement | null, shops, 'Todas', params.shop);
     params.shop = (el.aliFShop as HTMLSelectElement | null)?.value || '';
   }
@@ -1031,12 +1055,23 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
   (el.aliFCat1 as HTMLSelectElement | null)?.addEventListener('change', () => {
     params.catL1 = (el.aliFCat1 as HTMLSelectElement | null)?.value || '';
     params.catL2 = '';
+    const network = params.network || '';
+    const productsForCats = network
+      ? products.filter((p) => String(p.network ?? '').trim().toLowerCase() === network.trim().toLowerCase())
+      : products;
     const l2Select = el.aliFCat2 as HTMLSelectElement | null;
     if (l2Select) {
       const l2 = params.catL1
-        ? [...new Set(products.filter((p) => categoryL1(p) === params.catL1).map(categoryL2).filter(Boolean))].sort()
+        ? [...new Set(productsForCats.filter((p) => categoryL1(p) === params.catL1).map(categoryL2).filter(Boolean))].sort()
         : [];
-      setOptions(l2Select, l2, 'Todas', '');
+      const l2Labels = network
+        ? l2
+        : l2.map((c) => {
+            const owner = productsForCats.find((p) => categoryL2(p) === c);
+            const net = owner ? String(owner.network ?? '').trim() : '';
+            return net ? `${net} › ${c}` : c;
+          });
+      setOptions(l2Select, l2, 'Todas', '', l2Labels);
       l2Select.disabled = l2.length === 0;
     }
     activePreset = null;
