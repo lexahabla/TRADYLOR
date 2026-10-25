@@ -889,7 +889,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
              sincronización (antes en #aliImportActions). -->
         <div id="affiliateFilters" class="ali-filters">
 
-          <!-- CAPA 1 · Buscador + presets rápidos de 1 clic -->
+          <!-- CAPA 1 · Buscador -->
           <div class="ali-f-top">
             <div class="filter-field ali-f-search">
               <label for="aliFQ">Buscar</label>
@@ -902,16 +902,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <span class="ali-f-count" id="aliFCount" title="Resultados que cumplen los filtros">0/0</span>
               </div>
             </div>
-            <div class="ali-presets" role="group" aria-label="Vistas rápidas de filtros">
-              <button type="button" class="ali-preset" data-ali-preset="top-ventas" aria-pressed="false"><span class="ali-preset-ico">🔥</span> Top Ventas</button>
-              <button type="button" class="ali-preset" data-ali-preset="alto-margen" aria-pressed="false"><span class="ali-preset-ico">💰</span> Alto Margen</button>
-              <button type="button" class="ali-preset" data-ali-preset="envio-express" aria-pressed="false"><span class="ali-preset-ico">⚡</span> Envío Exprés</button>
-              <button type="button" class="ali-preset" data-ali-preset="segunda-mano" aria-pressed="false" title="Filtra exclusivamente productos de segunda mano o reacondicionados"><span class="ali-preset-ico">♻️</span> Segunda Mano</button>
-              <button type="button" class="ali-preset ali-preset-clear" data-ali-preset="clear" aria-pressed="false"><span class="ali-preset-ico">🗑️</span> Limpiar Filtros</button>
-            </div>
           </div>
 
-          <!-- CAPA 2 · Filtros principales + ordenación -->
+          <!-- CAPA 2 · Filtros principales + ordenación, reagrupados: primero
+               procedencia/taxonomía del producto (red, categoría, subcategoría,
+               estado en catálogo), después orden + métricas numéricas (precio,
+               comisión, ventas, valoración) y el botón de más filtros. Los
+               presets van en su propia línea (el <br> fuerza el salto dentro
+               del flex-wrap; ver ".ali-filters-row > br" más abajo), igual que
+               en el Catálogo de Productos Registrados. -->
           <div class="ali-filters-row">
             <!-- El Comerciante/Red va PRIMERO: es el filtro "padre" del que
                  dependen Categoría y Subcategoría (cascada), igual que
@@ -937,6 +936,33 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <option value="DISCARDED">Descartados</option>
               </select>
             </div>
+            <div class="filter-field ali-sort-field">
+              <label for="aliFSort">Ordenar por</label>
+              <div class="ali-sort-group">
+                <select id="aliFSort">
+                  <option value="ventas" selected>Más ventas</option>
+                  <option value="visitas">Visitas</option>
+                  <option value="comision_eur">Mayor comisión €</option>
+                  <option value="comision_pct">Mayor comisión %</option>
+                  <option value="valoracion">Mejor valoración</option>
+                  <option value="descuento">Mayor descuento</option>
+                  <option value="precio">Precio</option>
+                  <option value="nombre">Nombre</option>
+                  <option value="fecha">Fecha de alta</option>
+                </select>
+                <button type="button" id="aliFSortDir" class="btn-secondary btn-sm ali-sort-dir" data-dir="desc" title="Orden actual: mayor a menor. Pulsa para invertir.">↓</button>
+              </div>
+            </div>
+            <div class="filter-field ali-f-short">
+              <label for="aliFRatingMin">Valoración</label>
+              <select id="aliFRatingMin">
+                <option value="">Cualquiera</option>
+                <option value="4">≥ 4,0 ★</option>
+                <option value="4.5">≥ 4,5 ★</option>
+                <option value="4.6">≥ 4,6 ★</option>
+                <option value="4.8">≥ 4,8 ★</option>
+              </select>
+            </div>
             <div class="filter-field ali-f-pair">
               <label for="aliFPriceMin">Precio (€)</label>
               <div class="ali-pair">
@@ -959,37 +985,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <label for="aliFSalesMin">Ventas 30 d</label>
               <input type="number" id="aliFSalesMin" min="0" step="1" placeholder="Mín." inputmode="numeric" autocomplete="off" />
             </div>
-            <div class="filter-field ali-f-short">
-              <label for="aliFRatingMin">Valoración</label>
-              <select id="aliFRatingMin">
-                <option value="">Cualquiera</option>
-                <option value="4">≥ 4,0 ★</option>
-                <option value="4.5">≥ 4,5 ★</option>
-                <option value="4.6">≥ 4,6 ★</option>
-                <option value="4.8">≥ 4,8 ★</option>
-              </select>
-            </div>
-            <div class="filter-field ali-sort-field">
-              <label for="aliFSort">Ordenar por</label>
-              <div class="ali-sort-group">
-                <select id="aliFSort">
-                  <option value="ventas" selected>Más ventas</option>
-                  <option value="visitas">Visitas</option>
-                  <option value="comision_eur">Mayor comisión €</option>
-                  <option value="comision_pct">Mayor comisión %</option>
-                  <option value="valoracion">Mejor valoración</option>
-                  <option value="descuento">Mayor descuento</option>
-                  <option value="precio">Precio</option>
-                  <option value="nombre">Nombre</option>
-                  <option value="fecha">Fecha de alta</option>
-                </select>
-                <button type="button" id="aliFSortDir" class="btn-secondary btn-sm ali-sort-dir" data-dir="desc" title="Orden actual: mayor a menor. Pulsa para invertir.">↓</button>
-              </div>
-            </div>
             <div class="ali-f-btns">
               <button type="button" id="aliFMoreBtn" class="btn-secondary btn-sm" aria-expanded="false" aria-controls="aliAdvanced" title="Filtros avanzados: envío, Choice, comisión Hot, imágenes, tienda...">
                 ⚙ Más filtros <span class="ali-f-badge" id="aliFAdvBadge" hidden>0</span>
               </button>
+            </div>
+            <br />
+            <div class="ali-presets" role="group" aria-label="Vistas rápidas de filtros">
+              <button type="button" class="ali-preset" data-ali-preset="top-ventas" aria-pressed="false"><span class="ali-preset-ico">🔥</span> Top Ventas</button>
+              <button type="button" class="ali-preset" data-ali-preset="alto-margen" aria-pressed="false"><span class="ali-preset-ico">💰</span> Alto Margen</button>
+              <button type="button" class="ali-preset" data-ali-preset="envio-express" aria-pressed="false"><span class="ali-preset-ico">⚡</span> Envío Exprés</button>
+              <button type="button" class="ali-preset" data-ali-preset="segunda-mano" aria-pressed="false" title="Filtra exclusivamente productos de segunda mano o reacondicionados"><span class="ali-preset-ico">♻️</span> Segunda Mano</button>
+              <button type="button" class="ali-preset ali-preset-clear" data-ali-preset="clear" aria-pressed="false"><span class="ali-preset-ico">🗑️</span> Limpiar Filtros</button>
             </div>
           </div>
 
@@ -8563,6 +8570,18 @@ function renderTableRows(products, resetPage = true) {
 )}
 
 <style>
+  /* --color-bg-main: fondo de inputs/selects de este panel (precio, login,
+     credenciales de red, etc.). Se usaba en decenas de reglas de este archivo
+     pero nunca se había declarado, así que el navegador lo trataba como
+     inválido y lo ignoraba (quedaba transparente, "tapado" la mayor parte
+     del tiempo por el fondo oscuro de la página detrás, pero sin color
+     propio: por eso el truco anti-autofill/restaurado de Chrome, que
+     depende de esta variable, no pintaba nada y esos inputs se veían en
+     blanco al cargar la página). */
+  :root {
+    --color-bg-main: #161d2b;
+  }
+
   .admin-dashboard-view { flex-direction: column; gap: 1.5rem; }
   .view-heading { padding-bottom: 1.5rem; border-bottom: 1px solid var(--color-border); }
   .view-heading .admin-title { margin: .75rem 0 .5rem; }
@@ -8678,6 +8697,12 @@ function renderTableRows(products, resetPage = true) {
      popup del select se pinta en blanco y con texto blanco era ilegible;
       :global porque las opciones de aliFCat1/aliFCat2/aliFShop se inyectan por JS) */
   :global(select option) { background: #ffffff; color: #111827; }
+  /* Cabeceras <optgroup> (nombre de la red: "AliExpress Portals", "Ebay
+     Partner Network"...) agrupan aliFCat1 por comerciante cuando se ven
+     "Todas" las redes a la vez (ver setGroupedOptions en aliCatalogFilters.ts).
+     Sin esta regla, el navegador las pinta con su gris tenue por defecto,
+     casi ilegibles sobre el fondo blanco del popup. */
+  :global(select optgroup) { background: #ffffff; color: #000000; font-weight: 700; }
   .filter-check { display: inline-flex; align-items: center; gap: .45rem; color: var(--color-text-muted); font-size: .8rem; font-weight: 600; padding-bottom: .55rem; cursor: pointer; }
 
   /* Tabla comprimida (14 columnas): sin scroll horizontal ni vertical; la
@@ -8718,6 +8743,11 @@ function renderTableRows(products, resetPage = true) {
   .ali-filters { display: flex; flex-direction: column; gap: .55rem; margin-bottom: .6rem; padding: .55rem .65rem; background: rgba(255, 255, 255, .02); border: 1px solid var(--color-border); border-radius: 10px; }
   .ali-filters[hidden] { display: none; }
   .ali-filters-row { display: flex; align-items: flex-end; gap: .5rem; flex-wrap: wrap; }
+  /* El <br> entre el botón "Más filtros" y .ali-presets fuerza un salto de
+     línea dentro de este flex-wrap (un <br> normal no hace nada dentro de
+     flex): al ocupar el 100% del ancho, empuja los presets a su propia fila,
+     igual que en el Catálogo de Productos Registrados (#prodPresets). */
+  .ali-filters-row > br { flex-basis: 100%; width: 100%; height: 0; margin: 0; border: 0; padding: 0; }
   .ali-filters .filter-field { min-width: 90px; flex: 0 1 auto; }
   .ali-filters .filter-field.ali-f-search { flex: 1 1 180px; min-width: 150px; }
   .ali-filters .btn-secondary { flex-shrink: 0; padding: .5rem .8rem; font-size: .72rem; }
@@ -8738,8 +8768,10 @@ function renderTableRows(products, resetPage = true) {
   .ali-f-count { position: absolute; right: .45rem; padding: .1rem .5rem; border-radius: 999px; background: rgba(56, 189, 248, .14); color: #7dd3fc; font-size: .62rem; font-weight: 800; font-variant-numeric: tabular-nums; }
   .ali-f-count.is-filtered { background: rgba(56, 189, 248, .3); box-shadow: 0 0 0 1px rgba(56, 189, 248, .4) inset; }
 
-  /* CAPA 1 · Presets rápidos */
-  .ali-presets { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; margin-left: auto; }
+  /* CAPA 1 · Presets rápidos. Ahora viven en su propia línea dentro de
+     .ali-filters-row (tras el <br>), alineados a la izquierda igual que
+     #prodPresets, con una línea separadora como el resto de filas. */
+  .ali-presets { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; padding-top: .45rem; margin-top: .1rem; border-top: 1px dashed rgba(255, 255, 255, .07); }
   .ali-preset { display: inline-flex; align-items: center; gap: .3rem; padding: .45rem .7rem; font: inherit; font-size: .72rem; font-weight: 700; color: var(--color-text-muted); background: #0b1220; border: 1px solid var(--color-border); border-radius: 999px; cursor: pointer; transition: all .18s ease; white-space: nowrap; }
   .ali-preset:hover { color: #dbeafe; border-color: rgba(96, 165, 250, .5); transform: translateY(-1px); }
   .ali-preset.is-active { color: #04121f; background: linear-gradient(135deg, #38bdf8, #22d3ee); border-color: transparent; box-shadow: 0 4px 12px rgba(56, 189, 248, .28); }
