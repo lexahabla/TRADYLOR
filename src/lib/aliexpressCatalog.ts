@@ -97,6 +97,18 @@ export function writeAliCatalog(snapshot: AliCatalogSnapshot): boolean {
   }
 }
 
+/**
+ * Vacía la caché específica de AliExpress (aliexpress-catalog.json). Hace
+ * falta además de `DELETE /api/admin/catalog` (que sólo vacía la caché
+ * unificada `affiliate-catalog.json`): sin esto, la siguiente sincronización
+ * de AliExpress fusionaba sus productos con los de ESTA caché -que nunca se
+ * había tocado- y los resucitaba en la caché unificada aunque el admin
+ * acabase de vaciarla a propósito para "resincronizar desde cero".
+ */
+export function clearAliCatalog(): boolean {
+  return writeAliCatalog({ syncedAt: '', products: [] });
+}
+
 export function getAliCatalogState(): AliCatalogState {
   const snapshot = readAliCatalog();
   if (!snapshot) return { exists: false, syncedAt: null, stale: true, count: 0 };

@@ -11,7 +11,7 @@
  */
 
 import { cleanGeneratedDescription, enrichProductLocally } from '../localEnrich';
-import { enrichProductText, enforceMoreProsThanCons, hasTextCredentials, textProvider, type EnrichedText } from '../ai';
+import { enrichProductText, hasTextCredentials, overlayEnrichedText, textProvider } from '../ai';
 import {
   createCategory,
   getCategories,
@@ -89,35 +89,6 @@ function getOrCreateSubcategory(parentId: string, name: string): { id: string; c
 
   const result = createCategory({ name, parentId, keywords: [] });
   return { id: result.category?.id ?? slug, created: result.ok };
-}
-
-/** Overlay no destructivo: la IA mejora lo local sin borrar datos con campos vacíos. */
-function overlayText(local: EnrichedText, ai: EnrichedText): EnrichedText {
-  const pick = (aiValue: any, localValue: any) => {
-    if (typeof aiValue === 'string') return aiValue.trim() ? aiValue : localValue;
-    if (Array.isArray(aiValue)) return aiValue.length ? aiValue : localValue;
-    return aiValue ?? localValue;
-  };
-  const { pros, cons } = enforceMoreProsThanCons(pick(ai.pros, local.pros), pick(ai.cons, local.cons));
-  return {
-    ...local,
-    ...ai,
-    title: pick(ai.title, local.title),
-    description: pick(ai.description, local.description),
-    verdict: pick(ai.verdict, local.verdict),
-    category: pick(ai.category, local.category),
-    // La ficha técnica la marca el comercio: lo ya extraído por el scraping
-    // (local.specs) prevalece sobre lo que "adivine" la IA para las mismas
-    // claves; la IA sólo aporta claves adicionales que falten.
-    specs: { ...(ai.specs ?? {}), ...(local.specs ?? {}) },
-    techSheet: pick(ai.techSheet, local.techSheet),
-    // Siempre más pros que contras (ver enforceMoreProsThanCons): se calcula
-    // sobre el par ya elegido por pick(), que puede mezclar pros de una
-    // fuente con contras de otra.
-    pros,
-    cons,
-    pricing: ai.pricing ?? local.pricing,
-  };
 }
 
 /** Resuelve la categoría raíz y la subcategoría hija del producto. */
@@ -257,7 +228,7 @@ export async function runStageCategorize(
           ? { provider: options.provider, model: options.model }
           : {},
       );
-      enriched = overlayText(local, ai);
+      enriched = overlayEnrichedText(local, ai);
       aiEnriched = true;
     } catch (error) {
       // Sin IA disponible: se mantiene la ficha local (no destructivo), pero se

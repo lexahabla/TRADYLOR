@@ -6,6 +6,7 @@ import {
   generateProductImage,
   hasTextCredentials,
   hasImageCredentials,
+  overlayEnrichedText,
   textProvider,
   imageProvider,
   type EnrichedText,
@@ -150,33 +151,9 @@ async function enrichSingleText(
         specs: product.specs,
       });
       // Overlay: la IA mejora lo local, pero NO borra datos con campos vacíos
-      // (mismo criterio que /api/admin/add-product, para mantener la paridad
-      // de verdad entre este enriquecimiento masivo y el botón «Enriquecer»).
-      const pick = (aiValue: any, localValue: any) => {
-        if (typeof aiValue === 'string') return aiValue.trim() ? aiValue : localValue;
-        if (Array.isArray(aiValue)) return aiValue.length ? aiValue : localValue;
-        return aiValue ?? localValue;
-      };
-      const { pros: pickedPros, cons: pickedCons } = enforceMoreProsThanCons(
-        pick(ai.pros, localEnrichment.pros),
-        pick(ai.cons, localEnrichment.cons)
-      );
-      enrichment = {
-        ...localEnrichment,
-        ...ai,
-        title: pick(ai.title, localEnrichment.title),
-        description: pick(ai.description, localEnrichment.description),
-        verdict: pick(ai.verdict, localEnrichment.verdict),
-        category: pick(ai.category, localEnrichment.category),
-        // La ficha técnica la marca el comercio: lo ya extraído por el
-        // scraping (localEnrichment.specs) prevalece sobre lo que "adivine"
-        // la IA para las mismas claves.
-        specs: { ...(ai.specs ?? {}), ...(localEnrichment.specs ?? {}) },
-        techSheet: pick(ai.techSheet, localEnrichment.techSheet),
-        pros: pickedPros,
-        cons: pickedCons,
-        pricing: ai.pricing ?? localEnrichment.pricing,
-      };
+      // (mismo helper que /api/admin/add-product y "Construir Catálogo", para
+      // mantener la paridad de verdad entre todos los caminos de enriquecimiento).
+      enrichment = overlayEnrichedText(localEnrichment, ai);
       textStatus = 'ok';
     } catch (err: any) {
       textStatus = 'local';
@@ -195,8 +172,13 @@ async function enrichSingleText(
     enrichment?.title?.trim()?.slice(0, 80) ||
     product.title.slice(0, 80);
 
-  // Paso 2 — Imagen (solo si no hay imagen o se pide forzar).
-  const needsImage = !product.image || forceImage;
+  // Paso 2 — Imagen (solo si no hay imagen real o se pide forzar). Un
+  // placeholder ('—' o la imagen de stock por defecto) cuenta como "sin
+  // imagen": si no, un producto importado sin foto real se quedaba sin
+  // imagen de IA para siempre.
+  const currentImage = String(product.image || '').trim();
+  const hasUsableImage = Boolean(currentImage) && currentImage !== '—' && currentImage !== DEFAULT_IMAGE;
+  const needsImage = !hasUsableImage || forceImage;
   if (needsImage && hasImageCredentials()) {
     try {
       const result = await generateProductImage(enrichment?.title || product.title);

@@ -9,9 +9,11 @@ import {
   hasImageCredentials,
   hasTextCredentials,
   imageProvider,
+  overlayEnrichedText,
   textProvider,
   type EnrichedText,
 } from '../../../lib/ai';
+import { MAX_PRODUCT_IMAGES } from '../../../lib/imageQuality';
 import { enrichProductLocally } from '../../../lib/localEnrich';
 import { findDuplicateProduct, readProductsFromFile, slugify, upsertProduct, writeProductsToFile, type Product } from '../../../lib/productStore';
 import { autoLinkAlternatives, computeBadge } from '../../../lib/curation';
@@ -102,6 +104,14 @@ export const POST: APIRoute = async ({ request }) => {
       text: body?.options?.text !== false,
       image: body?.options?.image !== false,
       save: body?.options?.save !== false,
+      // Por defecto (false) conserva el comportamiento del botón manual
+      // "Enriquecer con IA (título + ficha + imagen)": siempre puede
+      // regenerar la imagen si el admin lo pide explícitamente desde el
+      // formulario. Opt-in para integraciones/llamadas en lote que no quieran
+      // sustituir en cadena fotos reales ya guardadas por una genérica de IA
+      // (el enriquecimiento masivo del panel usa /api/admin/enrich-bulk, que
+      // ya tiene esta misma protección incorporada por defecto).
+      imageOnlyIfMissing: body?.options?.imageOnlyIfMissing === true,
     };
 
     // ------------------------------------------------------------------
@@ -206,37 +216,9 @@ export const POST: APIRoute = async ({ request }) => {
             // como fuente de verdad para que la IA no invente ficha técnica.
             specs: body?.specs && typeof body.specs === 'object' ? body.specs : undefined,
           });
-          // Overlay: la IA mejora lo local, pero NO borra datos con campos vacíos.
-          const pick = (aiValue: any, localValue: any) => {
-            if (typeof aiValue === 'string') return aiValue.trim() ? aiValue : localValue;
-            if (Array.isArray(aiValue)) return aiValue.length ? aiValue : localValue;
-            return aiValue ?? localValue;
-          };
-          const { pros: pickedPros, cons: pickedCons } = enforceMoreProsThanCons(
-            pick(aiEnrichment.pros, localEnrichment.pros),
-            pick(aiEnrichment.cons, localEnrichment.cons)
-          );
-          enrichment = {
-            ...localEnrichment,
-            ...aiEnrichment,
-            title: pick(aiEnrichment.title, localEnrichment.title),
-            description: pick(aiEnrichment.description, localEnrichment.description),
-            verdict: pick(aiEnrichment.verdict, localEnrichment.verdict),
-            category: pick(aiEnrichment.category, localEnrichment.category),
-            // La ficha técnica la marca el comercio: lo ya extraído del
-            // scraping (localEnrichment.specs) prevalece sobre lo que
-            // "adivine" la IA para las mismas claves; la IA sólo aporta
-            // claves adicionales que el scraping no haya capturado.
-            specs: { ...(aiEnrichment.specs ?? {}), ...(localEnrichment.specs ?? {}) },
-            techSheet: pick(aiEnrichment.techSheet, localEnrichment.techSheet),
-            // Siempre más pros que contras (ver enforceMoreProsThanCons): se
-            // aplica AQUÍ (no sólo dentro de cada fuente) porque pick() elige
-            // pros y contras de forma independiente y podría mezclar un
-            // conjunto de pros con contras de la otra fuente.
-            pros: pickedPros,
-            cons: pickedCons,
-            pricing: aiEnrichment.pricing ?? localEnrichment.pricing,
-          };
+          // Overlay: la IA mejora lo local, pero NO borra datos con campos
+          // vacíos (mismo helper que usan "Construir Catálogo" y el Pipeline).
+          enrichment = overlayEnrichedText(localEnrichment, aiEnrichment);
           textStatus = 'ok';
         } catch (error: any) {
           textStatus = 'local';
@@ -249,9 +231,16 @@ export const POST: APIRoute = async ({ request }) => {
     // ------------------------------------------------------------------
     // PASO 2 — Generación/acondicionamiento de imagen (IA)
     //   El prompt usa el título sintetizado (más limpio y descriptivo).
+    //   `imageOnlyIfMissing` (opt-in, ver options más arriba): protege fotos
+    //   reales ya guardadas de una llamada en lote; el formulario manual (por
+    //   defecto) siempre puede regenerar si el admin lo pide explícitamente.
     // ------------------------------------------------------------------
     const imagePromptTitle = enrichment?.title?.trim() || title;
-    if (options.image) {
+    const currentImage = String(body?.image ?? '').trim();
+    const hasUsableImage = Boolean(currentImage) && currentImage !== '—' && currentImage !== DEFAULT_IMAGE;
+    if (options.image && options.imageOnlyIfMissing && hasUsableImage) {
+      imageStatus = 'skipped';
+    } else if (options.image) {
       if (!hasImageCredentials()) {
         imageStatus = 'skipped';
         warnings.push(
@@ -278,7 +267,7 @@ export const POST: APIRoute = async ({ request }) => {
       ? (body.gallery as unknown[])
           .map((g) => String(g ?? '').trim())
           .filter((g) => /^https?:\/\//i.test(g) || g.startsWith('/images/'))
-          .slice(0, 10)
+          .slice(0, MAX_PRODUCT_IMAGES)
       : [];
 
     // ASIN: del body o autodetectado desde el enlace de afiliado/URL del producto.

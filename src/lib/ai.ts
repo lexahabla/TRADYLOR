@@ -296,8 +296,9 @@ export async function chatComplete(
   throw lastError;
 }
 
-export function hasImageCredentials(): boolean {
-  return imageProvider() === 'flux' ? Boolean(env('FLUX_API_KEY')) : Boolean(env('OPENAI_API_KEY'));
+export function hasImageCredentials(providerOverride?: ImageProvider): boolean {
+  const provider = providerOverride ?? imageProvider();
+  return provider === 'flux' ? Boolean(env('FLUX_API_KEY')) : Boolean(env('OPENAI_API_KEY'));
 }
 
 /**
@@ -367,9 +368,25 @@ const TEXT_SYSTEM_PROMPT = [
 ].join('\n');
 
 /**
+ * Orden de candidatos para el fallback automático de texto: el proveedor por
+ * defecto (o el forzado explícitamente) se intenta primero; si falla (límite
+ * de peticiones agotado, modelo caído/retirado, error de red...) se prueban
+ * estos por orden, saltando los que no tengan clave configurada. Sólo se usa
+ * cuando el llamante NO fuerza un proveedor concreto: una elección explícita
+ * (p. ej. desde el Pipeline) se respeta siempre, sin fallback.
+ */
+const TEXT_PROVIDER_FALLBACK_ORDER: TextProvider[] = ['openai', 'anthropic', 'groq', 'nvidia', 'openrouter'];
+
+/**
  * Paso 1 — Enriquecimiento de texto con IA.
  * Genera descripción, ficha técnica estructurada, pros/contras, veredicto
  * y par de precios (oferta + original) con descuento realista.
+ *
+ * Con fallback automático entre proveedores: si no se fuerza `options.provider`
+ * y el proveedor por defecto falla (p. ej. Groq agota su límite de peticiones
+ * en un enriquecimiento masivo), se reintenta con cualquier otro proveedor que
+ * tenga credenciales configuradas antes de rendirse. Así "Enriquecer" en lote
+ * no degrada en silencio a la plantilla local a mitad de catálogo.
  */
 export async function enrichProductText(input: {
   title: string;
@@ -384,14 +401,14 @@ export async function enrichProductText(input: {
    *  tenga que inventarlas (la ficha técnica la marca el comercio, no la IA). */
   specs?: Record<string, string>;
 }, options: { provider?: TextProvider; model?: string } = {}): Promise<EnrichedText> {
-  // El proveedor se puede forzar por petición (p. ej. cuando el proveedor por
-  // defecto agota su límite de peticiones y hay otro con claves configuradas).
-  const provider = options.provider ?? textProvider();
-  // El modelo también: los límites diarios de Groq son POR MODELO, así que
-  // quedarse sin TPD en un modelo no implica quedarse sin cuota en todos.
+  const forcedProvider = Boolean(options.provider);
+  // El modelo sólo se reenvía al proveedor solicitado explícitamente: los
+  // modelos son específicos de cada proveedor y los límites diarios de Groq
+  // son POR MODELO (quedarse sin TPD en uno no agota el resto).
   const forcedModel = options.model?.trim();
-  if (!hasTextCredentials(provider)) {
-    throw new Error(`Falta ${textKeyEnvName(provider)} para enriquecer el texto`);
+  const primary = options.provider ?? textProvider();
+  if (!hasTextCredentials(primary)) {
+    throw new Error(`Falta ${textKeyEnvName(primary)} para enriquecer el texto`);
   }
 
   const specsEntries = input.specs ? Object.entries(input.specs).filter(([, v]) => String(v ?? '').trim()) : [];
@@ -410,43 +427,98 @@ export async function enrichProductText(input: {
     .filter(Boolean)
     .join('\n');
 
-  if (provider === 'anthropic') {
-    const model = forcedModel || env('ANTHROPIC_MODEL') || 'claude-3-5-sonnet-latest';
-    const response = await fetchWithTimeout(
-      'https://api.anthropic.com/v1/messages',
-      {
-        method: 'POST',
-        headers: anthropicHeaders(),
-        body: JSON.stringify({
-          model,
-          max_tokens: 1200,
-          temperature: 0.4,
-          system: TEXT_SYSTEM_PROMPT,
-          messages: [{ role: 'user', content: userContext }],
-        }),
-      },
-      60_000
-    );
-    if (!response.ok) {
-      throw new Error(`Anthropic respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
+  const callProvider = async (provider: TextProvider, modelForThis: string | undefined): Promise<EnrichedText> => {
+    if (provider === 'anthropic') {
+      const model = modelForThis || env('ANTHROPIC_MODEL') || 'claude-3-5-sonnet-latest';
+      const response = await fetchWithTimeout(
+        'https://api.anthropic.com/v1/messages',
+        {
+          method: 'POST',
+          headers: anthropicHeaders(),
+          body: JSON.stringify({
+            model,
+            max_tokens: 1200,
+            temperature: 0.4,
+            system: TEXT_SYSTEM_PROMPT,
+            messages: [{ role: 'user', content: userContext }],
+          }),
+        },
+        60_000
+      );
+      if (!response.ok) {
+        throw new Error(`Anthropic respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
+      }
+      const payload = await response.json();
+      const text = (payload?.content ?? []).map((block: any) => block?.text ?? '').join('');
+      return normalizeEnrichedText(parseLooseJson(text));
     }
-    const payload = await response.json();
-    const text = (payload?.content ?? []).map((block: any) => block?.text ?? '').join('');
+
+    // Compatibles con OpenAI: openai, groq (plan gratuito), nvidia (NIM) y
+    // openrouter (modelos ":free"). Mismo contrato, distinto endpoint/modelo.
+    const text = await callOpenAiCompat(provider, {
+      messages: [
+        { role: 'system', content: TEXT_SYSTEM_PROMPT },
+        { role: 'user', content: userContext },
+      ],
+      temperature: 0.4,
+      forcedModel: modelForThis,
+      timeoutMs: 60_000,
+    });
     return normalizeEnrichedText(parseLooseJson(text));
+  };
+
+  // Proveedor forzado explícitamente (p. ej. una tanda del Pipeline que elige
+  // "openai" a propósito para evitar Groq): se respeta sin fallback.
+  if (forcedProvider) {
+    return callProvider(primary, forcedModel);
   }
 
-  // Compatibles con OpenAI: openai, groq (plan gratuito), nvidia (NIM) y
-  // openrouter (modelos ":free"). Mismo contrato, distinto endpoint/modelo.
-  const text = await callOpenAiCompat(provider, {
-    messages: [
-      { role: 'system', content: TEXT_SYSTEM_PROMPT },
-      { role: 'user', content: userContext },
-    ],
-    temperature: 0.4,
-    forcedModel,
-    timeoutMs: 60_000,
-  });
-  return normalizeEnrichedText(parseLooseJson(text));
+  // Automático: el por defecto primero y, si falla, cualquier otro proveedor
+  // con credenciales configuradas (sin repetir el ya intentado).
+  const candidates = [primary, ...TEXT_PROVIDER_FALLBACK_ORDER.filter((p) => p !== primary)];
+  let lastError: unknown;
+  for (const candidate of candidates) {
+    if (!hasTextCredentials(candidate)) continue;
+    try {
+      return await callProvider(candidate, candidate === primary ? forcedModel : undefined);
+    } catch (error) {
+      lastError = error;
+      // Se prueba el siguiente proveedor disponible (fallback automático).
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Ningún proveedor de IA de texto disponible pudo enriquecer el producto.');
+}
+
+/**
+ * Combina una ficha LOCAL (base, siempre presente, gratis) con el resultado
+ * de la IA (overlay opcional): la IA mejora lo local, pero nunca borra datos
+ * con campos vacíos. Patrón único compartido por el alta/edición de producto
+ * (`add-product.ts`), "Construir Catálogo" (`build-catalog.ts`) y el Pipeline
+ * (`stageCategorize.ts`): los tres deben enriquecer EXACTAMENTE igual.
+ */
+export function overlayEnrichedText(local: EnrichedText, ai: EnrichedText): EnrichedText {
+  const pick = (aiValue: any, localValue: any) => {
+    if (typeof aiValue === 'string') return aiValue.trim() ? aiValue : localValue;
+    if (Array.isArray(aiValue)) return aiValue.length ? aiValue : localValue;
+    return aiValue ?? localValue;
+  };
+  const { pros, cons } = enforceMoreProsThanCons(pick(ai.pros, local.pros), pick(ai.cons, local.cons));
+  return {
+    ...local,
+    ...ai,
+    title: pick(ai.title, local.title),
+    description: pick(ai.description, local.description),
+    verdict: pick(ai.verdict, local.verdict),
+    category: pick(ai.category, local.category),
+    // La ficha técnica la marca el comercio: lo ya extraído localmente
+    // prevalece sobre lo que "adivine" la IA para las mismas claves; la IA
+    // sólo aporta claves adicionales que falten.
+    specs: { ...(ai.specs ?? {}), ...(local.specs ?? {}) },
+    techSheet: pick(ai.techSheet, local.techSheet),
+    pros,
+    cons,
+    pricing: ai.pricing ?? local.pricing,
+  };
 }
 
 /**
@@ -935,17 +1007,40 @@ async function downloadBytes(url: string): Promise<Uint8Array> {
  * Paso 2 — Generación de imagen de producto con IA.
  * Descarga el resultado y lo guarda en local para que los componentes de Astro
  * lo sirvan sin depender de URLs temporales de terceros.
+ *
+ * Con fallback automático: si no se fuerza `options.provider` y el proveedor
+ * configurado por defecto falla (créditos agotados, error del servicio...), se
+ * reintenta con el otro proveedor de imagen si tiene clave configurada.
  */
-export async function generateProductImage(title: string): Promise<ImageGenerationResult> {
-  const provider = imageProvider();
+export async function generateProductImage(
+  title: string,
+  options: { provider?: ImageProvider } = {},
+): Promise<ImageGenerationResult> {
+  const forcedProvider = Boolean(options.provider);
+  const primary = options.provider ?? imageProvider();
 
-  if (provider === 'flux') {
-    if (!env('FLUX_API_KEY')) throw new Error('Falta FLUX_API_KEY para generar la imagen con Flux');
-    return generateWithFlux(title);
+  const run = async (provider: ImageProvider): Promise<ImageGenerationResult> => {
+    if (provider === 'flux') {
+      if (!env('FLUX_API_KEY')) throw new Error('Falta FLUX_API_KEY para generar la imagen con Flux');
+      return generateWithFlux(title);
+    }
+    if (!env('OPENAI_API_KEY')) throw new Error('Falta OPENAI_API_KEY para generar la imagen');
+    return generateWithOpenAI(title);
+  };
+
+  if (forcedProvider) return run(primary);
+
+  try {
+    return await run(primary);
+  } catch (error) {
+    const alternate: ImageProvider = primary === 'flux' ? 'openai' : 'flux';
+    if (!hasImageCredentials(alternate)) throw error;
+    try {
+      return await run(alternate);
+    } catch {
+      throw error;
+    }
   }
-
-  if (!env('OPENAI_API_KEY')) throw new Error('Falta OPENAI_API_KEY para generar la imagen');
-  return generateWithOpenAI(title);
 }
 
 async function generateWithOpenAI(title: string): Promise<ImageGenerationResult> {

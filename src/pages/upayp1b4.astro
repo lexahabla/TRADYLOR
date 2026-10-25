@@ -661,6 +661,17 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <label for="prodFNetwork">Red</label>
             <select id="prodFNetwork" title="Filtra por la red de afiliación de origen del producto (AliExpress, eBay, Amazon…); se calcula a partir de los productos que haya en el catálogo"><option value="">Todas las redes</option></select>
           </div>
+          <div class="filter-field">
+            <label for="prodFPhotos">Nº de fotos</label>
+            <select id="prodFPhotos" title="Filtra por el número de fotos en la galería del producto (incluida la principal): útil para detectar fichas pobres en imágenes">
+              <option value="">Todas</option>
+              <option value="1">Solo 1 foto</option>
+              <option value="2">Solo 2 fotos</option>
+              <option value="3">Solo 3 fotos</option>
+              <option value="4">Solo 4 fotos</option>
+              <option value="4-">4 fotos o menos</option>
+            </select>
+          </div>
           <div class="filter-field ali-sort-field">
             <label for="prodFSort">Ordenar por</label>
             <div class="ali-sort-group">
@@ -1971,6 +1982,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const inputFilterList = document.getElementById('inputFilterList');
     const prodFCat = document.getElementById('prodFCat');
     const prodSubcatFilter = document.getElementById('prodSubcatAssign');
+    const prodFPhotos = document.getElementById('prodFPhotos');
     const prodFSort = document.getElementById('prodFSort');
     const prodFSortDir = document.getElementById('prodFSortDir');
     const prodFReset = document.getElementById('prodFReset');
@@ -3584,11 +3596,22 @@ function renderTableRows(products, resetPage = true) {
       return result;
     }
 
+    /**
+     * Nº de fotos de un producto: el tamaño de su galería (incluida la
+     * principal) si existe, o 1 si sólo tiene `image`, o 0 si no tiene nada.
+     * Mismo criterio que usa la columna "Galería (N)" del detalle de Importar.
+     */
+    function prodPhotoCount(product) {
+      if (Array.isArray(product.gallery) && product.gallery.length) return product.gallery.length;
+      return product.image ? 1 : 0;
+    }
+
     function prodFilterApply() {
       const q = (inputFilterList?.value || '').trim().toLowerCase();
       const cat = prodFCat?.value || '';
       const subcatId = prodSubcatFilter?.value || '';
       const network = (document.getElementById('prodFNetwork')?.value || '').trim().toLowerCase();
+      const photosFilter = prodFPhotos?.value || '';
       const sortKey = prodFSort?.value || 'publicados';
       const dir = prodSortDir === 'asc' ? 1 : -1;
       const prodRange = prodReadRangeFilters();
@@ -3621,6 +3644,16 @@ function renderTableRows(products, resetPage = true) {
         if (network) {
           const n = String(product.network || '').trim().toLowerCase();
           if (n !== network) return false;
+        }
+        // Filtro por nº de fotos: "1"/"2"/"3"/"4" = exactamente esa cantidad;
+        // "4-" = 4 fotos o menos (para detectar fichas pobres en imágenes).
+        if (photosFilter) {
+          const count = prodPhotoCount(product);
+          if (photosFilter === '4-') {
+            if (count > 4) return false;
+          } else if (count !== Number(photosFilter)) {
+            return false;
+          }
         }
         // Preset editorial activo (1 clic): filtro complementario.
         if (typeof activeProdPreset !== 'undefined' && activeProdPreset && !prodMatchesPreset(product, activeProdPreset)) return false;
@@ -3905,6 +3938,7 @@ function renderTableRows(products, resetPage = true) {
     });
 
     prodFNetwork?.addEventListener('change', prodFilterApply);
+    prodFPhotos?.addEventListener('change', prodFilterApply);
 
     // Al arrancar, sincronizar redes
     syncNetworkFilter();
@@ -3914,6 +3948,7 @@ function renderTableRows(products, resetPage = true) {
       if (prodFCat) prodFCat.value = '';
       syncSubcatFilter();
       if (prodFNetwork) prodFNetwork.value = '';
+      if (prodFPhotos) prodFPhotos.value = '';
       if (prodFSort) prodFSort.value = 'default';
       prodSortDir = 'desc';
       if (prodFSortDir) prodFSortDir.textContent = '↓';
@@ -4007,40 +4042,18 @@ function renderTableRows(products, resetPage = true) {
           showAlert('success', 'Categoría asignada', `${ids.length} producto(s) en «${categoryName}» (${data.updated} cambiados).`);
           await reloadProductsTable();
 
-          // Enriquecer cada producto asignado con la misma lógica de IA que btnAiEnrich
-          // (texto + ficha + imagen vía /api/admin/add-product).
+          // Enriquecer los productos asignados con la misma lógica que el
+          // botón «Enriquecer» (texto + ficha + imagen vía
+          // /api/admin/enrich-bulk, en un único lote).
           let enrichedCount = 0;
-          for (const id of ids) {
-            const product = (currentProducts || []).find((p) => p.id === id);
-            if (!product) continue;
-            try {
-              const res = await fetch('/api/admin/add-product', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  id: product.id,
-                  title: product.title || '',
-                  description: product.description || '',
-                  category: product.category || undefined,
-                  price: product.price ? Number(product.price) : undefined,
-                  originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
-                  image: product.image || undefined,
-                  affiliateUrl: product.affiliateUrl || undefined,
-                  merchant: product.merchant || undefined,
-                  url: product.affiliateUrl || undefined,
-                  brand: product.brand || undefined,
-                  rating: product.rating != null ? Number(product.rating) : undefined,
-                  reviewsCount: product.reviewsCount != null ? Number(product.reviewsCount) : undefined,
-                  specs: product.specs && typeof product.specs === 'object' ? product.specs : undefined,
-                  pros: Array.isArray(product.pros) ? product.pros : undefined,
-                  cons: Array.isArray(product.cons) ? product.cons : undefined,
-                  techSheet: product.techSheet || undefined,
-                  options: { text: true, image: true, save: true },
-                }),
-              });
-              const data2 = await res.json();
-              if (data2.success) enrichedCount++;
-            } catch { /* enriquecimiento individual: no falla el alta de categoría */ }
-          }
+          try {
+            const res2 = await fetch('/api/admin/enrich-bulk', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ ids, forceImage: false }),
+            });
+            const data2 = await res2.json();
+            enrichedCount = Number(data2?.processed) || 0;
+          } catch { /* enriquecimiento en lote: no invalida el alta de categoría */ }
           if (enrichedCount) {
             await reloadProductsTable();
             showAlert('success', 'Categoría + IA aplicada', `${ids.length} producto(s) categorizados y ${enrichedCount} enriquecido${enrichedCount === 1 ? '' : 's'} con IA.`);
@@ -4158,51 +4171,45 @@ function renderTableRows(products, resetPage = true) {
       let done = 0;
       let okCount = 0;
       let failCount = 0;
+      let aiTextCount = 0;
+      let localTextCount = 0;
+      let imageGeneratedCount = 0;
       const warnings = [];
 
-      // Enriquece cada producto con la misma lógica de IA que btnAiEnrich:
-      // POST /api/admin/add-product con options { text: true, image: true, save: true }
+      // Enriquece cada producto con /api/admin/enrich-bulk: la MISMA lógica de
+      // IA que "Enriquecer con IA (título + ficha + imagen)" (base local +
+      // overlay de IA vía `overlayEnrichedText`, sin borrar nunca datos con
+      // campos vacíos) más filtrado de galería de baja calidad y vinculación
+      // automática de alternativas. `forceImage: false` evita que un
+      // enriquecimiento MASIVO sustituya en cadena fotos reales del comercio
+      // por una genérica de IA (sólo rellena huecos). Se llama producto a
+      // producto (en vez de mandar todos los IDs de golpe) para poder mostrar
+      // el progreso en vivo; una pausa corta entre peticiones evita saturar
+      // de golpe al proveedor de IA (que además reintenta con otro proveedor
+      // si el por defecto falla: ver `enrichProductText`).
+      const prodEnrichDelayMs = 300;
       try {
         for (let i = 0; i < ids.length; i++) {
           const id = ids[i];
           const product = (currentProducts || []).find((p) => p.id === id);
           if (!product) continue;
 
-          const payload = {
-            id: product.id,
-            title: product.title || '',
-            description: product.description || '',
-            category: product.category || undefined,
-            price: product.price ? Number(product.price) : undefined,
-            originalPrice: product.originalPrice ? Number(product.originalPrice) : undefined,
-            image: product.image || undefined,
-            affiliateUrl: product.affiliateUrl || undefined,
-            merchant: product.merchant || undefined,
-            url: product.affiliateUrl || undefined,
-            brand: product.brand || undefined,
-            rating: product.rating != null ? Number(product.rating) : undefined,
-            reviewsCount: product.reviewsCount != null ? Number(product.reviewsCount) : undefined,
-            specs: product.specs && typeof product.specs === 'object' ? product.specs : undefined,
-            pros: Array.isArray(product.pros) ? product.pros : undefined,
-            cons: Array.isArray(product.cons) ? product.cons : undefined,
-            techSheet: product.techSheet || undefined,
-            options: { text: true, image: true, save: true },
-          };
-
           try {
-            const res = await fetch('/api/admin/add-product', {
+            const res = await fetch('/api/admin/enrich-bulk', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
+              body: JSON.stringify({ ids: [id], forceImage: false }),
             });
             const data = await res.json();
-            if (data.success) {
+            const row = Array.isArray(data.results) ? data.results[0] : null;
+            if (data.success && row?.ok) {
               okCount++;
-              if (Array.isArray(data.enrichment?.warnings)) {
-                warnings.push(...data.enrichment.warnings);
-              }
+              if (row.textStatus === 'ok') aiTextCount++;
+              else if (row.textStatus === 'local') localTextCount++;
+              if (row.imageStatus === 'ok') imageGeneratedCount++;
+              if (Array.isArray(row.warnings)) warnings.push(...row.warnings);
             } else {
               failCount++;
-              warnings.push(`${product.title || id}: ${data.message || 'error'}`);
+              warnings.push(`${product.title || id}: ${row?.warnings?.[0] || data.message || 'error'}`);
             }
           } catch (err) {
             failCount++;
@@ -4211,7 +4218,11 @@ function renderTableRows(products, resetPage = true) {
 
           done++;
           if (enrichProgressBar) enrichProgressBar.style.width = `${Math.round((done / total) * 100)}%`;
-          if (enrichProgressText) enrichProgressText.textContent = `${done} / ${total} productos procesados`;
+          if (enrichProgressText) enrichProgressText.textContent = `${done} / ${total} productos procesados · ${aiTextCount} con IA · ${localTextCount} con plantilla local`;
+
+          if (prodEnrichDelayMs > 0 && i < ids.length - 1) {
+            await new Promise((resolve) => setTimeout(resolve, prodEnrichDelayMs));
+          }
         }
 
         selectedProductIds.clear();
@@ -4220,11 +4231,12 @@ function renderTableRows(products, resetPage = true) {
 
         removeEnrichProgress();
 
+        const summary = `${aiTextCount} con IA · ${localTextCount} con plantilla local · ${imageGeneratedCount} imagen${imageGeneratedCount === 1 ? '' : 'es'} nueva${imageGeneratedCount === 1 ? '' : 's'}`;
         if (failCount === 0) {
-          showAlert('success', 'Enriquecimiento masivo finalizado', `${okCount} producto${okCount === 1 ? '' : 's'} enriquecido${okCount === 1 ? '' : 's'} con IA.`);
+          showAlert('success', 'Enriquecimiento masivo finalizado', `${okCount} producto${okCount === 1 ? '' : 's'} procesado${okCount === 1 ? '' : 's'} (${summary}).`);
         } else {
           const warnText = warnings.length ? ` · Avisos: ${warnings.slice(0, 5).join(' | ')}` : '';
-          showAlert('warning', 'Enriquecimiento masivo finalizado con errores', `${okCount} producto${okCount === 1 ? '' : 's'} OK · ${failCount} con error${warnText}.`);
+          showAlert('warning', 'Enriquecimiento masivo finalizado con errores', `${okCount} producto${okCount === 1 ? '' : 's'} OK (${summary}) · ${failCount} con error${warnText}.`);
         }
       } catch (err) {
         removeEnrichProgress();
@@ -6027,8 +6039,39 @@ function renderTableRows(products, resetPage = true) {
       if (aliCatalogDanger) aliCatalogDanger.hidden = !(state && state.count);
     }
 
+    /**
+     * Refresca `currentProducts` (el catálogo REAL de Tradylor) desde el
+     * servidor antes de calcular qué productos de Importar ya están
+     * "Añadido". Sin esto, si el catálogo se vació desde la pestaña
+     * «Catálogo» (u otra pestaña/sesión) la comparación podía usar una copia
+     * en memoria desactualizada y marcar como ya añadidos productos que en
+     * realidad ya no existen en products.json.
+     */
+    async function refreshCurrentProductsQuiet() {
+      try {
+        const res = await fetch('/api/products/add');
+        const data = await res.json();
+        if (data && data.success && Array.isArray(data.products)) {
+          currentProducts = data.products;
+        }
+      } catch (_) {
+        // Fallo de red: se sigue trabajando con lo que ya hubiera en memoria.
+      } finally {
+        // Se invalida SIEMPRE (haya fallado o no la recarga): lo que cambió
+        // de verdad (aliProducts, tras un sync) también obliga a recalcular.
+        aliInvalidateEstado();
+      }
+    }
+
     /** GET de la caché: ultra-rápido con sesión local + ETag en servidor. */
     async function loadAliCatalog() {
+      // El catálogo real (products.json) se refresca EN PARALELO: no bloquea
+      // la hidratación instantánea de abajo (sigue pintando en 0 ms); antes
+      // del render definitivo (tras resolver /api/admin/catalog) se espera a
+      // que termine, para que el estado «Añadido»/«Añadir» de cada fila
+      // refleje lo que de verdad hay en el catálogo en este mismo instante.
+      const currentProductsRefresh = refreshCurrentProductsQuiet();
+
       // 1. Hidratación instantánea desde caché de sesión local (render en 0 ms)
       if (!aliProducts || aliProducts.length === 0) {
         try {
@@ -6054,6 +6097,7 @@ function renderTableRows(products, resetPage = true) {
         });
         if (res.status === 304) {
           // El catálogo no ha cambiado en el servidor
+          await currentProductsRefresh;
           return;
         }
         const data = await res.json();
@@ -6061,6 +6105,7 @@ function renderTableRows(products, resetPage = true) {
           if (!aliProducts || aliProducts.length === 0) {
             if (aliCatalogHost) aliCatalogHost.innerHTML = '<div class="empty-dashboard">No se pudo leer la caché del catálogo.</div>';
           }
+          await currentProductsRefresh;
           return data;
         }
 
@@ -6076,7 +6121,9 @@ function renderTableRows(products, resetPage = true) {
         } catch (_) {}
 
         aliPage = 1;
-        aliInvalidateEstado();
+        // Para el render DEFINITIVO (no el instantáneo de arriba) sí se
+        // espera a tener el catálogo real al día.
+        await currentProductsRefresh;
         aliFilterPanel?.refresh();
         setAliMeta(data);
         renderAliCatalog();
@@ -6166,7 +6213,10 @@ function renderTableRows(products, resetPage = true) {
         if (data.ok) acRemovedSave(new Set());
         aliProducts = Array.isArray(data.products) ? data.products : [];
         aliPage = 1;
-        aliInvalidateEstado();
+        // Refresca el catálogo REAL antes de pintar: el estado «Añadido» de
+        // cada fila tiene que reflejar lo que hay en products.json AHORA, no
+        // una copia en memoria que pudo quedar desactualizada.
+        await refreshCurrentProductsQuiet();
         aliFilterPanel?.refresh();
         setAliMeta(data);
         renderAliCatalog();
@@ -6569,6 +6619,10 @@ function renderTableRows(products, resetPage = true) {
           aliPage = 1;
           aliSelected.clear();
           aliInvalidateEstado();
+          // Borra también la foto instantánea en sessionStorage: si no, la
+          // próxima carga del panel (loadAliCatalog) hidrata de golpe la
+          // tabla con los productos que se acaban de vaciar a propósito.
+          try { sessionStorage.removeItem('tradylor_aff_catalog_cache'); } catch (_) {}
           if (aliCatalogHost) {
             aliCatalogHost.innerHTML = '<div class="empty-dashboard">Catálogo vaciado. Pulsa «Sincronizar» para descargar el catálogo de las redes conectadas.</div>';
           }

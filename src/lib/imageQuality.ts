@@ -59,19 +59,37 @@ export function toHiResImageUrl(url: string | null | undefined): string | undefi
   }
 }
 
+/**
+ * Nº máximo de imágenes que se conservan en la galería de un producto. Antes
+ * de "Construir Catálogo" tenía un tope de 10 que descartaba fotos reales del
+ * comercio cuando el cross-matching encontraba variantes en varias redes;
+ * ahora se sube para "capturar todas las imágenes del producto" sin dejar de
+ * poner un límite razonable frente a datos corruptos.
+ */
+export const MAX_PRODUCT_IMAGES = 24;
+
+/**
+ * Fusiona TODAS las fuentes de imagen de un producto (principal + extra +
+ * galería) en una única galería deduplicada, en alta resolución. Antes
+ * `extraImages` se calculaba SOLO del parámetro `extraImages` de entrada: los
+ * llamantes que sólo rellenaban `gallery` (p. ej. el conector cuando no usa el
+ * contrato canónico) perdían TODAS sus imágenes extra en el resultado.
+ */
 export function upgradeProductImages(product: {
   mainImage?: string;
   extraImages?: string[];
   gallery?: string[];
 }): { mainImage?: string; extraImages: string[]; gallery: string[] } {
   const main = toHiResImageUrl(product.mainImage);
-  const extra = (product.extraImages ?? []).map(toHiResImageUrl).filter((u): u is string => Boolean(u));
-  const gallery = (product.gallery ?? []).map(toHiResImageUrl).filter((u): u is string => Boolean(u));
+  const combined = [...(product.extraImages ?? []), ...(product.gallery ?? [])]
+    .map(toHiResImageUrl)
+    .filter((u): u is string => Boolean(u));
+  const extra = [...new Set(combined.filter((u) => u !== main))];
   // Asegurar que mainImage está en gallery si no está
-  const allGallery = main ? [main, ...gallery.filter((u) => u !== main)] : gallery;
+  const gallery = main ? [main, ...extra] : extra;
   return {
     mainImage: main,
-    extraImages: extra,
-    gallery: allGallery.slice(0, 10),
+    extraImages: extra.slice(0, MAX_PRODUCT_IMAGES),
+    gallery: gallery.slice(0, MAX_PRODUCT_IMAGES),
   };
 }

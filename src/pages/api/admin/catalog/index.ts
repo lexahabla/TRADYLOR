@@ -19,6 +19,7 @@ import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../../lib/adminAuth';
 import {
   ALI_CATALOG_STALE_MS,
+  clearAliCatalog,
   readAliCatalog,
   syncAliCatalog,
 } from '../../../../lib/aliexpressCatalog';
@@ -176,6 +177,11 @@ export const DELETE: APIRoute = async ({ request }) => {
     const newSnapshot: AffiliateCatalogSnapshot = { syncedAt: '', products: [] };
     const saved = writeAffiliateCatalog(newSnapshot);
     invalidateCatalogMemoryCache();
+    // Vacía TAMBIÉN la caché específica de AliExpress: si se quedaba con sus
+    // productos de antes, la siguiente sincronización los fusionaba de vuelta
+    // en la caché unificada y el "vaciado completo" no era tal (reaparecían
+    // productos que el admin acababa de borrar a propósito).
+    clearAliCatalog();
 
     if (!saved) {
       return new Response(

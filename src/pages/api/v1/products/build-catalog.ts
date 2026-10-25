@@ -29,7 +29,7 @@ import { isValidApiToken, unauthorizedApiResponse } from '../../../../lib/apiAut
 import { canonicalToUnified } from '../../../../lib/networks/connectors/base';
 import type { NetworkConnector } from '../../../../lib/networks/connectors/base';
 import type { CanonicalAffiliateProduct, UnifiedProduct } from '../../../../lib/networks/types';
-import { toHiResImageUrl } from '../../../../lib/imageQuality';
+import { toHiResImageUrl, upgradeProductImages, MAX_PRODUCT_IMAGES } from '../../../../lib/imageQuality';
 import { cleanTitleKey, canonicalProductUrl, extractSourceId, titleSimilarity } from '../../../../lib/curation';
 import { readDeletedIds } from '../../../../lib/deletedProducts';
 import { slugifyProduct, upsertCatalogProduct } from '../../../../lib/catalogStore';
@@ -39,7 +39,8 @@ import { getPipelineConfig } from '../../../../lib/pipeline/config';
 import { computeEditorialStatus, extractNormalizedTags, computeConversionScore, computeBadge } from '../../../../lib/curation';
 import { isSecondHand } from '../../../../utils/aliCatalogFilters';
 import { incrementMetric, touchMetrics } from '../../../../lib/pipeline/metrics';
-import { enrichProductText, generateProductImage, hasTextCredentials, hasImageCredentials } from '../../../../lib/ai';
+import { enrichProductText, generateProductImage, hasTextCredentials, hasImageCredentials, overlayEnrichedText } from '../../../../lib/ai';
+import { enrichProductLocally } from '../../../../lib/localEnrich';
 import fs from 'fs';
 import path from 'path';
 import { DATA_DIR } from '../../../../lib/paths';
@@ -188,18 +189,12 @@ function cleanMerchant(name: string | undefined): string {
   return name.trim();
 }
 
-// Upgrade imágenes a resolución original
-function upgradeImages(obj: { mainImage?: string; extraImages?: string[]; gallery?: string[] }): {
-  mainImage?: string;
-  extraImages: string[];
-  gallery: string[];
-} {
-  const main = toHiResImageUrl(obj.mainImage);
-  const extra = (obj.extraImages ?? []).map(toHiResImageUrl).filter((u): u is string => Boolean(u));
-  const gallery = (obj.gallery ?? []).map(toHiResImageUrl).filter((u): u is string => Boolean(u));
-  const allGallery = main ? [main, ...gallery.filter((u) => u !== main)] : gallery;
-  return { mainImage: main, extraImages: extra, gallery: allGallery.slice(0, 10) };
-}
+// Upgrade imágenes a resolución original: fusiona TODAS las fuentes (imagen
+// principal + extra + galería) sin perder ninguna — ver `upgradeProductImages`
+// en lib/imageQuality.ts (antes había una copia local con un bug: calculaba
+// `extraImages` de un parámetro que algunos llamantes no rellenaban, así que
+// esas imágenes nunca llegaban a la galería final).
+const upgradeImages = upgradeProductImages;
 
 // Generar id único basado en slugifyProduct (consistente con pipeline/panel)
 function generateProductId(title: string, existingIds: Set<string>): string {
@@ -491,7 +486,7 @@ function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantG
       allAffiliateUrls,
       allDirectUrls,
       allMerchantNames,
-      allExtraImages: [...new Set(allExtraImages)].slice(0, 10),
+      allExtraImages: [...new Set(allExtraImages)].slice(0, MAX_PRODUCT_IMAGES),
     });
 
     if (groups.length >= BUILD_CONFIG.MAX_CROSS_MERCHANT_GROUPS) break;
@@ -786,57 +781,119 @@ async function buildAndUpsertProducts(
       product.badge = computeBadge(product as Product & { hsrScore?: number });
     }
 
+    const existingProduct = existingIndex >= 0 ? existingProducts[existingIndex] : undefined;
+
+    // ─── Curaduría: un resync NUNCA debe perder lo ya conseguido ────────────
+    // Categoría: una vez asignada (a mano en el panel o por un
+    // `autoCategorize` anterior) queda "pegajosa": sólo se recalcula
+    // mientras el producto siga sin categoría. Sin esto, cada «Construir
+    // Catálogo» podía reasignar (o vaciar) la categoría que el admin eligió
+    // a mano.
+    if (existingProduct?.category_id) {
+      product.category = existingProduct.category || product.category;
+      product.category_id = existingProduct.category_id;
+      product.subcategory_id = existingProduct.subcategory_id ?? product.subcategory_id;
+    }
+
+    // Imágenes: la galería SIEMPRE se amplía con lo nuevo que traiga este
+    // sync (nunca se descarta nada ya guardado) y la foto principal real
+    // nunca se sustituye por otra, para no cambiarle la imagen a un producto
+    // que el visitante ya puede haber visto.
+    if (existingProduct) {
+      const mergedGallery = new Set<string>([
+        ...(existingProduct.image && existingProduct.image !== '—' ? [existingProduct.image] : []),
+        ...(existingProduct.gallery ?? []),
+        ...(product.gallery ?? []),
+      ]);
+      product.gallery = [...mergedGallery].slice(0, MAX_PRODUCT_IMAGES);
+      if (existingProduct.image && existingProduct.image !== '—') {
+        product.image = existingProduct.image;
+      }
+    }
+
+    // Texto editorial: si la ficha YA se completó en un pase anterior, se
+    // conserva tal cual (precio, comisión, enlaces, ventas y galería sí se
+    // refrescan en cada sync; el texto curado/IA no se pisa con los datos
+    // crudos de la red que trae `product` hasta aquí).
+    const alreadyEnriched = Boolean(existingProduct?.ia_status === 'completed');
+    if (alreadyEnriched && existingProduct) {
+      product.title = existingProduct.title;
+      product.description = existingProduct.description;
+      product.pros = existingProduct.pros;
+      product.cons = existingProduct.cons;
+      product.verdict = existingProduct.verdict;
+      product.techSheet = existingProduct.techSheet;
+      product.specs = existingProduct.specs;
+      product.ia_status = existingProduct.ia_status;
+      if (existingProduct.badge) product.badge = existingProduct.badge;
+    }
+
     // ─── Enriquecimiento con IA (texto + imagen) ────────────────────────────────
-    // Solo enriquecer productos NUEVOS (no actualizaciones) y solo si hay credenciales
-    // Con `?enrich=0` se publica el catálogo sin llamar a la IA (publicación
-    // rápida); el enriquecimiento se hace después por lotes con el pipeline.
-    if (existingIndex === -1 && enrich) {
-      const hasTextAI = hasTextCredentials();
-      const hasImageAI = hasImageCredentials();
+    // Misma calidad que "Enriquecer con IA (título + ficha + imagen)": base
+    // SIEMPRE local (gratis, sin claves) y overlay de IA por encima cuando
+    // hay credenciales, con fallback automático entre proveedores si el por
+    // defecto falla (ver `enrichProductText`). Corre para productos NUEVOS o
+    // que aún no se completaron; nunca para fichas ya enriquecidas (se
+    // protegieron más arriba). Con `?enrich=0` se publica el catálogo sin
+    // llamar a la IA (publicación rápida); se puede completar después por
+    // lotes con el Pipeline.
+    if (enrich && !alreadyEnriched) {
+      const localText = enrichProductLocally({
+        title: product.title,
+        description: product.description,
+        category: product.category,
+        brand: product.brand,
+        merchant: product.merchant,
+        price: product.price,
+        originalPrice: product.originalPrice,
+        rating: product.rating,
+        reviewsCount: product.reviewsCount,
+        url: product.affiliateUrl,
+        pros: product.pros,
+        cons: product.cons,
+      });
 
-      if (hasTextAI || hasImageAI) {
+      let finalText = localText;
+      if (hasTextCredentials()) {
         try {
-          // Enriquecer texto si hay credenciales
-          if (hasTextAI) {
-            const aiText = await enrichProductText({
-              title: product.title,
-              description: product.description,
-              category: product.category,
-              url: product.affiliateUrl,
-              price: product.price,
-              originalPrice: product.originalPrice,
-            });
-
-            // Aplicar enriquecimiento de texto
-            if (aiText.title) product.title = aiText.title;
-            if (aiText.description) product.description = aiText.description;
-            if (aiText.techSheet) product.techSheet = aiText.techSheet;
-            if (aiText.specs && Object.keys(aiText.specs).length > 0) product.specs = aiText.specs;
-            if (aiText.pros && aiText.pros.length > 0) product.pros = aiText.pros;
-            if (aiText.cons && aiText.cons.length > 0) product.cons = aiText.cons;
-            if (aiText.verdict) product.verdict = aiText.verdict;
-            if (aiText.category) product.category = aiText.category;
-            if (aiText.pricing) {
-              product.price = aiText.pricing.price;
-              product.originalPrice = aiText.pricing.originalPrice;
-            }
-            product.ia_status = 'completed';
-            aiEnrichedTextCount++;
-          }
-
-          // Generar imagen si hay credenciales y no tiene imagen
-          if (hasImageAI && (!product.image || product.image === '—')) {
-            try {
-              const imageResult = await generateProductImage(product.title);
-              product.image = imageResult.url;
-              product.gallery = [imageResult.url, ...(product.gallery || [])].slice(0, 10);
-              aiEnrichedImagesCount++;
-            } catch (imgError) {
-              console.warn(`[BuildCatalog] Error generando imagen para ${product.id}:`, imgError);
-            }
-          }
+          const aiText = await enrichProductText({
+            title: product.title,
+            description: product.description,
+            category: product.category,
+            url: product.affiliateUrl,
+            price: product.price,
+            originalPrice: product.originalPrice,
+          });
+          finalText = overlayEnrichedText(localText, aiText);
+          aiEnrichedTextCount++;
         } catch (aiError) {
-          console.warn(`[BuildCatalog] Error enriqueciendo con IA para ${product.id}:`, aiError);
+          console.warn(`[BuildCatalog] Sin enriquecimiento de IA para "${product.title}" (se usa ficha local):`, aiError);
+        }
+      }
+
+      if (finalText.title?.trim()) product.title = finalText.title.trim();
+      if (finalText.description?.trim()) product.description = finalText.description;
+      if (finalText.pros.length) product.pros = finalText.pros;
+      if (finalText.cons.length) product.cons = finalText.cons;
+      if (finalText.verdict) product.verdict = finalText.verdict;
+      if (finalText.techSheet?.trim()) product.techSheet = finalText.techSheet;
+      if (finalText.specs && Object.keys(finalText.specs).length) product.specs = finalText.specs;
+      if (!product.category && finalText.category) product.category = finalText.category;
+      // El precio SIEMPRE es el real de la red (`group.bestPrice` /
+      // `bestOriginalPrice`): el par oferta/original que calcula el
+      // enriquecimiento es sólo de respaldo para el alta manual sin precio
+      // conocido y nunca debe sustituir un precio real ya capturado.
+      product.ia_status = 'completed';
+
+      // Imagen: sólo si falta (nunca sustituye una foto real del comercio).
+      if ((!product.image || product.image === '—') && hasImageCredentials()) {
+        try {
+          const imageResult = await generateProductImage(product.title);
+          product.image = imageResult.url;
+          product.gallery = [imageResult.url, ...(product.gallery || [])].slice(0, MAX_PRODUCT_IMAGES);
+          aiEnrichedImagesCount++;
+        } catch (imgError) {
+          console.warn(`[BuildCatalog] Error generando imagen para ${product.id}:`, imgError);
         }
       }
     }
