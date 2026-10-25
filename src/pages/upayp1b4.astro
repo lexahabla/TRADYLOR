@@ -579,7 +579,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <div class="product-sel-bar" id="productSelBar" style="background: none; border-color: #1f2937;">
           <label class="product-sel-title">ADMINISTRAR PRODUCTOS</label>
 
-          <!-- Selector Global de Ordenación del Catálogo Público (Backend) -->
+        <div class="product-sel-groups">
+
+          <!-- Selector Global de Ordenación del Catálogo Público (Backend):
+               misma fila que los grupos de acciones (product-sel-group). -->
           <div class="catalog-sort-bar" style="display: inline-flex; align-items: center; gap: .65rem; padding: .45rem .75rem; background: none; border: 1px solid #1f2937; border-radius: 8px;">
             <label for="prodToolbarSort" class="catalog-sort-label" style="white-space: nowrap;">🌐 Orden por defecto de la tienda web:</label>
             <select id="prodToolbarSort" class="catalog-sort-select sel-cat-assign" aria-label="Orden por defecto del catálogo público" title="Define el orden previamente establecido del catálogo público que ven los clientes al entrar a tradylor.com">
@@ -597,8 +600,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </select>
             <span id="sortSaveStatus" style="color: #34d399; font-size: .72rem; font-weight: 700; display: none;">✓ Guardado en tienda</span>
           </div>
-
-        <div class="product-sel-groups">
 
           <!-- Categoría funcional: IA -->
           <div class="product-sel-group" data-group="ai">
@@ -822,6 +823,31 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <div class="loading-panel">Cargando redes...</div>
           </div>
 
+          <div id="aliCatalogStatus" class="status-alert" hidden style="margin-bottom: 16px">
+            <div class="alert-icon" id="aliCatalogStatusIcon">ℹ️</div>
+            <div class="alert-content">
+              <strong id="aliCatalogStatusTitle">Estado</strong>
+              <p id="aliCatalogStatusText">Mensaje...</p>
+            </div>
+          </div>
+
+          <!-- Acceso rápido (sin bajar hasta los filtros de la tabla, CAPA 0 /
+               ali-f-sync-row): probar conexión, sincronizar y ver el estado
+               del catálogo. btnAliSyncTop/aliCatalogMetaTop son copias de
+               btnAliSync/aliCatalogMeta que se mantienen sincronizadas desde
+               JS (ver aliSyncButtons / setAliMeta). -->
+          <div class="ali-quick-sync">
+            <button type="button" id="btnBuildCatalogDryRun" class="btn-secondary btn-sm" title="Prueba la conexión con las redes: ejecuta la construcción del catálogo en modo simulación (dry-run), no guarda cambios, sólo muestra qué haría (incluidos los descartes de segunda mano y sin stock).">
+              <span class="btn-text">🔍 Probar Conexión</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <button type="button" id="btnAliSyncTop" class="btn-primary btn-sm" title="Descarga o refresca el catálogo de afiliados contra las APIs de las redes conectadas (AliExpress, eBay…)">
+              <span class="btn-text">Sincronizar Redes</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <span id="aliCatalogMetaTop" class="ali-catalog-meta">Cargando…</span>
+          </div>
+
           <div class="list-header-row">
             <div>
               <h2 class="card-title">2. Catálogo de Afiliados</h2>
@@ -843,14 +869,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <!-- 3. Catálogo AliExpress desde la caché del volumen (sin llamadas API en cada carga) -->
       <div id="aliCatalogCard">
 
-        <div id="aliCatalogStatus" class="status-alert" hidden style="margin-bottom: 16px">
-          <div class="alert-icon" id="aliCatalogStatusIcon">ℹ️</div>
-          <div class="alert-content">
-            <strong id="aliCatalogStatusTitle">Estado</strong>
-            <p id="aliCatalogStatusText">Mensaje...</p>
-          </div>
-        </div>
-
         <!-- Acciones del catálogo: Construir Catálogo (multi-red) + alta directa
              en categorías/subcategorías existentes. -->
         <div id="aliImportActions" class="ali-import-actions">
@@ -863,15 +881,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <select id="aliSubcatAssign" class="sel-cat-assign" aria-label="Subcategoría destino" title="Subcategoría (hija) donde añadir los productos marcados">
               <option value="">Subcategoría destino…</option>
             </select>
+            <button type="button" class="btn-success btn-sm" id="btnAliImportCat" title="Añade los productos marcados a la categoría elegida y los enriquece con IA (ficha completa: especificaciones, pros/contras y veredicto), igual que el botón «Enriquecer»">📥 Añadir a categoría</button>
             <button type="button" class="btn-ai btn-sm" id="btnBuildCatalog" title="Construye el catálogo completo consultando TODAS las redes conectadas (eBay, AliExpress, etc.): descarta segunda mano y sin stock, normaliza, deduplica cross-merchant, autoclasifica, enriquece con IA y guarda en products.json. Proceso completo de un solo clic.">
               <span class="btn-text">🏗️ Construir Catálogo</span>
               <div class="btn-spinner" hidden></div>
             </button>
-            <button type="button" id="btnBuildCatalogDryRun" class="btn-secondary btn-sm" title="Ejecuta la construcción del catálogo en modo simulación (dry-run): no guarda cambios, sólo muestra qué haría (incluidos los descartes de segunda mano y sin stock).">
-              <span class="btn-text">🔍 Simular (Dry-run)</span>
-              <div class="btn-spinner" hidden></div>
-            </button>
-            <button type="button" id="btnAliImportCat" class="btn-success btn-sm" title="Añade los productos marcados a la categoría elegida y los enriquece con IA (ficha completa: especificaciones, pros/contras y veredicto), igual que el botón «Enriquecer»">📥 Añadir a categoría</button>
           </div>
           <div id="aliCatalogDanger" class="ali-catalog-danger" hidden>
             <button type="button" id="btnAliDeleteSelected" class="btn-danger btn-sm" title="Elimina definitivamente los productos seleccionados del catálogo de afiliados (no se pueden recuperar salvo volviendo a sincronizar)">🗑️ Borrar seleccionados</button>
@@ -4507,11 +4521,12 @@ function renderTableRows(products, resetPage = true) {
       btn.disabled = true;
       btn.classList.add('loading');
       if (btnSpinner) btnSpinner.hidden = false;
-      if (btnText) btnText.textContent = dryRun ? 'Simulando…' : 'Construyendo…';
+      if (btnText) btnText.textContent = dryRun ? 'Probando…' : 'Construyendo…';
 
-      // Feedback en el cuadro de ESTA sección (aliCatalogStatus, junto al botón),
-      // no en el de «Extracción & Alta» (showAlert queda arriba del todo, fuera
-      // de la vista: el aviso se pintaba pero nadie lo veía sin subir la página).
+      // Feedback en el cuadro #aliCatalogStatus (ahora junto a "1. Redes
+      // conectadas", ver networksCard), no en el de «Extracción & Alta»
+      // (showAlert queda arriba del todo, fuera de la vista: el aviso se
+      // pintaba pero nadie lo veía sin subir la página).
       showAliStatus('loading', dryRun ? 'Simulando construcción de catálogo…' : 'Construyendo catálogo multi-comerciante…',
         'Consultando APIs de todas las redes conectadas, normalizando, deduplicando cross-merchant, autoclasificando y detectando ofertas estrella. Esto puede tardar bastante más de 30-120 segundos si hay enriquecimiento con IA de por medio.');
 
@@ -4555,7 +4570,7 @@ function renderTableRows(products, resetPage = true) {
           btn.classList.remove('loading');
         }
         if (btnSpinner) btnSpinner.hidden = true;
-        if (btnText) btnText.textContent = dryRun ? '🔍 Simular (Dry-run)' : '🏗️ Construir Catálogo';
+        if (btnText) btnText.textContent = dryRun ? '🔍 Probar Conexión' : '🏗️ Construir Catálogo';
       }
     }
 
@@ -5488,11 +5503,17 @@ function renderTableRows(products, resetPage = true) {
     // =========================================================================
     const aliCatalogHost = document.getElementById('aliCatalogHost');
     const aliCatalogMeta = document.getElementById('aliCatalogMeta');
+    const aliCatalogMetaTop = document.getElementById('aliCatalogMetaTop');
     const aliCatalogStatus = document.getElementById('aliCatalogStatus');
     const aliCatalogStatusIcon = document.getElementById('aliCatalogStatusIcon');
     const aliCatalogStatusTitle = document.getElementById('aliCatalogStatusTitle');
     const aliCatalogStatusText = document.getElementById('aliCatalogStatusText');
     const btnAliSync = document.getElementById('btnAliSync');
+    const btnAliSyncTop = document.getElementById('btnAliSyncTop');
+    // Copia de btnAliSync junto a #aliCatalogStatus (acceso rápido, sin bajar
+    // hasta los filtros de la tabla): ambos botones disparan la misma
+    // sincronización y comparten estado de carga (ver syncAliCatalogUI).
+    const aliSyncButtons = [btnAliSync, btnAliSyncTop].filter(Boolean);
     const btnAliMore = document.getElementById('btnAliMore');
     const aliFilters = document.getElementById('affiliateFilters') || document.getElementById('aliFilters');
     const aliSelectionBar = document.getElementById('aliSelectionBar');
@@ -5998,13 +6019,12 @@ function renderTableRows(products, resetPage = true) {
 
     function setAliMeta(state) {
       if (!aliCatalogMeta) return;
-      if (!state || !state.count) {
-        aliCatalogMeta.textContent = 'Sin sincronizar';
-        if (aliCatalogDanger) aliCatalogDanger.hidden = true;
-        return;
-      }
-      aliCatalogMeta.textContent = `${state.count} productos · ${aliRelTime(state.syncedAt)}${state.stale ? ' · obsoleto' : ''}`;
-      if (aliCatalogDanger) aliCatalogDanger.hidden = false;
+      const text = (!state || !state.count)
+        ? 'Sin sincronizar'
+        : `${state.count} productos · ${aliRelTime(state.syncedAt)}${state.stale ? ' · obsoleto' : ''}`;
+      aliCatalogMeta.textContent = text;
+      if (aliCatalogMetaTop) aliCatalogMetaTop.textContent = text;
+      if (aliCatalogDanger) aliCatalogDanger.hidden = !(state && state.count);
     }
 
     /** GET de la caché: ultra-rápido con sesión local + ETag en servidor. */
@@ -6091,11 +6111,19 @@ function renderTableRows(products, resetPage = true) {
     async function syncAliCatalogUI(networkId) {
       if (aliSyncing) return null;
       aliSyncing = true;
-      const spinner = btnAliSync ? btnAliSync.querySelector('.btn-spinner') : null;
-      const text = btnAliSync ? btnAliSync.querySelector('.btn-text') : null;
-      if (btnAliSync) btnAliSync.disabled = true;
-      if (spinner) spinner.hidden = false;
-      if (text) text.textContent = 'Sincronizando...';
+      // Ambos botones (el de la fila de filtros y la copia de acceso rápido
+      // junto a #aliCatalogStatus) comparten el mismo estado de carga; cada
+      // uno conserva su propia etiqueta inactiva ("Sincronizar" / "Sincronizar
+      // Redes") para restaurarla al terminar.
+      const syncBtnParts = aliSyncButtons.map((btn) => {
+        const text = btn.querySelector('.btn-text');
+        return { btn, spinner: btn.querySelector('.btn-spinner'), text, idleLabel: text ? text.textContent : '' };
+      });
+      syncBtnParts.forEach(({ btn, spinner, text }) => {
+        btn.disabled = true;
+        if (spinner) spinner.hidden = false;
+        if (text) text.textContent = 'Sincronizando...';
+      });
       try {
         // Auto-validación solo si NO se ha seleccionado una red específica (comportamiento legacy)
         // Si se elige una red concreta, solo validamos esa red.
@@ -6150,13 +6178,15 @@ function renderTableRows(products, resetPage = true) {
         return null;
       } finally {
         aliSyncing = false;
-        if (btnAliSync) btnAliSync.disabled = false;
-        if (spinner) spinner.hidden = true;
-        if (text) text.textContent = 'Sincronizar';
+        syncBtnParts.forEach(({ btn, spinner, text, idleLabel }) => {
+          btn.disabled = false;
+          if (spinner) spinner.hidden = true;
+          if (text) text.textContent = idleLabel;
+        });
       }
     }
 
-    btnAliSync?.addEventListener('click', () => syncAliCatalogUI(aliSyncNetwork?.value || undefined));
+    aliSyncButtons.forEach((btn) => btn.addEventListener('click', () => syncAliCatalogUI(aliSyncNetwork?.value || undefined)));
 
 /** «Cargar más»: pide al servidor las páginas 2-3 de cada keyword y
      *  amplía la caché (POST { append: true }); los rangos se recalculan. */
@@ -6164,7 +6194,7 @@ function renderTableRows(products, resetPage = true) {
       if (aliSyncing) return;
       aliSyncing = true;
       if (btnAliMore) btnAliMore.disabled = true;
-      if (btnAliSync) btnAliSync.disabled = true;
+      aliSyncButtons.forEach((btn) => { btn.disabled = true; });
       showAliStatus('loading', 'Ampliando catálogo', 'Descargando más páginas de las redes conectadas (puede tardar)...');
         try {
           const targetNetwork = aliSyncNetwork?.value || '';
@@ -6187,7 +6217,7 @@ function renderTableRows(products, resetPage = true) {
       } finally {
         aliSyncing = false;
         if (btnAliMore) btnAliMore.disabled = false;
-        if (btnAliSync) btnAliSync.disabled = false;
+        aliSyncButtons.forEach((btn) => { btn.disabled = false; });
       }
     });
 
@@ -6545,8 +6575,7 @@ function renderTableRows(products, resetPage = true) {
           if (aliFilters) aliFilters.hidden = false;
           if (aliImportTools) aliImportTools.hidden = false;
           if (btnAliMore) btnAliMore.hidden = true;
-          if (aliCatalogMeta) aliCatalogMeta.textContent = 'Sin sincronizar';
-          if (aliCatalogDanger) aliCatalogDanger.hidden = true;
+          setAliMeta(null);
           aliUpdateSelectionUI([]);
         } else {
           showAliStatus('error', 'No se pudo vaciar', data.message);
@@ -8796,8 +8825,9 @@ function renderTableRows(products, resetPage = true) {
   .prod-filters :global(.filter-field.prod-range-field[data-range-field="rating"]) { flex: 0 1 150px; min-width: 140px; }
   .prod-filters :global(.filter-field.prod-range-field[data-range-field="rating"] select) { max-width: 145px; width: auto; }
   .prod-filters :global(.filter-field.prod-range-field) { display: grid; grid-template-columns: minmax(0, 1fr); gap: .3rem; flex: 0 1 156px; min-width: 138px; }
-  /* Precio: sólo necesita caber 4 cifras (ej. 9999) por casilla, no más. */
-  .prod-filters :global(.filter-field.prod-range-field[data-range-field="price"]) { flex: 0 1 148px; min-width: 128px; }
+  /* Precio: cabida cómoda para 4 cifras por casilla (ampliado un 50% sobre
+     el ajuste anterior, que quedaba demasiado justo). */
+  .prod-filters :global(.filter-field.prod-range-field[data-range-field="price"]) { flex: 0 1 222px; min-width: 192px; }
   .prod-filters :global(.filter-field.prod-range-field label) { color: var(--color-text-dim); font-size: .68rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
   .prod-filters :global(.filter-field.prod-range-field input),
   .prod-filters :global(.filter-field.prod-range-field select) { width: 100%; box-sizing: border-box; padding: .55rem .7rem; color: var(--color-text-main); background: var(--color-bg-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); font: inherit; font-size: .8rem; outline: none; }
@@ -8825,8 +8855,9 @@ function renderTableRows(products, resetPage = true) {
   /* El botón de limpiar filtros se alinea con la altura de los controles. */
   .prod-filters .ali-f-reset { min-height: 2.15rem; }
   /* Contador de selección (span suelto, sin botón): mismo tono apagado que
-     las etiquetas de los filtros, centrado con los botones de su fila. */
-  .prod-filters #productSelCount { align-self: center; color: var(--color-text-dim); font-size: .78rem; font-weight: 600; white-space: nowrap; }
+     las etiquetas de los filtros. margin-left:auto empuja todo el grupo de
+     selección (contador + Catálogo + Limpiar) al extremo derecho de la fila. */
+  .prod-filters #productSelCount { align-self: none; margin-left: auto; color: var(--color-text-dim); font-size: .78rem; font-weight: 600; white-space: nowrap; }
 
   /* CAPA 3 · Panel desplegable «Más filtros» */
   .ali-advanced { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .5rem .7rem; padding: .55rem .6rem; background: rgba(255, 255, 255, .025); border: 1px dashed rgba(148, 163, 184, .22); border-radius: 8px; }
@@ -9191,11 +9222,14 @@ function renderTableRows(products, resetPage = true) {
   /* Fila única con el meta del catálogo y los controles de sincronización */
   .ali-f-sync-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; padding-bottom: .65rem; margin-bottom: .35rem; border-bottom: 1px dashed rgba(148, 163, 184, .18); }
   .ali-f-sync-row .ali-catalog-meta { font-size: .74rem; color: var(--color-text-dim); }
+  /* Acceso rápido (Probar Conexión + Sincronizar Redes + meta), justo debajo
+     de #aliCatalogStatus: misma fila, alineados a la derecha. */
+  .ali-quick-sync { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; flex-wrap: wrap; margin: .6rem 0; }
   .ali-import-actions .btn-sm { padding: .32rem .6rem; font-size: .68rem; }
   .ali-catalog-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; margin-left: auto; flex-wrap: wrap; }
   .ali-catalog-meta { color: var(--color-text-dim); font-size: .72rem; white-space: nowrap; }
   .ali-catalog-meta:empty { display: none; }
-  .ali-catalog-danger { display: flex; align-items: center; justify-content: flex-end; gap: .5rem; margin-left: auto; flex-wrap: wrap; padding-top: .4rem; border-top: 1px dashed rgba(239, 68, 68, .3); width: 100%; }
+  .ali-catalog-danger { display: flex; align-items: center; justify-content: flex-start; gap: .5rem; flex-wrap: wrap; padding-top: .4rem; border-top: 1px dashed rgba(239, 68, 68, .3); width: 100%; }
   .ali-catalog-danger[hidden] { display: none; }
   .ali-catalog-danger .btn-danger { background: #7f1d1d; border-color: #ef4444; color: #fca5a5; }
   .ali-catalog-danger .btn-danger:hover { background: #991b1b; border-color: #f87171; color: #fecaca; }
