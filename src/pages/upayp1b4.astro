@@ -940,15 +940,15 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <div class="filter-field ali-f-pair">
               <label for="aliFPriceMin">Precio (€)</label>
               <div class="ali-pair">
-                <input type="number" id="aliFPriceMin" min="0" step="0.01" placeholder="Mín." inputmode="decimal" />
+                <input type="number" id="aliFPriceMin" min="0" step="0.01" placeholder="Mín." inputmode="decimal" autocomplete="off" />
                 <span class="ali-pair-sep" aria-hidden="true">–</span>
-                <input type="number" id="aliFPriceMax" min="0" step="0.01" placeholder="Máx." inputmode="decimal" />
+                <input type="number" id="aliFPriceMax" min="0" step="0.01" placeholder="Máx." inputmode="decimal" autocomplete="off" />
               </div>
             </div>
             <div class="filter-field ali-f-pair">
               <label for="aliFCommMin">Comisión mín.</label>
               <div class="ali-pair">
-                <input type="number" id="aliFCommMin" min="0" step="0.1" placeholder="0" inputmode="decimal" />
+                <input type="number" id="aliFCommMin" min="0" step="0.1" placeholder="0" inputmode="decimal" autocomplete="off" />
                 <select id="aliFCommUnit" class="ali-pair-unit" aria-label="Unidad de comisión">
                   <option value="eur">€</option>
                   <option value="pct">%</option>
@@ -957,7 +957,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </div>
             <div class="filter-field ali-f-short">
               <label for="aliFSalesMin">Ventas 30 d</label>
-              <input type="number" id="aliFSalesMin" min="0" step="1" placeholder="Mín." inputmode="numeric" />
+              <input type="number" id="aliFSalesMin" min="0" step="1" placeholder="Mín." inputmode="numeric" autocomplete="off" />
             </div>
             <div class="filter-field ali-f-short">
               <label for="aliFRatingMin">Valoración</label>
@@ -1001,11 +1001,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <label class="ali-check"><input type="checkbox" id="aliFSecondHand" /> <span>Solo segunda mano / reacondicionado</span></label>
             <div class="filter-field ali-f-mini">
               <label for="aliFImages">Mín. imágenes</label>
-              <input type="number" id="aliFImages" min="0" step="1" placeholder="0" inputmode="numeric" />
+              <input type="number" id="aliFImages" min="0" step="1" placeholder="0" inputmode="numeric" autocomplete="off" />
             </div>
             <div class="filter-field ali-f-mini">
               <label for="aliFDiscMin">Descuento mín. (%)</label>
-              <input type="number" id="aliFDiscMin" min="0" max="100" step="1" placeholder="0" inputmode="numeric" />
+              <input type="number" id="aliFDiscMin" min="0" max="100" step="1" placeholder="0" inputmode="numeric" autocomplete="off" />
             </div>
             <div class="filter-field ali-f-mini">
               <label for="aliFShop">Tienda</label>
@@ -3404,9 +3404,9 @@ function renderTableRows(products, resetPage = true) {
         <div class="filter-field prod-range-field" data-range-field="price">
           <label for="prodFPriceMin">Precio (€)</label>
           <div class="ali-pair">
-            <input type="number" id="prodFPriceMin" min="${dataMin}" step="0.01" placeholder="Mín." inputmode="decimal" value="${escapeHtml(keepPriceMin)}" style="background:var(--color-bg-main);color:var(--color-text-main);border:1px solid var(--color-border);border-radius:var(--border-radius-sm);padding:.45rem .6rem;outline:none;" />
+            <input type="number" id="prodFPriceMin" min="${dataMin}" step="0.01" placeholder="Mín." inputmode="decimal" autocomplete="off" value="${escapeHtml(keepPriceMin)}" style="background:var(--color-bg-main);color:var(--color-text-main);border:1px solid var(--color-border);border-radius:var(--border-radius-sm);padding:.45rem .6rem;outline:none;" />
             <span class="ali-pair-sep" aria-hidden="true">–</span>
-            <input type="number" id="prodFPriceMax" max="${dataMax}" step="0.01" placeholder="Máx." inputmode="decimal" value="${escapeHtml(keepPriceMax)}" style="background:var(--color-bg-main);color:var(--color-text-main);border:1px solid var(--color-border);border-radius:var(--border-radius-sm);padding:.45rem .6rem;outline:none;" />
+            <input type="number" id="prodFPriceMax" max="${dataMax}" step="0.01" placeholder="Máx." inputmode="decimal" autocomplete="off" value="${escapeHtml(keepPriceMax)}" style="background:var(--color-bg-main);color:var(--color-text-main);border:1px solid var(--color-border);border-radius:var(--border-radius-sm);padding:.45rem .6rem;outline:none;" />
           </div>
         </div>
         <div class="filter-field prod-range-field" data-range-field="disc">
@@ -9580,11 +9580,15 @@ function renderTableRows(products, resetPage = true) {
   /* Autorrelleno/restauración de Chrome al cargar o refrescar la página:
      el navegador pinta el input de blanco (y mantiene ese fondo hasta que el
      usuario escribe) aunque nuestro CSS ya le ponga fondo oscuro, porque lo
-     hace con sus propios estilos internos de mayor prioridad. Se neutraliza
-     forzando el fondo oscuro vía box-shadow (el truco estándar para Chrome/
-     Edge/Safari) y el texto del tema. `:global()` para que cubra también los
-     inputs que se repintan por JS (innerHTML) en los filtros de Catálogo e
-     Importar Productos, que no llevan el atributo de scope de Astro. */
+     hace con sus propios estilos internos de mayor prioridad. La prevención
+     real es el atributo autocomplete="off" en los inputs de los filtros
+     (evita que el navegador los marque como "restaurados" en primer lugar);
+     esta regla es solo un cinturón de seguridad para cualquier campo donde
+     aun así se active. Se neutraliza forzando el fondo oscuro vía box-shadow
+     (el truco estándar para Chrome/Edge/Safari) y el texto del tema.
+     `:global()` para que cubra también los inputs que se repintan por JS
+     (innerHTML) en los filtros de Catálogo e Importar, que no llevan el
+     atributo de scope de Astro. */
   :global(input:-webkit-autofill),
   :global(input:-webkit-autofill:hover),
   :global(input:-webkit-autofill:focus),
@@ -9599,6 +9603,15 @@ function renderTableRows(products, resetPage = true) {
   :global(input:autofill) {
     background-color: var(--color-bg-main) !important;
     color: var(--color-text-main) !important;
+  }
+
+  /* El placeholder no debe heredar el color de texto fuerte de arriba: debe
+     verse igual de tenue que en cualquier otro input vacío del panel. */
+  :global(input:-webkit-autofill::placeholder),
+  :global(input:autofill::placeholder) {
+    -webkit-text-fill-color: var(--color-text-dim) !important;
+    color: var(--color-text-dim) !important;
+    opacity: 1;
   }
 
   /* Botones: base scoped para los estáticos (HTML del template) + base global
