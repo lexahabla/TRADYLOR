@@ -71,6 +71,12 @@ const hueOf = (index: number) => (index * 43) % 360;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   }
 
+  /* ── Ocultación de la barra mientras el 1er section (hero) está visible ── */
+  .category-bar--oculta {
+    transform: translateY(-100%);
+    transition: transform 0.3s ease;
+  }
+
   .category-frame {
     display: flex;
     align-items: center;
@@ -771,6 +777,42 @@ const hueOf = (index: number) => (index * 43) % 360;
       }
       if (!target.closest('.category-menu')) closePanel();
     });
+
+    /* ── Observer: oculta la barra mientras el 1er section (hero) está visible,
+         la muestra al entrar en #catalogo ─────────────────────────────────── */
+
+    const catalogo = document.getElementById('catalogo');
+    const firstSection = document.querySelector('section');
+
+    if (catalogo && 'IntersectionObserver' in window) {
+      let firstSectionVisible = false;
+      const visible = new Set<Element>();
+
+      const updateVisibility = () => {
+        const show = visible.size > 0 && !firstSectionVisible;
+        if (show) bar.classList.remove('category-bar--oculta');
+        else bar.classList.add('category-bar--oculta');
+      };
+
+      const catalogoObserver = new IntersectionObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) visible.add(entry.target as Element);
+          else visible.delete(entry.target as Element);
+        }
+        updateVisibility();
+      }, { threshold: 0.1 });
+      catalogoObserver.observe(catalogo);
+
+      if (firstSection) {
+        const firstObserver = new IntersectionObserver((entries) => {
+          for (const entry of entries) {
+            firstSectionVisible = entry.isIntersecting;
+          }
+          updateVisibility();
+        }, { threshold: 0.1 });
+        firstObserver.observe(firstSection);
+      }
+    }
 
   }
 </script>
