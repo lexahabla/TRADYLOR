@@ -778,40 +778,31 @@ const hueOf = (index: number) => (index * 43) % 360;
       if (!target.closest('.category-menu')) closePanel();
     });
 
-    /* ── Observer: oculta la barra mientras el 1er section (hero) está visible,
-         la muestra al entrar en #catalogo ─────────────────────────────────── */
+    /* ── Observer: oculta la barra mientras la 1ª sección (la que queda por
+         ENCIMA del catálogo, p. ej. un carrusel "Ofertas") está visible, y la
+         muestra en cuanto se hace scroll más allá de ella. A partir de ahí
+         queda visible el resto de la página (no se vuelve a ocultar al
+         salir de #catalogo): sólo hay un disparador, la propia sección
+         superior, evitando el parpadeo de observar también el catálogo
+         (una sección muy alta cuyo ratio de intersección puede caer por
+         debajo del threshold aunque siga ocupando la pantalla). ───────────── */
 
     const catalogo = document.getElementById('catalogo');
     const firstSection = document.querySelector('section');
 
-    if (catalogo && 'IntersectionObserver' in window) {
-      let firstSectionVisible = false;
-      const visible = new Set<Element>();
-
-      const updateVisibility = () => {
-        const show = visible.size > 0 && !firstSectionVisible;
-        if (show) bar.classList.remove('category-bar--oculta');
-        else bar.classList.add('category-bar--oculta');
-      };
-
-      const catalogoObserver = new IntersectionObserver((entries) => {
+    // Sólo aplica si existe #catalogo (esto sólo se usa en index.astro) Y hay
+    // una sección real por delante de él (p. ej. un carrusel dinámico
+    // "above"). Si no hay secciones dinámicas publicadas, `firstSection` es
+    // el propio #catalogo: en ese caso no hay "hero" que ocultar y se deja
+    // el comportamiento por defecto intacto (barra siempre visible).
+    if (catalogo && firstSection && firstSection !== catalogo && 'IntersectionObserver' in window) {
+      const firstObserver = new IntersectionObserver((entries) => {
         for (const entry of entries) {
-          if (entry.isIntersecting) visible.add(entry.target as Element);
-          else visible.delete(entry.target as Element);
+          if (entry.isIntersecting) bar.classList.add('category-bar--oculta');
+          else bar.classList.remove('category-bar--oculta');
         }
-        updateVisibility();
-      }, { threshold: 0.1 });
-      catalogoObserver.observe(catalogo);
-
-      if (firstSection) {
-        const firstObserver = new IntersectionObserver((entries) => {
-          for (const entry of entries) {
-            firstSectionVisible = entry.isIntersecting;
-          }
-          updateVisibility();
-        }, { threshold: 0.1 });
-        firstObserver.observe(firstSection);
-      }
+      }, { threshold: 0 });
+      firstObserver.observe(firstSection);
     }
 
   }
