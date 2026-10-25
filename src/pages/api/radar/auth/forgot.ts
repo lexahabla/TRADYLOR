@@ -21,7 +21,7 @@ export const POST: APIRoute = async ({ request }) => {
       message: 'Si existe una cuenta con ese email, recibirás un enlace de recuperación.',
       // Sólo en local: facilita probar el flujo sin SMTP.
       devResetUrl: result.devResetUrl,
-    });
+    }, 200);
   } catch (error) {
     if (error instanceof RadarAuthError) return json({ success: false, message: error.message }, error.status);
     return json({ success: false, message: 'Petición inválida.' }, 400);

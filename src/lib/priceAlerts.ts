@@ -67,7 +67,7 @@ function resolveCurrentPrice(product: SavedProduct): CurrentPrice | null {
     const stock = catalog.pricing?.stockStatus;
     return {
       price: catalog.price,
-      inStock: stock ? stock !== 'out_of_stock' : undefined,
+      inStock: stock ? stock !== 'Agotado' : undefined,
       image: catalog.image ? String(catalog.image) : undefined,
     };
   }
@@ -142,7 +142,7 @@ function buildAlertEmail(input: {
       <p style="margin:0 0 .35rem;font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#60a5fa">Mi Radar · Tradylor</p>
       <h1 style="font-size:1.35rem;margin:0 0 .75rem;line-height:1.3">${headline}</h1>
       <p style="color:#9ca3af;font-size:.9rem;line-height:1.6;margin:0 0 1.25rem">
-        Hola ${escapeHtml(name || 'de nuevo')}, este producto de tu Radar acaba de cambiar:
+        Hola ${escapeHtml(input.name || 'de nuevo')}, este producto de tu Radar acaba de cambiar:
       </p>
 
       <div style="display:flex;gap:1rem;align-items:center;background:rgba(17,24,39,.7);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:1rem;margin:0 0 1.25rem">

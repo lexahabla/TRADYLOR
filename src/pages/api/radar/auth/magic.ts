@@ -29,7 +29,7 @@ export const POST: APIRoute = async ({ request }) => {
       success: true,
       message: 'Si existe una cuenta con ese email, recibirás un enlace para entrar sin contraseña.',
       devMagicUrl: result.devMagicUrl,
-    });
+    }, 200);
   } catch (error) {
     if (error instanceof RadarAuthError) return json({ success: false, message: error.message }, error.status);
     return json({ success: false, message: 'Petición inválida.' }, 400);

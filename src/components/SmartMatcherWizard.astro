@@ -528,7 +528,7 @@ const productsJson = JSON.stringify(approvedProducts);
     const wizard = root.querySelector<HTMLElement>('[data-wizard]');
     if (!wizard) return;
 
-    const products: SmartProduct[] = window.__smartMatcherProducts || [];
+    const products = (window.__smartMatcherProducts || []) as SmartProduct[];
     const stepEls = wizard.querySelectorAll<HTMLElement>('[data-wizard-step]');
     const indicators = wizard.querySelectorAll<HTMLElement>('[data-step-indicator]');
     const resultEl = wizard.querySelector<HTMLElement>('[data-wizard-result]');

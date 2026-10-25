@@ -255,7 +255,7 @@ export function deleteProject(projectId: string): void {
 export function trackExitClick(productId: string, title: string): void {
   const data = loadRadar();
   data.pendingExits = [
-    { productId, title: String(title ?? '').slice(0, 200), timestamp: Date.now(), status: 'pending' },
+    { productId, title: String(title ?? '').slice(0, 200), timestamp: Date.now(), status: 'pending' as const },
     ...data.pendingExits.filter((e) => e.productId !== productId),
   ].slice(0, 50);
   persist(data);

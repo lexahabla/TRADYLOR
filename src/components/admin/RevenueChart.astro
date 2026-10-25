@@ -57,8 +57,6 @@ const fmt = new Intl.NumberFormat('es-ES');
 </div>
 
 <script type="module">
-  import type { PuntoIngreso } from '../../../data/mockVentas';
-
   const contenedor = document.querySelector('[data-revenue-chart]');
   if (contenedor) {
     const serie = JSON.parse(document.getElementById('ventas-serie-json')?.textContent || '[]');

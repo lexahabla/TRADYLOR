@@ -3198,12 +3198,22 @@ const headerCategoryPanelHtml = `
         const searchForm = document.querySelector('form.nav-search');
         if (!searchForm) return;
 
-        const searchInput = searchForm.querySelector('.ns-input');
-        const searchDrop = searchForm.querySelector('.cm-search-drop');
-        const clearBtn = searchForm.querySelector('.ns-clear');
+        const searchInput = searchForm.querySelector<HTMLInputElement>('.ns-input');
+        const searchDrop = searchForm.querySelector<HTMLElement>('.cm-search-drop');
+        const clearBtn = searchForm.querySelector<HTMLElement>('.ns-clear');
 
-        const escapeHtml = (value) =>
-          value.replace(/[&<>"']/g, (ch) => {
+        /** Item devuelto por /api/search para el desplegable de sugerencias. */
+        type SearchHit = {
+          url: string;
+          image: string;
+          title: string;
+          price: string;
+          merchant?: string;
+          discountPct?: number | string;
+        };
+
+        const escapeHtml = (value: string) =>
+          value.replace(/[&<>"']/g, (ch: string) => {
             switch (ch) {
               case '&': return '&amp;';
               case '<': return '&lt;';
@@ -3221,7 +3231,7 @@ const headerCategoryPanelHtml = `
           if (clearBtn) clearBtn.hidden = (searchInput?.value ?? '').length === 0;
         };
 
-        const catalogUrl = (query) => {
+        const catalogUrl = (query: string) => {
           const category = new URLSearchParams(window.location.search).get('category');
           const term = query.trim();
           const params = new URLSearchParams();
@@ -3231,7 +3241,7 @@ const headerCategoryPanelHtml = `
           return `/${qs ? `?${qs}` : ''}#catalogo`;
         };
 
-        const goToCatalog = (query) => {
+        const goToCatalog = (query: string) => {
           closeDrop();
           window.location.href = catalogUrl(query);
         };
@@ -3241,7 +3251,7 @@ const headerCategoryPanelHtml = `
           goToCatalog(searchInput?.value ?? '');
         });
 
-        clearBtn.addEventListener('click', () => {
+        clearBtn?.addEventListener('click', () => {
           if (searchInput) searchInput.value = '';
           syncClearBtn();
           const hasQuery = new URLSearchParams(window.location.search).has('q');
@@ -3253,16 +3263,16 @@ const headerCategoryPanelHtml = `
           }
         });
 
-        let dropTimer;
+        let dropTimer: ReturnType<typeof setTimeout>;
         let lastQuery = '';
 
-        const renderDropStatus = (message) => {
+        const renderDropStatus = (message: string) => {
           if (!searchDrop) return;
           searchDrop.innerHTML = `<p class="cm-drop-status">${escapeHtml(message)}</p>`;
           searchDrop.hidden = false;
         };
 
-        const runCascade = async (raw) => {
+        const runCascade = async (raw: string) => {
           const q = raw.trim();
           if (q.length < 2) {
             closeDrop();
@@ -3275,7 +3285,7 @@ const headerCategoryPanelHtml = `
             const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=5`);
             const data = await res.json();
             if (!data?.success) throw new Error('search failed');
-            const hits = data.products ?? [];
+            const hits: SearchHit[] = data.products ?? [];
             if (!searchDrop) return;
             if (hits.length === 0) {
               renderDropStatus(`Sin resultados para «${q}»`);
@@ -3303,16 +3313,16 @@ const headerCategoryPanelHtml = `
           }
         };
 
-        searchInput.addEventListener('input', () => {
+        searchInput?.addEventListener('input', () => {
           syncClearBtn();
           clearTimeout(dropTimer);
-          const value = searchInput.value;
+          const value = searchInput?.value ?? '';
           dropTimer = setTimeout(() => runCascade(value), 280);
         });
 
         document.addEventListener('click', (event) => {
           if (!searchDrop || searchDrop.hidden) return;
-          const target = event.target;
+          const target = event.target as Element | null;
           if (!target || typeof target.closest !== 'function') return;
           if (!target.closest('.nav-search')) closeDrop();
         });
@@ -3660,7 +3670,7 @@ const headerCategoryPanelHtml = `
           toggleUserMenu();
         });
         headerUserArea?.addEventListener('click', (e) => {
-          if (e.target.closest('[data-user-menu]')) return;
+          if ((e.target as Element).closest('[data-user-menu]')) return;
           e.stopPropagation();
           toggleUserMenu();
         });

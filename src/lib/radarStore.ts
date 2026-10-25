@@ -623,7 +623,7 @@ export function trackExit(userId: string, productId: string, title: string): Rad
   const all = readAll();
   const radar = all[userId] ?? emptyRadar();
   radar.pendingExits = [
-    { productId, title: String(title ?? '').slice(0, 200), timestamp: Date.now(), status: 'pending' },
+    { productId, title: String(title ?? '').slice(0, 200), timestamp: Date.now(), status: 'pending' as const },
     ...radar.pendingExits.filter((e) => e.productId !== productId),
   ].slice(0, 50);
   all[userId] = radar;

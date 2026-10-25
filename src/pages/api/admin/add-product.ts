@@ -411,9 +411,9 @@ export const POST: APIRoute = async ({ request }) => {
       // no se pierden en el filtro «En catálogo ».
       const incomingSourceId = String(body?.sourceId ?? '').trim();
       if (incomingSourceId) base.sourceId = incomingSourceId;
-      // Estado editorial: el enriquecimiento de texto completado marca ia_status.
+      // Estado editorial: el enriquecimiento de texto nunca queda en 'error'
+      // (si la IA falla se cae a la plantilla local), sólo 'ok' / 'local'.
       if (textStatus === 'ok' || textStatus === 'local') base.ia_status = 'completed';
-      else if (textStatus === 'error') base.ia_status = 'error';
       if (base.affiliateUrl && !base.link_status) base.link_status = 'active';
       upsertProduct(base);
       saved = true;
@@ -428,20 +428,9 @@ export const POST: APIRoute = async ({ request }) => {
       }
     }
 
-    const failed = options.text && options.image && textStatus === 'error' && imageStatus === 'error';
-    if (failed) {
-      return jsonResponse(
-        {
-          success: false,
-          saved: false,
-          message: 'Los dos pasos de IA fallaron; revisa las claves y los logs del servidor.',
-          warnings,
-          product: base,
-          enrichment: { text: textStatus, image: imageStatus, warnings },
-        },
-        502
-      );
-    }
+    // Nota: el texto nunca acaba en 'error' (si la IA falla se cae a la
+    // plantilla local y queda en 'local'), así que este "todo falló" no puede
+    // darse: una imagen fallida se comunica igualmente en `warnings`.
 
     return jsonResponse(
       {

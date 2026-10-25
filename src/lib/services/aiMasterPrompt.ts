@@ -392,11 +392,11 @@ export function parseMasterPromptResponse(raw: string): MasterPromptOutput {
     category: String(parsed.category ?? '').replace(/\s+/g, ' ').trim().slice(0, 60),
     subcategory: parsed.subcategory ? String(parsed.subcategory).replace(/\s+/g, ' ').trim().slice(0, 60) : undefined,
     normalized_tags: Array.isArray(parsed.normalized_tags)
-      ? [...new Set(parsed.normalized_tags.map((t: any) => String(t).replace(/\s+/g, ' ').trim()).filter((t: string) => t.length > 1))].slice(0, 20)
+      ? [...new Set<string>(parsed.normalized_tags.map((t: any) => String(t).replace(/\s+/g, ' ').trim()).filter((t: string) => t.length > 1))].slice(0, 20)
       : [],
     matching_key: String(parsed.matching_key ?? '').replace(/\s+/g, ' ').trim().slice(0, 120),
     competitor_terms: Array.isArray(parsed.competitor_terms)
-      ? [...new Set(parsed.competitor_terms.map((t: any) => String(t).replace(/\s+/g, ' ').trim()).filter((t: string) => t.length > 1))].slice(0, 15)
+      ? [...new Set<string>(parsed.competitor_terms.map((t: any) => String(t).replace(/\s+/g, ' ').trim()).filter((t: string) => t.length > 1))].slice(0, 15)
       : [],
     pricing: {
       price: Number(parsed.pricing?.price ?? 0),

@@ -224,6 +224,7 @@ type ExtraValue = string | number | boolean | null | undefined;
 type LooseProduct = UnifiedProduct & {
   shippingDays?: number | string | null;
   freeShipping?: boolean | null;
+  technicalSpecs?: Record<string, unknown>;
 };
 
 function extra(product: UnifiedProduct, key: string): ExtraValue {
@@ -373,7 +374,7 @@ export function isSecondHand(product: UnifiedProduct): boolean {
     extra(product, 'condition') ??
     extra(product, 'Estado') ??
     (product as unknown as { condition?: string }).condition ??
-    (product.technicalSpecs && product.technicalSpecs['Estado']) ??
+    (product as LooseProduct).technicalSpecs?.['Estado'] ??
     ''
   ).toLowerCase();
 

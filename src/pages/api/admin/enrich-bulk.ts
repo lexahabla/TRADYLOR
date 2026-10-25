@@ -205,7 +205,9 @@ async function enrichSingleText(
     brand: enrichment?.category ? product.brand : product.brand,
     ia_status: textStatus === 'ok' || textStatus === 'local' ? 'completed' : product.ia_status,
     ai_enriched: textStatus === 'ok',
-    ai_error: textStatus === 'skipped' ? 'Sin claves de IA configuradas' : product.ai_error,
+    // textStatus nunca llega 'skipped' aquí (sin claves se marca 'local' y se
+    // avisa en `warnings`), así que se conserva el error previo del producto.
+    ai_error: product.ai_error,
   };
 
   return { product: updated, textStatus, imageStatus, warnings };

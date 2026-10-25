@@ -213,7 +213,7 @@ export function countAdmins(excludeId?: string): number {
 
 /* ---------------------------------------------------------------- permisos */
 
-function assertCanManage(actor: AdminUser, target: AdminUser): void {
+function assertCanManage(actor: PublicUser, target: AdminUser): void {
   if (target.id === actor.id) return; // la cuenta propia siempre se puede editar
   if (actor.role !== 'admin') {
     throw new UserError('No tienes permisos para gestionar usuarios.', 403);
@@ -228,7 +228,7 @@ function assertCanManage(actor: AdminUser, target: AdminUser): void {
 
 /* ---------------------------------------------------------------------- CRUD */
 
-export function createUser(input: CreateUserInput, actor: AdminUser): PublicUser {
+export function createUser(input: CreateUserInput, actor: PublicUser): PublicUser {
   if (actor.role !== 'admin') {
     throw new UserError('No tienes permisos para crear usuarios.', 403);
   }
@@ -277,7 +277,7 @@ export function createUser(input: CreateUserInput, actor: AdminUser): PublicUser
   return toPublicUser(created);
 }
 
-export function updateUser(id: string, input: UpdateUserInput, actor: AdminUser): PublicUser {
+export function updateUser(id: string, input: UpdateUserInput, actor: PublicUser): PublicUser {
   const users = readUsers();
   const target = users.find((u) => u.id === id);
   if (!target) throw new UserError('Usuario no encontrado.', 404);
@@ -332,7 +332,7 @@ export function updateUser(id: string, input: UpdateUserInput, actor: AdminUser)
   return toPublicUser(target);
 }
 
-export function deleteUser(id: string, actor: AdminUser): void {
+export function deleteUser(id: string, actor: PublicUser): void {
   const users = readUsers();
   const target = users.find((u) => u.id === id);
   if (!target) throw new UserError('Usuario no encontrado.', 404);

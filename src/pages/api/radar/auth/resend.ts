@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ request }) => {
       message: 'Si existe una cuenta pendiente de activar, recibirás un nuevo correo de activación.',
       // Sólo en local: facilita probar el flujo sin SMTP.
       devVerifyUrl: result.devVerifyUrl,
-    });
+    }, 200);
   } catch (error) {
     if (error instanceof RadarAuthError) return json({ success: false, message: error.message }, error.status);
     return json({ success: false, message: 'Petición inválida.' }, 400);

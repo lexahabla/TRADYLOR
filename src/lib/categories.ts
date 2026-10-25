@@ -26,6 +26,8 @@ export interface Category {
   slug: string;
   icon: string;
   keywords: string[];
+  /** Descripción corta opcional (usada como tooltip); si no existe, manda `name`. */
+  description?: string;
   /**
    * ID de la categoría padre (null/ausente = categoría raíz). Las entradas con
    * parentId actúan como SUBCATEGORÍAS y se guardan en el mismo categories.json,

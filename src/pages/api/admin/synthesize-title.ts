@@ -51,7 +51,7 @@ export const POST: APIRoute = async ({ request }) => {
     const localTitle = synthesizeTitleLocally(title);
 
     if (!hasTextCredentials()) {
-      return jsonResponse({ success: true, title: localTitle || title, source: 'local' });
+      return jsonResponse({ success: true, title: localTitle || title, source: 'local' }, 200);
     }
 
     try {
@@ -61,10 +61,10 @@ export const POST: APIRoute = async ({ request }) => {
         category: body?.category ? String(body.category) : undefined,
         brand: body?.brand ? String(body.brand) : undefined,
       });
-      return jsonResponse({ success: true, title: aiTitle || localTitle || title, source: 'ai' });
+      return jsonResponse({ success: true, title: aiTitle || localTitle || title, source: 'ai' }, 200);
     } catch (error: any) {
       console.warn('[API admin/synthesize-title] IA no disponible:', error?.message ?? error);
-      return jsonResponse({ success: true, title: localTitle || title, source: 'local' });
+      return jsonResponse({ success: true, title: localTitle || title, source: 'local' }, 200);
     }
   } catch (error: any) {
     console.error('[API admin/synthesize-title] Error no controlado:', error);

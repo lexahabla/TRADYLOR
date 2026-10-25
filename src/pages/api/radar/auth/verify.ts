@@ -15,7 +15,7 @@ export const GET: APIRoute = ({ request }) => {
   if (!token) return json({ success: false, message: 'Falta el token de activación.' }, 400);
   try {
     verifyRadarUser(token);
-    return json({ success: true });
+    return json({ success: true }, 200);
   } catch (error) {
     if (error instanceof RadarAuthError) return json({ success: false, message: error.message }, error.status);
     return json({ success: false, message: 'No se pudo activar la cuenta.' }, 500);

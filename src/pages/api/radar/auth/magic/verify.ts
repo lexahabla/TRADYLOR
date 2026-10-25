@@ -30,7 +30,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       success: true,
       user: toPublicRadarUser(user),
       googleEnabled: Boolean(getGoogleOAuthConfig()),
-    });
+    }, 200);
   } catch (error) {
     if (error instanceof RadarAuthError) {
       return json({ success: false, message: error.message, code: error.code }, error.status);

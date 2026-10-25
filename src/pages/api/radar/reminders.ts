@@ -42,7 +42,7 @@ function allow(key: string): boolean {
 export const GET: APIRoute = ({ request }) => {
   const user = getRadarSessionUser(request);
   if (!user) return json({ success: false, message: 'Autenticacion requerida.' }, 401);
-  return json({ success: true, radar: getRadar(user.id) });
+  return json({ success: true, radar: getRadar(user.id) }, 200);
 };
 
 /**
@@ -103,5 +103,5 @@ export const DELETE: APIRoute = ({ request, url }) => {
   if (!user) return json({ success: false, message: 'Autenticacion requerida.' }, 401);
   const id = url.searchParams.get('id')?.trim();
   if (!id) return json({ success: false, message: 'id requerido.' }, 400);
-  return json({ success: true, radar: cancelReminder(user.id, id) });
+  return json({ success: true, radar: cancelReminder(user.id, id) }, 200);
 };

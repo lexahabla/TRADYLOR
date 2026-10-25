@@ -115,7 +115,7 @@
     </form>
 
     <!-- Verificación pendiente (tras registrarse con email no gmail) -->
-    <div class="auth-form" data-auth-form="verify" novalidate hidden>
+    <div class="auth-form" data-auth-form="verify" hidden>
       <div class="auth-info-box">
         <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
           <rect x="2" y="4" width="20" height="16" rx="3"></rect>
@@ -134,7 +134,7 @@
     </div>
 
     <!-- Cuenta aún no activada (login bloqueado) -->
-    <div class="auth-form" data-auth-form="locked" novalidate hidden>
+    <div class="auth-form" data-auth-form="locked" hidden>
       <div class="auth-info-box">
         <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
           <path d="M12 3 2.5 20h19L12 3z" stroke-linejoin="round"></path>
@@ -152,7 +152,7 @@
     </div>
 
     <!-- Cuenta activada (tras el enlace del email) -->
-    <div class="auth-form" data-auth-form="activated" novalidate hidden>
+    <div class="auth-form" data-auth-form="activated" hidden>
       <div class="auth-info-box">
         <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
           <circle cx="12" cy="12" r="10"></circle>
@@ -804,7 +804,7 @@
         if (result.devMagicUrl) {
           message += ` (dev: ${result.devMagicUrl})`;
         }
-        const hint = forms.magic?.querySelector('.auth-form-hint');
+        const hint = forms.magic?.querySelector<HTMLElement>('.auth-form-hint');
         if (hint) {
           hint.textContent = message;
           hint.style.color = '#6ee7b7';
@@ -867,7 +867,7 @@
           message += ` (dev: ${result.devResetUrl})`;
         }
         showError('');
-        const hint = forms.forgot?.querySelector('.auth-form-hint');
+        const hint = forms.forgot?.querySelector<HTMLElement>('.auth-form-hint');
         if (hint) {
           hint.textContent = message;
           hint.style.color = '#6ee7b7';

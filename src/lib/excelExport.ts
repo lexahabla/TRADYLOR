@@ -111,12 +111,15 @@ function barras(ws: ExcelJS.Worksheet, ref: string, color = PALETA.accent): void
   ws.addConditionalFormatting({
     ref,
     rules: [
+      // `color` no figura en los tipos de ExcelJS para dataBar (aunque sí lo
+      // acepta en runtime) y `priority` lo rellena ExcelJS al escribir el XLSX:
+      // por eso el salto por `unknown`.
       {
         type: 'dataBar',
         cfvo: [{ type: 'min' }, { type: 'max' }],
         color: { argb: color },
         gradient: true,
-      } as ExcelJS.ConditionalFormattingRule,
+      } as unknown as ExcelJS.ConditionalFormattingRule,
     ],
   });
 }

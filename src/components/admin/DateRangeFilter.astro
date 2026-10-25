@@ -69,14 +69,14 @@ const presets = [
 <script>
   const root = document.querySelector('[data-date-range-filter]');
   if (root) {
-    const desde = root.querySelector('[data-desde]');
-    const hasta = root.querySelector('[data-hasta]');
+    const desde = root.querySelector<HTMLInputElement>('[data-desde]');
+    const hasta = root.querySelector<HTMLInputElement>('[data-hasta]');
     const label = root.querySelector('[data-rango-activo]');
     const presets = root.querySelectorAll('[data-preset]');
 
-    const toISO = (d) => d.toISOString().slice(0, 10);
+    const toISO = (d: Date) => d.toISOString().slice(0, 10);
 
-    const emitir = (d, h) => {
+    const emitir = (d: string, h: string) => {
       if (desde) desde.value = d;
       if (hasta) hasta.value = h;
       if (label) label.textContent = `Mostrando: ${d} → ${h}`;
@@ -84,7 +84,7 @@ const presets = [
     };
 
     const hoy = new Date();
-    const aplicarPreset = (id) => {
+    const aplicarPreset = (id: string | null) => {
       const d = new Date(hoy);
       if (id === 'hoy') {
         emitir(toISO(d), toISO(d));

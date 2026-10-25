@@ -64,7 +64,7 @@ export interface Product {
 
   // â”€â”€â”€ New structured fields (optional for backward compat) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   awardBadge?: string;
-  productType?: 'Laptop' | 'Tablet' | 'Smartphone' | 'Smartwatch' | 'Auriculares' | 'Monitor' | 'ElectrodomÃ©stico' | 'Otros';
+  productType?: 'Laptop' | 'Tablet' | 'Smartphone' | 'Smartwatch' | 'Auriculares' | 'Monitor' | 'Electrodoméstico' | 'Otros';
   brand?: string;
   model?: string;
   pricing?: {

@@ -55,7 +55,7 @@ export interface Props {
 }
 
 const {
-  product,
+  product: productRaw,
   title,
   asin,
   customUrl,
@@ -68,11 +68,16 @@ const {
   layout = 'grid',
 } = Astro.props;
 
+// El objeto del catálogo sólo existe en la rama de tarjeta interna (el modo
+// directo no lo recibe y el template no entra en esa rama sin producto).
+const product = productRaw as Product;
+
 // Modo híbrido: amazonInput (URL de Amazon o ASIN) habilita la salida directa.
 const amazonPayload = (amazonInput ?? '').trim();
 const hybridMode = Boolean(amazonPayload);
-// Modo salida directa: sin objeto product y con algo que enlazar.
-const directMode = !product && (hybridMode || Boolean((customUrl || asin || '').trim()));
+// Modo salida directa: sin objeto product y con algo que enlazar. Se calcula
+// sobre el prop crudo para que TS no estreche `product` dentro de esa rama.
+const directMode = !productRaw && (hybridMode || Boolean((customUrl || asin || '').trim()));
 
 // Modo híbrido: se normaliza a ASIN (si es URL se extrae del path /dp/…) y se
 // pide la cesta de Amazon con la tag de afiliado. Si no hay ASIN válido se
@@ -228,8 +233,8 @@ const radarPayload = {
 };
 ---
 
+<!-- Modo híbrido / salida directa: CTA .exit-cta hacia la red de afiliación -->
 {directMode ? (
-  <!-- Modo híbrido / salida directa: CTA .exit-cta hacia la red de afiliación -->
   <article class="aff-product-card">
     <div class="aff-image-wrapper">
       <img

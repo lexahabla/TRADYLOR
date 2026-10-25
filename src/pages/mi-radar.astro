@@ -1453,7 +1453,9 @@ if (!sessionUser) {
 
   els.modalForm?.addEventListener('submit', (event) => {
     event.preventDefault();
-    const input = els.modalForm.querySelector<HTMLInputElement>('input');
+    const form = els.modalForm;
+    if (!form) return;
+    const input = form.querySelector<HTMLInputElement>('input');
     const value = input?.value.trim() ?? '';
     if (value) {
       const project = createProject(value);
@@ -1547,11 +1549,13 @@ if (!sessionUser) {
   els.reminderForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     if (!reminderProductId) return;
+    const reminderForm = els.reminderForm;
+    if (!reminderForm) return;
     const product = getRadarProducts().find((p) => p.id === reminderProductId);
-    const date = els.reminderForm.querySelector<HTMLInputElement>('input[name="date"]')?.value ?? '';
-    const time = els.reminderForm.querySelector<HTMLInputElement>('input[name="time"]')?.value ?? '';
-    const reason = els.reminderForm.querySelector<HTMLSelectElement>('select[name="reason"]')?.value ?? '';
-    const note = els.reminderForm.querySelector<HTMLInputElement>('input[name="note"]')?.value.trim() ?? '';
+    const date = reminderForm.querySelector<HTMLInputElement>('input[name="date"]')?.value ?? '';
+    const time = reminderForm.querySelector<HTMLInputElement>('input[name="time"]')?.value ?? '';
+    const reason = reminderForm.querySelector<HTMLSelectElement>('select[name="reason"]')?.value ?? '';
+    const note = reminderForm.querySelector<HTMLInputElement>('input[name="note"]')?.value.trim() ?? '';
 
     if (!date || !time) {
       setReminderError('Elige fecha y hora.');

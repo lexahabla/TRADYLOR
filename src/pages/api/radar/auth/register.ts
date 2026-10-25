@@ -56,5 +56,5 @@ export const POST: APIRoute = async ({ request }) => {
 // GET devuelve el estado de sesión (alias cómodo del cliente).
 export const GET: APIRoute = ({ request }) => {
   const user = getRadarSessionUser(request);
-  return json({ authenticated: Boolean(user), user, googleEnabled: Boolean(getGoogleOAuthConfig()) });
+  return json({ authenticated: Boolean(user), user, googleEnabled: Boolean(getGoogleOAuthConfig()) }, 200);
 };

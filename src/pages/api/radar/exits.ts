@@ -22,7 +22,7 @@ export const POST: APIRoute = async ({ request }) => {
     const productId = String(body.productId ?? '').trim();
     if (!productId) return json({ success: false, message: 'productId requerido.' }, 400);
     const radar = trackExit(user.id, productId, String(body.title ?? ''));
-    return json({ success: true, radar });
+    return json({ success: true, radar }, 200);
   } catch {
     return json({ success: false, message: 'Payload inválido.' }, 400);
   }
@@ -40,7 +40,7 @@ export const PATCH: APIRoute = async ({ request }) => {
       return json({ success: false, message: 'productId y status válidos requeridos.' }, 400);
     }
     const radar = resolveExit(user.id, productId, status);
-    return json({ success: true, radar });
+    return json({ success: true, radar }, 200);
   } catch {
     return json({ success: false, message: 'Payload inválido.' }, 400);
   }

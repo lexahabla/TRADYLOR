@@ -15,7 +15,7 @@ const json = (body: unknown, status: number) =>
 export const GET: APIRoute = ({ request }) => {
   const user = getRadarSessionUser(request);
   if (!user) return json({ success: false, message: 'Autenticacion requerida.' }, 401);
-  return json({ success: true, radar: getRadar(user.id) });
+  return json({ success: true, radar: getRadar(user.id) }, 200);
 };
 
 /**
@@ -35,7 +35,7 @@ export const POST: APIRoute = async ({ request }) => {
       removedProducts: body.removedProducts,
       removedProjects: body.removedProjects,
     });
-    return json({ success: true, radar });
+    return json({ success: true, radar }, 200);
   } catch {
     return json({ success: false, message: 'Payload inválido.' }, 400);
   }
