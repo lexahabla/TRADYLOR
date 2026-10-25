@@ -3,6 +3,7 @@ import { requireAdminAuth } from '../../../lib/adminAuth';
 import { suggestCategory, resolveCategoryIds } from '../../../lib/categories';
 import {
   buildRealisticPricing,
+  enforceMoreProsThanCons,
   enrichProductText,
   generateProductImage,
   hasImageCredentials,
@@ -201,6 +202,9 @@ export const POST: APIRoute = async ({ request }) => {
             url: body?.url,
             price: body?.price ? Number(body.price) : undefined,
             originalPrice: body?.originalPrice ? Number(body.originalPrice) : undefined,
+            // Specs ya extraídas de la página del comercio (scraping): se pasan
+            // como fuente de verdad para que la IA no invente ficha técnica.
+            specs: body?.specs && typeof body.specs === 'object' ? body.specs : undefined,
           });
           // Overlay: la IA mejora lo local, pero NO borra datos con campos vacíos.
           const pick = (aiValue: any, localValue: any) => {
@@ -208,6 +212,10 @@ export const POST: APIRoute = async ({ request }) => {
             if (Array.isArray(aiValue)) return aiValue.length ? aiValue : localValue;
             return aiValue ?? localValue;
           };
+          const { pros: pickedPros, cons: pickedCons } = enforceMoreProsThanCons(
+            pick(aiEnrichment.pros, localEnrichment.pros),
+            pick(aiEnrichment.cons, localEnrichment.cons)
+          );
           enrichment = {
             ...localEnrichment,
             ...aiEnrichment,
@@ -215,9 +223,18 @@ export const POST: APIRoute = async ({ request }) => {
             description: pick(aiEnrichment.description, localEnrichment.description),
             verdict: pick(aiEnrichment.verdict, localEnrichment.verdict),
             category: pick(aiEnrichment.category, localEnrichment.category),
-            specs: { ...(localEnrichment.specs ?? {}), ...(aiEnrichment.specs ?? {}) },
-            pros: pick(aiEnrichment.pros, localEnrichment.pros),
-            cons: pick(aiEnrichment.cons, localEnrichment.cons),
+            // La ficha técnica la marca el comercio: lo ya extraído del
+            // scraping (localEnrichment.specs) prevalece sobre lo que
+            // "adivine" la IA para las mismas claves; la IA sólo aporta
+            // claves adicionales que el scraping no haya capturado.
+            specs: { ...(aiEnrichment.specs ?? {}), ...(localEnrichment.specs ?? {}) },
+            techSheet: pick(aiEnrichment.techSheet, localEnrichment.techSheet),
+            // Siempre más pros que contras (ver enforceMoreProsThanCons): se
+            // aplica AQUÍ (no sólo dentro de cada fuente) porque pick() elige
+            // pros y contras de forma independiente y podría mezclar un
+            // conjunto de pros con contras de la otra fuente.
+            pros: pickedPros,
+            cons: pickedCons,
             pricing: aiEnrichment.pricing ?? localEnrichment.pricing,
           };
           textStatus = 'ok';
@@ -334,6 +351,11 @@ export const POST: APIRoute = async ({ request }) => {
         base.specs = { ...(base.specs ?? {}), ...enrichment.specs };
       }
       if (!base.category && enrichment.category) base.category = enrichment.category;
+      // Red de seguridad final: siempre más pros que contras en lo que se
+      // va a guardar, pase lo que pase arriba (ver enforceMoreProsThanCons).
+      const balanced = enforceMoreProsThanCons(base.pros ?? [], base.cons ?? []);
+      base.pros = balanced.pros;
+      base.cons = balanced.cons;
     }
 
     // ------------------------------------------------------------------

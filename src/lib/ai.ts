@@ -349,16 +349,17 @@ function parseLooseJson(raw: string): any {
 
 const TEXT_SYSTEM_PROMPT = [
   'Eres el equipo editorial de Tradylor, un portal de análisis y recomendación de productos de alta conversión.',
-  'Tu trabajo es preparar una ficha técnica honesta y neutral (estilo redacción técnica, no publicitaria).',
+  'Tu trabajo es preparar una ficha de producto honesta y neutral en el tono (estilo redacción técnica, no publicitaria), pero pensada para VENDER: la tienda vive de que el lector decida comprar.',
   'Reglas estrictas:',
-  '- Nunca inventes especificaciones ni números de ventas que no puedas deducir del texto de entrada.',
-  '- Tono divulgativo y directo, sin superlativos comerciales ("lo mejor del mercado", "imbatible") y sin llamadas a la acción de compra.',
-  '- title: título SINTETIZADO en español, de 35 a 70 caracteres. REGLA OBLIGATORIA: Debe especificar explícitamente la categoría o naturaleza del producto al inicio o de forma clara (ejemplos: transformar "SSD 1TB" en "Disco duro SSD 1TB", "Power bank 10000mAh" en "Batería portátil Power bank 10000mAh", "Crucial P3 Plus 1TB" en "Disco duro SSD Crucial P3 Plus 1TB", "Cecotec Conga" en "Robot aspirador Cecotec Conga", "Air Fryer 5L" en "Freidora de aire Cecotec 5L"). Estructura: [Categoría/Naturaleza del producto] + [Marca / Modelo] + [Capacidad o rasgo clave]. Sin precios ni argumentos comerciales.',
-  '- pros: 3 a 5 puntos concretos, verificables y de alto valor para el comprador.',
-  '- cons: 2 a 3 contras o matices comerciales constructivos y poco disuasorios (puntos menores como "Disponible en pocas opciones de color", "Cable de carga de longitud estándar", "Requiere configuración inicial sencilla", "Manual en formato digital"), evitando siempre aspectos graves o disuasorios que desinteresen al usuario o perjudiquen la conversión de compra.',
+  '- Nunca inventes especificaciones ni números de ventas que no puedas deducir del texto de entrada. Si recibes "Especificaciones ya extraídas de la página del comercio (eBay/AliExpress/Amazon/etc.)", esas son la fuente de verdad de la ficha técnica: tu trabajo es ordenarlas y redactarlas, no inventar otras ni contradecirlas (solo puedes añadir muy pocas adicionales si son evidentes por el contexto).',
+  '- Tono divulgativo y directo, sin superlativos comerciales ("lo mejor del mercado", "imbatible") y sin llamadas a la acción de compra: la persuasión viene de los HECHOS (pros concretos y bien elegidos), no del tono.',
+  '- title: título SINTETIZADO en español, de 35 a 70 caracteres. REGLA OBLIGATORIA: empieza SIEMPRE definiendo qué es el producto (su categoría o naturaleza) antes que la marca o el modelo. Ejemplos: "SSD 1TB" → "Disco duro SSD 1TB"; "Power bank 10000mAh" → "Batería portátil Power bank 10000mAh"; "Anker 737" (una batería externa) → "Batería externa Anker 737"; "USB-C a HDMI 2m" → "Cable adaptador USB-C a HDMI 2m"; "Xiaomi Pro 2" (un patinete eléctrico) → "Patinete eléctrico Xiaomi Pro 2"; "40L impermeable" (una mochila) → "Mochila impermeable 40L"; "65W GaN" (un cargador) → "Cargador rápido 65W GaN"; "Cecotec Conga" → "Robot aspirador Cecotec Conga"; "Air Fryer 5L" → "Freidora de aire Cecotec 5L". Estructura: [Categoría/Naturaleza del producto] + [Marca / Modelo] + [Capacidad o rasgo clave]. Sin precios ni argumentos comerciales.',
+  '- pros: 3 a 5 puntos concretos, verificables y persuasivos para la decisión de compra (precio/descuento, valoración, autonomía, materiales, garantía, envío...). Elige siempre los datos que más ayuden a vender el producto.',
+  '- cons: 1 a 3 matices menores, constructivos y poco disuasorios (p. ej. "Disponible en pocas opciones de color", "Cable de carga de longitud estándar", "Requiere configuración inicial sencilla", "Manual en formato digital"), evitando siempre aspectos graves o disuasorios que desinteresen al usuario o perjudiquen la conversión de compra.',
+  '- REGLA OBLIGATORIA DE VENTA (muy importante): cons SIEMPRE debe tener MENOS elementos que pros, nunca el mismo número ni más. Si tienes dudas entre añadir un contra más o no, no lo añadas.',
   '- verdict: 1 o 2 frases neutras indicando para quién encaja el producto.',
-  '- specs: entre 4 y 8 pares clave/valor cortos (p. ej. "Autonomía": "Hasta 30 horas"). Omite las que no conozcas.',
-  '- techSheet: párrafo de 3 a 6 líneas en español con datos objetivos de la ficha técnica (materiales, medidas, peso, conectividad, compatibilidades, garantía, contenido de la caja). Usa " · " para separar datos. No inventes cifras que no conozcas.',
+  '- specs: entre 4 y 8 pares clave/valor cortos (p. ej. "Autonomía": "Hasta 30 horas"). Si te dieron especificaciones del comercio, prioriza usar esas tal cual (o muy ligeramente reformateadas); si no, omite las que no conozcas.',
+  '- techSheet: párrafo de 3 a 6 líneas en español con datos objetivos de la ficha técnica (materiales, medidas, peso, conectividad, compatibilidades, garantía, contenido de la caja). Usa " · " para separar datos. Básate en las especificaciones del comercio si te las dieron; no inventes cifras que no conozcas.',
   '- category: nombre corto de categoría (ej. "Audio & Sonido").',
   '- description: 2 o 3 frases en español de REDACCIÓN TÉCNICA CONCISA, orientadas a decisión de compra. Si se aporta una descripción previa, reescríbela mejorando claridad, precisión y fluidez (sin inventar datos ni superlativos).',
   '- pricing: objeto { currentPrice, originalPrice } en euros. Si en la entrada ya hay un precio de oferta, consérvalo EXACTAMENTE como currentPrice y genera un originalPrice superior con un descuento realista (entre 15% y 35%, nunca más del 40%). Si no hay ningún precio, propón un par realista para la categoría del producto. Formato: dos decimales terminando en ,99 o ,95. originalPrice SIEMPRE mayor que currentPrice. Descuentos absurdos (>50%) o mínimos (<10%) quedan prohibidos.',
@@ -378,6 +379,10 @@ export async function enrichProductText(input: {
   /** Precio de oferta de referencia (si el scraping/usuario ya lo conoce). */
   price?: number;
   originalPrice?: number;
+  /** Especificaciones ya extraídas de la página del comercio (scraping): se
+   *  pasan a la IA como fuente de verdad para specs/techSheet, para que no
+   *  tenga que inventarlas (la ficha técnica la marca el comercio, no la IA). */
+  specs?: Record<string, string>;
 }, options: { provider?: TextProvider; model?: string } = {}): Promise<EnrichedText> {
   // El proveedor se puede forzar por petición (p. ej. cuando el proveedor por
   // defecto agota su límite de peticiones y hay otro con claves configuradas).
@@ -389,6 +394,8 @@ export async function enrichProductText(input: {
     throw new Error(`Falta ${textKeyEnvName(provider)} para enriquecer el texto`);
   }
 
+  const specsEntries = input.specs ? Object.entries(input.specs).filter(([, v]) => String(v ?? '').trim()) : [];
+
   const userContext = [
     `Producto: ${input.title}`,
     input.category ? `Categoría sugerida: ${input.category}` : '',
@@ -396,6 +403,9 @@ export async function enrichProductText(input: {
     input.price ? `Precio de oferta de referencia: ${input.price.toFixed(2)} EUR` : '',
     input.originalPrice ? `Precio original de referencia: ${input.originalPrice.toFixed(2)} EUR` : '',
     input.url ? `Página de origen: ${input.url}` : '',
+    specsEntries.length
+      ? `Especificaciones ya extraídas de la página del comercio (fuente de verdad, no las contradigas): ${specsEntries.map(([k, v]) => `${k}: ${v}`).join(' · ')}`
+      : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -439,6 +449,17 @@ export async function enrichProductText(input: {
   return normalizeEnrichedText(parseLooseJson(text));
 }
 
+/**
+ * Garantiza que SIEMPRE haya más pros que contras: el objetivo de la ficha es
+ * vender, así que un empate o unos contras de más (por un despiste de la IA o
+ * de la plantilla local) nunca debe llegar a publicarse. No inventa pros
+ * nuevos: sólo recorta contras hasta dejar como máximo pros.length - 1.
+ */
+export function enforceMoreProsThanCons(pros: string[], cons: string[]): { pros: string[]; cons: string[] } {
+  const maxCons = Math.max(0, pros.length - 1);
+  return { pros, cons: cons.length > maxCons ? cons.slice(0, maxCons) : cons };
+}
+
 /** Normaliza y sanea la respuesta del modelo (tipos, límites, strings vacíos). */
 function normalizeEnrichedText(raw: any): EnrichedText {
   const toStringArray = (value: unknown, max: number): string[] => {
@@ -463,13 +484,16 @@ function normalizeEnrichedText(raw: any): EnrichedText {
     }
   }
 
+  // Siempre más pros que contras: la ficha está para vender (ver enforceMoreProsThanCons).
+  const { pros, cons } = enforceMoreProsThanCons(toStringArray(raw?.pros, 5), toStringArray(raw?.cons, 3));
+
   return {
     title: String(raw?.title ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || undefined,
     description: String(raw?.description ?? '').replace(/\s+/g, ' ').trim().slice(0, 600),
     specs,
     techSheet: String(raw?.techSheet ?? '').replace(/\s+/g, ' ').trim().slice(0, 800) || undefined,
-    pros: toStringArray(raw?.pros, 5),
-    cons: toStringArray(raw?.cons, 4),
+    pros,
+    cons,
     verdict: String(raw?.verdict ?? '').replace(/\s+/g, ' ').trim().slice(0, 400),
     category: String(raw?.category ?? '').replace(/\s+/g, ' ').trim().slice(0, 60) || undefined,
     pricing: normalizePricing(raw?.pricing),
@@ -733,6 +757,8 @@ export function synthesizeTitleLocally(title: string): string {
     t = `Disco duro SSD ${t}`;
   } else if (/^\bpower\s*bank\b/i.test(t) && !/^\bbater[íi]a\b/i.test(t)) {
     t = `Batería portátil ${t}`;
+  } else if (/^\bbattery\b/i.test(t) && !/^\bbater[íi]a\b/i.test(t)) {
+    t = `Batería externa ${t}`;
   } else if (/^\b(?:tws|earbuds?)\b/i.test(t) && !/^\bauriculares\b/i.test(t)) {
     t = `Auriculares inalámbricos ${t}`;
   } else if (/^\bsmartwatch\b/i.test(t) && !/^\breloj\b/i.test(t)) {
@@ -741,6 +767,14 @@ export function synthesizeTitleLocally(title: string): string {
     t = `Freidora de aire ${t.replace(/^\b(?:air\s*fryer|airfryer)\b\s*/i, '')}`.trim();
   } else if (/^\b(?:conga|roomba)\b/i.test(t) && !/^\brobot\s+aspirador\b/i.test(t)) {
     t = `Robot aspirador ${t}`;
+  } else if (/^\b(?:usb-?c|usb-?a|micro-?usb|hdmi|lightning|type-?c)\b/i.test(t) && !/^\bcable\b/i.test(t)) {
+    t = `Cable ${t}`;
+  } else if (/^\bscooter\b/i.test(t) && !/^\bpatinete\b/i.test(t)) {
+    t = `Patinete eléctrico ${t.replace(/^\bscooter\b\s*/i, '')}`.trim();
+  } else if (/^\bbackpack\b/i.test(t) && !/^\bmochila\b/i.test(t)) {
+    t = `Mochila ${t.replace(/^\bbackpack\b\s*/i, '')}`.trim();
+  } else if (/^\b(?:charger|gan\s*charger)\b/i.test(t) && !/^\bcargador\b/i.test(t)) {
+    t = `Cargador ${t}`;
   }
 
   // Si el título usa separadores ("Marca - modelo - features..."), conserva
@@ -770,7 +804,7 @@ const TITLE_SYSTEM_PROMPT = [
   'Sintetiza y optimiza el título del producto para tarjetas y tablas de productos.',
   'Reglas estrictas:',
   `- Máximo ${MAX_TITLE_LENGTH} caracteres (entre 35 y 70 caracteres).`,
-  '- REGLA OBLIGATORIA: Debe especificar explícitamente la categoría o naturaleza del producto al inicio o de forma clara (ejemplos: transformar "SSD 1TB" en "Disco duro SSD 1TB", "Power bank 10000mAh" en "Batería portátil Power bank 10000mAh", "Crucial P3 Plus 1TB" en "Disco duro SSD Crucial P3 Plus 1TB", "Air Fryer 5L" en "Freidora de aire Cecotec 5L").',
+  '- REGLA OBLIGATORIA: empieza SIEMPRE definiendo qué es el producto (su categoría o naturaleza) antes que la marca o el modelo (ejemplos: "SSD 1TB" → "Disco duro SSD 1TB"; "Power bank 10000mAh" → "Batería portátil Power bank 10000mAh"; "Anker 737" (una batería externa) → "Batería externa Anker 737"; "USB-C a HDMI 2m" → "Cable adaptador USB-C a HDMI 2m"; "Xiaomi Pro 2" (un patinete eléctrico) → "Patinete eléctrico Xiaomi Pro 2"; "40L impermeable" (una mochila) → "Mochila impermeable 40L"; "65W GaN" (un cargador) → "Cargador rápido 65W GaN"; "Air Fryer 5L" → "Freidora de aire Cecotec 5L").',
   '- Estructura: [Categoría/Naturaleza del producto] + [Marca / Modelo] + [Capacidad o rasgo clave].',
   '- Sin precios, sin descuentos, sin argumentos de venta ni superlativos.',
   '- Sin el nombre del comercio ni sufijos de marketplace ("| Amazon.es", "- PcComponentes", "Envío gratis...").',

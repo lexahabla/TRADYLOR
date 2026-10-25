@@ -11,7 +11,7 @@
  *   2) Respaldo cuando la llamada a la IA falla (p. ej. sin créditos).
  */
 
-import { buildRealisticPricing, synthesizeTitleLocally, type EnrichedText } from './ai';
+import { buildRealisticPricing, enforceMoreProsThanCons, synthesizeTitleLocally, type EnrichedText } from './ai';
 
 export interface LocalEnrichInput {
   title: string;
@@ -182,6 +182,12 @@ function buildCons(input: LocalEnrichInput): string[] {
 export function enrichProductLocally(input: LocalEnrichInput): EnrichedText {
   const scrapedPros = Array.isArray(input.pros) ? input.pros.map(cleanBullet).filter(Boolean) : [];
   const scrapedCons = Array.isArray(input.cons) ? input.cons.map(cleanBullet).filter(Boolean) : [];
+  // Siempre más pros que contras (la ficha está para vender): se aplica igual
+  // si los pros/contras vienen del scraping que si son los de la plantilla.
+  const { pros, cons } = enforceMoreProsThanCons(
+    scrapedPros.length ? scrapedPros : buildPros(input),
+    scrapedCons.length ? scrapedCons : buildCons(input)
+  );
 
   return {
     title: synthesizeTitleLocally(input.title) || input.title,
@@ -194,8 +200,8 @@ export function enrichProductLocally(input: LocalEnrichInput): EnrichedText {
             .map(([label, value]) => `${label}: ${value}`)
             .join(' · ')
         : undefined,
-    pros: scrapedPros.length ? scrapedPros : buildPros(input),
-    cons: scrapedCons.length ? scrapedCons : buildCons(input),
+    pros,
+    cons,
     verdict: buildVerdict(input),
     category: input.category,
     // Par oferta/original creíble: respeta el precio de oferta conocido

@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../../lib/adminAuth';
 import { readProductsFromFile, writeProductsToFile, type Product } from '../../../../lib/productStore';
 import { getCategories, suggestCategory } from '../../../../lib/categories';
-import { enrichProductText, hasTextCredentials, textProvider } from '../../../../lib/ai';
+import { enrichProductText, enforceMoreProsThanCons, hasTextCredentials, textProvider } from '../../../../lib/ai';
 import { buildRealisticPricing } from '../../../../lib/ai';
 
 export const prerender = false;
@@ -353,14 +353,28 @@ async function executeActions(actions: OpenCodeAction[], products: Product[], pr
                 url: product.affiliateUrl,
                 price: product.price,
                 originalPrice: product.originalPrice,
+                // Specs ya extraídas por el scraping: fuente de verdad para
+                // que la IA no invente ficha técnica.
+                specs: product.specs,
               });
               if (enrichment.description) product.description = enrichment.description;
               if (enrichment.pros.length) product.pros = enrichment.pros;
               if (enrichment.cons.length) product.cons = enrichment.cons;
+              {
+                // Siempre más pros que contras en lo que queda persistido
+                // (ver enforceMoreProsThanCons): product.pros/cons pueden
+                // venir de asignaciones independientes (líneas de arriba).
+                const balanced = enforceMoreProsThanCons(product.pros ?? [], product.cons ?? []);
+                product.pros = balanced.pros;
+                product.cons = balanced.cons;
+              }
               if (enrichment.verdict) product.verdict = enrichment.verdict;
               if (enrichment.techSheet) product.techSheet = enrichment.techSheet;
               if (enrichment.specs && Object.keys(enrichment.specs).length) {
-                product.specs = { ...(product.specs ?? {}), ...enrichment.specs };
+                // La ficha técnica la marca el comercio: lo ya extraído por el
+                // scraping (product.specs) prevalece sobre lo que "adivine"
+                // la IA para las mismas claves.
+                product.specs = { ...enrichment.specs, ...(product.specs ?? {}) };
               }
               if (enrichment.category && !product.category) product.category = enrichment.category;
               if (enrichment.pricing) {

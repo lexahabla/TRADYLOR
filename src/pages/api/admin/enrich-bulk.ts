@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../lib/adminAuth';
 import {
   enrichProductText,
+  enforceMoreProsThanCons,
   generateProductImage,
   hasTextCredentials,
   hasImageCredentials,
@@ -136,6 +137,7 @@ async function enrichSingleText(
   // Paso 1 — Texto.
   if (hasTextCredentials()) {
     try {
+      const localEnrichment = enrichProductLocally(input);
       const ai = await enrichProductText({
         title: product.title,
         description: product.description,
@@ -143,8 +145,38 @@ async function enrichSingleText(
         url: product.affiliateUrl,
         price: product.price,
         originalPrice: product.originalPrice,
+        // Specs ya extraídas por el scraping: fuente de verdad para que la IA
+        // no invente ficha técnica (paridad con /api/admin/add-product).
+        specs: product.specs,
       });
-      enrichment = { ...enrichProductLocally(input), ...ai };
+      // Overlay: la IA mejora lo local, pero NO borra datos con campos vacíos
+      // (mismo criterio que /api/admin/add-product, para mantener la paridad
+      // de verdad entre este enriquecimiento masivo y el botón «Enriquecer»).
+      const pick = (aiValue: any, localValue: any) => {
+        if (typeof aiValue === 'string') return aiValue.trim() ? aiValue : localValue;
+        if (Array.isArray(aiValue)) return aiValue.length ? aiValue : localValue;
+        return aiValue ?? localValue;
+      };
+      const { pros: pickedPros, cons: pickedCons } = enforceMoreProsThanCons(
+        pick(ai.pros, localEnrichment.pros),
+        pick(ai.cons, localEnrichment.cons)
+      );
+      enrichment = {
+        ...localEnrichment,
+        ...ai,
+        title: pick(ai.title, localEnrichment.title),
+        description: pick(ai.description, localEnrichment.description),
+        verdict: pick(ai.verdict, localEnrichment.verdict),
+        category: pick(ai.category, localEnrichment.category),
+        // La ficha técnica la marca el comercio: lo ya extraído por el
+        // scraping (localEnrichment.specs) prevalece sobre lo que "adivine"
+        // la IA para las mismas claves.
+        specs: { ...(ai.specs ?? {}), ...(localEnrichment.specs ?? {}) },
+        techSheet: pick(ai.techSheet, localEnrichment.techSheet),
+        pros: pickedPros,
+        cons: pickedCons,
+        pricing: ai.pricing ?? localEnrichment.pricing,
+      };
       textStatus = 'ok';
     } catch (err: any) {
       textStatus = 'local';
@@ -185,15 +217,20 @@ async function enrichSingleText(
     product.gallery = filteredGallery.length ? filteredGallery : undefined;
   }
 
-  // Composición final del producto.
+  // Composición final del producto. Pros/contras: siempre más pros que
+  // contras (ver enforceMoreProsThanCons) sobre el PAR final ya resuelto,
+  // por si alguno cae al valor previo del producto y el otro no.
+  const finalPros = Array.isArray(enrichment?.pros) && enrichment.pros.length ? enrichment.pros : (product.pros ?? []);
+  const finalCons = Array.isArray(enrichment?.cons) && enrichment.cons.length ? enrichment.cons : (product.cons ?? []);
+  const { pros: balancedPros, cons: balancedCons } = enforceMoreProsThanCons(finalPros, finalCons);
   const updated: Product = {
     ...product,
     id: product.id,
     title: enrichment?.title?.trim() || product.title,
     title_short: titleShort,
     description: enrichment?.description?.trim() || product.description,
-    pros: Array.isArray(enrichment?.pros) && enrichment.pros.length ? enrichment.pros : product.pros,
-    cons: Array.isArray(enrichment?.cons) && enrichment.cons.length ? enrichment.cons : product.cons,
+    pros: balancedPros,
+    cons: balancedCons,
     verdict: enrichment?.verdict || product.verdict,
     techSheet: enrichment?.techSheet?.trim() || product.techSheet,
     specs: enrichment?.specs && Object.keys(enrichment.specs).length

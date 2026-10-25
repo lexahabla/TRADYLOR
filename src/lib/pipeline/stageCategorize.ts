@@ -11,7 +11,7 @@
  */
 
 import { cleanGeneratedDescription, enrichProductLocally } from '../localEnrich';
-import { enrichProductText, hasTextCredentials, textProvider, type EnrichedText } from '../ai';
+import { enrichProductText, enforceMoreProsThanCons, hasTextCredentials, textProvider, type EnrichedText } from '../ai';
 import {
   createCategory,
   getCategories,
@@ -98,6 +98,7 @@ function overlayText(local: EnrichedText, ai: EnrichedText): EnrichedText {
     if (Array.isArray(aiValue)) return aiValue.length ? aiValue : localValue;
     return aiValue ?? localValue;
   };
+  const { pros, cons } = enforceMoreProsThanCons(pick(ai.pros, local.pros), pick(ai.cons, local.cons));
   return {
     ...local,
     ...ai,
@@ -105,9 +106,16 @@ function overlayText(local: EnrichedText, ai: EnrichedText): EnrichedText {
     description: pick(ai.description, local.description),
     verdict: pick(ai.verdict, local.verdict),
     category: pick(ai.category, local.category),
-    specs: { ...(local.specs ?? {}), ...(ai.specs ?? {}) },
-    pros: pick(ai.pros, local.pros),
-    cons: pick(ai.cons, local.cons),
+    // La ficha técnica la marca el comercio: lo ya extraído por el scraping
+    // (local.specs) prevalece sobre lo que "adivine" la IA para las mismas
+    // claves; la IA sólo aporta claves adicionales que falten.
+    specs: { ...(ai.specs ?? {}), ...(local.specs ?? {}) },
+    techSheet: pick(ai.techSheet, local.techSheet),
+    // Siempre más pros que contras (ver enforceMoreProsThanCons): se calcula
+    // sobre el par ya elegido por pick(), que puede mezclar pros de una
+    // fuente con contras de otra.
+    pros,
+    cons,
     pricing: ai.pricing ?? local.pricing,
   };
 }
@@ -241,6 +249,9 @@ export async function runStageCategorize(
           url: next.affiliateUrl,
           price: next.price,
           originalPrice: next.originalPrice,
+          // Specs ya extraídas por el scraping: fuente de verdad para que la
+          // IA no invente ficha técnica (la marca el comercio, no la IA).
+          specs: next.specs,
         },
         options.provider || options.model
           ? { provider: options.provider, model: options.model }
