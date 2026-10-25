@@ -615,6 +615,13 @@ export interface AliFilterHost {
   getEstadoIndex(): Map<string, AliImportState>;
   /** Se llama cada vez que cambian filtros u orden: hay que repintar la tabla. */
   onChange(): void;
+  /**
+   * Nombre legible de una red/comerciante a partir de su id (p. ej. `amazon`
+   * → «Amazon Associates»), para agrupar Categoría/Subcategoría con
+   * `<optgroup>` cuando se ven todos los comerciantes a la vez. Si no se
+   * aporta, se usa el id tal cual.
+   */
+  getNetworkLabel?(id: string): string;
 }
 
 /** API que el panel usa tras montar la barra. */
@@ -768,6 +775,38 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
   let products: UnifiedProduct[] = [];
   let availability: AliFilterAvailability = { freeShipping: false, choice: false, hotCommission: false, secondHand: false };
 
+  /** Nombre legible del comerciante/red de un producto (para agrupar con `<optgroup>`). */
+  const networkLabelOf = (product: UnifiedProduct): string => {
+    const id = String(product.network ?? '').trim();
+    if (!id) return '';
+    return host.getNetworkLabel ? host.getNetworkLabel(id) : id;
+  };
+
+  /**
+   * Entradas únicas `{valor, etiqueta, grupo}` para un select agrupado por
+   * comerciante. Con un comerciante concreto ya seleccionado no hace falta
+   * agrupar (sería un único grupo): se deja el campo `group` vacío y
+   * `setGroupedOptions` pinta una lista plana.
+   */
+  const buildCategoryEntries = (
+    list: UnifiedProduct[],
+    categoryOf: (product: UnifiedProduct) => string,
+    groupByNetwork: boolean,
+  ): Array<{ value: string; label: string; group: string }> => {
+    const seen = new Set<string>();
+    const entries: Array<{ value: string; label: string; group: string }> = [];
+    for (const product of list) {
+      const value = categoryOf(product);
+      if (!value) continue;
+      const group = groupByNetwork ? networkLabelOf(product) : '';
+      const key = `${group}\u0000${value}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      entries.push({ value, label: value, group });
+    }
+    return entries;
+  };
+
   /* ── lectura de la UI → estado ─────────────────────────────────────────── */
 
   const numValue = (node: HTMLElement | null): number | undefined => {
@@ -841,46 +880,89 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     select.value = keep && values.includes(keep) ? keep : '';
   };
 
+  /**
+   * Igual que `setOptions`, pero agrupado por comerciante/red con `<optgroup>`
+   * reales (no un simple prefijo de texto): cada comerciante aparece como
+   * cabecera de grupo y sus categorías/subcategorías cuelgan de ella, bien
+   * ordenadas alfabéticamente tanto los grupos como las opciones dentro de
+   * cada uno. Si sólo hay UN comerciante representado (o ya se filtró por
+   * uno concreto), se pinta como lista plana, sin optgroup, para no generar
+   * una agrupación de un solo elemento sin sentido.
+   */
+  const setGroupedOptions = (
+    select: HTMLSelectElement | null,
+    entries: Array<{ value: string; label: string; group: string }>,
+    anyLabel: string,
+    keep?: string,
+  ): void => {
+    if (!select) return;
+    const fragment = document.createDocumentFragment();
+    const any = document.createElement('option');
+    any.value = '';
+    any.textContent = anyLabel;
+    fragment.appendChild(any);
+
+    const groups = new Map<string, Array<{ value: string; label: string }>>();
+    for (const entry of entries) {
+      const key = entry.group || '';
+      const list = groups.get(key) ?? [];
+      list.push({ value: entry.value, label: entry.label });
+      groups.set(key, list);
+    }
+
+    const groupNames = [...groups.keys()].sort((a, b) => a.localeCompare(b, 'es'));
+    const singleGroup = groupNames.length <= 1;
+
+    for (const groupName of groupNames) {
+      const items = (groups.get(groupName) ?? []).sort((a, b) => a.label.localeCompare(b.label, 'es'));
+      const container: HTMLOptGroupElement | DocumentFragment = singleGroup || !groupName
+        ? fragment
+        : document.createElement('optgroup');
+      if (container instanceof HTMLOptGroupElement) container.label = groupName;
+      for (const item of items) {
+        const option = document.createElement('option');
+        option.value = item.value;
+        option.textContent = item.label;
+        container.appendChild(option);
+      }
+      if (container instanceof HTMLOptGroupElement) fragment.appendChild(container);
+    }
+
+    select.textContent = '';
+    select.appendChild(fragment);
+    select.value = keep && entries.some((entry) => entry.value === keep) ? keep : '';
+  };
+
   function populateFacets(): void {
     // Filtrar productos por comerciante/red si hay uno seleccionado, para que
     // las categorías y subcategorías que se ofrezcan sean solo las de ese
     // comerciante. Cuando no hay comerciante seleccionado ("Todas"), se
-    // muestran todas las categorías precedidas del nombre del comerciante.
+    // agrupan con <optgroup> bajo el nombre de cada comerciante (no un simple
+    // prefijo de texto): así se ve claramente dónde empieza cada comerciante
+    // y qué categorías/subcategorías le pertenecen.
     const network = params.network || '';
     const productsForCats = network
       ? products.filter((p) => String(p.network ?? '').trim().toLowerCase() === network.trim().toLowerCase())
       : products;
+    const groupByNetwork = !network;
 
-    const l1Raw = [...new Set(productsForCats.map(categoryL1).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
-    const l1Labels = network
-      ? l1Raw
-      : l1Raw.map((c) => {
-          const owner = productsForCats.find((p) => categoryL1(p) === c);
-          const net = owner ? String(owner.network ?? '').trim() : '';
-          return net ? `${net} › ${c}` : c;
-        });
-    setOptions(el.aliFCat1 as HTMLSelectElement | null, l1Raw, 'Todas', params.catL1, l1Labels);
+    const l1Entries = buildCategoryEntries(productsForCats, categoryL1, groupByNetwork);
+    setGroupedOptions(el.aliFCat1 as HTMLSelectElement | null, l1Entries, 'Todas', params.catL1);
     params.catL1 = (el.aliFCat1 as HTMLSelectElement | null)?.value || '';
 
-    const l2Raw = params.catL1
-      ? [...new Set(productsForCats.filter((p) => categoryL1(p) === params.catL1).map(categoryL2).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'))
-      : [...new Set(productsForCats.map(categoryL2).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
-    const l2Labels = network
-      ? l2Raw
-      : l2Raw.map((c) => {
-          const owner = productsForCats.find((p) => categoryL2(p) === c);
-          const net = owner ? String(owner.network ?? '').trim() : '';
-          return net ? `${net} › ${c}` : c;
-        });
-    setOptions(el.aliFCat2 as HTMLSelectElement | null, l2Raw, params.catL1 ? 'Todas' : '—', params.catL2, l2Labels);
+    const productsForL2 = params.catL1
+      ? productsForCats.filter((p) => categoryL1(p) === params.catL1)
+      : productsForCats;
+    const l2Entries = buildCategoryEntries(productsForL2, categoryL2, groupByNetwork);
+    setGroupedOptions(el.aliFCat2 as HTMLSelectElement | null, l2Entries, params.catL1 ? 'Todas' : '—', params.catL2);
     params.catL2 = (el.aliFCat2 as HTMLSelectElement | null)?.value || '';
     const l2Select = el.aliFCat2 as HTMLSelectElement | null;
     if (l2Select) {
-      l2Select.disabled = l2.length === 0;
-      l2Select.title = l2.length === 0 ? 'Esta categoría no tiene subcategorías en la caché' : '';
+      l2Select.disabled = l2Entries.length === 0;
+      l2Select.title = l2Entries.length === 0 ? 'Esta categoría no tiene subcategorías en la caché' : '';
     }
 
-    const shops = [...new Set(productsForCats.map((p) => extra(p, 'Tienda')).filter((v): v is string => Boolean(v)))].sort();
+    const shops = [...new Set(productsForCats.map((p) => extra(p, 'Tienda')).filter((v): v is string => Boolean(v)))].sort((a, b) => a.localeCompare(b, 'es'));
     setOptions(el.aliFShop as HTMLSelectElement | null, shops, 'Todas', params.shop);
     params.shop = (el.aliFShop as HTMLSelectElement | null)?.value || '';
   }
@@ -1037,12 +1119,13 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     host.onChange();
   };
 
-  // La L1 la gestiona su propio listener en cascada (más abajo): si también la
-  // leyera onControlChange leería la L2 vieja antes de repueblarla.
+  // La L1 y la Red/Comerciante gestionan su propio listener en cascada (más
+  // abajo): si `onControlChange` también las leyera, repintaría la L2/los
+  // listados de categoría con el valor viejo antes de repueblarlos.
   for (const id of [
     'aliFQ', 'aliFCat2', 'aliFState', 'aliFPriceMin', 'aliFPriceMax', 'aliFCommMin', 'aliFCommUnit',
     'aliFSalesMin', 'aliFRatingMin', 'aliFDiscMin', 'aliFImages', 'aliFFreeShip', 'aliFChoice',
-    'aliFHot', 'aliFSecondHand', 'aliFShop', 'aliFNetwork', 'aliFSort',
+    'aliFHot', 'aliFSecondHand', 'aliFShop', 'aliFSort',
   ] as const) {
     const node = el[id];
     if (!node) continue;
@@ -1051,7 +1134,8 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     node.addEventListener(liveTyping ? 'input' : 'change', onControlChange);
   }
 
-  // Categoría L2 en cascada: al cambiar la L1 se repuebla la L2
+  // Categoría L2 en cascada: al cambiar la L1 se repuebla la L2 (agrupada por
+  // comerciante si se están viendo todos a la vez).
   (el.aliFCat1 as HTMLSelectElement | null)?.addEventListener('change', () => {
     params.catL1 = (el.aliFCat1 as HTMLSelectElement | null)?.value || '';
     params.catL2 = '';
@@ -1061,19 +1145,27 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
       : products;
     const l2Select = el.aliFCat2 as HTMLSelectElement | null;
     if (l2Select) {
-      const l2 = params.catL1
-        ? [...new Set(productsForCats.filter((p) => categoryL1(p) === params.catL1).map(categoryL2).filter(Boolean))].sort()
-        : [];
-      const l2Labels = network
-        ? l2
-        : l2.map((c) => {
-            const owner = productsForCats.find((p) => categoryL2(p) === c);
-            const net = owner ? String(owner.network ?? '').trim() : '';
-            return net ? `${net} › ${c}` : c;
-          });
-      setOptions(l2Select, l2, 'Todas', '', l2Labels);
-      l2Select.disabled = l2.length === 0;
+      const productsForL2 = params.catL1 ? productsForCats.filter((p) => categoryL1(p) === params.catL1) : [];
+      const l2Entries = buildCategoryEntries(productsForL2, categoryL2, !network);
+      setGroupedOptions(l2Select, l2Entries, params.catL1 ? 'Todas' : '—', '');
+      l2Select.disabled = l2Entries.length === 0;
+      l2Select.title = l2Entries.length === 0 ? 'Esta categoría no tiene subcategorías en la caché' : '';
     }
+    activePreset = null;
+    paintIndicators();
+    host.onChange();
+  });
+
+  // Comerciante/Red en cascada: al cambiar, Categoría y Subcategoría se
+  // repueblan para mostrar SÓLO las del comerciante elegido (o agrupadas por
+  // comerciante si se vuelve a «Todas»). La categoría/subcategoría elegidas
+  // se restablecen: no tendría sentido conservar una categoría de un
+  // comerciante distinto al recién seleccionado.
+  (el.aliFNetwork as HTMLSelectElement | null)?.addEventListener('change', () => {
+    params.network = (el.aliFNetwork as HTMLSelectElement | null)?.value || '';
+    params.catL1 = '';
+    params.catL2 = '';
+    populateFacets();
     activePreset = null;
     paintIndicators();
     host.onChange();

@@ -665,6 +665,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <label for="prodSubcatAssign">Subcategoría</label>
             <select id="prodSubcatAssign"><option value="">Todas las subcategorías</option></select>
           </div>
+          <div class="filter-field">
+            <label for="prodFMerchant">Comerciante</label>
+            <select id="prodFMerchant" title="Filtra por el comerciante/red de afiliación del producto en el catálogo"><option value="">Todos los comerciantes</option></select>
+          </div>
           <div class="filter-field ali-sort-field">
             <label for="prodFSort">Ordenar por</label>
             <div class="ali-sort-group">
@@ -909,17 +913,20 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
           <!-- CAPA 2 · Filtros principales + ordenación -->
           <div class="ali-filters-row">
+            <!-- El Comerciante/Red va PRIMERO: es el filtro "padre" del que
+                 dependen Categoría y Subcategoría (cascada), igual que
+                 Categoría → Subcategoría. -->
+            <div class="filter-field ali-f-network">
+              <label for="aliFNetwork">Comerciante / Red</label>
+              <select id="aliFNetwork" title="Filtra por la red de afiliación (comerciante) de origen: las categorías y subcategorías se ajustan al elegido"><option value="">Todas</option></select>
+            </div>
             <div class="filter-field ali-f-cat">
               <label for="aliFCat1">Categoría</label>
-              <select id="aliFCat1"><option value="">Todas</option></select>
+              <select id="aliFCat1" title="Con 'Todas' en Comerciante, se agrupan por comerciante (optgroup)"><option value="">Todas</option></select>
             </div>
             <div class="filter-field ali-f-cat">
               <label for="aliFCat2">Subcategoría</label>
               <select id="aliFCat2" disabled><option value="">Todas</option></select>
-            </div>
-            <div class="filter-field ali-f-network">
-              <label for="aliFNetwork">Comerciante / Red</label>
-              <select id="aliFNetwork" title="Filtra por la red de afiliación (comerciante) de origen"><option value="">Todas</option></select>
             </div>
             <div class="filter-field ali-f-state">
               <label for="aliFState">En catálogo</label>
@@ -1678,6 +1685,25 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   )}
 </Layout>
 
+<!--
+  Módulo de filtros del catálogo AliExpress (TypeScript, bundled por Astro).
+  Se publica en `window` porque el script principal del panel es `is:inline`
+  (JS clásico, sin imports): los módulos se ejecutan SIEMPRE antes de
+  DOMContentLoaded, así que el panel lo encuentra montado en su arranque.
+  IMPORTANTE: este script vive FUERA del condicional `{isAuthenticated && ...}`
+  a propósito. Astro sólo hoistea/bundlea un `<script>` (sin `is:inline`) si
+  puede analizarlo de forma estática en el árbol de la plantilla; anidado
+  dentro de una expresión condicional (`{cond && (...)}`) el compilador no lo
+  reconocía y lo dejaba como texto literal sin procesar (el navegador fallaba
+  con «Cannot use import statement outside a module» y la barra de filtros de
+  Afiliados quedaba completamente inoperativa). Ejecutarlo siempre es inocuo:
+  sólo expone funciones puras en `window`, no toca el DOM.
+-->
+<script>
+  import { filterAliCatalog, mountAliFilters, queryAliCatalog } from '../utils/aliCatalogFilters';
+  window.tradylorAliFilters = { filterAliCatalog, mountAliFilters, queryAliCatalog };
+</script>
+
 {isAuthenticated && sessionUser && sessionUser.role === 'admin' && (
 <!-- Modal para crear/editar sección con productos seleccionados -->
 <div class="admin-modal" id="createSectionModal" hidden role="dialog" aria-modal="true" aria-labelledby="createSectionModalTitle">
@@ -1738,16 +1764,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   } catch (_) {
     window.__INITIAL_PRODUCTS__ = [];
   }
-</script>
-<!--
-  Módulo de filtros del catálogo AliExpress (TypeScript, bundled por Astro).
-  Se publica en `window` porque el script principal del panel es `is:inline`
-  (JS clásico, sin imports): los módulos se ejecutan SIEMPRE antes de
-  DOMContentLoaded, así que el panel lo encuentra montado en su arranque.
--->
-<script>
-  import { filterAliCatalog, mountAliFilters, queryAliCatalog } from '../utils/aliCatalogFilters';
-  window.tradylorAliFilters = { filterAliCatalog, mountAliFilters, queryAliCatalog };
 </script>
 <script is:inline>
   // Inicialización de estado y elementos DOM
@@ -2992,6 +3008,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           currentProducts = data.products;
           aliInvalidateEstado();
           prodBuildRanges();
+          syncMerchantFilter();
           prodFilterApply();
           // El filtro «Estado» de la tabla de afiliados se calcula con esta lista.
           try {
@@ -3549,34 +3566,27 @@ function renderTableRows(products, resetPage = true) {
       const q = (inputFilterList?.value || '').trim().toLowerCase();
       const cat = prodFCat?.value || '';
       const subcatId = prodSubcatFilter?.value || '';
-      // Filtros de affiliateFilters (Categoría, Subcategoría, Comerciante/Red)
-      // que también actúan sobre la tabla de productos registrados (#productsTable).
-      const aliCat = document.getElementById('aliFCat1')?.value || '';
-      const aliSubcat = document.getElementById('aliFCat2')?.value || '';
-      const aliNetwork = document.getElementById('aliFNetwork')?.value || '';
-      const merchant = (document.getElementById('prodFMerchant')?.value || aliNetwork || '').trim().toLowerCase();
+      const merchant = (document.getElementById('prodFMerchant')?.value || '').trim().toLowerCase();
       const sortKey = prodFSort?.value || 'publicados';
       const dir = prodSortDir === 'asc' ? 1 : -1;
       const prodRange = prodReadRangeFilters();
       const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
 
       const filtered = currentProducts.filter((product) => {
-        // Filtro de categoría: usa prodFCat si está seteado, si no aliFCat1 (affiliateFilters)
-        const activeCat = cat || aliCat;
-        if (activeCat) {
-          const root = allCats.find((c) => !c.parentId && (c.name === activeCat || c.id === activeCat));
+        // Filtro de categoría (taxonomía propia de Tradylor: categoriesCache).
+        if (cat) {
+          const root = allCats.find((c) => !c.parentId && (c.name === cat || c.id === cat));
           const productCat = String(product.category || '');
           const productSub = product.subcategory_id ? allCats.find((c) => c.id === product.subcategory_id) : null;
-          const matchCat = productCat === activeCat
+          const matchCat = productCat === cat
             || Boolean(root && (product.category_id === root.id || (productSub && productSub.parentId === root.id)));
           if (!matchCat) return false;
         }
-        // Filtro de subcategoría: usa prodSubcatFilter si está seteado, si no aliFCat2 (affiliateFilters)
-        const activeSubcat = subcatId || aliSubcat;
-        if (activeSubcat) {
-          const target = allCats.find((c) => c.id === activeSubcat);
+        // Filtro de subcategoría (idem).
+        if (subcatId) {
+          const target = allCats.find((c) => c.id === subcatId);
           const pid = String(product.subcategory_id || '');
-          let matchSub = pid === activeSubcat;
+          let matchSub = pid === subcatId;
           if (!matchSub && target) {
             const psub = pid ? allCats.find((c) => c.id === pid) : null;
             const pname = String(psub ? psub.name : pid || '').toLowerCase();
@@ -3584,7 +3594,7 @@ function renderTableRows(products, resetPage = true) {
           }
           if (!matchSub) return false;
         }
-        // Filtro de comerciante: usa prodFMerchant (eliminado del HTML) o aliFNetwork (affiliateFilters)
+        // Filtro de comerciante (prodFMerchant: valores reales de product.merchant/network_label).
         if (merchant) {
           const m = String(product.merchant || product.network_label || '').trim().toLowerCase();
           if (m !== merchant) return false;
@@ -3882,13 +3892,6 @@ function renderTableRows(products, resetPage = true) {
       if (prodFSort) prodFSort.value = 'default';
       prodSortDir = 'desc';
       if (prodFSortDir) prodFSortDir.textContent = '↓';
-      // Limpiar también los filtros de affiliateFilters que afectan a products-table
-      const aliFCat1 = document.getElementById('aliFCat1');
-      const aliFCat2 = document.getElementById('aliFCat2');
-      const aliFNetwork = document.getElementById('aliFNetwork');
-      if (aliFCat1) aliFCat1.value = '';
-      if (aliFCat2) aliFCat2.value = '';
-      if (aliFNetwork) aliFNetwork.value = '';
       const priceMin = document.getElementById('prodFPriceMin');
       const priceMax = document.getElementById('prodFPriceMax');
       const discRange = document.getElementById('prodFDiscRange');
@@ -3903,15 +3906,6 @@ function renderTableRows(products, resetPage = true) {
     // así que se escuchan de forma delegada sobre el contenedor.
     prodRangeFields?.addEventListener('input', prodFilterApply);
     prodRangeFields?.addEventListener('change', prodFilterApply);
-
-    // Los filtros de affiliateFilters (Categoría, Subcategoría, Comerciante/Red)
-    // también actúan sobre la tabla de productos registrados (#productsTable).
-    const aliFCat1 = document.getElementById('aliFCat1');
-    const aliFCat2 = document.getElementById('aliFCat2');
-    const aliFNetwork = document.getElementById('aliFNetwork');
-    aliFCat1?.addEventListener('change', prodFilterApply);
-    aliFCat2?.addEventListener('change', prodFilterApply);
-    aliFNetwork?.addEventListener('change', prodFilterApply);
 
      function updateProdSelCount() {
       if (productSelCount) productSelCount.textContent = `${selectedProductIds.size} seleccionado${selectedProductIds.size === 1 ? '' : 's'}`;
@@ -5838,6 +5832,10 @@ function renderTableRows(products, resetPage = true) {
         getProducts: () => aliProducts,
         getEstadoIndex: () => aliEstadoIndex(),
         onChange: onAliFilterChange,
+        getNetworkLabel: (id) => {
+          const match = (networksCache || []).find((n) => n.id === id);
+          return match ? match.name : id;
+        },
       });
     }
 
