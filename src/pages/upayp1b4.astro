@@ -3549,28 +3549,34 @@ function renderTableRows(products, resetPage = true) {
       const q = (inputFilterList?.value || '').trim().toLowerCase();
       const cat = prodFCat?.value || '';
       const subcatId = prodSubcatFilter?.value || '';
-      const merchant = (document.getElementById('prodFMerchant')?.value || '').trim().toLowerCase();
+      // Filtros de affiliateFilters (Categoría, Subcategoría, Comerciante/Red)
+      // que también actúan sobre la tabla de productos registrados (#productsTable).
+      const aliCat = document.getElementById('aliFCat1')?.value || '';
+      const aliSubcat = document.getElementById('aliFCat2')?.value || '';
+      const aliNetwork = document.getElementById('aliFNetwork')?.value || '';
+      const merchant = (document.getElementById('prodFMerchant')?.value || aliNetwork || '').trim().toLowerCase();
       const sortKey = prodFSort?.value || 'publicados';
       const dir = prodSortDir === 'asc' ? 1 : -1;
       const prodRange = prodReadRangeFilters();
       const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
 
       const filtered = currentProducts.filter((product) => {
-        if (cat) {
-          // Filtro de categoría: casa el texto legado (product.category) o la
-          // jerarquía real (category_id / subcategoría hija de la raíz elegida).
-          const root = allCats.find((c) => !c.parentId && (c.name === cat || c.id === cat));
+        // Filtro de categoría: usa prodFCat si está seteado, si no aliFCat1 (affiliateFilters)
+        const activeCat = cat || aliCat;
+        if (activeCat) {
+          const root = allCats.find((c) => !c.parentId && (c.name === activeCat || c.id === activeCat));
           const productCat = String(product.category || '');
           const productSub = product.subcategory_id ? allCats.find((c) => c.id === product.subcategory_id) : null;
-          const matchCat = productCat === cat
+          const matchCat = productCat === activeCat
             || Boolean(root && (product.category_id === root.id || (productSub && productSub.parentId === root.id)));
           if (!matchCat) return false;
         }
-        if (subcatId) {
-          // Filtro de subcategoría (id del categories.json, con fallback por nombre).
-          const target = allCats.find((c) => c.id === subcatId);
+        // Filtro de subcategoría: usa prodSubcatFilter si está seteado, si no aliFCat2 (affiliateFilters)
+        const activeSubcat = subcatId || aliSubcat;
+        if (activeSubcat) {
+          const target = allCats.find((c) => c.id === activeSubcat);
           const pid = String(product.subcategory_id || '');
-          let matchSub = pid === subcatId;
+          let matchSub = pid === activeSubcat;
           if (!matchSub && target) {
             const psub = pid ? allCats.find((c) => c.id === pid) : null;
             const pname = String(psub ? psub.name : pid || '').toLowerCase();
@@ -3578,6 +3584,7 @@ function renderTableRows(products, resetPage = true) {
           }
           if (!matchSub) return false;
         }
+        // Filtro de comerciante: usa prodFMerchant (eliminado del HTML) o aliFNetwork (affiliateFilters)
         if (merchant) {
           const m = String(product.merchant || product.network_label || '').trim().toLowerCase();
           if (m !== merchant) return false;
@@ -3875,6 +3882,13 @@ function renderTableRows(products, resetPage = true) {
       if (prodFSort) prodFSort.value = 'default';
       prodSortDir = 'desc';
       if (prodFSortDir) prodFSortDir.textContent = '↓';
+      // Limpiar también los filtros de affiliateFilters que afectan a products-table
+      const aliFCat1 = document.getElementById('aliFCat1');
+      const aliFCat2 = document.getElementById('aliFCat2');
+      const aliFNetwork = document.getElementById('aliFNetwork');
+      if (aliFCat1) aliFCat1.value = '';
+      if (aliFCat2) aliFCat2.value = '';
+      if (aliFNetwork) aliFNetwork.value = '';
       const priceMin = document.getElementById('prodFPriceMin');
       const priceMax = document.getElementById('prodFPriceMax');
       const discRange = document.getElementById('prodFDiscRange');
@@ -3889,6 +3903,15 @@ function renderTableRows(products, resetPage = true) {
     // así que se escuchan de forma delegada sobre el contenedor.
     prodRangeFields?.addEventListener('input', prodFilterApply);
     prodRangeFields?.addEventListener('change', prodFilterApply);
+
+    // Los filtros de affiliateFilters (Categoría, Subcategoría, Comerciante/Red)
+    // también actúan sobre la tabla de productos registrados (#productsTable).
+    const aliFCat1 = document.getElementById('aliFCat1');
+    const aliFCat2 = document.getElementById('aliFCat2');
+    const aliFNetwork = document.getElementById('aliFNetwork');
+    aliFCat1?.addEventListener('change', prodFilterApply);
+    aliFCat2?.addEventListener('change', prodFilterApply);
+    aliFNetwork?.addEventListener('change', prodFilterApply);
 
      function updateProdSelCount() {
       if (productSelCount) productSelCount.textContent = `${selectedProductIds.size} seleccionado${selectedProductIds.size === 1 ? '' : 's'}`;
@@ -8774,12 +8797,12 @@ function renderTableRows(products, resetPage = true) {
     flex: 1 1 0;
     width: auto;
     min-width: 0;
-    background: var(--color-bg-main) !important;
-    color: var(--color-text-main) !important;
-    border: 1px solid var(--color-border) !important;
-    border-radius: var(--border-radius-sm) !important;
-    padding: .45rem .6rem !important;
-    outline: none !important;
+    background: var(--color-bg-main);
+    color: var(--color-text-main);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    padding: .45rem .6rem;
+    outline: none;
   }
   .prod-filters :global(.filter-field.prod-range-field .ali-pair input::placeholder) { color: var(--color-text-dim); }
   .prod-filters :global(.filter-field.prod-range-field .ali-pair-sep) { display: flex; align-items: center; color: var(--color-text-dim); font-size: .7rem; }
@@ -10837,7 +10860,7 @@ function renderTableRows(products, resetPage = true) {
   :global(.preset-chip:hover) { color: var(--color-text-main); border-color: rgba(96, 165, 250, .45); }
   :global(.preset-chip-clear) { color: #fca5a5; border-color: rgba(239, 68, 68, .3); }
   :global(.preset-chip-action) { color: #86efac; border-color: rgba(34, 197, 94, .3); }
-  :global(.preset-chip.is-active) { color: #04121f; background: linear-gradient(135deg, #38bdf8, #22d3ee); border-color: transparent; box-shadow: 0 4px 12px rgba(56, 189, 248, .28); }
+  :global(.preset-chip[aria-pressed="true"]) { color: #04121f; background: linear-gradient(135deg, #38bdf8, #22d3ee); border-color: transparent; box-shadow: 0 4px 12px rgba(56, 189, 248, .28); }
 
   :global(.score-badge) {
     display: inline-flex;
