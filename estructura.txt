@@ -36,6 +36,7 @@ src/components/admin/TrafficSalesDashboard.astro
 src/components/AdminNav.astro
 src/components/AdminUserMenu.astro
 src/components/AffiliateLink.astro
+src/components/AsistenteIAWidget.astro
 src/components/AuthModal.astro
 src/components/CategoryMenu.astro
 src/components/CategoryNav.astro
@@ -166,6 +167,7 @@ src/pages/api/admin/users/[id].ts
 src/pages/api/admin/users/[id]/avatar.ts
 src/pages/api/admin/users/index.ts
 src/pages/api/analytics/event.ts
+src/pages/api/asistente-ia.ts
 src/pages/api/categories/[id].ts
 src/pages/api/categories/index.ts
 src/pages/api/ebay/search.ts

@@ -15,6 +15,7 @@ export interface Props {
 
 import ReturnBanner from '../components/ReturnBanner.astro';
 import AuthModal from '../components/AuthModal.astro';
+import AsistenteIAWidget from '../components/AsistenteIAWidget.astro';
 import { GOOGLE_TRANSLATE_LANGS } from '../utils/translate';
 import { getCategories, type Category } from '../lib/categories';
 import { readSections } from '../lib/sections';
@@ -4516,6 +4517,10 @@ const headerCategoryPanelHtml = `
       })();
     </script>
   )}
+
+    {!isBackend && (
+      <AsistenteIAWidget />
+    )}
 
   </body>
 </html>

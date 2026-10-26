@@ -1,0 +1,246 @@
+---
+/**
+ * TRADYLOR — WIDGET FLOTANTE ASISTENTE IA (Gemini)
+ *
+ * Chat flotante (esquina inferior derecha) que consume
+ * POST /api/asistente-ia. Se inyecta en Layout.astro para que esté disponible
+ * en todas las páginas públicas.
+ */
+
+export interface Props {
+  /** Texto del botón de apertura. */
+  toggleLabel?: string;
+  /** Título de la cabecera del chat. */
+  headerTitle?: string;
+  /** Placebo del input. */
+  inputPlaceholder?: string;
+}
+
+const {
+  toggleLabel = '💬 Dependiente IA',
+  headerTitle = 'Tradylor · Assistent IA',
+  inputPlaceholder = 'Pregunta sobre qualsevol producte…',
+} = Astro.props;
+---
+
+<div id="tradylor-ia-widget">
+  <button id="ia-toggle-btn" type="button" aria-label="Abrir asistente de IA">
+    {toggleLabel}
+  </button>
+  <div id="ia-chat-window" class="hidden" role="dialog" aria-modal="true" aria-label="Chat asistente IA">
+    <div class="chat-header">
+      <span>{headerTitle}</span>
+      <button id="ia-close-btn" type="button" aria-label="Cerrar chat">✕</button>
+    </div>
+    <div id="ia-messages" role="log" aria-live="polite"></div>
+    <div class="chat-input-container">
+      <input
+        type="text"
+        id="ia-input"
+        placeholder={inputPlaceholder}
+        aria-label="Escribe tu consulta al asistente IA"
+      />
+      <button id="ia-send-btn" type="button">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<style is:global>
+  #tradylor-ia-widget {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 9999;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+
+  #ia-toggle-btn {
+    background-color: #0f172a;
+    color: #ffffff;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-size: 14px;
+    line-height: 1;
+  }
+
+  #ia-toggle-btn:hover {
+    background-color: #1e293b;
+  }
+
+  #ia-chat-window {
+    width: 350px;
+    height: 450px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: absolute;
+    bottom: 60px;
+    right: 0;
+  }
+
+  #ia-chat-window.hidden {
+    display: none;
+  }
+
+  .chat-header {
+    background: #0f172a;
+    color: #fff;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-weight: 600;
+    font-size: 15px;
+  }
+
+  .chat-header button {
+    background: none;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  #ia-messages {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 14px;
+    background: #f8fafc;
+  }
+
+  .msg-user {
+    align-self: flex-end;
+    background: #e2e8f0;
+    padding: 8px 12px;
+    border-radius: 12px 12px 0 12px;
+    color: #1e293b;
+    max-width: 80%;
+  }
+
+  .msg-ia {
+    align-self: flex-start;
+    background: #f1f5f9;
+    padding: 8px 12px;
+    border-radius: 12px 12px 12px 0;
+    border-left: 3px solid #3b82f6;
+    color: #1e293b;
+    max-width: 80%;
+  }
+
+  .chat-input-container {
+    display: flex;
+    border-top: 1px solid #e2e8f0;
+    padding: 8px;
+    background: #fff;
+  }
+
+  #ia-input {
+    flex: 1;
+    border: 1px solid #e2e8f0;
+    outline: none;
+    padding: 8px;
+    font-size: 14px;
+    border-radius: 6px;
+  }
+
+  #ia-input:focus {
+    border-color: #3b82f6;
+  }
+
+  #ia-send-btn {
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 14px;
+    margin-left: 6px;
+  }
+
+  #ia-send-btn:hover {
+    background: #1d4ed8;
+  }
+</style>
+
+<script is:inline>
+  (() => {
+    const toggleBtn = document.getElementById('ia-toggle-btn');
+    const closeBtn = document.getElementById('ia-close-btn');
+    const chatWindow = document.getElementById('ia-chat-window');
+    const sendBtn = document.getElementById('ia-send-btn');
+    const input = document.getElementById('ia-input');
+    const messagesContainer = document.getElementById('ia-messages');
+
+    if (toggleBtn && closeBtn && chatWindow) {
+      toggleBtn.addEventListener('click', () => chatWindow.classList.toggle('hidden'));
+      closeBtn.addEventListener('click', () => chatWindow.classList.add('hidden'));
+    }
+
+    async function enviarMensaje() {
+      const texto = input && input.value.trim();
+      if (!texto) return;
+
+      if (messagesContainer) {
+        messagesContainer.innerHTML += `<div class="msg-user">${escapeHtml(texto)}</div>`;
+      }
+      if (input) input.value = '';
+      if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+      const loadingId = 'loading-' + Date.now();
+      if (messagesContainer) {
+        messagesContainer.innerHTML += `<div class="msg-ia" id="${loadingId}">Pensant…</div>`;
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      }
+
+      try {
+        const res = await fetch('/api/asistente-ia', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mensajeUsuario: texto,
+            contextoProducto: {},
+          }),
+        });
+
+        const data = await res.json();
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) {
+          loadingEl.innerText = data.respuesta || 'Error de connexión con el servidor.';
+        }
+      } catch (error) {
+        const loadingEl = document.getElementById(loadingId);
+        if (loadingEl) {
+          loadingEl.innerText = 'Error de connexión con el servidor.';
+        }
+      }
+
+      if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function escapeHtml(texto) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return String(texto).replace(/[&<>"']/g, (ch) => map[ch] ?? ch);
+    }
+
+    if (sendBtn && input) {
+      sendBtn.addEventListener('click', enviarMensaje);
+      input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') enviarMensaje();
+      });
+    }
+  })();
+</script>
