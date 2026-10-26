@@ -2917,7 +2917,7 @@ const headerCategoryPanelHtml = `
                         <svg class="header-user-menu-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
                       </a>
                       <div class="header-user-menu-divider" role="separator"></div>
-                      <a href="/herramientas/" class="header-user-menu-btn">
+                      <a href="/herramientas/perfilador" class="header-user-menu-btn">
                         <span class="header-user-menu-icon header-user-menu-icon--blue" aria-hidden="true">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21v-1a8 8 0 0 1 16 0v1" /></svg>
                         </span>
@@ -3023,7 +3023,7 @@ const headerCategoryPanelHtml = `
                   <svg class="nav-dropdown-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </button>
                 <div class="nav-dropdown-panel" id="navHerramientasPanel" data-herramientas-panel hidden>
-                  <a href="/herramientas/" class="nav-dropdown-item">
+                  <a href="/herramientas/perfilador" class="nav-dropdown-item">
                     <span class="nav-dropdown-item-icon" aria-hidden="true">👤</span> Perfilador de Compra
                   </a>
                   <a href="/herramientas/comparador" class="nav-dropdown-item">
@@ -3856,7 +3856,7 @@ const headerCategoryPanelHtml = `
           if (profiles.length === 0) {
             buyerProfilePanel.innerHTML = `
               <p class="nav-profile-hint">Aún no tienes perfiles guardados. Completa el Perfilador de Compra y guárdalo con un nombre.</p>
-              <a href="/herramientas/" class="nav-profile-create">+ Crear mi primer perfil</a>
+              <a href="/herramientas/perfilador" class="nav-profile-create">+ Crear mi primer perfil</a>
             `;
             return;
           }
@@ -3875,7 +3875,7 @@ const headerCategoryPanelHtml = `
             ${itemsHtml}
             ${active ? '<button type="button" class="nav-profile-option" data-bp-clear>Ningún perfil activo</button>' : ''}
             <div class="nav-dropdown-sep" role="separator"></div>
-            <a href="/herramientas/" class="nav-profile-create">+ Crear nuevo perfil</a>
+            <a href="/herramientas/perfilador" class="nav-profile-create">+ Crear nuevo perfil</a>
           `;
         }
 
