@@ -1,0 +1,445 @@
+---
+/**
+ * TRADYLOR — COMPARADOR DE PRODUCTOS (Página dedicada)
+ * Elige un producto del catálogo y ve su análisis cruzado frente a sus
+ * alternativas reales y rivales de categoría, con la alternativa recomendada.
+ * Enlazada desde el mainNav (dropdown "Herramientas").
+ */
+import Layout from '../../layouts/Layout.astro';
+import ComparisonTable from '../../components/ComparisonTable.astro';
+import { getCatalogProducts, productKey } from '../../lib/catalog';
+import { getCrossMerchantOffers } from '../../lib/productNetwork';
+import { getCategoryById } from '../../lib/categories';
+
+export const prerender = false;
+
+const allProducts = getCatalogProducts();
+const approvedProducts = allProducts.filter((p) => p.audit_status !== 'rejected');
+
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(amount);
+const cleanMarketplaceSuffix = (text: string) =>
+  text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
+
+const rootCategoryOf = (product: (typeof approvedProducts)[number]): { id: string; name: string } => {
+  const cat = getCategoryById(String(product.category_id ?? product.category ?? ''));
+  const root = cat?.parentId ? getCategoryById(cat.parentId) : cat;
+  return { id: root?.id ?? 'otros', name: root?.name ?? 'Otros productos' };
+};
+
+const groupedOptions = new Map<string, { name: string; products: typeof approvedProducts }>();
+for (const product of approvedProducts) {
+  const root = rootCategoryOf(product);
+  const group = groupedOptions.get(root.id) ?? { name: root.name, products: [] as typeof approvedProducts };
+  group.products.push(product);
+  groupedOptions.set(root.id, group);
+}
+for (const group of groupedOptions.values()) {
+  group.products.sort((a, b) => cleanMarketplaceSuffix(a.title).localeCompare(cleanMarketplaceSuffix(b.title)));
+}
+const optionGroups = [...groupedOptions.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+const compareKey = (Astro.url.searchParams.get('producto') ?? '').trim();
+const baseProduct = compareKey
+  ? approvedProducts.find((p) => productKey(p) === compareKey || p.id === compareKey)
+  : undefined;
+
+const resolveProducts = (ids: Array<string | undefined | null>) =>
+  ids
+    .filter((id): id is string => Boolean(id))
+    .map((id) => approvedProducts.find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => Boolean(p));
+
+let comparisonSet: typeof approvedProducts = [];
+let alternativeVerdict: { product: (typeof approvedProducts)[number]; role: 'cheaper' | 'premium' | 'similar'; note: string } | null = null;
+let categoryRivals: typeof approvedProducts = [];
+let crossMerchantOffers: ReturnType<typeof getCrossMerchantOffers> = [];
+
+if (baseProduct) {
+  const alternatives = baseProduct.alternatives;
+  const cheaperIds = alternatives?.cheaperOptionIds?.length
+    ? alternatives.cheaperOptionIds
+    : alternatives?.cheaperOptionId
+      ? [alternatives.cheaperOptionId]
+      : [];
+  const similarIds = alternatives?.similarOptionIds?.length
+    ? alternatives.similarOptionIds
+    : alternatives?.similarOptionId
+      ? [alternatives.similarOptionId]
+      : [];
+
+  const cheaperProducts = resolveProducts(cheaperIds);
+  const premiumProducts = resolveProducts([alternatives?.premiumOptionId]);
+  const similarProducts = resolveProducts(similarIds);
+  const linkedProducts = (baseProduct.alternative_product_ids ?? [])
+    .map((id) => approvedProducts.find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => Boolean(p));
+
+  const roleIds = new Set(
+    [...cheaperIds, ...similarIds, alternatives?.premiumOptionId].filter(Boolean) as string[],
+  );
+  const extraLinked = linkedProducts.filter((p) => !roleIds.has(p.id) && p.id !== baseProduct.id);
+
+  const rootId = rootCategoryOf(baseProduct).id;
+  categoryRivals = approvedProducts
+    .filter((p) => p.id !== baseProduct.id && !roleIds.has(p.id) && rootCategoryOf(p).id === rootId)
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+    .slice(0, 2);
+
+  const roleProducts = [...cheaperProducts, ...premiumProducts, ...similarProducts, ...extraLinked];
+  comparisonSet = [baseProduct, ...roleProducts, ...categoryRivals].slice(0, 5);
+
+  const scoredAlternatives: Array<{ product: (typeof approvedProducts)[number]; role: 'cheaper' | 'premium' | 'similar' }> = [
+    ...cheaperProducts.map((product) => ({ product, role: 'cheaper' as const })),
+    ...premiumProducts.map((product) => ({ product, role: 'premium' as const })),
+    ...similarProducts.map((product) => ({ product, role: 'similar' as const })),
+    ...extraLinked.map((product) => ({ product, role: 'similar' as const })),
+  ].filter((entry) => entry.product.id !== baseProduct.id);
+
+  const scoreOf = (p: (typeof approvedProducts)[number]) =>
+    (p.rating ?? 0) * 5 + Math.min((p.conversion_score ?? 0) / 10, 5);
+  const best = scoredAlternatives.sort((a, b) => scoreOf(b.product) - scoreOf(a.product))[0];
+
+  if (best) {
+    const priceDelta = baseProduct.price - best.product.price;
+    const notes: Record<typeof best.role, string> = {
+      cheaper:
+        priceDelta > 0
+          ? `Cuesta ${formatCurrency(priceDelta)} menos que tu selección con una valoración igual o superior.`
+          : 'Es la opción más económica vinculada a este producto.',
+      premium:
+        priceDelta < 0
+          ? `Añade ${formatCurrency(Math.abs(priceDelta))} sobre tu selección a cambio de prestaciones superiores.`
+          : 'Es la opción premium vinculada a este producto.',
+      similar:
+        'Misma gama y uso, con valoraciones contrastadas: la alternativa directa si tu selección no te convence.',
+    };
+    alternativeVerdict = { product: best.product, role: best.role, note: notes[best.role] };
+  }
+
+  crossMerchantOffers = getCrossMerchantOffers(baseProduct);
+}
+
+const comparisonMeta = baseProduct
+  ? JSON.stringify({
+      productIds: comparisonSet.map((p) => p.id),
+      productKey: productKey(baseProduct),
+      categoryName: rootCategoryOf(baseProduct).name,
+    }).replace(/</g, '\\u003c')
+  : null;
+
+const pageTitle = baseProduct ? `Comparador: ${cleanMarketplaceSuffix(baseProduct.title)} | Tradylor` : 'Comparador de Productos | Tradylor';
+const pageDescription = baseProduct
+  ? `Análisis cruzado de ${cleanMarketplaceSuffix(baseProduct.title)} frente a sus alternativas reales y la alternativa recomendada.`
+  : 'Elige un producto del catálogo para compararlo con sus alternativas reales y ver cuál te conviene más.';
+---
+
+<Layout title={pageTitle} description={pageDescription} noindex={false}>
+  <a href="/herramientas" class="tools-back-link" style="display:inline-flex;align-items:center;gap:.5rem;margin:1rem auto;max-width:fit-content;padding:.75rem 1.2rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e5e7eb;font-weight:700;text-decoration:none;">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+    Volver al Centro de Herramientas
+  </a>
+
+  <main class="tools-page">
+    <!-- HERO -->
+    <section class="tools-hero">
+      <div class="container tools-hero-inner">
+        <span class="tools-kicker">Paso 3 de El Método · Comparador</span>
+        <h1 class="tools-title">Comparador de Productos</h1>
+        <p class="tools-subtitle">
+          Elige un producto del catálogo y te mostramos su análisis cruzado frente a las
+          alternativas reales (más barato, premium, similar) y rivales de categoría,
+          además de la alternativa que te recomendamos.
+        </p>
+      </div>
+    </section>
+
+    <!-- Selector de producto con estilo nav-search -->
+    {approvedProducts.length > 0 ? (
+      <>
+        <form class="comparator-search-form" role="search" method="get" aria-label="Buscar producto para comparar">
+          <label for="compareProductInput" class="visually-label">Elige un producto para comparar con sus alternativas:</label>
+          <div class="nav-search-wrapper">
+            <input
+              id="compareProductInput"
+              name="producto"
+              type="search"
+              class="nav-search-input"
+              placeholder="Busca un producto por nombre, marca o comerciante…"
+              value={compareKey ? '' : ''}
+              list="compareProductDatalist"
+              autocomplete="off"
+            />
+            <datalist id="compareProductDatalist">
+              {optionGroups.flatMap((group) =>
+                group.products.map((product) => `<option value="${productKey(product)}">${cleanMarketplaceSuffix(product.title)} · ${formatCurrency(product.price)}</option>`)
+              )}
+            </datalist>
+            <button type="submit" class="nav-search-submit" aria-label="Comparar">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            </button>
+          </div>
+          <p class="comparator-hint">
+            Escribe el nombre del producto o selecciona uno de las sugerencias. Al enviar verás su análisis cruzado.
+          </p>
+        </form>
+      </>
+    ) : (
+      <p class="tools-empty-note">Aún no hay suficientes productos publicados para activar el comparador. Vuelve pronto.</p>
+    )}
+
+    {!baseProduct ? (
+      <p class="tools-empty-note">
+        Selecciona un producto de la lista: te mostramos su análisis cruzado frente a las
+        alternativas reales del catálogo y cuál de ellas te conviene más.
+      </p>
+    ) : (
+      <div class="comparator-result">
+        <!-- Resumen del producto elegido -->
+        <div class="comparator-picked">
+          <img class="comparator-picked-img" src={baseProduct.image} alt={cleanMarketplaceSuffix(baseProduct.title)} loading="lazy" width="96" height="96" />
+          <div class="comparator-picked-body">
+            <span class="comparator-picked-tag">Producto elegido</span>
+            <h2 class="comparator-picked-title">{cleanMarketplaceSuffix(baseProduct.title)}</h2>
+            <p class="comparator-picked-meta">
+              <strong>{formatCurrency(baseProduct.price)}</strong>
+              {baseProduct.originalPrice && baseProduct.originalPrice > baseProduct.price && (
+                <span class="comparator-picked-old">{formatCurrency(baseProduct.originalPrice)}</span>
+              )}
+              {typeof baseProduct.rating === 'number' && (
+                <span>★ {baseProduct.rating.toFixed(1)}{baseProduct.reviewsCount ? ` (${baseProduct.reviewsCount})` : ''}</span>
+              )}
+              <span>{baseProduct.merchant}</span>
+            </p>
+            <a class="comparator-picked-link" href={`/producto/${encodeURIComponent(productKey(baseProduct))}`}>
+              Ver análisis completo →
+            </a>
+          </div>
+        </div>
+
+        <!-- Análisis cruzado: tabla comparativa del producto vs alternativas -->
+        {comparisonSet.length > 1 ? (
+          <ComparisonTable
+            products={comparisonSet}
+            highlightId={baseProduct.id}
+            title={`Análisis cruzado: ${cleanMarketplaceSuffix(baseProduct.title)} y sus alternativas`}
+          />
+        ) : (
+          <p class="tools-empty-note">
+            Todavía no hay alternativas vinculadas ni rivales comparables para este producto.
+            Pronto ampliamos su análisis cruzado.
+          </p>
+        )}
+
+        <!-- Veredicto: la alternativa recomendada -->
+        {alternativeVerdict && (
+          <div class="comparator-verdict" data-role={alternativeVerdict.role}>
+            <span class="comparator-verdict-tag">Nuestra alternativa</span>
+            <h3 class="comparator-verdict-title">
+              {alternativeVerdict.role === 'cheaper'
+                ? 'Más barata sin renunciar'
+                : alternativeVerdict.role === 'premium'
+                  ? 'Sube de gama'
+                  : 'Alternativa directa'}
+            </h3>
+            <a class="comparator-verdict-card" href={`/producto/${encodeURIComponent(productKey(alternativeVerdict.product))}`}>
+              <img class="comparator-verdict-img" src={alternativeVerdict.product.image} alt={cleanMarketplaceSuffix(alternativeVerdict.product.title)} loading="lazy" width="80" height="80" />
+              <span class="comparator-verdict-info">
+                <span class="comparator-verdict-name">{cleanMarketplaceSuffix(alternativeVerdict.product.title)}</span>
+                <span class="comparator-verdict-price">
+                  {formatCurrency(alternativeVerdict.product.price)}
+                  {typeof alternativeVerdict.product.rating === 'number' && (
+                    <span class="comparator-verdict-rating">★ {alternativeVerdict.product.rating.toFixed(1)}</span>
+                  )}
+                </span>
+                <span class="comparator-verdict-note">{alternativeVerdict.note}</span>
+              </span>
+              <span class="comparator-verdict-cta">Ver análisis →</span>
+            </a>
+          </div>
+        )}
+
+        <!-- Comparativa multitienda automática -->
+        {crossMerchantOffers.length > 1 && (
+          <div class="comparator-cross">
+            <span class="comparator-cross-tag">También disponible en</span>
+            <ul class="comparator-cross-list">
+              {crossMerchantOffers.map((offer) => (
+                <li class:list={['comparator-cross-item', { 'is-current': offer.isCurrent }]}>
+                  <span class="cm-merchant">{offer.merchant}</span>
+                  {typeof offer.price === 'number' && <span class="cm-price">{formatCurrency(offer.price)}</span>}
+                  {offer.isCurrent ? (
+                    <span class="cm-current-tag">Precio comparado arriba</span>
+                  ) : (
+                    <a href={offer.redirectUrl} class="cm-view-link" rel="sponsored nofollow noopener" target="_blank">
+                      Ver oferta →
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    )}
+
+    {comparisonMeta && (
+      <script type="application/json" id="comparator-meta" set:html={JSON.stringify(comparisonMeta)} />
+    )}
+
+    <script>
+      import { addComparatorHistoryEntry } from '../../../utils/radarStore';
+      const meta = document.getElementById('comparator-meta')?.textContent;
+      if (meta) {
+        try {
+          const parsed = JSON.parse(meta) as { productIds?: string[]; categoryName?: string };
+          const ids = Array.isArray(parsed.productIds) ? parsed.productIds : [];
+          if (ids.length > 1) {
+            const storageKey = `tradylor-compare-${ids[0]}`;
+            if (!sessionStorage.getItem(storageKey)) {
+              sessionStorage.setItem(storageKey, '1');
+              addComparatorHistoryEntry({ categoryName: parsed.categoryName, productIds: ids });
+            }
+          }
+        } catch {
+          /* sin historial: la comparativa sigue funcionando */
+        }
+      }
+    </script>
+
+    <style>
+      .visually-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; white-space: nowrap; border-width: 0; }
+
+      .tools-back-link:hover {
+        background: rgba(59, 130, 246, 0.14);
+        border-color: rgba(96, 165, 250, 0.4);
+        color: #ffffff;
+      }
+
+      .tools-hero {
+        padding: 3.5rem 0 2.5rem;
+        background: radial-gradient(ellipse at top, rgba(59, 130, 246, 0.12) 0%, transparent 65%);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .tools-hero-inner { text-align: center; max-width: 760px; }
+      .tools-kicker {
+        display: inline-block; font-size: 0.74rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em;
+        color: #60a5fa; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.28);
+        padding: 0.35rem 0.9rem; border-radius: 999px; margin-bottom: 1rem;
+      }
+      .tools-title {
+        font-family: var(--font-heading); font-size: clamp(2rem, 4.5vw, 3rem); font-weight: 800; color: #ffffff;
+        margin: 0 0 0.85rem; letter-spacing: -0.02em;
+      }
+      .tools-subtitle {
+        font-size: 1rem; color: rgba(255, 255, 255, 0.65); line-height: 1.7; margin: 0 auto 2rem; max-width: 620px;
+      }
+
+      /* Form estilo nav-search para el selector de producto */
+      .comparator-search-form { margin-bottom: 2rem; }
+      .nav-search-wrapper {
+        position: relative; display: flex; align-items: center; flex: 1 1 auto; max-width: 600px; margin: 0 auto;
+        height: 48px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+      }
+      .nav-search-wrapper:focus-within {
+        background: rgba(2, 6, 23, 0.85); border-color: rgba(96, 165, 250, 0.55); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
+      }
+      .nav-search-input {
+        flex: 1 1 auto; min-width: 0; height: 100%; padding: 0 0.5rem; font-family: var(--font-body, inherit); font-size: 0.85rem;
+        color: #f3f4f6; background: transparent; border: none; outline: none; -webkit-appearance: none; appearance: none;
+      }
+      .nav-search-input::placeholder { color: rgba(255, 255, 255, 0.45); }
+      .nav-search-submit {
+        display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0;
+        margin-right: 4px; padding: 0; color: #ffffff; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+        border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+        transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
+      }
+      .nav-search-submit:hover {
+        background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); box-shadow: 0 6px 18px rgba(37, 99, 235, 0.55); transform: translateY(-1px);
+      }
+      .comparator-hint { text-align: center; color: var(--color-text-dim); font-size: 0.82rem; margin-top: 0.5rem; }
+
+      .tools-empty-note { padding: 2rem; text-align: center; color: var(--color-text-dim); background: rgba(255, 255, 255, 0.02);
+        border: 1px dashed rgba(255, 255, 255, 0.12); border-radius: 16px; }
+
+      /* Reutiliza los mismos estilos del comparador de herramientas.astro */
+      .comparator-result { display: flex; flex-direction: column; gap: 2rem; }
+      .comparator-picked {
+        display: flex; gap: 1.1rem; padding: 1.25rem; background: linear-gradient(160deg, rgba(245, 158, 11, 0.06) 0%, rgba(17, 24, 39, 0.8) 100%);
+        border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 18px;
+      }
+      .comparator-picked-img { width: 96px; height: 96px; object-fit: cover; border-radius: 12px; background: #1a1a2e; flex-shrink: 0; }
+      .comparator-picked-body { min-width: 0; }
+      .comparator-picked-tag {
+        display: inline-block; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+        color: #fbbf24; margin-bottom: 0.35rem;
+      }
+      .comparator-picked-title {
+        font-family: var(--font-heading); font-size: 1.2rem; font-weight: 800; color: #ffffff; margin: 0 0 0.45rem;
+      }
+      .comparator-picked-meta {
+        display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; font-size: 0.85rem; color: rgba(255, 255, 255, 0.6);
+        margin: 0 0 0.5rem;
+      }
+      .comparator-picked-meta strong { color: #fbbf24; font-family: var(--font-heading); font-size: 1.05rem; }
+      .comparator-picked-old { text-decoration: line-through; color: rgba(255, 255, 255, 0.35); }
+      .comparator-picked-link {
+        font-size: 0.82rem; font-weight: 700; color: #60a5fa; text-decoration: none;
+      }
+      .comparator-picked-link:hover { text-decoration: underline; }
+
+      .comparator-verdict {
+        padding: 1.5rem; background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.28); border-radius: 18px;
+      }
+      .comparator-verdict[data-role='premium'] { background: rgba(59, 130, 246, 0.05); border-color: rgba(59, 130, 246, 0.28); }
+      .comparator-verdict-tag {
+        display: inline-block; font-size: 0.68rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+        color: #34d399; margin-bottom: 0.35rem;
+      }
+      .comparator-verdict[data-role='premium'] .comparator-verdict-tag { color: #93c5fd; }
+      .comparator-verdict-title {
+        font-family: var(--font-heading); font-size: 1.25rem; font-weight: 800; color: #ffffff; margin: 0 0 1rem;
+      }
+      .comparator-verdict-card {
+        display: flex; align-items: center; gap: 1rem; padding: 1rem; background: rgba(10, 14, 23, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 14px; text-decoration: none;
+        transition: border-color 0.2s ease, transform 0.2s ease;
+      }
+      .comparator-verdict-card:hover { border-color: rgba(52, 211, 153, 0.5); transform: translateY(-2px); }
+      .comparator-verdict-img { width: 80px; height: 80px; object-fit: cover; border-radius: 10px; background: #1a1a2e; flex-shrink: 0; }
+      .comparator-verdict-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.3rem; }
+      .comparator-verdict-name { font-size: 0.95rem; font-weight: 700; color: #ffffff; }
+      .comparator-verdict-price {
+        display: flex; align-items: center; gap: 0.5rem; font-family: var(--font-heading); font-size: 1.05rem; font-weight: 800; color: #34d399;
+      }
+      .comparator-verdict-rating { font-size: 0.8rem; color: #fbbf24; }
+      .comparator-verdict-note { font-size: 0.8rem; line-height: 1.5; color: rgba(255, 255, 255, 0.6); }
+      .comparator-verdict-cta { flex-shrink: 0; font-size: 0.8rem; font-weight: 700; color: #6ee7b7; }
+
+      .comparator-cross { padding: 1.25rem; background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.09); border-radius: 16px; }
+      .comparator-cross-tag {
+        display: block; font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;
+        color: var(--color-text-dim); margin-bottom: 0.75rem;
+      }
+      .comparator-cross-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+      .comparator-cross-item {
+        display: flex; align-items: center; gap: 0.75rem; padding: 0.6rem 0.75rem; background: rgba(10, 14, 23, 0.5);
+        border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 10px; font-size: 0.85rem;
+      }
+      .comparator-cross-item .cm-merchant { flex: 1; font-weight: 700; color: #e5e7eb; }
+      .comparator-cross-item .cm-price { font-family: var(--font-heading); font-weight: 800; color: #ffffff; }
+      .comparator-cross-item .cm-current-tag { font-size: 0.72rem; color: #6ee7b7; }
+      .comparator-cross-item .cm-view-link { font-size: 0.78rem; font-weight: 700; color: #60a5fa; text-decoration: none; }
+      .comparator-cross-item .cm-view-link:hover { text-decoration: underline; }
+
+      @media (max-width: 640px) {
+        .nav-search-wrapper { max-width: 100%; height: 44px; }
+        .comparator-picked { flex-direction: column; align-items: flex-start; }
+        .comparator-verdict-card { flex-wrap: wrap; }
+        .comparator-verdict-cta { width: 100%; text-align: right; }
+      }
+    </style>
+  </main>
+</Layout>

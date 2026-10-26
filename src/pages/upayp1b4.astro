@@ -709,6 +709,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <button type="button" class="preset-chip" data-prod-preset="sin-categoria" title="Productos sin ninguna categoría asignada">📂 Sin Categoria</button>
           <button type="button" class="preset-chip" data-prod-preset="segunda-mano" title="Productos de segunda mano, reacondicionados o usados">♻️ Segunda Mano</button>
           <button type="button" class="preset-chip" data-prod-preset="sin-ia" title="Productos cuya ficha no está completada con IA">⚠️ Sin Enriquecer IA</button>
+          <button type="button" class="preset-chip" data-prod-preset="sin-tags" title="Productos sin etiquetas técnicas normalizadas (normalized_tags vacías)">🏷️ Sin Tags</button>
           <button type="button" class="preset-chip" data-prod-preset="duplicados" title="Duplicados por sourceId, URL canónica o título limpio">♻️ Duplicados</button>
           <button type="button" class="preset-chip" data-prod-preset="alta-rentabilidad" title="conversion_score ≥ 75">🔥 Alta Rentabilidad</button>
           <button type="button" class="preset-chip" data-prod-preset="listos" title="Categoría + subcategoría + IA completada + enlace activo">⭐ Listos para Publicar</button>
@@ -2889,6 +2890,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           if (result.success) {
             // Recargar lista de productos inmediatamente
             await reloadProductsTable();
+            // El botón de enriquecer IA debe seguir funcionando tras guardar
+            // y al pasar a editar el siguiente producto sin recargar la página.
+            reinitAiEnrichButton();
 
             if (isEditing) {
               // Modo edición: se conserva el id y el formulario relleno para
@@ -3059,8 +3063,17 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
     };
 
+    // Se usa onclick (no addEventListener) para que el listener se reemplace
+    // en cada inicialización y el botón "Enriquecer con IA" siga funcionando
+    // al editar un segundo producto sin tener que recargar la página.
     if (btnAiEnrich) {
-      btnAiEnrich.addEventListener('click', () => runAiEnrich());
+      btnAiEnrich.onclick = () => runAiEnrich();
+    }
+
+    // Re-inicializa el botón de enriquecer IA tras guardar o editar un producto,
+    // para que nunca quede "atascado" entre ediciones sucesivas.
+    function reinitAiEnrichButton() {
+      if (btnAiEnrich) btnAiEnrich.onclick = () => runAiEnrich();
     }
 
     // =========================================================================
@@ -3453,6 +3466,8 @@ function renderTableRows(products, resetPage = true) {
               if (inputScrapeUrl) inputScrapeUrl.value = product.affiliateUrl || '';
 
               updatePreview();
+              // El botón de enriquecer IA debe estar operativo al editar este producto.
+              reinitAiEnrichButton();
               showAlert('success', 'Producto Cargado en Formulario', `Editando "${product.title}". Modifica los campos y pulsa "Guardar cambios".`);
               // Despliega el panel de edición y nos coloca en su inicio.
               setFormPanelExpanded(true);
@@ -7512,6 +7527,10 @@ function renderTableRows(products, resetPage = true) {
         }
         case 'sin-ia':
           return (product.ia_status || ((product.description || '').trim().length >= 60 ? 'completed' : 'pending')) !== 'completed';
+        case 'sin-tags': {
+          const tags = Array.isArray(product.normalized_tags) ? product.normalized_tags : [];
+          return tags.length === 0;
+        }
         case 'duplicados':
           return product.is_duplicate === true;
         case 'alta-rentabilidad':

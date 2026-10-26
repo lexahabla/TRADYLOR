@@ -3017,7 +3017,23 @@ const headerCategoryPanelHtml = `
                 </div>
               </li>
               <li><a href="/#el-metodo" class="nav-link">El Método</a></li>
-              <li><a href="/herramientas" class="nav-link">Herramientas</a></li>
+              <li class="nav-item-dropdown" data-nav-dropdown>
+                <button type="button" class="nav-link nav-dropdown-btn" data-herramientas-btn aria-expanded="false" aria-controls="navHerramientasPanel">
+                  Herramientas
+                  <svg class="nav-dropdown-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="nav-dropdown-panel" id="navHerramientasPanel" data-herramientas-panel hidden>
+                  <a href="/herramientas/" class="nav-dropdown-item">
+                    <span class="nav-dropdown-item-icon" aria-hidden="true">👤</span> Perfilador de Compra
+                  </a>
+                  <a href="/herramientas/comparador" class="nav-dropdown-item">
+                    <span class="nav-dropdown-item-icon" aria-hidden="true">⚖️</span> Comparador de Productos
+                  </a>
+                  <a href="/herramientas/dependiente-ia" class="nav-dropdown-item">
+                    <span class="nav-dropdown-item-icon" aria-hidden="true">🤖</span> Dependiente IA
+                  </a>
+                </div>
+              </li>
               <li><a href="#aviso-afiliacion" class="nav-link">Aviso de Afiliación</a></li>
               <li class="nav-item-dropdown nav-item-profile" data-buyer-profile-switcher>
                 <button type="button" class="nav-link nav-dropdown-btn nav-profile-btn" data-buyer-profile-btn aria-expanded="false" aria-controls="navBuyerProfilePanel">
@@ -3283,30 +3299,51 @@ const headerCategoryPanelHtml = `
           });
         }
 
-        // --- Desplegable "Top Selecciones" del mainNav (secciones dinámicas) ---
-        const topSelBtn = document.querySelector('[data-top-selecciones-btn]');
-        const topSelPanel = document.querySelector('[data-top-selecciones-panel]');
-        if (topSelBtn && topSelPanel) {
-          const setTopSelOpen = (open) => {
-            topSelPanel.hidden = !open;
-            topSelBtn.setAttribute('aria-expanded', String(open));
+        // --- Desplegables del mainNav en HOVER (mouseon) ---
+        // Se abren al pasar el cursor por encima y se cierran al salir,
+        // con un pequeño retardo para evitar cierres accidentales.
+        function setupHoverDropdown(btnAttr, panelAttr) {
+          const btn = document.querySelector(`[${btnAttr}]`);
+          const panel = document.querySelector(`[${panelAttr}]`);
+          if (!btn || !panel) return;
+          let hoverTimer = null;
+          const setOpen = (open) => {
+            if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = null; }
+            panel.hidden = !open;
+            btn.setAttribute('aria-expanded', String(open));
           };
-          topSelBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            setTopSelOpen(topSelPanel.hidden);
+          const openAfter = () => {
+            if (hoverTimer) clearTimeout(hoverTimer);
+            hoverTimer = setTimeout(() => setOpen(true), 120);
+          };
+          const closeAfter = () => {
+            if (hoverTimer) clearTimeout(hoverTimer);
+            hoverTimer = setTimeout(() => setOpen(false), 200);
+          };
+          btn.addEventListener('mouseenter', openAfter);
+          btn.addEventListener('mouseleave', closeAfter);
+          panel.addEventListener('mouseenter', () => {
+            if (hoverTimer) clearTimeout(hoverTimer);
+            setOpen(true);
           });
-          topSelPanel.addEventListener('click', (e) => {
-            if (e.target.closest('a')) setTopSelOpen(false);
+          panel.addEventListener('mouseleave', closeAfter);
+          // Clic en una opción del panel: navega y cierra el desplegable
+          panel.addEventListener('click', (e) => {
+            if (e.target.closest('a')) setOpen(false);
           });
+          // Clic fuera: cierra
           document.addEventListener('click', (event) => {
             const t = event.target;
             if (!(t instanceof Element)) return;
-            if (!t.closest('[data-nav-dropdown]')) setTopSelOpen(false);
+            if (!t.closest(`[data-nav-dropdown]`)) setOpen(false);
           });
           document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') setTopSelOpen(false);
+            if (event.key === 'Escape') setOpen(false);
           });
         }
+
+        setupHoverDropdown('[data-top-selecciones-btn]', '[data-top-selecciones-panel]');
+        setupHoverDropdown('[data-herramientas-btn]', '[data-herramientas-panel]');
 
         // --- Desplegable de categorías del buscador de cabecera ---
         if (headerCatBtn && headerCatPanel) {
@@ -3819,7 +3856,7 @@ const headerCategoryPanelHtml = `
           if (profiles.length === 0) {
             buyerProfilePanel.innerHTML = `
               <p class="nav-profile-hint">Aún no tienes perfiles guardados. Completa el Perfilador de Compra y guárdalo con un nombre.</p>
-              <a href="/herramientas#perfilador" class="nav-profile-create">+ Crear mi primer perfil</a>
+              <a href="/herramientas/" class="nav-profile-create">+ Crear mi primer perfil</a>
             `;
             return;
           }
@@ -3838,7 +3875,7 @@ const headerCategoryPanelHtml = `
             ${itemsHtml}
             ${active ? '<button type="button" class="nav-profile-option" data-bp-clear>Ningún perfil activo</button>' : ''}
             <div class="nav-dropdown-sep" role="separator"></div>
-            <a href="/herramientas#perfilador" class="nav-profile-create">+ Crear nuevo perfil</a>
+            <a href="/herramientas/" class="nav-profile-create">+ Crear nuevo perfil</a>
           `;
         }
 
