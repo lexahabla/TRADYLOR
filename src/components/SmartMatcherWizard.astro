@@ -1,38 +1,25 @@
 ---
-import type { Product } from '../data/products';
-
-export interface Props {
-  products: Product[];
-}
-
-const { products } = Astro.props;
-
-const approvedProducts = products
-  .filter((p) => p.audit_status !== 'rejected')
-  .map((p) => ({
-    id: p.id,
-    title: p.title,
-    price: p.price,
-    originalPrice: p.originalPrice,
-    image: p.image,
-    category: p.category,
-    rating: p.rating,
-    reviewsCount: p.reviewsCount,
-    conversionScore: p.conversion_score ?? 0,
-    pros: p.pros,
-    cons: p.cons,
-    slug: p.slug,
-  }));
-
-const productsJson = JSON.stringify(approvedProducts);
+/**
+ * ==============================================================================
+ * TRADYLOR — PERFILADOR DE COMPRA (SmartMatcherWizard)
+ * ==============================================================================
+ * Asistente de 3 preguntas (uso, presupuesto, prioridad) que NO recomienda
+ * productos: su único resultado es el PERFIL DE COMPPRADOR. Ese perfil se
+ * guarda con nombre (Mi Radar / nube) y pasa a:
+ *   - aparecer en el selector de perfil del mainNav (elegir uno activo),
+ *   - alimentar el badge "Encaja con tu perfil" de las tarjetas.
+ * Guardarlo requiere sesión (gate de registro en el paso de resultado).
+ * ==============================================================================
+ */
 ---
 
 <section class="smw-section" data-smart-matcher>
   <div class="smw-header">
-    <div class="smw-tag">Asistente Inteligente</div>
-    <h2 class="smw-title">¿Qué producto encaja contigo?</h2>
+    <div class="smw-tag">Paso 3 · Herramientas</div>
+    <h2 class="smw-title">Crea tu Perfil de Comprador</h2>
     <p class="smw-desc">
-      Responde 3 preguntas rápidas y te recomendamos la mejor opción verificada de nuestro catálogo.
+      Responde 3 preguntas rápidas. Guardamos el resultado como un perfil con nombre que tú
+      eliges y que aplicamos a lo largo de toda la web para priorizar lo que encaja contigo.
     </p>
   </div>
 
@@ -145,11 +132,9 @@ const productsJson = JSON.stringify(approvedProducts);
         <p class="smw-result-desc" data-result-desc></p>
 
         <div class="smw-result-locked" data-result-locked hidden>
-          <p class="smw-locked-text">🔒 Regístrate gratis para ver tus recomendaciones y guardar este perfil de comprador.</p>
+          <p class="smw-locked-text">🔒 Regístrate gratis para guardar este perfil de comprador y que te acompañe en toda la web.</p>
           <button type="button" class="smw-unlock-btn" data-result-unlock>Crear cuenta gratis</button>
         </div>
-
-        <div class="smw-result-products" data-result-products></div>
 
         <div class="smw-save-profile" data-save-profile hidden>
           <input type="text" class="smw-save-input" data-save-profile-name maxlength="60" placeholder="Nombre de este perfil (ej: Para mí, Regalo papá)" />
@@ -165,14 +150,6 @@ const productsJson = JSON.stringify(approvedProducts);
     </div>
   </div>
 </section>
-
-<script type="application/json" id="smw-products-data" set:html={productsJson}></script>
-<script is:inline>
-  // OJO: `is:inline` no lo procesa Vite → aquí sólo JavaScript puro.
-  // La declaración de tipos de `window.__smartMatcherProducts` vive en
-  // src/env.d.ts (no se puede poner aquí porque rompería la sintaxis).
-  window.__smartMatcherProducts = JSON.parse(document.getElementById('smw-products-data')?.textContent || '[]');
-</script>
 
 <style>
   .smw-section {
@@ -488,77 +465,6 @@ const productsJson = JSON.stringify(approvedProducts);
     margin: 0 auto 1.5rem;
   }
 
-  .smw-result-products {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .smw-product-card {
-    background: rgba(17, 24, 39, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 14px;
-    overflow: hidden;
-    transition: border-color 0.25s ease, transform 0.25s ease;
-    text-decoration: none;
-    display: block;
-  }
-
-  .smw-product-card:hover {
-    border-color: rgba(59, 130, 246, 0.5);
-    transform: translateY(-3px);
-  }
-
-  .smw-product-card-img {
-    width: 100%;
-    height: 140px;
-    object-fit: cover;
-    background: #1a1a2e;
-  }
-
-  .smw-product-card-body {
-    padding: 0.85rem;
-  }
-
-  .smw-product-card-title {
-    font-size: 0.82rem;
-    font-weight: 700;
-    color: #ffffff;
-    margin-bottom: 0.3rem;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.35;
-  }
-
-  .smw-product-card-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 0.72rem;
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  .smw-product-card-price {
-    font-family: var(--font-heading, 'Outfit', sans-serif);
-    font-size: 1rem;
-    font-weight: 800;
-    color: #60a5fa;
-  }
-
-  .smw-product-card-score {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    padding: 0.2rem 0.5rem;
-    background: rgba(16, 185, 129, 0.12);
-    border-radius: 6px;
-    color: #34d399;
-    font-weight: 700;
-  }
-
   .smw-restart {
     display: inline-flex;
     align-items: center;
@@ -606,7 +512,8 @@ const productsJson = JSON.stringify(approvedProducts);
 
 <script>
   import { getSession } from '../utils/auth';
-  import { saveBuyerProfile } from '../utils/radarStore';
+  import { saveBuyerProfile, getBuyerProfiles } from '../utils/radarStore';
+  import { BUYER_PROFILE_BUDGET_LABELS, BUYER_PROFILE_PRIORITY_LABELS, BUYER_PROFILE_USAGE_LABELS } from '../types/radar';
 
   const PENDING_QUIZ_KEY = 'tradylor-pending-quiz';
 
@@ -636,21 +543,6 @@ const productsJson = JSON.stringify(approvedProducts);
   }
 
   (() => {
-  interface SmartProduct {
-    id: string;
-    title: string;
-    price: number;
-    originalPrice?: number;
-    image: string;
-    category: string;
-    rating?: number;
-    reviewsCount?: number;
-    conversionScore: number;
-    pros: string[];
-    cons: string[];
-    slug?: string;
-  }
-
   const initWizard = () => {
     const root = document.querySelector<HTMLElement>('[data-smart-matcher]');
     if (!root) return;
@@ -658,14 +550,12 @@ const productsJson = JSON.stringify(approvedProducts);
     const wizard = root.querySelector<HTMLElement>('[data-wizard]');
     if (!wizard) return;
 
-    const products = (window.__smartMatcherProducts || []) as SmartProduct[];
     const stepEls = wizard.querySelectorAll<HTMLElement>('[data-wizard-step]');
     const indicators = wizard.querySelectorAll<HTMLElement>('[data-step-indicator]');
     const resultEl = wizard.querySelector<HTMLElement>('[data-wizard-result]');
     const badgeEl = wizard.querySelector<HTMLElement>('[data-result-badge]');
     const titleEl = wizard.querySelector<HTMLElement>('[data-result-title]');
     const descEl = wizard.querySelector<HTMLElement>('[data-result-desc]');
-    const productsEl = wizard.querySelector<HTMLElement>('[data-result-products]');
     const restartBtn = wizard.querySelector<HTMLButtonElement>('[data-wizard-restart]');
     const resultLockedEl = wizard.querySelector<HTMLElement>('[data-result-locked]');
     const resultUnlockBtn = wizard.querySelector<HTMLButtonElement>('[data-result-unlock]');
@@ -676,13 +566,6 @@ const productsJson = JSON.stringify(approvedProducts);
 
     let currentStep = 0;
     const answers: Record<string, string> = {};
-
-    const budgetRanges: Record<string, [number, number]> = {
-      low: [0, 100],
-      mid: [100, 400],
-      high: [400, 1000],
-      premium: [1000, Infinity],
-    };
 
     const showStep = (index: number) => {
       stepEls.forEach((el, i) => {
@@ -695,36 +578,13 @@ const productsJson = JSON.stringify(approvedProducts);
       currentStep = index;
     };
 
-    const getRecommendations = (): SmartProduct[] => {
-      const budget = answers.budget || 'mid';
-      const [min, max] = budgetRanges[budget] || [0, Infinity];
-      const priority = answers.priority || 'balance';
-
-      let filtered = products.filter((p) => p.price >= min && p.price <= max);
-
-      if (filtered.length === 0) {
-        filtered = products.slice();
-      }
-
-      const sorted = filtered.sort((a, b) => {
-        const scoreA = a.conversionScore;
-        const scoreB = b.conversionScore;
-
-        if (priority === 'price') {
-          return a.price - b.price || scoreB - scoreA;
-        }
-        if (priority === 'quality') {
-          return scoreB - scoreA || a.price - b.price;
-        }
-        return scoreB - scoreA;
-      });
-
-      return sorted.slice(0, 3);
-    };
-
+    /**
+     * El resultado del Perfilador es SOLO el perfil (resumen delas3 respuestas):
+     * no se recomienda ningún producto aquí. El perfil guardado luego alimenta
+     * el selector del mainNav y el badge "Encaja con tu perfil".
+     */
     const showResult = async () => {
       stashPendingQuizAnswers(answers);
-      const recs = getRecommendations();
 
       stepEls.forEach((el) => { el.hidden = true; });
       indicators.forEach((el) => {
@@ -735,39 +595,18 @@ const productsJson = JSON.stringify(approvedProducts);
       const session = await getSession().catch(() => ({ authenticated: false, user: null, googleEnabled: false }));
       const isLogged = Boolean(session.user);
 
-      if (recs.length > 0 && badgeEl && titleEl && descEl) {
-        const priorityLabel = answers.priority === 'price' ? 'Precio' : answers.priority === 'quality' ? 'Calidad' : 'Equilibrio';
-        const budgetLabel = answers.budget === 'low' ? 'económico' : answers.budget === 'mid' ? 'moderado' : answers.budget === 'high' ? 'alto' : 'premium';
-        const usageLabel = answers.usage === 'productividad' ? 'productividad' : answers.usage === 'entretenimiento' ? 'entretenimiento' : answers.usage === 'creatividad' ? 'creatividad' : answers.usage === 'hogar' ? 'hogar' : answers.usage === 'movilidad' ? 'movilidad' : 'fitness';
+      if (badgeEl && titleEl && descEl) {
+        const usageLabel = BUYER_PROFILE_USAGE_LABELS[answers.usage || 'productividad'] ?? 'Productividad';
+        const budgetLabel = BUYER_PROFILE_BUDGET_LABELS[answers.budget || 'mid'] ?? 'Moderado';
+        const priorityLabel = BUYER_PROFILE_PRIORITY_LABELS[answers.priority || 'balance'] ?? 'Equilibrio';
 
-        badgeEl.textContent = `Smart Match: ${usageLabel} · ${budgetLabel} · ${priorityLabel}`;
-        titleEl.textContent = `Te recomendamos ${recs.length} op${recs.length === 1 ? 'ón' : 'ciones'} verificada${recs.length === 1 ? '' : 's'}`;
-        descEl.textContent = 'Estos productos han pasado nuestro filtro de auditoría y destacan por su puntuación de conversión y calidad verificada.';
+        badgeEl.textContent = 'Tu perfil de comprador';
+        titleEl.textContent = `${usageLabel} · ${budgetLabel} · ${priorityLabel}`;
+        descEl.textContent = 'Este es el perfil que guardaremos con el nombre que elijas. Lo usamos para el marcado visual en el catálogo y para que puedas cambiar de perfil desde la barra superior cuando quieras.';
       }
 
-      // Gate de registro: el resultado final (los productos recomendados) sólo
-      // se revela con sesión; sin ella se muestra un teaser + CTA de registro
-      // (no se oculta nada del catálogo en sí, sólo ESTE resultado puntual).
+      // Gate de registro: guardar el perfil (y que te acompañe en la web) requiere sesión.
       if (resultLockedEl) resultLockedEl.hidden = isLogged;
-      if (productsEl) {
-        productsEl.hidden = !isLogged;
-        if (isLogged && recs.length > 0) {
-          productsEl.innerHTML = recs.map((p) => `
-            <a class="smw-product-card" href="/producto/${p.slug ?? p.id}" target="_blank" rel="noopener">
-              <img class="smw-product-card-img" src="${p.image}" alt="${p.title}" loading="lazy" />
-              <div class="smw-product-card-body">
-                <div class="smw-product-card-title">${p.title}</div>
-                <div class="smw-product-card-meta">
-                  <span class="smw-product-card-price">${new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(p.price)}</span>
-                  <span class="smw-product-card-score">${p.conversionScore}/100</span>
-                </div>
-              </div>
-            </a>
-          `).join('');
-        } else {
-          productsEl.innerHTML = '';
-        }
-      }
       if (saveProfileWrap) saveProfileWrap.hidden = !isLogged;
       if (saveProfileNote) saveProfileNote.textContent = '';
 
@@ -776,7 +615,7 @@ const productsJson = JSON.stringify(approvedProducts);
 
     resultUnlockBtn?.addEventListener('click', () => {
       const w = window as unknown as Record<string, { open?: (view?: string, context?: string) => void } | undefined>;
-      w.TradylorAuth?.open?.('register', 'quiz-complete');
+      w.TradylorAuth?.open?.('register', 'buyer-profile');
     });
 
     saveProfileBtn?.addEventListener('click', () => {
@@ -793,7 +632,8 @@ const productsJson = JSON.stringify(approvedProducts);
       });
       if (saveProfileInput) saveProfileInput.value = '';
       if (saveProfileNote) {
-        saveProfileNote.textContent = `Perfil "${name}" guardado y activado: ya aparece en el selector de perfil del menú.`;
+        const total = getBuyerProfiles().length;
+        saveProfileNote.textContent = `✓ Perfil "${name}" guardado${total > 1 ? ` (llevas ${total})` : ''}. Ya aparece en el selector de perfil de la barra superior y se marca en el catálogo.`;
       }
     });
 

@@ -113,6 +113,7 @@ export function loadRadar(): RadarData {
       : [],
     removedProducts: cleanTombstones(stored.removedProducts),
     removedProjects: cleanTombstones(stored.removedProjects),
+    removedToolRecords: cleanTombstones(stored.removedToolRecords),
     buyerProfiles: Array.isArray(stored.buyerProfiles) ? stored.buyerProfiles : [],
     activeBuyerProfileId: stored.activeBuyerProfileId || undefined,
     comparatorHistory: Array.isArray(stored.comparatorHistory) ? stored.comparatorHistory : [],
@@ -426,6 +427,8 @@ export function deleteBuyerProfile(id: string): void {
   const data = loadRadar();
   data.buyerProfiles = (data.buyerProfiles ?? []).filter((p) => p.id !== id);
   if (data.activeBuyerProfileId === id) data.activeBuyerProfileId = undefined;
+  // Baja en la nube: sin la marca, la fusión por unión del servidor lo resucitaría.
+  data.removedToolRecords = withTombstone(data.removedToolRecords, id, Date.now());
   persist(data);
   void pushToCloud(data);
 }
@@ -460,6 +463,7 @@ export function addComparatorHistoryEntry(input: {
 export function deleteComparatorHistoryEntry(id: string): void {
   const data = loadRadar();
   data.comparatorHistory = (data.comparatorHistory ?? []).filter((c) => c.id !== id);
+  data.removedToolRecords = withTombstone(data.removedToolRecords, id, Date.now());
   persist(data);
   void pushToCloud(data);
 }
@@ -498,6 +502,7 @@ export function saveAiChat(input: {
 export function deleteAiChat(id: string): void {
   const data = loadRadar();
   data.aiChats = (data.aiChats ?? []).filter((c) => c.id !== id);
+  data.removedToolRecords = withTombstone(data.removedToolRecords, id, Date.now());
   persist(data);
   void pushToCloud(data);
 }
@@ -506,6 +511,74 @@ export function deleteAiChat(id: string): void {
 
 /** Los envíos van uno tras otro: así el servidor los procesa en el orden de los cambios. */
 let pushChain: Promise<void> = Promise.resolve();
+
+/**
+ * Combina el radar de la nube con el local SIN pisar nada: los registros de
+ * herramientas (perfiles de comprador, comparativas y chats IA) se unen por id
+ * y gana el más reciente de cada lado. Así un pull/respuesta de sync no borra
+ * un perfil creado mientras tanto (o sin conexión), y una baja local sí se
+ * respeta aunque la nube aún no la haya recibido.
+ */
+function mergeCloudRadar(local: RadarData, remote: RadarData): RadarData {
+  const stampOf = (value: unknown): number => {
+    const ms = Date.parse(String(value ?? ''));
+    return Number.isFinite(ms) ? ms : 0;
+  };
+  const unionById = <T extends { id: string; createdAt: string; updatedAt?: string }>(
+    remoteList: T[] | undefined,
+    localList: T[] | undefined,
+    max: number,
+  ): T[] => {
+    const byId = new Map<string, T>();
+    for (const item of remoteList ?? []) {
+      if (item && typeof item.id === 'string' && item.id) byId.set(item.id, item);
+    }
+    for (const item of localList ?? []) {
+      if (!item || typeof item.id !== 'string' || !item.id) continue;
+      const existing = byId.get(item.id);
+      if (!existing || stampOf(item.updatedAt || item.createdAt) >= stampOf(existing.updatedAt || existing.createdAt)) {
+        byId.set(item.id, item);
+      }
+    }
+    return [...byId.values()]
+      .sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))
+      .slice(0, max);
+  };
+
+  const tombstones = { ...(remote.removedToolRecords ?? {}), ...(local.removedToolRecords ?? {}) };
+  const withoutDeleted = <T extends { id: string }>(list: T[]): T[] =>
+    list.filter((item) => !(item && item.id in tombstones));
+
+  const buyerProfiles = withoutDeleted(unionById(remote.buyerProfiles, local.buyerProfiles, 8));
+  const comparatorHistory = withoutDeleted(unionById(remote.comparatorHistory, local.comparatorHistory, 30));
+  const aiChats = withoutDeleted(unionById(remote.aiChats, local.aiChats, 30));
+
+  const activeId = local.activeBuyerProfileId && buyerProfiles.some((p) => p.id === local.activeBuyerProfileId)
+    ? local.activeBuyerProfileId
+    : remote.activeBuyerProfileId;
+
+  return {
+    ...remote,
+    buyerProfiles,
+    comparatorHistory,
+    aiChats,
+    activeBuyerProfileId: activeId,
+    removedToolRecords: tombstones,
+  };
+}
+
+/** Guarda en LocalStorage el radar devuelto por la nube, fusionado con lo local. */
+function storeCloudRadar(remote: RadarData): RadarData {
+  const merged = mergeCloudRadar(loadRadar(), remote);
+  localRev += 1;
+  try {
+    localStorage.setItem(RADAR_STORAGE_KEY, JSON.stringify(merged));
+  } catch {
+    /* modo privado / cuota */
+  }
+  for (const listener of listeners) listener(merged);
+  return merged;
+}
 
 function pushToCloud(data: RadarData): Promise<void> {
   const body = JSON.stringify(data);
@@ -531,8 +604,7 @@ async function pushSnapshot(body: string, rev: number): Promise<void> {
     // ya es antigua: aplicarla borraría ese cambio. El envío posterior lo trae todo.
     if (payload.radar && rev === localRev) {
       // Refleja el merge del server (conserva altas hechas en otro dispositivo).
-      localStorage.setItem(RADAR_STORAGE_KEY, JSON.stringify(payload.radar));
-      for (const listener of listeners) listener(payload.radar);
+      storeCloudRadar(payload.radar);
     }
   } catch {
     /* offline: el próximo push llevará los cambios */
@@ -551,11 +623,7 @@ export async function syncLocalToCloud(): Promise<RadarData | null> {
     });
     if (!res.ok) return null;
     const payload = (await res.json()) as { radar?: RadarData };
-    if (payload.radar) {
-      localStorage.setItem(RADAR_STORAGE_KEY, JSON.stringify(payload.radar));
-      for (const listener of listeners) listener(payload.radar);
-      return payload.radar;
-    }
+    if (payload.radar) return storeCloudRadar(payload.radar);
     return null;
   } catch {
     return null;
@@ -564,18 +632,15 @@ export async function syncLocalToCloud(): Promise<RadarData | null> {
 
 /**
  * Descarga el radar de la nube (tras detectar sesión en otro dispositivo).
- * Combina con lo local por id de producto (más reciente gana).
+ * Combina con lo local: productos/listas por el merge del servidor y los
+ * registros de herramientas por unión de ids (ver mergeCloudRadar).
  */
 export async function pullFromCloud(): Promise<RadarData | null> {
   try {
     const res = await fetch('/api/radar', { headers: { Accept: 'application/json' } });
     if (!res.ok) return null;
     const payload = (await res.json()) as { radar?: RadarData };
-    if (payload.radar) {
-      localStorage.setItem(RADAR_STORAGE_KEY, JSON.stringify(payload.radar));
-      for (const listener of listeners) listener(payload.radar);
-      return payload.radar;
-    }
+    if (payload.radar) return storeCloudRadar(payload.radar);
     return null;
   } catch {
     return null;

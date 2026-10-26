@@ -3,10 +3,10 @@
  * ==============================================================================
  * TRADYLOR — SECCIÓN "EL MÉTODO" (home, #el-metodo)
  * ==============================================================================
- * Explica los 3 pasos del método editorial de Tradylor e integra de forma
- * nativa las 3 herramientas (Perfilador, Comparador, Dependiente IA) como
- * parte del Paso 3. Enlazada desde el mainNav (scroll suave) y desde
- * "Herramientas" en el header.
+ * Explica los 3 pasos del método editorial de Tradylor. Sólo la explicación:
+ * las herramientas (Perfilador, Comparador, Dependiente IA) viven en su
+ * propio centro (/herramientas), enlazado desde el mainNav y desde el menú
+ * de usuario del header.
  * ==============================================================================
  */
 ---
@@ -18,7 +18,7 @@
       <h2 class="section-title">El Método Tradylor</h2>
       <p class="section-desc max-700">
         Tres pasos, siempre en este orden, antes de recomendarte nada: agregamos, filtramos
-        y por último te damos las mejores opciones junto a la tecnología para elegir sin dudas.
+        y por último seleccionamos las mejores opciones junto a las alternativas directas.
       </p>
     </div>
 
@@ -61,7 +61,7 @@
       </article>
 
       <!-- Paso 3 -->
-      <article class="method-step method-step--tools">
+      <article class="method-step">
         <div class="method-step-number">3</div>
         <div class="method-step-body">
           <div class="method-step-icon" aria-hidden="true">
@@ -69,45 +69,12 @@
               <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
             </svg>
           </div>
-          <h3 class="method-step-title">Te ofrecemos las mejores opciones, alternativas y tecnología de asistencia</h3>
+          <h3 class="method-step-title">Seleccionamos las mejores opciones</h3>
           <p class="method-step-desc">
-            El resultado del filtro se traduce en herramientas reales que puedes usar ahora
-            mismo para decidir con seguridad:
+            Cada producto que publicamos se acompaña de su ficha de análisis técnico, su
+            historial de precios, sus alternativas reales y las tiendas donde encontrarlo:
+            decides con toda la información delante, no con una promesa de descuento.
           </p>
-
-          <div class="method-tools-grid">
-            <a href="/herramientas#perfilador" class="method-tool-card">
-              <span class="method-tool-icon method-tool-icon--blue" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21v-1a8 8 0 0 1 16 0v1" /></svg>
-              </span>
-              <span class="method-tool-name">Perfilador de Compra</span>
-              <span class="method-tool-desc">Define tus prioridades y filtra visualmente lo que encaja contigo.</span>
-              <span class="method-tool-link">Probarlo ahora →</span>
-            </a>
-
-            <a href="/herramientas#comparador" class="method-tool-card">
-              <span class="method-tool-icon method-tool-icon--amber" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
-              </span>
-              <span class="method-tool-name">Comparador de Productos</span>
-              <span class="method-tool-desc">Enfrenta cada producto a sus alternativas directas de otros comerciantes.</span>
-              <span class="method-tool-link">Probarlo ahora →</span>
-            </a>
-
-            <a href="/herramientas#dependiente-ia" class="method-tool-card">
-              <span class="method-tool-icon method-tool-icon--green" aria-hidden="true">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" /></svg>
-              </span>
-              <span class="method-tool-name">Dependiente IA</span>
-              <span class="method-tool-desc">Tu asistente experto para guiarte en lenguaje natural hacia la elección perfecta.</span>
-              <span class="method-tool-link">Probarlo ahora →</span>
-            </a>
-          </div>
-
-          <a href="/herramientas" class="method-cta">
-            Ir al Centro de Herramientas
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          </a>
         </div>
       </article>
     </div>
@@ -191,97 +158,6 @@
     color: rgba(255, 255, 255, 0.68);
     margin: 0;
     max-width: 680px;
-  }
-
-  .method-step--tools .method-step-desc {
-    margin-bottom: 1.5rem;
-  }
-
-  .method-tools-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
-
-  .method-tool-card {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-    padding: 1.25rem;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 16px;
-    text-decoration: none;
-    transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
-  }
-
-  .method-tool-card:hover {
-    transform: translateY(-4px);
-    border-color: rgba(96, 165, 250, 0.5);
-    background: rgba(59, 130, 246, 0.08);
-  }
-
-  .method-tool-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 42px;
-    height: 42px;
-    border-radius: 12px;
-    margin-bottom: 0.25rem;
-  }
-
-  .method-tool-icon--blue { background: rgba(59, 130, 246, 0.16); color: #60a5fa; }
-  .method-tool-icon--amber { background: rgba(245, 158, 11, 0.16); color: #fbbf24; }
-  .method-tool-icon--green { background: rgba(16, 185, 129, 0.16); color: #34d399; }
-
-  .method-tool-name {
-    font-family: var(--font-heading);
-    font-size: 1rem;
-    font-weight: 700;
-    color: #ffffff;
-  }
-
-  .method-tool-desc {
-    font-size: 0.82rem;
-    line-height: 1.55;
-    color: rgba(255, 255, 255, 0.6);
-  }
-
-  .method-tool-link {
-    margin-top: 0.3rem;
-    font-size: 0.78rem;
-    font-weight: 700;
-    color: #60a5fa;
-  }
-
-  .method-cta {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.85rem 1.5rem;
-    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-    color: #ffffff;
-    font-family: var(--font-heading);
-    font-weight: 700;
-    font-size: 0.92rem;
-    border-radius: 12px;
-    text-decoration: none;
-    box-shadow: 0 10px 28px rgba(16, 185, 129, 0.35);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .method-cta:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 14px 34px rgba(16, 185, 129, 0.45);
-  }
-
-  @media (max-width: 860px) {
-    .method-tools-grid {
-      grid-template-columns: 1fr;
-    }
   }
 
   @media (max-width: 640px) {

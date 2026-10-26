@@ -5,47 +5,154 @@
  * ==============================================================================
  * Página dedicada que reúne las 3 herramientas de "El Método" (Paso 3):
  * Perfilador de Compra, Comparador de Productos y Dependiente IA. Enlazada
- * desde el mainNav ("Herramientas") y desde la sección #el-metodo de la home.
+ * desde el mainNav ("Herramientas"), desde el menú de usuario del header y
+ * desde Mi Radar ("Mis herramientas").
+ *
+ * COMPARADOR: se elige UN producto del catálogo y de ahí sale el análisis
+ * cruzado (tabla con el producto + sus alternativas reales y rivales de
+ * categoría) y la alternativa recomendada. Reutiliza la misma resolución de
+ * alternativas que la ficha (Product.alternatives + alternativas vinculadas
+ * desde el panel) y la tabla comparativa ComparisonTable.
  * ==============================================================================
  */
 export const prerender = false;
 
 import Layout from '../layouts/Layout.astro';
 import SmartMatcherWizard from '../components/SmartMatcherWizard.astro';
-import ProductComparator from '../components/comparativa/ProductComparator.astro';
+import ComparisonTable from '../components/ComparisonTable.astro';
 import DependienteIA from '../components/DependienteIA.astro';
-import { getCatalogProducts } from '../lib/catalog';
-import { getCategories, getCategoryById } from '../lib/categories';
+import { getCatalogProducts, productKey } from '../lib/catalog';
+import { getCrossMerchantOffers } from '../lib/productNetwork';
+import { getCategoryById } from '../lib/categories';
 
 const allProducts = getCatalogProducts();
 const approvedProducts = allProducts.filter((p) => p.audit_status !== 'rejected');
 
-// Selector de categoría del Comparador: sólo raíces con al menos 2 productos (si no, no hay nada que comparar).
-const rootCategories = getCategories().filter((cat) => !cat.parentId);
-const categoryCounts = new Map<string, number>();
-for (const product of approvedProducts) {
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(amount);
+const cleanMarketplaceSuffix = (text: string) =>
+  text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
+
+/** Raíz de categoría de un producto (para agrupar el selector). */
+const rootCategoryOf = (product: (typeof approvedProducts)[number]): { id: string; name: string } => {
   const cat = getCategoryById(String(product.category_id ?? product.category ?? ''));
-  const rootId = cat?.parentId ?? cat?.id;
-  if (!rootId) continue;
-  categoryCounts.set(rootId, (categoryCounts.get(rootId) ?? 0) + 1);
+  const root = cat?.parentId ? getCategoryById(cat.parentId) : cat;
+  return { id: root?.id ?? 'otros', name: root?.name ?? 'Otros productos' };
+};
+
+/** Catálogo ordenado y agrupado para el selector de productos. */
+const groupedOptions = new Map<string, { name: string; products: typeof approvedProducts }>();
+for (const product of approvedProducts) {
+  const root = rootCategoryOf(product);
+  const group = groupedOptions.get(root.id) ?? { name: root.name, products: [] as typeof approvedProducts };
+  group.products.push(product);
+  groupedOptions.set(root.id, group);
 }
-const comparableCategories = rootCategories.filter((cat) => (categoryCounts.get(cat.id) ?? 0) >= 2);
+for (const group of groupedOptions.values()) {
+  group.products.sort((a, b) => cleanMarketplaceSuffix(a.title).localeCompare(cleanMarketplaceSuffix(b.title)));
+}
+const optionGroups = [...groupedOptions.values()].sort((a, b) => a.name.localeCompare(b.name));
 
-const compareSlug = (Astro.url.searchParams.get('categoria') ?? '').trim();
-const compareCategory = compareSlug ? comparableCategories.find((c) => c.slug === compareSlug) : comparableCategories[0];
+/* ------------------------- resolución del producto elegido (?producto=) ----- */
+const compareKey = (Astro.url.searchParams.get('producto') ?? '').trim();
+const baseProduct = compareKey
+  ? approvedProducts.find((p) => productKey(p) === compareKey || p.id === compareKey)
+  : undefined;
 
-const compareProducts = compareCategory
-  ? approvedProducts
-      .filter((p) => {
-        const cat = getCategoryById(String(p.category_id ?? p.category ?? ''));
-        const rootId = cat?.parentId ?? cat?.id;
-        return rootId === compareCategory.id;
-      })
-      .slice(0, 12)
-  : [];
+const resolveProducts = (ids: Array<string | undefined | null>) =>
+  ids
+    .filter((id): id is string => Boolean(id))
+    .map((id) => approvedProducts.find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => Boolean(p));
 
-const pageTitle = 'Centro de Herramientas | Tradylor';
-const pageDescription = 'Perfilador de Compra, Comparador de Productos y Dependiente IA: las 3 herramientas del Método Tradylor en un mismo sitio.';
+let comparisonSet: typeof approvedProducts = [];
+let alternativeVerdict: { product: (typeof approvedProducts)[number]; role: 'cheaper' | 'premium' | 'similar'; note: string } | null = null;
+let categoryRivals: typeof approvedProducts = [];
+let crossMerchantOffers: ReturnType<typeof getCrossMerchantOffers> = [];
+
+if (baseProduct) {
+  const alternatives = baseProduct.alternatives;
+  const cheaperIds = alternatives?.cheaperOptionIds?.length
+    ? alternatives.cheaperOptionIds
+    : alternatives?.cheaperOptionId
+      ? [alternatives.cheaperOptionId]
+      : [];
+  const similarIds = alternatives?.similarOptionIds?.length
+    ? alternatives.similarOptionIds
+    : alternatives?.similarOptionId
+      ? [alternatives.similarOptionId]
+      : [];
+
+  const cheaperProducts = resolveProducts(cheaperIds);
+  const premiumProducts = resolveProducts([alternatives?.premiumOptionId]);
+  const similarProducts = resolveProducts(similarIds);
+  const linkedProducts = (baseProduct.alternative_product_ids ?? [])
+    .map((id) => approvedProducts.find((p) => p.id === id))
+    .filter((p): p is NonNullable<typeof p> => Boolean(p));
+
+  const roleIds = new Set(
+    [...cheaperIds, ...similarIds, alternatives?.premiumOptionId].filter(Boolean) as string[],
+  );
+  const extraLinked = linkedProducts.filter((p) => !roleIds.has(p.id) && p.id !== baseProduct.id);
+
+  // Rivales de la misma categoría que no están vinculados como alternativas
+  // (sirven de contexto cuando hay pocas alternativas directas).
+  const rootId = rootCategoryOf(baseProduct).id;
+  categoryRivals = approvedProducts
+    .filter((p) => p.id !== baseProduct.id && !roleIds.has(p.id) && rootCategoryOf(p).id === rootId)
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+    .slice(0, 2);
+
+  const roleProducts = [...cheaperProducts, ...premiumProducts, ...similarProducts, ...extraLinked];
+  comparisonSet = [baseProduct, ...roleProducts, ...categoryRivals].slice(0, 5);
+
+  // Alternativa recomendada: la mejor valorada entre las vinculadas, con un
+  // veredicto según el papel que ocupa en el catálogo.
+  const scoredAlternatives: Array<{ product: (typeof approvedProducts)[number]; role: 'cheaper' | 'premium' | 'similar' }> = [
+    ...cheaperProducts.map((product) => ({ product, role: 'cheaper' as const })),
+    ...premiumProducts.map((product) => ({ product, role: 'premium' as const })),
+    ...similarProducts.map((product) => ({ product, role: 'similar' as const })),
+    ...extraLinked.map((product) => ({ product, role: 'similar' as const })),
+  ].filter((entry) => entry.product.id !== baseProduct.id);
+
+  const scoreOf = (p: (typeof approvedProducts)[number]) =>
+    (p.rating ?? 0) * 5 + Math.min((p.conversion_score ?? 0) / 10, 5);
+  const best = scoredAlternatives.sort((a, b) => scoreOf(b.product) - scoreOf(a.product))[0];
+
+  if (best) {
+    const priceDelta = baseProduct.price - best.product.price;
+    const notes: Record<typeof best.role, string> = {
+      cheaper:
+        priceDelta > 0
+          ? `Cuesta ${formatCurrency(priceDelta)} menos que tu selección con una valoración igual o superior.`
+          : 'Es la opción más económica vinculada a este producto.',
+      premium:
+        priceDelta < 0
+          ? `Añade ${formatCurrency(Math.abs(priceDelta))} sobre tu selección a cambio de prestaciones superiores.`
+          : 'Es la opción premium vinculada a este producto.',
+      similar:
+        'Misma gama y uso, con valoraciones contrastadas: la alternativa directa si tu selección no te convence.',
+    };
+    alternativeVerdict = { product: best.product, role: best.role, note: notes[best.role] };
+  }
+
+  crossMerchantOffers = getCrossMerchantOffers(baseProduct);
+}
+
+const comparisonMeta = baseProduct
+  ? JSON.stringify({
+      productIds: comparisonSet.map((p) => p.id),
+      productKey: productKey(baseProduct),
+      categoryName: rootCategoryOf(baseProduct).name,
+    }).replace(/</g, '\\u003c')
+  : null;
+
+const pageTitle = baseProduct
+  ? `Comparador: ${cleanMarketplaceSuffix(baseProduct.title)} | Tradylor`
+  : 'Centro de Herramientas | Tradylor';
+const pageDescription = baseProduct
+  ? `Análisis cruzado de ${cleanMarketplaceSuffix(baseProduct.title)} frente a sus alternativas reales y la alternativa recomendada.`
+  : 'Perfilador de Compra, Comparador de Productos y Dependiente IA: las 3 herramientas del Método Tradylor en un mismo sitio.';
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
@@ -84,8 +191,8 @@ const pageDescription = 'Perfilador de Compra, Comparador de Productos y Dependi
         </nav>
 
         <p class="tools-auth-note">
-          Puedes probar las 3 herramientas sin cuenta. Para ver el resultado final y guardarlo en tu
-          panel, sólo hace falta <button type="button" class="tools-auth-link" data-open-auth="register">crear una cuenta gratis</button>.
+          Puedes probar las 3 herramientas sin cuenta. Para guardar tu perfil o tu comparativa en
+          tu panel, sólo hace falta <button type="button" class="tools-auth-link" data-open-auth="register">crear una cuenta gratis</button>.
         </p>
       </div>
     </section>
@@ -94,30 +201,130 @@ const pageDescription = 'Perfilador de Compra, Comparador de Productos y Dependi
          1. PERFILADOR DE COMPRA
          ============================================================ -->
     <div class="container" id="perfilador">
-      <SmartMatcherWizard products={allProducts} />
+      <SmartMatcherWizard />
     </div>
 
     <!-- ============================================================
-         2. COMPARADOR DE PRODUCTOS
+         2. COMPARADOR DE PRODUCTOS (por producto elegido)
          ============================================================ -->
     <section class="tools-comparator-wrap" id="comparador">
       <div class="container">
-        {comparableCategories.length > 0 ? (
+        {approvedProducts.length > 0 ? (
           <>
-            <form class="comparator-category-form" method="get">
-              <label for="compareCategorySelect" class="comparator-category-label">Comparar categoría:</label>
-              <select id="compareCategorySelect" name="categoria" class="comparator-category-select">
-                {comparableCategories.map((cat) => (
-                  <option value={cat.slug} selected={compareCategory?.slug === cat.slug}>
-                    {cat.icon} {cat.name} ({categoryCounts.get(cat.id) ?? 0})
-                  </option>
-                ))}
-              </select>
+            <form class="comparator-product-form" method="get">
+              <label for="compareProductSelect" class="comparator-product-label">
+                Elige un producto para comparar con sus alternativas:
+              </label>
+              <div class="comparator-product-row">
+                <select id="compareProductSelect" name="producto" class="comparator-product-select">
+                  <option value="">— Selecciona un producto —</option>
+                  {optionGroups.map((group) => (
+                    <optgroup label={group.name}>
+                      {group.products.map((product) => (
+                        <option value={productKey(product)} selected={baseProduct?.id === product.id}>
+                          {cleanMarketplaceSuffix(product.title)} · {formatCurrency(product.price)}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                <button type="submit" class="comparator-product-btn">Comparar</button>
+              </div>
             </form>
-            {compareProducts.length > 1 ? (
-              <ProductComparator products={compareProducts} categoryName={compareCategory?.name} />
+
+            {!baseProduct ? (
+              <p class="tools-empty-note">
+                Selecciona un producto de la lista: te mostramos su análisis cruzado frente a las
+                alternativas reales del catálogo y cuál de ellas te conviene más.
+              </p>
             ) : (
-              <p class="tools-empty-note">Elige una categoría con al menos 2 productos para comparar.</p>
+              <div class="comparator-result">
+                <!-- Resumen del producto elegido -->
+                <div class="comparator-picked">
+                  <img class="comparator-picked-img" src={baseProduct.image} alt={cleanMarketplaceSuffix(baseProduct.title)} loading="lazy" width="96" height="96" />
+                  <div class="comparator-picked-body">
+                    <span class="comparator-picked-tag">Producto elegido</span>
+                    <h2 class="comparator-picked-title">{cleanMarketplaceSuffix(baseProduct.title)}</h2>
+                    <p class="comparator-picked-meta">
+                      <strong>{formatCurrency(baseProduct.price)}</strong>
+                      {baseProduct.originalPrice && baseProduct.originalPrice > baseProduct.price && (
+                        <span class="comparator-picked-old">{formatCurrency(baseProduct.originalPrice)}</span>
+                      )}
+                      {typeof baseProduct.rating === 'number' && (
+                        <span>★ {baseProduct.rating.toFixed(1)}{baseProduct.reviewsCount ? ` (${baseProduct.reviewsCount})` : ''}</span>
+                      )}
+                      <span>{baseProduct.merchant}</span>
+                    </p>
+                    <a class="comparator-picked-link" href={`/producto/${encodeURIComponent(productKey(baseProduct))}`}>
+                      Ver análisis completo →
+                    </a>
+                  </div>
+                </div>
+
+                <!-- Análisis cruzado: tabla comparativa del producto vs alternativas -->
+                {comparisonSet.length > 1 ? (
+                  <ComparisonTable
+                    products={comparisonSet}
+                    highlightId={baseProduct.id}
+                    title={`Análisis cruzado: ${cleanMarketplaceSuffix(baseProduct.title)} y sus alternativas`}
+                  />
+                ) : (
+                  <p class="tools-empty-note">
+                    Todavía no hay alternativas vinculadas ni rivales comparables para este producto.
+                    Pronto ampliamos su análisis cruzado.
+                  </p>
+                )}
+
+                <!-- Veredicto: la alternativa recomendada -->
+                {alternativeVerdict && (
+                  <div class="comparator-verdict" data-role={alternativeVerdict.role}>
+                    <span class="comparator-verdict-tag">Nuestra alternativa</span>
+                    <h3 class="comparator-verdict-title">
+                      {alternativeVerdict.role === 'cheaper'
+                        ? 'Más barata sin renunciar'
+                        : alternativeVerdict.role === 'premium'
+                          ? 'Sube de gama'
+                          : 'Alternativa directa'}
+                    </h3>
+                    <a class="comparator-verdict-card" href={`/producto/${encodeURIComponent(productKey(alternativeVerdict.product))}`}>
+                      <img class="comparator-verdict-img" src={alternativeVerdict.product.image} alt={cleanMarketplaceSuffix(alternativeVerdict.product.title)} loading="lazy" width="80" height="80" />
+                      <span class="comparator-verdict-info">
+                        <span class="comparator-verdict-name">{cleanMarketplaceSuffix(alternativeVerdict.product.title)}</span>
+                        <span class="comparator-verdict-price">
+                          {formatCurrency(alternativeVerdict.product.price)}
+                          {typeof alternativeVerdict.product.rating === 'number' && (
+                            <span class="comparator-verdict-rating">★ {alternativeVerdict.product.rating.toFixed(1)}</span>
+                          )}
+                        </span>
+                        <span class="comparator-verdict-note">{alternativeVerdict.note}</span>
+                      </span>
+                      <span class="comparator-verdict-cta">Ver análisis →</span>
+                    </a>
+                  </div>
+                )}
+
+                <!-- Comparativa multitienda automática (mismo producto en otras redes) -->
+                {crossMerchantOffers.length > 1 && (
+                  <div class="comparator-cross">
+                    <span class="comparator-cross-tag">También disponible en</span>
+                    <ul class="comparator-cross-list">
+                      {crossMerchantOffers.map((offer) => (
+                        <li class:list={['comparator-cross-item', { 'is-current': offer.isCurrent }]}>
+                          <span class="cm-merchant">{offer.merchant}</span>
+                          {typeof offer.price === 'number' && <span class="cm-price">{formatCurrency(offer.price)}</span>}
+                          {offer.isCurrent ? (
+                            <span class="cm-current-tag">Precio comparado arriba</span>
+                          ) : (
+                            <a href={offer.redirectUrl} class="cm-view-link" rel="sponsored nofollow noopener" target="_blank">
+                              Ver oferta →
+                            </a>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
           </>
         ) : (
@@ -125,6 +332,11 @@ const pageDescription = 'Perfilador de Compra, Comparador de Productos y Dependi
         )}
       </div>
     </section>
+
+    {/* Datos de la comparativa para registrarla en "Mis herramientas" (Mi Radar). */}
+    {comparisonMeta && (
+      <script type="application/json" id="comparator-meta" set:html={JSON.stringify(comparisonMeta)} />
+    )}
 
     <!-- ============================================================
          3. DEPENDIENTE IA
@@ -135,16 +347,27 @@ const pageDescription = 'Perfilador de Compra, Comparador de Productos y Dependi
   </main>
 </Layout>
 
-<script is:inline>
-  (() => {
-    const select = document.getElementById('compareCategorySelect');
-    select?.addEventListener('change', () => {
-      const url = new URL(window.location.href);
-      url.searchParams.set('categoria', select.value);
-      url.hash = 'comparador';
-      window.location.href = url.toString();
-    });
-  })();
+<script>
+  import { addComparatorHistoryEntry } from '../utils/radarStore';
+
+  // Registra la comparativa abierta en el historial de Mi Radar (sólo una vez
+  // por producto y sesión: el navegador puede recargar al volver atrás).
+  const meta = document.getElementById('comparator-meta')?.textContent;
+  if (meta) {
+    try {
+      const parsed = JSON.parse(meta) as { productIds?: string[]; categoryName?: string };
+      const ids = Array.isArray(parsed.productIds) ? parsed.productIds : [];
+      if (ids.length > 1) {
+        const storageKey = `tradylor-compare-${ids[0]}`;
+        if (!sessionStorage.getItem(storageKey)) {
+          sessionStorage.setItem(storageKey, '1');
+          addComparatorHistoryEntry({ categoryName: parsed.categoryName, productIds: ids });
+        }
+      }
+    } catch {
+      /* sin historial: la comparativa sigue funcionando */
+    }
+  }
 </script>
 
 <style>
@@ -258,31 +481,314 @@ const pageDescription = 'Perfilador de Compra, Comparador de Productos y Dependi
     padding: 1rem 0 3rem;
   }
 
-  .comparator-category-form {
-    display: flex;
-    align-items: center;
-    gap: 0.65rem;
-    margin-bottom: 1.5rem;
+  .comparator-product-form {
+    margin-bottom: 1.75rem;
   }
 
-  .comparator-category-label {
+  .comparator-product-label {
+    display: block;
     font-size: 0.8rem;
     font-weight: 700;
     color: var(--color-text-dim);
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    margin-bottom: 0.6rem;
   }
 
-  .comparator-category-select {
-    padding: 0.5rem 0.9rem;
+  .comparator-product-row {
+    display: flex;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+  }
+
+  .comparator-product-select {
+    flex: 1;
+    min-width: 260px;
+    padding: 0.65rem 0.9rem;
     background: #0b1220;
     border: 1px solid rgba(148, 163, 184, 0.3);
     border-radius: 10px;
     color: #e5e7eb;
     font: inherit;
-    font-size: 0.85rem;
+    font-size: 0.88rem;
     font-weight: 600;
     cursor: pointer;
+  }
+
+  .comparator-product-select:focus {
+    outline: none;
+    border-color: rgba(59, 130, 246, 0.6);
+  }
+
+  .comparator-product-btn {
+    flex-shrink: 0;
+    padding: 0.65rem 1.4rem;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    border: 0;
+    border-radius: 10px;
+    color: #1a1205;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .comparator-product-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(245, 158, 11, 0.3);
+  }
+
+  .comparator-result {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+  }
+
+  /* Producto elegido */
+  .comparator-picked {
+    display: flex;
+    gap: 1.1rem;
+    padding: 1.25rem;
+    background: linear-gradient(160deg, rgba(245, 158, 11, 0.06) 0%, rgba(17, 24, 39, 0.8) 100%);
+    border: 1px solid rgba(245, 158, 11, 0.25);
+    border-radius: 18px;
+  }
+
+  .comparator-picked-img {
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: 12px;
+    background: #1a1a2e;
+    flex-shrink: 0;
+  }
+
+  .comparator-picked-body {
+    min-width: 0;
+  }
+
+  .comparator-picked-tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #fbbf24;
+    margin-bottom: 0.35rem;
+  }
+
+  .comparator-picked-title {
+    font-family: var(--font-heading);
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.45rem;
+  }
+
+  .comparator-picked-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0 0 0.5rem;
+  }
+
+  .comparator-picked-meta strong {
+    color: #fbbf24;
+    font-family: var(--font-heading);
+    font-size: 1.05rem;
+  }
+
+  .comparator-picked-old {
+    text-decoration: line-through;
+    color: rgba(255, 255, 255, 0.35);
+  }
+
+  .comparator-picked-link {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #60a5fa;
+    text-decoration: none;
+  }
+
+  .comparator-picked-link:hover {
+    text-decoration: underline;
+  }
+
+  /* Veredicto de la alternativa recomendada */
+  .comparator-verdict {
+    padding: 1.5rem;
+    background: rgba(16, 185, 129, 0.05);
+    border: 1px solid rgba(16, 185, 129, 0.28);
+    border-radius: 18px;
+  }
+
+  .comparator-verdict[data-role='premium'] {
+    background: rgba(59, 130, 246, 0.05);
+    border-color: rgba(59, 130, 246, 0.28);
+  }
+
+  .comparator-verdict-tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #34d399;
+    margin-bottom: 0.35rem;
+  }
+
+  .comparator-verdict[data-role='premium'] .comparator-verdict-tag {
+    color: #93c5fd;
+  }
+
+  .comparator-verdict-title {
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 1rem;
+  }
+
+  .comparator-verdict-card {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem;
+    background: rgba(10, 14, 23, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    text-decoration: none;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+  }
+
+  .comparator-verdict-card:hover {
+    border-color: rgba(52, 211, 153, 0.5);
+    transform: translateY(-2px);
+  }
+
+  .comparator-verdict-img {
+    width: 80px;
+    height: 80px;
+    object-fit: cover;
+    border-radius: 10px;
+    background: #1a1a2e;
+    flex-shrink: 0;
+  }
+
+  .comparator-verdict-info {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .comparator-verdict-name {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #ffffff;
+  }
+
+  .comparator-verdict-price {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-heading);
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #34d399;
+  }
+
+  .comparator-verdict-rating {
+    font-size: 0.8rem;
+    color: #fbbf24;
+  }
+
+  .comparator-verdict-note {
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .comparator-verdict-cta {
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #6ee7b7;
+  }
+
+  /* Multitienda */
+  .comparator-cross {
+    padding: 1.25rem;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 16px;
+  }
+
+  .comparator-cross-tag {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-dim);
+    margin-bottom: 0.75rem;
+  }
+
+  .comparator-cross-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .comparator-cross-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.75rem;
+    background: rgba(10, 14, 23, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    font-size: 0.85rem;
+  }
+
+  .comparator-cross-item.is-current {
+    border-color: rgba(52, 211, 153, 0.35);
+  }
+
+  .comparator-cross-item .cm-merchant {
+    flex: 1;
+    font-weight: 700;
+    color: #e5e7eb;
+  }
+
+  .comparator-cross-item .cm-price {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    color: #ffffff;
+  }
+
+  .comparator-cross-item .cm-current-tag {
+    font-size: 0.72rem;
+    color: #6ee7b7;
+  }
+
+  .comparator-cross-item .cm-view-link {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #60a5fa;
+    text-decoration: none;
+  }
+
+  .comparator-cross-item .cm-view-link:hover {
+    text-decoration: underline;
   }
 
   .tools-empty-note {
@@ -292,5 +798,21 @@ const pageDescription = 'Perfilador de Compra, Comparador de Productos y Dependi
     background: rgba(255, 255, 255, 0.02);
     border: 1px dashed rgba(255, 255, 255, 0.12);
     border-radius: 16px;
+  }
+
+  @media (max-width: 640px) {
+    .comparator-picked {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .comparator-verdict-card {
+      flex-wrap: wrap;
+    }
+
+    .comparator-verdict-cta {
+      width: 100%;
+      text-align: right;
+    }
   }
 </style>

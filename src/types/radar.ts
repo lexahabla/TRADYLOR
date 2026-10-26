@@ -196,6 +196,13 @@ export interface RadarData {
   removedProducts?: Record<string, number>;
   /** Bajas de listas: id → epoch ms (los ids de lista son únicos, no se reutilizan). */
   removedProjects?: Record<string, number>;
+  /**
+   * Bajas de registros de herramientas (perfiles de comprador, comparativas
+   * guardadas y chats del Dependiente IA): id → epoch ms. La fusión de esas
+   * listas es por unión, así que sin esta marca un registro borrado en un
+   * dispositivo volvía en el siguiente sync.
+   */
+  removedToolRecords?: Record<string, number>;
   /** Perfiles de comprador guardados (opcional; requiere sesión para crearse). */
   buyerProfiles?: BuyerProfile[];
   /** id del perfil marcado como activo en el selector del mainNav (o vacío). */

@@ -83,6 +83,7 @@ export function getRadar(userId: string): RadarData {
     reminders: Array.isArray(stored.reminders) ? stored.reminders : [],
     removedProducts: cleanTombstones(stored.removedProducts, Date.now()),
     removedProjects: cleanTombstones(stored.removedProjects, Date.now()),
+    removedToolRecords: cleanTombstones(stored.removedToolRecords, Date.now()),
     buyerProfiles: Array.isArray(stored.buyerProfiles) ? stored.buyerProfiles : [],
     activeBuyerProfileId: stored.activeBuyerProfileId || undefined,
     comparatorHistory: Array.isArray(stored.comparatorHistory) ? stored.comparatorHistory : [],
@@ -99,6 +100,9 @@ const PRODUCT_TOMBSTONE_MAX = 500;
 /** Las bajas de listas duran más: los ids de lista no se reutilizan. */
 const PROJECT_TOMBSTONE_TTL_MS = 730 * DAY_MS;
 const PROJECT_TOMBSTONE_MAX = 200;
+/** Bajas de registros de herramientas (perfiles, comparativas, chats IA). */
+const TOOL_TOMBSTONE_TTL_MS = 365 * DAY_MS;
+const TOOL_TOMBSTONE_MAX = 300;
 
 function toStamp(value: unknown): number {
   const ms = Date.parse(String(value ?? ''));
@@ -387,6 +391,15 @@ export function syncRadar(userId: string, incoming: Partial<RadarData>): RadarDa
     PROJECT_TOMBSTONE_TTL_MS,
     PROJECT_TOMBSTONE_MAX,
   );
+  // Bajas de registros de herramientas: sin ellas la unión por id de perfiles,
+  // comparativas y chats resucitaba lo borrado en el cliente.
+  const removedToolRecords = mergeTombstones(
+    cleanTombstones(incoming.removedToolRecords, now),
+    cleanTombstones(current.removedToolRecords, now),
+    now,
+    TOOL_TOMBSTONE_TTL_MS,
+    TOOL_TOMBSTONE_MAX,
+  );
 
   // --- Listas: nombre y descripción del cliente; las que sólo viven en la nube se conservan.
   const incomingProjects = (Array.isArray(incoming.projects) ? incoming.projects : []).filter(
@@ -510,16 +523,30 @@ export function syncRadar(userId: string, incoming: Partial<RadarData>): RadarDa
     .filter((c): c is AiChatEntry => Boolean(c));
   const aiChats = mergeById(incomingAiChats, current.aiChats ?? [], AI_CHATS_MAX);
 
+  // Registros dados de baja en cualquier dispositivo no vuelven (mismo criterio
+  // que con los productos: sólo se descarta si la baja es igual o posterior).
+  const toolStamp = (item: { createdAt: string; updatedAt?: string }) =>
+    Math.max(toStamp(item.createdAt), toStamp(item.updatedAt));
+  const dropBanned = <T extends { id: string; createdAt: string; updatedAt?: string }>(list: T[]): T[] =>
+    list.filter((item) => {
+      const at = removedToolRecords[item.id];
+      return at === undefined || at < toolStamp(item);
+    });
+
+  const liveProfiles = dropBanned(buyerProfiles);
   const merged: RadarData = {
     projects,
     pendingExits: [...exitsById.values()].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50),
     reminders,
     removedProducts,
     removedProjects,
-    buyerProfiles,
-    activeBuyerProfileId,
-    comparatorHistory,
-    aiChats,
+    removedToolRecords,
+    buyerProfiles: liveProfiles,
+    activeBuyerProfileId: liveProfiles.some((p) => p.id === activeBuyerProfileId)
+      ? activeBuyerProfileId
+      : undefined,
+    comparatorHistory: dropBanned(comparatorHistory),
+    aiChats: dropBanned(aiChats),
   };
   all[userId] = merged;
   writeAll(all);
