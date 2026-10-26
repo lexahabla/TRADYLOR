@@ -7,6 +7,7 @@ import {
   hasTextCredentials,
   hasImageCredentials,
   overlayEnrichedText,
+  mergeWithMinimum,
   textProvider,
   imageProvider,
   type EnrichedText,
@@ -199,10 +200,14 @@ async function enrichSingleText(
     product.gallery = filteredGallery.length ? filteredGallery : undefined;
   }
 
-  // Composición final del producto. Pros/contras: siempre más pros que
-  // contras (ver enforceMoreProsThanCons) sobre el PAR final ya resuelto,
-  // por si alguno cae al valor previo del producto y el otro no.
-  const finalPros = Array.isArray(enrichment?.pros) && enrichment.pros.length ? enrichment.pros : (product.pros ?? []);
+  // Composición final del producto. Pros: se exige un mínimo de 3 (ver
+  // mergeWithMinimum), completando con los que ya tenía el producto si el
+  // enriquecimiento se queda corto, en vez de descartarlos por completo
+  // (antes: "todo o nada", lo que podía dejar sólo 1 pro y, tras forzar el
+  // balance pros>cons, 0 contras). Contras: se respeta la respuesta no vacía
+  // del enriquecimiento; si viene vacía, se usan los previos del producto.
+  const enrichmentPros = Array.isArray(enrichment?.pros) ? enrichment.pros : [];
+  const finalPros = mergeWithMinimum(enrichmentPros, product.pros ?? [], 3);
   const finalCons = Array.isArray(enrichment?.cons) && enrichment.cons.length ? enrichment.cons : (product.cons ?? []);
   const { pros: balancedPros, cons: balancedCons } = enforceMoreProsThanCons(finalPros, finalCons);
   const updated: Product = {

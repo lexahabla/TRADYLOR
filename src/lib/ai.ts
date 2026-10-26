@@ -490,6 +490,44 @@ export async function enrichProductText(input: {
 }
 
 /**
+ * Combina una lista de pros/cons de la IA con la lista local, exigiendo un
+ * mínimo de elementos. Antes el criterio era "todo o nada": si la IA devolvía
+ * aunque fuera 1 solo elemento, se usaba ese array completo descartando los
+ * locales (que podían tener 3-5 más sólidos). Los modelos gratuitos (Groq y
+ * similares) no siempre cumplen la instrucción de "3 a 5 pros" al pie de la
+ * letra, sobre todo bajo carga en un enriquecimiento masivo: con el criterio
+ * antiguo, esas respuestas cortas se aceptaban como "éxito" y, al forzar
+ * después que haya más pros que contras (ver enforceMoreProsThanCons), los
+ * contras se recortaban a 0 o casi 0.
+ *
+ * Con esta función: si la IA ya alcanza el mínimo, se usa tal cual (su
+ * redacción suele ser mejor); si se queda corta, se completa con elementos
+ * locales que no se solapen textualmente, SIN descartar lo que la IA sí
+ * aportó.
+ */
+export function mergeWithMinimum(aiList: string[], localList: string[], minimum: number): string[] {
+  if (aiList.length >= minimum) return aiList;
+  if (!aiList.length) return localList;
+  const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+  const seen = new Set(aiList.map(normalize));
+  const merged = [...aiList];
+  for (const candidate of localList) {
+    if (merged.length >= minimum) break;
+    const key = normalize(candidate);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(candidate);
+  }
+  return merged;
+}
+
+/**
  * Combina una ficha LOCAL (base, siempre presente, gratis) con el resultado
  * de la IA (overlay opcional): la IA mejora lo local, pero nunca borra datos
  * con campos vacíos. Patrón único compartido por el alta/edición de producto
@@ -502,7 +540,15 @@ export function overlayEnrichedText(local: EnrichedText, ai: EnrichedText): Enri
     if (Array.isArray(aiValue)) return aiValue.length ? aiValue : localValue;
     return aiValue ?? localValue;
   };
-  const { pros, cons } = enforceMoreProsThanCons(pick(ai.pros, local.pros), pick(ai.cons, local.cons));
+  // Pros: mínimo 3 (lo que pide el prompt a la IA). Cons: cualquier respuesta
+  // no vacía de la IA se respeta tal cual (el prompt sólo pide 1-3), y sólo
+  // se recurre a los locales si la IA no devolvió ninguno.
+  const mergedPros = mergeWithMinimum(
+    Array.isArray(ai.pros) ? ai.pros : [],
+    Array.isArray(local.pros) ? local.pros : [],
+    3
+  );
+  const { pros, cons } = enforceMoreProsThanCons(mergedPros, pick(ai.cons, local.cons));
   return {
     ...local,
     ...ai,
@@ -519,6 +565,7 @@ export function overlayEnrichedText(local: EnrichedText, ai: EnrichedText): Enri
     cons,
     pricing: ai.pricing ?? local.pricing,
   };
+
 }
 
 /**

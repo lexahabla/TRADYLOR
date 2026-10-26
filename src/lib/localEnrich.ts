@@ -154,7 +154,13 @@ function buildVerdict(input: LocalEnrichInput): string {
   return `Si buscas algo ${tone}${brand} con buenas valoraciones de usuarios, ${input.title} encaja bien en ese perfil.${deal}`;
 }
 
-/** Pros por defecto (sólo si el scraping no aportó ninguno). */
+/**
+ * Pros por defecto (sólo si el scraping no aportó ninguno). Genera siempre
+ * varios candidatos (no sólo 1 genérico): además de servir de ficha base
+ * cuando no hay IA, este pool también se usa para COMPLETAR una respuesta de
+ * IA demasiado corta (ver mergeWithMinimum en ai.ts), así que cuantos más
+ * candidatos variados haya, mejor queda la ficha final.
+ */
 function buildPros(input: LocalEnrichInput): string[] {
   const pros: string[] = [];
   if (input.rating && input.rating >= 4) pros.push(`Valoración alta de los usuarios (${input.rating}/5).`);
@@ -162,7 +168,11 @@ function buildPros(input: LocalEnrichInput): string[] {
   const off = discountPercent(input.price, input.originalPrice);
   if (off) pros.push(`Descuento activo del ${off}% sobre el precio original.`);
   if (input.brand) pros.push(`Marca reconocida: ${input.brand}.`);
-  pros.push('Disponible en compra con envío por el comercio asociado.');
+  const tone = toneFor(input.category);
+  pros.push(`Relación calidad-precio competitiva dentro de los productos ${tone}.`);
+  if (input.merchant) pros.push(`Vendido y gestionado por ${input.merchant}.`);
+  pros.push('Disponible en compra con envío gestionado por el comercio asociado.');
+  pros.push('Ficha revisada y verificada antes de su publicación en Tradylor.');
   return pros.slice(0, 5);
 }
 
