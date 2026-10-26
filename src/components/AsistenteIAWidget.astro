@@ -219,12 +219,16 @@ const {
         const data = await res.json();
         const loadingEl = document.getElementById(loadingId);
         if (loadingEl) {
-          loadingEl.innerText = data.respuesta || 'Error de connexión con el servidor.';
+          // Si el servidor devolvió un error real (data.error), lo mostramos;
+          // si no hay respuesta (respuesta vacía), usamos el mensaje genérico.
+          loadingEl.innerText =
+            data.respuesta ||
+            (data.error ? `Error del servidor: ${data.error}` : 'Error de connexion avec le serveur.');
         }
       } catch (error) {
         const loadingEl = document.getElementById(loadingId);
         if (loadingEl) {
-          loadingEl.innerText = 'Error de connexión con el servidor.';
+          loadingEl.innerText = 'Error de connexion avec le serveur.';
         }
       }
 

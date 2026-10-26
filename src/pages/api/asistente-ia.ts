@@ -44,6 +44,13 @@ export const POST: APIRoute = async ({ request }) => {
       return json({ error: 'mensajeUsuario es obligatorio.' }, 400);
     }
 
+    if (!process.env.GEMINI_API_KEY) {
+      return json(
+        { error: 'GEMINI_API_KEY no está configurada en el servidor.' },
+        500,
+      );
+    }
+
     const systemInstruction = `
 Eres el Dependiente IA de Tradylor.com, un asistente de compras experto y objetivo.
 Tu objetivo es orientar al usuario utilizando la información de nuestro método (pros, contras y especificaciones).
