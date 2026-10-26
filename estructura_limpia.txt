@@ -216,7 +216,7 @@ src/pages/ejemplo-afiliados.astro
 src/pages/herramientas.astro
 src/pages/herramientas/comparador.astro
 src/pages/herramientas/dependiente-ia.astro
-src/pages/herramientas/index.astro
+src/pages/herramientas/perfilador.astro
 src/pages/index.astro
 src/pages/metodologia.astro
 src/pages/mi-radar.astro
