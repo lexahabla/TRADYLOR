@@ -298,7 +298,7 @@ const radarPayload = {
     </div>
   </article>
 ) : (
-<article class="product-card" id={`product-${product?.id}`} data-layout={layout}>
+<article class="product-card" id={`product-${product?.id}`} data-layout={layout} data-pc-price={product.price} data-pc-discount={discountPercent ?? ''} data-pc-rating={product.rating ?? ''} data-pc-score={product.conversion_score ?? ''}>
   <!-- Enlace de tarjeta completa: al pasar el cursor toda la tarjeta lleva a
        la ficha. Los elementos con enlace propio (título, categoría, imagen,
        "Comprar ya" y "Mi Radar") quedan por encima (z-index). -->
@@ -346,6 +346,11 @@ const radarPayload = {
   <!-- Contenido Editorial & Especificaciones -->
   <div class="card-content">
     <a class="category-label" href={`/?category=${encodeURIComponent(String(product.category ?? '').toLowerCase().trim())}`}>{product.category}</a>
+
+    <span class="profile-match-badge" data-profile-match-badge hidden>
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+      Encaja con tu perfil
+    </span>
 
     {product.rating && (
       <div class="rating-box" aria-label={`Puntuación: ${product.rating} sobre 5`}>
@@ -583,6 +588,26 @@ const radarPayload = {
   a.category-label:hover {
     background: rgba(96, 165, 250, 0.2);
     border-color: rgba(96, 165, 250, 0.45);
+  }
+
+  .profile-match-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    width: 100%;
+    font-size: 0.66rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    color: #052e22;
+    background: linear-gradient(135deg, #34d399, #10b981);
+    padding: 0.28rem 0.5rem;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  }
+
+  .profile-match-badge[hidden] {
+    display: none;
   }
 
   .rating-box {

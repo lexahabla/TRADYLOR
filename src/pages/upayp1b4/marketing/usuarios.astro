@@ -508,6 +508,15 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
           </div>
           <ul class="mu-factors-list">${factors || '<li class="mu-empty-inline">Sin factores: perfil frío sin actividad.</li>'}</ul>
         </section>
+        <section class="mu-dcol">
+          <h3 class="mu-dtitle">Centro de Herramientas</h3>
+          <dl class="mu-dl">
+            <dt>Perfiles de comprador</dt><dd>${b.tools.buyerProfilesCount}</dd>
+            <dt>Perfil activo</dt><dd>${esc(b.tools.activeBuyerProfileName ?? 'Ninguno')}</dd>
+            <dt>Comparativas guardadas</dt><dd>${b.tools.comparatorHistoryCount}</dd>
+            <dt>Chats con Dependiente IA</dt><dd>${b.tools.aiChatsCount}</dd>
+          </dl>
+        </section>
         <div class="mu-detail-footer">
           <button type="button" class="mu-btn mu-btn-small mu-btn-danger" data-delete-user>Eliminar usuario</button>
         </div>

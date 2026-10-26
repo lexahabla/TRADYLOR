@@ -52,6 +52,31 @@ if (!sessionUser) {
       <div class="radar-exit-cards" data-radar-exit-cards></div>
     </section>
 
+    <!-- 2b. Mis herramientas: accesos directos a Perfilador, Comparador y Dependiente IA -->
+    <section class="radar-tools-section" data-radar-tools-section>
+      <div class="radar-tools-head">
+        <h2 class="radar-section-title">Mis herramientas</h2>
+        <a href="/herramientas" class="radar-tools-all-link">Ir al Centro de Herramientas →</a>
+      </div>
+      <div class="radar-tools-grid">
+        <article class="radar-tool-card">
+          <h3 class="radar-tool-card-title">🧭 Perfiles de comprador</h3>
+          <div class="radar-tool-card-list" data-radar-tool-profiles></div>
+          <a href="/herramientas#perfilador" class="radar-tool-card-link">+ Crear nuevo perfil</a>
+        </article>
+        <article class="radar-tool-card">
+          <h3 class="radar-tool-card-title">⚖️ Comparativas guardadas</h3>
+          <div class="radar-tool-card-list" data-radar-tool-comparisons></div>
+          <a href="/herramientas#comparador" class="radar-tool-card-link">+ Ir al comparador</a>
+        </article>
+        <article class="radar-tool-card">
+          <h3 class="radar-tool-card-title">🤖 Conversaciones con el Dependiente IA</h3>
+          <div class="radar-tool-card-list" data-radar-tool-aichats></div>
+          <a href="/herramientas#dependiente-ia" class="radar-tool-card-link">+ Nueva conversación</a>
+        </article>
+      </div>
+    </section>
+
     <!-- 3. Carpetas / listas -->
     <section class="radar-projects">
       <div class="radar-projects-bar">
@@ -235,6 +260,119 @@ if (!sessionUser) {
 
   .radar-return-flow[hidden] {
     display: none;
+  }
+
+  /* Mis herramientas */
+  .radar-tools-section {
+    margin-bottom: 2.5rem;
+  }
+
+  .radar-tools-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.9rem;
+  }
+
+  .radar-tools-all-link {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #60a5fa;
+    text-decoration: none;
+  }
+
+  .radar-tools-all-link:hover {
+    text-decoration: underline;
+  }
+
+  .radar-tools-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+  }
+
+  .radar-tool-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    padding: 1.1rem;
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+  }
+
+  .radar-tool-card-title {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--color-text-main);
+  }
+
+  .radar-tool-card-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-height: 1.5rem;
+  }
+
+  .radar-tool-card-empty {
+    font-size: 0.78rem;
+    color: var(--color-text-dim);
+  }
+
+  .radar-tool-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.6rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--color-border);
+    border-radius: 9px;
+    font-size: 0.8rem;
+  }
+
+  .radar-tool-item.is-active {
+    border-color: rgba(52, 211, 153, 0.5);
+    background: rgba(16, 185, 129, 0.08);
+  }
+
+  .radar-tool-item-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--color-text-main);
+    font-weight: 600;
+    background: none;
+    border: none;
+    text-align: left;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
+  }
+
+  .radar-tool-item-remove {
+    flex-shrink: 0;
+    padding: 0.15rem;
+    background: none;
+    border: none;
+    color: var(--color-text-dim);
+    cursor: pointer;
+    display: inline-flex;
+  }
+
+  .radar-tool-item-remove:hover {
+    color: #f87171;
+  }
+
+  @media (max-width: 900px) {
+    .radar-tools-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   .radar-section-title {
@@ -1168,7 +1306,14 @@ if (!sessionUser) {
     cancelReminder,
     createProject,
     createReminder,
+    deleteAiChat,
+    deleteBuyerProfile,
+    deleteComparatorHistoryEntry,
     deleteProject,
+    getActiveBuyerProfile,
+    getAiChats,
+    getBuyerProfiles,
+    getComparatorHistory,
     getProjects,
     getRadarProducts,
     getScheduledReminder,
@@ -1177,6 +1322,7 @@ if (!sessionUser) {
     onRadarChange,
     removeProduct,
     resolveExit,
+    setActiveBuyerProfile,
     setProductAlert,
     setProductNote,
   } from '../utils/radarStore';
@@ -1429,7 +1575,89 @@ if (!sessionUser) {
     renderGrid(projects);
     renderDndHint(projects);
     renderExits();
+    renderTools();
   }
+
+  /* ------------------------------------------------------- Mis herramientas */
+
+  function renderTools(): void {
+    const profilesHost = $('[data-radar-tool-profiles]');
+    const comparisonsHost = $('[data-radar-tool-comparisons]');
+    const aiChatsHost = $('[data-radar-tool-aichats]');
+
+    if (profilesHost) {
+      const profiles = getBuyerProfiles();
+      const active = getActiveBuyerProfile();
+      profilesHost.innerHTML = profiles.length
+        ? profiles.map((p) => `
+            <div class="radar-tool-item${p.id === active?.id ? ' is-active' : ''}">
+              <button type="button" class="radar-tool-item-name" data-tool-activate-profile="${p.id}" title="Marcar como perfil activo">
+                ${p.id === active?.id ? '✓ ' : ''}${escapeHtml(p.name)}
+              </button>
+              <button type="button" class="radar-tool-item-remove" data-tool-delete-profile="${p.id}" aria-label="Eliminar perfil ${escapeHtml(p.name)}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+          `).join('')
+        : '<p class="radar-tool-card-empty">Aún no tienes perfiles guardados.</p>';
+    }
+
+    if (comparisonsHost) {
+      const history = getComparatorHistory();
+      comparisonsHost.innerHTML = history.length
+        ? history.slice(0, 5).map((c) => `
+            <div class="radar-tool-item">
+              <span class="radar-tool-item-name">${escapeHtml(c.categoryName || 'Comparativa')} · ${c.productIds.length} productos</span>
+              <button type="button" class="radar-tool-item-remove" data-tool-delete-comparison="${c.id}" aria-label="Eliminar comparativa guardada">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+          `).join('')
+        : '<p class="radar-tool-card-empty">Aún no has guardado ninguna comparativa.</p>';
+    }
+
+    if (aiChatsHost) {
+      const chats = getAiChats();
+      aiChatsHost.innerHTML = chats.length
+        ? chats.slice(0, 5).map((c) => `
+            <div class="radar-tool-item">
+              <span class="radar-tool-item-name">${escapeHtml(c.title)}</span>
+              <button type="button" class="radar-tool-item-remove" data-tool-delete-chat="${c.id}" aria-label="Eliminar conversación">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+          `).join('')
+        : '<p class="radar-tool-card-empty">Aún no has hablado con el Dependiente IA.</p>';
+    }
+  }
+
+  document.querySelector('[data-radar-tools-section]')?.addEventListener('click', (event) => {
+    const target = event.target as Element | null;
+    if (!target) return;
+    const activateBtn = target.closest<HTMLElement>('[data-tool-activate-profile]');
+    if (activateBtn?.dataset.toolActivateProfile) {
+      setActiveBuyerProfile(activateBtn.dataset.toolActivateProfile);
+      renderTools();
+      return;
+    }
+    const deleteProfileBtn = target.closest<HTMLElement>('[data-tool-delete-profile]');
+    if (deleteProfileBtn?.dataset.toolDeleteProfile) {
+      deleteBuyerProfile(deleteProfileBtn.dataset.toolDeleteProfile);
+      renderTools();
+      return;
+    }
+    const deleteComparisonBtn = target.closest<HTMLElement>('[data-tool-delete-comparison]');
+    if (deleteComparisonBtn?.dataset.toolDeleteComparison) {
+      deleteComparatorHistoryEntry(deleteComparisonBtn.dataset.toolDeleteComparison);
+      renderTools();
+      return;
+    }
+    const deleteChatBtn = target.closest<HTMLElement>('[data-tool-delete-chat]');
+    if (deleteChatBtn?.dataset.toolDeleteChat) {
+      deleteAiChat(deleteChatBtn.dataset.toolDeleteChat);
+      renderTools();
+    }
+  });
 
   /* -------------------------------------------------------------- modal */
 

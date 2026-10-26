@@ -99,6 +99,13 @@ export interface AudienceUser360 {
     viewedNotBought: ViewedNotBoughtMetric[];
     savedCount: number;
     savedProducts: SavedProduct[];
+    /** Uso de las 3 herramientas del Centro de Herramientas (perfiles, comparativas, chats IA). */
+    tools: {
+      buyerProfilesCount: number;
+      activeBuyerProfileName?: string;
+      comparatorHistoryCount: number;
+      aiChatsCount: number;
+    };
   };
   leadScore: LeadScore;
 }
@@ -272,6 +279,12 @@ export function buildAudienceUser360(user: PublicRadarUser): AudienceUser360 {
       viewedNotBought,
       savedCount: savedById.size,
       savedProducts: [...savedById.values()],
+      tools: {
+        buyerProfilesCount: radar.buyerProfiles?.length ?? 0,
+        activeBuyerProfileName: radar.buyerProfiles?.find((p) => p.id === radar.activeBuyerProfileId)?.name,
+        comparatorHistoryCount: radar.comparatorHistory?.length ?? 0,
+        aiChatsCount: radar.aiChats?.length ?? 0,
+      },
     },
     leadScore,
   };

@@ -3622,6 +3622,7 @@ const headerCategoryPanelHtml = `
           trackExitClick,
         } from '../utils/radarStore';
         import type { BuyerProfile, SavedProduct, UserProfile } from '../types/radar';
+        import { BUYER_PROFILE_BUDGET_RANGES } from '../types/radar';
         import { openSharePanel } from '../utils/shareUi';
 
         // ---------------------------------------------------------- helpers UI
@@ -3828,6 +3829,41 @@ const headerCategoryPanelHtml = `
             setBuyerProfilePanelOpen(false);
           }
         });
+
+        // ------------------------------------------- badge "Encaja con tu perfil"
+        // Filtro VISUAL (nunca oculta productos): marca con un badge las tarjetas
+        // cuyo precio entra en el rango del perfil activo (y, si la prioridad es
+        // calidad o precio, exige además buena valoración o descuento real).
+        function applyProfileMatchBadges(user: UserProfile | null): void {
+          const cards = document.querySelectorAll<HTMLElement>('[data-pc-price]');
+          if (!cards.length) return;
+          const profile = user ? getActiveBuyerProfile() : null;
+          const range = profile ? BUYER_PROFILE_BUDGET_RANGES[profile.budget] : null;
+
+          cards.forEach((card) => {
+            const badge = card.querySelector<HTMLElement>('[data-profile-match-badge]');
+            if (!badge) return;
+            if (!profile || !range) {
+              badge.hidden = true;
+              return;
+            }
+            const price = Number(card.dataset.pcPrice);
+            if (!Number.isFinite(price)) {
+              badge.hidden = true;
+              return;
+            }
+            let match = price >= range[0] && price <= range[1];
+            if (match && profile.priority === 'quality') {
+              const rating = Number(card.dataset.pcRating) || 0;
+              const score = Number(card.dataset.pcScore) || 0;
+              match = rating >= 4 || score >= 60;
+            } else if (match && profile.priority === 'price') {
+              const discount = Number(card.dataset.pcDiscount) || 0;
+              match = discount >= 10;
+            }
+            badge.hidden = !match;
+          });
+        }
 
         // ------------------------------------------------------ drawer Carrito / Radar
         const radarDrawer = document.getElementById('radarDrawer');
@@ -4208,12 +4244,14 @@ const headerCategoryPanelHtml = `
 
         onRadarChange(syncButtons);
         onRadarChange(() => renderBuyerProfileSwitcher(getCachedSession()?.user ?? null));
+        onRadarChange(() => applyProfileMatchBadges(getCachedSession()?.user ?? null));
         onAuthChange((user) => {
           // Con cuenta activa se completa el guardado que quedó pendiente
           // en el gate de registro (clic en «Guardar» de una tarjeta).
           if (user) flushPendingRadarSave();
           renderHeaderAuth(user);
           renderBuyerProfileSwitcher(user);
+          applyProfileMatchBadges(user);
           syncButtons();
           if (user) void syncMarketingProfile();
         });
@@ -4222,6 +4260,7 @@ const headerCategoryPanelHtml = `
           if (session.user) flushPendingRadarSave();
           renderHeaderAuth(session.user ?? null);
           renderBuyerProfileSwitcher(session.user ?? null);
+          applyProfileMatchBadges(session.user ?? null);
           syncButtons();
           if (session.user) void syncMarketingProfile();
         });
