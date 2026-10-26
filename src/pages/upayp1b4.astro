@@ -808,10 +808,89 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <h3 class="card-title">Secciones de la web</h3>
             <p class="card-desc">Crea secciones que se mostrarán en la portada con los productos que elijas (arrastra desde el catálogo con la selección).</p>
           </div>
+          <button type="button" id="btnSectionSuggestions" class="btn-secondary">✨ Sugerencias inteligentes</button>
+        </div>
+        <div id="sectionSuggestionsPanel" class="section-suggestions-panel" hidden>
+          <div class="section-suggestions-head">
+            <span class="card-desc">Propuestas automáticas según el calendario comercial y el estado actual del catálogo (descuentos, valoraciones y novedades). Un clic las crea ya con los productos elegidos; luego puedes editarlas como cualquier otra sección.</span>
+            <button type="button" id="btnSectionSuggestionsClose" class="suggestions-close-btn" aria-label="Cerrar sugerencias">✕</button>
+          </div>
+          <div id="sectionSuggestionsList" class="section-suggestions-list">
+            <div class="loading-panel">Calculando sugerencias...</div>
+          </div>
         </div>
         <div id="sectionsListAdmin" class="sections-list-admin"></div>
       </div>
     </section>
+
+    <style>
+      .section-suggestions-panel {
+        margin: 0.75rem 0 1.25rem;
+        padding: 1rem 1.1rem;
+        background: rgba(59, 130, 246, 0.06);
+        border: 1px solid rgba(59, 130, 246, 0.22);
+        border-radius: var(--border-radius-md, 12px);
+      }
+      .section-suggestions-panel[hidden] { display: none; }
+      .section-suggestions-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 0.85rem;
+      }
+      .suggestions-close-btn {
+        flex-shrink: 0;
+        width: 26px;
+        height: 26px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 7px;
+        color: var(--color-text-muted);
+        cursor: pointer;
+      }
+      .suggestions-close-btn:hover {
+        color: #fff;
+        background: rgba(239, 68, 68, 0.18);
+        border-color: rgba(239, 68, 68, 0.4);
+      }
+      .section-suggestions-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 0.85rem;
+      }
+      .suggestion-card {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        padding: 0.9rem;
+        background: var(--color-bg-card, #111827);
+        border: 1px solid var(--color-border, #1f2937);
+        border-radius: 10px;
+      }
+      .suggestion-card-title {
+        font-weight: 700;
+        font-size: 0.92rem;
+        color: var(--color-text-main, #f3f4f6);
+      }
+      .suggestion-card-desc {
+        font-size: 0.78rem;
+        color: var(--color-text-muted, #9ca3af);
+        line-height: 1.5;
+      }
+      .suggestion-card-meta {
+        font-size: 0.72rem;
+        color: var(--color-text-dim, #6b7280);
+      }
+      .suggestion-card-actions {
+        margin-top: 0.3rem;
+        display: flex;
+        gap: 0.5rem;
+      }
+    </style>
 
     <section data-admin-view="affiliates" class:list={['admin-card', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'affiliates' }]}>
 
@@ -4428,6 +4507,85 @@ function renderTableRows(products, resetPage = true) {
         host.innerHTML = '<p class="text-muted">Error de red.</p>';
       }
     }
+
+    // ─── Sugerencias inteligentes de secciones (calendario comercial) ─────────
+    let sectionSuggestionsLoaded = false;
+    const btnSectionSuggestions = document.getElementById('btnSectionSuggestions');
+    const sectionSuggestionsPanel = document.getElementById('sectionSuggestionsPanel');
+    const sectionSuggestionsList = document.getElementById('sectionSuggestionsList');
+    const btnSectionSuggestionsClose = document.getElementById('btnSectionSuggestionsClose');
+
+    async function loadSectionSuggestions() {
+      if (!sectionSuggestionsList) return;
+      sectionSuggestionsList.innerHTML = '<div class="loading-panel">Calculando sugerencias...</div>';
+      try {
+        const res = await fetch('/api/admin/sections/suggestions', { headers: { Accept: 'application/json' }, cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || !data.success) { sectionSuggestionsList.innerHTML = '<p class="text-muted">No se pudieron calcular sugerencias.</p>'; return; }
+        const suggestions = Array.isArray(data.suggestions) ? data.suggestions : [];
+        if (!suggestions.length) { sectionSuggestionsList.innerHTML = '<p class="text-muted">El catálogo aún no tiene suficientes productos para proponer secciones.</p>'; return; }
+        sectionSuggestionsList.innerHTML = suggestions.map((s) => `
+          <div class="suggestion-card">
+            <span class="suggestion-card-title">${escapeHtml ? escapeHtml(s.title) : s.title}</span>
+            <span class="suggestion-card-desc">${escapeHtml ? escapeHtml(s.description) : s.description}</span>
+            <span class="suggestion-card-meta">${s.productIds.length} producto(s) · ${escapeHtml ? escapeHtml(s.reason) : s.reason}</span>
+            <div class="suggestion-card-actions">
+              <button type="button" class="btn-success btn-sm" data-suggestion-create="${s.key}">${s.existingSectionId ? 'Actualizar' : '+ Crear'}</button>
+            </div>
+          </div>
+        `).join('');
+        sectionSuggestionsList.querySelectorAll('[data-suggestion-create]').forEach((btn) => {
+          btn.onclick = async () => {
+            const key = btn.getAttribute('data-suggestion-create');
+            const suggestion = suggestions.find((s) => s.key === key);
+            if (!suggestion) return;
+            btn.disabled = true;
+            try {
+              const res = await fetch('/api/admin/sections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'create',
+                  id: suggestion.key,
+                  title: suggestion.title,
+                  description: suggestion.description,
+                  productIds: suggestion.productIds,
+                  published: true,
+                  position: 'below',
+                  speed: 'normal',
+                }),
+              });
+              const data = await res.json();
+              if (data.success) {
+                showAlert('success', 'Sección creada', `${suggestion.title} ya está publicada en la portada.`);
+                btn.textContent = 'Actualizar';
+                await loadSectionsAdmin();
+              } else {
+                showAlert('error', 'Error', data.message || 'No se pudo crear la sección.');
+              }
+            } catch {
+              showAlert('error', 'Error de red', 'No se pudo crear la sección.');
+            } finally {
+              btn.disabled = false;
+            }
+          };
+        });
+      } catch {
+        sectionSuggestionsList.innerHTML = '<p class="text-muted">Error de red.</p>';
+      }
+    }
+
+    btnSectionSuggestions?.addEventListener('click', async () => {
+      if (!sectionSuggestionsPanel) return;
+      sectionSuggestionsPanel.hidden = !sectionSuggestionsPanel.hidden;
+      if (!sectionSuggestionsPanel.hidden && !sectionSuggestionsLoaded) {
+        sectionSuggestionsLoaded = true;
+        await loadSectionSuggestions();
+      }
+    });
+    btnSectionSuggestionsClose?.addEventListener('click', () => {
+      if (sectionSuggestionsPanel) sectionSuggestionsPanel.hidden = true;
+    });
 
     /** Hace que las filas de sección se puedan arrastrar para reordenar. */
     function initSectionDragAndDrop(host, sections) {

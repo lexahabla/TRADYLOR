@@ -84,6 +84,7 @@ async function forwardClickToWebhook(webhookUrl: string, payload: unknown): Prom
 export const GET: APIRoute = async ({ url }) => {
   const key = url.searchParams.get('id') ?? url.searchParams.get('slug');
   const source = (url.searchParams.get('src') ?? '').slice(0, 60);
+  const network = (url.searchParams.get('network') ?? '').trim().toLowerCase();
 
   const product = findCatalogProduct(key);
 
@@ -92,7 +93,14 @@ export const GET: APIRoute = async ({ url }) => {
     return new Response(null, { status: 302, headers: redirectHeaders('/') });
   }
 
-  const destination = buildPurchaseUrl(product) || product.affiliateUrl;
+  // Comparativa multitienda: salida a OTRA red detectada automáticamente por
+  // «Construir Catálogo» (extra.crossMerchant.affiliateUrls). Sin match válido,
+  // se usa el comportamiento normal (comprar en la tienda principal).
+  const crossMerchantUrls = (product as { extra?: { crossMerchant?: { affiliateUrls?: Record<string, string> } } })
+    .extra?.crossMerchant?.affiliateUrls;
+  const crossMerchantUrl = network && crossMerchantUrls ? crossMerchantUrls[network] : undefined;
+
+  const destination = crossMerchantUrl || buildPurchaseUrl(product) || product.affiliateUrl;
 
   // 1. Registro del clic de salida (cola en memoria, se persiste en segundo plano).
   trackEvent({

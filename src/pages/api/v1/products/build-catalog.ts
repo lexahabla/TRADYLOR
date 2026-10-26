@@ -147,6 +147,12 @@ interface CrossMerchantGroup {
   allDirectUrls: Record<string, string>;
   allMerchantNames: Record<string, string>;
   allExtraImages: string[];
+  /** Precio actual de CADA red del grupo (automático; alimenta la comparativa multitienda de la ficha). */
+  allPrices: Record<string, number>;
+  /** Precio original (antes de descuento) de cada red, cuando la red lo declara. */
+  allOriginalPrices: Record<string, number>;
+  /** Divisa declarada por cada red (normalmente EUR). */
+  allCurrencies: Record<string, string>;
 }
 
 // ─── Utilidades ─────────────────────────────────────────────────────────────
@@ -416,6 +422,10 @@ function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantG
     const allDirectUrls: Record<string, string> = { [base._network]: base.directUrl };
     const allMerchantNames: Record<string, string> = { [base._network]: cleanMerchant(base.merchantName) };
     const allExtraImages = [...base.extraImages];
+    const allPrices: Record<string, number> = { [base._network]: base.price };
+    const allOriginalPrices: Record<string, number> = {};
+    if (base.originalPrice > base.price) allOriginalPrices[base._network] = base.originalPrice;
+    const allCurrencies: Record<string, string> = base.currency ? { [base._network]: base.currency } : {};
 
     let bestPrice = base.price;
     let bestOriginalPrice = base.originalPrice;
@@ -462,6 +472,9 @@ function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantG
       allDirectUrls[candidate._network] = candidate.directUrl;
       allMerchantNames[candidate._network] = cleanMerchant(candidate.merchantName);
       allExtraImages.push(...candidate.extraImages);
+      allPrices[candidate._network] = candidate.price;
+      if (candidate.originalPrice > candidate.price) allOriginalPrices[candidate._network] = candidate.originalPrice;
+      if (candidate.currency) allCurrencies[candidate._network] = candidate.currency;
 
       if (candidate.price < bestPrice) bestPrice = candidate.price;
       if (candidate.originalPrice > bestOriginalPrice) bestOriginalPrice = candidate.originalPrice;
@@ -487,6 +500,9 @@ function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantG
       allDirectUrls,
       allMerchantNames,
       allExtraImages: [...new Set(allExtraImages)].slice(0, MAX_PRODUCT_IMAGES),
+      allPrices,
+      allOriginalPrices,
+      allCurrencies,
     });
 
     if (groups.length >= BUILD_CONFIG.MAX_CROSS_MERCHANT_GROUPS) break;
@@ -766,6 +782,9 @@ async function buildAndUpsertProducts(
           affiliateUrls: group.allAffiliateUrls,
           directUrls: group.allDirectUrls,
           merchantNames: group.allMerchantNames,
+          prices: group.allPrices,
+          originalPrices: group.allOriginalPrices,
+          currencies: group.allCurrencies,
           variantsCount: group.variants.length + 1,
           hsr: group.isHSR,
           hsrScore: group.hsrScore,

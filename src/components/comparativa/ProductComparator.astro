@@ -55,7 +55,7 @@ const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(amount);
 ---
 
-<section class="comparator" data-comparator>
+<section class="comparator" data-comparator data-category-name={categoryName ?? ''}>
   <div class="comparator-head">
     <div class="comparator-title-group">
       <span class="comparator-kicker">Motor de Comparativa</span>
@@ -615,8 +615,12 @@ const formatCurrency = (amount: number) =>
 </style>
 
 <script>
+  import { getSession } from '../../utils/auth';
+  import { addComparatorHistoryEntry } from '../../utils/radarStore';
+
   type ViewMode = 'technical' | 'usage';
 
+  (() => {
   const root = document.querySelector<HTMLElement>('[data-comparator]');
   if (!root) return;
 
@@ -684,5 +688,34 @@ const formatCurrency = (amount: number) =>
     });
   };
 
-  smartMatch?.addEventListener('change', () => applySmartMatch(smartMatch.value));
+  smartMatch?.addEventListener('change', async () => {
+    const profile = smartMatch.value;
+    if (!profile) {
+      applySmartMatch('');
+      return;
+    }
+    // Gate de registro: el RESULTADO del Smart Match (qué producto encaja
+    // mejor) requiere sesión; sin ella se revierte el selector y se abre el
+    // modal de registro. El resto del comparador (vista técnica/de uso) sigue
+    // siendo libre para cualquier visitante.
+    const session = await getSession().catch(() => ({ authenticated: false, user: null, googleEnabled: false }));
+    if (!session.user) {
+      smartMatch.value = '';
+      const w = window as unknown as Record<string, { open?: (view?: string, context?: string) => void } | undefined>;
+      w.TradylorAuth?.open?.('register', 'tool-result');
+      return;
+    }
+    applySmartMatch(profile);
+    const productIds = Array.from(cards)
+      .map((card) => card.dataset.product)
+      .filter((id): id is string => Boolean(id));
+    if (productIds.length > 1) {
+      addComparatorHistoryEntry({
+        categoryName: root.dataset.categoryName || undefined,
+        smartMatchProfile: profile,
+        productIds,
+      });
+    }
+  });
+  })();
 </script>

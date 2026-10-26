@@ -1,0 +1,361 @@
+---
+/**
+ * ==============================================================================
+ * TRADYLOR — DEPENDIENTE IA (chat, Centro de Herramientas)
+ * ==============================================================================
+ * Chat de cara al usuario que reutiliza el motor de IA ya configurado en el
+ * servidor (misma `chatComplete` que la consola del panel admin). Usuarios
+ * anónimos pueden escribir y reciben una respuesta recortada (`locked`); con
+ * sesión de Mi Radar la respuesta llega completa y se guarda automáticamente
+ * en su cuenta (ver utils/radarStore.ts `saveAiChat`).
+ * ==============================================================================
+ */
+---
+
+<section class="dia-section" id="dependiente-ia" data-dependiente-ia>
+  <div class="dia-header">
+    <span class="dia-tag">Asistente Inteligente</span>
+    <h2 class="dia-title">Dependiente IA</h2>
+    <p class="dia-desc">
+      Cuéntale qué buscas (uso, presupuesto, prioridades) y te recomendará productos reales de
+      nuestro catálogo, nunca artículos inventados.
+    </p>
+  </div>
+
+  <div class="dia-chat">
+    <div class="dia-messages" data-dia-messages>
+      <div class="dia-message dia-message--assistant">
+        <span class="dia-avatar" aria-hidden="true">🤖</span>
+        <div class="dia-bubble">
+          ¡Hola! Soy el Dependiente IA de Tradylor. Cuéntame qué necesitas (por ejemplo:
+          «unos auriculares para hacer deporte, presupuesto 80€») y busco las mejores
+          opciones de nuestro catálogo.
+        </div>
+      </div>
+    </div>
+
+    <div class="dia-locked-banner" data-dia-locked-banner hidden>
+      <span>🔓 Regístrate gratis para ver la recomendación completa y guardar esta conversación en tu panel.</span>
+      <button type="button" class="dia-unlock-btn" data-dia-unlock>Crear cuenta gratis</button>
+    </div>
+
+    <form class="dia-form" data-dia-form>
+      <input
+        type="text"
+        name="message"
+        class="dia-input"
+        placeholder="Ej: busco una tablet barata para leer y ver vídeos"
+        maxlength="300"
+        autocomplete="off"
+        required
+      />
+      <button type="submit" class="dia-send-btn" data-dia-send aria-label="Enviar">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+      </button>
+    </form>
+    <p class="dia-hint" data-dia-hint aria-live="polite"></p>
+  </div>
+</section>
+
+<style>
+  .dia-section {
+    padding: 3.5rem 0;
+  }
+
+  .dia-header {
+    text-align: center;
+    margin-bottom: 2rem;
+  }
+
+  .dia-tag {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    margin-bottom: 0.85rem;
+  }
+
+  .dia-title {
+    font-family: var(--font-heading, 'Outfit', sans-serif);
+    font-size: clamp(1.6rem, 3vw, 2.2rem);
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.5rem;
+  }
+
+  .dia-desc {
+    font-size: 0.92rem;
+    color: rgba(255, 255, 255, 0.55);
+    margin: 0 auto;
+    max-width: 560px;
+    line-height: 1.6;
+  }
+
+  .dia-chat {
+    max-width: 720px;
+    margin: 0 auto;
+    background: linear-gradient(160deg, rgba(16, 185, 129, 0.05) 0%, rgba(17, 24, 39, 0.8) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.18);
+    border-radius: 20px;
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+
+  .dia-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    max-height: 420px;
+    min-height: 140px;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+
+  .dia-message {
+    display: flex;
+    gap: 0.6rem;
+    align-items: flex-start;
+  }
+
+  .dia-message--user {
+    flex-direction: row-reverse;
+  }
+
+  .dia-avatar {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 1rem;
+  }
+
+  .dia-bubble {
+    max-width: 78%;
+    padding: 0.7rem 0.9rem;
+    border-radius: 14px;
+    font-size: 0.88rem;
+    line-height: 1.55;
+    color: #e5e7eb;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .dia-message--user .dia-bubble {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(37, 99, 235, 0.2));
+    border-color: rgba(96, 165, 250, 0.3);
+  }
+
+  .dia-locked-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    padding: 0.75rem 0.9rem;
+    background: rgba(245, 158, 11, 0.08);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    border-radius: 12px;
+    font-size: 0.8rem;
+    color: #fbbf24;
+  }
+
+  .dia-locked-banner[hidden] {
+    display: none;
+  }
+
+  .dia-unlock-btn {
+    flex-shrink: 0;
+    padding: 0.5rem 1rem;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #1a1205;
+    font: inherit;
+    font-size: 0.78rem;
+    font-weight: 800;
+    border: 0;
+    border-radius: 9px;
+    cursor: pointer;
+  }
+
+  .dia-form {
+    display: flex;
+    gap: 0.6rem;
+  }
+
+  .dia-input {
+    flex: 1;
+    padding: 0.8rem 1rem;
+    background: rgba(10, 14, 23, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    color: #f3f4f6;
+    font: inherit;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .dia-input:focus {
+    border-color: #34d399;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.16);
+  }
+
+  .dia-input:disabled {
+    opacity: 0.6;
+  }
+
+  .dia-send-btn {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    color: #ffffff;
+    border: 0;
+    border-radius: 12px;
+    cursor: pointer;
+    box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.2s ease;
+  }
+
+  .dia-send-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  .dia-send-btn:disabled {
+    opacity: 0.55;
+    cursor: wait;
+  }
+
+  .dia-hint {
+    min-height: 1em;
+    margin: 0;
+    font-size: 0.74rem;
+    color: #f87171;
+  }
+
+  @media (max-width: 640px) {
+    .dia-chat {
+      padding: 1.1rem;
+    }
+
+    .dia-bubble {
+      max-width: 88%;
+      font-size: 0.84rem;
+    }
+  }
+</style>
+
+<script>
+  import { getSession } from '../utils/auth';
+  import { saveAiChat } from '../utils/radarStore';
+
+  (() => {
+    const root = document.querySelector<HTMLElement>('[data-dependiente-ia]');
+    if (!root) return;
+
+    const messagesEl = root.querySelector<HTMLElement>('[data-dia-messages]');
+    const form = root.querySelector<HTMLFormElement>('[data-dia-form]');
+    const input = form?.querySelector<HTMLInputElement>('input[name="message"]');
+    const sendBtn = root.querySelector<HTMLButtonElement>('[data-dia-send]');
+    const lockedBanner = root.querySelector<HTMLElement>('[data-dia-locked-banner]');
+    const unlockBtn = root.querySelector<HTMLButtonElement>('[data-dia-unlock]');
+    const hint = root.querySelector<HTMLElement>('[data-dia-hint]');
+
+    if (!messagesEl || !form || !input) return;
+
+    interface Turn {
+      role: 'user' | 'assistant';
+      content: string;
+      at: string;
+    }
+
+    const history: Turn[] = [];
+    let chatId: string | undefined;
+
+    const ESCAPE_MAP: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (ch) => ESCAPE_MAP[ch] ?? ch);
+
+    function appendMessage(role: 'user' | 'assistant', text: string): void {
+      if (!messagesEl) return;
+      const el = document.createElement('div');
+      el.className = `dia-message dia-message--${role}`;
+      el.innerHTML = `
+        <span class="dia-avatar" aria-hidden="true">${role === 'assistant' ? '🤖' : '🙂'}</span>
+        <div class="dia-bubble">${escapeHtml(text).replace(/\n/g, '<br/>')}</div>
+      `;
+      messagesEl.appendChild(el);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function setBusy(busy: boolean): void {
+      if (sendBtn) sendBtn.disabled = busy;
+      if (input) input.disabled = busy;
+    }
+
+    async function persistIfLogged(): Promise<void> {
+      try {
+        const session = await getSession();
+        if (!session.user) return;
+        const title = history.find((h) => h.role === 'user')?.content.slice(0, 60) || 'Conversación';
+        const saved = saveAiChat({ id: chatId, title, messages: history });
+        chatId = saved.id;
+      } catch {
+        /* el guardado nunca debe romper la conversación */
+      }
+    }
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      appendMessage('user', text);
+      history.push({ role: 'user', content: text, at: new Date().toISOString() });
+      setBusy(true);
+      if (hint) hint.textContent = '';
+
+      try {
+        const res = await fetch('/api/radar/ai-assistant', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: history.map((h) => ({ role: h.role, content: h.content })) }),
+        });
+        const data = (await res.json().catch(() => ({}))) as { success?: boolean; reply?: string; message?: string; locked?: boolean };
+        if (!res.ok || !data.success) {
+          appendMessage('assistant', data.message || 'No he podido responder ahora mismo. Inténtalo de nuevo en unos segundos.');
+          if (hint) hint.textContent = data.message && res.status === 429 ? data.message : '';
+          return;
+        }
+        appendMessage('assistant', data.reply ?? '');
+        history.push({ role: 'assistant', content: data.reply ?? '', at: new Date().toISOString() });
+        const isLocked = Boolean(data.locked);
+        if (lockedBanner) lockedBanner.hidden = !isLocked;
+        if (!isLocked) void persistIfLogged();
+      } catch {
+        appendMessage('assistant', 'Sin conexión. Inténtalo de nuevo.');
+      } finally {
+        setBusy(false);
+        input.focus();
+      }
+    });
+
+    unlockBtn?.addEventListener('click', () => {
+      const w = window as unknown as Record<string, { open?: (view?: string, context?: string) => void } | undefined>;
+      w.TradylorAuth?.open?.('register', 'tool-result');
+    });
+  })();
+</script>

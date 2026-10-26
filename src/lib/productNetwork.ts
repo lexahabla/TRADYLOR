@@ -136,3 +136,54 @@ export function getProductNetwork(product: Partial<Product> | null | undefined):
   const id = detectNetworkId(product);
   return { id, label: networkLabel(id) };
 }
+
+/** Una oferta de un comerciante dentro de la comparativa multitienda automática. */
+export interface CrossMerchantOffer {
+  network: string;
+  label: string;
+  merchant: string;
+  price?: number;
+  originalPrice?: number;
+  currency: string;
+  /** `/api/redirect?id=<product>&network=<network>` (nunca el enlace de afiliado en crudo). */
+  redirectUrl: string;
+  /** `true` en la red cuyo precio es el que ya se muestra como precio principal de la ficha. */
+  isCurrent: boolean;
+}
+
+/**
+ * Ofertas multitienda detectadas AUTOMÁTICAMENTE por «Construir Catálogo»
+ * (`extra.crossMerchant`, ver build-catalog.ts): mismo producto visto en
+ * varias redes de afiliación, con su precio y enlace propios. Sin esto (o en
+ * productos antiguos sin el campo) devuelve `[]` y la ficha simplemente no
+ * pinta el bloque — retrocompatible al 100%.
+ */
+export function getCrossMerchantOffers(product: Product): CrossMerchantOffer[] {
+  const cross = (product as { extra?: { crossMerchant?: Record<string, unknown> } }).extra?.crossMerchant;
+  const networks = Array.isArray(cross?.networks) ? (cross!.networks as unknown[]).map(String) : [];
+  if (networks.length < 2) return [];
+
+  const affiliateUrls = (cross?.affiliateUrls ?? {}) as Record<string, string>;
+  const merchantNames = (cross?.merchantNames ?? {}) as Record<string, string>;
+  const prices = (cross?.prices ?? {}) as Record<string, number>;
+  const originalPrices = (cross?.originalPrices ?? {}) as Record<string, number>;
+  const currencies = (cross?.currencies ?? {}) as Record<string, string>;
+
+  const offers: CrossMerchantOffer[] = networks
+    .filter((network) => Boolean(affiliateUrls[network]))
+    .map((network) => {
+      const price = typeof prices[network] === 'number' ? prices[network] : undefined;
+      return {
+        network,
+        label: networkLabel(network),
+        merchant: merchantNames[network] || networkLabel(network),
+        price,
+        originalPrice: typeof originalPrices[network] === 'number' ? originalPrices[network] : undefined,
+        currency: currencies[network] || 'EUR',
+        redirectUrl: `/api/redirect?id=${encodeURIComponent(product.id)}&network=${encodeURIComponent(network)}&src=multistore`,
+        isCurrent: typeof price === 'number' && Math.abs(price - product.price) < 0.005,
+      };
+    });
+
+  return offers.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+}

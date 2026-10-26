@@ -143,7 +143,20 @@ const productsJson = JSON.stringify(approvedProducts);
         <div class="smw-result-badge" data-result-badge></div>
         <h3 class="smw-result-title" data-result-title></h3>
         <p class="smw-result-desc" data-result-desc></p>
+
+        <div class="smw-result-locked" data-result-locked hidden>
+          <p class="smw-locked-text">🔒 Regístrate gratis para ver tus recomendaciones y guardar este perfil de comprador.</p>
+          <button type="button" class="smw-unlock-btn" data-result-unlock>Crear cuenta gratis</button>
+        </div>
+
         <div class="smw-result-products" data-result-products></div>
+
+        <div class="smw-save-profile" data-save-profile hidden>
+          <input type="text" class="smw-save-input" data-save-profile-name maxlength="60" placeholder="Nombre de este perfil (ej: Para mí, Regalo papá)" />
+          <button type="button" class="smw-save-btn" data-save-profile-btn>💾 Guardar como mi perfil</button>
+        </div>
+        <p class="smw-save-note" data-save-profile-note aria-live="polite"></p>
+
         <button type="button" class="smw-restart" data-wizard-restart>
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
           Empezar de nuevo
@@ -359,6 +372,93 @@ const productsJson = JSON.stringify(approvedProducts);
     padding: 1rem 0;
   }
 
+  .smw-result-locked {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    background: rgba(245, 158, 11, 0.07);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+    border-radius: 16px;
+  }
+
+  .smw-result-locked[hidden] {
+    display: none;
+  }
+
+  .smw-locked-text {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #fbbf24;
+    max-width: 440px;
+  }
+
+  .smw-unlock-btn {
+    padding: 0.65rem 1.4rem;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #1a1205;
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 800;
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+
+  .smw-save-profile {
+    display: flex;
+    gap: 0.6rem;
+    max-width: 480px;
+    margin: 0 auto 0.6rem;
+  }
+
+  .smw-save-profile[hidden] {
+    display: none;
+  }
+
+  .smw-save-input {
+    flex: 1;
+    padding: 0.65rem 0.85rem;
+    background: rgba(10, 14, 23, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    color: #f3f4f6;
+    font: inherit;
+    font-size: 0.85rem;
+    outline: none;
+  }
+
+  .smw-save-input:focus {
+    border-color: #34d399;
+  }
+
+  .smw-save-btn {
+    flex-shrink: 0;
+    padding: 0.65rem 1rem;
+    background: rgba(16, 185, 129, 0.16);
+    border: 1px solid rgba(16, 185, 129, 0.4);
+    color: #6ee7b7;
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 700;
+    border-radius: 10px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .smw-save-btn:hover {
+    background: rgba(16, 185, 129, 0.26);
+  }
+
+  .smw-save-note {
+    min-height: 1em;
+    margin: 0 0 1rem;
+    font-size: 0.78rem;
+    color: #6ee7b7;
+  }
+
   .smw-result-badge {
     display: inline-block;
     font-size: 0.7rem;
@@ -505,6 +605,36 @@ const productsJson = JSON.stringify(approvedProducts);
 </style>
 
 <script>
+  import { getSession } from '../utils/auth';
+  import { saveBuyerProfile } from '../utils/radarStore';
+
+  const PENDING_QUIZ_KEY = 'tradylor-pending-quiz';
+
+  function stashPendingQuizAnswers(answers: Record<string, string>): void {
+    try {
+      sessionStorage.setItem(PENDING_QUIZ_KEY, JSON.stringify(answers));
+    } catch {
+      /* sin sessionStorage (modo privado): el usuario repetirá el quiz tras registrarse */
+    }
+  }
+
+  function readPendingQuizAnswers(): Record<string, string> | null {
+    try {
+      const raw = sessionStorage.getItem(PENDING_QUIZ_KEY);
+      return raw ? (JSON.parse(raw) as Record<string, string>) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function clearPendingQuizAnswers(): void {
+    try {
+      sessionStorage.removeItem(PENDING_QUIZ_KEY);
+    } catch {
+      /* no-op */
+    }
+  }
+
   (() => {
   interface SmartProduct {
     id: string;
@@ -537,6 +667,12 @@ const productsJson = JSON.stringify(approvedProducts);
     const descEl = wizard.querySelector<HTMLElement>('[data-result-desc]');
     const productsEl = wizard.querySelector<HTMLElement>('[data-result-products]');
     const restartBtn = wizard.querySelector<HTMLButtonElement>('[data-wizard-restart]');
+    const resultLockedEl = wizard.querySelector<HTMLElement>('[data-result-locked]');
+    const resultUnlockBtn = wizard.querySelector<HTMLButtonElement>('[data-result-unlock]');
+    const saveProfileWrap = wizard.querySelector<HTMLElement>('[data-save-profile]');
+    const saveProfileInput = wizard.querySelector<HTMLInputElement>('[data-save-profile-name]');
+    const saveProfileBtn = wizard.querySelector<HTMLButtonElement>('[data-save-profile-btn]');
+    const saveProfileNote = wizard.querySelector<HTMLElement>('[data-save-profile-note]');
 
     let currentStep = 0;
     const answers: Record<string, string> = {};
@@ -586,7 +722,8 @@ const productsJson = JSON.stringify(approvedProducts);
       return sorted.slice(0, 3);
     };
 
-    const showResult = () => {
+    const showResult = async () => {
+      stashPendingQuizAnswers(answers);
       const recs = getRecommendations();
 
       stepEls.forEach((el) => { el.hidden = true; });
@@ -595,7 +732,10 @@ const productsJson = JSON.stringify(approvedProducts);
         el.classList.add('is-done');
       });
 
-      if (recs.length > 0 && badgeEl && titleEl && descEl && productsEl) {
+      const session = await getSession().catch(() => ({ authenticated: false, user: null, googleEnabled: false }));
+      const isLogged = Boolean(session.user);
+
+      if (recs.length > 0 && badgeEl && titleEl && descEl) {
         const priorityLabel = answers.priority === 'price' ? 'Precio' : answers.priority === 'quality' ? 'Calidad' : 'Equilibrio';
         const budgetLabel = answers.budget === 'low' ? 'económico' : answers.budget === 'mid' ? 'moderado' : answers.budget === 'high' ? 'alto' : 'premium';
         const usageLabel = answers.usage === 'productividad' ? 'productividad' : answers.usage === 'entretenimiento' ? 'entretenimiento' : answers.usage === 'creatividad' ? 'creatividad' : answers.usage === 'hogar' ? 'hogar' : answers.usage === 'movilidad' ? 'movilidad' : 'fitness';
@@ -603,22 +743,59 @@ const productsJson = JSON.stringify(approvedProducts);
         badgeEl.textContent = `Smart Match: ${usageLabel} · ${budgetLabel} · ${priorityLabel}`;
         titleEl.textContent = `Te recomendamos ${recs.length} op${recs.length === 1 ? 'ón' : 'ciones'} verificada${recs.length === 1 ? '' : 's'}`;
         descEl.textContent = 'Estos productos han pasado nuestro filtro de auditoría y destacan por su puntuación de conversión y calidad verificada.';
-        productsEl.innerHTML = recs.map((p) => `
-          <a class="smw-product-card" href="/producto/${p.slug ?? p.id}" target="_blank" rel="noopener">
-            <img class="smw-product-card-img" src="${p.image}" alt="${p.title}" loading="lazy" />
-            <div class="smw-product-card-body">
-              <div class="smw-product-card-title">${p.title}</div>
-              <div class="smw-product-card-meta">
-                <span class="smw-product-card-price">${new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(p.price)}</span>
-                <span class="smw-product-card-score">${p.conversionScore}/100</span>
-              </div>
-            </div>
-          </a>
-        `).join('');
       }
+
+      // Gate de registro: el resultado final (los productos recomendados) sólo
+      // se revela con sesión; sin ella se muestra un teaser + CTA de registro
+      // (no se oculta nada del catálogo en sí, sólo ESTE resultado puntual).
+      if (resultLockedEl) resultLockedEl.hidden = isLogged;
+      if (productsEl) {
+        productsEl.hidden = !isLogged;
+        if (isLogged && recs.length > 0) {
+          productsEl.innerHTML = recs.map((p) => `
+            <a class="smw-product-card" href="/producto/${p.slug ?? p.id}" target="_blank" rel="noopener">
+              <img class="smw-product-card-img" src="${p.image}" alt="${p.title}" loading="lazy" />
+              <div class="smw-product-card-body">
+                <div class="smw-product-card-title">${p.title}</div>
+                <div class="smw-product-card-meta">
+                  <span class="smw-product-card-price">${new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(p.price)}</span>
+                  <span class="smw-product-card-score">${p.conversionScore}/100</span>
+                </div>
+              </div>
+            </a>
+          `).join('');
+        } else {
+          productsEl.innerHTML = '';
+        }
+      }
+      if (saveProfileWrap) saveProfileWrap.hidden = !isLogged;
+      if (saveProfileNote) saveProfileNote.textContent = '';
 
       if (resultEl) resultEl.hidden = false;
     };
+
+    resultUnlockBtn?.addEventListener('click', () => {
+      const w = window as unknown as Record<string, { open?: (view?: string, context?: string) => void } | undefined>;
+      w.TradylorAuth?.open?.('register', 'quiz-complete');
+    });
+
+    saveProfileBtn?.addEventListener('click', () => {
+      const name = saveProfileInput?.value.trim() ?? '';
+      if (!name) {
+        saveProfileInput?.focus();
+        return;
+      }
+      saveBuyerProfile({
+        name,
+        usage: answers.usage || 'productividad',
+        budget: answers.budget || 'mid',
+        priority: answers.priority || 'balance',
+      });
+      if (saveProfileInput) saveProfileInput.value = '';
+      if (saveProfileNote) {
+        saveProfileNote.textContent = `Perfil "${name}" guardado y activado: ya aparece en el selector de perfil del menú.`;
+      }
+    });
 
     wizard.querySelectorAll<HTMLButtonElement>('[data-wizard-option]').forEach((btn) => {
       btn.addEventListener('click', () => {
@@ -648,6 +825,20 @@ const productsJson = JSON.stringify(approvedProducts);
     });
 
     showStep(0);
+
+    // Si el usuario completó el quiz sin sesión, se guarda en sessionStorage
+    // (stashPendingQuizAnswers) para poder desbloquear el resultado nada más
+    // iniciar sesión (el modal de registro redirige a esta misma página).
+    void (async () => {
+      const pending = readPendingQuizAnswers();
+      if (!pending) return;
+      const session = await getSession().catch(() => ({ authenticated: false, user: null, googleEnabled: false }));
+      if (!session.user) return;
+      Object.assign(answers, pending);
+      indicators.forEach((el) => el.classList.add('is-done'));
+      clearPendingQuizAnswers();
+      void showResult();
+    })();
   };
 
   if (document.readyState === 'loading') {

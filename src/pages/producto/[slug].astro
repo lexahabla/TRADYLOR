@@ -24,6 +24,7 @@ import PriceHistoryChart from '../../components/PriceHistoryChart.astro';
 import { getCatalogProducts, findCatalogProduct, productKey } from '../../lib/catalog';
 import { isVideoUrl, videoThumbUrl } from '../../lib/media';
 import { resolveProductShipping } from '../../lib/shipping';
+import { getCrossMerchantOffers } from '../../lib/productNetwork';
 
 const allProducts = getCatalogProducts();
 const cleanMarketplaceSuffix = (text: string) => text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
@@ -51,6 +52,9 @@ const merchantSlug = String(product.merchant ?? '').toLowerCase().replace(/[^a-z
 // Envío: campos propios del producto o, si no existen (importaciones antiguas),
 // los del snapshot del catálogo AliExpress (ver lib/shipping.ts).
 const shipping = resolveProductShipping(product);
+
+// Comparativa multitienda automática (mismo producto en otras redes de afiliación).
+const crossMerchantOffers = getCrossMerchantOffers(product);
 
 // Galería completa del carrusel: imagen principal + vistas adicionales (sin duplicados).
 const galleryImages = [
@@ -382,6 +386,29 @@ const productSchema = {
           </div>
         )}
 
+        {/* Comparativa multitienda: detección 100% automática (Construir Catálogo).
+             Sin productos cross-red o en fichas antiguas, no se pinta nada. */}
+        {crossMerchantOffers.length > 1 && (
+          <div class="cross-merchant-block" role="note">
+            <span class="vendor-label">También disponible en</span>
+            <ul class="cross-merchant-list">
+              {crossMerchantOffers.map((offer) => (
+                <li class:list={['cross-merchant-item', { 'is-current': offer.isCurrent }]}>
+                  <span class="cm-merchant">{offer.merchant}</span>
+                  {typeof offer.price === 'number' && <span class="cm-price">{formatCurrency(offer.price)}</span>}
+                  {offer.isCurrent ? (
+                    <span class="cm-current-tag">Precio mostrado arriba</span>
+                  ) : (
+                    <a href={offer.redirectUrl} class="cm-view-link" rel="sponsored nofollow noopener" target="_blank">
+                      Ver oferta →
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <!-- CTA principal: Comprar ya → pantalla puente nativa /checkout/[id] -->
         <a href={checkoutUrl} class="cta-primary-btn" id={`order-cta-${product.id}`}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
@@ -458,6 +485,62 @@ const productSchema = {
         )}
       </div>
     </section>
+
+    <style>
+      .cross-merchant-block {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin: 0.25rem 0 1.1rem;
+        padding: 0.85rem 1rem;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid var(--color-border);
+        border-radius: var(--border-radius-sm);
+      }
+      .cross-merchant-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+      .cross-merchant-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        font-size: 0.85rem;
+      }
+      .cross-merchant-item.is-current {
+        opacity: 0.75;
+      }
+      .cm-merchant {
+        font-weight: 600;
+        color: var(--color-text-main);
+      }
+      .cm-price {
+        font-weight: 700;
+        color: #60a5fa;
+        margin-left: auto;
+      }
+      .cm-current-tag {
+        font-size: 0.72rem;
+        color: var(--color-text-dim);
+        white-space: nowrap;
+      }
+      .cm-view-link {
+        flex-shrink: 0;
+        font-size: 0.78rem;
+        font-weight: 700;
+        color: #34d399;
+        text-decoration: none;
+        white-space: nowrap;
+      }
+      .cm-view-link:hover {
+        text-decoration: underline;
+      }
+    </style>
 
     <!-- ======================================================
          HISTÓRICO DE PRECIO (captura progresiva, 1 punto/día)

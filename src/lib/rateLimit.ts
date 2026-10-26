@@ -41,6 +41,12 @@ export const shareEmailsExternalPerIp: RateLimiter = createRateLimiter(15, 60 * 
 /** Traducciones del mensaje de la tarjeta (proxy de Google Translate) por IP: 120 por hora. */
 export const shareTranslatesPerIp: RateLimiter = createRateLimiter(120, 60 * 60 * 1000);
 
+/** Mensajes al Dependiente IA (Centro de Herramientas) por usuario logeado: 60 por hora. */
+export const aiAssistantPerUser: RateLimiter = createRateLimiter(60, 60 * 60 * 1000);
+
+/** ...y por IP (cubre también a los anónimos, que sólo ven una respuesta en preview): 30 por hora. */
+export const aiAssistantPerIp: RateLimiter = createRateLimiter(30, 60 * 60 * 1000);
+
 export function createRateLimiter(max: number, windowMs: number): RateLimiter {
   const entries = new Map<string, { count: number; resetAt: number }>();
   return {
