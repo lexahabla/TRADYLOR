@@ -137,8 +137,8 @@
         </div>
 
         <div class="smw-save-profile" data-save-profile hidden>
-          <input type="text" class="smw-save-input" data-save-profile-name maxlength="60" placeholder="Nombre de este perfil (ej: Para mí, Regalo papá)" />
-          <button type="button" class="smw-save-btn" data-save-profile-btn>💾 Guardar como mi perfil</button>
+          <span class="smw-save-name" data-save-profile-name></span>
+          <button type="button" class="smw-save-btn" data-save-profile-btn>💾 Guardar mi perfil</button>
         </div>
         <p class="smw-save-note" data-save-profile-note aria-live="polite"></p>
 
@@ -386,6 +386,7 @@
 
   .smw-save-profile {
     display: flex;
+    align-items: center;
     gap: 0.6rem;
     max-width: 480px;
     margin: 0 auto 0.6rem;
@@ -395,20 +396,12 @@
     display: none;
   }
 
-  .smw-save-input {
+  .smw-save-name {
     flex: 1;
-    padding: 0.65rem 0.85rem;
-    background: rgba(10, 14, 23, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 10px;
-    color: #f3f4f6;
-    font: inherit;
     font-size: 0.85rem;
-    outline: none;
-  }
-
-  .smw-save-input:focus {
-    border-color: #34d399;
+    color: #e5e7eb;
+    font-weight: 600;
+    overflow-wrap: anywhere;
   }
 
   .smw-save-btn {
@@ -513,7 +506,7 @@
 <script>
   import { getSession } from '../utils/auth';
   import { saveBuyerProfile, getBuyerProfiles } from '../utils/radarStore';
-  import { BUYER_PROFILE_BUDGET_LABELS, BUYER_PROFILE_PRIORITY_LABELS, BUYER_PROFILE_USAGE_LABELS } from '../types/radar';
+  import { BUYER_PROFILE_BUDGET_LABELS, BUYER_PROFILE_PRIORITY_LABELS, BUYER_PROFILE_USAGE_LABELS, buyerProfileDisplayName } from '../types/radar';
 
   const PENDING_QUIZ_KEY = 'tradylor-pending-quiz';
 
@@ -560,7 +553,7 @@
     const resultLockedEl = wizard.querySelector<HTMLElement>('[data-result-locked]');
     const resultUnlockBtn = wizard.querySelector<HTMLButtonElement>('[data-result-unlock]');
     const saveProfileWrap = wizard.querySelector<HTMLElement>('[data-save-profile]');
-    const saveProfileInput = wizard.querySelector<HTMLInputElement>('[data-save-profile-name]');
+    const saveProfileName = wizard.querySelector<HTMLElement>('[data-save-profile-name]');
     const saveProfileBtn = wizard.querySelector<HTMLButtonElement>('[data-save-profile-btn]');
     const saveProfileNote = wizard.querySelector<HTMLElement>('[data-save-profile-note]');
 
@@ -602,7 +595,14 @@
 
         badgeEl.textContent = 'Tu perfil de comprador';
         titleEl.textContent = `${usageLabel} · ${budgetLabel} · ${priorityLabel}`;
-        descEl.textContent = 'Este es el perfil que guardaremos con el nombre que elijas. Lo usamos para el marcado visual en el catálogo y para que puedas cambiar de perfil desde la barra superior cuando quieras.';
+        descEl.textContent = 'Este es el perfil que guardaremos con el nombre generado a partir de tus respuestas. Lo usamos para el marcado visual en el catálogo y para que puedas cambiar de perfil desde la barra superior cuando quieras.';
+        if (saveProfileName) {
+          saveProfileName.textContent = buyerProfileDisplayName({
+            usage: answers.usage || 'productividad',
+            budget: answers.budget || 'mid',
+            priority: answers.priority || 'balance',
+          });
+        }
       }
 
       // Gate de registro: guardar el perfil (y que te acompañe en la web) requiere sesión.
@@ -619,21 +619,14 @@
     });
 
     saveProfileBtn?.addEventListener('click', () => {
-      const name = saveProfileInput?.value.trim() ?? '';
-      if (!name) {
-        saveProfileInput?.focus();
-        return;
-      }
       saveBuyerProfile({
-        name,
         usage: answers.usage || 'productividad',
         budget: answers.budget || 'mid',
         priority: answers.priority || 'balance',
       });
-      if (saveProfileInput) saveProfileInput.value = '';
       if (saveProfileNote) {
         const total = getBuyerProfiles().length;
-        saveProfileNote.textContent = `✓ Perfil "${name}" guardado${total > 1 ? ` (llevas ${total})` : ''}. Ya aparece en el selector de perfil de la barra superior y se marca en el catálogo.`;
+        saveProfileNote.textContent = `✓ Perfil guardado${total > 1 ? ` (llevas ${total})` : ''}. Ya aparece en el selector de perfil de la barra superior y se marca en el catálogo.`;
       }
     });
 

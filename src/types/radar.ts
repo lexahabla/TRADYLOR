@@ -150,6 +150,8 @@ export interface BuyerProfile {
   budget: string;
   /** Prioridad elegida en el Perfilador: price | quality | balance. */
   priority: string;
+  /** Color generado automáticamente para la combinación (HSL string). */
+  color?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -266,3 +268,57 @@ export const BUYER_PROFILE_PRIORITY_LABELS: Record<string, string> = {
 };
 /** Máximo de perfiles de comprador guardados por usuario. */
 export const BUYER_PROFILE_MAX = 8;
+
+/**
+ * Genera un nombre corto y descriptivo para una combinación de Perfil de Comprador.
+ * Ejemplo: "Productividad · Equilibrio · Contenido" o "Movilidad · Premium · Rendimiento".
+ * Se usa cuando el usuario guarda un perfil: ya no pone nombre a mano, se asigna
+ * automáticamente a partir de uso + presupuesto + prioridad.
+ */
+export function buyerProfileDisplayName(profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'>): string {
+  const usage = BUYER_PROFILE_USAGE_LABELS[profile.usage] ?? profile.usage;
+  const budget = BUYER_PROFILE_BUDGET_LABELS[profile.budget] ?? profile.budget;
+  const priority = BUYER_PROFILE_PRIORITY_LABELS[profile.priority] ?? profile.priority;
+
+  // Subtítulo corto según la prioridad, para diferenciar perfiles del mismo uso/presupuesto.
+  const priorityShort: Record<string, string> = {
+    price: 'Ahorro',
+    quality: 'Calidad',
+    balance: 'Equilibrio',
+  };
+  const pShort = priorityShort[profile.priority] ?? profile.priority;
+
+  return `${usage} · ${pShort} · ${budget}`;
+}
+
+/**
+ * Genera un color determinístico (HSL) para una combinación de perfil, para
+ * usar en el badge "Encaja con tu perfil" y en el selector del mainNav.
+ * Cada combinación (uso + presupuesto + prioridad) obtiene un color distinto
+ * y estable entre sesiones.
+ */
+export function buyerProfileColor(profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'>): { h: number; s: number; l: number } {
+  const str = `${profile.usage}|${profile.budget}|${profile.priority}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash) + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const h = Math.abs(hash) % 360;
+  // Saturación y luminosidad en rango agradable para badges (no demasiado oscuro ni claro).
+  const s = 55 + (Math.abs(hash) % 25); // 55–80 %
+  const l = 50 + (Math.abs(hash) % 15); // 50–65 %
+  return { h, s, l };
+}
+
+/** Convierte {h,s,l} a una cadena CSS hsl(). */
+export function hslString(c: { h: number; s: number; l: number }): string {
+  return `hsl(${c.h}, ${c.s}%, ${c.l}%)`;
+}
+
+/** Color de texto adecuado sobre un fondo HSL (blanco o negro según luminosidad). */
+export function contrastTextColor(c: { h: number; s: number; l: number }): string {
+  // Fórmula aproximada de luminancia percibida.
+  const lum = (0.299 * c.h + 0.587 * c.s + 0.114 * c.l) / 100;
+  return lum > 0.5 ? '#0b121e' : '#ffffff';
+}

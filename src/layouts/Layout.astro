@@ -3931,14 +3931,37 @@ const headerCategoryPanelHtml = `
         // Filtro VISUAL (nunca oculta productos): marca con un badge las tarjetas
         // cuyo precio entra en el rango del perfil activo (y, si la prioridad es
         // calidad o precio, exige además buena valoración o descuento real).
+        // El badge muestra el NOMBRE del perfil activo y un COLOR según la
+        // combinación (uso + presupuesto + prioridad).
+        function profileDisplayName(p: { usage: string; budget: string; priority: string }): string {
+          const u = { productividad: 'Productividad', entretenimiento: 'Entretenimiento', creatividad: 'Creatividad', hogar: 'Hogar', movilidad: 'Movilidad', fitness: 'Fitness' }[p.usage] ?? p.usage;
+          const b = { low: 'Bajo', mid: 'Medio', high: 'Alto', premium: 'Premium' }[p.budget] ?? p.budget;
+          const pr = { price: 'Ahorro', quality: 'Calidad', balance: 'Equilibrio' }[p.priority] ?? p.priority;
+          return `${u} · ${pr} · ${b}`;
+        }
+        function profileColor(p: { usage: string; budget: string; priority: string }): string {
+          const str = `${p.usage}|${p.budget}|${p.priority}`;
+          let hash = 0;
+          for (let i = 0; i < str.length; i++) {
+            hash = ((hash << 5) - hash) + str.charCodeAt(i);
+            hash |= 0;
+          }
+          const h = Math.abs(hash) % 360;
+          const s = 55 + (Math.abs(hash) % 25);
+          const l = 50 + (Math.abs(hash) % 15);
+          return `hsl(${h}, ${s}%, ${l}%)`;
+        }
         function applyProfileMatchBadges(user: UserProfile | null): void {
           const cards = document.querySelectorAll<HTMLElement>('[data-pc-price]');
           if (!cards.length) return;
           const profile = user ? getActiveBuyerProfile() : null;
           const range = profile ? BUYER_PROFILE_BUDGET_RANGES[profile.budget] : null;
+          const pName = profile ? profileDisplayName(profile) : '';
+          const pColor = profile ? profileColor(profile) : '';
 
           cards.forEach((card) => {
             const badge = card.querySelector<HTMLElement>('[data-profile-match-badge]');
+            const nameEl = badge?.querySelector<HTMLElement>('[data-profile-name-text]');
             if (!badge) return;
             if (!profile || !range) {
               badge.hidden = true;
@@ -3959,6 +3982,18 @@ const headerCategoryPanelHtml = `
               match = discount >= 10;
             }
             badge.hidden = !match;
+            if (match) {
+              badge.setAttribute('data-profile-name', pName);
+              badge.style.setProperty('--badge-color-start', pColor);
+              badge.style.setProperty('--badge-color-end', pColor);
+              // Color de texto contrastante sobre el fondo del badge
+              const m = /hsl\((\d+),\s*([\d.]+)%,\s*([\d.]+)%\)/.exec(pColor);
+              if (m) {
+                const lum = (0.299 * Number(m[1]) + 0.587 * Number(m[2]) + 0.114 * Number(m[3])) / 100;
+                badge.style.setProperty('--badge-text-color', lum > 0.5 ? '#0b121e' : '#ffffff');
+              }
+              if (nameEl) nameEl.textContent = pName;
+            }
           });
         }
 

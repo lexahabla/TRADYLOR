@@ -389,6 +389,27 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
           </div>
         </div>
       )}
+
+      <!-- Sección: Tus perfiles de comprador (Perfilador) -->
+      {user && (
+        <section class="p-card buyer-profiles-section" id="buyerProfilesSection">
+          <div class="card-header">
+            <div class="header-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/></svg>
+            </div>
+            <div>
+              <span class="card-title">Tus perfiles de comprador</span>
+              <p class="card-desc">Cada perfil guarda tu combinación de uso, presupuesto y prioridad. Se usa para marcar qué productos encajan contigo en el catálogo.</p>
+            </div>
+          </div>
+          <div class="buyer-profiles-list" id="buyerProfilesList">
+            <!-- Se rellena desde JS con los perfiles guardados -->
+          </div>
+          <div class="form-actions">
+            <a href="/herramientas/" class="btn-primary">+ Crear o editar un perfil</a>
+          </div>
+        </section>
+      )}
     </div>
   </main>
 </Layout>
@@ -747,3 +768,121 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
   .btn-secondary:hover:not(:disabled) { color: var(--color-text-main); background: #242f45; }
   .btn-secondary:disabled { opacity: .6; cursor: not-allowed; }
 </style>
+
+<style>
+  .buyer-profiles-section { margin-top: 1rem; }
+  .buyer-profiles-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
+  .buyer-profile-item {
+    display: flex; align-items: center; gap: 0.85rem; padding: 0.85rem 1rem;
+    background: #0d121f; border: 1px solid var(--color-border); border-radius: var(--border-radius-md);
+  }
+  .buyer-profile-color-dot {
+    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
+    border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
+  }
+  .buyer-profile-info { flex: 1; min-width: 0; }
+  .buyer-profile-name {
+    font-weight: 700; color: var(--color-text-main); margin: 0 0 0.15rem; overflow-wrap: anywhere;
+  }
+  .buyer-profile-meta {
+    display: flex; gap: 0.75rem; font-size: 0.78rem; color: var(--color-text-dim); flex-wrap: wrap;
+  }
+  .buyer-profile-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+  .buyer-profile-btn-active, .buyer-profile-btn-delete {
+    padding: 0.4rem 0.75rem; font-size: 0.78rem; font-weight: 700; border-radius: 8px; cursor: pointer; border: none;
+  }
+  .buyer-profile-btn-active {
+    background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35);
+  }
+  .buyer-profile-btn-active:hover { background: rgba(59, 130, 246, 0.25); }
+  .buyer-profile-btn-active.is-active {
+    background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.45);
+  }
+  .buyer-profile-btn-delete {
+    background: rgba(239, 68, 68, 0.1); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3);
+  }
+  .buyer-profile-btn-delete:hover { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
+  .buyer-profiles-empty {
+    padding: 1.5rem; text-align: center; color: var(--color-text-dim);
+    background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.12); border-radius: var(--border-radius-md);
+  }
+</style>
+
+<script>
+  import { getBuyerProfiles, setActiveBuyerProfile, deleteBuyerProfile } from '../utils/radarStore';
+
+  (function () {
+    const list = document.getElementById('buyerProfilesList');
+    if (!list) return;
+
+    function renderProfiles() {
+      const profiles = getBuyerProfiles();
+      const activeId = (() => {
+        try {
+          const raw = localStorage.getItem('tradylor-radar-v1');
+          if (!raw) return null;
+          const data = JSON.parse(raw);
+          return data.activeBuyerProfileId ?? null;
+        } catch { return null; }
+      })();
+
+      if (!profiles || profiles.length === 0) {
+        list.innerHTML = `<div class="buyer-profiles-empty">Aún no tienes perfiles guardados. Completa el Perfilador de Compra para crear tu primero.</div>`;
+        return;
+      }
+
+      list.innerHTML = profiles.map((p) => {
+        const isActive = p.id === activeId;
+        return `
+          <div class="buyer-profile-item" data-bp-id="${p.id}">
+            <span class="buyer-profile-color-dot" style="background:${p.color || '#3b82f6'}" aria-hidden="true"></span>
+            <div class="buyer-profile-info">
+              <div class="buyer-profile-name">${p.name}</div>
+              <div class="buyer-profile-meta">
+                <span>${p.usage}</span>
+                <span>${p.budget}</span>
+                <span>${p.priority}</span>
+              </div>
+            </div>
+            <div class="buyer-profile-actions">
+              ${isActive
+                ? '<button type="button" class="buyer-profile-btn-active buyer-profile-btn-active--set" data-bp-set="${p.id}" disabled>Activo</button>'
+                : '<button type="button" class="buyer-profile-btn-active" data-bp-set="${p.id}">Usar este perfil</button>'}
+              <button type="button" class="buyer-profile-btn-delete" data-bp-delete="${p.id}" title="Eliminar perfil">🗑️</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // Event listeners
+      list.querySelectorAll('[data-bp-set]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-bp-set');
+          if (!id || btn.disabled) return;
+          try {
+            setActiveBuyerProfile(id);
+            renderProfiles();
+          } catch {
+            /* silencioso */
+          }
+        });
+      });
+
+      list.querySelectorAll('[data-bp-delete]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-bp-delete');
+          if (!id) return;
+          if (!confirm('¿Eliminar este perfil de comprador?')) return;
+          try {
+            deleteBuyerProfile(id);
+            renderProfiles();
+          } catch {
+            /* silencioso */
+          }
+        });
+      });
+    }
+
+    renderProfiles();
+  })();
+</script>

@@ -22,6 +22,9 @@ import {
   type RadarData,
   type Reminder,
   type SavedProduct,
+  buyerProfileColor,
+  buyerProfileDisplayName,
+  hslString,
 } from '../types/radar';
 
 export { RADAR_STORAGE_KEY };
@@ -396,12 +399,17 @@ export function getActiveBuyerProfile(): BuyerProfile | null {
  * y lo marca como activo. Igual que el resto de mutaciones, sólo se refleja
  * en la nube si hay sesión (si no, el push a /api/radar se ignora con 401).
  */
-export function saveBuyerProfile(input: { name: string; usage: string; budget: string; priority: string }): BuyerProfile {
+export function saveBuyerProfile(input: { name?: string; usage: string; budget: string; priority: string }): BuyerProfile {
   const data = loadRadar();
   const now = new Date().toISOString();
+  // El nombre se genera automáticamente a partir de la combinación (uso +
+  // presupuesto + prioridad): el usuario ya no lo escribe a mano.
+  const name = buyerProfileDisplayName(input);
+  const color = hslString(buyerProfileColor(input));
   const profile: BuyerProfile = {
     id: shortId('bp'),
-    name: input.name.trim().slice(0, 60) || 'Mi perfil',
+    name,
+    color,
     usage: input.usage,
     budget: input.budget,
     priority: input.priority,

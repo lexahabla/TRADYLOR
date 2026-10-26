@@ -347,9 +347,9 @@ const radarPayload = {
   <div class="card-content">
     <a class="category-label" href={`/?category=${encodeURIComponent(String(product.category ?? '').toLowerCase().trim())}`}>{product.category}</a>
 
-    <span class="profile-match-badge" data-profile-match-badge hidden>
+    <span class="profile-match-badge" data-profile-match-badge hidden data-profile-name="" data-profile-color="">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
-      Encaja con tu perfil
+      <span data-profile-name-text>Encaja con tu perfil</span>
     </span>
 
     {product.rating && (
@@ -599,11 +599,11 @@ const radarPayload = {
     font-size: 0.66rem;
     font-weight: 800;
     letter-spacing: 0.02em;
-    color: #052e22;
-    background: linear-gradient(135deg, #34d399, #10b981);
+    color: var(--badge-text-color, #052e22);
+    background: linear-gradient(135deg, var(--badge-color-start, #34d399), var(--badge-color-end, #10b981));
     padding: 0.28rem 0.5rem;
     border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+    box-shadow: 0 4px 12px rgba(var(--badge-color-rgb, 16, 185, 129), 0.3);
   }
 
   .profile-match-badge[hidden] {
