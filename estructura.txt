@@ -42,6 +42,8 @@ src/components/CategoryNav.astro
 src/components/common/TrustMetrics.astro
 src/components/comparativa/ProductComparator.astro
 src/components/ComparisonTable.astro
+src/components/DependienteIA.astro
+src/components/home/MethodSection.astro
 src/components/metodologia/MethodologyQuiz.astro
 src/components/PriceHistoryChart.astro
 src/components/ProductCard.astro
@@ -121,6 +123,7 @@ src/lib/radarStore.ts
 src/lib/rateLimit.ts
 src/lib/reminders.ts
 src/lib/sections.ts
+src/lib/sectionSuggestions.ts
 src/lib/services/affiliateAdapter.ts
 src/lib/services/aiMasterPrompt.ts
 src/lib/services/databaseSchema.ts
@@ -155,6 +158,7 @@ src/pages/api/admin/networks.ts
 src/pages/api/admin/normalize-tags.ts
 src/pages/api/admin/pipeline/index.ts
 src/pages/api/admin/sections.ts
+src/pages/api/admin/sections/suggestions.ts
 src/pages/api/admin/synthesize-title.ts
 src/pages/api/admin/tombstones/index.ts
 src/pages/api/admin/upload-image.ts
@@ -172,6 +176,7 @@ src/pages/api/products/curation.ts
 src/pages/api/products/delete.ts
 src/pages/api/products/search.ts
 src/pages/api/radar/add.ts
+src/pages/api/radar/ai-assistant.ts
 src/pages/api/radar/alert.ts
 src/pages/api/radar/auth/avatar.ts
 src/pages/api/radar/auth/forgot.ts
@@ -208,6 +213,7 @@ src/pages/api/v1/products/import.ts
 src/pages/api/v1/products/index.ts
 src/pages/checkout/[id].astro
 src/pages/ejemplo-afiliados.astro
+src/pages/herramientas.astro
 src/pages/index.astro
 src/pages/metodologia.astro
 src/pages/mi-radar.astro

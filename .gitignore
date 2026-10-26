@@ -86,3 +86,4 @@ src/data/deleted-product-ids.json
 
 # logs locales de desarrollo (npm run dev)
 dev-*.log
+server-*.log

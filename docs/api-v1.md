@@ -819,6 +819,74 @@ huérfanos (`cleanedProducts` en la respuesta).
 
 ---
 
+## 8. Centro de Herramientas y secciones inteligentes (admin/usuario, interno)
+
+### GET /api/admin/sections/suggestions
+
+Protegido por sesión de administrador. Devuelve sugerencias **100% automáticas** de
+secciones para la portada (`src/lib/sectionSuggestions.ts`): según la fecha actual
+elige eventos del calendario comercial (Black Friday, Navidad, rebajas de enero,
+San Valentín, Día de la Madre, verano, vuelta al cole, Halloween, 11.11…) y, si no
+hay ninguno activo, dos sugerencias "evergreen" (mayor ahorro / novedades). Cada
+sugerencia ya trae su `productIds` calculado con una heurística determinista sobre
+el catálogo (descuento %, valoración o fecha de alta) — cero trabajo manual.
+
+```json
+{
+  "success": true,
+  "suggestions": [
+    {
+      "key": "black-friday",
+      "title": "🔥 Black Friday",
+      "description": "Los descuentos más agresivos del catálogo ahora mismo.",
+      "icon": "🔥",
+      "productIds": ["..."],
+      "reason": "Ordenado por % de descuento",
+      "existingSectionId": "black-friday"
+    }
+  ]
+}
+```
+
+`existingSectionId` sólo aparece si ya existe una sección publicada con ese id (el
+panel ofrece "Actualizar" en vez de "Crear"). El panel crea la sección con el POST
+ya existente de `/api/admin/sections` (`action:'create'`, mismo `id` que `key`).
+
+### GET /api/redirect — parámetro `network` (comparativa multitienda)
+
+`GET /api/redirect?id=<producto>&network=<red>&src=multistore` sale hacia la URL de
+afiliado de **otra** red detectada automáticamente por "Construir Catálogo"
+(`extra.crossMerchant`, ver `src/lib/productNetwork.ts#getCrossMerchantOffers`), en
+vez de la tienda principal del producto. Sin `network` (o sin match), el
+comportamiento es el de siempre. El enlace real nunca se expone en el HTML.
+
+### POST /api/radar/ai-assistant — Dependiente IA
+
+Público (usuarios anónimos y con sesión de Mi Radar); limitado por IP/usuario
+(`src/lib/rateLimit.ts`). Reutiliza el **mismo motor de IA ya configurado** en el
+servidor (`chatComplete`, el que usa la consola del panel admin) con un prompt
+acotado a recomendar **sólo** productos reales del catálogo aprobado.
+
+```json
+// Body
+{ "messages": [{ "role": "user", "content": "busco auriculares para deporte, 80€" }] }
+```
+
+```json
+// Respuesta (sin sesión): recortada
+{ "success": true, "reply": "Te recomiendo los…", "locked": true }
+// Respuesta (con sesión): completa
+{ "success": true, "reply": "Te recomiendo los Jesebang…", "locked": false }
+```
+
+Sin proveedor de IA configurado responde `503`. El cliente guarda la conversación
+completa en la cuenta del usuario vía el store de Mi Radar (`utils/radarStore.ts`
+`saveAiChat`), igual que los perfiles de comprador (`saveBuyerProfile`) y las
+comparativas guardadas (`addComparatorHistoryEntry`) — todo viaja en el mismo
+`POST /api/radar` de sincronización que ya usa el resto de Mi Radar.
+
+---
+
 ## Notas operativas
 
 - Máximo **50 productos** por petición de importación.
