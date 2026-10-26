@@ -11,7 +11,7 @@
  *   2) Respaldo cuando la llamada a la IA falla (p. ej. sin créditos).
  */
 
-import { buildRealisticPricing, enforceMoreProsThanCons, synthesizeTitleLocally, type EnrichedText } from './ai';
+import { buildRealisticPricing, enforceMoreProsThanCons, mergeWithMinimum, synthesizeTitleLocally, type EnrichedText } from './ai';
 
 export interface LocalEnrichInput {
   title: string;
@@ -188,6 +188,9 @@ function buildCons(input: LocalEnrichInput): string[] {
 /**
  * Enriquece un producto localmente con plantillas (gratis, instantáneo).
  * Sólo rellena los campos vacíos; lo que el scraping ya aportó se respeta.
+ * Si el scraping sólo aportó 1-2 pros (p. ej. un dato de comisión, que no es
+ * una ventaja real para el comprador), se completa con la plantilla hasta un
+ * mínimo de 3 en vez de dejarlos tal cual (ver mergeWithMinimum en ai.ts).
  */
 export function enrichProductLocally(input: LocalEnrichInput): EnrichedText {
   const scrapedPros = Array.isArray(input.pros) ? input.pros.map(cleanBullet).filter(Boolean) : [];
@@ -195,7 +198,7 @@ export function enrichProductLocally(input: LocalEnrichInput): EnrichedText {
   // Siempre más pros que contras (la ficha está para vender): se aplica igual
   // si los pros/contras vienen del scraping que si son los de la plantilla.
   const { pros, cons } = enforceMoreProsThanCons(
-    scrapedPros.length ? scrapedPros : buildPros(input),
+    mergeWithMinimum(scrapedPros, buildPros(input), 3),
     scrapedCons.length ? scrapedCons : buildCons(input)
   );
 

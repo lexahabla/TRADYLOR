@@ -274,20 +274,30 @@ export const POST: APIRoute = async ({ request }) => {
       // Normalizar tags técnicos.
       updated.normalized_tags = extractNormalizedTags(updated);
 
-      // Auto-vincular alternativas (económicas + competidor directo) si no las tiene.
-      const stored = roleIdsOf(updated);
-      const hasLinks = Array.isArray(updated.alternative_product_ids) && updated.alternative_product_ids.length > 0;
-      const hasRoles = Boolean(stored.premium.length || stored.cheaper.length || stored.similar.length);
-      if (!hasLinks || !hasRoles) {
-        const ensured = autoLinkAlternatives(updated.id);
-        if (ensured.ok) {
-          const fresh = readProductsFromFile().find((p) => p.id === updated.id);
-          if (fresh) Object.assign(updated, fresh);
-        }
-      }
-
+      // IMPORTANTE: se guarda el enriquecimiento ANTES de auto-vincular
+      // alternativas. autoLinkAlternatives relee products.json desde disco; si
+      // se llamaba antes de upsertProduct, esa relectura devolvía el producto
+      // tal cual estaba ANTES de enriquecerlo, y el Object.assign(updated,
+      // fresh) posterior sobrescribía título/descripción/pros/contras recién
+      // generados con los valores viejos justo antes de guardar (bug real:
+      // el enriquecimiento "se perdía" en productos que entraban en el
+      // auto-link, que es el caso más común en un enriquecimiento masivo).
       if (!dryRun) {
         upsertProduct(updated);
+
+        // Auto-vincular alternativas (económicas + competidor directo) si no las tiene.
+        const stored = roleIdsOf(updated);
+        const hasLinks = Array.isArray(updated.alternative_product_ids) && updated.alternative_product_ids.length > 0;
+        const hasRoles = Boolean(stored.premium.length || stored.cheaper.length || stored.similar.length);
+        if (!hasLinks || !hasRoles) {
+          const ensured = autoLinkAlternatives(updated.id);
+          if (ensured.ok) {
+            // El archivo ya tiene el enriquecimiento guardado arriba, así que
+            // esta relectura sólo aporta los campos de alternativas/roles.
+            const fresh = readProductsFromFile().find((p) => p.id === updated.id);
+            if (fresh) Object.assign(updated, fresh);
+          }
+        }
       }
 
       results.push({ id: updated.id, title: updated.title, ok: true, textStatus, imageStatus, warnings });
