@@ -33,7 +33,7 @@ import {
   type ProductAlternative,
   type EnrichedProduct,
 } from './databaseSchema';
-import { enrichProductText, hasTextCredentials, textProvider, type EnrichedText } from '../ai';
+import { enrichProductText, hasTextCredentials, mergeWithMinimum, textProvider, type EnrichedText } from '../ai';
 import { enrichProductLocally } from '../localEnrich';
 import { getCategories, createCategory, getCategoryById, type Category } from '../categories';
 import { suggestCategory } from '../categories';
@@ -518,17 +518,39 @@ export class MassCatalogPipeline {
     };
 
     // Pros/Cons: estructurados de IA > planos de local/red
+    // Si la IA devuelve pocos pros (común con modelos gratuitos bajo carga),
+    // completamos con la plantilla local para asegurar un mínimo de 3.
+    const localEnrich = enrichProductLocally({
+      title: unified.title,
+      description: unified.description,
+      category: unified.category,
+      brand: (unified.extra as Record<string, string> | undefined)?.['Marca']
+        || (unified.extra as Record<string, string> | undefined)?.['brand'],
+      merchant: unified.network,
+      price: unified.price,
+      originalPrice: unified.originalPrice,
+      rating: unified.rating,
+      reviewsCount: unified.reviewsCount,
+      url: unified.productUrl,
+      specs: (unified.extra as Record<string, string> | undefined) || undefined,
+    });
+
     let finalPros: string[] = [];
     let finalCons: string[] = [];
     let finalProsCons: EnrichedProduct['pros_cons'] = { pros: [], cons: [] };
 
     if (enrichment?.pros_cons) {
       finalProsCons = enrichment.pros_cons;
-      finalPros = enrichment.pros_cons.pros.map(p => p.text);
-      finalCons = enrichment.pros_cons.cons.map(c => c.text);
+      const iaPros = enrichment.pros_cons.pros.map(p => p.text);
+      const iaCons = enrichment.pros_cons.cons.map(c => c.text);
+      // Garantizar mínimo de 3 pros completando con plantilla local
+      finalPros = mergeWithMinimum(iaPros, localEnrich.pros, 3);
+      finalCons = iaCons.length ? iaCons : localEnrich.cons;
     } else {
-      finalPros = aiEnrichment?.pros || [];
-      finalCons = aiEnrichment?.cons || [];
+      const iaPros = aiEnrichment?.pros || [];
+      const iaCons = aiEnrichment?.cons || [];
+      finalPros = mergeWithMinimum(iaPros, localEnrich.pros, 3);
+      finalCons = iaCons.length ? iaCons : localEnrich.cons;
       finalProsCons = structureProsCons(finalPros, finalCons);
     }
 
@@ -935,7 +957,11 @@ function buildEnrichedProductForBatch(
   const finalTitle = enrichment?.title || aiEnrichment?.title || unified.title;
   const finalDescription = enrichment?.description || aiEnrichment?.description || unified.description;
   const mergedSpecs = { ...(unified.extra as Record<string, string> || {}), ...(aiEnrichment?.specs || {}), ...(enrichment?.specs || {}) };
-  const finalPros = enrichment?.pros_cons?.pros.map(p => p.text) || aiEnrichment?.pros || [];
+  const finalPros = mergeWithMinimum(
+    enrichment?.pros_cons?.pros.map(p => p.text) || aiEnrichment?.pros || [],
+    aiEnrichment?.pros || [],
+    3
+  );
   const finalCons = enrichment?.pros_cons?.cons.map(c => c.text) || aiEnrichment?.cons || [];
   const finalProsCons = enrichment?.pros_cons || structureProsCons(finalPros, finalCons);
   const highlights = enrichment?.highlights || generateHighlights(finalPros, mergedSpecs);
