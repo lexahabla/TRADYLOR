@@ -134,6 +134,54 @@ export const REMINDER_MAX_PER_USER = 20;
 /** Horizonte máximo de programación: 1 año. */
 export const REMINDER_MAX_HORIZON_MS = 365 * 24 * 60 * 60 * 1000;
 
+/**
+ * Perfil de Comprador guardado: resultado nombrado del Perfilador de Compra
+ * (uso + presupuesto + prioridad). Un usuario puede guardar varios; el
+ * selector del mainNav marca uno como "activo" (`RadarData.activeBuyerProfileId`).
+ * El activo actúa como filtro VISUAL (badge "Encaja con tu perfil") en el
+ * catálogo, nunca oculta productos.
+ */
+export interface BuyerProfile {
+  id: string;
+  name: string;
+  /** Uso principal elegido en el Perfilador (ver data-value de SmartMatcherWizard). */
+  usage: string;
+  /** Presupuesto elegido en el Perfilador: low | mid | high | premium. */
+  budget: string;
+  /** Prioridad elegida en el Perfilador: price | quality | balance. */
+  priority: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Comparativa guardada desde el Comparador de Productos (Centro de Herramientas). */
+export interface ComparatorHistoryEntry {
+  id: string;
+  createdAt: string;
+  categorySlug?: string;
+  categoryName?: string;
+  /** Perfil Smart Match aplicado en el momento de guardar (si lo hubiera). */
+  smartMatchProfile?: string;
+  productIds: string[];
+}
+
+/** Un turno de la conversación con el Dependiente IA. */
+export interface AiChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  at: string;
+}
+
+/** Conversación guardada con el Dependiente IA (Centro de Herramientas). */
+export interface AiChatEntry {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Título corto autogenerado (primeras palabras del primer mensaje). */
+  title: string;
+  messages: AiChatMessage[];
+}
+
 /** Estado completo de Mi Radar de un usuario (anónimo o en la nube). */
 export interface RadarData {
   projects: ProjectFolder[];
@@ -148,6 +196,14 @@ export interface RadarData {
   removedProducts?: Record<string, number>;
   /** Bajas de listas: id → epoch ms (los ids de lista son únicos, no se reutilizan). */
   removedProjects?: Record<string, number>;
+  /** Perfiles de comprador guardados (opcional; requiere sesión para crearse). */
+  buyerProfiles?: BuyerProfile[];
+  /** id del perfil marcado como activo en el selector del mainNav (o vacío). */
+  activeBuyerProfileId?: string;
+  /** Comparativas guardadas desde el Centro de Herramientas. */
+  comparatorHistory?: ComparatorHistoryEntry[];
+  /** Conversaciones guardadas con el Dependiente IA. */
+  aiChats?: AiChatEntry[];
 }
 
 /** Respuesta de /api/radar/auth/session. */
@@ -170,3 +226,36 @@ export const RADAR_STORAGE_KEY = 'tradylor-radar-v1';
 
 /** Umbral del Return Flow en /mi-radar: se pregunta a partir de 24h. */
 export const RETURN_FLOW_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Etiquetas legibles de los valores `data-value` del Perfilador de Compra
+ * (SmartMatcherWizard). Se comparten aquí para que el selector del mainNav,
+ * Mi Radar y el badge "Encaja con tu perfil" no dupliquen el texto.
+ */
+export const BUYER_PROFILE_USAGE_LABELS: Record<string, string> = {
+  productividad: 'Productividad',
+  entretenimiento: 'Entretenimiento',
+  creatividad: 'Creatividad',
+  hogar: 'Hogar Inteligente',
+  movilidad: 'Movilidad',
+  fitness: 'Fitness y Salud',
+};
+export const BUYER_PROFILE_BUDGET_LABELS: Record<string, string> = {
+  low: 'Hasta 100€',
+  mid: '100€ – 400€',
+  high: '400€ – 1000€',
+  premium: 'Más de 1000€',
+};
+export const BUYER_PROFILE_BUDGET_RANGES: Record<string, [number, number]> = {
+  low: [0, 100],
+  mid: [100, 400],
+  high: [400, 1000],
+  premium: [1000, Infinity],
+};
+export const BUYER_PROFILE_PRIORITY_LABELS: Record<string, string> = {
+  price: 'Precio',
+  quality: 'Calidad / Durabilidad',
+  balance: 'Equilibrio',
+};
+/** Máximo de perfiles de comprador guardados por usuario. */
+export const BUYER_PROFILE_MAX = 8;

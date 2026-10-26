@@ -17,6 +17,7 @@ import ReturnBanner from '../components/ReturnBanner.astro';
 import AuthModal from '../components/AuthModal.astro';
 import { GOOGLE_TRANSLATE_LANGS } from '../utils/translate';
 import { getCategories, type Category } from '../lib/categories';
+import { readSections } from '../lib/sections';
 
 const {
   title = "Tradylor | Portal de Curación, Recomendaciones y Comparativas de Productos",
@@ -55,6 +56,12 @@ for (const cat of headerCategories) {
   headerSubsByParent.set(cat.parentId, list);
 }
 const headerHueOf = (index: number) => (index * 43) % 360;
+
+// "Top Selecciones" del mainNav: secciones creadas desde el panel admin
+// ("Secciones de la web") + las dos opciones fijas (ventas/valoración).
+const navTopSections = (readSections() || [])
+  .filter((s) => s.published)
+  .sort((a, b) => a.order - b.order);
 
 // HTML del panel de categorías del buscador de cabecera (inyectado con set:html).
 const headerCategoryPanelHtml = `
@@ -343,6 +350,173 @@ const headerCategoryPanelHtml = `
       }
       .nav-link:hover::after {
         width: 100%;
+      }
+
+      /* Desplegables del mainNav: "Top Selecciones" + selector de Perfil de Comprador */
+      .nav-item-dropdown {
+        position: relative;
+      }
+      .nav-dropdown-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0;
+        margin: 0;
+        background: none;
+        border: none;
+        font: inherit;
+        cursor: pointer;
+      }
+      .nav-dropdown-caret {
+        flex-shrink: 0;
+        opacity: 0.7;
+        transition: transform 0.2s ease;
+      }
+      .nav-dropdown-btn[aria-expanded='true'] .nav-dropdown-caret {
+        transform: rotate(180deg);
+      }
+      .nav-dropdown-panel {
+        position: absolute;
+        top: calc(100% + 0.85rem);
+        left: 0;
+        z-index: 120;
+        min-width: 15rem;
+        max-width: 20rem;
+        max-height: 60vh;
+        overflow-y: auto;
+        padding: 0.4rem;
+        background: rgba(12, 16, 26, 0.98);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 14px;
+        box-shadow: 0 24px 56px rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+      }
+      .nav-dropdown-panel[hidden] {
+        display: none;
+      }
+      .nav-dropdown-item {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        padding: 0.55rem 0.7rem;
+        border-radius: 9px;
+        font-size: 0.84rem;
+        font-weight: 600;
+        color: #e5e7eb;
+        text-decoration: none;
+        transition: background 0.16s ease, color 0.16s ease;
+      }
+      .nav-dropdown-item:hover {
+        background: rgba(59, 130, 246, 0.16);
+        color: #ffffff;
+      }
+      .nav-dropdown-item-icon {
+        flex-shrink: 0;
+        font-size: 0.95rem;
+      }
+      .nav-dropdown-sep {
+        height: 1px;
+        margin: 0.35rem 0.3rem;
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .nav-dropdown-empty {
+        padding: 0.6rem 0.7rem;
+        font-size: 0.78rem;
+        color: var(--color-text-dim);
+      }
+
+      /* Selector de Perfil de Comprador: alineado a la derecha en escritorio
+         (último elemento del mainNav; en responsive pasa a ser el último del drawer). */
+      .nav-item-profile {
+        margin-left: auto;
+      }
+      .nav-profile-btn {
+        color: #93c5fd;
+      }
+      .nav-profile-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #475569;
+        flex-shrink: 0;
+        transition: background 0.2s ease, box-shadow 0.2s ease;
+      }
+      .nav-item-profile.has-active-profile .nav-profile-dot {
+        background: #34d399;
+        box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+      }
+      .nav-dropdown-panel--profile {
+        right: 0;
+        left: auto;
+      }
+      .nav-profile-option {
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        width: 100%;
+        padding: 0.55rem 0.7rem;
+        border-radius: 9px;
+        border: none;
+        background: none;
+        font: inherit;
+        font-size: 0.84rem;
+        font-weight: 600;
+        color: #e5e7eb;
+        text-align: left;
+        cursor: pointer;
+        transition: background 0.16s ease, color 0.16s ease;
+      }
+      .nav-profile-option:hover {
+        background: rgba(59, 130, 246, 0.16);
+        color: #ffffff;
+      }
+      .nav-profile-option.is-active {
+        color: #34d399;
+      }
+      .nav-profile-option-check {
+        margin-left: auto;
+        color: #34d399;
+        flex-shrink: 0;
+        display: inline-flex;
+      }
+      .nav-profile-option-delete {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: #64748b;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+      .nav-profile-option-delete:hover {
+        color: #f87171;
+        background: rgba(239, 68, 68, 0.14);
+      }
+      .nav-profile-create {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.6rem 0.7rem;
+        border-radius: 9px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        color: #60a5fa;
+        text-decoration: none;
+      }
+      .nav-profile-create:hover {
+        background: rgba(59, 130, 246, 0.14);
+      }
+      .nav-profile-hint {
+        padding: 0.6rem 0.7rem 0.3rem;
+        font-size: 0.74rem;
+        line-height: 1.5;
+        color: var(--color-text-dim);
       }
 
       /* Acciones del Header (Carrito) */
@@ -1721,6 +1895,11 @@ const headerCategoryPanelHtml = `
       .affiliate-disclosure-box {
         margin-bottom: 3rem;
       }
+      /* Ancla de scroll suave para "Aviso de Afiliación" (sin altura, no desplaza nada) */
+      .anchor-offset {
+        display: block;
+        height: 0;
+      }
       .disclosure-card {
         background: rgba(17, 24, 39, 0.6);
         border: 1px solid rgba(245, 158, 11, 0.25);
@@ -2214,6 +2393,28 @@ const headerCategoryPanelHtml = `
         #mainNav.is-open .nav-link:active {
           color: #60a5fa !important;
           padding-left: 0.9rem !important;
+        }
+        /* Desplegables dentro del drawer: se expanden en línea (sin flotar) */
+        #mainNav.is-open .nav-item-profile {
+          margin-left: 0 !important;
+        }
+        #mainNav.is-open .nav-dropdown-panel {
+          position: static !important;
+          width: 100% !important;
+          max-width: none !important;
+          max-height: none !important;
+          margin: 0 0 0.5rem !important;
+          padding: 0.3rem !important;
+          background: rgba(255, 255, 255, 0.03) !important;
+          border: 1px solid rgba(255, 255, 255, 0.08) !important;
+          box-shadow: none !important;
+          backdrop-filter: none !important;
+        }
+        #mainNav.is-open .nav-dropdown-item,
+        #mainNav.is-open .nav-profile-option,
+        #mainNav.is-open .nav-profile-create {
+          padding: 0.75rem 0.6rem !important;
+          font-size: 0.95rem !important;
         }
       }
       @media (max-width: 600px) {
@@ -2735,10 +2936,37 @@ const headerCategoryPanelHtml = `
               </button>
             </div>
             <ul class="nav-list items-start justify-start md:items-center md:justify-center">
-              <li><a href="/#destacados" class="nav-link">Top Selecciones</a></li>
-              <li><a href="/#metodologia" class="nav-link">Metodología</a></li>
-              <li><a href="/#comparativas" class="nav-link">Comparativas</a></li>
-              <li><a href="#aviso-legal" class="nav-link">Aviso de Afiliación</a></li>
+              <li class="nav-item-dropdown" data-nav-dropdown>
+                <button type="button" class="nav-link nav-dropdown-btn" data-top-selecciones-btn aria-expanded="false" aria-controls="navTopSeleccionesPanel">
+                  Top Selecciones
+                  <svg class="nav-dropdown-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="nav-dropdown-panel" id="navTopSeleccionesPanel" data-top-selecciones-panel hidden>
+                  <a href="/?sort=ventas#catalogo" class="nav-dropdown-item">
+                    <span class="nav-dropdown-item-icon" aria-hidden="true">🔥</span> Lo más vendido
+                  </a>
+                  <a href="/?sort=valoracion#catalogo" class="nav-dropdown-item">
+                    <span class="nav-dropdown-item-icon" aria-hidden="true">⭐</span> Mejor valorados
+                  </a>
+                  {navTopSections.length > 0 && <div class="nav-dropdown-sep" role="separator"></div>}
+                  {navTopSections.map((s) => (
+                    <a href={`/#section-${s.id}`} class="nav-dropdown-item">
+                      <span class="nav-dropdown-item-icon" aria-hidden="true">🗂️</span> {s.title}
+                    </a>
+                  ))}
+                </div>
+              </li>
+              <li><a href="/#el-metodo" class="nav-link">El Método</a></li>
+              <li><a href="/herramientas" class="nav-link">Herramientas</a></li>
+              <li><a href="#aviso-afiliacion" class="nav-link">Aviso de Afiliación</a></li>
+              <li class="nav-item-dropdown nav-item-profile" data-buyer-profile-switcher>
+                <button type="button" class="nav-link nav-dropdown-btn nav-profile-btn" data-buyer-profile-btn aria-expanded="false" aria-controls="navBuyerProfilePanel">
+                  <span class="nav-profile-dot" aria-hidden="true"></span>
+                  <span data-buyer-profile-label>Perfil inactivo</span>
+                  <svg class="nav-dropdown-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                </button>
+                <div class="nav-dropdown-panel nav-dropdown-panel--profile" id="navBuyerProfilePanel" data-buyer-profile-panel hidden></div>
+              </li>
             </ul>
           </div>
         </nav>
@@ -2856,7 +3084,7 @@ const headerCategoryPanelHtml = `
             <li><a href="/#metodologia">Protocolo de Pruebas</a></li>
             <li><a href="/#metodologia">Monitoreo de Precios en Vivo</a></li>
             <li><a href="/#metodologia">Política de Imparcialidad</a></li>
-            <li><a href="#aviso-legal">Aviso de Divulgación</a></li>
+            <li><a href="#aviso-afiliacion">Aviso de Divulgación</a></li>
           </ul>
         </div>
 
@@ -2875,6 +3103,7 @@ const headerCategoryPanelHtml = `
 
       {/* Sección Crítica de Aviso de Afiliación Obligatorio (Amazon Associates, FTC y UE) */}
       {!isBackend && (
+      <span id="aviso-afiliacion" class="anchor-offset" aria-hidden="true"></span>
       <div id="aviso-legal" class="affiliate-disclosure-box container">
         <div class="disclosure-card">
           <div class="disclosure-header">
@@ -2991,6 +3220,31 @@ const headerCategoryPanelHtml = `
                 if (headerCatBtn) headerCatBtn.setAttribute('aria-expanded', 'false');
               }
             }
+          });
+        }
+
+        // --- Desplegable "Top Selecciones" del mainNav (secciones dinámicas) ---
+        const topSelBtn = document.querySelector('[data-top-selecciones-btn]');
+        const topSelPanel = document.querySelector('[data-top-selecciones-panel]');
+        if (topSelBtn && topSelPanel) {
+          const setTopSelOpen = (open) => {
+            topSelPanel.hidden = !open;
+            topSelBtn.setAttribute('aria-expanded', String(open));
+          };
+          topSelBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setTopSelOpen(topSelPanel.hidden);
+          });
+          topSelPanel.addEventListener('click', (e) => {
+            if (e.target.closest('a')) setTopSelOpen(false);
+          });
+          document.addEventListener('click', (event) => {
+            const t = event.target;
+            if (!(t instanceof Element)) return;
+            if (!t.closest('[data-nav-dropdown]')) setTopSelOpen(false);
+          });
+          document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') setTopSelOpen(false);
           });
         }
 
@@ -3356,14 +3610,18 @@ const headerCategoryPanelHtml = `
         // =====================================================================
         import { getSession, getCachedSession, initAuth, logout, onAuthChange } from '../utils/auth';
         import {
+          deleteBuyerProfile,
+          getActiveBuyerProfile,
+          getBuyerProfiles,
           getRadarProducts,
           isSaved,
           onRadarChange,
           removeProduct,
           saveToRadar,
+          setActiveBuyerProfile,
           trackExitClick,
         } from '../utils/radarStore';
-        import type { SavedProduct, UserProfile } from '../types/radar';
+        import type { BuyerProfile, SavedProduct, UserProfile } from '../types/radar';
         import { openSharePanel } from '../utils/shareUi';
 
         // ---------------------------------------------------------- helpers UI
@@ -3451,6 +3709,125 @@ const headerCategoryPanelHtml = `
               : 'Guardar en la nube (Iniciar sesión)';
           }
         }
+
+        // ------------------------------------------- selector de Perfil de Comprador
+        const buyerProfileWrap = $('[data-buyer-profile-switcher]');
+        const buyerProfileBtn = $<HTMLButtonElement>('[data-buyer-profile-btn]');
+        const buyerProfilePanel = $('[data-buyer-profile-panel]');
+        const buyerProfileLabel = $('[data-buyer-profile-label]');
+
+        function escapeHtmlNav(value: string): string {
+          return value.replace(/[&<>"']/g, (ch) => {
+            switch (ch) {
+              case '&': return '&amp;';
+              case '<': return '&lt;';
+              case '>': return '&gt;';
+              case '"': return '&quot;';
+              default: return '&#39;';
+            }
+          });
+        }
+
+        function setBuyerProfilePanelOpen(open: boolean): void {
+          if (!buyerProfilePanel || !buyerProfileBtn) return;
+          buyerProfilePanel.hidden = !open;
+          buyerProfileBtn.setAttribute('aria-expanded', String(open));
+        }
+
+        /**
+         * Pinta el selector de Perfil de Comprador del mainNav:
+         *  - Sin sesión: "Perfil inactivo" (el clic abre el modal de registro).
+         *  - Con sesión: nombre del perfil activo (o "Elegir perfil") + desplegable
+         *    con los perfiles guardados, cuál está activo y acceso al Perfilador.
+         */
+        function renderBuyerProfileSwitcher(user: UserProfile | null): void {
+          if (!buyerProfileWrap || !buyerProfileBtn || !buyerProfilePanel || !buyerProfileLabel) return;
+
+          if (!user) {
+            buyerProfileLabel.textContent = 'Perfil inactivo';
+            buyerProfileWrap.classList.remove('has-active-profile');
+            setBuyerProfilePanelOpen(false);
+            return;
+          }
+
+          const profiles = getBuyerProfiles();
+          const active = getActiveBuyerProfile();
+          buyerProfileWrap.classList.toggle('has-active-profile', Boolean(active));
+          buyerProfileLabel.textContent = active ? active.name : (profiles.length ? 'Elegir perfil' : 'Sin perfil');
+
+          if (profiles.length === 0) {
+            buyerProfilePanel.innerHTML = `
+              <p class="nav-profile-hint">Aún no tienes perfiles guardados. Completa el Perfilador de Compra y guárdalo con un nombre.</p>
+              <a href="/herramientas#perfilador" class="nav-profile-create">+ Crear mi primer perfil</a>
+            `;
+            return;
+          }
+
+          const itemsHtml = profiles.map((p: BuyerProfile) => `
+            <button type="button" class="nav-profile-option${p.id === active?.id ? ' is-active' : ''}" data-bp-select="${p.id}">
+              <span>${escapeHtmlNav(p.name)}</span>
+              ${p.id === active?.id ? '<span class="nav-profile-option-check" aria-hidden="true">✓</span>' : ''}
+              <span class="nav-profile-option-delete" data-bp-delete="${p.id}" title="Eliminar perfil" role="button" aria-label="Eliminar perfil ${escapeHtmlNav(p.name)}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </span>
+            </button>
+          `).join('');
+
+          buyerProfilePanel.innerHTML = `
+            ${itemsHtml}
+            ${active ? '<button type="button" class="nav-profile-option" data-bp-clear>Ningún perfil activo</button>' : ''}
+            <div class="nav-dropdown-sep" role="separator"></div>
+            <a href="/herramientas#perfilador" class="nav-profile-create">+ Crear nuevo perfil</a>
+          `;
+        }
+
+        buyerProfileBtn?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const session = getCachedSession();
+          if (!session?.user) {
+            const w = window as unknown as Record<string, { open?: (view?: string, context?: string) => void } | undefined>;
+            w.TradylorAuth?.open?.('register', 'buyer-profile');
+            return;
+          }
+          setBuyerProfilePanelOpen(Boolean(buyerProfilePanel?.hidden));
+        });
+
+        buyerProfilePanel?.addEventListener('click', (event) => {
+          const t = event.target;
+          if (!(t instanceof Element)) return;
+          const deleteBtn = t.closest<HTMLElement>('[data-bp-delete]');
+          if (deleteBtn?.dataset.bpDelete) {
+            event.stopPropagation();
+            deleteBuyerProfile(deleteBtn.dataset.bpDelete);
+            renderBuyerProfileSwitcher(getCachedSession()?.user ?? null);
+            return;
+          }
+          const selectBtn = t.closest<HTMLElement>('[data-bp-select]');
+          if (selectBtn?.dataset.bpSelect) {
+            setActiveBuyerProfile(selectBtn.dataset.bpSelect);
+            renderBuyerProfileSwitcher(getCachedSession()?.user ?? null);
+            setBuyerProfilePanelOpen(false);
+            return;
+          }
+          if (t.closest('[data-bp-clear]')) {
+            setActiveBuyerProfile(null);
+            renderBuyerProfileSwitcher(getCachedSession()?.user ?? null);
+            setBuyerProfilePanelOpen(false);
+          }
+        });
+
+        document.addEventListener('click', (event) => {
+          const t = event.target;
+          if (!(t instanceof Element)) return;
+          if (buyerProfilePanel && !buyerProfilePanel.hidden && !t.closest('[data-buyer-profile-switcher]')) {
+            setBuyerProfilePanelOpen(false);
+          }
+        });
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape' && buyerProfilePanel && !buyerProfilePanel.hidden) {
+            setBuyerProfilePanelOpen(false);
+          }
+        });
 
         // ------------------------------------------------------ drawer Carrito / Radar
         const radarDrawer = document.getElementById('radarDrawer');
@@ -3830,11 +4207,13 @@ const headerCategoryPanelHtml = `
         );
 
         onRadarChange(syncButtons);
+        onRadarChange(() => renderBuyerProfileSwitcher(getCachedSession()?.user ?? null));
         onAuthChange((user) => {
           // Con cuenta activa se completa el guardado que quedó pendiente
           // en el gate de registro (clic en «Guardar» de una tarjeta).
           if (user) flushPendingRadarSave();
           renderHeaderAuth(user);
+          renderBuyerProfileSwitcher(user);
           syncButtons();
           if (user) void syncMarketingProfile();
         });
@@ -3842,11 +4221,13 @@ const headerCategoryPanelHtml = `
           authReady = true;
           if (session.user) flushPendingRadarSave();
           renderHeaderAuth(session.user ?? null);
+          renderBuyerProfileSwitcher(session.user ?? null);
           syncButtons();
           if (session.user) void syncMarketingProfile();
         });
         // Si no hay sesión aún, muestra el bloque anónimo ya (evita flash).
         renderHeaderAuth(getCachedSession()?.user ?? null);
+        renderBuyerProfileSwitcher(getCachedSession()?.user ?? null);
         syncButtons();
         // Re-sincroniza tras pintar tarjetas dinámicas (fetch del home, etc.).
         window.addEventListener('load', syncButtons);

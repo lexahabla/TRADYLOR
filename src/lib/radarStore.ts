@@ -3,13 +3,24 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { dataFile } from './paths';
 import {
+  BUYER_PROFILE_BUDGET_LABELS,
+  BUYER_PROFILE_MAX,
+  BUYER_PROFILE_PRIORITY_LABELS,
+  BUYER_PROFILE_USAGE_LABELS,
   DEFAULT_PROJECT,
+  type AiChatEntry,
+  type BuyerProfile,
+  type ComparatorHistoryEntry,
   type PendingExit,
   type ProjectFolder,
   type RadarData,
   type Reminder,
   type SavedProduct,
 } from '../types/radar';
+
+const COMPARATOR_HISTORY_MAX = 30;
+const AI_CHATS_MAX = 30;
+const AI_CHAT_MESSAGES_MAX = 40;
 
 /**
  * ==============================================================================
@@ -35,6 +46,9 @@ function emptyRadar(): RadarData {
     projects: [{ ...DEFAULT_PROJECT, products: [] }],
     pendingExits: [],
     reminders: [],
+    buyerProfiles: [],
+    comparatorHistory: [],
+    aiChats: [],
   };
 }
 
@@ -69,6 +83,10 @@ export function getRadar(userId: string): RadarData {
     reminders: Array.isArray(stored.reminders) ? stored.reminders : [],
     removedProducts: cleanTombstones(stored.removedProducts, Date.now()),
     removedProjects: cleanTombstones(stored.removedProjects, Date.now()),
+    buyerProfiles: Array.isArray(stored.buyerProfiles) ? stored.buyerProfiles : [],
+    activeBuyerProfileId: stored.activeBuyerProfileId || undefined,
+    comparatorHistory: Array.isArray(stored.comparatorHistory) ? stored.comparatorHistory : [],
+    aiChats: Array.isArray(stored.aiChats) ? stored.aiChats : [],
   };
 }
 
@@ -252,6 +270,96 @@ function sanitizeRadarProduct(product: SavedProduct): SavedProduct {
 }
 
 /**
+ * Une por `id` dos listas de registros con `createdAt`/`updatedAt` (perfiles
+ * de comprador, comparativas guardadas, chats IA): gana el más reciente de
+ * cada lado y el resultado se recorta a `max` (los más recientes primero).
+ */
+function mergeById<T extends { id: string; createdAt: string; updatedAt?: string }>(
+  incoming: T[],
+  existing: T[],
+  max: number,
+): T[] {
+  const byId = new Map<string, T>();
+  for (const item of existing) {
+    if (item && typeof item.id === 'string' && item.id) byId.set(item.id, item);
+  }
+  for (const item of incoming) {
+    if (!item || typeof item.id !== 'string' || !item.id) continue;
+    const current = byId.get(item.id);
+    if (!current) {
+      byId.set(item.id, item);
+      continue;
+    }
+    const incomingStamp = toStamp(item.updatedAt || item.createdAt);
+    const currentStamp = toStamp(current.updatedAt || current.createdAt);
+    byId.set(item.id, incomingStamp >= currentStamp ? item : current);
+  }
+  return [...byId.values()]
+    .sort((a, b) => String(b.updatedAt || b.createdAt).localeCompare(String(a.updatedAt || a.createdAt)))
+    .slice(0, max);
+}
+
+/** Valida un perfil de comprador recibido del cliente (nunca confiar en el payload). */
+function sanitizeBuyerProfile(input: BuyerProfile): BuyerProfile | null {
+  const id = String(input?.id ?? '').trim().slice(0, 64);
+  const name = String(input?.name ?? '').trim().slice(0, 60);
+  if (!id || !name) return null;
+  const usage = (BUYER_PROFILE_USAGE_LABELS[input?.usage] ? input.usage : 'productividad');
+  const budget = (BUYER_PROFILE_BUDGET_LABELS[input?.budget] ? input.budget : 'mid');
+  const priority = (BUYER_PROFILE_PRIORITY_LABELS[input?.priority] ? input.priority : 'balance');
+  const now = new Date().toISOString();
+  return {
+    id,
+    name,
+    usage,
+    budget,
+    priority,
+    createdAt: String(input?.createdAt || now).slice(0, 40),
+    updatedAt: String(input?.updatedAt || now).slice(0, 40),
+  };
+}
+
+/** Valida una comparativa guardada (ids de producto como strings cortos). */
+function sanitizeComparatorEntry(input: ComparatorHistoryEntry): ComparatorHistoryEntry | null {
+  const id = String(input?.id ?? '').trim().slice(0, 64);
+  if (!id) return null;
+  const productIds = Array.isArray(input?.productIds)
+    ? input.productIds.map((v) => String(v).slice(0, 200)).filter(Boolean).slice(0, 12)
+    : [];
+  return {
+    id,
+    createdAt: String(input?.createdAt || new Date().toISOString()).slice(0, 40),
+    categorySlug: input?.categorySlug ? String(input.categorySlug).slice(0, 80) : undefined,
+    categoryName: input?.categoryName ? String(input.categoryName).slice(0, 120) : undefined,
+    smartMatchProfile: input?.smartMatchProfile ? String(input.smartMatchProfile).slice(0, 40) : undefined,
+    productIds,
+  };
+}
+
+/** Valida una conversación con el Dependiente IA (recorta mensajes y longitud). */
+function sanitizeAiChat(input: AiChatEntry): AiChatEntry | null {
+  const id = String(input?.id ?? '').trim().slice(0, 64);
+  if (!id) return null;
+  const messages = (Array.isArray(input?.messages) ? input.messages : [])
+    .map((m) => ({
+      role: m?.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+      content: String(m?.content ?? '').slice(0, 4000),
+      at: String(m?.at || new Date().toISOString()).slice(0, 40),
+    }))
+    .filter((m) => m.content.trim())
+    .slice(0, AI_CHAT_MESSAGES_MAX);
+  if (!messages.length) return null;
+  const now = new Date().toISOString();
+  return {
+    id,
+    createdAt: String(input?.createdAt || now).slice(0, 40),
+    updatedAt: String(input?.updatedAt || now).slice(0, 40),
+    title: String(input?.title || messages[0]?.content || 'Conversación').slice(0, 100),
+    messages,
+  };
+}
+
+/**
  * Sync LocalStorage → nube. Fusión por unión con marcas de tiempo:
  *  - Altas: lo que sólo existe en un lado se conserva (otro dispositivo, otra sesión).
  *  - Mover: si un producto aparece en dos listas, queda en la del cambio más reciente
@@ -379,12 +487,39 @@ export function syncRadar(userId: string, incoming: Partial<RadarData>): RadarDa
     ? mergeReminders(incomingReminders, current.reminders ?? [])
     : [];
 
+  // Perfiles de comprador, comparativas guardadas y chats IA: unión por id,
+  // gana el más reciente de cada lado (ver mergeById).
+  const incomingBuyerProfiles = (Array.isArray(incoming.buyerProfiles) ? incoming.buyerProfiles : [])
+    .map(sanitizeBuyerProfile)
+    .filter((p): p is BuyerProfile => Boolean(p));
+  const buyerProfiles = mergeById(incomingBuyerProfiles, current.buyerProfiles ?? [], BUYER_PROFILE_MAX);
+  // Perfil activo: lo decide el cliente que sincroniza (puede mandar '' para
+  // "ninguno"); si no lo incluye (cliente antiguo) se conserva el de la nube.
+  // Sólo es válido si sigue existiendo entre los perfiles ya fusionados.
+  const activeBuyerProfileId = 'activeBuyerProfileId' in incoming
+    ? (buyerProfiles.some((p) => p.id === incoming.activeBuyerProfileId) ? incoming.activeBuyerProfileId : undefined)
+    : current.activeBuyerProfileId;
+
+  const incomingComparatorHistory = (Array.isArray(incoming.comparatorHistory) ? incoming.comparatorHistory : [])
+    .map(sanitizeComparatorEntry)
+    .filter((c): c is ComparatorHistoryEntry => Boolean(c));
+  const comparatorHistory = mergeById(incomingComparatorHistory, current.comparatorHistory ?? [], COMPARATOR_HISTORY_MAX);
+
+  const incomingAiChats = (Array.isArray(incoming.aiChats) ? incoming.aiChats : [])
+    .map(sanitizeAiChat)
+    .filter((c): c is AiChatEntry => Boolean(c));
+  const aiChats = mergeById(incomingAiChats, current.aiChats ?? [], AI_CHATS_MAX);
+
   const merged: RadarData = {
     projects,
     pendingExits: [...exitsById.values()].sort((a, b) => b.timestamp - a.timestamp).slice(0, 50),
     reminders,
     removedProducts,
     removedProjects,
+    buyerProfiles,
+    activeBuyerProfileId,
+    comparatorHistory,
+    aiChats,
   };
   all[userId] = merged;
   writeAll(all);

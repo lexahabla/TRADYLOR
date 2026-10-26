@@ -14,6 +14,9 @@
 import {
   DEFAULT_PROJECT,
   RADAR_STORAGE_KEY,
+  type AiChatEntry,
+  type BuyerProfile,
+  type ComparatorHistoryEntry,
   type PendingExit,
   type ProjectFolder,
   type RadarData,
@@ -30,12 +33,18 @@ const listeners = new Set<Listener>();
 /** Las bajas se recuerdan 180 días (hasta 500): el servidor aplica el mismo límite. */
 const TOMBSTONE_TTL_MS = 180 * 24 * 60 * 60 * 1000;
 const TOMBSTONE_MAX = 500;
+const BUYER_PROFILE_MAX = 8;
+const COMPARATOR_HISTORY_MAX = 30;
+const AI_CHATS_MAX = 30;
 
 function emptyRadar(): RadarData {
   return {
     projects: [{ ...DEFAULT_PROJECT, products: [] }],
     pendingExits: [],
     reminders: [],
+    buyerProfiles: [],
+    comparatorHistory: [],
+    aiChats: [],
   };
 }
 
@@ -104,6 +113,10 @@ export function loadRadar(): RadarData {
       : [],
     removedProducts: cleanTombstones(stored.removedProducts),
     removedProjects: cleanTombstones(stored.removedProjects),
+    buyerProfiles: Array.isArray(stored.buyerProfiles) ? stored.buyerProfiles : [],
+    activeBuyerProfileId: stored.activeBuyerProfileId || undefined,
+    comparatorHistory: Array.isArray(stored.comparatorHistory) ? stored.comparatorHistory : [],
+    aiChats: Array.isArray(stored.aiChats) ? stored.aiChats : [],
   };
 }
 
@@ -358,6 +371,135 @@ export async function setProductAlert(input: {
   } catch {
     return { ok: false, message: 'Sin conexión. Inténtalo de nuevo.' };
   }
+}
+
+/* ---------------------------------------------------- perfiles de comprador */
+
+function shortId(prefix: string): string {
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Todos los perfiles de comprador guardados (requiere haberlos creado con sesión). */
+export function getBuyerProfiles(): BuyerProfile[] {
+  return loadRadar().buyerProfiles ?? [];
+}
+
+/** Perfil marcado como activo (el que usa el badge "Encaja con tu perfil"), o null. */
+export function getActiveBuyerProfile(): BuyerProfile | null {
+  const data = loadRadar();
+  return data.buyerProfiles?.find((p) => p.id === data.activeBuyerProfileId) ?? null;
+}
+
+/**
+ * Guarda el resultado del Perfilador de Compra como un nuevo perfil nombrado
+ * y lo marca como activo. Igual que el resto de mutaciones, sólo se refleja
+ * en la nube si hay sesión (si no, el push a /api/radar se ignora con 401).
+ */
+export function saveBuyerProfile(input: { name: string; usage: string; budget: string; priority: string }): BuyerProfile {
+  const data = loadRadar();
+  const now = new Date().toISOString();
+  const profile: BuyerProfile = {
+    id: shortId('bp'),
+    name: input.name.trim().slice(0, 60) || 'Mi perfil',
+    usage: input.usage,
+    budget: input.budget,
+    priority: input.priority,
+    createdAt: now,
+    updatedAt: now,
+  };
+  data.buyerProfiles = [profile, ...(data.buyerProfiles ?? [])].slice(0, BUYER_PROFILE_MAX);
+  data.activeBuyerProfileId = profile.id;
+  persist(data);
+  void pushToCloud(data);
+  return profile;
+}
+
+/** Marca (o quita, con `null`) el perfil activo del selector del mainNav. */
+export function setActiveBuyerProfile(id: string | null): void {
+  const data = loadRadar();
+  data.activeBuyerProfileId = id ?? undefined;
+  persist(data);
+  void pushToCloud(data);
+}
+
+export function deleteBuyerProfile(id: string): void {
+  const data = loadRadar();
+  data.buyerProfiles = (data.buyerProfiles ?? []).filter((p) => p.id !== id);
+  if (data.activeBuyerProfileId === id) data.activeBuyerProfileId = undefined;
+  persist(data);
+  void pushToCloud(data);
+}
+
+/* ------------------------------------------------------ comparativas guardadas */
+
+export function getComparatorHistory(): ComparatorHistoryEntry[] {
+  return loadRadar().comparatorHistory ?? [];
+}
+
+export function addComparatorHistoryEntry(input: {
+  categorySlug?: string;
+  categoryName?: string;
+  smartMatchProfile?: string;
+  productIds: string[];
+}): ComparatorHistoryEntry {
+  const data = loadRadar();
+  const entry: ComparatorHistoryEntry = {
+    id: shortId('cmp'),
+    createdAt: new Date().toISOString(),
+    categorySlug: input.categorySlug,
+    categoryName: input.categoryName,
+    smartMatchProfile: input.smartMatchProfile,
+    productIds: input.productIds.slice(0, 12),
+  };
+  data.comparatorHistory = [entry, ...(data.comparatorHistory ?? [])].slice(0, COMPARATOR_HISTORY_MAX);
+  persist(data);
+  void pushToCloud(data);
+  return entry;
+}
+
+export function deleteComparatorHistoryEntry(id: string): void {
+  const data = loadRadar();
+  data.comparatorHistory = (data.comparatorHistory ?? []).filter((c) => c.id !== id);
+  persist(data);
+  void pushToCloud(data);
+}
+
+/* ------------------------------------------------------- chats con el Dependiente IA */
+
+export function getAiChats(): AiChatEntry[] {
+  return loadRadar().aiChats ?? [];
+}
+
+/** Crea o actualiza (si manda `id` existente) una conversación guardada. */
+export function saveAiChat(input: {
+  id?: string;
+  title: string;
+  messages: Array<{ role: 'user' | 'assistant'; content: string; at: string }>;
+}): AiChatEntry {
+  const data = loadRadar();
+  const now = new Date().toISOString();
+  const list = data.aiChats ?? [];
+  const existingIdx = input.id ? list.findIndex((c) => c.id === input.id) : -1;
+  const entry: AiChatEntry = {
+    id: existingIdx >= 0 ? list[existingIdx].id : shortId('chat'),
+    createdAt: existingIdx >= 0 ? list[existingIdx].createdAt : now,
+    updatedAt: now,
+    title: input.title.trim().slice(0, 100) || 'Conversación',
+    messages: input.messages.slice(-40),
+  };
+  if (existingIdx >= 0) list[existingIdx] = entry;
+  else list.unshift(entry);
+  data.aiChats = list.slice(0, AI_CHATS_MAX);
+  persist(data);
+  void pushToCloud(data);
+  return entry;
+}
+
+export function deleteAiChat(id: string): void {
+  const data = loadRadar();
+  data.aiChats = (data.aiChats ?? []).filter((c) => c.id !== id);
+  persist(data);
+  void pushToCloud(data);
 }
 
 /* -------------------------------------------------------------------- sync */

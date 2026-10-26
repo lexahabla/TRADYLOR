@@ -4,6 +4,7 @@ import ProductCard from '../components/ProductCard.astro';
 import TrustMetrics from '../components/common/TrustMetrics.astro';
 import TransparencyDashboard from '../components/TransparencyDashboard.astro';
 import SmartMatcherWizard from '../components/SmartMatcherWizard.astro';
+import MethodSection from '../components/home/MethodSection.astro';
 import { getCatalogProducts } from '../lib/catalog';
 import { readSections } from '../lib/sections';
 import { getCategoryById } from '../lib/categories';
@@ -147,7 +148,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
        SECCIONES DINÁMICAS POR ENCIMA DEL CATÁLOGO (carrusel deslizable)
        ============================================================ -->
   {aboveCatalogSections.map((section) => (
-    <section class="feed-section" data-dynamic-section={section.id} data-section-speed={section.speed || 'normal'} aria-label={section.title}>
+    <section class="feed-section" id={`section-${section.id}`} data-dynamic-section={section.id} data-section-speed={section.speed || 'normal'} aria-label={section.title}>
       <div class="container">
         <div class="section-header">
           <h2 class="section-title">{section.title}</h2>
@@ -482,10 +483,15 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   </section>
 
   <!-- ============================================================
+       7. EL MÉTODO (3 pasos + herramientas integradas)
+       ============================================================ -->
+  <MethodSection />
+
+  <!-- ============================================================
        SECCIONES DINÁMICAS POR DEBAJO DEL CATÁLOGO (carrusel deslizable)
        ============================================================ -->
   {belowCatalogSections.map((section) => (
-    <section class="feed-section" data-dynamic-section={section.id} data-section-speed={section.speed || 'normal'} aria-label={section.title}>
+    <section class="feed-section" id={`section-${section.id}`} data-dynamic-section={section.id} data-section-speed={section.speed || 'normal'} aria-label={section.title}>
       <div class="container">
         <div class="section-header">
           <h2 class="section-title">{section.title}</h2>
