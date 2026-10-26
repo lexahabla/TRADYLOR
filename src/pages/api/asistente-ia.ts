@@ -3,14 +3,17 @@ import { GoogleGenAI } from '@google/genai';
 
 /**
  * ==============================================================================
- * TRADYLOR — ASISTENTE IA (Gemini)
+ * TRADYLOR — ASISTENTE IA (Gemini en Vertex AI)
  * ==============================================================================
  * POST /api/asistente-ia  { mensajeUsuario, contextoProducto? }
  *
- * Endpoint de chat flotante impulsado por Gemini (@google/genai). Se integra
- * en el servidor SSR de Astro (mismo proceso, mismo puerto 4321), por lo que
- * no hace falta levantar un servidor Express aparte ni exponer un puerto
- * adicional en el contenedor de producción.
+ * Endpoint de chat flotante impulsado por Gemini (@google/genai) en modo
+ * Vertex AI (Google Cloud / credenciales de cuenta de servicio mediante
+ * Application Default Credentials). No usa claves API de AI Studio.
+ *
+ * Se integra en el servidor SSR de Astro (mismo proceso, mismo puerto 4321),
+ * por lo que no hace falta levantar un servidor Express aparte ni exponer un
+ * puerto adicional en el contenedor de producción.
  *
  * Responde con { respuesta: string } o { error: string } + status 500.
  * ==============================================================================
@@ -18,7 +21,11 @@ import { GoogleGenAI } from '@google/genai';
 
 export const prerender = false;
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const ai = new GoogleGenAI({
+  vertexAI: true,
+  project: process.env.VERTEX_AI_PROJECT ?? 'gen-lang-client-0762423530',
+  location: process.env.VERTEX_AI_LOCATION ?? 'us-central1',
+});
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -42,13 +49,6 @@ export const POST: APIRoute = async ({ request }) => {
 
     if (!mensajeUsuario || typeof mensajeUsuario !== 'string') {
       return json({ error: 'mensajeUsuario es obligatorio.' }, 400);
-    }
-
-    if (!process.env.GEMINI_API_KEY) {
-      return json(
-        { error: 'GEMINI_API_KEY no está configurada en el servidor.' },
-        500,
-      );
     }
 
     const systemInstruction = `
