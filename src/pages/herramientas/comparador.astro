@@ -135,9 +135,9 @@ const pageDescription = baseProduct
 ---
 
 <Layout title={pageTitle} description={pageDescription} noindex={false}>
-  <a href="/herramientas" class="tools-back-link" style="display:inline-flex;align-items:center;gap:.5rem;margin:1rem auto;max-width:fit-content;padding:.75rem 1.2rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e5e7eb;font-weight:700;text-decoration:none;">
+  <a href="/herramientas" class="tools-back-link" style="display:inline-flex;align-items:center;gap:.5rem;margin:1rem 0 1rem 1.5rem;max-width:fit-content;padding:.75rem 1.2rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e5e7eb;font-weight:700;text-decoration:none;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-    Volver al Centro de Herramientas
+    Volver a la tienda
   </a>
 
   <main class="tools-page">
@@ -157,7 +157,7 @@ const pageDescription = baseProduct
     <!-- Selector de producto con estilo nav-search -->
     {approvedProducts.length > 0 ? (
       <>
-        <form class="comparator-search-form" role="search" method="get" aria-label="Buscar producto para comparar">
+        <form class="nav-search" role="search" method="get" aria-label="Buscar producto para comparar">
           <label for="compareProductInput" class="visually-label">Elige un producto para comparar con sus alternativas:</label>
           <div class="nav-search-wrapper">
             <input

@@ -439,9 +439,8 @@ const headerCategoryPanelHtml = `
           position: relative;
         }
         .nav-list {
-          /* deja hueco a la derecha para que los enlaces centrados no choquen
-             con el selector de perfil anclado al extremo */
-          padding-right: 15rem;
+          /* sin hueco extra a la derecha: los enlaces centrados ocupan todo el ancho */
+          padding-right: 0;
         }
         .nav-item-profile {
           position: absolute;
@@ -466,6 +465,13 @@ const headerCategoryPanelHtml = `
       .nav-item-profile.has-active-profile .nav-profile-dot {
         background: #34d399;
         box-shadow: 0 0 8px rgba(52, 211, 153, 0.6);
+      }
+      .nav-profile-label-text {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 700;
+        color: #93c5fd;
       }
       .nav-dropdown-panel--profile {
         right: 0;
@@ -3039,7 +3045,7 @@ const headerCategoryPanelHtml = `
               <li class="nav-item-dropdown nav-item-profile" data-buyer-profile-switcher>
                 <button type="button" class="nav-link nav-dropdown-btn nav-profile-btn" data-buyer-profile-btn aria-expanded="false" aria-controls="navBuyerProfilePanel">
                   <span class="nav-profile-dot" aria-hidden="true"></span>
-                  <span data-buyer-profile-label>Perfil inactivo</span>
+                  <span data-buyer-profile-label class="nav-profile-label-text">INACTIVO</span>
                   <svg class="nav-dropdown-caret" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
                 </button>
                 <div class="nav-dropdown-panel nav-dropdown-panel--profile" id="navBuyerProfilePanel" data-buyer-profile-panel hidden></div>
@@ -3843,7 +3849,7 @@ const headerCategoryPanelHtml = `
           if (!buyerProfileWrap || !buyerProfileBtn || !buyerProfilePanel || !buyerProfileLabel) return;
 
           if (!user) {
-            buyerProfileLabel.textContent = 'Perfil inactivo';
+            buyerProfileLabel.textContent = 'INACTIVO';
             buyerProfileWrap.classList.remove('has-active-profile');
             setBuyerProfilePanelOpen(false);
             return;
@@ -3856,7 +3862,7 @@ const headerCategoryPanelHtml = `
 
           if (profiles.length === 0) {
             buyerProfilePanel.innerHTML = `
-              <p class="nav-profile-hint">Aún no tienes perfiles guardados. Completa el Perfilador de Compra y guárdalo con un nombre.</p>
+              <p class="nav-profile-hint">Aún no tienes perfiles de comprador guardados. Completa el Perfilador de Compra y guárdalos en tu perfil.</p>
               <a href="/herramientas/perfilador" class="nav-profile-create">+ Crear mi primer perfil</a>
             `;
             return;
