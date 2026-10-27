@@ -44,6 +44,8 @@ const productSchema = z.object({
   brand: z.string(),
   model: z.string(),
   awardBadge: z.string().optional(), // e.g., "Mejor Calidad/Precio", "Elección Top"
+  /** Estado físico (Nuevo/Usado/Reacondicionado...). Señal de confianza en la ficha pública. */
+  condition: z.string().optional(),
 
   // ─── Pricing & Stock Intelligence ──────────────────────────────────────────
   pricing: z.object({

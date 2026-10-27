@@ -49,6 +49,21 @@ const techSheet = (product.techSheet ?? '').trim();
 const fulfillmentProvider = product.fulfillmentProvider ?? product.merchant;
 // Clave normalizada del comerciante (para colorear el sello según la tienda).
 const merchantSlug = String(product.merchant ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+// Estado físico (Nuevo/Usado/Reacondicionado...): señal de confianza igual
+// que en el panel admin; sólo se resalta en ámbar cuando es segunda mano.
+const USED_CONDITION_RE = /used|pre-owned|refurbished|reacondicionad|segunda\s*mano|usad[oa]|open\s*box|seminuev|coleccionable|collectible/i;
+const conditionLabel = (product.condition ?? '').trim();
+const isUsedCondition = conditionLabel ? USED_CONDITION_RE.test(conditionLabel) : false;
+// Mapeo a los valores estándar de schema.org para el JSON-LD (SEO / Google Shopping).
+const schemaItemCondition = conditionLabel
+  ? /refurb|reacondicionad/i.test(conditionLabel)
+    ? 'https://schema.org/RefurbishedCondition'
+    : /damaged|for parts|desguace|averiad/i.test(conditionLabel)
+      ? 'https://schema.org/DamagedCondition'
+      : isUsedCondition
+        ? 'https://schema.org/UsedCondition'
+        : 'https://schema.org/NewCondition'
+  : undefined;
 // Envío: campos propios del producto o, si no existen (importaciones antiguas),
 // los del snapshot del catálogo AliExpress (ver lib/shipping.ts).
 const shipping = resolveProductShipping(product);
@@ -147,6 +162,7 @@ const productSchema = {
     availability: 'https://schema.org/InStock',
     seller: { '@type': 'Organization', name: product.merchant },
     url: product.affiliateUrl || undefined,
+    ...(schemaItemCondition && { itemCondition: schemaItemCondition }),
   },
   ...(product.rating && {
     aggregateRating: {
@@ -362,6 +378,15 @@ const productSchema = {
           <div class="brand-row">
             <span class="vendor-label">Marca</span>
             <span class="vendor-name">{product.brand}</span>
+          </div>
+        )}
+
+        <!-- Estado físico (Nuevo/Usado/Reacondicionado...): señal de confianza,
+             destacada en ámbar cuando es un artículo de segunda mano. -->
+        {conditionLabel && (
+          <div class="brand-row">
+            <span class="vendor-label">Estado</span>
+            <span class:list={['vendor-name', { 'is-used': isUsedCondition }]}>{conditionLabel}</span>
           </div>
         )}
 
@@ -1885,6 +1910,13 @@ const productSchema = {
   }
   .vendor-name[data-merchant="amazon"] { color: #f59e0b; }
   .vendor-name[data-merchant="pccomponentes"] { color: #f87171; }
+
+  /* Estado físico de segunda mano: mismo código de color ámbar que el panel admin. */
+  .vendor-name.is-used {
+    color: #fcd34d;
+    background: rgba(245, 158, 11, 0.12);
+    border-color: rgba(245, 158, 11, 0.32);
+  }
 
   .brand-row {
     display: flex;

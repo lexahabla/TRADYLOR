@@ -136,6 +136,7 @@ function normalizeToProduct(schema: Product): FlatProduct {
     awardBadge: schema.awardBadge,
     productType: schema.productType,
     brand: schema.brand,
+    condition: schema.condition,
     model: schema.model,
     pricing: {
       currentPrice: schema.pricing.currentPrice,

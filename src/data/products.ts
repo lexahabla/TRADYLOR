@@ -66,6 +66,8 @@ export interface Product {
   awardBadge?: string;
   productType?: 'Laptop' | 'Tablet' | 'Smartphone' | 'Smartwatch' | 'Auriculares' | 'Monitor' | 'Electrodoméstico' | 'Otros';
   brand?: string;
+  /** Estado físico del producto (Nuevo/Usado/Reacondicionado...). Señal de confianza en la ficha pública. */
+  condition?: string;
   model?: string;
   pricing?: {
     currentPrice: number;
@@ -183,6 +185,7 @@ export function toStructuredProduct(flat: Product): ProductSchema {
     brand: flat.brand ?? '',
     model: flat.model ?? flat.title,
     awardBadge: flat.awardBadge ?? flat.badge,
+    condition: flat.condition,
     pricing: {
       currentPrice: flat.price,
       originalPrice: flat.originalPrice,
