@@ -11,21 +11,13 @@ import { GoogleGenAI } from '@google/genai';
  * Vertex AI (Google Cloud / credenciales de cuenta de servicio mediante
  * Application Default Credentials). No usa claves API de AI Studio.
  *
- * Se integra en el servidor SSR de Astro (mismo proceso, mismo puerto 4321),
- * por lo que no hace falta levantar un servidor Express aparte ni exponer un
- * puerto adicional en el contenedor de producción.
+ * Se integra en el servidor SSR de Astro (mismo proceso, mismo puerto 4321).
  *
- * Responde con { respuesta: string } o { error: string } + status 500.
+ * Responde con { respuesta: string } o { error: string } + status.
  * ==============================================================================
  */
 
 export const prerender = false;
-
-const ai = new GoogleGenAI({
-  vertexAI: true,
-  project: process.env.VERTEX_AI_PROJECT ?? 'gen-lang-client-0762423530',
-  location: process.env.VERTEX_AI_LOCATION ?? 'us-central1',
-});
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -51,6 +43,14 @@ export const POST: APIRoute = async ({ request }) => {
       return json({ error: 'mensajeUsuario es obligatorio.' }, 400);
     }
 
+    // Inicialización dentro del handler para capturar errores de credenciales
+    // (Application Default Credentials / GOOGLE_APPLICATION_CREDENTIALS).
+    const ai = new GoogleGenAI({
+      vertexAI: true,
+      project: process.env.VERTEX_AI_PROJECT ?? 'gen-lang-client-0762423530',
+      location: process.env.VERTEX_AI_LOCATION ?? 'us-central1',
+    });
+
     const systemInstruction = `
 Eres el Dependiente IA de Tradylor.com, un asistente de compras experto y objetivo.
 Tu objetivo es orientar al usuario utilizando la información de nuestro método (pros, contras y especificaciones).
@@ -73,9 +73,12 @@ Responde en español.
 
     return json({ respuesta: response.text ?? '' });
   } catch (error) {
-    console.error('[Asistente IA / Gemini]:', error);
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('[Asistente IA / Gemini]:', msg);
+    // Devolvemos el error real para diagnosticar (en producción se puede
+    // ocultar el detalle si se prefiere, pero ahora es útil para depurar).
     return json(
-      { error: 'No se ha podido procesar la respuesta del asistente.' },
+      { error: `No se ha podido procesar la respuesta del asistente: ${msg}` },
       500,
     );
   }
