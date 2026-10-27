@@ -67,7 +67,25 @@ export const POST: APIRoute = async ({ request }) => {
       { role: 'user', content: mensajeUsuario },
     ];
 
-    const respuesta = await chatComplete(messages, { temperature: 0.7 });
+    /** Timeout propio (25s) para que el servidor siempre responda antes que el
+     * proxy/load balancer de Easy Panel y evitar 502 HTML del gateway. */
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25_000);
+
+    let respuesta: string;
+    try {
+      respuesta = await Promise.race([
+        chatComplete(messages, { temperature: 0.7, timeoutMs: 25_000 }),
+        new Promise<string>((_, reject) =>
+          controller.signal.addEventListener('abort', () =>
+            reject(new Error('Tiempo de espera agotado. Inténtalo de nuevo.')),
+          ),
+        ),
+      ]);
+    } finally {
+      clearTimeout(timeout);
+    }
+
     const trimmed = respuesta.trim()
       || 'No he encontrado una recomendación clara con esos datos: cuéntame tu presupuesto y para qué lo vas a usar.';
 
