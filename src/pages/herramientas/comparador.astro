@@ -27,10 +27,10 @@ const rootCategoryOf = (product: (typeof approvedProducts)[number]): { id: strin
   return { id: root?.id ?? 'otros', name: root?.name ?? 'Otros productos' };
 };
 
-const groupedOptions = new Map<string, { name: string; products: typeof approvedProducts }>();
+const groupedOptions = new Map<string, { id: string; name: string; products: typeof approvedProducts }>();
 for (const product of approvedProducts) {
   const root = rootCategoryOf(product);
-  const group = groupedOptions.get(root.id) ?? { name: root.name, products: [] as typeof approvedProducts };
+  const group = groupedOptions.get(root.id) ?? { id: root.id, name: root.name, products: [] as typeof approvedProducts };
   group.products.push(product);
   groupedOptions.set(root.id, group);
 }
@@ -38,6 +38,53 @@ for (const group of groupedOptions.values()) {
   group.products.sort((a, b) => cleanMarketplaceSuffix(a.title).localeCompare(cleanMarketplaceSuffix(b.title)));
 }
 const optionGroups = [...groupedOptions.values()].sort((a, b) => a.name.localeCompare(b.name));
+
+// Panel de categorías propio del buscador del comparador (mismo patrón visual que
+// la cabecera, limitado a las categorías raíz con productos aptos para comparar).
+const compareHueOf = (index: number) => (index * 43) % 360;
+const compareCategoryCards = optionGroups.map((group, i) => ({
+  id: group.id,
+  name: group.name,
+  icon: getCategoryById(group.id)?.icon ?? '📦',
+  count: group.products.length,
+  hue: compareHueOf(i),
+}));
+const compareCategoryPanelHtml = `
+  <div class="cmp-cat-panel-head">
+    <span class="cmp-cat-panel-title">Categorías</span>
+    <button type="button" class="cmp-cat-panel-all" data-cat-id="">Ver todas</button>
+  </div>
+  <div class="cmp-cat-panel-grid">
+    ${compareCategoryCards.map((cat) => `
+      <button type="button" class="cmp-cat-card" data-cat-id="${cat.id}" style="--h: ${cat.hue}">
+        <span class="cmp-cat-card-icon">${cat.icon}</span>
+        <span class="cmp-cat-card-text">
+          <span class="cmp-cat-card-name">${cat.name}</span>
+          <span class="cmp-cat-card-meta">${cat.count} producto${cat.count === 1 ? '' : 's'}</span>
+        </span>
+        <span class="cmp-cat-card-arrow">›</span>
+      </button>
+    `).join('')}
+  </div>
+`;
+
+// Catálogo plano para el autocompletado en vivo del buscador (sin llamadas a API:
+// reutiliza los mismos productos ya calculados arriba para el datalist).
+const compareSearchItems = optionGroups.flatMap((group) =>
+  group.products.map((product) => ({
+    key: productKey(product),
+    title: cleanMarketplaceSuffix(product.title),
+    price: formatCurrency(product.price),
+    image: product.image,
+    merchant: product.merchant,
+    categoryId: group.id,
+    discountPct:
+      product.originalPrice && product.originalPrice > product.price
+        ? Math.round((1 - product.price / product.originalPrice) * 100)
+        : null,
+  })),
+);
+const compareSearchDataJson = JSON.stringify({ items: compareSearchItems }).replace(/</g, '\\u003c');
 
 const compareKey = (Astro.url.searchParams.get('producto') ?? '').trim();
 const baseProduct = compareKey
@@ -154,46 +201,49 @@ const pageDescription = baseProduct
       </div>
     </section>
 
-    <!-- Selector de producto con estilo nav-search (idéntico al de la cabecera) -->
+    <!-- Selector de producto con estilo nav-search (idéntico al de la cabecera, con
+         panel de categorías y autocompletado propios, aptos para seleccionar el
+         producto a comparar). -->
     {approvedProducts.length > 0 ? (
       <>
-        <form class="nav-search" role="search" method="get" aria-label="Buscar producto para comparar" autocomplete="off">
-          <!-- Desplegable de categorías a la izquierda del input (idéntico al header) -->
-          <button type="button" class="category-menu-btn" aria-label="Categorías" aria-expanded="false" aria-controls="header-category-panel">
-            <span class="cm-btn-icon">▾</span>
-            <span class="cm-btn-label hidden md:inline">Categorías</span>
-          </button>
-          <input
-            id="compareProductInput"
-            name="producto"
-            type="search"
-            class="ns-input cm-search-input"
-            placeholder="Buscar productos…"
-            value={compareKey ? '' : ''}
-            list="compareProductDatalist"
-            autocomplete="off"
-          />
-          <button type="button" class="ns-clear" aria-label="Borrar la búsqueda" hidden>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </button>
-          <button type="submit" class="ns-submit" aria-label="Buscar">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <circle cx="11" cy="11" r="8"></circle>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-            </svg>
-          </button>
-          <datalist id="compareProductDatalist">
-            {optionGroups.flatMap((group) =>
-              group.products.map((product) => `<option value="${productKey(product)}">${cleanMarketplaceSuffix(product.title)} · ${formatCurrency(product.price)}</option>`)
-            )}
-          </datalist>
-        </form>
-          <p class="comparator-hint">
-            Escribe el nombre del producto o selecciona uno de las sugerencias. Al enviar verás su análisis cruzado.
-          </p>
+        <div class="comparator-search-wrap" data-comparator-search>
+          <form id="comparatorSearchForm" class="nav-search" role="search" method="get" aria-label="Buscar producto para comparar" autocomplete="off">
+            <!-- Desplegable de categorías a la izquierda del input (idéntico al header) -->
+            <button type="button" class="cmp-cat-btn" data-comparator-cat-btn aria-label="Categorías" aria-expanded="false" aria-controls="comparatorCategoryPanel">
+              <span class="cmp-cat-btn-icon">▾</span>
+              <span class="cmp-cat-btn-label hidden md:inline">Categorías</span>
+            </button>
+            <input
+              id="compareProductInput"
+              name="producto"
+              type="search"
+              class="ns-input cm-search-input"
+              placeholder="Buscar productos…"
+              autocomplete="off"
+              data-comparator-input
+            />
+            <button type="button" class="ns-clear" data-comparator-clear aria-label="Borrar la búsqueda" hidden>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+            <button type="submit" class="ns-submit" aria-label="Buscar">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </button>
+            <!-- Sugerencias en vivo (filtradas en el cliente desde el catálogo embebido) -->
+            <div class="cmp-search-drop" data-comparator-drop hidden></div>
+            <!-- Panel de categorías (desplegable bajo el botón) -->
+            <div id="comparatorCategoryPanel" class="cmp-cat-panel" data-comparator-cat-panel hidden set:html={compareCategoryPanelHtml}></div>
+          </form>
+        </div>
+        <p class="comparator-hint">
+          Escribe el nombre del producto o elige una categoría o sugerencia. Al seleccionar uno verás su análisis cruzado.
+        </p>
+        <script type="application/json" id="comparator-search-data" set:html={compareSearchDataJson} />
       </>
     ) : (
       <p class="tools-empty-note">Aún no hay suficientes productos publicados para activar el comparador. Vuelve pronto.</p>
@@ -318,6 +368,197 @@ const pageDescription = baseProduct
       }
     </script>
 
+    <!-- Buscador del comparador: panel de categorías + autocompletado propios.
+         No depende del buscador de la cabecera (ese script sólo engancha el
+         PRIMER form.nav-search del documento, que es el del header) ni de
+         /api/search: usa el catálogo ya calculado en el servidor (sin red). -->
+    <script>
+      type CompareSearchItem = {
+        key: string;
+        title: string;
+        price: string;
+        image: string;
+        merchant?: string;
+        categoryId: string;
+        discountPct: number | null;
+      };
+
+      (function () {
+        const wrap = document.querySelector<HTMLElement>('[data-comparator-search]');
+        if (!wrap) return;
+
+        const raw = document.getElementById('comparator-search-data')?.textContent;
+        let items: CompareSearchItem[] = [];
+        try {
+          items = raw ? (JSON.parse(raw).items ?? []) : [];
+        } catch {
+          items = [];
+        }
+
+        const form = wrap.querySelector<HTMLFormElement>('#comparatorSearchForm');
+        const input = wrap.querySelector<HTMLInputElement>('[data-comparator-input]');
+        const drop = wrap.querySelector<HTMLElement>('[data-comparator-drop]');
+        const clearBtn = wrap.querySelector<HTMLElement>('[data-comparator-clear]');
+        const catBtn = wrap.querySelector<HTMLElement>('[data-comparator-cat-btn]');
+        const catPanel = wrap.querySelector<HTMLElement>('[data-comparator-cat-panel]');
+        if (!form || !input || !drop) return;
+
+        let activeCategory = '';
+
+        const escapeHtml = (value: string) =>
+          value.replace(/[&<>"']/g, (ch) => {
+            switch (ch) {
+              case '&': return '&amp;';
+              case '<': return '&lt;';
+              case '>': return '&gt;';
+              case '"': return '&quot;';
+              default: return '&#39;';
+            }
+          });
+
+        const normalize = (value: string) =>
+          value
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '');
+
+        const closeDrop = () => { drop.hidden = true; };
+
+        const syncClearBtn = () => {
+          if (clearBtn) clearBtn.hidden = (input.value ?? '').length === 0 && !activeCategory;
+        };
+
+        const setCatOpen = (open: boolean) => {
+          if (!catBtn || !catPanel) return;
+          catPanel.hidden = !open;
+          catBtn.setAttribute('aria-expanded', String(open));
+        };
+
+        const markActiveCard = () => {
+          if (!catPanel) return;
+          catPanel.querySelectorAll('[data-cat-id]').forEach((el) => {
+            el.classList.toggle('is-active', el.getAttribute('data-cat-id') === activeCategory);
+          });
+        };
+
+        const renderStatus = (message: string) => {
+          drop.innerHTML = `<p class="cmp-drop-status">${escapeHtml(message)}</p>`;
+          drop.hidden = false;
+        };
+
+        const renderItems = (list: CompareSearchItem[]) => {
+          if (list.length === 0) {
+            renderStatus(activeCategory ? 'Sin resultados en esta categoría.' : 'Sin resultados para tu búsqueda.');
+            return;
+          }
+          drop.innerHTML = list
+            .slice(0, 8)
+            .map(
+              (item) => `
+                <a class="cmp-drop-item" href="/herramientas/comparador?producto=${encodeURIComponent(item.key)}" data-item-key="${escapeHtml(item.key)}">
+                  <img src="${escapeHtml(item.image)}" alt="" loading="lazy" width="44" height="44" />
+                  <span class="cmp-drop-body">
+                    <span class="cmp-drop-title">${escapeHtml(item.title)}</span>
+                    <span class="cmp-drop-meta">
+                      <span class="cmp-drop-price">${escapeHtml(item.price)}</span>
+                      ${item.merchant ? `<span class="cmp-drop-sep" aria-hidden="true">·</span><span class="cmp-drop-merchant">${escapeHtml(item.merchant)}</span>` : ''}
+                    </span>
+                  </span>
+                  ${item.discountPct ? `<span class="cmp-drop-discount">-${item.discountPct}%</span>` : ''}
+                </a>`,
+            )
+            .join('');
+          drop.hidden = false;
+        };
+
+        const filterItems = (rawQuery: string) => {
+          const q = normalize(rawQuery.trim());
+          let pool = items;
+          if (activeCategory) pool = pool.filter((item) => item.categoryId === activeCategory);
+          if (!q) return pool;
+          return pool.filter(
+            (item) => normalize(item.title).includes(q) || normalize(item.merchant ?? '').includes(q),
+          );
+        };
+
+        const runFilter = () => {
+          const query = input.value ?? '';
+          if (!query.trim() && !activeCategory) {
+            closeDrop();
+            return;
+          }
+          renderItems(filterItems(query));
+        };
+
+        input.addEventListener('input', () => {
+          syncClearBtn();
+          runFilter();
+        });
+
+        input.addEventListener('focus', () => {
+          if (input.value.trim() || activeCategory) runFilter();
+        });
+
+        form.addEventListener('submit', (event) => {
+          event.preventDefault();
+          const matches = filterItems(input.value ?? '');
+          if (matches.length === 1) {
+            window.location.href = `/herramientas/comparador?producto=${encodeURIComponent(matches[0].key)}`;
+            return;
+          }
+          renderItems(matches);
+        });
+
+        clearBtn?.addEventListener('click', () => {
+          input.value = '';
+          activeCategory = '';
+          markActiveCard();
+          syncClearBtn();
+          closeDrop();
+          input.focus();
+        });
+
+        if (catBtn && catPanel) {
+          catBtn.addEventListener('click', (event) => {
+            event.stopPropagation();
+            closeDrop();
+            setCatOpen(catPanel.hidden);
+          });
+
+          catPanel.addEventListener('click', (event) => {
+            const target = event.target as Element | null;
+            const card = target?.closest<HTMLElement>('[data-cat-id]');
+            if (!card) return;
+            event.preventDefault();
+            activeCategory = card.getAttribute('data-cat-id') ?? '';
+            markActiveCard();
+            setCatOpen(false);
+            syncClearBtn();
+            input.focus();
+            runFilter();
+          });
+        }
+
+        document.addEventListener('click', (event) => {
+          const target = event.target as Element | null;
+          if (!target || typeof target.closest !== 'function') return;
+          if (!target.closest('[data-comparator-search]')) {
+            closeDrop();
+            setCatOpen(false);
+          }
+        });
+
+        document.addEventListener('keydown', (event) => {
+          if (event.key === 'Escape') {
+            closeDrop();
+            setCatOpen(false);
+          }
+        });
+
+        syncClearBtn();
+      })();
+    </script>
+
     <style>
       .visually-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; white-space: nowrap; border-width: 0; }
 
@@ -346,8 +587,12 @@ const pageDescription = baseProduct
         font-size: 1rem; color: rgba(255, 255, 255, 0.65); line-height: 1.7; margin: 0 auto 2rem; max-width: 620px;
       }
 
-      /* Form estilo nav-search para el selector de producto (clonado del header) */
+      /* Form estilo nav-search para el selector de producto (clonado del header,
+         con estilos propios porque el CSS original está scopeado a
+         .container.header-inner, que no existe fuera de la cabecera). */
+      .comparator-search-wrap { max-width: 600px; margin: 0 auto 0.5rem; }
       .nav-search {
+        position: relative; /* contenedor del panel de categorías y las sugerencias */
         margin-bottom: 2rem;
         display: flex; align-items: center; flex: 1 1 auto; max-width: 600px; margin: 0 auto 2rem auto;
         height: 48px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px;
@@ -361,6 +606,7 @@ const pageDescription = baseProduct
         color: #f3f4f6; background: transparent; border: none; outline: none; -webkit-appearance: none; appearance: none;
       }
       .ns-input::placeholder { color: rgba(255, 255, 255, 0.45); }
+      .ns-input::-webkit-search-cancel-button, .ns-input::-webkit-search-decoration { display: none; -webkit-appearance: none; }
       .ns-submit {
         display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0;
         margin-right: 4px; padding: 0; color: #ffffff; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
@@ -370,6 +616,14 @@ const pageDescription = baseProduct
       .ns-submit:hover {
         background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); box-shadow: 0 6px 18px rgba(37, 99, 235, 0.55); transform: translateY(-1px);
       }
+      .ns-submit:active { transform: scale(0.96); }
+      .ns-clear {
+        display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; flex-shrink: 0;
+        padding: 0; color: rgba(255, 255, 255, 0.5); background: transparent; border: none; border-radius: 999px; cursor: pointer;
+        transition: background 0.18s ease, color 0.18s ease;
+      }
+      .ns-clear:hover { color: #ffffff; background: rgba(255, 255, 255, 0.12); }
+
       .comparator-hint { text-align: center; color: var(--color-text-dim); font-size: 0.82rem; margin-top: 0.5rem; }
 
       .tools-empty-note { padding: 2rem; text-align: center; color: var(--color-text-dim); background: rgba(255, 255, 255, 0.02);
@@ -447,9 +701,156 @@ const pageDescription = baseProduct
 
       @media (max-width: 640px) {
         .nav-search { max-width: 100%; height: 44px; }
+        .comparator-search-wrap { max-width: 100%; padding: 0 1rem; }
         .comparator-picked { flex-direction: column; align-items: flex-start; }
         .comparator-verdict-card { flex-wrap: wrap; }
         .comparator-verdict-cta { width: 100%; text-align: right; }
+      }
+    </style>
+
+    <!-- Estilos globales (sin scoping) para el panel de categorías y el dropdown
+         de sugerencias: ambos se inyectan como HTML crudo (set:html en servidor
+         y innerHTML en cliente), por lo que nunca reciben el atributo de scoping
+         de Astro y las reglas del <style> normal de arriba no les aplicarían. -->
+    <style is:global>
+      .cmp-cat-btn {
+        display: inline-flex; align-items: center; gap: 0.45rem; height: 100%; padding: 0 0.7rem 0 0.85rem;
+        background: transparent; border: none; border-radius: 10px 0 0 10px; color: rgba(255, 255, 255, 0.85);
+        font-family: var(--font-body, inherit); font-size: 0.8rem; font-weight: 700; cursor: pointer; white-space: nowrap;
+        transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+      }
+      .cmp-cat-btn:hover, .cmp-cat-btn[aria-expanded='true'] {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
+      }
+      .cmp-cat-btn-icon { font-size: 1rem; line-height: 1; flex-shrink: 0; }
+      .cmp-cat-btn-label { max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+      /* Panel de categorías desplegado bajo el buscador */
+      .cmp-cat-panel {
+        position: absolute; top: calc(100% + 0.6rem); left: 0; z-index: 200;
+        width: min(38rem, calc(100vw - 3rem)); max-height: calc(85vh - 80px); overflow-y: auto;
+        padding: 0.85rem; background: rgba(12, 16, 26, 0.98); border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 18px; box-shadow: 0 26px 60px rgba(0, 0, 0, 0.65);
+        backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      }
+      .cmp-cat-panel[hidden] { display: none !important; }
+      .cmp-cat-panel:not([hidden]) { display: block !important; animation: cmp-panel-in 0.18s ease; }
+      .cmp-cat-panel-head {
+        display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+        padding: 0.1rem 0.25rem 0.6rem; margin-bottom: 0.6rem; border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      }
+      .cmp-cat-panel-title {
+        font-size: 0.7rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: rgba(255, 255, 255, 0.45);
+      }
+      .cmp-cat-panel-all {
+        font-family: var(--font-body, inherit); font-size: 0.74rem; font-weight: 700; color: #93c5fd;
+        text-decoration: none; background: none; cursor: pointer; padding: 0.22rem 0.6rem; border-radius: 999px;
+        border: 1px solid transparent; transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+      }
+      .cmp-cat-panel-all:hover { background: rgba(59, 130, 246, 0.18); color: #ffffff; }
+      .cmp-cat-panel-all.is-active {
+        background: rgba(59, 130, 246, 0.25); border-color: rgba(96, 165, 250, 0.45); color: #ffffff;
+      }
+      .cmp-cat-panel-grid {
+        display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem;
+        max-height: min(66vh, 30rem); overflow-y: auto; overscroll-behavior: contain; padding-right: 0.2rem;
+      }
+      .cmp-cat-card {
+        display: flex; align-items: center; gap: 0.6rem; width: 100%; padding: 0.55rem 0.6rem; border-radius: 14px;
+        text-decoration: none; color: #e5e7eb; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08);
+        font-family: inherit; text-align: left; cursor: pointer;
+        transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+      }
+      .cmp-cat-card:hover, .cmp-cat-card.is-active {
+        transform: translateY(-2px); background: rgba(59, 130, 246, 0.14); border-color: rgba(96, 165, 250, 0.45);
+        box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+      }
+      .cmp-cat-card-icon {
+        display: inline-flex; align-items: center; justify-content: center; width: 2.4rem; height: 2.4rem; flex-shrink: 0;
+        border-radius: 12px; font-size: 1.2rem; line-height: 1;
+        background: linear-gradient(135deg, hsl(var(--h, 215) 80% 60% / 0.28), hsl(var(--h, 215) 80% 55% / 0.08));
+        border: 1px solid hsl(var(--h, 215) 80% 60% / 0.32);
+      }
+      .cmp-cat-card-text { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; flex: 1; }
+      .cmp-cat-card-name {
+        font-family: var(--font-body, inherit); font-size: 0.84rem; font-weight: 700; line-height: 1.2;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .cmp-cat-card-meta {
+        font-family: var(--font-body, inherit); font-size: 0.7rem; font-weight: 600; color: rgba(255, 255, 255, 0.45);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .cmp-cat-card-arrow { flex-shrink: 0; opacity: 0.35; transition: opacity 0.18s ease, transform 0.18s ease; }
+      .cmp-cat-card:hover .cmp-cat-card-arrow { opacity: 0.95; transform: translateX(2px); }
+
+      /* Sugerencias del buscador (autocompletado local) */
+      .cmp-search-drop {
+        position: absolute; top: calc(100% + 6px); left: 0; z-index: 5;
+        width: min(24rem, calc(100vw - 1.5rem)); max-height: min(60vh, 26rem); overflow-y: auto;
+        background: rgba(12, 16, 26, 0.97); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 14px;
+        box-shadow: 0 24px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(59, 130, 246, 0.08), 0 0 24px rgba(59, 130, 246, 0.12);
+        backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: 0.35rem;
+        transform-origin: top center; animation: cmp-drop-in 0.16s ease;
+      }
+      .cmp-search-drop[hidden] { display: none; }
+      .cmp-drop-status { margin: 0; padding: 0.6rem 0.65rem; font-size: 0.74rem; font-weight: 600; color: rgba(255, 255, 255, 0.55); }
+      .cmp-drop-item {
+        display: flex; align-items: center; gap: 0.65rem; padding: 0.5rem 0.6rem; border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.06); text-decoration: none; color: #e5e7eb; background: rgba(255, 255, 255, 0.03);
+        transition: background 0.18s ease, border-color 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
+      }
+      .cmp-drop-item:hover {
+        background: linear-gradient(135deg, rgba(59, 130, 246, 0.18) 0%, rgba(37, 99, 235, 0.12) 100%);
+        border-color: rgba(96, 165, 250, 0.4); transform: translateX(2px); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+      }
+      .cmp-drop-item + .cmp-drop-item { margin-top: 0.3rem; }
+      .cmp-drop-item img {
+        width: 44px; height: 44px; border-radius: 10px; object-fit: contain; object-position: center;
+        background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); border: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 0.35rem; flex-shrink: 0; transition: transform 0.25s ease;
+      }
+      .cmp-drop-item:hover img { transform: scale(1.03); }
+      .cmp-drop-body { min-width: 0; flex: 1; }
+      .cmp-drop-title {
+        display: block; font-size: 0.8rem; font-weight: 700; line-height: 1.35; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; color: #f1f5f9; transition: color 0.18s ease;
+      }
+      .cmp-drop-item:hover .cmp-drop-title { color: #60a5fa; }
+      .cmp-drop-meta { display: flex; align-items: center; gap: 0.4rem; margin-top: 0.15rem; font-size: 0.7rem; line-height: 1.3; }
+      .cmp-drop-price {
+        font-family: var(--font-heading, inherit); font-weight: 800; color: #60a5fa;
+        background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent; background-clip: text;
+      }
+      .cmp-drop-sep { color: rgba(255, 255, 255, 0.2); }
+      .cmp-drop-merchant { color: #94a3b8; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 8rem; }
+      .cmp-drop-discount {
+        padding: 0.15rem 0.55rem; font-size: 0.68rem; font-weight: 800; color: #34d399; background: rgba(16, 185, 129, 0.16);
+        border: 1px solid rgba(52, 211, 153, 0.35); border-radius: 999px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.15);
+      }
+
+      @keyframes cmp-panel-in {
+        from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes cmp-drop-in {
+        from { opacity: 0; transform: translateY(-4px) scale(0.985); }
+        to { opacity: 1; transform: none; }
+      }
+
+      @media (max-width: 640px) {
+        .cmp-cat-btn {
+          padding: 0 0.55rem; gap: 0; border-radius: 9px 0 0 9px;
+          background: rgba(255, 255, 255, 0.06); border-right: 1px solid rgba(255, 255, 255, 0.1); color: #60a5fa;
+        }
+        .cmp-cat-btn-label { display: none !important; }
+        .cmp-cat-btn-icon { font-size: 0.9rem; color: #60a5fa; }
+        .cmp-cat-panel {
+          position: fixed; top: 64px; left: 0.5rem; right: 0.5rem; width: auto; max-width: calc(100vw - 1rem);
+          max-height: calc(100dvh - 75px); max-height: calc(100vh - 75px); z-index: 600;
+        }
+        .cmp-cat-panel-grid { grid-template-columns: 1fr; gap: 0.5rem; }
+        .cmp-search-drop { width: min(100%, calc(100vw - 2rem)); }
       }
     </style>
   </main>

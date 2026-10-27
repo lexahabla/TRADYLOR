@@ -3336,10 +3336,11 @@ const headerCategoryPanelHtml = `
             setOpen(true);
           });
           panel.addEventListener('mouseleave', closeAfter);
-          // Clic en el botón: abre/cierra (toggle)
+          // Clic en el botón: abre/cierra (toggle). El nuevo estado "open" es
+          // el valor actual de panel.hidden (si está oculto, pasa a abierto).
           btn.addEventListener('click', (e) => {
             e.stopPropagation();
-            setOpen(!panel.hidden);
+            setOpen(panel.hidden);
           });
           // Clic en una opción del panel: navega y cierra el desplegable
           panel.addEventListener('click', (e) => {
@@ -3356,8 +3357,8 @@ const headerCategoryPanelHtml = `
           });
         }
 
-        setupDropdown('[data-top-selecciones-btn]', '[data-top-selecciones-panel]');
-        setupDropdown('[data-herramientas-btn]', '[data-herramientas-panel]');
+        setupDropdown('data-top-selecciones-btn', 'data-top-selecciones-panel');
+        setupDropdown('data-herramientas-btn', 'data-herramientas-panel');
 
         // --- Desplegable de categorías del buscador de cabecera ---
         if (headerCatBtn && headerCatPanel) {
