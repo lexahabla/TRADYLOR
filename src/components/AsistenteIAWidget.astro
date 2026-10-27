@@ -1,10 +1,15 @@
 ---
 /**
- * TRADYLOR — WIDGET FLOTANTE ASISTENTE IA (Gemini)
+ * TRADYLOR — WIDGET FLOTANTE ASISTENTE IA (Dependiente IA)
  *
  * Chat flotante (esquina inferior derecha) que consume
  * POST /api/asistente-ia. Se inyecta en Layout.astro para que esté disponible
  * en todas las páginas públicas.
+ *
+ * Respuesta del servidor: { respuesta, tipo, productos?, usuario? }
+ *   - tipo 'saludo': texto de bienvenida.
+ *   - tipo 'recomendacion': productos con tarjetas (imagen + título + precio + razón).
+ *   - tipo 'general': texto plano.
  */
 
 export interface Props {
@@ -12,14 +17,14 @@ export interface Props {
   toggleLabel?: string;
   /** Título de la cabecera del chat. */
   headerTitle?: string;
-  /** Placebo del input. */
+  /** Placeholder del input. */
   inputPlaceholder?: string;
 }
 
 const {
   toggleLabel = '💬 Dependiente IA',
-  headerTitle = 'Tradylor · Assistent IA',
-  inputPlaceholder = 'Pregunta sobre qualsevol producte…',
+  headerTitle = 'Tradylor · Asistente IA',
+  inputPlaceholder = 'Pregunta sobre cualquier producto…',
 } = Astro.props;
 ---
 
@@ -115,7 +120,7 @@ const {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     font-size: 14px;
     background: #f8fafc;
   }
@@ -137,6 +142,65 @@ const {
     border-left: 3px solid #3b82f6;
     color: #1e293b;
     max-width: 80%;
+    line-height: 1.5;
+  }
+
+  /* Tarjetas de producto recomendadas */
+  .ia-producto {
+    align-self: flex-start;
+    width: 100%;
+    max-width: 100%;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px;
+    margin: 6px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ia-producto img {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #f1f5f9;
+  }
+
+  .ia-producto-title {
+    font-weight: 700;
+    font-size: 13px;
+    color: #0f172a;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .ia-producto-price {
+    font-weight: 800;
+    font-size: 14px;
+    color: #10b981;
+  }
+
+  .ia-producto-reason {
+    font-size: 12px;
+    color: #475569;
+    margin-top: 4px;
+  }
+
+  .ia-producto-link {
+    display: inline-block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: #2563eb;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  .ia-producto-link:hover {
+    text-decoration: underline;
   }
 
   .chat-input-container {
@@ -151,8 +215,8 @@ const {
     border: 1px solid #e2e8f0;
     outline: none;
     padding: 8px;
-    font-size: 14px;
     border-radius: 6px;
+    font-size: 14px;
   }
 
   #ia-input:focus {
@@ -190,6 +254,53 @@ const {
       closeBtn.addEventListener('click', () => chatWindow.classList.add('hidden'));
     }
 
+    function escapeHtml(texto) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return String(texto).replace(/[&<>"']/g, (ch) => map[ch] ?? ch);
+    }
+
+    function renderProducto(p) {
+      const slug = escapeHtml(p.slug || '');
+      const title = escapeHtml(p.title || 'Producto');
+      const price = escapeHtml(p.price || 'sin precio');
+      const reason = escapeHtml(p.reason || '');
+      const image = escapeHtml(p.image || '');
+      const link = `/producto/${slug}`;
+      return `
+        <div class="ia-producto">
+          ${image ? `<img src="${image}" alt="${title}" loading="lazy">` : ''}
+          <div class="ia-producto-title">${title}</div>
+          <div class="ia-producto-price">${price}</div>
+          ${reason ? `<div class="ia-producto-reason">${reason}</div>` : ''}
+          <a href="${link}" target="_blank" rel="nofollow noopener sponsored" class="ia-producto-link">Ver ficha del producto →</a>
+        </div>
+      `;
+    }
+
+    function appendIAMensaje(data) {
+      if (!messagesContainer) return;
+
+      // Texto principal si lo hay
+      if (data.respuesta) {
+        const el = document.createElement('div');
+        el.className = 'msg-ia';
+        el.innerHTML = escapeHtml(data.respuesta);
+        messagesContainer.appendChild(el);
+      }
+
+      // Tarjetas de producto si las hay
+      if (data.productos && Array.isArray(data.productos) && data.productos.length) {
+        data.productos.forEach((p) => {
+          const el = document.createElement('div');
+          el.className = 'msg-ia';
+          el.innerHTML = renderProducto(p);
+          messagesContainer.appendChild(el);
+        });
+      }
+
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
     async function enviarMensaje() {
       const texto = input && input.value.trim();
       if (!texto) return;
@@ -202,7 +313,7 @@ const {
 
       const loadingId = 'loading-' + Date.now();
       if (messagesContainer) {
-        messagesContainer.innerHTML += `<div class="msg-ia" id="${loadingId}">Pensant…</div>`;
+        messagesContainer.innerHTML += `<div class="msg-ia" id="${loadingId}">Pensando…</div>`;
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
       }
 
@@ -218,26 +329,26 @@ const {
 
         const data = await res.json();
         const loadingEl = document.getElementById(loadingId);
-        if (loadingEl) {
-          // Si el servidor devolvió un error real (data.error), lo mostramos;
-          // si no hay respuesta (respuesta vacía), usamos el mensaje genérico.
-          loadingEl.innerText =
-            data.respuesta ||
-            (data.error ? `Error del servidor: ${data.error}` : 'Error de connexion avec le serveur.');
+        if (loadingEl) loadingEl.remove();
+
+        if (data.error) {
+          const el = document.createElement('div');
+          el.className = 'msg-ia';
+          el.textContent = `Error del servidor: ${data.error}`;
+          if (messagesContainer) messagesContainer.appendChild(el);
+        } else {
+          appendIAMensaje(data);
         }
       } catch (error) {
         const loadingEl = document.getElementById(loadingId);
-        if (loadingEl) {
-          loadingEl.innerText = 'Error de connexion avec le serveur.';
-        }
+        if (loadingEl) loadingEl.remove();
+        const el = document.createElement('div');
+        el.className = 'msg-ia';
+        el.textContent = 'Error de connexion avec le serveur.';
+        if (messagesContainer) messagesContainer.appendChild(el);
       }
 
       if (messagesContainer) messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    function escapeHtml(texto) {
-      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-      return String(texto).replace(/[&<>"']/g, (ch) => map[ch] ?? ch);
     }
 
     if (sendBtn && input) {
