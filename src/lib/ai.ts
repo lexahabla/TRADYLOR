@@ -188,6 +188,8 @@ async function callOpenAiCompat(
     maxTokens?: number;
     forcedModel?: string;
     timeoutMs?: number;
+    /** Sobrescribe el jsonMode del proveedor (útil para chat libre que no necesita JSON). */
+    jsonMode?: boolean;
   }
 ): Promise<string> {
   const compat = openAiCompat(provider, opts.forcedModel);
@@ -196,7 +198,9 @@ async function callOpenAiCompat(
     temperature: opts.temperature ?? 0.4,
     messages: opts.messages,
   };
-  if (compat.jsonMode) body.response_format = { type: 'json_object' };
+  // jsonMode de las opciones tiene prioridad sobre el del proveedor
+  const useJsonMode = opts.jsonMode ?? compat.jsonMode;
+  if (useJsonMode) body.response_format = { type: 'json_object' };
   if (opts.maxTokens) body.max_tokens = opts.maxTokens;
   const response = await fetchWithTimeout(
     compat.url,
@@ -225,7 +229,7 @@ async function callOpenAiCompat(
  */
 export async function chatComplete(
   messages: ChatMessage[],
-  opts: { provider?: TextProvider; model?: string; temperature?: number; timeoutMs?: number } = {}
+  opts: { provider?: TextProvider; model?: string; temperature?: number; timeoutMs?: number; jsonMode?: boolean } = {}
 ): Promise<string> {
   const requested = opts.provider ?? textProvider();
   if (!hasTextCredentials(requested)) {
@@ -267,6 +271,7 @@ export async function chatComplete(
       temperature: opts.temperature ?? 0.6,
       forcedModel: model?.trim() || undefined,
       timeoutMs: opts.timeoutMs ?? 90_000,
+      jsonMode: opts.jsonMode,
     });
   };
 

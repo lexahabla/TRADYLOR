@@ -75,7 +75,7 @@ export const POST: APIRoute = async ({ request }) => {
     let respuesta: string;
     try {
       respuesta = await Promise.race([
-        chatComplete(messages, { temperature: 0.7, timeoutMs: 25_000 }),
+        chatComplete(messages, { temperature: 0.7, timeoutMs: 25_000, jsonMode: false }),
         new Promise<string>((_, reject) =>
           controller.signal.addEventListener('abort', () =>
             reject(new Error('Tiempo de espera agotado. Inténtalo de nuevo.')),
