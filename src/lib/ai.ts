@@ -28,7 +28,7 @@ export type ImageProvider = 'openai' | 'flux';
  * Not Found (modelo obsoleto/desactivado), el sistema conmuta al siguiente
  * de esta lista que tenga clave configurada.
  */
-export const FREE_TEXT_PROVIDERS: TextProvider[] = ['groq', 'nvidia', 'openrouter'];
+export const FREE_TEXT_PROVIDERS: TextProvider[] = ['nvidia', 'groq', 'openrouter'];
 
 export interface EnrichedPricing {
   /** Precio de oferta (el que ve el usuario como precio actual). */
@@ -149,7 +149,7 @@ function openAiCompat(provider: TextProvider, forcedModel?: string): OpenAiCompa
     return {
       url: 'https://integrate.api.nvidia.com/v1/chat/completions',
       key: env('NVIDIA_API_KEY'),
-      model: forcedModel || env('NVIDIA_MODEL') || 'meta/llama-3.3-70b-instruct',
+      model: forcedModel || env('NVIDIA_MODEL') || 'nvidia/nemotron-3.5-super-vl-120b-a12b',
       label: 'NVIDIA',
       jsonMode: false,
     };
@@ -198,8 +198,9 @@ async function callOpenAiCompat(
     temperature: opts.temperature ?? 0.4,
     messages: opts.messages,
   };
-  // jsonMode de las opciones tiene prioridad sobre el del proveedor
-  const useJsonMode = opts.jsonMode ?? compat.jsonMode;
+  // jsonMode de las opciones tiene prioridad sobre el del proveedor,
+  // salvo en NVIDIA/OpenRouter: no admiten response_format de forma fiable.
+  const useJsonMode = (opts.jsonMode ?? compat.jsonMode) && provider !== 'nvidia' && provider !== 'openrouter';
   if (useJsonMode) body.response_format = { type: 'json_object' };
   if (opts.maxTokens) body.max_tokens = opts.maxTokens;
   const response = await fetchWithTimeout(
@@ -292,8 +293,11 @@ export async function chatComplete(
       return await tryProvider(provider, modelToUse);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
-      const isGoneOrNotFound = /respondió (410|404)\b/.test(msg);
-      if (!isGoneOrNotFound) throw error;
+      // 410/404 = modelo retirado · 429 = límite de peticiones agotado
+      // (p. ej. Groq gratuito): en cualquiera de los casos se prueba el
+      // siguiente proveedor gratuito antes de rendirse.
+      const isRetryable = /respondió (410|404|429)\b/.test(msg);
+      if (!isRetryable) throw error;
       lastError = error;
       // continuar con el siguiente candidato (fallback automático)
     }
@@ -380,7 +384,7 @@ const TEXT_SYSTEM_PROMPT = [
  * cuando el llamante NO fuerza un proveedor concreto: una elección explícita
  * (p. ej. desde el Pipeline) se respeta siempre, sin fallback.
  */
-const TEXT_PROVIDER_FALLBACK_ORDER: TextProvider[] = ['openai', 'anthropic', 'groq', 'nvidia', 'openrouter'];
+const TEXT_PROVIDER_FALLBACK_ORDER: TextProvider[] = ['openai', 'anthropic', 'nvidia', 'groq', 'openrouter'];
 
 /**
  * Paso 1 — Enriquecimiento de texto con IA.

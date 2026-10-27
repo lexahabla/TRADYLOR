@@ -149,7 +149,7 @@ const pageDescription = "Gestión, scraping de metadatos y alta de productos con
 // El módulo "Tráfico y ventas" se muestra como una sección más del panel
 const requestedSection = Astro.url.searchParams.get('section') || 'products';
 
-const allowedSections = ['products', 'affiliates', 'categories', 'analytics', 'marketing', 'transparency'];
+const allowedSections = ['products', 'affiliates', 'categories', 'analytics', 'marketing', 'transparency', 'desarrollo-ia'];
 const initialSection = allowedSections.includes(requestedSection) ? requestedSection : 'products';
 ---
 
@@ -1473,45 +1473,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </button>
         </div>
 
-        <!-- Conectividad de IA: estado de conexión, modelos gratuitos y
-             disponibilidad/consumo de tokens de cada proveedor. -->
-        <div class="tp-options tp-ai-connect" id="tpAiConnect">
-          <div class="tp-ai-head">
-            <span class="tp-reasons-title">Conectividad de IA y tokens</span>
-            <button type="button" id="btnAiStatusRefresh" class="btn-secondary btn-sm" title="Comprueba la conexión REAL con cada proveedor (contra su endpoint de modelos) y refresca el estado">
-              <span class="btn-text">↻ Probar conexión</span>
-              <div class="btn-spinner" hidden></div>
-            </button>
-            <button type="button" id="btnAiConsoleOpen2" class="btn-ai btn-sm" title="Abre la consola de IA interactiva (chat con los proveedores conectados y ejecución del asistente local opencode)">🤖 Consola IA</button>
-          </div>
-          <div id="tpAiProviders" class="tp-ai-providers">
-            <div class="loading-panel">Cargando estado de la IA…</div>
-          </div>
-
-          <!-- API keys: se guardan en el volumen (ai-keys.json) y quedan
-               conectadas para TODOS los botones de IA del panel. -->
-          <div class="tp-ai-keys">
-            <label class="tp-provider" for="aiKeyProvider">
-              <span class="tp-provider-label">Proveedor</span>
-              <select id="aiKeyProvider" title="Proveedor de IA al que guardar la API key">
-                <option value="openai">OpenAI</option>
-                <option value="nvidia">NVIDIA (NIM)</option>
-                <option value="openrouter">OpenRouter</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="groq">Groq</option>
-              </select>
-            </label>
-            <label class="tp-provider tp-ai-key-field" for="aiKeyValue">
-              <span class="tp-provider-label">API Key</span>
-              <input id="aiKeyValue" type="password" placeholder="Pega aquí la API key…" autocomplete="off" spellcheck="false" title="La clave se guarda en el servidor (volumen) y nunca se devuelve completa al navegador" />
-            </label>
-            <button type="button" id="btnAiKeyTest" class="btn-secondary btn-sm" title="Comprueba la clave contra el proveedor ANTES de guardarla (sin consumir tokens)">🧪 Probar</button>
-            <button type="button" id="btnAiKeySave" class="btn-success btn-sm" title="Guarda la clave en el servidor: queda conectada para Enriquecer, Construir Catálogo, Pipeline y la consola IA">💾 Guardar clave</button>
-            <button type="button" id="btnAiKeyDelete" class="btn-danger-ghost btn-sm" title="Elimina la clave guardada de este proveedor (desconecta la IA del panel para ese proveedor)">🗑️ Borrar clave</button>
-            <span id="aiKeyStatus" class="tp-ai-key-status" role="status"></span>
-          </div>
-        </div>
-
         <div class="tp-progress" id="tpProgress" hidden>
           <div class="tp-progress-bar"><span class="tp-progress-fill" id="tpProgressFill"></span></div>
           <p class="tp-progress-text" id="tpProgressText">Sin ejecuciones en marcha.</p>
@@ -1538,6 +1499,139 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </thead>
             <tbody id="tpResultsBody"></tbody>
           </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════ DESARROLLO IA ═══════════════════ -->
+    <section data-admin-view="desarrollo-ia" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'desarrollo-ia' }]}>
+      <div class="view-heading">
+        <span class="admin-tag-pill">Entrenamiento y conectividad</span>
+        <h2 class="admin-title">Desarrollo IA</h2>
+        <p class="admin-subtitle">Entrena y alimenta a las dos personalidades de IA de Tradylor, gestiona sus claves y comprueba la conexión con los proveedores.</p>
+      </div>
+
+      <!-- ── Personalidades ── -->
+      <div class="admin-card">
+        <div class="card-header">
+          <div class="header-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2a5 5 0 0 1 5 5v1a5 5 0 0 1-10 0V7a5 5 0 0 1 5-5z"></path>
+              <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"></path>
+            </svg>
+          </div>
+          <div style="flex: 1;">
+            <h2 class="card-title">Personalidades de IA</h2>
+            <p class="card-desc">Dos personalidades, un mismo modelo. <strong>Dependiente IA</strong> atiende al usuario en el widget flotante y en la página de la herramienta. <strong>Consola IA</strong> asiste al administrador desde el botón 🤖 del panel.</p>
+          </div>
+        </div>
+
+        <div class="dia-personas">
+          <div class="dia-persona">
+            <span class="dia-persona-badge is-customer">👤 Usuario final</span>
+            <h3 class="dia-persona-name">Dependiente IA</h3>
+            <p class="dia-persona-desc">Ayuda y orienta al usuario sobre el funcionamiento de la tienda y sus productos (widget flotante + página «Dependiente IA»).</p>
+            <code class="dia-persona-skill" data-skill-persona="dependiente">Skill actual: cargando…</code>
+          </div>
+          <div class="dia-persona">
+            <span class="dia-persona-badge is-admin">🛠 Administrador</span>
+            <h3 class="dia-persona-name">Consola IA</h3>
+            <p class="dia-persona-desc">Ayuda al administrador a gestionar la tienda: catálogo, pipeline, métricas y marketing (botón 🤖 del panel).</p>
+            <code class="dia-persona-skill" data-skill-persona="admin">Skill actual: cargando…</code>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Entrenamiento de skills ── -->
+      <div class="admin-card">
+        <div class="card-header">
+          <div class="header-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+            </svg>
+          </div>
+          <div style="flex: 1;">
+            <h2 class="card-title">Entrenar y alimentar con skills</h2>
+            <p class="card-desc">Escribe instrucciones que se añaden al prompt de cada personalidad (máx. 40 por persona). Se aplican al instante en la siguiente conversación.</p>
+          </div>
+        </div>
+
+        <div class="tp-options">
+          <label class="tp-provider" for="skillPersona">
+            <span class="tp-provider-label">Personalidad</span>
+            <select id="skillPersona" title="Personalidad a la que se añade la instrucción">
+              <option value="dependiente">Dependiente IA (usuario)</option>
+              <option value="admin">Consola IA (admin)</option>
+            </select>
+          </label>
+          <label class="tp-provider tp-ai-key-field" for="skillText">
+            <span class="tp-provider-label">Instrucción</span>
+            <input id="skillText" type="text" placeholder="Ej: Prioriza siempre productos con descuento > 20%…" maxlength="600" autocomplete="off" />
+          </label>
+          <button type="button" id="btnSkillAdd" class="btn-success btn-sm" title="Añade la instrucción al prompt de la personalidad seleccionada">➕ Añadir skill</button>
+          <span id="skillStatus" class="tp-ai-key-status" role="status"></span>
+        </div>
+
+        <div class="tp-ai-keys" style="flex-direction: column; align-items: stretch;">
+          <div id="skillsDependiente" class="skills-list">
+            <span class="tp-reasons-title">Skills del Dependiente IA (usuario)</span>
+            <div class="skills-items" data-skills-target="dependiente"><div class="loading-panel">Cargando skills…</div></div>
+          </div>
+          <div id="skillsAdmin" class="skills-list">
+            <span class="tp-reasons-title">Skills de la Consola IA (admin)</span>
+            <div class="skills-items" data-skills-target="admin"><div class="loading-panel">Cargando skills…</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Conectividad de IA y tokens (migrada desde Transparencia) ── -->
+      <div class="admin-card">
+        <div class="card-header">
+          <div class="header-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+            </svg>
+          </div>
+          <div style="flex: 1;">
+            <h2 class="card-title">Conectividad de IA y tokens</h2>
+            <p class="card-desc">Estado de conexión, modelos gratuitos y claves de los proveedores. Las claves quedan conectadas para Enriquecer, Pipeline, Consola IA y los dos asistentes.</p>
+          </div>
+        </div>
+
+        <div class="tp-options tp-ai-connect" id="tpAiConnect">
+          <div class="tp-ai-head">
+            <span class="tp-reasons-title">Proveedores</span>
+            <button type="button" id="btnAiStatusRefresh" class="btn-secondary btn-sm" title="Comprueba la conexión REAL con cada proveedor (contra su endpoint de modelos) y refresca el estado">
+              <span class="btn-text">↻ Probar conexión</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <button type="button" id="btnAiConsoleOpen2" class="btn-ai btn-sm" title="Abre la consola de IA interactiva (chat con los proveedores conectados y ejecución del asistente local opencode)">🤖 Consola IA</button>
+          </div>
+          <div id="tpAiProviders" class="tp-ai-providers">
+            <div class="loading-panel">Cargando estado de la IA…</div>
+          </div>
+
+          <div class="tp-ai-keys">
+            <label class="tp-provider" for="aiKeyProvider">
+              <span class="tp-provider-label">Proveedor</span>
+              <select id="aiKeyProvider" title="Proveedor de IA al que guardar la API key">
+                <option value="openai">OpenAI</option>
+                <option value="nvidia">NVIDIA (NIM)</option>
+                <option value="openrouter">OpenRouter</option>
+                <option value="anthropic">Anthropic</option>
+                <option value="groq">Groq</option>
+              </select>
+            </label>
+            <label class="tp-provider tp-ai-key-field" for="aiKeyValue">
+              <span class="tp-provider-label">API Key</span>
+              <input id="aiKeyValue" type="password" placeholder="Pega aquí la API key…" autocomplete="off" spellcheck="false" title="La clave se guarda en el servidor (volumen) y nunca se devuelve completa al navegador" />
+            </label>
+            <button type="button" id="btnAiKeyTest" class="btn-secondary btn-sm" title="Comprueba la clave contra el proveedor ANTES de guardarla (sin consumir tokens)">🧪 Probar</button>
+            <button type="button" id="btnAiKeySave" class="btn-success btn-sm" title="Guarda la clave en el servidor: queda conectada para Enriquecer, Construir Catálogo, Pipeline y la consola IA">💾 Guardar clave</button>
+            <button type="button" id="btnAiKeyDelete" class="btn-danger-ghost btn-sm" title="Elimina la clave guardada de este proveedor (desconecta la IA del panel para ese proveedor)">🗑️ Borrar clave</button>
+            <span id="aiKeyStatus" class="tp-ai-key-status" role="status"></span>
+          </div>
         </div>
       </div>
     </section>
@@ -8762,6 +8856,93 @@ function renderTableRows(products, resetPage = true) {
     tpLoadAiStatus(false);
     aiConsoleLoadProviders();
 
+    // ── Desarrollo IA › Skills de entrenamiento ─────────────────────────────
+    const skillPersona = document.getElementById('skillPersona');
+    const skillText = document.getElementById('skillText');
+    const skillStatus = document.getElementById('skillStatus');
+    const btnSkillAdd = document.getElementById('btnSkillAdd');
+
+    function skillSetStatus(msg, isError) {
+      if (!skillStatus) return;
+      skillStatus.textContent = msg || '';
+      skillStatus.style.color = isError ? '#f87171' : '#34d399';
+      if (msg) setTimeout(() => { skillStatus.textContent = ''; }, 4000);
+    }
+
+    function skillRenderPersona(persona, skills) {
+      const box = document.querySelector('[data-skills-target="' + persona + '"]');
+      const summary = document.querySelector('[data-skill-persona="' + persona + '"]');
+      if (summary) {
+        summary.textContent = skills.length
+          ? skills.length + ' skill(s) · última: ' + skills[skills.length - 1].text.slice(0, 90)
+          : 'Sin skills: usa el prompt base de la personalidad.';
+      }
+      if (!box) return;
+      if (!skills.length) {
+        box.innerHTML = '<div class="skills-empty">Aún no has añadido instrucciones a esta personalidad.</div>';
+        return;
+      }
+      box.innerHTML = skills.map((s) =>
+        '<div class="skill-chip"><span>' + s.text.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])) + '</span>' +
+        '<button type="button" data-skill-del="' + s.id + '" title="Eliminar esta instrucción" aria-label="Eliminar skill">×</button></div>'
+      ).join('');
+    }
+
+    async function skillsLoad() {
+      try {
+        const res = await fetch('/api/admin/ai-skills', { cache: 'no-store' });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'No se pudieron cargar los skills.');
+        const all = Array.isArray(data.skills) ? data.skills : [];
+        skillRenderPersona('dependiente', all.filter((s) => s.persona === 'dependiente'));
+        skillRenderPersona('admin', all.filter((s) => s.persona === 'admin'));
+      } catch (err) {
+        skillSetStatus((err && err.message) || 'Error al cargar skills.', true);
+      }
+    }
+
+    btnSkillAdd?.addEventListener('click', async () => {
+      const persona = skillPersona ? skillPersona.value : 'dependiente';
+      const text = skillText ? skillText.value.trim() : '';
+      if (!text) { skillSetStatus('Escribe la instrucción primero.', true); return; }
+      try {
+        const res = await fetch('/api/admin/ai-skills', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ persona, text }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'No se pudo añadir.');
+        if (skillText) skillText.value = '';
+        skillSetStatus('✓ Skill añadida. Se aplica en la próxima conversación.');
+        await skillsLoad();
+      } catch (err) {
+        skillSetStatus((err && err.message) || 'Error al añadir.', true);
+      }
+    });
+
+    skillText?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); btnSkillAdd?.click(); }
+    });
+
+    document.addEventListener('click', async (event) => {
+      const btn = event.target && event.target.closest ? event.target.closest('[data-skill-del]') : null;
+      if (!btn) return;
+      const id = btn.getAttribute('data-skill-del');
+      if (!id) return;
+      try {
+        const res = await fetch('/api/admin/ai-skills?id=' + encodeURIComponent(id), { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.message || 'No se pudo eliminar.');
+        skillSetStatus('✓ Skill eliminada.');
+        await skillsLoad();
+      } catch (err) {
+        skillSetStatus((err && err.message) || 'Error al eliminar.', true);
+      }
+    });
+
+    skillsLoad();
+
     // ── Tooltip global del panel (mejora visual de los `title` nativos) ─────
     const adminTooltipEl = document.createElement('div');
     adminTooltipEl.className = 'admin-tooltip';
@@ -9294,7 +9475,24 @@ function renderTableRows(products, resetPage = true) {
   .aic-input-row { display: flex; gap: .4rem; padding: .6rem .65rem; border-top: 1px solid var(--color-border); }
   .aic-input-row input { flex: 1; min-width: 0; padding: .45rem .6rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-main); font: inherit; font-size: .78rem; }
 
-  /* Conectividad de IA (Transparencia) */
+  /* ── Desarrollo IA: personalidades + skills ───────────────────────────── */
+  .dia-personas { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; }
+  .dia-persona { padding: 1rem; background: rgba(255, 255, 255, .03); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); display: flex; flex-direction: column; gap: .45rem; }
+  .dia-persona-badge { align-self: flex-start; font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; padding: .28rem .6rem; border-radius: 999px; border: 1px solid; }
+  .dia-persona-badge.is-customer { color: #34d399; background: rgba(52, 211, 153, .1); border-color: rgba(52, 211, 153, .3); }
+  .dia-persona-badge.is-admin { color: #93c5fd; background: rgba(59, 130, 246, .1); border-color: rgba(59, 130, 246, .3); }
+  .dia-persona-name { margin: .15rem 0 0; font-size: 1rem; color: var(--color-text-main); }
+  .dia-persona-desc { margin: 0; font-size: .8rem; color: var(--color-text-dim); line-height: 1.55; flex: 1; }
+  .dia-persona-skill { display: block; margin-top: .5rem; padding: .45rem .6rem; background: rgba(0, 0, 0, .25); border: 1px solid var(--color-border); border-radius: 8px; font-size: .72rem; color: var(--color-text-muted); white-space: pre-wrap; word-break: break-word; }
+
+  .skills-list { display: flex; flex-direction: column; gap: .5rem; }
+  .skills-items { display: flex; flex-direction: column; gap: .4rem; }
+  .skill-chip { display: flex; align-items: flex-start; justify-content: space-between; gap: .6rem; padding: .5rem .65rem; background: rgba(59, 130, 246, .08); border: 1px solid rgba(59, 130, 246, .22); border-radius: 9px; font-size: .78rem; color: var(--color-text-main); line-height: 1.45; }
+  .skill-chip button { flex-shrink: 0; background: transparent; border: 0; color: var(--color-text-muted); font-size: .95rem; line-height: 1; cursor: pointer; padding: .1rem .35rem; border-radius: 6px; }
+  .skill-chip button:hover { color: #f87171; background: rgba(239, 68, 68, .12); }
+  .skills-empty { font-size: .76rem; color: var(--color-text-dim); font-style: italic; padding: .35rem .1rem; }
+
+  /* Conectividad de IA (Desarrollo IA) */
   .tp-ai-connect { display: block; }
   .tp-ai-head { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin-bottom: .55rem; }
   .tp-ai-providers { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: .55rem; }
@@ -9618,6 +9816,7 @@ function renderTableRows(products, resetPage = true) {
   section[data-admin-view="analytics"].is-visible { display: flex !important; }
   section[data-admin-view="marketing"].is-visible { display: flex !important; }
   section[data-admin-view="transparency"].is-visible { display: flex !important; }
+  section[data-admin-view="desarrollo-ia"].is-visible { display: flex !important; }
 
   @media (max-width: 900px) {
     .category-form { flex-direction: column; }

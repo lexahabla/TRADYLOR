@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { chatComplete, hasTextCredentials, type ChatMessage } from '../../lib/ai';
-import { getCatalogProducts } from '../../lib/catalog';
+import { dependienteIaSystemPrompt, withSkills } from '../../lib/aiPersonas';
+import { getSkillsForPersona } from '../../lib/aiSkillsStore';
 import { getRadarSessionUser } from '../../lib/radarAuth';
 
 /**
@@ -9,18 +10,16 @@ import { getRadarSessionUser } from '../../lib/radarAuth';
  * ==============================================================================
  * POST /api/asistente-ia  { mensajeUsuario, contextoProducto? }
  *
- * Endpoint de chat flotante impulsado por el mismo motor de IA del servidor
- * (`chatComplete` de src/lib/ai): OpenAI, Anthropic, Groq, NVIDIA y OpenRouter
- * con fallback automático entre los proveedores gratuitos que tengan clave
- * configurada. NO usa Gemini ni Vertex AI.
+ * Widget flotante (#ia-chat-window). Usa la MISMA personalidad que la página
+ * dedicada /herramientas/dependiente-ia (ver lib/aiPersonas.ts): un único
+ * system prompt compartido, con jsonMode:true para el formato de tarjetas.
+ * Motor: `chatComplete` (NVIDIA Nemotron por defecto, con fallback).
  *
  * Devuelve respuestas estructuradas:
  *   { respuesta, tipo, productos?, usuario? }
  *   - tipo 'saludo': bienvenida, usa nombre si está logueado, sino pide el nombre.
  *   - tipo 'recomendacion': hasta 3 productos reales con { slug, title, price, image, reason }.
  *   - tipo 'general': texto plano.
- *
- * Se integra en el servidor SSR de Astro (mismo proceso, mismo puerto 4321).
  * ==============================================================================
  */
 
@@ -36,22 +35,6 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-/** Extracto compacto del catálogo aprobado para anclar al modelo a productos reales. */
-function buildCatalogExcerpt(): string {
-  const products = getCatalogProducts()
-    .filter((p) => p.audit_status !== 'rejected')
-    .sort((a, b) => (b.conversion_score ?? 0) - (a.conversion_score ?? 0))
-    .slice(0, 60);
-
-  return products
-    .map((p) => {
-      const slug = p.slug || p.id;
-      const price = p.price ? `${p.price.toFixed(2)}€` : 'sin precio';
-      return `- [${slug}] "${p.title}" · ${p.category || 'General'} · ${price} · Imagen: ${p.image || 'sin imagen'}`;
-    })
-    .join('\n');
-}
-
 const SALUDOS = ['hola', 'buenos días', 'buenas tardes', 'buenas noches', 'hey', 'hi', 'buenas'];
 
 function esSaludo(texto: string): boolean {
@@ -60,34 +43,14 @@ function esSaludo(texto: string): boolean {
 }
 
 /**
- * System prompt con "skills" de conversación para una tienda de productos.
- * Guía al modelo para respuestas cortas, estructuradas y con enlaces reales.
+ * System prompt del widget: MISMA personalidad que la página Dependiente IA
+ * (lib/aiPersonas.ts), en formato JSON para las tarjetas del chat.
  */
-function systemPrompt(catalogo: string, nombreUsuario?: string): string {
-  const saludoInicial = nombreUsuario
-    ? `El usuario se llama ${nombreUsuario}. Úsalo para saludarle por nombre.`
-    : 'El usuario NO está logueado. Pídele amablemente su nombre para poder tratarle de forma personalizada.';
-
-  return `
-Eres el "Dependiente IA" de Tradylor.com, asistente de compras experto y objetivo.
-HABILIDADES DE CONVERSACIÓN:
-1. Si el usuario dice "hola" o similar, saluda calurosamente: "Hola, ¿cómo estás? ¿En qué puedo ayudarte? ¿Buscas algún producto en concreto?"
-2. ${saludoInicial}
-3. Si ya conoces su nombre, úsalo de vez en cuando (no en cada frase).
-
-REGLAS PARA RECOMENDAR PRODUCTOS:
-1. Recomienda SOLO productos de la lista del catálogo de abajo (nunca inventes modelos, precios ni tiendas).
-2. Máximo 3 productos por respuesta.
-3. Responde ÚNICAMENTE en formato JSON válido con esta estructura:
-   { "productos": [ { "slug": "<slug>", "title": "<título>", "pro": "<una ventaja corta>" } ] }
-4. No incluyas texto adicional fuera del JSON. Sin precios, sin tablas, sin secciones numeradas.
-5. Si no hay nada adecuado, devuelve { "productos": [] } y el sistema pedirá presupuesto o uso.
-6. Responde en español.
-
----
-CATÁLOGO DISPONIBLE:
-${catalogo}
-`.trim();
+function systemPrompt(nombreUsuario?: string): string {
+  return withSkills(
+    dependienteIaSystemPrompt({ nombreUsuario, jsonMode: true }),
+    getSkillsForPersona('dependiente'),
+  );
 }
 
 export const POST: APIRoute = async ({ request }) => {
@@ -115,12 +78,10 @@ export const POST: APIRoute = async ({ request }) => {
     const radarUser = getRadarSessionUser(request);
     const nombreUsuario = radarUser?.name ?? undefined;
 
-    const catalogo = buildCatalogExcerpt() || '(catálogo vacío por ahora)';
-
     const esSaludoInicial = esSaludo(mensajeUsuario);
 
     const messages: ChatMessage[] = [
-      { role: 'system', content: systemPrompt(catalogo, nombreUsuario) },
+      { role: 'system', content: systemPrompt(nombreUsuario) },
     ];
 
     if (esSaludoInicial) {

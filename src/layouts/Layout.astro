@@ -4531,7 +4531,7 @@ const headerCategoryPanelHtml = `
     </script>
   )}
 
-    {!isBackend && (
+    {!isBackend && !Astro.url.pathname.startsWith('/herramientas/dependiente-ia') && (
       <AsistenteIAWidget />
     )}
 

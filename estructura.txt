@@ -66,7 +66,9 @@ src/lib/adminDashboard.ts
 src/lib/affiliateCatalog.ts
 src/lib/ai.ts
 src/lib/aiKeysStore.ts
+src/lib/aiPersonas.ts
 src/lib/aiProviders.ts
+src/lib/aiSkillsStore.ts
 src/lib/aliCatalogMerge.ts
 src/lib/aliexpressCatalog.ts
 src/lib/analytics.ts
@@ -137,6 +139,7 @@ src/lib/validateProducts.ts
 src/middleware.ts
 src/pages/api/admin/add-product.ts
 src/pages/api/admin/ai-console.ts
+src/pages/api/admin/ai-skills.ts
 src/pages/api/admin/ai-keys/index.ts
 src/pages/api/admin/ai-keys/test.ts
 src/pages/api/admin/ai-status.ts

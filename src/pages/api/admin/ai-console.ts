@@ -4,6 +4,8 @@ import { requireAdminAuth } from '../../../lib/adminAuth';
 import { AI_PROVIDER_IDS, effectiveKey, type AiProviderId } from '../../../lib/aiKeysStore';
 import { testOpencodeCli } from '../../../lib/aiProviders';
 import { chatComplete, textProvider, type ChatMessage, type TextProvider } from '../../../lib/ai';
+import { adminIaSystemPrompt, withSkills } from '../../../lib/aiPersonas';
+import { getSkillsForPersona } from '../../../lib/aiSkillsStore';
 
 export const prerender = false;
 
@@ -118,13 +120,20 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ success: false, message: 'La conversación está vacía.' }, 400);
   }
 
+  // Personalidad «Consola IA» (gestión de tienda) + skills entrenados por el admin.
+  const hasSystem = messages.some((m) => m.role === 'system');
+  const adminPrompt = withSkills(adminIaSystemPrompt(), getSkillsForPersona('admin'));
+  const finalMessages: ChatMessage[] = hasSystem
+    ? messages
+    : [{ role: 'system' as const, content: adminPrompt }, ...messages];
+
   const providerRaw = String(body.provider || '').trim().toLowerCase();
   const provider = (AI_PROVIDER_IDS as string[]).includes(providerRaw)
     ? (providerRaw as TextProvider)
     : undefined;
 
   try {
-    const reply = await chatComplete(messages, { provider, model });
+    const reply = await chatComplete(finalMessages, { provider, model });
     return json({ success: true, mode: 'chat', provider: provider ?? textProvider(), reply });
   } catch (error) {
     return json({
