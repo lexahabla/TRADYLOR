@@ -47,8 +47,8 @@ export const POST: APIRoute = async ({ request }) => {
     // (Application Default Credentials / GOOGLE_APPLICATION_CREDENTIALS).
     const ai = new GoogleGenAI({
       vertexAI: true,
-      project: process.env.VERTEX_AI_PROJECT ?? 'gen-lang-client-0762423530',
-      location: process.env.VERTEX_AI_LOCATION ?? 'us-central1',
+      project: process.env.VERTEX_AI_PROJECT ?? 'project-14150355-54ed-40a4-80e',
+      location: process.env.VERTEX_AI_LOCATION ?? 'europe-west1',
     });
 
     const systemInstruction = `
