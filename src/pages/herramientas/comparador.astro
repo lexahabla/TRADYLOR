@@ -159,26 +159,28 @@ const pageDescription = baseProduct
       <>
         <form class="nav-search" role="search" method="get" aria-label="Buscar producto para comparar">
           <label for="compareProductInput" class="visually-label">Elige un producto para comparar con sus alternativas:</label>
-          <div class="nav-search-wrapper">
-            <input
-              id="compareProductInput"
-              name="producto"
-              type="search"
-              class="nav-search-input"
-              placeholder="Busca un producto por nombre, marca o comerciante…"
-              value={compareKey ? '' : ''}
-              list="compareProductDatalist"
-              autocomplete="off"
-            />
-            <datalist id="compareProductDatalist">
-              {optionGroups.flatMap((group) =>
-                group.products.map((product) => `<option value="${productKey(product)}">${cleanMarketplaceSuffix(product.title)} · ${formatCurrency(product.price)}</option>`)
-              )}
-            </datalist>
-            <button type="submit" class="nav-search-submit" aria-label="Comparar">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            </button>
-          </div>
+          <input
+            id="compareProductInput"
+            name="producto"
+            type="search"
+            class="ns-input cm-search-input"
+            placeholder="Busca un producto por nombre, marca o comerciante…"
+            value={compareKey ? '' : ''}
+            list="compareProductDatalist"
+            autocomplete="off"
+          />
+          <datalist id="compareProductDatalist">
+            {optionGroups.flatMap((group) =>
+              group.products.map((product) => `<option value="${productKey(product)}">${cleanMarketplaceSuffix(product.title)} · ${formatCurrency(product.price)}</option>`)
+            )}
+          </datalist>
+          <button type="submit" class="ns-submit" aria-label="Comparar">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+          </button>
+        </form>
           <p class="comparator-hint">
             Escribe el nombre del producto o selecciona uno de las sugerencias. Al enviar verás su análisis cruzado.
           </p>
@@ -335,28 +337,28 @@ const pageDescription = baseProduct
         font-size: 1rem; color: rgba(255, 255, 255, 0.65); line-height: 1.7; margin: 0 auto 2rem; max-width: 620px;
       }
 
-      /* Form estilo nav-search para el selector de producto */
-      .comparator-search-form { margin-bottom: 2rem; }
-      .nav-search-wrapper {
-        position: relative; display: flex; align-items: center; flex: 1 1 auto; max-width: 600px; margin: 0 auto;
+      /* Form estilo nav-search para el selector de producto (clonado del header) */
+      .nav-search {
+        margin-bottom: 2rem;
+        display: flex; align-items: center; flex: 1 1 auto; max-width: 600px; margin: 0 auto 2rem auto;
         height: 48px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px;
         transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
       }
-      .nav-search-wrapper:focus-within {
+      .nav-search:focus-within {
         background: rgba(2, 6, 23, 0.85); border-color: rgba(96, 165, 250, 0.55); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.22);
       }
-      .nav-search-input {
+      .ns-input {
         flex: 1 1 auto; min-width: 0; height: 100%; padding: 0 0.5rem; font-family: var(--font-body, inherit); font-size: 0.85rem;
         color: #f3f4f6; background: transparent; border: none; outline: none; -webkit-appearance: none; appearance: none;
       }
-      .nav-search-input::placeholder { color: rgba(255, 255, 255, 0.45); }
-      .nav-search-submit {
+      .ns-input::placeholder { color: rgba(255, 255, 255, 0.45); }
+      .ns-submit {
         display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0;
         margin-right: 4px; padding: 0; color: #ffffff; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
         border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
         transition: transform 0.15s ease, box-shadow 0.2s ease, background 0.2s ease;
       }
-      .nav-search-submit:hover {
+      .ns-submit:hover {
         background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%); box-shadow: 0 6px 18px rgba(37, 99, 235, 0.55); transform: translateY(-1px);
       }
       .comparator-hint { text-align: center; color: var(--color-text-dim); font-size: 0.82rem; margin-top: 0.5rem; }
@@ -435,7 +437,7 @@ const pageDescription = baseProduct
       .comparator-cross-item .cm-view-link:hover { text-decoration: underline; }
 
       @media (max-width: 640px) {
-        .nav-search-wrapper { max-width: 100%; height: 44px; }
+        .nav-search { max-width: 100%; height: 44px; }
         .comparator-picked { flex-direction: column; align-items: flex-start; }
         .comparator-verdict-card { flex-wrap: wrap; }
         .comparator-verdict-cta { width: 100%; text-align: right; }

@@ -378,11 +378,12 @@ const headerCategoryPanelHtml = `
       }
       .nav-dropdown-panel {
         position: absolute;
-        top: calc(100% + 0.85rem);
+        top: 100%;
         left: 0;
-        z-index: 120;
+        margin-top: 0.35rem;
+        z-index: 200;
         min-width: 15rem;
-        max-width: 20rem;
+        max-width: 22rem;
         max-height: 60vh;
         overflow-y: auto;
         padding: 0.4rem;
@@ -3306,10 +3307,10 @@ const headerCategoryPanelHtml = `
           });
         }
 
-        // --- Desplegables del mainNav en HOVER (mouseon) ---
-        // Se abren al pasar el cursor por encima y se cierran al salir,
-        // con un pequeño retardo para evitar cierres accidentales.
-        function setupHoverDropdown(btnAttr, panelAttr) {
+        // --- Desplegables del mainNav en HOVER (mouseon) y CLIC (toggle) ---
+        // Se abren al pasar el cursor y también al hacer clic en el botón.
+        // Se cierran al salir con un pequeño retardo para evitar cierres accidentales.
+        function setupDropdown(btnAttr, panelAttr) {
           const btn = document.querySelector(`[${btnAttr}]`);
           const panel = document.querySelector(`[${panelAttr}]`);
           if (!btn || !panel) return;
@@ -3327,6 +3328,7 @@ const headerCategoryPanelHtml = `
             if (hoverTimer) clearTimeout(hoverTimer);
             hoverTimer = setTimeout(() => setOpen(false), 200);
           };
+          // Hover
           btn.addEventListener('mouseenter', openAfter);
           btn.addEventListener('mouseleave', closeAfter);
           panel.addEventListener('mouseenter', () => {
@@ -3334,6 +3336,11 @@ const headerCategoryPanelHtml = `
             setOpen(true);
           });
           panel.addEventListener('mouseleave', closeAfter);
+          // Clic en el botón: abre/cierra (toggle)
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            setOpen(!panel.hidden);
+          });
           // Clic en una opción del panel: navega y cierra el desplegable
           panel.addEventListener('click', (e) => {
             if (e.target.closest('a')) setOpen(false);
@@ -3349,8 +3356,8 @@ const headerCategoryPanelHtml = `
           });
         }
 
-        setupHoverDropdown('[data-top-selecciones-btn]', '[data-top-selecciones-panel]');
-        setupHoverDropdown('[data-herramientas-btn]', '[data-herramientas-panel]');
+        setupDropdown('[data-top-selecciones-btn]', '[data-top-selecciones-panel]');
+        setupDropdown('[data-herramientas-btn]', '[data-herramientas-panel]');
 
         // --- Desplegable de categorías del buscador de cabecera ---
         if (headerCatBtn && headerCatPanel) {
