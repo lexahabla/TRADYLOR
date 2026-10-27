@@ -35,6 +35,11 @@ const {
 const currentYear = new Date().getFullYear();
 // En las páginas del backend se ocultan la navegación pública y las acciones de cabecera
 const isBackend = Astro.url.pathname.startsWith('/upayp1b4');
+// El Aviso de Afiliación sólo se muestra como sección propia en la portada; en el
+// resto de páginas los enlaces a "#aviso-afiliacion"/"#aviso-legal" navegan a la home.
+const isHome = Astro.url.pathname === '/';
+const legalAnchorHref = isHome ? '#aviso-legal' : '/#aviso-legal';
+const afiliacionAnchorHref = isHome ? '#aviso-afiliacion' : '/#aviso-afiliacion';
 
 // URLs absolutas para SEO/OG: el social scrapers exigen https:// completo,
 // y el dominio canónico sale de `site` (no del host del proxy).
@@ -170,11 +175,14 @@ const headerCategoryPanelHtml = `
         --shadow-card: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
         --shadow-glow: 0 0 25px rgba(59, 130, 246, 0.15);
 
-        /* Cabecera fija en dos capas: header (sticky) + barra de categorías
-           (sticky justo debajo). Las usan .site-header, #categoryBar y el
-           scroll-padding de los anclajes. */
-        --header-h: 72px;
-        --category-bar-h: 56px;
+        /* Cabecera fija en dos capas: header (logo/buscador) + fila de
+           navegación (sticky, ambas dentro de .site-header). Antes existía
+           aquí una tercera barra de categorías (#categoryBar) que ya no
+           existe en el DOM; dejaba un hueco/gap falso en los anclajes
+           (#el-metodo, #catalogo...). --header-h es la altura total real
+           de .site-header (medida: header-inner 70px + nav ~40px). */
+        --header-h: 110px;
+        --category-bar-h: 0px;
       }
 
       * {
@@ -203,7 +211,7 @@ const headerCategoryPanelHtml = `
         scroll-behavior: smooth;
         /* Los anclajes (#catalogo, #destacados…) no deben quedar tapados por
            la cabecera fija (header + barra de categorías). */
-        scroll-padding-top: calc(var(--header-h, 72px) + var(--category-bar-h, 56px) + 12px);
+        scroll-padding-top: calc(var(--header-h, 110px) + var(--category-bar-h, 0px) + 12px);
         text-rendering: optimizeLegibility;
         -webkit-font-smoothing: antialiased;
         /* Evita que elementos fixed desplazados (p. ej. el drawer del carrito)
@@ -2066,6 +2074,11 @@ const headerCategoryPanelHtml = `
 
       /* Responsive */
       @media (max-width: 960px) {
+        :root {
+          /* En móvil la fila de enlaces del nav se oculta en el drawer: la
+             cabecera fija sólo ocupa la altura del header-inner. */
+          --header-h: 68px;
+        }
         .footer-grid {
           grid-template-columns: 1fr 1fr;
         }
@@ -3064,7 +3077,7 @@ const headerCategoryPanelHtml = `
                   </a>
                 </div>
               </li>
-              <li><a href="#aviso-afiliacion" class="nav-link">Aviso de Afiliación</a></li>
+              <li><a href={afiliacionAnchorHref} class="nav-link">Aviso de Afiliación</a></li>
               <li class="nav-item-dropdown nav-item-profile" data-buyer-profile-switcher>
                 <button type="button" class="nav-link nav-dropdown-btn nav-profile-btn" data-buyer-profile-btn aria-expanded="false" aria-controls="navBuyerProfilePanel">
                   <span class="nav-profile-dot" aria-hidden="true"></span>
@@ -3145,6 +3158,34 @@ const headerCategoryPanelHtml = `
       <slot />
     </main>
 
+    {/* Aviso de Afiliación: última sección antes del footer, sólo en portada. */}
+    {!isBackend && isHome && (
+      <span id="aviso-afiliacion" class="anchor-offset" aria-hidden="true"></span>
+      <div id="aviso-legal" class="affiliate-disclosure-box container">
+        <div class="disclosure-card">
+          <div class="disclosure-header">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <line x1="12" y1="16" x2="12" y2="12"></line>
+              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+            </svg>
+            <h5>Aviso Legal Obligatorio de Monetización por Afiliación</h5>
+          </div>
+          <div class="disclosure-body">
+            <p>
+              <strong>Declaración de Afiliación:</strong> En cumplimiento de las directrices de la Comisión Federal de Comercio (FTC), la normativa europea de comercio electrónico y las políticas de los programas de asociados: <strong>Tradylor.com</strong> participa en el Programa de Afiliados de <em>Amazon EU Associates</em>, un programa de publicidad para afiliados diseñado para ofrecer a sitios web un modo de obtener comisiones por publicidad mediante la creación de enlaces a Amazon.es, así como en redes de afiliación de terceros (PcComponentes, Awin, entre otros).
+            </p>
+            <p>
+              <strong>Sin coste extra para el usuario:</strong> El uso de enlaces de afiliado no incrementa en ningún caso el precio final del producto para el comprador. Nuestras opiniones, selecciones y veredictos técnicos son 100% autónomos y jamás están condicionados por los acuerdos de afiliación.
+            </p>
+            <p>
+              <strong>Variabilidad de Precios y Stock:</strong> Los precios, disponibilidad y condiciones de envío mostrados en las fichas son exactos a la fecha de última actualización editorial, pero pueden diferir en el sitio web del comerciante final. Las compras quedan reguladas bajo los términos y condiciones de la tienda de destino.
+            </p>
+          </div>
+        </div>
+      </div>
+    )}
+
     <!-- 4. Footer Detallado con Aviso Legal de Afiliación Completo -->
     <footer class="site-footer">
       {/* El footer-grid y el aviso legal de afiliación se muestran sólo en la
@@ -3187,10 +3228,10 @@ const headerCategoryPanelHtml = `
         <div class="footer-col">
           <h4 class="footer-heading">Criterio Editorial</h4>
           <ul class="footer-links">
-            <li><a href="/#metodologia">Protocolo de Pruebas</a></li>
-            <li><a href="/#metodologia">Monitoreo de Precios en Vivo</a></li>
-            <li><a href="/#metodologia">Política de Imparcialidad</a></li>
-            <li><a href="#aviso-afiliacion">Aviso de Divulgación</a></li>
+            <li><a href="/metodologia">Protocolo de Pruebas</a></li>
+            <li><a href="/metodologia">Monitoreo de Precios en Vivo</a></li>
+            <li><a href="/metodologia">Política de Imparcialidad</a></li>
+            <li><a href={afiliacionAnchorHref}>Aviso de Divulgación</a></li>
           </ul>
         </div>
 
@@ -3198,41 +3239,13 @@ const headerCategoryPanelHtml = `
         <div class="footer-col">
           <h4 class="footer-heading">Marco Legal</h4>
           <ul class="footer-links">
-            <li><a href="#aviso-legal">Aviso Legal & Términos</a></li>
-            <li><a href="#aviso-legal">Política de Privacidad</a></li>
-            <li><a href="#aviso-legal">Política de Cookies</a></li>
-            <li><a href="#aviso-legal">Contacto & Soporte</a></li>
+            <li><a href={legalAnchorHref}>Aviso Legal & Términos</a></li>
+            <li><a href={legalAnchorHref}>Política de Privacidad</a></li>
+            <li><a href={legalAnchorHref}>Política de Cookies</a></li>
+            <li><a href={legalAnchorHref}>Contacto & Soporte</a></li>
           </ul>
         </div>
         </div>
-      )}
-
-      {/* Sección Crítica de Aviso de Afiliación Obligatorio (Amazon Associates, FTC y UE) */}
-      {!isBackend && (
-      <span id="aviso-afiliacion" class="anchor-offset" aria-hidden="true"></span>
-      <div id="aviso-legal" class="affiliate-disclosure-box container">
-        <div class="disclosure-card">
-          <div class="disclosure-header">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
-            </svg>
-            <h5>Aviso Legal Obligatorio de Monetización por Afiliación</h5>
-          </div>
-          <div class="disclosure-body">
-            <p>
-              <strong>Declaración de Afiliación:</strong> En cumplimiento de las directrices de la Comisión Federal de Comercio (FTC), la normativa europea de comercio electrónico y las políticas de los programas de asociados: <strong>Tradylor.com</strong> participa en el Programa de Afiliados de <em>Amazon EU Associates</em>, un programa de publicidad para afiliados diseñado para ofrecer a sitios web un modo de obtener comisiones por publicidad mediante la creación de enlaces a Amazon.es, así como en redes de afiliación de terceros (PcComponentes, Awin, entre otros).
-            </p>
-            <p>
-              <strong>Sin coste extra para el usuario:</strong> El uso de enlaces de afiliado no incrementa en ningún caso el precio final del producto para el comprador. Nuestras opiniones, selecciones y veredictos técnicos son 100% autónomos y jamás están condicionados por los acuerdos de afiliación.
-            </p>
-            <p>
-              <strong>Variabilidad de Precios y Stock:</strong> Los precios, disponibilidad y condiciones de envío mostrados en las fichas son exactos a la fecha de última actualización editorial, pero pueden diferir en el sitio web del comerciante final. Las compras quedan reguladas bajo los términos y condiciones de la tienda de destino.
-            </p>
-          </div>
-        </div>
-      </div>
       )}
 
       <!-- Barra de Copyright -->
@@ -3443,8 +3456,51 @@ const headerCategoryPanelHtml = `
         let lastScrollY = Math.max(0, window.pageYOffset || document.documentElement.scrollTop || 0);
         let ticking = false;
 
+        // Caso 1: la página carga directamente con un hash en la URL (enlace
+        // externo, navegación completa en vez de same-document, recarga,
+        // avanzar/retroceder...). El navegador hace su propio scroll al
+        // fragmento después de que este script ya ha arrancado con
+        // lastScrollY=0, y ese salto se confunde con "scroll hacia abajo".
+        let anchorSuppressUntil = 0;
+        if (window.location.hash && window.location.hash !== '#' && document.querySelector(window.location.hash)) {
+          anchorSuppressUntil = Date.now() + 1500;
+        }
+
+        // Caso 2: enlace de anclaje pulsado dentro de la misma página
+        // (#el-metodo, #catalogo...): el salto de scroll que dispara el
+        // navegador (instantáneo o animado según motor/SO/preferencias de
+        // accesibilidad) genera eventos "scroll" cuyo orden y valores
+        // intermedios no son fiables entre navegadores: se detectaban como
+        // "scroll hacia abajo" y el header se ocultaba a mitad de camino.
+        // En vez de perseguir la posición exacta (frágil),
+        // se usa una ventana de tiempo fija de reloj: mientras no haya
+        // pasado, el header se fuerza visible pase lo que pase con scrollY.
+        document.addEventListener('click', (event) => {
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          const link = target.closest('a[href*="#"]');
+          if (!link) return;
+          let url;
+          try {
+            url = new URL(link.getAttribute('href'), window.location.href);
+          } catch {
+            return;
+          }
+          if (url.pathname !== window.location.pathname || !url.hash || url.hash === '#') return;
+          if (!document.querySelector(url.hash)) return;
+          siteHeader.classList.remove('scroll-hidden');
+          anchorSuppressUntil = Date.now() + 1200;
+        });
+
         const updateHeaderOnScroll = () => {
           const currentScrollY = Math.max(0, window.pageYOffset || document.documentElement.scrollTop || 0);
+
+          if (Date.now() < anchorSuppressUntil) {
+            siteHeader.classList.remove('scroll-hidden');
+            lastScrollY = currentScrollY;
+            ticking = false;
+            return;
+          }
 
           // Si el menú responsive o drawer está abierto, mantener visible el header
           const isNavOpen = mainNav && mainNav.classList.contains('is-open');

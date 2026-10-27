@@ -16,7 +16,7 @@
     <div class="section-header center">
       <div class="section-tag">Cómo trabajamos</div>
       <h2 class="section-title">El Método Tradylor</h2>
-      <p class="section-desc max-700">
+      <p class="section-desc">
         Tres pasos, siempre en este orden, antes de recomendarte nada: agregamos, filtramos
         y por último seleccionamos las mejores opciones junto a las alternativas directas.
       </p>
@@ -82,6 +82,44 @@
 </section>
 
 <style>
+  /* Cabecera de sección: mismo patrón visual que el resto de secciones de la
+     home (catálogo, dinámicas...), replicado aquí porque el scoping de
+     estilos de Astro no comparte CSS entre index.astro y este componente. */
+  .section-header {
+    margin-bottom: 3rem;
+  }
+  .section-header.center {
+    text-align: center;
+    padding-top: 2rem;
+  }
+  .section-tag {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #3b82f6;
+    letter-spacing: 0.1em;
+    margin-bottom: 1rem;
+    display: inline-block;
+  }
+  .section-title {
+    font-family: var(--font-heading);
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin-bottom: 1rem;
+    color: #ffffff;
+  }
+  .section-desc {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.1rem;
+    max-width: 700px;
+    line-height: 1.7;
+  }
+  .section-header.center .section-desc {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
   .method-section {
     padding: 5rem 0 6rem;
     border-top: 1px solid rgba(255, 255, 255, 0.07);
@@ -161,6 +199,15 @@
   }
 
   @media (max-width: 640px) {
+    .section-title {
+      font-size: clamp(1.5rem, 3vw, 2rem);
+    }
+    .section-desc {
+      font-size: 1rem;
+    }
+    .section-header {
+      margin-bottom: 2.25rem;
+    }
     .method-step {
       flex-direction: column;
       padding: 1.4rem;

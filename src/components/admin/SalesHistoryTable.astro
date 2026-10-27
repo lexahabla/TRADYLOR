@@ -68,7 +68,7 @@ const formatDate = (iso: string) => {
   </table>
 </div>
 
-<script type="module">
+<script>
   const tbody = document.querySelector('[data-sales-history]');
   if (tbody) {
     const registros = JSON.parse(document.getElementById('ventas-registros-json')?.textContent || '[]');

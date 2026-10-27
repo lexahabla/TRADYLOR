@@ -20,17 +20,16 @@ export interface Props {
 const { icon, title, subtitle } = Astro.props;
 ---
 
-<div class="tool-container tool-top-row">
-  <a href="/herramientas" class="tool-back-pill">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <line x1="19" y1="12" x2="5" y2="12"></line>
-      <polyline points="12 19 5 12 12 5"></polyline>
-    </svg>
-    Volver a la tienda
-  </a>
-</div>
-
 <section class="tool-hero">
+  <div class="tool-container tool-hero-top">
+    <a href="/herramientas" class="tool-back-pill">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="19" y1="12" x2="5" y2="12"></line>
+        <polyline points="12 19 5 12 12 5"></polyline>
+      </svg>
+      Volver a la tienda
+    </a>
+  </div>
   <div class="tool-container tool-hero-inner">
     <span class="tool-kicker">
       <span class="tool-kicker-icon" aria-hidden="true">{icon}</span>
@@ -51,18 +50,19 @@ const { icon, title, subtitle } = Astro.props;
     padding: 0 1.5rem;
     box-sizing: border-box;
   }
-  .tool-top-row {
-    padding-top: 1.25rem;
+  .tool-hero-top {
+    margin-bottom: 1.5rem;
   }
   .tool-back-pill {
     display: inline-flex;
     align-items: center;
-    gap: 0.5rem;
-    padding: 0.4rem 0.9rem;
-    font-size: 0.74rem;
+    gap: 0.4rem;
+    padding: 0.3rem 0.7rem;
+    margin-left: -0.9rem;
+    font-size: 0.66rem;
     font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
     color: #60a5fa;
     background: rgba(59, 130, 246, 0.1);
     border: 1px solid rgba(59, 130, 246, 0.28);
@@ -78,7 +78,7 @@ const { icon, title, subtitle } = Astro.props;
   }
 
   .tool-hero {
-    padding: 2rem 0 2.25rem;
+    padding: 1.25rem 0 2.25rem;
     margin-bottom: 2.5rem;
     background: radial-gradient(ellipse at top, rgba(59, 130, 246, 0.12) 0%, transparent 65%);
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);

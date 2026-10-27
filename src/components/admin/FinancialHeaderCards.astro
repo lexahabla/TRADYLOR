@@ -75,8 +75,8 @@ const fmtPct = (n: number) => `${n.toFixed(1).replace('.', ',')}%`;
   </div>
 </div>
 
-<script type="module">
-  import { computeResumen, formatEUR } from '../../../data/mockVentas';
+<script>
+  import { computeResumen, formatEUR } from '../../data/mockVentas';
 
   const contenedor = document.querySelector('[data-financial-cards]');
   if (contenedor) {
