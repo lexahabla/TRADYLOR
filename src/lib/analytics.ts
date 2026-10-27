@@ -23,6 +23,7 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import { DATA_DIR, dataFile } from './paths';
+import { readJsonArrayFile, writeJsonArrayFile } from './jsonStore';
 
 /** Tipos de evento admitidos (compatibles con los beacons de Layout.astro). */
 export type TipoEvento =
@@ -57,10 +58,11 @@ export interface AnalyticsEvent {
 }
 
 const ANALYTICS_PATH = dataFile('analytics.json');
+const IGNORED_IPS_PATH = dataFile('analytics-ignored-ips.json');
 const MAX_EVENTS = 10_000;
 const FLUSH_DELAY_MS = 750;
 
-/** IPs que no se contabilizan (ordenador de desarrollo). */
+/** IPs que no se contabilizan (ordenador de desarrollo) si no se configura nada más. */
 const DEFAULT_IGNORED_IPS = ['26.95.41.235'];
 
 let cache: AnalyticsEvent[] | null = null;
@@ -69,30 +71,91 @@ let dirty = false;
 let flushing = false;
 const flushListeners: Array<() => void> = [];
 
-/** IPs ignoradas: variable ANALYTICS_IGNORE_IPS (coma) o la lista por defecto. */
-export function getIgnoredIps(): string[] {
-  const raw = process.env.ANALYTICS_IGNORE_IPS ?? '';
-  const list = raw
-    .split(',')
-    .map((ip) => ip.trim())
-    .filter(Boolean);
-  return list.length ? list : DEFAULT_IGNORED_IPS;
+/**
+ * IPs excluidas añadidas desde el panel (persistidas en disco, sobreviven a
+ * un redeploy porque viven en el volumen de datos). Se cachean en memoria
+ * para que comprobar una IP en `trackEvent` siga siendo O(1) sin tocar el
+ * disco en el camino caliente; `addIgnoredIp`/`removeIgnoredIp` actualizan
+ * el caché a la vez que escriben el fichero.
+ */
+let ignoredIpsFileCache: string[] | null = null;
+
+function loadIgnoredIpsFile(): string[] {
+  if (ignoredIpsFileCache) return ignoredIpsFileCache;
+  const raw = readJsonArrayFile<unknown>(IGNORED_IPS_PATH);
+  ignoredIpsFileCache = raw.filter((ip): ip is string => typeof ip === 'string' && ip.trim() !== '');
+  return ignoredIpsFileCache;
 }
 
-/** Extrae la IP del cliente (proxy reverso primero). */
+/**
+ * Normaliza una IP para compararla de forma fiable: recorta espacios y quita
+ * el prefijo IPv4-mapped-IPv6 (`::ffff:1.2.3.4` -> `1.2.3.4`) que algunos
+ * proxys anteponen y que antes hacía fallar la comparación exacta.
+ */
+export function normalizeIp(ip: string | undefined | null): string | undefined {
+  if (!ip) return undefined;
+  let value = ip.trim();
+  if (value.toLowerCase().startsWith('::ffff:')) value = value.slice(7);
+  return value || undefined;
+}
+
+/** IPs ignoradas de la variable de entorno y de las añadidas desde el panel, sin duplicados. */
+export function getIgnoredIpSources(): { env: string[]; file: string[] } {
+  const raw = process.env.ANALYTICS_IGNORE_IPS ?? '';
+  const env = raw
+    .split(',')
+    .map((ip) => normalizeIp(ip))
+    .filter((ip): ip is string => Boolean(ip));
+  const file = loadIgnoredIpsFile()
+    .map((ip) => normalizeIp(ip))
+    .filter((ip): ip is string => Boolean(ip));
+  return { env, file };
+}
+
+/** Lista combinada (env + panel) de IPs que no se contabilizan en la medición. */
+export function getIgnoredIps(): string[] {
+  const { env, file } = getIgnoredIpSources();
+  const combined = Array.from(new Set([...env, ...file]));
+  return combined.length ? combined : DEFAULT_IGNORED_IPS;
+}
+
+/** Añade una IP a la lista persistida (panel de administración). Idempotente. */
+export function addIgnoredIp(ip: string): string[] {
+  const normalized = normalizeIp(ip);
+  const current = loadIgnoredIpsFile();
+  if (!normalized || current.includes(normalized)) return current;
+  const updated = [...current, normalized];
+  ignoredIpsFileCache = updated;
+  writeJsonArrayFile(IGNORED_IPS_PATH, updated);
+  return updated;
+}
+
+/** Quita una IP de la lista persistida (no afecta a las fijadas por variable de entorno). */
+export function removeIgnoredIp(ip: string): string[] {
+  const normalized = normalizeIp(ip);
+  const updated = loadIgnoredIpsFile().filter((existing) => existing !== normalized);
+  ignoredIpsFileCache = updated;
+  writeJsonArrayFile(IGNORED_IPS_PATH, updated);
+  return updated;
+}
+
+/** Extrae la IP del cliente (proxy reverso primero), ya normalizada. */
 export function clientIpFrom(request: Request): string | undefined {
   const forwarded = request.headers.get('x-forwarded-for');
   if (forwarded) {
     const first = forwarded.split(',')[0]?.trim();
-    if (first) return first;
+    if (first) return normalizeIp(first);
   }
-  return request.headers.get('x-real-ip')?.trim() || request.headers.get('cf-connecting-ip')?.trim() || undefined;
+  return normalizeIp(
+    request.headers.get('x-real-ip')?.trim() || request.headers.get('cf-connecting-ip')?.trim() || undefined,
+  );
 }
 
 /** ¿Hay que descartar esta IP (ordenador de desarrollo / red interna)? */
 export function isIgnoredIp(ip: string | undefined): boolean {
-  if (!ip) return false;
-  return getIgnoredIps().includes(ip);
+  const normalized = normalizeIp(ip);
+  if (!normalized) return false;
+  return getIgnoredIps().includes(normalized);
 }
 
 /** Registra un callback que se ejecuta tras cada persistencia (p.ej. agregados mensuales). */

@@ -50,8 +50,8 @@ export const glosarioMetricas: MetricaDefinicion[] = [
     id: 'usuarios-unicos',
     nombre: 'Usuarios únicos',
     categoria: 'trafico',
-    definicionCorta: 'Personas distintas que han visitado la web en el periodo, deduplicadas por dispositivo o identificador.',
-    definicionLarga: 'Mide audiencia real frente a sesiones: una misma persona que entra tres veces cuenta como una sesión pero como un único usuario. La relación entre ambos números indica la fidelidad (un ratio cercano a 1 significa que casi nadie repite visita). Es la métrica base para calcular alcance, coste por visitante y valor de vida del usuario.',
+    definicionCorta: 'Personas distintas que han visitado la web en el periodo (por dispositivo/navegador), NO cuentas registradas.',
+    definicionLarga: 'Mide audiencia real frente a sesiones: una misma persona que entra tres veces cuenta como tres sesiones pero como un único usuario (se deduplica por un identificador anónimo guardado en el navegador). Es independiente de "usuarios registrados en Mi Radar": alguien puede visitar la web decenas de veces sin crear nunca una cuenta, así que lo normal es que este número sea mucho mayor que el de cuentas registradas. La relación entre sesiones y usuarios únicos indica la fidelidad (un ratio cercano a 1 significa que casi nadie repite visita).',
     consejoIa: 'Compara sesiones y usuarios: si el ratio supera 2, tu contenido funciona pero el retorno es bajo — crea email o listas de favoritos para fidelizar.',
   },
   {

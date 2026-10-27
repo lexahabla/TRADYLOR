@@ -14,9 +14,11 @@ export interface Props {
   /** definicionCorta del glosario para el tooltip `?`. */
   ayuda?: string;
   periodo?: string;
+  /** Línea secundaria opcional para dar contexto (p.ej. aclarar vs. usuarios registrados). */
+  nota?: string;
 }
 
-const { etiqueta, valor, variacion, favorable = true, ayuda, periodo } = Astro.props;
+const { etiqueta, valor, variacion, favorable = true, ayuda, periodo, nota } = Astro.props;
 
 const sube = variacion >= 0;
 const deltaTexto = `${sube ? '+' : ''}${variacion.toFixed(1).replace('.', ',')}%`;
@@ -47,4 +49,5 @@ const deltaClase = favorable
     </span>
     {periodo && <span class="text-[11px] text-slate-500">{periodo}</span>}
   </div>
+  {nota && <p class="text-[10px] leading-snug text-slate-500">{nota}</p>}
 </div>

@@ -2,6 +2,9 @@
 /**
  * TRADYLOR — Tabla de métricas por producto (Módulo Tráfico y Ventas)
  * Visitas, conversiones, tasa de conversión y badge de estado por ficha.
+ * Incluye buscador por nombre (cliente, sin recarga): la tabla ya trae TODO
+ * el catálogo con sus contadores (a cero si no tuvo visitas), así que buscar
+ * cualquier producto por nombre siempre encuentra una fila.
  */
 import type { ProductoMetrico } from '../../data/mockAnalytics';
 
@@ -18,49 +21,101 @@ const badges: Record<ProductoMetrico['estado'], { label: string; clase: string }
   estable: { label: 'Estable', clase: 'border-sky-500/30 bg-sky-500/15 text-sky-300' },
   friccion: { label: 'Requiere optimización', clase: 'border-rose-500/30 bg-rose-500/15 text-rose-300' },
 };
+
+/** Clave de búsqueda normalizada (minúsculas, sin acentos). */
+const clave = (texto: string) => texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 ---
 
-<div class="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03]">
-  <table class="min-w-[760px] border-collapse text-left" style="width: 100%">
-    <thead>
-      <tr class="border-b border-white/10 bg-white/[0.02] text-[11px] uppercase tracking-wider text-slate-400">
-        <th class="px-5 py-3 font-bold">Producto</th>
-        <th class="px-5 py-3 [text-align:right] font-bold">Visitas</th>
-        <th class="px-5 py-3 [text-align:right] font-bold">Conversiones</th>
-        <th class="px-5 py-3 font-bold">Tasa de conversión</th>
-        <th class="px-5 py-3 font-bold">Estado</th>
-      </tr>
-    </thead>
-    <tbody>
-      {productos.map((producto) => {
-        const badge = badges[producto.estado];
-        const tasa = Math.max(Math.round(producto.tasaConversion * 10), 4);
-        return (
-          <tr class="border-b border-white/5 transition last:border-b-0 hover:bg-sky-500/5">
-            <td class="px-5 py-3.5">
-              <div class="min-w-0">
-                <p class="text-sm font-semibold text-white">{producto.titulo}</p>
-                <p class="mt-0.5 text-[11px] text-slate-500">{producto.red} · {producto.nota}</p>
-              </div>
-            </td>
-            <td class="px-5 py-3.5 [text-align:right] text-sm font-bold text-white">{fmt.format(producto.visitas)}</td>
-            <td class="px-5 py-3.5 [text-align:right] text-sm font-semibold text-slate-300">{fmt.format(producto.conversiones)}</td>
-            <td class="px-5 py-3.5">
-              <div class="flex items-center gap-2">
-                <span class="text-sm font-extrabold text-emerald-300">{producto.tasaConversion.toFixed(1).replace('.', ',')}%</span>
-                <span class="h-1.5 w-16 overflow-hidden rounded-full bg-white/[0.08]">
-                  <span class="block h-full rounded-full bg-emerald-400" style={`width:${Math.min(tasa * 2, 100)}%`}></span>
+<div class="flex flex-col gap-3" data-product-table>
+  <div class="flex items-center gap-2">
+    <svg class="h-4 w-4 shrink-0 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="8"></circle>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+    <input
+      type="search"
+      data-buscar-producto
+      placeholder="Buscar producto por nombre…"
+      class="w-full max-w-sm rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white outline-none transition focus:border-sky-400/60"
+    />
+    <span class="ml-auto text-[11px] font-bold uppercase tracking-wider text-slate-500" data-resultados-contador></span>
+  </div>
+
+  <div class="overflow-x-auto rounded-2xl border border-white/10 bg-white/[0.03]">
+    <table class="min-w-[760px] border-collapse text-left" style="width: 100%">
+      <thead>
+        <tr class="border-b border-white/10 bg-white/[0.02] text-[11px] uppercase tracking-wider text-slate-400">
+          <th class="px-5 py-3 font-bold">Producto</th>
+          <th class="px-5 py-3 [text-align:right] font-bold">Visitas</th>
+          <th class="px-5 py-3 [text-align:right] font-bold">Conversiones</th>
+          <th class="px-5 py-3 font-bold">Tasa de conversión</th>
+          <th class="px-5 py-3 font-bold">Estado</th>
+        </tr>
+      </thead>
+      <tbody data-filas>
+        {productos.map((producto) => {
+          const badge = badges[producto.estado];
+          const tasa = Math.max(Math.round(producto.tasaConversion * 10), 4);
+          return (
+            <tr class="border-b border-white/5 transition last:border-b-0 hover:bg-sky-500/5" data-fila-producto data-titulo={clave(producto.titulo)}>
+              <td class="px-5 py-3.5">
+                <div class="min-w-0">
+                  <p class="text-sm font-semibold text-white">{producto.titulo}</p>
+                  <p class="mt-0.5 text-[11px] text-slate-500">{producto.red} · {producto.nota}</p>
+                </div>
+              </td>
+              <td class="px-5 py-3.5 [text-align:right] text-sm font-bold text-white">{fmt.format(producto.visitas)}</td>
+              <td class="px-5 py-3.5 [text-align:right] text-sm font-semibold text-slate-300">{fmt.format(producto.conversiones)}</td>
+              <td class="px-5 py-3.5">
+                <div class="flex items-center gap-2">
+                  <span class="text-sm font-extrabold text-emerald-300">{producto.tasaConversion.toFixed(1).replace('.', ',')}%</span>
+                  <span class="h-1.5 w-16 overflow-hidden rounded-full bg-white/[0.08]">
+                    <span class="block h-full rounded-full bg-emerald-400" style={`width:${Math.min(tasa * 2, 100)}%`}></span>
+                  </span>
+                </div>
+              </td>
+              <td class="px-5 py-3.5">
+                <span class:list={['inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide', badge.clase]}>
+                  {badge.label}
                 </span>
-              </div>
-            </td>
-            <td class="px-5 py-3.5">
-              <span class:list={['inline-flex whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide', badge.clase]}>
-                {badge.label}
-              </span>
-            </td>
-          </tr>
-        );
-      })}
-    </tbody>
-  </table>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+    <p class="hidden px-5 py-8 text-center text-xs text-slate-500" data-sin-resultados>
+      Ningún producto coincide con esa búsqueda.
+    </p>
+  </div>
 </div>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-product-table]');
+  if (root) {
+    const input = root.querySelector<HTMLInputElement>('[data-buscar-producto]');
+    const filas = Array.from(root.querySelectorAll<HTMLTableRowElement>('[data-fila-producto]'));
+    const sinResultados = root.querySelector<HTMLElement>('[data-sin-resultados]');
+    const contador = root.querySelector<HTMLElement>('[data-resultados-contador]');
+
+    const normalizar = (texto: string) =>
+      texto.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    const filtrar = () => {
+      const query = normalizar(input?.value.trim() || '');
+      let visibles = 0;
+      filas.forEach((fila) => {
+        const coincide = !query || (fila.dataset.titulo || '').includes(query);
+        fila.classList.toggle('hidden', !coincide);
+        if (coincide) visibles += 1;
+      });
+      if (sinResultados) sinResultados.classList.toggle('hidden', visibles > 0);
+      if (contador) {
+        contador.textContent = query ? `${visibles} de ${filas.length}` : `${filas.length} productos`;
+      }
+    };
+
+    input?.addEventListener('input', filtrar);
+    filtrar();
+  }
+</script>

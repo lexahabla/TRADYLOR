@@ -23,6 +23,7 @@ scripts/check-inline-scripts.mjs
 scripts/reset-admin-password.mjs
 src/components/admin/DateRangeFilter.astro
 src/components/admin/FinancialHeaderCards.astro
+src/components/admin/IpExclusionManager.astro
 src/components/admin/MarketingMenu.astro
 src/components/admin/MarketingShell.astro
 src/components/admin/MetricCard.astro
@@ -148,6 +149,7 @@ src/pages/api/admin/ai-status.ts
 src/pages/api/admin/aliexpress/catalog.ts
 src/pages/api/admin/alternatives.ts
 src/pages/api/admin/analytics/export.ts
+src/pages/api/admin/analytics/ignored-ips.ts
 src/pages/api/admin/analytics/months.ts
 src/pages/api/admin/analytics/reset.ts
 src/pages/api/admin/auto-curate/index.ts

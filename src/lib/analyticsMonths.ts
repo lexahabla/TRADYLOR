@@ -22,7 +22,7 @@ import {
   resetAnalytics,
   type AnalyticsEvent,
 } from './analytics';
-import { findCatalogProduct } from './catalog';
+import { findCatalogProduct, getCatalogProducts } from './catalog';
 
 const MONTHS_PATH = dataFile('analytics-months.json');
 const MESES_ES = [
@@ -119,23 +119,56 @@ export function labelOfMonth(month: string): string {
   return `${MESES_ES[Number(mon) - 1] ?? mon} ${year}`;
 }
 
+/** Extrae el hostname (sin www.) de un referrer; cadena vacía si es directo/ilegible. */
+function extraerHost(referrer: string | undefined): string {
+  const raw = (referrer ?? '').trim().toLowerCase();
+  if (!raw) return '';
+  try {
+    return new URL(raw).hostname.replace(/^www\./, '');
+  } catch {
+    return raw.replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '');
+  }
+}
+
 /** Clasifica el referente de una visita en una fuente de tráfico. */
 export function clasificarFuente(referrer: string | undefined): FuenteId {
-  const raw = (referrer ?? '').trim().toLowerCase();
-  if (!raw) return 'directo';
-  let host = raw;
-  try {
-    host = new URL(raw).hostname.replace(/^www\./, '');
-  } catch {
-    host = raw.replace(/^https?:\/\//, '').split('/')[0].replace(/^www\./, '');
-  }
-  const actual = host.replace(/^www\./, '');
+  const host = extraerHost(referrer);
+  if (!host) return 'directo';
   const propio = (process.env.PUBLIC_HOST ?? 'tradylor.com').replace(/^www\./, '');
-  if (actual === propio || actual.endsWith(propio)) return 'directo';
+  if (host === propio || host.endsWith(propio)) return 'directo';
   if (/google|bing|duckduckgo|yahoo|baidu|yandex|ecosia|brave|qwant/.test(host)) return 'organico';
   if (/facebook|instagram|twitter|x\.com|t\.co|tiktok|linkedin|pinterest|youtube|reddit|threads|whatsapp|telegram/.test(host)) return 'social';
   if (/mail\.|outlook|newsletter|list-manage|substack|sendgrid|mailchimp|campaign/.test(host)) return 'email';
   return 'referido';
+}
+
+export interface ReferrerTop {
+  /** Hostname real (p.ej. "google.com") o "(directo)" cuando no hay referrer. */
+  host: string;
+  sesiones: number;
+  porcentaje: number;
+}
+
+/**
+ * Procedencias reales (dominios) detrás de las 5 fuentes agregadas: en vez de
+ * "Orgánico 40%" muestra "google.com 32, bing.com 8", para auditar de dónde
+ * viene el tráfico de verdad y detectar bots o referidos inesperados.
+ */
+export function computeTopReferrers(events: AnalyticsEvent[], limite = 8): ReferrerTop[] {
+  const primerHost = new Map<string, string>();
+  for (const event of events) {
+    if (event.type !== 'page_view') continue;
+    const key = event.sessionId ?? event.visitorId ?? event.createdAt;
+    if (primerHost.has(key)) continue;
+    primerHost.set(key, extraerHost(event.referrer) || '(directo)');
+  }
+  const counts = new Map<string, number>();
+  for (const host of primerHost.values()) counts.set(host, (counts.get(host) ?? 0) + 1);
+  const total = primerHost.size || 1;
+  return [...counts.entries()]
+    .map(([host, sesiones]) => ({ host, sesiones, porcentaje: redondear((sesiones / total) * 100) }))
+    .sort((a, b) => b.sesiones - a.sesiones)
+    .slice(0, limite);
 }
 
 const FUENTE_LABEL: Record<FuenteId, string> = Object.fromEntries(
@@ -165,6 +198,12 @@ function eventosEnRango(events: AnalyticsEvent[], desdeMs: number, hastaMs: numb
     return Number.isFinite(ts) && ts >= desdeMs && ts < hastaMs;
   });
 }
+
+/** Tope para la media de permanencia: una pestaña olvidada abierta horas no
+ *  debe poder inflar "Tiempo medio de permanencia" (el beacon ya limita a 45
+ *  min en el servidor; aquí se acota aún más sólo para la media, sin tocar
+ *  el valor crudo almacenado). */
+const MAX_DURATION_FOR_AVG_MS = 20 * 60 * 1000;
 
 /** Agrupa un conjunto de eventos en las métricas de un periodo. */
 export function computeMetricas(events: AnalyticsEvent[]): MetricasPeriodo {
@@ -209,7 +248,7 @@ export function computeMetricas(events: AnalyticsEvent[]): MetricasPeriodo {
     } else if (event.type === 'contact_click') contactos += 1;
 
     if (event.type === 'page_duration' && typeof event.durationMs === 'number') {
-      duraciones.push(event.durationMs);
+      duraciones.push(Math.min(event.durationMs, MAX_DURATION_FOR_AVG_MS));
       if (event.sessionId) {
         duracionPorSesion.set(event.sessionId, (duracionPorSesion.get(event.sessionId) ?? 0) + event.durationMs);
         const estado = rebotePorSesion.get(event.sessionId) ?? { paginas: 0, durMs: 0 };
@@ -319,6 +358,40 @@ export function computeTopProductos(events: AnalyticsEvent[], limite = 10): Prod
     .slice(0, limite);
 }
 
+/**
+ * Rendimiento de TODO el catálogo en el periodo (no sólo el Top 10): incluye
+ * los productos sin ninguna visita con sus contadores a cero, para que la
+ * búsqueda por nombre del dashboard encuentre cualquier ficha, no sólo las
+ * más populares. No se usa en el histórico mensual ni en el Excel (que
+ * siguen con `computeTopProductos`, limitado a 10) para no tocar esos
+ * contratos ya existentes.
+ */
+export function computeProductosCompleto(events: AnalyticsEvent[]): ProductoMes[] {
+  const byProduct = new Map<string, { titulo: string; visitas: number; salidas: number; compras: number }>();
+  for (const producto of getCatalogProducts()) {
+    byProduct.set(producto.id, { titulo: producto.title || producto.id, visitas: 0, salidas: 0, compras: 0 });
+  }
+  for (const event of events) {
+    if (!event.productId) continue;
+    const entry =
+      byProduct.get(event.productId) ?? { titulo: tituloDeProducto(event.productId), visitas: 0, salidas: 0, compras: 0 };
+    if (event.type === 'page_view') entry.visitas += 1;
+    else if (event.type === 'outbound_click') entry.salidas += 1;
+    else if (event.type === 'purchase') entry.compras += 1;
+    byProduct.set(event.productId, entry);
+  }
+  return [...byProduct.entries()]
+    .map(([productId, entry]) => ({
+      productId,
+      titulo: entry.titulo,
+      visitas: entry.visitas,
+      salidas: entry.salidas,
+      compras: entry.compras,
+      tasa: entry.visitas ? Math.min(redondear((entry.salidas / entry.visitas) * 100), 100) : 0,
+    }))
+    .sort((a, b) => b.visitas - a.visitas);
+}
+
 /* --------------------------------------------------------- periodo del panel */
 
 export interface PeriodoDashboard {
@@ -328,6 +401,10 @@ export interface PeriodoDashboard {
   evolucion: PuntoDia[];
   topProductos: ProductoMes[];
   dias: number;
+  /** Rendimiento de TODO el catálogo (no sólo el Top 10), para la búsqueda por nombre. */
+  productosCompletos?: ProductoMes[];
+  /** Dominios reales detrás de las 5 fuentes agregadas. */
+  topReferrers?: ReferrerTop[];
 }
 
 const DAY_MS = 86_400_000;
@@ -366,6 +443,8 @@ function getPeriodoRangoMs(desde: number, hasta: number, dias: number): PeriodoD
     fuentes: computeFuentes(actuales),
     evolucion: computeEvolucion(actuales, Math.min(dias, 31)),
     topProductos: computeTopProductos(actuales),
+    productosCompletos: computeProductosCompleto(actuales),
+    topReferrers: computeTopReferrers(actuales),
     dias,
   };
 }

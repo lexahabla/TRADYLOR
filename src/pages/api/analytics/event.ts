@@ -49,9 +49,12 @@ export const POST: APIRoute = async ({ request }) => {
     const texto = (value: unknown, max: number) =>
       typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
 
+    // Tope de cordura: una pestaña de producto olvidada abierta horas (muy
+    // habitual durante el desarrollo) no debe registrar una permanencia de
+    // varias horas. 45 min ya es generoso para leer una ficha.
     const durationMs =
       typeof payload.durationMs === 'number' && Number.isFinite(payload.durationMs)
-        ? Math.min(Math.max(Math.round(payload.durationMs), 0), 6 * 60 * 60 * 1000)
+        ? Math.min(Math.max(Math.round(payload.durationMs), 0), 45 * 60 * 1000)
         : undefined;
     const amount =
       typeof payload.amount === 'number' && Number.isFinite(payload.amount) && payload.amount > 0

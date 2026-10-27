@@ -33,7 +33,7 @@ const fmt = new Intl.NumberFormat('es-ES');
     </div>
   </div>
 
-  <div class="mt-6 flex h-48 items-end gap-1.5" data-revenue-chart>
+  <div class="mt-6 flex h-48 items-stretch gap-1.5" data-revenue-chart>
     {serie.map((punto) => {
       const pctBruta = maxBruta > 0 ? Math.max(Math.round((punto.facturacionBruta / maxBruta) * 100), 6) : 0;
       const pctNeta = punto.facturacionBruta > 0 ? Math.round((punto.comisionNeta / punto.facturacionBruta) * pctBruta) : 0;
@@ -42,8 +42,13 @@ const fmt = new Intl.NumberFormat('es-ES');
           <span class="text-[10px] font-bold text-slate-400 opacity-0 transition group-hover/bar:opacity-100">
             {fmt.format(Math.round(punto.comisionNeta))} €
           </span>
-          <div class="relative [width:100%] overflow-hidden rounded-t-md bg-sky-600/70 transition group-hover/bar:bg-sky-500" style={`height:${pctBruta}%`}>
-            <div class="absolute bottom-0 left-0 w-full rounded-b-sm bg-emerald-400" style={`height:${pctNeta}%`}></div>
+          {/* "Track" con altura definida (flex-1 dentro de un padre con items-stretch):
+              sin esto las barras con height:% no tenían ninguna altura de referencia
+              donde resolverse y quedaban invisibles (0 px) pese a haber datos. */}
+          <div class="relative w-full flex-1">
+            <div class="absolute inset-x-0 bottom-0 overflow-hidden rounded-t-md bg-sky-600/70 transition group-hover/bar:bg-sky-500" style={`height:${pctBruta}%`}>
+              <div class="absolute inset-x-0 bottom-0 rounded-b-sm bg-emerald-400" style={`height:${pctNeta}%`}></div>
+            </div>
           </div>
           <span class="text-[9px] text-slate-500">{punto.etiqueta}</span>
         </div>
@@ -70,8 +75,10 @@ const fmt = new Intl.NumberFormat('es-ES');
         return `
           <div class="group/bar flex min-w-0 flex-1 flex-col items-center gap-1.5" title="${punto.etiqueta}: Bruta ${fmt.format(Math.round(punto.facturacionBruta))} € · Neta ${fmt.format(Math.round(punto.comisionNeta))} €">
             <span class="text-[10px] font-bold text-slate-400 opacity-0 transition group-hover/bar:opacity-100">${fmt.format(Math.round(punto.comisionNeta))} €</span>
-            <div class="relative [width:100%] overflow-hidden rounded-t-md bg-sky-600/70 transition group-hover/bar:bg-sky-500" style="height:${pctBruta}%">
-              <div class="absolute bottom-0 left-0 w-full rounded-b-sm bg-emerald-400" style="height:${pctNeta}%"></div>
+            <div class="relative w-full flex-1">
+              <div class="absolute inset-x-0 bottom-0 overflow-hidden rounded-t-md bg-sky-600/70 transition group-hover/bar:bg-sky-500" style="height:${pctBruta}%">
+                <div class="absolute inset-x-0 bottom-0 rounded-b-sm bg-emerald-400" style="height:${pctNeta}%"></div>
+              </div>
             </div>
             <span class="text-[9px] text-slate-500">${punto.etiqueta}</span>
           </div>`;

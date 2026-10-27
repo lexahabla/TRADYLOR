@@ -1,0 +1,174 @@
+---
+/**
+ * TRADYLOR — Panel de autoexclusión de IPs (Módulo Tráfico y Ventas)
+ * Resuelve la pregunta "¿de verdad se están filtrando mis visitas?": muestra
+ * la IP con la que el servidor ve ESTA petición (misma función que decide si
+ * un evento se descarta) y permite excluirla con un clic, sin tocar Easy
+ * Panel ni variables de entorno. Persiste en DATA_DIR/analytics-ignored-ips.json
+ * (sobrevive a un redeploy) y se combina con ANALYTICS_IGNORE_IPS si existe.
+ */
+import { clientIpFrom, getIgnoredIpSources, isIgnoredIp } from '../../lib/analytics';
+
+const detectedIp = clientIpFrom(Astro.request) ?? null;
+const { env: envIps, file: fileIps } = getIgnoredIpSources();
+const detectedExcluded = detectedIp ? isIgnoredIp(detectedIp) : false;
+---
+
+<div class="flex min-w-0 flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5" data-ip-panel>
+  <div class="flex flex-wrap items-start justify-between gap-3">
+    <div class="min-w-0">
+      <h3 class="text-sm font-extrabold uppercase tracking-wider text-white">Exclusión de IPs de trabajo</h3>
+      <p class="mt-1 text-xs leading-relaxed text-slate-400">
+        Tus propias visitas (admin trabajando en la web) no deberían contar como tráfico real.
+      </p>
+    </div>
+    <span
+      class:list={[
+        'shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wider',
+        detectedExcluded
+          ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300'
+          : 'border-amber-500/30 bg-amber-500/15 text-amber-300',
+      ]}
+      data-ip-badge
+    >
+      {detectedExcluded ? '✅ Tu IP ya está excluida' : '⚠️ Tu IP NO está excluida'}
+    </span>
+  </div>
+
+  <div class="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3.5 py-2.5">
+    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">Tu IP detectada ahora</span>
+    <code class="rounded-md bg-white/5 px-2 py-0.5 text-xs font-bold text-sky-300" data-ip-detectada>{detectedIp ?? 'No se pudo detectar'}</code>
+    {!detectedExcluded && detectedIp && (
+      <button
+        type="button"
+        data-excluir-mi-ip
+        data-ip={detectedIp}
+        class="ml-auto rounded-full border border-sky-400/40 bg-sky-500/20 px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-sky-300 transition hover:bg-sky-500/30"
+      >
+        Excluir mi IP ahora
+      </button>
+    )}
+  </div>
+
+  <div class="flex flex-col gap-2">
+    <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">IPs excluidas actualmente</span>
+    <ul class="flex flex-wrap gap-2" data-ip-lista>
+      {fileIps.length === 0 && envIps.length === 0 && (
+        <li class="text-xs text-slate-500" data-ip-vacio>Ninguna todavía.</li>
+      )}
+      {fileIps.map((ip) => (
+        <li class="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.05] py-1 pl-3 pr-1.5 text-xs font-semibold text-slate-200">
+          {ip}
+          <button
+            type="button"
+            data-quitar-ip
+            data-ip={ip}
+            aria-label={`Quitar ${ip} de la lista de exclusión`}
+            class="flex h-5 w-5 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-500/20 hover:text-rose-300"
+          >
+            ×
+          </button>
+        </li>
+      ))}
+      {envIps.map((ip) => (
+        <li class="flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.02] px-3 py-1 text-xs font-semibold text-slate-400" title="Fijada por la variable de entorno ANALYTICS_IGNORE_IPS: para quitarla, edítala en Easy Panel.">
+          {ip} <span class="text-[10px] uppercase text-slate-600">(entorno)</span>
+        </li>
+      ))}
+    </ul>
+  </div>
+
+  <form data-ip-form class="flex flex-wrap items-center gap-2 border-t border-white/5 pt-3">
+    <input
+      type="text"
+      data-ip-input
+      placeholder="Añadir otra IP (p.ej. la de tu móvil)"
+      class="min-w-0 flex-1 rounded-lg border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-semibold text-white outline-none transition focus:border-sky-400/60"
+    />
+    <button
+      type="submit"
+      class="rounded-full border border-white/15 bg-white/[0.05] px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wider text-slate-300 transition hover:border-sky-400/30 hover:text-sky-300"
+    >
+      Añadir
+    </button>
+  </form>
+
+  <p class="text-[11px] leading-relaxed text-slate-500">
+    Por privacidad la IP nunca se guarda junto a las visitas: excluir una IP sólo afecta a las
+    visitas <strong>futuras</strong>. Los números ya registrados antes de excluirla no se pueden
+    limpiar por separado — usa «Reiniciar a cero» (abajo, en Histórico mensual) para empezar de
+    cero una vez tu IP esté excluida.
+  </p>
+  <p class="text-[11px] text-rose-300" data-ip-error hidden></p>
+</div>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-ip-panel]');
+  if (root) {
+    const errorEl = root.querySelector<HTMLElement>('[data-ip-error]');
+
+    const mostrarError = (mensaje: string) => {
+      if (!errorEl) return;
+      errorEl.textContent = mensaje;
+      errorEl.hidden = false;
+    };
+
+    const llamar = async (method: 'POST' | 'DELETE', ip: string) => {
+      const respuesta = await fetch('/api/admin/analytics/ignored-ips', {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip }),
+      });
+      const datos = await respuesta.json().catch(() => ({}));
+      if (!respuesta.ok || datos?.success === false) {
+        throw new Error(datos?.message || 'No se pudo actualizar la lista de IPs.');
+      }
+    };
+
+    root.querySelector('[data-excluir-mi-ip]')?.addEventListener('click', async (event) => {
+      const btn = event.currentTarget as HTMLButtonElement;
+      const ip = btn.dataset.ip;
+      if (!ip) return;
+      btn.disabled = true;
+      try {
+        await llamar('POST', ip);
+        window.location.reload();
+      } catch (error) {
+        mostrarError(error instanceof Error ? error.message : 'No se pudo excluir la IP.');
+        btn.disabled = false;
+      }
+    });
+
+    root.querySelectorAll<HTMLButtonElement>('[data-quitar-ip]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const ip = btn.dataset.ip;
+        if (!ip) return;
+        btn.disabled = true;
+        try {
+          await llamar('DELETE', ip);
+          window.location.reload();
+        } catch (error) {
+          mostrarError(error instanceof Error ? error.message : 'No se pudo quitar la IP.');
+          btn.disabled = false;
+        }
+      });
+    });
+
+    const form = root.querySelector<HTMLFormElement>('[data-ip-form]');
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const input = form.querySelector<HTMLInputElement>('[data-ip-input]');
+      const ip = input?.value.trim();
+      if (!ip) return;
+      const btn = form.querySelector<HTMLButtonElement>('button[type="submit"]');
+      if (btn) btn.disabled = true;
+      try {
+        await llamar('POST', ip);
+        window.location.reload();
+      } catch (error) {
+        mostrarError(error instanceof Error ? error.message : 'No se pudo añadir la IP.');
+        if (btn) btn.disabled = false;
+      }
+    });
+  }
+</script>

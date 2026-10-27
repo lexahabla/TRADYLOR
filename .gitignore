@@ -67,6 +67,8 @@ public/images/products/
 # analitica real (eventos en bruto y agregados mensuales: viven en el volumen)
 src/data/analytics.json
 src/data/analytics-months.json
+# IPs de trabajo excluidas desde el panel (se generan en local/volumen)
+src/data/analytics-ignored-ips.json
 src/data/marketing-email-config.json
 
 # caché del catálogo AliExpress (se genera con el botón Sincronizar; vive en el volumen)

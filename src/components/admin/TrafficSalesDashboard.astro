@@ -10,6 +10,7 @@ import MetricCard from './MetricCard.astro';
 import SimpleBarChart from './SimpleBarChart.astro';
 import ProductMetricsTable from './ProductMetricsTable.astro';
 import PeriodPicker, { type SeleccionPeriodo } from './PeriodPicker.astro';
+import IpExclusionManager from './IpExclusionManager.astro';
 import {
   formatValor,
   type FormatoValor,
@@ -24,6 +25,7 @@ import {
   getPeriodoRango,
 } from '../../lib/analyticsMonths';
 import { getPeriodoOptimo } from '../../lib/analyticsOptimo';
+import { getAllRadarUsers } from '../../lib/radarAuth';
 
 const fmtNum = new Intl.NumberFormat('es-ES');
 
@@ -123,13 +125,27 @@ interface FichaMetrica {
   variacion: number;
   favorable: boolean;
   glosarioId: string;
+  /** Línea secundaria opcional (contexto adicional bajo la tarjeta). */
+  nota?: string;
 }
 
 const m = periodo.actual;
 const a = periodo.anterior;
+const registradosRadar = getAllRadarUsers().length;
 const fichas: FichaMetrica[] = [
   { etiqueta: 'Sesiones', valor: m.sesiones, formato: 'numero', variacion: variacion(m.sesiones, a.sesiones), favorable: true, glosarioId: 'sesiones' },
-  { etiqueta: 'Usuarios únicos', valor: m.usuariosUnicos, formato: 'numero', variacion: variacion(m.usuariosUnicos, a.usuariosUnicos), favorable: true, glosarioId: 'usuarios-unicos' },
+  {
+    etiqueta: 'Usuarios únicos',
+    valor: m.usuariosUnicos,
+    formato: 'numero',
+    variacion: variacion(m.usuariosUnicos, a.usuariosUnicos),
+    favorable: true,
+    glosarioId: 'usuarios-unicos',
+    // Esto NO son cuentas: es cualquier navegador/dispositivo distinto que haya
+    // pasado por la web. Se aclara aquí porque es la confusión más habitual
+    // ("¿por qué hay miles de 'usuarios' si sólo hay 3-4 personas registradas?").
+    nota: esOptimo ? undefined : `De los que ${fmtNum.format(registradosRadar)} tienen cuenta registrada en Mi Radar.`,
+  },
   { etiqueta: 'Páginas / sesión', valor: m.paginasPorSesion, formato: 'decimal', variacion: variacion(m.paginasPorSesion, a.paginasPorSesion), favorable: true, glosarioId: 'paginas-por-sesion' },
   { etiqueta: 'Permanencia media', valor: m.permanenciaMediaSeg, formato: 'duracion', variacion: variacion(m.permanenciaMediaSeg, a.permanenciaMediaSeg), favorable: true, glosarioId: 'permanencia' },
   { etiqueta: 'Tasa de rebote', valor: m.rebotePct, formato: 'percent', variacion: variacion(m.rebotePct, a.rebotePct), favorable: m.rebotePct <= a.rebotePct, glosarioId: 'tasa-rebote' },
@@ -162,6 +178,15 @@ const barrasTop = periodo.topProductos.slice(0, 5).map((producto, index) => ({
   color: index < 3 ? '#38bdf8' : '#475569',
 }));
 
+// Dominios reales detrás de las 5 fuentes agregadas (p.ej. "google.com" en vez
+// de sólo "Orgánico"), para auditar de dónde viene el tráfico de verdad.
+const barrasReferrers = (periodo.topReferrers ?? []).map((referrer, index) => ({
+  etiqueta: referrer.host,
+  valor: referrer.sesiones,
+  texto: `${fmtNum.format(referrer.sesiones)} ses. · ${referrer.porcentaje.toFixed(1).replace('.', ',')}%`,
+  color: index < 3 ? '#38bdf8' : '#475569',
+}));
+
 const maxVisitas = evolucion.length ? Math.max(...evolucion.map((punto) => punto.visitas)) : 0;
 const totalVisitas = evolucion.reduce((suma, punto) => suma + punto.visitas, 0);
 const maxDia = evolucion.length
@@ -177,7 +202,7 @@ const METRICAS_EVOLUCION = [
   { id: 'conversionpct', label: 'Conversión %', percent: true, desde: '#e11d48', hasta: '#fda4af' },
 ] as const;
 
-const productosTabla: ProductoMetrico[] = periodo.topProductos.map((producto) => {
+const productosTabla: ProductoMetrico[] = (periodo.productosCompletos ?? periodo.topProductos).map((producto) => {
   const estado: ProductoMetrico['estado'] =
     producto.tasa >= 4 ? 'alta' : producto.tasa >= 2.5 ? 'estable' : 'friccion';
   return {
@@ -258,11 +283,10 @@ const enCurso = resumen.meses[0]?.month ?? '';
         Aún no hay visitas reales registradas. Las métricas empezarán a rellenarse
         automáticamente con las visitas a fichas de producto, clics de salida a
         tienda y compras. Pulsa «Métrica óptima» para ver un escenario de referencia.
-        {ignoredIps.length > 0 && (
-          <> Las IPs de trabajo ({ignoredIps.join(', ')}) quedan excluidas de la medición.</>
-        )}
       </div>
     )}
+
+    {!esOptimo && <IpExclusionManager />}
 
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {fichas.map((ficha) => (
@@ -273,6 +297,7 @@ const enCurso = resumen.meses[0]?.month ?? '';
           favorable={ficha.favorable}
           ayuda={getMetrica(ficha.glosarioId)?.definicionCorta}
           periodo={seleccion.etiqueta}
+          nota={ficha.nota}
         />
       ))}
     </div>
@@ -320,7 +345,7 @@ const enCurso = resumen.meses[0]?.month ?? '';
       {evolucion.length === 0 ? (
         <p class="mt-10 flex h-64 items-center justify-center text-xs text-slate-500">Sin datos en el periodo seleccionado.</p>
       ) : (
-        <div class="mt-6 flex h-64 items-end gap-1.5 lg:h-72" data-eje-bars>
+        <div class="mt-6 flex h-64 items-stretch gap-1.5 lg:h-72" data-eje-bars>
           {evolucion.map((punto) => {
             const pct = maxVisitas > 0 ? Math.max(Math.round((punto.visitas / maxVisitas) * 100), 8) : 0;
             return (
@@ -338,11 +363,17 @@ const enCurso = resumen.meses[0]?.month ?? '';
                 <span class="text-[10px] font-bold text-slate-400 opacity-0 transition group-hover/bar:opacity-100" data-bar-value>
                   {fmtNum.format(punto.visitas)}
                 </span>
-                <div
-                  class="[width:100%] rounded-t-md transition-[height]"
-                  style={`height:${pct}%; background:linear-gradient(to top, #0284c7, #7dd3fc)`}
-                  data-bar-fill
-                ></div>
+                {/* Track con altura definida (flex-1 bajo items-stretch): el relleno
+                    de abajo (height:%) se apoyaba antes directamente en este flex-col
+                    de altura automática, que SIEMPRE resuelve los porcentajes a 0 px
+                    (por eso no se veía ninguna barra aunque hubiera datos). */}
+                <div class="relative w-full flex-1">
+                  <div
+                    class="absolute inset-x-0 bottom-0 rounded-t-md transition-[height]"
+                    style={`height:${pct}%; background:linear-gradient(to top, #0284c7, #7dd3fc)`}
+                    data-bar-fill
+                  ></div>
+                </div>
                 <span class="text-[9px] text-slate-500">{punto.etiqueta}</span>
               </div>
             );
@@ -367,6 +398,15 @@ const enCurso = resumen.meses[0]?.month ?? '';
       items={barrasTop}
       ayuda={getMetrica('visualizaciones-producto')?.definicionCorta}
     />
+
+    <div class="lg:col-span-2">
+      <SimpleBarChart
+        titulo="Procedencias reales"
+        subtitulo="Dominios de referencia detrás de las 5 fuentes agregadas (quién enlaza de verdad)."
+        items={barrasReferrers}
+        ayuda="Antes de agrupar en Orgánico/Social/Referido, estos son los dominios (document.referrer) tal cual los envía el navegador: útil para detectar bots, redes nuevas o referidos inesperados."
+      />
+    </div>
   </section>
 
   <!-- 4. Recomendaciones de IA -->
@@ -388,20 +428,21 @@ const enCurso = resumen.meses[0]?.month ?? '';
     </div>
   </section>
 
-  <!-- 4. Tabla por producto -->
+  <!-- 4. Tabla por producto (catálogo completo, con buscador por nombre dentro
+       del propio componente: no se limita al Top 10 como el ranking de arriba) -->
   <section class="flex flex-col gap-4">
     <div class="flex flex-wrap items-end justify-between gap-2">
       <div>
         <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Rendimiento por producto</h2>
         <p class="mt-1 text-xs text-slate-400">
-          Visitas, salidas a tienda y estado de fricción de cada ficha del catálogo.
+          Visitas, salidas a tienda y estado de fricción de cada ficha del catálogo. Busca por nombre para encontrar cualquier producto, tenga o no visitas en este periodo.
         </p>
       </div>
       <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{productosTabla.length} productos</span>
     </div>
     {productosTabla.length === 0 ? (
       <p class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-8 text-center text-xs text-slate-500">
-        Todavía no hay visitas a fichas de producto en el periodo.
+        Todavía no hay productos en el catálogo.
       </p>
     ) : (
       <ProductMetricsTable productos={productosTabla} />
