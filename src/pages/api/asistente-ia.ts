@@ -78,11 +78,11 @@ HABILIDADES DE CONVERSACIÓN:
 REGLAS PARA RECOMENDAR PRODUCTOS:
 1. Recomienda SOLO productos de la lista del catálogo de abajo (nunca inventes modelos, precios ni tiendas).
 2. Máximo 3 productos por respuesta.
-3. Sé MÁS CORTO y conciso: máximo 4-5 líneas en total, sin tablas ni secciones numeradas.
-4. Por cada producto: nombre, precio, enlace "/producto/<slug>" y una razón de UNA frase por la que lo recomiendas.
-5. Si no hay nada adecuado, dilo con honestidad y pide presupuesto o uso.
-6. Responde en español, tono directo y profesional.
-7. Cuando recomiendes productos, incluye su campo "image" (URL de foto) para que se muestre una tarjeta.
+3. Responde ÚNICAMENTE en formato JSON válido con esta estructura:
+   { "productos": [ { "slug": "<slug>", "title": "<título>", "pro": "<una ventaja corta>" } ] }
+4. No incluyas texto adicional fuera del JSON. Sin precios, sin tablas, sin secciones numeradas.
+5. Si no hay nada adecuado, devuelve { "productos": [] } y el sistema pedirá presupuesto o uso.
+6. Responde en español.
 
 ---
 CATÁLOGO DISPONIBLE:
@@ -149,7 +149,7 @@ export const POST: APIRoute = async ({ request }) => {
     let respuesta: string;
     try {
       respuesta = await Promise.race([
-        chatComplete(messages, { temperature: 0.5, timeoutMs: 25_000, jsonMode: false }),
+        chatComplete(messages, { temperature: 0.5, timeoutMs: 25_000, jsonMode: true }),
         new Promise<string>((_, reject) =>
           controller.signal.addEventListener('abort', () =>
             reject(new Error('Tiempo de espera agotado. Inténtalo de nuevo.')),
@@ -160,7 +160,37 @@ export const POST: APIRoute = async ({ request }) => {
       clearTimeout(timeout);
     }
 
-    const trimmed = respuesta.trim()
+    // Intentar parsear JSON estructurado de productos. Si falla, devolver texto plano.
+    let productos: Array<{ slug: string; title: string; pro: string }> = [];
+    let textoPlano = '';
+    try {
+      const parsed = JSON.parse(respuesta);
+      if (parsed?.productos && Array.isArray(parsed.productos)) {
+        productos = parsed.productos
+          .filter((p: any) => p?.slug && p?.title)
+          .map((p: any) => ({
+            slug: String(p.slug),
+            title: String(p.title),
+            pro: String(p.pro || ''),
+          }))
+          .slice(0, 3);
+      } else {
+        textoPlano = respuesta.trim();
+      }
+    } catch {
+      textoPlano = respuesta.trim();
+    }
+
+    if (productos.length > 0) {
+      return json({
+        respuesta: '',
+        tipo: 'recomendacion',
+        productos,
+        usuario: nombreUsuario ?? null,
+      });
+    }
+
+    const trimmed = textoPlano
       || 'No he encontrado una recomendación clara con esos datos: cuéntame tu presupuesto y para qué lo vas a usar.';
 
     return json({ respuesta: trimmed, tipo: 'general', productos: [], usuario: nombreUsuario ?? null });

@@ -145,7 +145,7 @@ const {
     line-height: 1.5;
   }
 
-  /* Tarjetas de producto recomendadas */
+  /* Tarjetas de producto recomendadas (solo título + pro breve) */
   .ia-producto {
     align-self: flex-start;
     width: 100%;
@@ -153,24 +153,16 @@ const {
     background: #ffffff;
     border: 1px solid #e2e8f0;
     border-radius: 10px;
-    padding: 10px;
+    padding: 10px 12px;
     margin: 6px 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-  }
-
-  .ia-producto img {
-    width: 100%;
-    height: 120px;
-    object-fit: cover;
-    border-radius: 8px;
-    background: #f1f5f9;
+    gap: 4px;
   }
 
   .ia-producto-title {
-    font-weight: 700;
-    font-size: 13px;
+    font-weight: 800;
+    font-size: 14px;
     color: #0f172a;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -178,29 +170,21 @@ const {
     overflow: hidden;
   }
 
-  .ia-producto-price {
+  .ia-producto-title a {
+    color: #0f172a;
+    text-decoration: none;
     font-weight: 800;
-    font-size: 14px;
-    color: #10b981;
+  }
+
+  .ia-producto-title a:hover {
+    text-decoration: underline;
+    color: #2563eb;
   }
 
   .ia-producto-reason {
-    font-size: 12px;
+    font-size: 12.5px;
     color: #475569;
-    margin-top: 4px;
-  }
-
-  .ia-producto-link {
-    display: inline-block;
-    margin-top: 6px;
-    font-size: 12px;
-    color: #2563eb;
-    text-decoration: none;
-    font-weight: 600;
-  }
-
-  .ia-producto-link:hover {
-    text-decoration: underline;
+    margin-top: 2px;
   }
 
   .chat-input-container {
@@ -262,17 +246,12 @@ const {
     function renderProducto(p) {
       const slug = escapeHtml(p.slug || '');
       const title = escapeHtml(p.title || 'Producto');
-      const price = escapeHtml(p.price || 'sin precio');
-      const reason = escapeHtml(p.reason || '');
-      const image = escapeHtml(p.image || '');
+      const pro = escapeHtml(p.pro || '');
       const link = `/producto/${slug}`;
       return `
         <div class="ia-producto">
-          ${image ? `<img src="${image}" alt="${title}" loading="lazy">` : ''}
-          <div class="ia-producto-title">${title}</div>
-          <div class="ia-producto-price">${price}</div>
-          ${reason ? `<div class="ia-producto-reason">${reason}</div>` : ''}
-          <a href="${link}" target="_blank" rel="nofollow noopener sponsored" class="ia-producto-link">Ver ficha del producto →</a>
+          <div class="ia-producto-title"><a href="${link}" target="_blank" rel="nofollow noopener sponsored">${title}</a></div>
+          ${pro ? `<div class="ia-producto-reason">${pro}</div>` : ''}
         </div>
       `;
     }
