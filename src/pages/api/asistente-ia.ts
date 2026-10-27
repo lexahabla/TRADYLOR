@@ -59,7 +59,7 @@ Responde en español.
 `.trim();
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: process.env.VERTEX_AI_MODEL ?? 'gemini-1.5-flash',
       contents: [
         { role: 'user', parts: [{ text: systemInstruction }] },
         { role: 'user', parts: [{ text: `Contexto del usuario/catálogo: ${JSON.stringify(contextoProducto || {})}` }] },
