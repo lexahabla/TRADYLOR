@@ -2,7 +2,7 @@
 /**
  * TRADYLOR — Guía y Glosario de Métricas (Módulo Tráfico y Ventas)
  * Glosario estructurado: definición breve/larga por métrica, categoría,
- * consejo de IA y filtro por categoría (script cliente).
+ * consejo de IA, buscador por texto y filtro por categoría (script cliente).
  */
 export const prerender = false;
 
@@ -24,15 +24,16 @@ if (sessionUser.role !== 'admin') return Astro.redirect('/upayp1b4/perfil');
 // El panel nunca se cachea: un deploy nuevo tiene que verse a la primera.
 Astro.response.headers.set('Cache-Control', 'no-store');
 
-const catInfo: Record<CategoriaMetrica, { label: string; clase: string }> = {
-  trafico: { label: 'Tráfico', clase: 'border-sky-500/30 bg-sky-500/15 text-sky-300' },
-  seo: { label: 'SEO', clase: 'border-violet-500/30 bg-violet-500/15 text-violet-300' },
-  ventas: { label: 'Ventas & Monetización', clase: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300' },
-  producto: { label: 'Métricas de Producto', clase: 'border-amber-500/30 bg-amber-500/15 text-amber-300' },
-  herramientas: { label: 'Herramientas', clase: 'border-indigo-500/30 bg-indigo-500/15 text-indigo-300' },
-  ia: { label: 'IA', clase: 'border-rose-500/30 bg-rose-500/15 text-rose-300' },
+const catInfo: Record<CategoriaMetrica, { label: string; clase: string; icono: string }> = {
+  trafico: { label: 'Tráfico', clase: 'border-sky-500/30 bg-sky-500/15 text-sky-300', icono: '📈' },
+  seo: { label: 'SEO', clase: 'border-violet-500/30 bg-violet-500/15 text-violet-300', icono: '🔍' },
+  ventas: { label: 'Ventas & Monetización', clase: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300', icono: '💰' },
+  producto: { label: 'Métricas de Producto', clase: 'border-amber-500/30 bg-amber-500/15 text-amber-300', icono: '📦' },
+  herramientas: { label: 'Herramientas', clase: 'border-indigo-500/30 bg-indigo-500/15 text-indigo-300', icono: '🛠️' },
+  ia: { label: 'IA', clase: 'border-rose-500/30 bg-rose-500/15 text-rose-300', icono: '🤖' },
 };
 
+const DESCRIPCION_TODAS = 'Todas las categorías: tráfico, SEO, ventas, producto, herramientas e IA.';
 const total = glosarioMetricas.length;
 ---
 
@@ -71,32 +72,51 @@ const total = glosarioMetricas.length;
 
     <AdminNav context="catalogo" active="analytics" user={sessionUser} />
 
-    <!-- Filtros por categoría -->
+    <!-- Filtros por categoría + buscador -->
     <section class="flex flex-col gap-4">
-      <div class="flex flex-wrap items-end justify-between gap-2">
-        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{total} términos</span>
-        <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Categorías del glosario">
+      <div class="flex flex-wrap items-end justify-between gap-3">
+        <div class="min-w-0">
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500" data-resultado-count>{total} términos</span>
+          <p class="mt-1 max-w-2xl text-xs leading-relaxed text-slate-500" data-cat-descripcion>{DESCRIPCION_TODAS}</p>
+        </div>
+        <label class="relative w-full max-w-xs shrink-0">
+          <span class="sr-only">Buscar métrica</span>
+          <input
+            type="search"
+            data-buscador
+            placeholder="Buscar métrica (ej. rebote, AOV, CTR...)"
+            class="w-full rounded-full border border-white/15 bg-white/5 py-2.5 pl-4 pr-9 text-xs font-semibold text-white placeholder:text-slate-500 outline-none transition focus:border-sky-400/60"
+          />
+          <svg class="pointer-events-none absolute right-3.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+        </label>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2" role="tablist" aria-label="Categorías del glosario">
+        <button
+          type="button"
+          role="tab"
+          aria-selected="true"
+          data-cat-tab="todas"
+          data-cat-desc={DESCRIPCION_TODAS}
+          class="inline-flex items-center gap-1.5 rounded-full border border-sky-400 bg-sky-500 px-4 py-2 text-xs font-extrabold text-slate-950 transition"
+        >
+          <span aria-hidden="true">🗂️</span> Todas ({total})
+        </button>
+        {categoriasGlosario.map((cat) => (
           <button
             type="button"
             role="tab"
-            aria-selected="true"
-            data-cat-tab="todas"
-            class="rounded-full border border-sky-400 bg-sky-500 px-4 py-2 text-xs font-extrabold text-slate-950 transition"
+            aria-selected="false"
+            data-cat-tab={cat.id}
+            data-cat-desc={cat.descripcion}
+            class="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-extrabold text-slate-300 transition hover:border-sky-500/40 hover:text-white"
           >
-            Todas ({total})
+            <span aria-hidden="true">{catInfo[cat.id].icono}</span> {cat.label} ({metricasPorCategoria(cat.id).length})
           </button>
-            {categoriasGlosario.map((cat) => (
-              <button
-                type="button"
-                role="tab"
-                aria-selected="false"
-                data-cat-tab={cat.id}
-                class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-extrabold text-slate-300 transition hover:border-sky-500/40 hover:text-white"
-              >
-                {cat.label} ({metricasPorCategoria(cat.id).length})
-              </button>
-            ))}
-        </div>
+        ))}
       </div>
 
       <!-- Tarjetas del glosario -->
@@ -105,12 +125,13 @@ const total = glosarioMetricas.length;
           <article
             id={metrica.id}
             data-cat-card={metrica.categoria}
+            data-nombre={metrica.nombre.toLowerCase()}
             class="flex min-w-0 scroll-mt-24 flex-col gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition hover:border-sky-500/30"
           >
             <div class="flex flex-wrap items-center justify-between gap-2">
               <h2 class="text-sm font-extrabold text-white">{metrica.nombre}</h2>
               <span class:list={['shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider', catInfo[metrica.categoria].clase]}>
-                {catInfo[metrica.categoria].label}
+                {catInfo[metrica.categoria].icono} {catInfo[metrica.categoria].label}
               </span>
             </div>
 
@@ -128,49 +149,66 @@ const total = glosarioMetricas.length;
       </div>
 
       <p id="glosarioVacio" hidden class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-8 text-center text-sm text-slate-400">
-        No hay métricas en esta categoría.
+        Ninguna métrica coincide con tu búsqueda o categoría. Prueba con otro término.
       </p>
     </section>
   </div>
 </Layout>
 
 <script>
-  const BASE = 'rounded-full border px-4 py-2 text-xs font-extrabold transition';
+  const BASE = 'inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-xs font-extrabold transition';
   const ON = 'border-sky-400 bg-sky-500 text-slate-950';
   const OFF = 'border-white/10 bg-white/5 text-slate-300 hover:border-sky-500/40 hover:text-white';
 
   const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-cat-tab]'));
   const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-cat-card]'));
   const vacio = document.getElementById('glosarioVacio');
+  const buscador = document.querySelector<HTMLInputElement>('[data-buscador]');
+  const descEl = document.querySelector('[data-cat-descripcion]');
+  const countEl = document.querySelector('[data-resultado-count]');
 
-  function aplicar(cat: string) {
+  let catActiva = 'todas';
+
+  function marcarTab(activa: string) {
+    tabs.forEach((tab) => {
+      const activo = tab.dataset.catTab === activa;
+      tab.setAttribute('aria-selected', String(activo));
+      tab.className = `${BASE} ${activo ? ON : OFF}`;
+    });
+    if (descEl) descEl.textContent = tabs.find((t) => t.dataset.catTab === activa)?.dataset.catDesc ?? '';
+  }
+
+  function aplicar() {
+    const q = (buscador?.value ?? '').trim().toLowerCase();
     let visibles = 0;
     cards.forEach((card) => {
-      const ok = cat === 'todas' || card.dataset.catCard === cat;
+      const okCategoria = catActiva === 'todas' || card.dataset.catCard === catActiva;
+      const okTexto = !q || (card.dataset.nombre ?? '').includes(q) || (card.textContent ?? '').toLowerCase().includes(q);
+      const ok = okCategoria && okTexto;
       // Se usa style.display y no el atributo `hidden`: las tarjetas llevan
       // `class="flex"` y una regla de autor (.flex{display:flex}) siempre
       // gana al display:none del navegador sobre [hidden].
       card.style.display = ok ? '' : 'none';
       if (ok) visibles += 1;
     });
-    if (vacio) vacio.style.display = visibles > 0 ? '' : 'none';
-    tabs.forEach((tab) => {
-      const activo = tab.dataset.catTab === cat;
-      tab.setAttribute('aria-selected', String(activo));
-      tab.className = `${BASE} ${activo ? ON : OFF}`;
-    });
+    if (vacio) vacio.style.display = visibles > 0 ? 'none' : '';
+    if (countEl) countEl.textContent = q ? `${visibles} resultado(s)` : `${cards.length} términos`;
   }
 
-  tabs.forEach((tab) => tab.addEventListener('click', () => aplicar(tab.dataset.catTab ?? 'todas')));
+  tabs.forEach((tab) => tab.addEventListener('click', () => {
+    catActiva = tab.dataset.catTab ?? 'todas';
+    marcarTab(catActiva);
+    aplicar();
+  }));
+
+  buscador?.addEventListener('input', aplicar);
 
   // Si llegamos desde el dashboard con #metrica, filtramos a su categoría.
   const hashId = window.location.hash.slice(1);
-  if (hashId) {
-    const card = document.getElementById(hashId);
-    if (card) aplicar(card.getAttribute('data-cat-card') ?? 'todas');
-  } else {
-    aplicar('todas');
-  }
+  const card = hashId ? document.getElementById(hashId) : null;
+  catActiva = card?.getAttribute('data-cat-card') ?? 'todas';
+  marcarTab(catActiva);
+  aplicar();
 </script>
 
 <style>

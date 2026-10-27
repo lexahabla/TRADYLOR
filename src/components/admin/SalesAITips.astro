@@ -1,16 +1,19 @@
 ---
 /**
  * TRADYLOR — Consejos IA de margen (Bloque de Ventas)
- * Tarjetas de recomendación para mejorar el margen de comisiones, con el
- * mismo patrón visual que las RecomendacionIA del bloque de tráfico
- * (badge de tipo + detalle). Fuente estática: consejosVentasIA.
+ * Tarjetas de recomendación generadas con reglas sobre las ventas confirmadas
+ * reales del periodo (ver `lib/salesLedger.ts`). Se recalculan en cliente al
+ * cambiar el rango de fechas, igual que el resto del bloque.
  */
-import type { ConsejoVentasIA } from '../../data/mockVentas';
-import { consejosVentasIA } from '../../data/mockVentas';
+import type { RegistroVenta, ConsejoVentasIA } from '../../lib/salesLedger';
+import { getConsejosVentasIA } from '../../lib/salesLedger';
 
-export interface Props {}
+export interface Props {
+  registros: RegistroVenta[];
+}
 
-const consejos = consejosVentasIA;
+const { registros } = Astro.props;
+const consejos = getConsejosVentasIA(registros);
 
 const styles: Record<ConsejoVentasIA['tipo'], { badge: string; borde: string; icono: string }> = {
   oportunidad: { badge: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300', borde: 'hover:border-emerald-400/50', icono: '📈' },
@@ -25,13 +28,13 @@ const etiquetaTipo: Record<ConsejoVentasIA['tipo'], string> = {
 };
 ---
 
-<div class="flex min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5">
+<div class="flex min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5" data-sales-ai-tips>
   <div class="min-w-0">
     <h3 class="text-sm font-extrabold uppercase tracking-wider text-white">Consejos IA para mejorar tu margen</h3>
-    <p class="mt-1 text-xs leading-relaxed text-slate-400">Sugerencias automáticas basadas en el reparto de comisiones del periodo.</p>
+    <p class="mt-1 text-xs leading-relaxed text-slate-400">Reglas automáticas sobre las ventas confirmadas (Return Flow) del periodo seleccionado.</p>
   </div>
 
-  <ul class="mt-5 flex flex-col gap-3.5">
+  <ul class="mt-5 flex flex-col gap-3.5" data-tips-list>
     {consejos.map((consejo) => {
       const s = styles[consejo.tipo];
       return (
@@ -51,3 +54,45 @@ const etiquetaTipo: Record<ConsejoVentasIA['tipo'], string> = {
     })}
   </ul>
 </div>
+
+<script>
+  import { getConsejosVentasIA } from '../../lib/salesLedgerCore';
+
+  const root = document.querySelector('[data-sales-ai-tips]');
+  const list = root?.querySelector('[data-tips-list]');
+  if (root && list) {
+    const registros = JSON.parse(document.getElementById('ventas-registros-json')?.textContent || '[]');
+
+    const styles = {
+      oportunidad: { badge: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300', borde: 'hover:border-emerald-400/50', icono: '📈' },
+      alerta: { badge: 'border-rose-500/30 bg-rose-500/15 text-rose-300', borde: 'hover:border-rose-400/50', icono: '⚠️' },
+      info: { badge: 'border-sky-500/30 bg-sky-500/15 text-sky-300', borde: 'hover:border-sky-400/50', icono: '💡' },
+    };
+    const etiqueta = { oportunidad: 'Oportunidad', alerta: 'Alerta', info: 'Info' };
+
+    const render = (regs) => {
+      const consejos = getConsejosVentasIA(regs);
+      list.innerHTML = consejos.map((consejo) => {
+        const s = styles[consejo.tipo];
+        return `
+          <li class="flex min-w-0 flex-col gap-2 rounded-xl border border-white/10 bg-white/[0.02] p-4 transition ${s.borde}">
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex min-w-0 items-start gap-2.5">
+                <span class="mt-0.5 shrink-0 text-base leading-none" aria-hidden="true">${s.icono}</span>
+                <p class="min-w-0 text-sm font-bold text-white">${consejo.titulo}</p>
+              </div>
+              <span class="inline-flex shrink-0 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-wide ${s.badge}">
+                ${etiqueta[consejo.tipo]}
+              </span>
+            </div>
+            <p class="pl-7 text-xs leading-relaxed text-slate-400">${consejo.detalle}</p>
+          </li>`;
+      }).join('');
+    };
+
+    window.addEventListener('ventas:rango-cambiado', (e) => {
+      const { desde, hasta } = e.detail;
+      render(registros.filter((v) => v.fecha >= desde && v.fecha <= hasta));
+    });
+  }
+</script>

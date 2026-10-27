@@ -5,8 +5,8 @@
  * directa y % medio de comisión. Se actualizan al emitir el evento
  * "ventas:rango-cambiado" (DateRangeFilter) recalculando desde los registros.
  */
-import type { RegistroVenta } from '../../data/mockVentas';
-import { computeResumen, formatEUR } from '../../data/mockVentas';
+import type { RegistroVenta } from '../../lib/salesLedger';
+import { computeResumen, formatEUR } from '../../lib/salesLedger';
 
 export interface Props {
   registros: RegistroVenta[];
@@ -76,7 +76,7 @@ const fmtPct = (n: number) => `${n.toFixed(1).replace('.', ',')}%`;
 </div>
 
 <script>
-  import { computeResumen, formatEUR } from '../../data/mockVentas';
+  import { computeResumen, formatEUR } from '../../lib/salesLedgerCore';
 
   const contenedor = document.querySelector('[data-financial-cards]');
   if (contenedor) {

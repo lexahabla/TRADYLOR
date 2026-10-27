@@ -168,6 +168,15 @@ const maxDia = evolucion.length
   ? evolucion.reduce((mejor, punto) => (punto.visitas > mejor.visitas ? punto : mejor), evolucion[0])
   : { etiqueta: '—', visitas: 0 };
 
+/** Métricas seleccionables en el gráfico "Evolución diaria" (ver script al final del fichero). */
+const METRICAS_EVOLUCION = [
+  { id: 'visitas', label: 'Visitas', percent: false, desde: '#0284c7', hasta: '#7dd3fc' },
+  { id: 'sesiones', label: 'Sesiones', percent: false, desde: '#7c3aed', hasta: '#c4b5fd' },
+  { id: 'salidas', label: 'Salidas', percent: false, desde: '#d97706', hasta: '#fcd34d' },
+  { id: 'compras', label: 'Compras', percent: false, desde: '#059669', hasta: '#6ee7b7' },
+  { id: 'conversionpct', label: 'Conversión %', percent: true, desde: '#e11d48', hasta: '#fda4af' },
+] as const;
+
 const productosTabla: ProductoMetrico[] = periodo.topProductos.map((producto) => {
   const estado: ProductoMetrico['estado'] =
     producto.tasa >= 4 ? 'alta' : producto.tasa >= 2.5 ? 'estable' : 'friccion';
@@ -269,61 +278,99 @@ const enCurso = resumen.meses[0]?.month ?? '';
     </div>
   </section>
 
-  <!-- 2. Tendencia + fuentes de tráfico -->
-  <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-    <div class="flex min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-      <div class="flex flex-wrap items-start justify-between gap-2">
+  <!-- 2. Evolución diaria (ancho completo: más tamaño y un selector de métrica
+       para ver visitas, sesiones, salidas, compras o conversión en el mismo
+       gráfico, todo con datos reales del tracker propio). -->
+  <section class="flex flex-col gap-4">
+    <div class="flex min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5 lg:p-6" data-evolucion-chart>
+      <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="min-w-0">
-          <h3 class="text-sm font-extrabold uppercase tracking-wider text-white">Evolución de visitas</h3>
+          <h3 class="text-base font-extrabold uppercase tracking-wider text-white">Evolución diaria</h3>
           <p class="mt-1 text-xs leading-relaxed text-slate-400">
-            {evolucion.length === 1 ? 'Último día' : `Últimos ${evolucion.length} días`} del periodo · {fmtNum.format(totalVisitas)} visitas
+            {evolucion.length === 1 ? 'Último día' : `Últimos ${evolucion.length} días`} del periodo ·{' '}
+            <span data-eje-total>{fmtNum.format(totalVisitas)}</span> <span data-eje-total-label>visitas</span>
           </p>
         </div>
-        <span class="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-extrabold text-emerald-300">
+        <span class="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-extrabold text-emerald-300" data-eje-mejor>
           Mejor día: {maxDia.etiqueta} ({fmtNum.format(maxDia.visitas)})
         </span>
       </div>
 
+      <div class="mt-4 flex flex-wrap items-center gap-2" role="tablist" aria-label="Métrica del gráfico de evolución">
+        {METRICAS_EVOLUCION.map((metrica, index) => (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={index === 0 ? 'true' : 'false'}
+            data-eje-tab={metrica.id}
+            data-label={metrica.label}
+            data-percent={metrica.percent ? '1' : ''}
+            class:list={[
+              'rounded-full border px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wider transition',
+              index === 0
+                ? 'border-sky-400 bg-sky-500 text-slate-950'
+                : 'border-white/10 bg-white/5 text-slate-300 hover:border-sky-500/40 hover:text-white',
+            ]}
+          >
+            {metrica.label}
+          </button>
+        ))}
+      </div>
+
       {evolucion.length === 0 ? (
-        <p class="mt-10 flex h-44 items-center justify-center text-xs text-slate-500">Sin visitas en el periodo seleccionado.</p>
+        <p class="mt-10 flex h-64 items-center justify-center text-xs text-slate-500">Sin datos en el periodo seleccionado.</p>
       ) : (
-        <div class="mt-6 flex h-44 items-end gap-1.5">
-          {evolucion.map((punto, index) => {
-            const pct = Math.max(Math.round((punto.visitas / maxVisitas) * 100), 8);
+        <div class="mt-6 flex h-64 items-end gap-1.5 lg:h-72" data-eje-bars>
+          {evolucion.map((punto) => {
+            const pct = maxVisitas > 0 ? Math.max(Math.round((punto.visitas / maxVisitas) * 100), 8) : 0;
             return (
-              <div class="group/bar flex min-w-0 flex-1 flex-col items-center gap-1.5" title={`${punto.etiqueta}: ${fmtNum.format(punto.visitas)} visitas`}>
-                <span class="text-[10px] font-bold text-slate-400 opacity-0 transition group-hover/bar:opacity-100">
+              <div
+                class="group/bar flex min-w-0 flex-1 flex-col items-center gap-1.5"
+                data-bar
+                data-etiqueta={punto.etiqueta}
+                data-m-visitas={punto.visitas}
+                data-m-sesiones={punto.sesiones}
+                data-m-salidas={punto.salidas}
+                data-m-compras={punto.compras}
+                data-m-conversionpct={punto.conversionPct}
+                title={`${punto.etiqueta}: ${fmtNum.format(punto.visitas)} visitas`}
+              >
+                <span class="text-[10px] font-bold text-slate-400 opacity-0 transition group-hover/bar:opacity-100" data-bar-value>
                   {fmtNum.format(punto.visitas)}
                 </span>
                 <div
-                  class="[width:100%] rounded-t-md bg-gradient-to-t from-sky-600 to-sky-300 transition group-hover/bar:from-violet-500 group-hover/bar:to-violet-300"
-                  style={`height:${pct}%`}
+                  class="[width:100%] rounded-t-md transition-[height]"
+                  style={`height:${pct}%; background:linear-gradient(to top, #0284c7, #7dd3fc)`}
+                  data-bar-fill
                 ></div>
-                <span class="text-[9px] text-slate-500">{index % 2 === 0 ? punto.etiqueta : ''}</span>
+                <span class="text-[9px] text-slate-500">{punto.etiqueta}</span>
               </div>
             );
           })}
         </div>
       )}
     </div>
+  </section>
 
+  <!-- 3. Fuentes de tráfico + productos más visitados (mismo formato de ranking) -->
+  <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
     <SimpleBarChart
       titulo="Fuentes de tráfico"
       subtitulo="Reparto de sesiones por origen (referrer) durante el periodo."
       items={barrasFuentes}
       ayuda={getMetrica('fuentes-trafico')?.definicionCorta}
     />
-  </section>
 
-  <!-- 3. Ranking de productos + IA -->
-  <section class="grid grid-cols-1 gap-4 lg:grid-cols-2">
     <SimpleBarChart
       titulo="Productos más visitados"
       subtitulo="Visualizaciones de ficha por producto (top 5)."
       items={barrasTop}
       ayuda={getMetrica('visualizaciones-producto')?.definicionCorta}
     />
+  </section>
 
+  <!-- 4. Recomendaciones de IA -->
+  <section class="flex flex-col gap-4">
     <div class="flex min-w-0 flex-col rounded-2xl border border-white/10 bg-white/[0.03] p-5">
       <div class="flex items-start justify-between gap-3">
         <div class="min-w-0">
@@ -502,5 +549,86 @@ const enCurso = resumen.meses[0]?.month ?? '';
         btnReset.disabled = false;
       }
     });
+  }
+</script>
+
+<script>
+  // Selector de métrica del gráfico "Evolución diaria": cambia qué dato mueve
+  // las barras (visitas/sesiones/salidas/compras/conversión) sin recargar,
+  // leyendo los valores ya embebidos como data-* en cada barra.
+  const fmt = new Intl.NumberFormat('es-ES');
+  const root = document.querySelector<HTMLElement>('[data-evolucion-chart]');
+  if (root) {
+    const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-eje-tab]'));
+    const bars = Array.from(root.querySelectorAll<HTMLElement>('[data-bar]'));
+    const totalEl = root.querySelector('[data-eje-total]');
+    const totalLabelEl = root.querySelector('[data-eje-total-label]');
+    const mejorEl = root.querySelector('[data-eje-mejor]');
+
+    const COLORES: Record<string, [string, string]> = {
+      visitas: ['#0284c7', '#7dd3fc'],
+      sesiones: ['#7c3aed', '#c4b5fd'],
+      salidas: ['#d97706', '#fcd34d'],
+      compras: ['#059669', '#6ee7b7'],
+      conversionpct: ['#e11d48', '#fda4af'],
+    };
+    const ACTIVO = 'rounded-full border px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wider transition border-sky-400 bg-sky-500 text-slate-950';
+    const INACTIVO = 'rounded-full border px-3.5 py-1.5 text-[11px] font-extrabold uppercase tracking-wider transition border-white/10 bg-white/5 text-slate-300 hover:border-sky-500/40 hover:text-white';
+
+    const datasetKey = (id: string) => `m${id.charAt(0).toUpperCase()}${id.slice(1)}`;
+
+    function aplicar(metricaId: string) {
+      const tab = tabs.find((t) => t.dataset.ejeTab === metricaId);
+      const label = tab?.dataset.label || metricaId;
+      const esPercent = tab?.dataset.percent === '1';
+      const [desde, hasta] = COLORES[metricaId] ?? COLORES.visitas;
+      const key = datasetKey(metricaId);
+
+      const valores = bars.map((bar) => Number(bar.dataset[key] ?? 0));
+      const max = valores.length ? Math.max(...valores) : 0;
+      let mejorIndex = 0;
+
+      bars.forEach((bar, index) => {
+        const valor = valores[index];
+        if (valor > valores[mejorIndex]) mejorIndex = index;
+        const pct = max > 0 ? Math.max(Math.round((valor / max) * 100), valor > 0 ? 4 : 0) : 0;
+        const fill = bar.querySelector<HTMLElement>('[data-bar-fill]');
+        const value = bar.querySelector<HTMLElement>('[data-bar-value]');
+        const texto = esPercent ? `${valor.toFixed(1).replace('.', ',')}%` : fmt.format(valor);
+        if (fill) {
+          fill.style.height = `${pct}%`;
+          fill.style.background = `linear-gradient(to top, ${desde}, ${hasta})`;
+        }
+        if (value) value.textContent = texto;
+        bar.title = `${bar.dataset.etiqueta}: ${texto} ${label.toLowerCase()}`;
+      });
+
+      if (totalEl) {
+        if (esPercent) {
+          // Media ponderada (salidas÷visitas), no el promedio simple de cada día.
+          const totalVisitas = bars.reduce((s, bar) => s + Number(bar.dataset.mVisitas ?? 0), 0);
+          const totalSalidas = bars.reduce((s, bar) => s + Number(bar.dataset.mSalidas ?? 0), 0);
+          const conversionGlobal = totalVisitas ? (totalSalidas / totalVisitas) * 100 : 0;
+          totalEl.textContent = `${conversionGlobal.toFixed(1).replace('.', ',')}%`;
+        } else {
+          totalEl.textContent = fmt.format(valores.reduce((s, v) => s + v, 0));
+        }
+      }
+      if (totalLabelEl) totalLabelEl.textContent = esPercent ? 'conversión media' : label.toLowerCase();
+      if (mejorEl && bars[mejorIndex]) {
+        const texto = esPercent
+          ? `${valores[mejorIndex].toFixed(1).replace('.', ',')}%`
+          : fmt.format(valores[mejorIndex]);
+        mejorEl.textContent = `Mejor día: ${bars[mejorIndex].dataset.etiqueta} (${texto})`;
+      }
+
+      tabs.forEach((t) => {
+        const activo = t.dataset.ejeTab === metricaId;
+        t.setAttribute('aria-selected', String(activo));
+        t.className = activo ? ACTIVO : INACTIVO;
+      });
+    }
+
+    tabs.forEach((tab) => tab.addEventListener('click', () => aplicar(tab.dataset.ejeTab || 'visitas')));
   }
 </script>

@@ -5,7 +5,7 @@
  * comisión neta (barra superpuesta en verde). 100% Tailwind + CSS inline,
  * sin librerías de gráficos. Se recalcula con el rango activo del filtro.
  */
-import type { PuntoIngreso } from '../../data/mockVentas';
+import type { PuntoIngreso } from '../../lib/salesLedger';
 
 export interface Props {
   serie: PuntoIngreso[];
@@ -80,13 +80,8 @@ const fmt = new Intl.NumberFormat('es-ES');
 
     window.addEventListener('ventas:rango-cambiado', (e) => {
       const { desde, hasta } = e.detail;
-      render(serie.filter((p) => {
-        // La serie mock usa etiquetas dd/MM; convertimos a ISO para filtrar.
-        const [dia, mes] = p.etiqueta.split('/');
-        const anio = new Date().getFullYear();
-        const iso = `${anio}-${mes}-${dia}`;
-        return iso >= desde && iso <= hasta;
-      }));
+      // La serie trae `fecha` ISO (yyyy-mm-dd): filtra bien aunque el rango cruce de año.
+      render(serie.filter((p) => p.fecha >= desde && p.fecha <= hasta));
     });
   }
 </script>

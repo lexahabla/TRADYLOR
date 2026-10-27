@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { dataFile } from './paths';
+import { trackEvent } from './analytics';
+import { findCatalogProduct } from './catalog';
 import {
   BUYER_PROFILE_BUDGET_LABELS,
   BUYER_PROFILE_MAX,
@@ -797,11 +799,32 @@ export function trackExit(userId: string, productId: string, title: string): Rad
 export function resolveExit(userId: string, productId: string, status: 'purchased' | 'dismissed'): RadarData {
   const all = readAll();
   const radar = all[userId] ?? emptyRadar();
+  const exit = radar.pendingExits.find((e) => e.productId === productId);
   radar.pendingExits = radar.pendingExits.map((e) =>
     e.productId === productId ? { ...e, status } : e,
   );
   all[userId] = radar;
   writeAll(all);
+
+  // El propio usuario confirmando "sí, compré" es la única señal de venta
+  // 100% real de la que dispone Tradylor (Compra Delegada: no hay checkout
+  // propio ni webhook de las redes de afiliados). Se alimenta aquí el
+  // tracker de analítica para que "Tráfico y Ventas" dependa de confirmaciones
+  // reales y no de datos de ejemplo. Idempotente: sólo cuenta la primera vez
+  // que una salida pasa a 'purchased'.
+  if (status === 'purchased' && exit && exit.status !== 'purchased') {
+    try {
+      const product = findCatalogProduct(productId);
+      trackEvent({
+        type: 'purchase',
+        productId,
+        amount: typeof product?.price === 'number' ? product.price : undefined,
+        source: 'cliente',
+      });
+    } catch (error) {
+      console.warn('[RadarStore] No se pudo registrar la compra en analytics:', error);
+    }
+  }
   return radar;
 }
 

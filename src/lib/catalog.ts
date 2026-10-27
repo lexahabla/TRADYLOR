@@ -12,13 +12,38 @@
  * ==============================================================================
  */
 
+import fs from 'node:fs';
 import { products as staticProducts, type Product } from '../data/products';
 import { validateProducts, validateSingleProduct } from './validateProducts';
 import { dataFile } from './paths';
 import { readJsonArrayFile } from './jsonStore';
-import { readDeletedIds } from './deletedProducts';
+import { readDeletedIds, DELETED_FILE_PATH } from './deletedProducts';
 
 const DATA_FILE_PATH = dataFile('products.json');
+
+/**
+ * Caché en memoria del catálogo normalizado, invalidada por la fecha de
+ * modificación de `products.json` + `deleted-product-ids.json`.
+ *
+ * `getCatalogProducts()` se llama decenas de veces por petición (home, ficha,
+ * búsqueda, marketing insights, y sobre todo el dashboard de Tráfico y Ventas,
+ * que la invoca una vez por cada producto de su "top 5/10" y por cada mes en
+ * curso). Sin caché, cada llamada releía products.json del disco Y
+ * revalidaba con Zod TODO el catálogo desde cero — con un catálogo grande
+ * esto bloqueaba el event loop de Node varios segundos y hacía que ese
+ * dashboard (y el resto del sitio, por ser un único proceso) tardara mucho
+ * en cargar o pareciera "caído". Al no cambiar los ficheros entre peticiones
+ * normales, se reutiliza el resultado tal cual (misma salida, cero coste).
+ */
+let catalogCache: { products: Product[]; key: string } | null = null;
+
+function statMtime(filePath: string): number {
+  try {
+    return fs.statSync(filePath).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
 
 /** Nested objects that must be merged field-by-field instead of replaced. */
 const NESTED_KEYS = [
@@ -64,6 +89,11 @@ function mergeProducts(base: Product, overlay: Product): Product {
 }
 
 export function getCatalogProducts(): Product[] {
+  // Caché por mtime: si ninguno de los dos ficheros cambió desde la última
+  // llamada, se devuelve el resultado ya calculado (ver comentario arriba).
+  const cacheKey = `${statMtime(DATA_FILE_PATH)}:${statMtime(DELETED_FILE_PATH)}`;
+  if (catalogCache && catalogCache.key === cacheKey) return [...catalogCache.products];
+
   // Lectura tolerante: si el JSON está a medio escribir, `readJsonArrayFile`
   // reintenta y devuelve la última versión válida (antes devolvía `[]` y la
   // web se quedaba sin catálogo).
@@ -103,7 +133,8 @@ export function getCatalogProducts(): Product[] {
     `[Catalog] Loaded ${merged.length} products (${mergedRaw.length} live + ${curatedOnly.length} curated)`
   );
 
-  return merged;
+  catalogCache = { products: merged, key: cacheKey };
+  return [...merged];
 }
 
 /**

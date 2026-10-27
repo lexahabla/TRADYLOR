@@ -57,7 +57,6 @@ src/content/config.ts
 src/data/categories.json
 src/data/metricasGlosario.ts
 src/data/mockAnalytics.ts
-src/data/mockVentas.ts
 src/data/products.json
 src/data/products.ts
 src/env.d.ts
@@ -126,6 +125,8 @@ src/lib/radarAuth.ts
 src/lib/radarStore.ts
 src/lib/rateLimit.ts
 src/lib/reminders.ts
+src/lib/salesLedger.ts
+src/lib/salesLedgerCore.ts
 src/lib/sections.ts
 src/lib/sectionSuggestions.ts
 src/lib/services/affiliateAdapter.ts

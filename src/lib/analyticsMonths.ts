@@ -60,6 +60,14 @@ export interface PuntoDia {
   fecha: string;
   etiqueta: string;
   visitas: number;
+  /** Sesiones distintas de ese día (o visitas si no hay sessionId). */
+  sesiones: number;
+  /** Clics de salida a tienda (.exit-cta) ese día. */
+  salidas: number;
+  /** Compras confirmadas ese día (Return Flow). */
+  compras: number;
+  /** Salidas ÷ visitas del día, en %. */
+  conversionPct: number;
 }
 
 export interface ProductoMes {
@@ -259,18 +267,31 @@ export function computeFuentes(events: AnalyticsEvent[]): FuenteMes[] {
   });
 }
 
-/** Serie diaria de visitas de un conjunto de eventos. */
+/** Serie diaria de visitas, sesiones, salidas, compras y conversión de un conjunto de eventos. */
 export function computeEvolucion(events: AnalyticsEvent[], limiteDias = 30): PuntoDia[] {
-  const porDia = new Map<string, number>();
+  const porDia = new Map<string, { visitas: number; sesiones: Set<string>; salidas: number; compras: number }>();
   for (const event of events) {
-    if (event.type !== 'page_view') continue;
     const fecha = event.createdAt.slice(0, 10);
-    porDia.set(fecha, (porDia.get(fecha) ?? 0) + 1);
+    const bucket = porDia.get(fecha) ?? { visitas: 0, sesiones: new Set<string>(), salidas: 0, compras: 0 };
+    if (event.sessionId) bucket.sesiones.add(event.sessionId);
+    if (event.type === 'page_view') bucket.visitas += 1;
+    else if (event.type === 'outbound_click') bucket.salidas += 1;
+    else if (event.type === 'purchase') bucket.compras += 1;
+    porDia.set(fecha, bucket);
   }
   const dias = [...porDia.keys()].sort();
   return dias.slice(-limiteDias).map((fecha) => {
     const [year, month, day] = fecha.split('-');
-    return { fecha, etiqueta: `${day}/${month}`, visitas: porDia.get(fecha) ?? 0 };
+    const bucket = porDia.get(fecha)!;
+    return {
+      fecha,
+      etiqueta: `${day}/${month}`,
+      visitas: bucket.visitas,
+      sesiones: bucket.sesiones.size || bucket.visitas,
+      salidas: bucket.salidas,
+      compras: bucket.compras,
+      conversionPct: bucket.visitas ? redondear((bucket.salidas / bucket.visitas) * 100) : 0,
+    };
   });
 }
 

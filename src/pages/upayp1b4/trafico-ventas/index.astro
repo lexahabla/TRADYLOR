@@ -16,7 +16,7 @@ import RevenueChart from '../../../components/admin/RevenueChart.astro';
 import SalesHistoryTable from '../../../components/admin/SalesHistoryTable.astro';
 import SalesAITips from '../../../components/admin/SalesAITips.astro';
 import { getSessionUser } from '../../../lib/adminAuth';
-import { registrosVentas, serieIngresos } from '../../../data/mockVentas';
+import { getRegistrosVentas, getSerieIngresos, filtrarPorRango } from '../../../lib/salesLedger';
 
 const sessionUser = getSessionUser(Astro.request);
 if (!sessionUser) return Astro.redirect('/upayp1b4');
@@ -28,7 +28,11 @@ Astro.response.headers.set('Cache-Control', 'no-store');
 // Rango por defecto del bloque financiero: últimos 30 días.
 const hoyISO = new Date().toISOString().slice(0, 10);
 const desdeISO = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-const registrosIniciales = registrosVentas.filter((v) => v.fecha >= desdeISO && v.fecha <= hoyISO);
+// Ventas confirmadas reales (Return Flow de Mi Radar): sin confirmaciones,
+// todo son ceros y los componentes lo dicen explícitamente.
+const registrosVentas = getRegistrosVentas();
+const serieIngresos = getSerieIngresos(registrosVentas);
+const registrosIniciales = filtrarPorRango(registrosVentas, desdeISO, hoyISO);
 ---
 
 <Layout
@@ -53,7 +57,6 @@ const registrosIniciales = registrosVentas.filter((v) => v.fecha >= desdeISO && 
           <strong>?</strong> de cada métrica para ver su definición.
         </p>
         <div class="module-heading-actions">
-          <span class="data-example-pill">Datos de ejemplo</span>
           <a class="guide-link" href="/upayp1b4/trafico-ventas/guia">
             Guía y Glosario
             <span aria-hidden="true">→</span>
@@ -78,13 +81,22 @@ const registrosIniciales = registrosVentas.filter((v) => v.fecha >= desdeISO && 
         </p>
       </div>
 
+      {registrosVentas.length === 0 && (
+        <div class="sales-empty-note">
+          Aún no hay ventas confirmadas. Este bloque se alimenta de las confirmaciones reales
+          "¿Llegaste a comprar?" del Return Flow de Mi Radar (no hay checkout propio ni webhook de
+          las redes de afiliados): en cuanto un usuario confirme una compra aquí aparecerán sus
+          cifras reales, nunca datos de ejemplo.
+        </div>
+      )}
+
       <DateRangeFilter desde={desdeISO} hasta={hoyISO} />
 
       <FinancialHeaderCards registros={registrosIniciales} />
 
       <div class="sales-grid">
         <RevenueChart serie={serieIngresos} />
-        <SalesAITips />
+        <SalesAITips registros={registrosIniciales} />
       </div>
 
       <SalesHistoryTable registros={registrosIniciales} />
@@ -150,7 +162,6 @@ const registrosIniciales = registrosVentas.filter((v) => v.fecha >= desdeISO && 
   .admin-back-to-top:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(56, 189, 248, .5); }
   .admin-back-to-top svg { display: block; }
   .module-heading-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.6rem; margin-top: 0.9rem; }
-  .data-example-pill { padding: 0.35rem 0.85rem; color: #fbbf24; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 9999px; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; }
   .guide-link { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.55rem 1rem; color: #06121f; background: #38bdf8; border-radius: 9999px; font-size: 0.78rem; font-weight: 800; text-decoration: none; transition: background 0.2s ease; }
   .guide-link:hover { background: #7dd3fc; }
 
@@ -159,6 +170,7 @@ const registrosIniciales = registrosVentas.filter((v) => v.fecha >= desdeISO && 
   .sales-separator { display: flex; flex-direction: column; gap: 0.75rem; padding: 2rem 0 1rem; border-top: 1px solid var(--color-border); }
   .sales-separator-title { font-family: var(--font-heading); font-size: clamp(1.4rem, 2.8vw, 1.9rem); font-weight: 800; color: var(--color-text-main); line-height: 1.25; }
   .sales-separator-sub { color: var(--color-text-muted); font-size: 0.92rem; max-width: 820px; line-height: 1.6; }
+  .sales-empty-note { padding: 0.9rem 1.1rem; color: #fbbf24; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 14px; font-size: 0.85rem; line-height: 1.6; max-width: 900px; }
   .sales-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 1.5rem; align-items: start; }
 
   @media (max-width: 900px) {

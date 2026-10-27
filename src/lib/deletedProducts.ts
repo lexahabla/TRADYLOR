@@ -10,6 +10,8 @@ import { writeJsonArrayFile } from './jsonStore';
  */
 
 const DELETED_FILE = dataFile('deleted-product-ids.json');
+/** Ruta exportada para que `catalog.ts` pueda invalidar su caché por mtime. */
+export const DELETED_FILE_PATH = DELETED_FILE;
 
 // IDs de productos eliminados previamente (curados del catálogo inicial).
 const BUILTIN_DELETED = [

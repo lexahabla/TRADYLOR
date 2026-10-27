@@ -5,8 +5,8 @@
  * importe bruto y comisión neta. Se filtra con el rango activo del
  * DateRangeFilter mediante el evento "ventas:rango-cambiado".
  */
-import type { RegistroVenta, TipoVenta } from '../../data/mockVentas';
-import { etiquetaTipoVenta } from '../../data/mockVentas';
+import type { RegistroVenta, TipoVenta } from '../../lib/salesLedger';
+import { etiquetaTipoVenta } from '../../lib/salesLedger';
 
 export interface Props {
   registros: RegistroVenta[];

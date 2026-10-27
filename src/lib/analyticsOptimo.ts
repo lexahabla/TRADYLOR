@@ -57,6 +57,18 @@ function visitasDia(iso: string): number {
   return Math.max(1, Math.round(base * semanal * crecimiento * ruido(`v:${iso}`)));
 }
 
+/** Sesiones/salidas/compras óptimas de un día, con las mismas proporciones que `metricasOptimas`. */
+function sesionesDia(iso: string, visitas: number): number {
+  const paginasPorSesion = 3.6 * ruido(`pps:${iso}`, 0.08);
+  return Math.max(1, Math.round(visitas / paginasPorSesion));
+}
+function salidasDia(iso: string, visitas: number): number {
+  return Math.round(visitas * 0.092 * ruido(`sal:${iso}`, 0.1));
+}
+function comprasDia(iso: string, sesiones: number): number {
+  return Math.round(sesiones * 0.049 * ruido(`com:${iso}`, 0.12));
+}
+
 function isoDeTs(ts: number): string {
   return new Date(ts).toISOString().slice(0, 10);
 }
@@ -75,14 +87,29 @@ function serieDiaria(desdeISO: string, hastaISO: string, maxPuntos = 31): PuntoD
   const hasta = Date.parse(`${hastaISO}T12:00:00Z`);
   if (!Number.isFinite(desde) || !Number.isFinite(hasta) || hasta < desde) return [];
 
-  const dias: Array<{ iso: string; visitas: number }> = [];
+  const dias: Array<{ iso: string; visitas: number; sesiones: number; salidas: number; compras: number }> = [];
   for (let ts = desde; ts <= hasta; ts += DAY_MS) {
     const iso = isoDeTs(ts);
-    dias.push({ iso, visitas: visitasDia(iso) });
+    const visitas = visitasDia(iso);
+    const sesiones = sesionesDia(iso, visitas);
+    const salidas = salidasDia(iso, visitas);
+    const compras = comprasDia(iso, sesiones);
+    dias.push({ iso, visitas, sesiones, salidas, compras });
   }
 
+  const conversion = (visitas: number, salidas: number) =>
+    visitas ? Math.round((salidas / visitas) * 1000) / 10 : 0;
+
   if (dias.length <= maxPuntos) {
-    return dias.map((d) => ({ fecha: d.iso, etiqueta: etiquetaDia(d.iso), visitas: d.visitas }));
+    return dias.map((d) => ({
+      fecha: d.iso,
+      etiqueta: etiquetaDia(d.iso),
+      visitas: d.visitas,
+      sesiones: d.sesiones,
+      salidas: d.salidas,
+      compras: d.compras,
+      conversionPct: conversion(d.visitas, d.salidas),
+    }));
   }
 
   const tamBucket = Math.ceil(dias.length / maxPuntos);
@@ -90,7 +117,18 @@ function serieDiaria(desdeISO: string, hastaISO: string, maxPuntos = 31): PuntoD
   for (let i = 0; i < dias.length; i += tamBucket) {
     const grupo = dias.slice(i, i + tamBucket);
     const visitas = grupo.reduce((s, d) => s + d.visitas, 0);
-    salida.push({ fecha: grupo[0].iso, etiqueta: etiquetaDia(grupo[0].iso), visitas });
+    const sesiones = grupo.reduce((s, d) => s + d.sesiones, 0);
+    const salidas = grupo.reduce((s, d) => s + d.salidas, 0);
+    const compras = grupo.reduce((s, d) => s + d.compras, 0);
+    salida.push({
+      fecha: grupo[0].iso,
+      etiqueta: etiquetaDia(grupo[0].iso),
+      visitas,
+      sesiones,
+      salidas,
+      compras,
+      conversionPct: conversion(visitas, salidas),
+    });
   }
   return salida;
 }
