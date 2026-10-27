@@ -67,10 +67,10 @@ export const POST: APIRoute = async ({ request }) => {
 
   if (!history.length) return json({ success: false, message: 'Escribe tu pregunta para el Dependiente IA.' }, 400);
 
-  const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt(user?.name ?? undefined) }, ...history];
-
   try {
-    const reply = await chatComplete(messages, { temperature: 0.5 });
+    const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt(user?.name ?? undefined) }, ...history];
+
+    const reply = await chatComplete(messages, { temperature: 0.5, timeoutMs: 25_000 });
     const trimmed = reply.trim()
       || 'No he encontrado una recomendación clara con esos datos: cuéntame tu presupuesto y para qué lo vas a usar.';
 
@@ -82,6 +82,12 @@ export const POST: APIRoute = async ({ request }) => {
 
     return json({ success: true, reply: trimmed, locked: false });
   } catch (error) {
-    return json({ success: false, message: error instanceof Error ? error.message : 'Error del proveedor de IA.' }, 502);
+    // NOTA: el proxy de Easy Panel sustituye cualquier 5xx por su propia página
+    // HTML (el cliente no puede parsearla y muestra un error genérico). Por eso
+    // los fallos del proveedor se devuelven con status 200 + success:false:
+    // el frontend muestra `message` tal cual.
+    const msg = error instanceof Error ? error.message : 'Error del proveedor de IA.';
+    console.error('[Dependiente IA] Error al responder:', msg);
+    return json({ success: false, message: msg || 'No he podido responder ahora mismo. Inténtalo de nuevo en unos segundos.' }, 200);
   }
 };
