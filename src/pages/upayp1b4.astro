@@ -745,6 +745,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <th>Imagen</th>
               <th>Producto & Categoría</th>
               <th title="Red de afiliados">Comercio</th>
+              <th>Estado</th>
               <th>Precio</th>
               <th title="Score de conversión">Score</th>
               <th>Enlace Afiliado</th>
@@ -753,7 +754,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </thead>
           <tbody id="productsTableBody">
             {initialPageProducts.length === 0 ? (
-              <tr class="empty-row"><td colspan="8">No hay productos registrados en el catálogo aún.</td></tr>
+              <tr class="empty-row"><td colspan="9">No hay productos registrados en el catálogo aún.</td></tr>
             ) : (
               initialPageProducts.map((p) => (
                 <tr data-product-id={p.id} class="product-row">
@@ -764,6 +765,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                     <div class="row-meta"><span class="pill-category">{p.category}</span></div>
                   </td>
                   <td class="col-merchant"><span class="merchant-badge">{p.network_label || p.merchant || '—'}</span></td>
+                  <td class="col-condition">
+                    {(() => {
+                      const cond = p.condition || p.specs?.['Estado'] || p.specs?.['Condición'] || p.specs?.['Condition'];
+                      if (!cond) return <span class="cond-pill cond-unknown">—</span>;
+                      const isUsed = /used|pre-owned|refurbished|reacondicionad|segunda\s*mano|usad[oa]|open\s*box|seminuev/i.test(cond);
+                      return <span class={`cond-pill ${isUsed ? 'cond-used' : 'cond-new'}`}>{cond}</span>;
+                    })()}
+                  </td>
                   <td class="col-price"><span class="price-val">{p.price.toFixed(2)} €</span></td>
                   <td class="col-score">
                     <span class={`score-badge score-${Number(p.conversion_score) > 75 ? 'high' : Number(p.conversion_score) >= 40 ? 'mid' : 'low'}`}>
@@ -3240,6 +3249,17 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       }
     }
 
+const USED_CONDITION_RE = /used|pre-owned|refurbished|reacondicionad|segunda\s*mano|usad[oa]|open\s*box|seminuev/i;
+
+/** Pastilla de «Estado» para el Catálogo de Productos Registrados (producto ya guardado: campo `condition` o, en su defecto, `specs`). */
+function prodConditionBadge(p) {
+  const raw = p.condition || (p.specs && (p.specs['Estado'] || p.specs['Condición'] || p.specs['Condition']));
+  if (!raw) return '<span class="cond-pill cond-unknown">—</span>';
+  const text = escapeHtml(String(raw));
+  const isUsed = USED_CONDITION_RE.test(String(raw));
+  return `<span class="cond-pill ${isUsed ? 'cond-used' : 'cond-new'}">${text}</span>`;
+}
+
 function renderTableRows(products, resetPage = true) {
       if (!productsTableBody) return;
 
@@ -3270,7 +3290,7 @@ function renderTableRows(products, resetPage = true) {
       if (pageProducts.length === 0) {
         productsTableBody.innerHTML = `
           <tr class="empty-row">
-            <td colspan="8">No hay productos registrados en el catálogo aún.</td>
+            <td colspan="9">No hay productos registrados en el catálogo aún.</td>
           </tr>
         `;
         return;
@@ -3314,6 +3334,7 @@ function renderTableRows(products, resetPage = true) {
               </div>
             </td>
             <td class="col-merchant"><span class="merchant-badge" title="${p.merchant ? `Comerciante: ${escapeHtml(p.merchant)}` : 'Red de afiliados'}">${escapeHtml(p.network_label || p.merchant || '—')}</span></td>
+            <td class="col-condition">${prodConditionBadge(p)}</td>
             <td class="col-price">
               <span class="price-val">${Number(p.price).toFixed(2)} €</span>
               ${p.originalPrice ? `<span class="price-old">${Number(p.originalPrice).toFixed(2)} €</span>` : ''}
@@ -3355,7 +3376,7 @@ function renderTableRows(products, resetPage = true) {
             </td>
           </tr>
           <tr class="product-detail-row" data-prod-detail="${index}" hidden>
-            <td colspan="10"><dl class="aff-detail-grid">
+            <td colspan="11"><dl class="aff-detail-grid">
               <div class="aff-detail-item"><dt>Título</dt><dd>${escapeHtml ? escapeHtml(p.title) : p.title}</dd></div>
               <div class="aff-detail-item"><dt>Categoría</dt><dd>${p.category || '—'}</dd></div>
               <div class="aff-detail-item aff-detail-curate"><dt>Categorización (edición rápida)</dt><dd class="aff-curate-controls">
@@ -5494,6 +5515,9 @@ function renderTableRows(products, resetPage = true) {
       const fulfillmentProvider =
         product.fulfillmentProvider || extraOf('Distribuidor') || extraOf('Fulfillment') || extraOf('Vendedor') || undefined;
       const buyNowUrl = extraOf('Enlace de compra directa') || extraOf('Buy Now') || extraOf('Buy Now URL') || undefined;
+      // Estado físico (Nuevo/Usado/Reacondicionado...): dato clave para poder
+      // filtrar después los productos de segunda mano en el catálogo.
+      const condition = extraOf('Estado') || extraOf('Condición') || extraOf('Condition') || undefined;
       return {
         action: 'save',
         product: {
@@ -5521,6 +5545,7 @@ function renderTableRows(products, resetPage = true) {
           specs,
           fulfillmentProvider,
           buyNowUrl,
+          condition,
           pros: [`Comisión estimada: ${product.commissionRate ?? 0}% en ${product.network}`],
           cons: [],
           shippingInfo,
@@ -5874,7 +5899,7 @@ function renderTableRows(products, resetPage = true) {
     bindSubcatDestCascade(aliCatAssign, aliSubcatAssign);
 
     // Columnas de la tabla de afiliados (la columna «Tienda» se eliminó).
-    const ALI_COLS = 13;
+    const ALI_COLS = 14;
     let aliProducts = [];
     let aliVisible = [];
     /** Productos por página de la tabla de afiliados (25 / 50 / 75). */
@@ -6117,6 +6142,18 @@ function renderTableRows(products, resetPage = true) {
       return value == null || value === '' ? null : value;
     }
 
+    /** Patrón de detección de segunda mano (mismo criterio que prodMatchesPreset). */
+    const ALI_USED_CONDITION_RE = /used|pre-owned|refurbished|reacondicionad|segunda\s*mano|usad[oa]|open\s*box|seminuev/i;
+
+    /** Pastilla de «Estado» (Nuevo/Usado/...) para la tabla de Importar. */
+    function aliConditionBadge(product) {
+      const raw = aliExtra(product, 'Estado') || aliExtra(product, 'Condición') || aliExtra(product, 'Condition');
+      if (!raw) return '<span class="cond-pill cond-unknown">—</span>';
+      const text = escapeHtml(String(raw));
+      const isUsed = ALI_USED_CONDITION_RE.test(String(raw));
+      return `<span class="cond-pill ${isUsed ? 'cond-used' : 'cond-new'}">${text}</span>`;
+    }
+
     function aliDiscount(product) {
       const raw = aliExtra(product, 'Descuento');
       if (raw) return `${String(raw).replace('%', '')}%`;
@@ -6234,6 +6271,7 @@ function renderTableRows(products, resetPage = true) {
                 <th>Foto</th>
                 <th>Producto</th>
                 <th>Categoría</th>
+                <th>Estado</th>
                 <th class="aff-num">Precio</th>
                 <th class="aff-num">Precio orig.</th>
                 <th class="aff-num">Dto.</th>
@@ -6270,6 +6308,7 @@ function renderTableRows(products, resetPage = true) {
                     <span>${escapeHtml(product.network)}${product.category ? ` · ${escapeHtml(product.category)}` : ''}${estadoPill}</span>
                   </td>
                   <td>${escapeHtml(product.category || '—')}</td>
+                  <td>${aliConditionBadge(product)}</td>
                   <td class="aff-num">${money(product.price, product.currency)}</td>
                   <td class="aff-num">${product.originalPrice != null ? money(product.originalPrice, product.currency) : '—'}</td>
                   <td class="aff-num ac-discount">${discount ? escapeHtml(discount) : '—'}</td>
@@ -9294,6 +9333,14 @@ function renderTableRows(products, resetPage = true) {
   :global(.ac-state) { display: inline-block; margin-left: .35rem; padding: .05rem .3rem; border-radius: 999px; font-size: .56rem; font-weight: 800; vertical-align: 1px; white-space: nowrap; }
   :global(.ac-state.is-imported) { color: #6ee7b7; background: rgba(16, 185, 129, .12); border: 1px solid rgba(16, 185, 129, .28); }
   :global(.ac-state.is-discarded) { color: #fca5a5; background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .28); }
+
+  /* Columna «Estado» (condición física: Nuevo/Usado/Reacondicionado...) de
+     las tablas de Importar y Catálogo. Se destaca en ámbar los artículos de
+     segunda mano para poder filtrarlos de un vistazo. */
+  :global(.cond-pill) { display: inline-block; padding: .15rem .45rem; border-radius: 999px; font-size: .62rem; font-weight: 800; white-space: nowrap; }
+  :global(.cond-pill.cond-new) { color: #93c5fd; background: rgba(59, 130, 246, .1); border: 1px solid rgba(59, 130, 246, .28); }
+  :global(.cond-pill.cond-used) { color: #fcd34d; background: rgba(245, 158, 11, .12); border: 1px solid rgba(245, 158, 11, .32); }
+  :global(.cond-pill.cond-unknown) { color: var(--color-text-dim); }
 
   /* Letrero «Añadido al catálogo» anclado sobre el botón Añadir */
   :global(.aff-actions) { position: relative; }

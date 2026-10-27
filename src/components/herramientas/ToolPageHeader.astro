@@ -3,7 +3,7 @@
  * TRADYLOR — CABECERA COMPARTIDA DE LAS PÁGINAS DE HERRAMIENTA
  * Usada por /herramientas/perfilador, /herramientas/comparador y
  * /herramientas/dependiente-ia (Asesor IA) para que las 3 páginas compartan
- * exactamente la misma estructura: enlace "Volver a la tienda" + hero con
+ * exactamente la misma estructura: enlace "VOLVER" (a la portada) + hero con
  * kicker "Herramienta" (verde, con el icono de esa herramienta en el
  * dropdown del mainNav) + título + subtítulo.
  * El ancho de columna (`.tool-container`) lo reutilizan también los propios
@@ -22,12 +22,12 @@ const { icon, title, subtitle } = Astro.props;
 
 <section class="tool-hero">
   <div class="tool-container tool-hero-top">
-    <a href="/herramientas" class="tool-back-pill">
+    <a href="/" class="tool-back-pill">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <line x1="19" y1="12" x2="5" y2="12"></line>
         <polyline points="12 19 5 12 12 5"></polyline>
       </svg>
-      Volver a la tienda
+      VOLVER
     </a>
   </div>
   <div class="tool-container tool-hero-inner">

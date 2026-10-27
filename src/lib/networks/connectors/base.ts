@@ -67,6 +67,11 @@ export function canonicalToUnified(product: CanonicalAffiliateProduct): UnifiedP
   const generated: Record<string, string | number | boolean | null> = {
     'ID externo': product.externalId,
     Marca: product.brand ?? null,
+    // Estado físico (Nuevo/Usado/Reacondicionado...): se promueve desde
+    // technicalSpecs a una clave propia de `extra` para que el panel (tabla
+    // de Importar y Catálogo) pueda mostrarlo y filtrarlo sin tener que
+    // parsear el texto combinado de «Especificaciones».
+    'Estado': product.technicalSpecs?.['Estado'] ?? product.technicalSpecs?.['Condition'] ?? null,
     Distribuidor: product.merchantName || null,
     Tienda: product.merchantName || null,
     'ID tienda': product.merchantId || null,

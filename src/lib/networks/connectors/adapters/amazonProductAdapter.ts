@@ -197,6 +197,18 @@ export class AmazonProductAdapter {
       technicalSpecs['Tipo'] = item.ItemInfo.Classifications.ProductTypeName.DisplayValue;
     }
     if (availability) technicalSpecs['Disponibilidad'] = availability;
+    // Estado físico (PA-API sólo lo informa en listados de Amazon Warehouse /
+    // vendedores de segunda mano; en nuevo no suele venir el campo).
+    const rawCondition = item.ItemInfo?.Condition?.Value?.trim();
+    if (rawCondition) {
+      const conditionEs: Record<string, string> = {
+        New: 'Nuevo',
+        Used: 'Usado',
+        Collectible: 'Coleccionable',
+        Refurbished: 'Reacondicionado',
+      };
+      technicalSpecs['Estado'] = conditionEs[rawCondition] ?? rawCondition;
+    }
     features.filter(Boolean).slice(0, 5).forEach((feature, index) => {
       technicalSpecs[`Característica ${index + 1}`] = feature;
     });

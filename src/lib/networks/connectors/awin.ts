@@ -325,6 +325,7 @@ const FEED_ALIASES = {
   rating: ['rating', 'product_rating', 'average_rating', 'avg_rating'],
   reviewCount: ['review_count', 'reviews', 'num_reviews', 'total_reviews'],
   guarantee: ['guarantee', 'warranty'],
+  condition: ['condition', 'product_condition', 'item_condition'],
 } as const satisfies Record<string, readonly string[]>;
 
 function pick(row: FeedRow, ...keys: readonly string[]): string {
@@ -423,6 +424,17 @@ function mapFeedRow(row: FeedRow, feed: AwinFeed, syncedAt: string): CanonicalAf
     else technicalSpecs['Plazo de entrega'] = deliveryTime;
   }
   if (deliveryCost) technicalSpecs['Coste de envío'] = deliveryCost;
+  // Estado físico: el feed estándar de Awin usa "new"/"used"/"refurbished".
+  const rawCondition = pick(row, ...FEED_ALIASES.condition);
+  if (rawCondition) {
+    const conditionEs: Record<string, string> = {
+      new: 'Nuevo',
+      used: 'Usado',
+      refurbished: 'Reacondicionado',
+      'b-grade': 'Reacondicionado',
+    };
+    technicalSpecs['Estado'] = conditionEs[rawCondition.toLowerCase()] ?? rawCondition;
+  }
 
   const merchantName = pick(row, ...FEED_ALIASES.merchantName) || feed.title || 'Awin';
   const feedMerchantId = /^\d+$/.test(feed.id) ? feed.id : undefined;

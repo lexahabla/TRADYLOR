@@ -23,7 +23,7 @@ export interface Props {
 
 const {
   toggleLabel = '💬 Asesor IA',
-  headerTitle = 'Tradylor · Asistente IA',
+  headerTitle = 'Asesor IA',
   inputPlaceholder = 'Pregunta sobre cualquier producto…',
 } = Astro.props;
 ---
@@ -79,9 +79,10 @@ const {
   #ia-chat-window {
     width: 350px;
     height: 450px;
-    background: #ffffff;
+    background: var(--color-bg-card, #111827);
+    border: 1px solid var(--color-border, #1f2937);
     border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -95,23 +96,28 @@ const {
   }
 
   .chat-header {
-    background: #0f172a;
-    color: #fff;
+    background: var(--color-bg-body, #0a0e17);
+    color: var(--color-text-main, #f3f4f6);
     padding: 12px 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     font-weight: 600;
     font-size: 15px;
+    border-bottom: 1px solid var(--color-border, #1f2937);
   }
 
   .chat-header button {
     background: none;
     border: none;
-    color: #fff;
+    color: var(--color-text-muted, #9ca3af);
     cursor: pointer;
     font-size: 16px;
     line-height: 1;
+  }
+
+  .chat-header button:hover {
+    color: var(--color-text-main, #f3f4f6);
   }
 
   #ia-messages {
@@ -122,25 +128,25 @@ const {
     flex-direction: column;
     gap: 10px;
     font-size: 14px;
-    background: #f8fafc;
+    background: var(--color-bg-body, #0a0e17);
   }
 
   .msg-user {
     align-self: flex-end;
-    background: #e2e8f0;
+    background: var(--color-primary, #3b82f6);
     padding: 8px 12px;
     border-radius: 12px 12px 0 12px;
-    color: #1e293b;
+    color: #ffffff;
     max-width: 80%;
   }
 
   .msg-ia {
     align-self: flex-start;
-    background: #f1f5f9;
+    background: var(--color-bg-card-hover, #162032);
     padding: 8px 12px;
     border-radius: 12px 12px 12px 0;
     border-left: 3px solid #3b82f6;
-    color: #1e293b;
+    color: var(--color-text-main, #f3f4f6);
     max-width: 80%;
     line-height: 1.5;
   }
@@ -150,8 +156,8 @@ const {
     align-self: flex-start;
     width: 100%;
     max-width: 100%;
-    background: #ffffff;
-    border: 1px solid #e2e8f0;
+    background: var(--color-surface-subtle, #1a2234);
+    border: 1px solid var(--color-border, #1f2937);
     border-radius: 10px;
     padding: 10px 12px;
     margin: 6px 0;
@@ -163,7 +169,7 @@ const {
   .ia-producto-title {
     font-weight: 800;
     font-size: 14px;
-    color: #0f172a;
+    color: var(--color-text-main, #f3f4f6);
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -171,36 +177,42 @@ const {
   }
 
   .ia-producto-title a {
-    color: #0f172a;
+    color: var(--color-text-main, #f3f4f6);
     text-decoration: none;
     font-weight: 800;
   }
 
   .ia-producto-title a:hover {
     text-decoration: underline;
-    color: #2563eb;
+    color: #60a5fa;
   }
 
   .ia-producto-reason {
     font-size: 12.5px;
-    color: #475569;
+    color: var(--color-text-muted, #9ca3af);
     margin-top: 2px;
   }
 
   .chat-input-container {
     display: flex;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--color-border, #1f2937);
     padding: 8px;
-    background: #fff;
+    background: var(--color-bg-card, #111827);
   }
 
   #ia-input {
     flex: 1;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--color-border, #1f2937);
     outline: none;
     padding: 8px;
     border-radius: 6px;
     font-size: 14px;
+    background: var(--color-surface-subtle, #1a2234);
+    color: var(--color-text-main, #f3f4f6);
+  }
+
+  #ia-input::placeholder {
+    color: var(--color-text-dim, #6b7280);
   }
 
   #ia-input:focus {

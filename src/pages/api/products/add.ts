@@ -578,6 +578,28 @@ export function extractMetadata(html: string, targetUrl: string) {
     if (brandMeta) brand = cleanExtractedText(brandMeta);
   }
 
+  // ── ESTADO DEL PRODUCTO (Nuevo/Usado/Reacondicionado) ───────────────────
+  // Dato clave para poder filtrar después los artículos de segunda mano.
+  // eBay lo publica en <div class="x-item-condition-text"><span
+  // class="clipped">Usado</span></div>; se añade un fallback genérico
+  // (microdato itemCondition / JSON embebido / etiqueta "Estado:") por si
+  // otros comercios usan un campo semejante.
+  let condition = '';
+  const ebayConditionMatch = html.match(/x-item-condition-text[\s\S]{0,400}?class=["']clipped["'][^>]*>\s*([^<]+?)\s*</i);
+  if (ebayConditionMatch?.[1]) {
+    condition = cleanExtractedText(ebayConditionMatch[1]);
+  }
+  if (!condition) {
+    const genericConditionMatch =
+      html.match(/itemprop=["']itemCondition["'][^>]*content=["'][^"']*?(New|Used|Refurbished|UsedCondition|NewCondition|RefurbishedCondition)["']/i) ||
+      html.match(/"itemCondition"\s*:\s*"[^"]*?(New|Used|Refurbished)[^"]*"/i) ||
+      html.match(/(?:estado|condici[oó]n)\s*(?:del producto)?\s*:?\s*(?:<\/[^>]+>\s*)?<[^>]*>\s*(Nuevo|Usado|Reacondicionado|Seminuevo|De exposición)\s*</i);
+    if (genericConditionMatch?.[1]) {
+      const map: Record<string, string> = { New: 'Nuevo', Used: 'Usado', Refurbished: 'Reacondicionado' };
+      condition = map[genericConditionMatch[1]] ?? cleanExtractedText(genericConditionMatch[1]);
+    }
+  }
+
   // 2ª fuente: Amazon usa tablas técnicas y listas de detalle. El objeto nace
   // con las specs ya recogidas del JSON-LD (additionalProperty) para que las
   // tablas del HTML sólo añadan las que falten.
@@ -815,7 +837,11 @@ export function extractMetadata(html: string, targetUrl: string) {
     brand,
     rating: rating ?? undefined,
     reviewsCount: reviewsCount ?? undefined,
-    specs: Object.keys(specs).length ? specs : undefined,
+    condition: condition || undefined,
+    specs: (() => {
+      if (condition) specs['Estado'] = condition;
+      return Object.keys(specs).length ? specs : undefined;
+    })(),
     fulfillmentProvider,
     shippingInfo: shippingInfo || undefined,
     shippingDays,
@@ -990,6 +1016,7 @@ export async function complementProductFromPage(
     emptyStr(data.shippingInfo) ||
     emptyStr(data.buyNowUrl) ||
     emptyStr(data.description) ||
+    emptyStr(data.condition) ||
     // `rating`/`reviewsCount`: sólo si el cliente NO los envió (undefined);
     // un null explícito significa "limpiarlo" y no se rellena. La galería se
     // lee sólo si viene VACÍA (con ≥1 imagen el flujo de análisis ya cubrió el
@@ -1024,6 +1051,7 @@ export async function complementProductFromPage(
     }
     if (emptyStr(data.buyNowUrl) && scraped.buyNowUrl) data.buyNowUrl = scraped.buyNowUrl;
     if (emptyStr(data.description) && scraped.description) data.description = scraped.description;
+    if (emptyStr(data.condition) && scraped.condition) data.condition = scraped.condition;
     if (scraped.gallery?.length) {
       const merged = (Array.isArray(data.gallery) ? data.gallery.map((g: unknown) => String(g ?? '').trim()) : [])
         .filter(Boolean);
@@ -1436,6 +1464,9 @@ export const POST: APIRoute = async ({ request }) => {
           return n != null ? Math.max(0, Math.round(n)) : undefined;
         })(),
         brand: strField(dataToSave.brand, existingProduct?.brand),
+        // Estado físico (Nuevo/Usado/Reacondicionado...): dato clave para
+        // poder filtrar después los productos de segunda mano.
+        condition: strField(dataToSave.condition, existingProduct?.condition),
         fulfillmentProvider: strField(dataToSave.fulfillmentProvider, existingProduct?.fulfillmentProvider),
         verdict: strField(dataToSave.verdict, existingProduct?.verdict),
         techSheet: strField(dataToSave.techSheet, existingProduct?.techSheet),

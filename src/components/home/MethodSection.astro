@@ -90,7 +90,6 @@
   }
   .section-header.center {
     text-align: center;
-    padding-top: 2rem;
   }
   .section-tag {
     font-size: 0.85rem;
@@ -121,7 +120,7 @@
   }
 
   .method-section {
-    padding: 5rem 0 6rem;
+    padding: 2.5rem 0 6rem;
     border-top: 1px solid rgba(255, 255, 255, 0.07);
     background: linear-gradient(180deg, transparent 0%, rgba(16, 185, 129, 0.03) 45%, transparent 100%);
   }
@@ -199,6 +198,9 @@
   }
 
   @media (max-width: 640px) {
+    .method-section {
+      padding: 1.5rem 0 3.5rem;
+    }
     .section-title {
       font-size: clamp(1.5rem, 3vw, 2rem);
     }
@@ -208,9 +210,20 @@
     .section-header {
       margin-bottom: 2.25rem;
     }
+    .method-steps {
+      gap: 1.1rem;
+      margin-top: 2.25rem;
+    }
     .method-step {
       flex-direction: column;
+      gap: 0.9rem;
       padding: 1.4rem;
+    }
+    .method-step-number {
+      margin-bottom: 0.25rem;
+    }
+    .method-step-desc {
+      max-width: none;
     }
   }
 </style>

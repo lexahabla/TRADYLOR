@@ -32,6 +32,9 @@ export interface Product {
   reviewsCount?: number;
   /** Marca del producto (ej: Samsung); se muestra en la ficha y en JSON-LD. */
   brand?: string;
+  /** Estado físico del producto (Nuevo/Usado/Reacondicionado...). Clave para
+   *  poder filtrar y señalizar los productos de segunda mano en el panel. */
+  condition?: string;
   verdict?: string;
   specs?: Record<string, string>;
   /** Texto de ficha técnica (consulta en la página del producto). */

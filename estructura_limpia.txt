@@ -219,7 +219,6 @@ src/pages/api/v1/products/import.ts
 src/pages/api/v1/products/index.ts
 src/pages/checkout/[id].astro
 src/pages/ejemplo-afiliados.astro
-src/pages/herramientas.astro
 src/pages/herramientas/comparador.astro
 src/pages/herramientas/dependiente-ia.astro
 src/pages/herramientas/perfilador.astro
