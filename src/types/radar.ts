@@ -135,7 +135,7 @@ export const REMINDER_MAX_PER_USER = 20;
 export const REMINDER_MAX_HORIZON_MS = 365 * 24 * 60 * 60 * 1000;
 
 /**
- * Perfil de Comprador guardado: resultado nombrado del Perfilador de Compra
+ * Perfil de Comprador guardado: resultado nombrado del Perfilador
  * (uso + presupuesto + prioridad). Un usuario puede guardar varios; el
  * selector del mainNav marca uno como "activo" (`RadarData.activeBuyerProfileId`).
  * El activo actúa como filtro VISUAL (badge "Encaja con tu perfil") en el
@@ -156,7 +156,7 @@ export interface BuyerProfile {
   updatedAt: string;
 }
 
-/** Comparativa guardada desde el Comparador de Productos (Centro de Herramientas). */
+/** Comparativa guardada desde el Comparador (Centro de Herramientas). */
 export interface ComparatorHistoryEntry {
   id: string;
   createdAt: string;
@@ -237,7 +237,7 @@ export const RADAR_STORAGE_KEY = 'tradylor-radar-v1';
 export const RETURN_FLOW_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Etiquetas legibles de los valores `data-value` del Perfilador de Compra
+ * Etiquetas legibles de los valores `data-value` del Perfilador
  * (SmartMatcherWizard). Se comparten aquí para que el selector del mainNav,
  * Mi Radar y el badge "Encaja con tu perfil" no dupliquen el texto.
  */

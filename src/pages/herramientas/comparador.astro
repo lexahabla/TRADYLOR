@@ -6,6 +6,7 @@
  * Enlazada desde el mainNav (dropdown "Herramientas").
  */
 import Layout from '../../layouts/Layout.astro';
+import ToolPageHeader from '../../components/herramientas/ToolPageHeader.astro';
 import ComparisonTable from '../../components/ComparisonTable.astro';
 import { getCatalogProducts, productKey } from '../../lib/catalog';
 import { getCrossMerchantOffers } from '../../lib/productNetwork';
@@ -175,31 +176,19 @@ const comparisonMeta = baseProduct
     }).replace(/</g, '\\u003c')
   : null;
 
-const pageTitle = baseProduct ? `Comparador: ${cleanMarketplaceSuffix(baseProduct.title)} | Tradylor` : 'Comparador de Productos | Tradylor';
+const pageTitle = baseProduct ? `Comparador: ${cleanMarketplaceSuffix(baseProduct.title)} | Tradylor` : 'Comparador | Tradylor';
 const pageDescription = baseProduct
   ? `Análisis cruzado de ${cleanMarketplaceSuffix(baseProduct.title)} frente a sus alternativas reales y la alternativa recomendada.`
   : 'Elige un producto del catálogo para compararlo con sus alternativas reales y ver cuál te conviene más.';
 ---
 
 <Layout title={pageTitle} description={pageDescription} noindex={false}>
-  <a href="/herramientas" class="tools-back-link" style="display:inline-flex;align-items:center;gap:.5rem;margin:1rem 0 1rem 1.5rem;max-width:fit-content;padding:.75rem 1.2rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e5e7eb;font-weight:700;text-decoration:none;">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-    Volver a la tienda
-  </a>
-
-  <main class="tools-page">
-    <!-- HERO -->
-    <section class="tools-hero">
-      <div class="container tools-hero-inner">
-        <span class="tools-kicker">Paso 3 de El Método · Comparador</span>
-        <h1 class="tools-title">Comparador de Productos</h1>
-        <p class="tools-subtitle">
-          Elige un producto del catálogo y te mostramos su análisis cruzado frente a las
-          alternativas reales (más barato, premium, similar) y rivales de categoría,
-          además de la alternativa que te recomendamos.
-        </p>
-      </div>
-    </section>
+  <ToolPageHeader
+    icon="⚖️"
+    title="Comparador"
+    subtitle="Elige un producto del catálogo y te mostramos su análisis cruzado frente a las alternativas reales (más barato, premium, similar) y rivales de categoría, además de la alternativa que te recomendamos."
+  />
+  <div class="tool-container tool-body">
 
     <!-- Selector de producto con estilo nav-search (idéntico al de la cabecera, con
          panel de categorías y autocompletado propios, aptos para seleccionar el
@@ -562,39 +551,15 @@ const pageDescription = baseProduct
     <style>
       .visually-label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; white-space: nowrap; border-width: 0; }
 
-      .tools-back-link:hover {
-        background: rgba(59, 130, 246, 0.14);
-        border-color: rgba(96, 165, 250, 0.4);
-        color: #ffffff;
-      }
-
-      .tools-hero {
-        padding: 3.5rem 0 2.5rem;
-        background: radial-gradient(ellipse at top, rgba(59, 130, 246, 0.12) 0%, transparent 65%);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-      }
-      .tools-hero-inner { text-align: center; max-width: 760px; }
-      .tools-kicker {
-        display: inline-block; font-size: 0.74rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em;
-        color: #60a5fa; background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.28);
-        padding: 0.35rem 0.9rem; border-radius: 999px; margin-bottom: 1rem;
-      }
-      .tools-title {
-        font-family: var(--font-heading); font-size: clamp(2rem, 4.5vw, 3rem); font-weight: 800; color: #ffffff;
-        margin: 0 0 0.85rem; letter-spacing: -0.02em;
-      }
-      .tools-subtitle {
-        font-size: 1rem; color: rgba(255, 255, 255, 0.65); line-height: 1.7; margin: 0 auto 2rem; max-width: 620px;
-      }
-
       /* Form estilo nav-search para el selector de producto (clonado del header,
          con estilos propios porque el CSS original está scopeado a
-         .container.header-inner, que no existe fuera de la cabecera). */
-      .comparator-search-wrap { max-width: 600px; margin: 0 auto 0.5rem; }
+         .container.header-inner, que no existe fuera de la cabecera). El ancho
+         lo da el .tool-container compartido (sin max-width propio) para quedar
+         alineado con la cabecera y con el resto del cuerpo de la página. */
+      .comparator-search-wrap { margin-bottom: 0.5rem; }
       .nav-search {
         position: relative; /* contenedor del panel de categorías y las sugerencias */
-        margin-bottom: 2rem;
-        display: flex; align-items: center; flex: 1 1 auto; max-width: 600px; margin: 0 auto 2rem auto;
+        display: flex; align-items: center; width: 100%; margin-bottom: 2rem;
         height: 48px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 10px;
         transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
       }
@@ -700,8 +665,7 @@ const pageDescription = baseProduct
       .comparator-cross-item .cm-view-link:hover { text-decoration: underline; }
 
       @media (max-width: 640px) {
-        .nav-search { max-width: 100%; height: 44px; }
-        .comparator-search-wrap { max-width: 100%; padding: 0 1rem; }
+        .nav-search { height: 44px; }
         .comparator-picked { flex-direction: column; align-items: flex-start; }
         .comparator-verdict-card { flex-wrap: wrap; }
         .comparator-verdict-cta { width: 100%; text-align: right; }
@@ -853,5 +817,5 @@ const pageDescription = baseProduct
         .cmp-search-drop { width: min(100%, calc(100vw - 2rem)); }
       }
     </style>
-  </main>
+  </div>
 </Layout>

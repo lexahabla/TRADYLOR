@@ -1,0 +1,133 @@
+---
+/**
+ * TRADYLOR — CABECERA COMPARTIDA DE LAS PÁGINAS DE HERRAMIENTA
+ * Usada por /herramientas/perfilador, /herramientas/comparador y
+ * /herramientas/dependiente-ia (Asesor IA) para que las 3 páginas compartan
+ * exactamente la misma estructura: enlace "Volver a la tienda" + hero con
+ * kicker "Herramienta" (verde, con el icono de esa herramienta en el
+ * dropdown del mainNav) + título + subtítulo.
+ * El ancho de columna (`.tool-container`) lo reutilizan también los propios
+ * cuerpos de cada página (wizard / chat / buscador) para que todo quede
+ * alineado a los mismos márgenes.
+ */
+export interface Props {
+  /** Emoji de la herramienta, igual que en el dropdown "Herramientas" del mainNav. */
+  icon: string;
+  title: string;
+  subtitle: string;
+}
+
+const { icon, title, subtitle } = Astro.props;
+---
+
+<div class="tool-container tool-top-row">
+  <a href="/herramientas" class="tool-back-pill">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <line x1="19" y1="12" x2="5" y2="12"></line>
+      <polyline points="12 19 5 12 12 5"></polyline>
+    </svg>
+    Volver a la tienda
+  </a>
+</div>
+
+<section class="tool-hero">
+  <div class="tool-container tool-hero-inner">
+    <span class="tool-kicker">
+      <span class="tool-kicker-icon" aria-hidden="true">{icon}</span>
+      Herramienta
+    </span>
+    <h1 class="tool-title">{title}</h1>
+    <p class="tool-subtitle">{subtitle}</p>
+  </div>
+</section>
+
+<style is:global>
+  /* Columna compartida: hero y cuerpo de las 3 páginas de herramienta quedan
+     siempre alineados al mismo ancho y márgenes. */
+  .tool-container {
+    width: 100%;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    box-sizing: border-box;
+  }
+  .tool-top-row {
+    padding-top: 1.25rem;
+  }
+  .tool-back-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.28);
+    border-radius: 999px;
+    text-decoration: none;
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  }
+  .tool-back-pill:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(96, 165, 250, 0.55);
+    color: #ffffff;
+    transform: translateX(-2px);
+  }
+
+  .tool-hero {
+    padding: 2rem 0 2.25rem;
+    margin-bottom: 2.5rem;
+    background: radial-gradient(ellipse at top, rgba(59, 130, 246, 0.12) 0%, transparent 65%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  .tool-hero-inner {
+    text-align: center;
+  }
+  .tool-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.74rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.28);
+    padding: 0.35rem 0.9rem 0.35rem 0.7rem;
+    border-radius: 999px;
+    margin-bottom: 1rem;
+  }
+  .tool-kicker-icon {
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+  .tool-title {
+    font-family: var(--font-heading);
+    font-size: clamp(2rem, 4.2vw, 2.75rem);
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 0.85rem;
+    letter-spacing: -0.02em;
+  }
+  .tool-subtitle {
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.65);
+    line-height: 1.7;
+    margin: 0 auto;
+    max-width: 600px;
+  }
+  .tool-body {
+    padding-bottom: 3rem;
+  }
+
+  @media (max-width: 640px) {
+    .tool-hero {
+      padding: 1.5rem 0 1.75rem;
+      margin-bottom: 1.75rem;
+    }
+  }
+</style>

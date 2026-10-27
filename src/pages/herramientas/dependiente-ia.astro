@@ -1,33 +1,27 @@
 ---
 /**
- * TRADYLOR — DEPENDIENTE IA (Página dedicada)
+ * TRADYLOR — ASESOR IA (Página dedicada, ruta /herramientas/dependiente-ia)
  * Chat de asistencia para decidir productos. Enlazada desde el mainNav
- * (dropdown "Herramientas").
+ * (dropdown "Herramientas"). La ruta se mantiene por compatibilidad de
+ * enlaces ya compartidos; el nombre visible en toda la web es "Asesor IA".
  */
 import Layout from '../../layouts/Layout.astro';
+import ToolPageHeader from '../../components/herramientas/ToolPageHeader.astro';
 import DependienteIA from '../../components/DependienteIA.astro';
 
 export const prerender = false;
 
-const pageTitle = 'Dependiente IA | Tradylor';
-const pageDescription = 'Pregunta en lenguaje natural qué producto necesitas y el Dependiente IA te recomendará opciones reales de nuestro catálogo.';
+const pageTitle = 'Asesor IA | Tradylor';
+const pageDescription = 'Pregunta en lenguaje natural qué producto necesitas y el Asesor IA te recomendará opciones reales de nuestro catálogo.';
 ---
 
 <Layout title={pageTitle} description={pageDescription} noindex={false}>
-  <a href="/herramientas" class="tools-back-link" style="display:inline-flex;align-items:center;gap:.5rem;margin:1rem 0 1rem 1.5rem;max-width:fit-content;padding:.75rem 1.2rem;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:10px;color:#e5e7eb;font-weight:700;text-decoration:none;">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
-    Volver a la tienda
-  </a>
-
-  <section class="tools-page">
+  <ToolPageHeader
+    icon="🤖"
+    title="Asesor IA"
+    subtitle="Cuéntale qué buscas (uso, presupuesto, prioridades) y te recomendará productos reales de nuestro catálogo, nunca artículos inventados."
+  />
+  <div class="tool-container tool-body">
     <DependienteIA />
-  </section>
-
-  <style>
-    .tools-back-link:hover {
-      background: rgba(59, 130, 246, 0.14);
-      border-color: rgba(96, 165, 250, 0.4);
-      color: #ffffff;
-    }
-  </style>
+  </div>
 </Layout>

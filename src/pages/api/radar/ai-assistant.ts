@@ -1,19 +1,19 @@
 import type { APIRoute } from 'astro';
 import { chatComplete, hasTextCredentials, type ChatMessage } from '../../../lib/ai';
-import { dependienteIaSystemPrompt, withSkills } from '../../../lib/aiPersonas';
+import { asesorIaSystemPrompt, withSkills } from '../../../lib/aiPersonas';
 import { getSkillsForPersona } from '../../../lib/aiSkillsStore';
 import { getRadarSessionUser } from '../../../lib/radarAuth';
 import { aiAssistantPerIp, aiAssistantPerUser } from '../../../lib/rateLimit';
 
 /**
  * ==============================================================================
- * TRADYLOR — DEPENDIENTE IA (Centro de Herramientas)
+ * TRADYLOR — ASESOR IA (Centro de Herramientas)
  * ==============================================================================
  * POST /api/radar/ai-assistant  { messages: [{role, content}] }
  *
  * Usa la MISMA personalidad que el widget flotante (#ia-chat-window):
  * un único system prompt compartido en lib/aiPersonas.ts
- * (`dependienteIaSystemPrompt`) + los skills entrenados por el admin
+ * (`asesorIaSystemPrompt`) + los skills entrenados por el admin
  * (apartado «Desarrollo IA»). Motor: chatComplete (NVIDIA Nemotron, fallback).
  *
  * Acceso: usuarios anónimos pueden preguntar, pero la respuesta llega
@@ -37,7 +37,7 @@ function json(body: unknown, status = 200): Response {
 
 function systemPrompt(nombreUsuario?: string): string {
   return withSkills(
-    dependienteIaSystemPrompt({ nombreUsuario, jsonMode: false }),
+    asesorIaSystemPrompt({ nombreUsuario, jsonMode: false }),
     getSkillsForPersona('dependiente'),
   );
 }

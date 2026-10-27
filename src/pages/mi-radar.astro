@@ -52,7 +52,7 @@ if (!sessionUser) {
       <div class="radar-exit-cards" data-radar-exit-cards></div>
     </section>
 
-    <!-- 2b. Mis herramientas: accesos directos a Perfilador, Comparador y Dependiente IA -->
+    <!-- 2b. Mis herramientas: accesos directos a Perfilador, Comparador y Asesor IA -->
     <section class="radar-tools-section" data-radar-tools-section>
       <div class="radar-tools-head">
         <h2 class="radar-section-title">Mis herramientas</h2>
@@ -70,7 +70,7 @@ if (!sessionUser) {
           <a href="/herramientas/comparador" class="radar-tool-card-link">+ Ir al comparador</a>
         </article>
         <article class="radar-tool-card">
-          <h3 class="radar-tool-card-title">🤖 Conversaciones con el Dependiente IA</h3>
+          <h3 class="radar-tool-card-title">🤖 Conversaciones con el Asesor IA</h3>
           <div class="radar-tool-card-list" data-radar-tool-aichats></div>
           <a href="/herramientas/dependiente-ia" class="radar-tool-card-link">+ Nueva conversación</a>
         </article>
@@ -1627,7 +1627,7 @@ if (!sessionUser) {
               </button>
             </div>
           `).join('')
-        : '<p class="radar-tool-card-empty">Aún no has hablado con el Dependiente IA.</p>';
+        : '<p class="radar-tool-card-empty">Aún no has hablado con el Asesor IA.</p>';
     }
   }
 

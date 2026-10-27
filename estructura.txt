@@ -44,6 +44,7 @@ src/components/common/TrustMetrics.astro
 src/components/comparativa/ProductComparator.astro
 src/components/ComparisonTable.astro
 src/components/DependienteIA.astro
+src/components/herramientas/ToolPageHeader.astro
 src/components/home/MethodSection.astro
 src/components/metodologia/MethodologyQuiz.astro
 src/components/PriceHistoryChart.astro

@@ -395,7 +395,7 @@ export function getActiveBuyerProfile(): BuyerProfile | null {
 }
 
 /**
- * Guarda el resultado del Perfilador de Compra como un nuevo perfil nombrado
+ * Guarda el resultado del Perfilador como un nuevo perfil nombrado
  * y lo marca como activo. Igual que el resto de mutaciones, sólo se refleja
  * en la nube si hay sesión (si no, el push a /api/radar se ignora con 401).
  */

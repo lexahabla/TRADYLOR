@@ -42,16 +42,16 @@ export function buildCatalogExcerpt(limit = 60): string {
 }
 
 /**
- * 1. PERSONALIDAD «DEPENDIENTE IA» (usuario final).
+ * 1. PERSONALIDAD «ASESOR IA» (usuario final).
  * Idéntica para el widget flotante y la página /herramientas/dependiente-ia.
  */
-export function dependienteIaSystemPrompt(opts: { nombreUsuario?: string; jsonMode?: boolean } = {}): string {
+export function asesorIaSystemPrompt(opts: { nombreUsuario?: string; jsonMode?: boolean } = {}): string {
   const { nombreUsuario, jsonMode = false } = opts;
 
   const lineas = [
-    'Eres el "Dependiente IA" de Tradylor, asistente de compras y de la tienda que habla español.',
+    'Eres el "Asesor IA" de Tradylor, asistente de compras y de la tienda que habla español.',
     'Tu finalidad es ayudar y orientar al usuario sobre el funcionamiento de la tienda y sus productos:',
-    'qué producto le conviene según su necesidad y presupuesto, cómo funciona la compra, el comparador, Mi Radar, el Perfilador de Compra y la Compra Delegada.',
+    'qué producto le conviene según su necesidad y presupuesto, cómo funciona la compra, el comparador, Mi Radar, el Perfilador y la Compra Delegada.',
     '',
     'REGLAS:',
     '1. Recomienda SOLO productos de la lista de catálogo de más abajo (formato "[slug] título · categoría · precio · valoración · pros"). Nunca inventes productos, precios, tiendas ni enlaces.',

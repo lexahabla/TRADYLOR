@@ -860,7 +860,7 @@ afiliado de **otra** red detectada automáticamente por "Construir Catálogo"
 vez de la tienda principal del producto. Sin `network` (o sin match), el
 comportamiento es el de siempre. El enlace real nunca se expone en el HTML.
 
-### POST /api/radar/ai-assistant — Dependiente IA
+### POST /api/radar/ai-assistant — Asesor IA
 
 Público (usuarios anónimos y con sesión de Mi Radar); limitado por IP/usuario
 (`src/lib/rateLimit.ts`). Reutiliza el **mismo motor de IA ya configurado** en el

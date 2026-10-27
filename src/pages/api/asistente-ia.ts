@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { chatComplete, hasTextCredentials, type ChatMessage } from '../../lib/ai';
-import { dependienteIaSystemPrompt, withSkills } from '../../lib/aiPersonas';
+import { asesorIaSystemPrompt, withSkills } from '../../lib/aiPersonas';
 import { getSkillsForPersona } from '../../lib/aiSkillsStore';
 import { getRadarSessionUser } from '../../lib/radarAuth';
 
@@ -48,7 +48,7 @@ function esSaludo(texto: string): boolean {
  */
 function systemPrompt(nombreUsuario?: string): string {
   return withSkills(
-    dependienteIaSystemPrompt({ nombreUsuario, jsonMode: true }),
+    asesorIaSystemPrompt({ nombreUsuario, jsonMode: true }),
     getSkillsForPersona('dependiente'),
   );
 }
