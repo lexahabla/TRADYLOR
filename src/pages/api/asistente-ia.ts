@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { chatComplete, hasTextCredentials, type ChatMessage } from '../../lib/ai';
+import { getCatalogProducts } from '../../lib/catalog';
 
 /**
  * ==============================================================================
@@ -30,11 +31,34 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+/** Extracto compacto del catálogo aprobado para anclar al modelo a productos reales. */
+function buildCatalogExcerpt(): string {
+  const products = getCatalogProducts()
+    .filter((p) => p.audit_status !== 'rejected')
+    .sort((a, b) => (b.conversion_score ?? 0) - (a.conversion_score ?? 0))
+    .slice(0, 40);
+
+  return products
+    .map((p) => {
+      const slug = p.slug || p.id;
+      const price = p.price ? `${p.price.toFixed(2)}€` : 'sin precio';
+      return `- [${slug}] "${p.title}" · ${p.category || 'General'} · ${price}`;
+    })
+    .join('\n');
+}
+
 const SYSTEM_INSTRUCTION = `
-Eres el "Dependiente IA" de Tradylor.com, un asistente de compras experto y objetivo.
-Tu objetivo es orientar al usuario utilizando la información de nuestro método (pros, contras y especificaciones).
-Sé claro, conciso y transparente.
-Responde en español.
+Eres el "Dependiente IA" de Tradylor.com, asistente de compras experto y objetivo.
+REGLAS ESTRICTAS:
+1. Recomienda SOLO productos de la lista del catálogo de abajo (nunca inventes modelos, precios ni tiendas).
+2. Máximo 3 productos por respuesta.
+3. Sé MÁS CORTO y conciso: máximo 4-5 líneas en total, sin tablas ni secciones numeradas.
+4. Por cada producto: nombre, precio, enlace "/producto/<slug>" y una razón de UNA frase por la que lo recomiendas.
+5. Si no hay nada adecuado, dilo con honestidad y pide presupuesto o uso.
+6. Responde en español, tono directo y profesional.
+---
+CATÁLOGO DISPONIBLE:
+{{CATALOGO}}
 `.trim();
 
 export const POST: APIRoute = async ({ request }) => {
@@ -58,8 +82,10 @@ export const POST: APIRoute = async ({ request }) => {
       return json({ error: 'mensajeUsuario es obligatorio.' }, 400);
     }
 
+    const catalogo = buildCatalogExcerpt() || '(catálogo vacío por ahora)';
+
     const messages: ChatMessage[] = [
-      { role: 'system', content: SYSTEM_INSTRUCTION },
+      { role: 'system', content: SYSTEM_INSTRUCTION.replace('{{CATALOGO}}', catalogo) },
       {
         role: 'user',
         content: `Contexto del usuario/catálogo: ${JSON.stringify(contextoProducto || {})}`,
@@ -75,7 +101,7 @@ export const POST: APIRoute = async ({ request }) => {
     let respuesta: string;
     try {
       respuesta = await Promise.race([
-        chatComplete(messages, { temperature: 0.7, timeoutMs: 25_000, jsonMode: false }),
+        chatComplete(messages, { temperature: 0.5, timeoutMs: 25_000, jsonMode: false }),
         new Promise<string>((_, reject) =>
           controller.signal.addEventListener('abort', () =>
             reject(new Error('Tiempo de espera agotado. Inténtalo de nuevo.')),
