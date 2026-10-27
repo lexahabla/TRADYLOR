@@ -336,7 +336,7 @@
         });
         const data = (await res.json().catch(() => ({}))) as { success?: boolean; reply?: string; message?: string; locked?: boolean };
         if (!res.ok || !data.success) {
-          appendMessage('assistant', data.message || 'No he podido responder ahora mismo. Inténtalo de nuevo en unos segundos.');
+          appendMessage('assistant', data.message || 'Ups, se me ha atragantado la respuesta. Vuelve a preguntar en unos segundos y lo intento de nuevo.');
           if (hint) hint.textContent = data.message && res.status === 429 ? data.message : '';
           return;
         }

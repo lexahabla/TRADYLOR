@@ -55,9 +55,10 @@ function systemPrompt(nombreUsuario?: string): string {
 
 export const POST: APIRoute = async ({ request }) => {
   if (!hasTextCredentials()) {
+    // 200 (no 5xx): el proxy de Easy Panel enmascara los 5xx con HTML propio.
     return json(
       { error: 'El asistente IA no está disponible ahora mismo (sin proveedor de IA configurado en el servidor).' },
-      503,
+      200,
     );
   }
 
@@ -158,9 +159,11 @@ export const POST: APIRoute = async ({ request }) => {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error('[Asistente IA]:', msg);
+    // NUNCA 5xx: el proxy de Easy Panel sustituye los códigos 5xx por su propia
+    // página HTML y el frontend no puede parsearla (mostraría un error genérico).
     return json(
-      { error: `No se ha podido procesar la respuesta del asistente: ${msg}` },
-      502,
+      { error: 'Ups, se me ha atragantado la respuesta. Vuelve a preguntar en unos segundos y lo intento de nuevo.' },
+      200,
     );
   }
 };

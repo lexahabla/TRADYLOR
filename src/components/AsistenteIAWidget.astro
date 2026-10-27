@@ -306,14 +306,14 @@ const {
           }),
         });
 
-        const data = await res.json();
+        const data = await res.json().catch(() => ({ error: 'Respuesta no válida del servidor.' }));
         const loadingEl = document.getElementById(loadingId);
         if (loadingEl) loadingEl.remove();
 
         if (data.error) {
           const el = document.createElement('div');
           el.className = 'msg-ia';
-          el.textContent = `Error del servidor: ${data.error}`;
+          el.textContent = data.error;
           if (messagesContainer) messagesContainer.appendChild(el);
         } else {
           appendIAMensaje(data);
@@ -323,7 +323,7 @@ const {
         if (loadingEl) loadingEl.remove();
         const el = document.createElement('div');
         el.className = 'msg-ia';
-        el.textContent = 'Error de connexion avec le serveur.';
+        el.textContent = 'Sin conexión con el servidor. Vuelve a intentarlo en unos segundos.';
         if (messagesContainer) messagesContainer.appendChild(el);
       }
 

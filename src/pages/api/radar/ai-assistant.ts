@@ -44,7 +44,8 @@ function systemPrompt(nombreUsuario?: string): string {
 
 export const POST: APIRoute = async ({ request }) => {
   if (!hasTextCredentials()) {
-    return json({ success: false, message: 'El Dependiente IA no está disponible ahora mismo (sin proveedor de IA configurado en el servidor).' }, 503);
+    // 200 (no 5xx): el proxy de Easy Panel enmascara los 5xx con HTML propio.
+    return json({ success: false, message: 'El Dependiente IA no está disponible ahora mismo (sin proveedor de IA configurado en el servidor).' }, 200);
   }
 
   const user = getRadarSessionUser(request);
@@ -70,7 +71,7 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt(user?.name ?? undefined) }, ...history];
 
-    const reply = await chatComplete(messages, { temperature: 0.5, timeoutMs: 25_000 });
+    const reply = await chatComplete(messages, { temperature: 0.5, timeoutMs: 25_000, jsonMode: false });
     const trimmed = reply.trim()
       || 'No he encontrado una recomendación clara con esos datos: cuéntame tu presupuesto y para qué lo vas a usar.';
 
@@ -88,6 +89,8 @@ export const POST: APIRoute = async ({ request }) => {
     // el frontend muestra `message` tal cual.
     const msg = error instanceof Error ? error.message : 'Error del proveedor de IA.';
     console.error('[Dependiente IA] Error al responder:', msg);
-    return json({ success: false, message: msg || 'No he podido responder ahora mismo. Inténtalo de nuevo en unos segundos.' }, 200);
+    // Mensaje amigable para el usuario (el detalle técnico queda en el log del
+    // servidor); jamás status 5xx: el proxy de Easy Panel los enmascara con HTML.
+    return json({ success: false, message: 'Ups, se me ha atragantado la respuesta. Vuelve a preguntar en unos segundos y lo intento de nuevo.' }, 200);
   }
 };
