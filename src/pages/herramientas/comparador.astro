@@ -154,37 +154,46 @@ const pageDescription = baseProduct
       </div>
     </section>
 
-    <!-- Selector de producto con estilo nav-search -->
+    <!-- Selector de producto con estilo nav-search (idéntico al de la cabecera) -->
     {approvedProducts.length > 0 ? (
       <>
-        <form class="nav-search" role="search" method="get" aria-label="Buscar producto para comparar">
-          <label for="compareProductInput" class="visually-label">Elige un producto para comparar con sus alternativas:</label>
+        <form class="nav-search" role="search" method="get" aria-label="Buscar producto para comparar" autocomplete="off">
+          <!-- Desplegable de categorías a la izquierda del input (idéntico al header) -->
+          <button type="button" class="category-menu-btn" aria-label="Categorías" aria-expanded="false" aria-controls="header-category-panel">
+            <span class="cm-btn-icon">▾</span>
+            <span class="cm-btn-label hidden md:inline">Categorías</span>
+          </button>
           <input
             id="compareProductInput"
             name="producto"
             type="search"
             class="ns-input cm-search-input"
-            placeholder="Busca un producto por nombre, marca o comerciante…"
+            placeholder="Buscar productos…"
             value={compareKey ? '' : ''}
             list="compareProductDatalist"
             autocomplete="off"
           />
-          <datalist id="compareProductDatalist">
-            {optionGroups.flatMap((group) =>
-              group.products.map((product) => `<option value="${productKey(product)}">${cleanMarketplaceSuffix(product.title)} · ${formatCurrency(product.price)}</option>`)
-            )}
-          </datalist>
-          <button type="submit" class="ns-submit" aria-label="Comparar">
+          <button type="button" class="ns-clear" aria-label="Borrar la búsqueda" hidden>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+          <button type="submit" class="ns-submit" aria-label="Buscar">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
           </button>
+          <datalist id="compareProductDatalist">
+            {optionGroups.flatMap((group) =>
+              group.products.map((product) => `<option value="${productKey(product)}">${cleanMarketplaceSuffix(product.title)} · ${formatCurrency(product.price)}</option>`)
+            )}
+          </datalist>
         </form>
           <p class="comparator-hint">
             Escribe el nombre del producto o selecciona uno de las sugerencias. Al enviar verás su análisis cruzado.
           </p>
-        </form>
       </>
     ) : (
       <p class="tools-empty-note">Aún no hay suficientes productos publicados para activar el comparador. Vuelve pronto.</p>
