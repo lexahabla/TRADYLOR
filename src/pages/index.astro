@@ -192,31 +192,25 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
         </div>
       </div>
 
-      <!-- Selector de ordenación del catálogo (alineado a la derecha) -->
+      <!-- Selector de ordenación del catálogo (alineado a la derecha). Incluye
+           también, en el mismo select, los perfiles de comprador del
+           usuario ("Perfil - " + nombre del perfil): elegir uno filtra el
+           catálogo (a diferencia del badge "Encaja con tu perfil", siempre
+           visual, este SÍ oculta lo que no encaja) y vuelve a mostrar las
+           etiquetas de los productos que sí encajan. -->
       <div class="catalog-sort-bar">
         <label for="catalogSortSelect" class="catalog-sort-label">
-          <span class="catalog-sort-label-full">Ordenar catálogo:</span>
+          <span class="catalog-sort-label-full">Ordenar</span>
           <span class="catalog-sort-label-short">Ordenar:</span>
         </label>
-        <select id="catalogSortSelect" class="catalog-sort-select" aria-label="Ordenar catálogo">
+        <select id="catalogSortSelect" class="catalog-sort-select" aria-label="Ordenar catálogo" data-catalog-sort-select>
           <option value="precio_desc" selected={activeSort === 'precio_desc'}>Precio de mayor a menor</option>
           <option value="precio_asc" selected={activeSort === 'precio_asc'}>Precio de menor a mayor</option>
           <option value="valoracion" selected={activeSort === 'valoracion'}>Mejor valorados</option>
           <option value="ventas" selected={activeSort === 'ventas'}>Más vendidos</option>
           <option value="score" selected={activeSort === 'score'}>Más destacados</option>
+          <optgroup label="Perfil de comprador" data-catalog-profile-options hidden></optgroup>
         </select>
-
-        <!-- Filtro opcional por Perfil de Comprador (Perfilador): se rellena y
-             se muestra por JS sólo si el usuario tiene perfiles guardados.
-             A diferencia del badge "Encaja con tu perfil" (siempre visual,
-             nunca oculta nada), este control SÍ oculta los productos que no
-             encajan, de forma explícita y reversible (opción "Todos"). -->
-        <div class="catalog-profile-filter" data-profile-filter-wrap hidden>
-          <label for="catalogProfileFilterSelect" class="catalog-sort-label">Perfil:</label>
-          <select id="catalogProfileFilterSelect" class="catalog-sort-select" aria-label="Filtrar por perfil de comprador" data-profile-filter-select>
-            <option value="">Todos los productos</option>
-          </select>
-        </div>
       </div>
 
       <div class="products-grid">
@@ -596,6 +590,10 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     const sortSelect = document.getElementById('catalogSortSelect');
     sortSelect?.addEventListener('change', () => {
       const val = sortSelect.value;
+      // Las opciones de perfil de comprador ("profile:<id>") las gestiona el
+      // otro script (módulo, importa el store): aquí sólo nos ocupamos de los
+      // criterios de orden reales, que recargan la página con ?sort=.
+      if (val.indexOf('profile:') === 0) return;
       // Cookie de sesión: el SSR la lee (Astro.cookies) para mantener el orden elegido
       // en visitas posteriores sin `?sort=` en la URL, sin necesidad de redirigir aquí.
       try {
@@ -611,26 +609,31 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
 </script>
 
 <script>
-  // Filtro opcional por Perfil de Comprador en el catálogo (catalog-sort-bar):
-  // se rellena y se muestra solo si el usuario tiene perfiles guardados.
-  // A diferencia del badge "Encaja con tu perfil" (siempre visual, nunca
-  // oculta nada), este control SÍ oculta las tarjetas que no encajan; se
-  // revierte con la opción "Todos los productos".
+  // Perfiles de comprador en el selector de orden del catálogo
+  // (catalog-sort-bar): se añaden como "Perfil - {nombre}" dentro del mismo
+  // <select>, sólo si el usuario tiene perfiles guardados. A diferencia del
+  // badge "Encaja con tu perfil" (siempre visual, nunca oculta nada), elegir
+  // uno aquí SÍ oculta los productos que no encajan — y, para los que sí,
+  // muestra también la etiqueta/badge de ese perfil (antes sólo se pintaba
+  // para el perfil marcado como "activo" en el nav, nunca para éste).
   import { getBuyerProfiles } from '../utils/buyerProfileStore';
   import { onRadarChange } from '../utils/radarStore';
-  import { matchesBuyerProfileCard } from '../types/buyerProfile';
+  import { matchesBuyerProfileCard, paintProfileMatchBadge } from '../types/buyerProfile';
 
   (() => {
-    const wrap = document.querySelector<HTMLElement>('[data-profile-filter-wrap]');
-    const select = document.querySelector<HTMLSelectElement>('[data-profile-filter-select]');
-    if (!wrap || !select) return;
+    const select = document.querySelector<HTMLSelectElement>('[data-catalog-sort-select]');
+    const profileGroup = document.querySelector<HTMLOptGroupElement>('[data-catalog-profile-options]');
+    if (!select || !profileGroup) return;
 
-    function applyFilter(): void {
-      const profileId = select!.value;
-      const profile = profileId ? getBuyerProfiles().find((p) => p.id === profileId) : null;
+    const PROFILE_PREFIX = 'profile:';
+
+    function applyProfileFilter(profileId: string | null): void {
+      const profile = profileId ? getBuyerProfiles().find((p) => p.id === profileId) ?? null : null;
       document.querySelectorAll<HTMLElement>('.products-grid [data-pc-price]').forEach((card) => {
+        const badge = card.querySelector<HTMLElement>('[data-profile-match-badge]');
         if (!profile) {
           card.style.display = '';
+          if (badge) badge.hidden = true;
           return;
         }
         const match = matchesBuyerProfileCard(
@@ -643,30 +646,40 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
           profile,
         );
         card.style.display = match ? '' : 'none';
+        if (badge) paintProfileMatchBadge(badge, match, profile);
       });
     }
 
-    function renderOptions(): void {
+    function renderProfileOptions(): void {
       const profiles = getBuyerProfiles();
-      wrap!.hidden = profiles.length === 0;
-      if (profiles.length === 0) return;
-      const previous = select!.value;
-      select!.innerHTML = [
-        '<option value="">Todos los productos</option>',
-        ...profiles.map((p) => `<option value="${p.id}">${p.name}</option>`),
-      ].join('');
-      // Conserva la selección si el perfil sigue existiendo; si no, no filtra
-      // nada por defecto (el filtro es una elección explícita del usuario,
-      // no se activa solo porque haya un perfil activo).
-      select!.value = profiles.some((p) => p.id === previous) ? previous : '';
-      applyFilter();
+      const previousValue = select!.value;
+      profileGroup!.hidden = profiles.length === 0;
+      profileGroup!.innerHTML = profiles
+        .map((p) => `<option value="${PROFILE_PREFIX}${p.id}">Perfil - ${p.name}</option>`)
+        .join('');
+      const stillExists = profiles.some((p) => `${PROFILE_PREFIX}${p.id}` === previousValue);
+      if (stillExists) {
+        select!.value = previousValue;
+      } else if (previousValue.indexOf(PROFILE_PREFIX) === 0) {
+        // El perfil con el que se filtraba se borró: vuelve a mostrar todo.
+        select!.selectedIndex = 0;
+        applyProfileFilter(null);
+      }
     }
 
-    select.addEventListener('change', applyFilter);
-    renderOptions();
+    select.addEventListener('change', () => {
+      const val = select!.value;
+      if (val.indexOf(PROFILE_PREFIX) === 0) {
+        applyProfileFilter(val.slice(PROFILE_PREFIX.length));
+      }
+      // Los valores de orden real (precio_desc, score...) navegan y recargan
+      // la página (ver script is:inline de arriba): no hace falta nada más.
+    });
+
+    renderProfileOptions();
     // Si se activa/crea/borra un perfil desde el nav o desde /perfil, esta
     // lista y el filtro en curso se mantienen al día sin recargar.
-    onRadarChange(renderOptions);
+    onRadarChange(renderProfileOptions);
   })();
 </script>
 
@@ -894,13 +907,6 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   .catalog-sort-select:focus {
     border-color: #60a5fa;
   }
-  .catalog-profile-filter {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding-left: 0.65rem;
-    border-left: 1px solid var(--color-border);
-  }
 
   .catalog-header-bar .section-header {
     margin-bottom: 0;
@@ -933,13 +939,6 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     .catalog-sort-select {
       padding: 0.3rem 0.5rem;
       font-size: 0.76rem;
-    }
-    .catalog-profile-filter {
-      flex-basis: 100%;
-      padding-left: 0;
-      padding-top: 0.4rem;
-      border-left: none;
-      border-top: 1px solid var(--color-border);
     }
   }
 

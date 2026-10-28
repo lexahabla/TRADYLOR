@@ -8,12 +8,12 @@
  * respuesta del servidor no se bloquean.
  */
 import type { MiddlewareHandler } from 'astro';
-import { clientIpFrom, trackProductVisit } from './lib/analytics';
+import { clientIpFrom, getAnalyticsEvents, trackProductVisit } from './lib/analytics';
 import { getSessionUser } from './lib/adminAuth';
-import { findCatalogProduct } from './lib/catalog';
+import { findCatalogProduct, getCatalogProducts } from './lib/catalog';
 import { recordPricePoint } from './lib/priceHistory';
 import { startReminderScheduler } from './lib/reminders';
-import { getRadarSessionUser, recordRadarUserVisit, SESSION_COOKIE_NAME } from './lib/radarAuth';
+import { getAllRadarUsers, getRadarSessionUser, recordRadarUserVisit, SESSION_COOKIE_NAME } from './lib/radarAuth';
 import { startMarketingScheduler } from './lib/marketingEmail';
 import { startPriceAlertScheduler } from './lib/priceAlerts';
 
@@ -26,6 +26,24 @@ startMarketingScheduler();
 // Alertas de bajada de precio de Mi Radar (comparación cada 6 h contra el
 // catálogo interno y la caché de AliExpress; email + badge en el panel).
 startPriceAlertScheduler();
+
+/**
+ * Precalienta en el arranque las cachés en memoria más caras (catálogo,
+ * eventos de analítica, usuarios de Mi Radar): sin esto, cada redeploy las
+ * deja frías y la PRIMERA petición que las necesita (muy a menudo el panel
+ * de Tráfico y Ventas, que llama a getCatalogProducts() una vez por mes del
+ * histórico) paga de golpe el coste de releer y validar con Zod todo
+ * products.json — bloqueando el event loop varios segundos y dando la
+ * sensación de que esa página "tarda mucho" o "no carga el contenido".
+ * Nunca debe poder tumbar el arranque del servidor: todo va en try/catch.
+ */
+try {
+  getCatalogProducts();
+  getAnalyticsEvents();
+  getAllRadarUsers();
+} catch (error) {
+  console.warn('[Middleware] No se pudieron precalentar las cachés de arranque:', error);
+}
 
 /** /producto/<slug> o /productos/<slug>, con o sin barra final. */
 const PRODUCT_PATH = /^\/(productos?)\/([^/]+?)\/?$/i;

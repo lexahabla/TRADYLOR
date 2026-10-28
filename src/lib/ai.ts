@@ -77,9 +77,15 @@ const AI_KEY_ENVS = new Set([
 export function env(name: string): string {
   const fromProcess = process.env[name];
   if (fromProcess !== undefined && fromProcess !== '') return fromProcess;
-  const fromAstro = (import.meta.env as Record<string, string | undefined>)[name];
-  if (fromAstro !== undefined && fromAstro !== '') return fromAstro;
-  // Fallback: claves guardadas desde el panel (Transparencia › Conectividad IA).
+  // Las 6 claves de IA tienen su propio fallback fiable (el almacén del panel,
+  // siempre al día). `import.meta.env` lo congela Vite en tiempo de BUILD: si
+  // el contenedor se construyó con un valor antiguo/erróneo en el entorno
+  // (p. ej. una clave equivocada que luego se corrigió sólo en el panel o en
+  // las variables de Easy Panel), esta rama servía ese valor obsoleto en vez
+  // de la clave real y correcta — un "clave inválida" muy difícil de
+  // diagnosticar porque /api/admin/ai-keys/test (que no mira import.meta.env)
+  // sí daba conexión correcta con la misma clave. Por eso estas 6 se saltan
+  // ese paso y van directas de process.env al almacén del panel.
   if (AI_KEY_ENVS.has(name)) {
     try {
       return storedKeyForEnv(name);
@@ -87,6 +93,8 @@ export function env(name: string): string {
       return '';
     }
   }
+  const fromAstro = (import.meta.env as Record<string, string | undefined>)[name];
+  if (fromAstro !== undefined && fromAstro !== '') return fromAstro;
   return '';
 }
 

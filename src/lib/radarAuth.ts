@@ -194,13 +194,25 @@ function getCookies(request: Request): Record<string, string> {
 
 /* ------------------------------------------------------------ persistencia */
 
+/**
+ * Caché en memoria por mtime (mismo patrón que lib/catalog.ts y lib/userStore.ts):
+ * `getAllRadarUsers()` se llama en el dashboard de Tráfico y Ventas y leía el
+ * fichero completo de disco en cada petición sin ninguna reutilización.
+ */
+let usersCache: { mtimeMs: number; users: RadarUser[] } | null = null;
+
 function readUsers(): RadarUser[] {
   if (!fs.existsSync(USERS_FILE)) return [];
   try {
+    const stat = fs.statSync(USERS_FILE);
+    if (usersCache && usersCache.mtimeMs === stat.mtimeMs) return usersCache.users;
     const parsed = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
-    return Array.isArray(parsed) ? (parsed as RadarUser[]) : [];
+    const users = Array.isArray(parsed) ? (parsed as RadarUser[]) : [];
+    usersCache = { mtimeMs: stat.mtimeMs, users };
+    return users;
   } catch (error) {
     console.error('[RadarAuth] Error leyendo radar-users.json:', error);
+    if (usersCache) return usersCache.users;
     return [];
   }
 }
@@ -210,6 +222,12 @@ function writeUsers(users: RadarUser[]): void {
   const tmp = `${USERS_FILE}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(users, null, 2), 'utf-8');
   fs.renameSync(tmp, USERS_FILE);
+  try {
+    const stat = fs.statSync(USERS_FILE);
+    usersCache = { mtimeMs: stat.mtimeMs, users };
+  } catch {
+    usersCache = null;
+  }
 }
 
 export function deleteRadarUser(userId: string): boolean {

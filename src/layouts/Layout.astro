@@ -2132,10 +2132,7 @@ const headerCategoryPanelHtml = `
           display: flex;
           align-items: center;
           justify-content: flex-start;
-          /* Un poco más de aire entre el buscador y sus vecinos (hamburguesa a
-             la izquierda, acciones de usuario a la derecha): al repartir el
-             espacio en flex, esto también hace el buscador algo más estrecho. */
-          gap: 0.75rem;
+          gap: 0.5rem;
           box-sizing: border-box;
         }
         .header-inner .brand-logo {
@@ -2201,7 +2198,9 @@ const headerCategoryPanelHtml = `
           min-width: 0;
           max-width: none;
           border-radius: 9px;
-          margin: 0;
+          /* Más estrecho y con separación real de la hamburguesa y las
+             acciones de usuario (antes "margin: 0" lo pegaba a ambas). */
+          margin: 0 0.6rem;
         }
         .container.header-inner .ns-input {
           font-size: 0.8rem;
@@ -2546,7 +2545,7 @@ const headerCategoryPanelHtml = `
           padding-right: 0.5rem;
         }
         .header-inner {
-          gap: 0.45rem;
+          gap: 0.35rem;
           min-height: 66px;
           padding-top: 5px;
           padding-bottom: 5px;
@@ -2557,6 +2556,7 @@ const headerCategoryPanelHtml = `
         }
         .container.header-inner .nav-search {
           height: 36px;
+          margin: 0 0.45rem;
         }
         .container.header-inner .category-menu-btn {
           padding: 0 0.5rem;
@@ -2590,6 +2590,7 @@ const headerCategoryPanelHtml = `
         }
         .container.header-inner .nav-search {
           height: 34px;
+          margin: 0 0.35rem;
         }
         .container.header-inner .category-menu-btn {
           padding: 0 0.45rem;
@@ -3851,10 +3852,9 @@ const headerCategoryPanelHtml = `
         import type { SavedProduct, UserProfile } from '../types/radar';
         import {
           buyerProfileColor,
-          buyerProfileDisplayName,
-          contrastTextColor,
           hslString,
           matchesBuyerProfileCard,
+          paintProfileMatchBadge,
           type BuyerProfile,
         } from '../types/buyerProfile';
         import { openSharePanel } from '../utils/shareUi';
@@ -4089,13 +4089,9 @@ const headerCategoryPanelHtml = `
           const cards = document.querySelectorAll<HTMLElement>('[data-pc-price]');
           if (!cards.length) return;
           const profile = user ? getActiveBuyerProfile() : null;
-          const pName = profile ? buyerProfileDisplayName(profile) : '';
-          const pColorHsl = profile ? buyerProfileColor(profile) : null;
-          const pColor = pColorHsl ? hslString(pColorHsl) : '';
 
           cards.forEach((card) => {
             const badge = card.querySelector<HTMLElement>('[data-profile-match-badge]');
-            const nameEl = badge?.querySelector<HTMLElement>('[data-profile-name-text]');
             if (!badge) return;
             if (!profile) {
               badge.hidden = true;
@@ -4115,14 +4111,7 @@ const headerCategoryPanelHtml = `
               },
               profile,
             );
-            badge.hidden = !match;
-            if (match && pColorHsl) {
-              badge.setAttribute('data-profile-name', pName);
-              badge.style.setProperty('--badge-color-start', pColor);
-              badge.style.setProperty('--badge-color-end', pColor);
-              badge.style.setProperty('--badge-text-color', contrastTextColor(pColorHsl));
-              if (nameEl) nameEl.textContent = pName;
-            }
+            paintProfileMatchBadge(badge, match, profile);
           });
         }
 

@@ -302,6 +302,31 @@ export function matchesBuyerProfileCard(
   return true;
 }
 
+/**
+ * Pinta (o apaga) el badge "Encaja con tu perfil" de una tarjeta: mismo
+ * marcado/colores tanto si lo activa el perfil marcado como "activo" en el
+ * nav (Layout.astro) como si lo activa el filtro por perfil del catálogo
+ * (index.astro) — con un perfil DISTINTO al activo, que antes se quedaba sin
+ * badge aunque el producto sí encajara.
+ */
+export function paintProfileMatchBadge(
+  badge: HTMLElement,
+  match: boolean,
+  profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'> | null,
+): void {
+  badge.hidden = !match;
+  if (!match || !profile) return;
+  const name = buyerProfileDisplayName(profile);
+  const colorHsl = buyerProfileColor(profile);
+  const color = hslString(colorHsl);
+  badge.setAttribute('data-profile-name', name);
+  badge.style.setProperty('--badge-color-start', color);
+  badge.style.setProperty('--badge-color-end', color);
+  badge.style.setProperty('--badge-text-color', contrastTextColor(colorHsl));
+  const nameEl = badge.querySelector<HTMLElement>('[data-profile-name-text]');
+  if (nameEl) nameEl.textContent = name;
+}
+
 /** Color de texto adecuado sobre un fondo HSL (blanco o negro según luminosidad). */
 export function contrastTextColor(c: { h: number; s: number; l: number }): string {
   // Fórmula aproximada de luminancia percibida.
