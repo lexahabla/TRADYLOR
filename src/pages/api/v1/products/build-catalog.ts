@@ -655,6 +655,165 @@ export function smartSort(groups: Array<CrossMerchantGroup & { category: string;
 }
 
 // ─── Paso 7: Construcción de Product + stamping pipeline + upsert atómico ────
+
+/** Construye el objeto Product para UN grupo (incluye enriquecimiento IA).
+ * Solo LEE existingProducts/existingIds; no los modifica. */
+async function buildSingleProduct(
+  group: any,
+  ctx: {
+    existingProducts: any[];
+    existingIds: Set<string>;
+    deletedIds: Set<string>;
+    pipelineConfig: any;
+    enrich: boolean;
+  }
+): Promise<{ status: 'ok'; baseId: string; product: any; existingIndex: number } | { status: 'skip' }> {
+  const { existingProducts, existingIds, deletedIds, pipelineConfig, enrich } = ctx;
+  const canonical = group.canonical;
+  const affiliateUrl = group.allAffiliateUrls[group.allNetworks[0]] || canonical.affiliateUrl;
+  const merchantName = cleanMerchant(group.allMerchantNames[group.allNetworks[0]]) || canonical.merchantName;
+  const sourceId = String(canonical.externalId || '').trim()
+    || extractSourceId({ sourceId: canonical.externalId, affiliateUrl } as any);
+  const canonicalUrl = canonicalProductUrl(affiliateUrl);
+  let existingIndex = -1;
+  if (sourceId) {
+    existingIndex = existingProducts.findIndex((p) => extractSourceId(p) === sourceId);
+  }
+  if (existingIndex === -1 && canonicalUrl) {
+    existingIndex = existingProducts.findIndex(
+      (p) => canonicalProductUrl(p.affiliateUrl) === canonicalUrl || canonicalProductUrl(p.buyNowUrl) === canonicalUrl,
+    );
+  }
+  const baseId = existingIndex >= 0 ? existingProducts[existingIndex].id : generateProductId(canonical.title, existingIds);
+  existingIds.add(baseId);
+  if (deletedIds.has(baseId)) return { status: 'skip' };
+  const duplicateHit = findIngestDuplicate(existingProducts, {
+    ...canonical, id: baseId, sourceId,
+    category: group.category || 'Tecnología', merchant: merchantName, affiliateUrl,
+  } as any, baseId);
+  if (duplicateHit && existingIndex === -1) {
+    existingIndex = existingProducts.findIndex((p) => p.id === duplicateHit.duplicateOf);
+  }
+  const discountPct = calculateDiscountPercentage(group.bestOriginalPrice, group.bestPrice);
+  const hsrBadge = group.isHSR ? 'Oferta Estrella' : undefined;
+  const upgraded = upgradeImages({
+    mainImage: canonical.mainImage, extraImages: canonical.extraImages, gallery: group.allExtraImages,
+  });
+  const product: any = {
+    id: baseId, title: canonical.title,
+    description: canonical.description || `${canonical.brand ?? canonical.merchantName} · ${canonical.category}`,
+    price: group.bestPrice,
+    originalPrice: group.bestOriginalPrice > group.bestPrice ? group.bestOriginalPrice : undefined,
+    image: upgraded.mainImage || canonical.mainImage || '', gallery: upgraded.gallery,
+    category: group.category || '', subcategory_id: group.subcategoryId,
+    merchant: cleanMerchant(group.allMerchantNames[group.allNetworks[0]]) || canonical.merchantName,
+    affiliateUrl: group.allAffiliateUrls[group.allNetworks[0]] || canonical.affiliateUrl,
+    buyNowUrl: group.allDirectUrls[group.allNetworks[0]] || canonical.directUrl,
+    asin: canonical.network === 'amazon' ? canonical.externalId : undefined,
+    pros: [`Disponible en ${group.allNetworks.length} comerciante(s)`, ...(discountPct > 0 ? [`Descuento ${discountPct}%`] : []), ...(group.bestCommissionRate > 0 ? [`Comisión ${group.bestCommissionRate}%`] : [])],
+    cons: group.variants.length > 0 ? [`Comparar precios en ${group.allNetworks.join(', ')}`] : [],
+    badge: hsrBadge, rating: group.bestRating > 0 ? group.bestRating : undefined,
+    reviewsCount: canonical.reviewCount > 0 ? canonical.reviewCount : undefined, brand: canonical.brand,
+    network: canonical.network || group.allNetworks[0],
+    currency: canonical.currency || group.allCurrencies[group.allNetworks[0]],
+    commissionRate: group.bestCommissionRate > 0 ? group.bestCommissionRate : undefined,
+    inStock: canonical.inStock, visits: canonical._sourceUnified?.visits,
+    condition: canonical.extra?.['Estado'] ?? canonical.extra?.['Condición'] ?? canonical.extra?.['Condition'],
+    shippingInfo: canonical._sourceUnified?.shippingInfo ?? canonical.extra?.['Texto de envío'],
+    shippingDays: canonical._sourceUnified?.shippingDays,
+    freeShipping: canonical.extra?.['Envío gratis'] === true,
+    sourceId: canonical.externalId, category_id: group.categoryId,
+    audit_status: 'pending', audit_score: 0, audit_reasons: [],
+    ia_status: 'pending',
+    link_status: group.allAffiliateUrls[0] || canonical.affiliateUrl ? 'active' : 'pending',
+    normalized_tags: [], conversion_score: 0,
+    pipeline_version: pipelineConfig.version, pipeline_run_at: new Date().toISOString(),
+    commissionEstimate: group.bestCommissionAmount, sales30d: group.bestSales,
+    extra: { ...canonical.extra,
+      crossMerchant: { networks: group.allNetworks, affiliateUrls: group.allAffiliateUrls,
+        directUrls: group.allDirectUrls, merchantNames: group.allMerchantNames,
+        prices: group.allPrices, originalPrices: group.allOriginalPrices,
+        currencies: group.allCurrencies, variantsCount: group.variants.length + 1,
+        hsr: group.isHSR, hsrScore: group.hsrScore },
+    },
+  };
+  if (!product.badge) product.badge = computeBadge(product);
+  const existingProduct = existingIndex >= 0 ? existingProducts[existingIndex] : undefined;
+  if (existingProduct?.category_id) {
+    product.category = existingProduct.category || product.category;
+    product.category_id = existingProduct.category_id;
+    product.subcategory_id = existingProduct.subcategory_id ?? product.subcategory_id;
+  }
+  if (existingProduct) {
+    const mergedGallery = new Set<string>([
+      ...(existingProduct.image && existingProduct.image !== '—' ? [existingProduct.image] : []),
+      ...(existingProduct.gallery ?? []), ...(product.gallery ?? []),
+    ]);
+    product.gallery = [...mergedGallery].slice(0, MAX_PRODUCT_IMAGES);
+    if (existingProduct.image && existingProduct.image !== '—') product.image = existingProduct.image;
+  }
+  const alreadyEnriched = Boolean(existingProduct?.ia_status === 'completed');
+  if (alreadyEnriched && existingProduct) {
+    product.title = existingProduct.title;
+    product.description = existingProduct.description;
+    product.pros = existingProduct.pros;
+    product.cons = existingProduct.cons;
+    product.verdict = existingProduct.verdict;
+    product.techSheet = existingProduct.techSheet;
+    product.specs = existingProduct.specs;
+    product.ia_status = existingProduct.ia_status;
+    if (existingProduct.badge) product.badge = existingProduct.badge;
+  }
+  if (enrich && !alreadyEnriched) {
+    const localText = enrichProductLocally({
+      title: product.title, description: product.description, category: product.category,
+      brand: product.brand, merchant: product.merchant, price: product.price,
+      originalPrice: product.originalPrice, rating: product.rating,
+      reviewsCount: product.reviewsCount, url: product.affiliateUrl,
+      pros: product.pros, cons: product.cons,
+    });
+    let finalText = localText;
+    if (hasTextCredentials()) {
+      try {
+        const aiText = await enrichProductText({
+          title: product.title, description: product.description, category: product.category,
+          url: product.affiliateUrl, price: product.price, originalPrice: product.originalPrice,
+        });
+        finalText = overlayEnrichedText(localText, aiText);
+      } catch { /* usar ficha local */ }
+    }
+    if (finalText.title?.trim()) product.title = finalText.title.trim();
+    if (finalText.description?.trim()) product.description = finalText.description;
+    if (finalText.pros.length) product.pros = finalText.pros;
+    if (finalText.cons.length) product.cons = finalText.cons;
+    if (finalText.verdict) product.verdict = finalText.verdict;
+    if (finalText.techSheet?.trim()) product.techSheet = finalText.techSheet;
+    if (finalText.specs && Object.keys(finalText.specs).length) product.specs = finalText.specs;
+    if (!product.category && finalText.category) product.category = finalText.category;
+    if (!product.brand && finalText.brand) product.brand = finalText.brand;
+    product.ia_status = 'completed';
+    if ((!product.image || product.image === '—') && hasImageCredentials()) {
+      try {
+        const imageResult = await generateProductImage(product.title);
+        product.image = imageResult.url;
+        product.gallery = [imageResult.url, ...(product.gallery || [])].slice(0, MAX_PRODUCT_IMAGES);
+      } catch { /* usar imagen de red */ }
+    }
+  }
+  const auditResult = runStageAudit(product, pipelineConfig);
+  if (auditResult.ok && auditResult.product) {
+    product.audit_status = (auditResult.product as any).audit_status ?? 'pending';
+    product.audit_score = (auditResult.product as any).audit_score ?? 0;
+    product.audit_reasons = (auditResult.product as any).audit_reasons ?? [];
+  }
+  const editorial = computeEditorialStatus(product);
+  product.ia_status = editorial.ia_status;
+  product.link_status = editorial.link_status;
+  product.normalized_tags = extractNormalizedTags(product);
+  product.conversion_score = computeConversionScore(product);
+  return { status: 'ok', baseId, product, existingIndex };
+}
+
 export async function buildAndUpsertProducts(
   groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }>,
   dryRun: boolean,
