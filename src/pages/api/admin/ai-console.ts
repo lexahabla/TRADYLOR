@@ -133,7 +133,12 @@ export const POST: APIRoute = async ({ request }) => {
     : undefined;
 
   try {
-    const reply = await chatComplete(finalMessages, { provider, model });
+    // jsonMode:false explícito: es chat libre (no una extracción estructurada),
+    // y sin la palabra "json" en el prompt del sistema, OpenAI/Groq rechazan
+    // con 400 cualquier llamada con response_format:json_object (lo exigen
+    // ambos). Antes se heredaba el jsonMode por defecto del proveedor (true
+    // en OpenAI y Groq), así que el chat libre fallaba siempre con esos dos.
+    const reply = await chatComplete(finalMessages, { provider, model, jsonMode: false });
     return json({ success: true, mode: 'chat', provider: provider ?? textProvider(), reply });
   } catch (error) {
     return json({

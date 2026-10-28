@@ -128,10 +128,10 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
   {
     id: 'gemini',
     name: 'Google Gemini',
-    chatUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
+    chatUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent',
     modelsUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
     envKey: 'GEMINI_API_KEY',
-    defaultModel: 'gemini-3.8-flash',
+    defaultModel: 'gemini-3.5-flash',
     freeModels: [],
     pricingNote: 'API oficial de Google AI Studio: consumo por token (pago por uso); consulta la cuota gratuita vigente en ai.google.dev.',
     docsUrl: 'https://ai.google.dev/gemini-api/docs',

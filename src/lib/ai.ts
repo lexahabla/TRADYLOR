@@ -14,7 +14,7 @@ import { storedKeyForEnv } from './aiKeysStore';
  *   TEXT_AI_PROVIDER   openai (por defecto) | anthropic | groq | nvidia | openrouter | gemini
  *   OPENAI_API_KEY / OPENAI_MODEL            (por defecto gpt-4o-mini)
  *   ANTHROPIC_API_KEY / ANTHROPIC_MODEL      (por defecto claude-3-5-sonnet-latest)
- *   GEMINI_API_KEY / GEMINI_MODEL            (por defecto gemini-3.8-flash; Google AI Studio)
+ *   GEMINI_API_KEY / GEMINI_MODEL            (por defecto gemini-3.5-flash; Google AI Studio)
  *   IMAGE_AI_PROVIDER  openai (por defecto) | flux
  *   IMAGE_MODEL        (por defecto gpt-image-1; acepta dall-e-3)
  *   FLUX_API_KEY / FLUX_ENDPOINT
@@ -77,15 +77,23 @@ const AI_KEY_ENVS = new Set([
 export function env(name: string): string {
   const fromProcess = process.env[name];
   if (fromProcess !== undefined && fromProcess !== '') return fromProcess;
-  // Las 6 claves de IA tienen su propio fallback fiable (el almacén del panel,
-  // siempre al día). `import.meta.env` lo congela Vite en tiempo de BUILD: si
-  // el contenedor se construyó con un valor antiguo/erróneo en el entorno
-  // (p. ej. una clave equivocada que luego se corrigió sólo en el panel o en
-  // las variables de Easy Panel), esta rama servía ese valor obsoleto en vez
-  // de la clave real y correcta — un "clave inválida" muy difícil de
-  // diagnosticar porque /api/admin/ai-keys/test (que no mira import.meta.env)
-  // sí daba conexión correcta con la misma clave. Por eso estas 6 se saltan
-  // ese paso y van directas de process.env al almacén del panel.
+
+  // import.meta.env es fiable sólo en DESARROLLO (`astro dev`), donde Vite lo
+  // rellena en caliente desde .env: así "pega la clave en .env" funciona en
+  // local sin tocar el entorno del sistema. En un BUILD DE PRODUCCIÓN, Vite
+  // lo CONGELA en tiempo de build: si el contenedor se construyó con un
+  // valor antiguo o erróneo en el entorno (p. ej. una clave que luego se
+  // corrigió sólo en el panel o en las variables de Easy Panel), esta rama
+  // serviría ese valor obsoleto en vez del correcto — un "clave inválida"
+  // muy difícil de diagnosticar porque /api/admin/ai-keys/test (que no mira
+  // import.meta.env) sí daba conexión correcta con la misma clave. Por eso
+  // las 6 claves de IA sólo la consultan en desarrollo; en producción van
+  // directas de process.env al almacén del panel (siempre al día).
+  if (import.meta.env.DEV || !AI_KEY_ENVS.has(name)) {
+    const fromAstro = (import.meta.env as Record<string, string | undefined>)[name];
+    if (fromAstro !== undefined && fromAstro !== '') return fromAstro;
+  }
+
   if (AI_KEY_ENVS.has(name)) {
     try {
       return storedKeyForEnv(name);
@@ -93,8 +101,6 @@ export function env(name: string): string {
       return '';
     }
   }
-  const fromAstro = (import.meta.env as Record<string, string | undefined>)[name];
-  if (fromAstro !== undefined && fromAstro !== '') return fromAstro;
   return '';
 }
 
@@ -367,11 +373,14 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 60_0
 }
 
 /**
- * Modelo de reserva si el principal da 503 (sobrecarga momentánea de Google,
- * confirmado en vivo probando varias versiones contra la API real: 3.8 y 3.7
- * devolvían 503/timeout, 3.5 respondía bien) o 404 (modelo retirado/renombrado,
- * como pasó con gemini-2.5-flash → "ya no disponible para nuevos usuarios").
- * Una versión anterior de Gemini Flash, estable y con buena disponibilidad.
+ * Modelo por defecto Y de reserva: 3.8/3.7 (las versiones más nuevas de
+ * Gemini Flash) dieron 503/timeout/429 repetidamente en pruebas reales
+ * contra la API (alta demanda / cuota agotada, ver AGENTS.md), mientras que
+ * 3.5 respondía siempre bien; 2.5 ya ni está disponible para cuentas nuevas
+ * (404, "update your code to use gemini-3.8-flash"). Por eso 3.5 es el
+ * modelo por defecto (GEMINI_MODEL) Y el de reserva si alguien fuerza
+ * explícitamente otro modelo (env, panel o consola) que acabe fallando con
+ * 503/404/429.
  */
 const GEMINI_FALLBACK_MODEL = 'gemini-3.5-flash';
 
@@ -429,7 +438,7 @@ async function callGeminiRaw(opts: {
   maxOutputTokens?: number;
   timeoutMs: number;
 }): Promise<string> {
-  const modelName = opts.model?.trim() || env('GEMINI_MODEL') || 'gemini-3.8-flash';
+  const modelName = opts.model?.trim() || env('GEMINI_MODEL') || 'gemini-3.5-flash';
   try {
     return await callGeminiModel(modelName, opts);
   } catch (error) {

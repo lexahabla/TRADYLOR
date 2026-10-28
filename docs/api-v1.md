@@ -688,7 +688,7 @@ pisa la redacción editorial anterior. El fallo queda registrado en `ai_error`
 | `groq` | `GROQ_API_KEY` (+ `GROQ_MODEL`) | Plan gratuito con **límite diario de tokens por modelo** (`TPD`): al agotarse responde `429` y el lote se queda sin enriquecer. Se puede forzar otro modelo con `model` (o `GROQ_MODEL`) porque los cubos de cuota son independientes. |
 | `nvidia` | `NVIDIA_API_KEY` (+ `NVIDIA_MODEL`) | API NIM gratuita (créditos de cortesía de NVIDIA); modelo por defecto `nvidia/nemotron-3.5-super-vl-120b-a12b`. No admite `response_format: json_object` en todos sus modelos, así que el modo JSON estricto queda desactivado para este proveedor. |
 | `openrouter` | `OPENROUTER_API_KEY` (+ `OPENROUTER_MODEL`) | Modelos con sufijo `:free` sin coste (límite de peticiones por día); modelo por defecto `deepseek/deepseek-chat-v3-0324:free`. Igual que NVIDIA, sin modo JSON estricto garantizado en todos los modelos. |
-| `gemini` | `GEMINI_API_KEY` (+ `GEMINI_MODEL`) | API oficial de Google AI Studio (`ai.google.dev`), formato propio `contents`/`systemInstruction` (no compatible con el resto de proveedores); consumo por token, modelo por defecto `gemini-3.8-flash`. |
+| `gemini` | `GEMINI_API_KEY` (+ `GEMINI_MODEL`) | API oficial de Google AI Studio (`ai.google.dev`), formato propio `contents`/`systemInstruction` (no compatible con el resto de proveedores); consumo por token, modelo por defecto `gemini-3.5-flash` (3.6-3.8 dieron 503/429 por alta demanda/cuota en pruebas reales; con fallback automático a 3.5 si el modelo forzado falla). |
 
 ---
 
