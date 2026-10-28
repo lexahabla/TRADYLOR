@@ -724,6 +724,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <label for="prodFNetwork">Red</label>
             <select id="prodFNetwork" title="Filtra por la red de afiliación de origen del producto (AliExpress, eBay, Amazon…); se calcula a partir de los productos que haya en el catálogo"><option value="">Todas las redes</option></select>
           </div>
+          <div class="filter-field ali-f-cat">
+            <label for="prodFCatNetwork">Cat/Redes</label>
+            <select id="prodFCatNetwork" title="Categoría agrupada por red de afiliación: con 'Red' en Todas, se agrupan por red (optgroup); al elegir una opción, fija a la vez los filtros «Red» y «Categoría»"><option value="">Todas</option></select>
+          </div>
+          <div class="filter-field ali-f-cat">
+            <label for="prodFSubcatNetwork">SubCat/Redes</label>
+            <select id="prodFSubcatNetwork" disabled title="Subcategoría de la opción elegida en «Cat/Redes», acotada a los productos de esa red"><option value="">Todas</option></select>
+          </div>
           <div class="filter-field">
             <label for="prodFPhotos">Nº de fotos</label>
             <select id="prodFPhotos" title="Filtra por el número de fotos en la galería del producto (incluida la principal): útil para detectar fichas pobres en imágenes">
@@ -2240,6 +2248,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const inputFilterList = document.getElementById('inputFilterList');
     const prodFCat = document.getElementById('prodFCat');
     const prodSubcatFilter = document.getElementById('prodSubcatAssign');
+    const prodFCatNetwork = document.getElementById('prodFCatNetwork');
+    const prodFSubcatNetwork = document.getElementById('prodFSubcatNetwork');
     const prodFPhotos = document.getElementById('prodFPhotos');
     const prodFSort = document.getElementById('prodFSort');
     const prodFSortDir = document.getElementById('prodFSortDir');
@@ -3316,6 +3326,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           aliInvalidateEstado();
           prodBuildRanges();
           syncNetworkFilter();
+          syncCatNetworkFilter();
+          syncSubcatNetworkFilter();
           prodFilterApply();
           // El filtro «Estado» de la tabla de afiliados se calcula con esta lista.
           try {
@@ -4178,6 +4190,11 @@ function renderTableRows(products, resetPage = true) {
     prodFCat?.addEventListener('change', () => {
       // El filtro de subcategoría se repliega sobre la categoría elegida.
       syncSubcatFilter();
+      // La categoría ya no coincide necesariamente con la opción elegida en
+      // «Cat/Redes» (que vincula categoría + red): se limpia para no mostrar
+      // una combinación que ya no es la aplicada.
+      if (prodFCatNetwork) prodFCatNetwork.value = '';
+      syncSubcatNetworkFilter();
       prodFilterApply();
     });
     prodSubcatFilter?.addEventListener('change', prodFilterApply);
@@ -4205,6 +4222,110 @@ function renderTableRows(products, resetPage = true) {
         select.value = current;
       }
     }
+
+    /**
+     * «Cat/Redes»: categoría agrupada por red de afiliación (mismo criterio que
+     * aliFCat1 en Importar). Si «Red» está en "Todas", las opciones se agrupan
+     * en <optgroup> por red; si ya hay una red fija elegida, se listan sin
+     * agrupar (una sola red). Al elegir una opción se fijan a la vez los
+     * filtros «Red» y «Categoría» ya existentes (prodFNetwork/prodFCat): no
+     * duplica lógica de filtrado, sólo ayuda a elegir los dos a la vez.
+     */
+    function syncCatNetworkFilter() {
+      if (!prodFCatNetwork) return;
+      const current = prodFCatNetwork.value;
+      const fixedNetwork = (prodFNetwork && prodFNetwork.value) || '';
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+
+      // id de red -> { label, categorías: Map<clave, {id, name, count}> }
+      const byNetwork = new Map();
+      (currentProducts || []).forEach((p) => {
+        const netId = String(p.network || '').trim().toLowerCase();
+        if (!netId) return;
+        if (fixedNetwork && netId !== fixedNetwork) return;
+        const netLabel = String(p.network_label || '').trim() || (netId.charAt(0).toUpperCase() + netId.slice(1));
+        if (!byNetwork.has(netId)) byNetwork.set(netId, { label: netLabel, cats: new Map() });
+        const root = p.category_id
+          ? allCats.find((c) => c.id === p.category_id)
+          : (p.category ? allCats.find((c) => !c.parentId && c.name === p.category) : null);
+        const catName = root ? root.name : String(p.category || '').trim();
+        if (!catName) return;
+        const entry = byNetwork.get(netId);
+        const key = root ? root.id : `n:${catName.toLowerCase()}`;
+        if (!entry.cats.has(key)) entry.cats.set(key, { id: root ? root.id : '', name: catName, count: 0 });
+        entry.cats.get(key).count++;
+      });
+
+      const networksSorted = Array.from(byNetwork.entries()).sort((a, b) => a[1].label.localeCompare(b[1].label, 'es'));
+      let html = '<option value="">Todas</option>';
+      networksSorted.forEach(([netId, info]) => {
+        const cats = Array.from(info.cats.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+        if (!cats.length) return;
+        const optionsHtml = cats
+          .map((cat) => `<option value="${escapeHtml(netId)}::${escapeHtml(cat.id || cat.name)}">${escapeHtml(cat.name)} (${cat.count})</option>`)
+          .join('');
+        html += fixedNetwork ? optionsHtml : `<optgroup label="${escapeHtml(info.label)}">${optionsHtml}</optgroup>`;
+      });
+      prodFCatNetwork.innerHTML = html;
+      if (current && Array.from(prodFCatNetwork.options).some((option) => option.value === current)) {
+        prodFCatNetwork.value = current;
+      } else {
+        prodFCatNetwork.value = '';
+      }
+    }
+
+    /** «SubCat/Redes»: subcategorías de la opción elegida en «Cat/Redes», acotadas a los productos de esa red. */
+    function syncSubcatNetworkFilter() {
+      if (!prodFSubcatNetwork) return;
+      const raw = prodFCatNetwork ? prodFCatNetwork.value : '';
+      if (!raw) {
+        prodFSubcatNetwork.innerHTML = '<option value="">Todas</option>';
+        prodFSubcatNetwork.disabled = true;
+        return;
+      }
+      const sepIdx = raw.indexOf('::');
+      const netId = sepIdx >= 0 ? raw.slice(0, sepIdx) : '';
+      const catRef = sepIdx >= 0 ? raw.slice(sepIdx + 2) : raw;
+      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      const root = allCats.find((c) => !c.parentId && (c.id === catRef || c.name === catRef));
+      const subsOfRoot = root ? allCats.filter((c) => c.parentId === root.id) : [];
+      const present = new Set();
+      (currentProducts || []).forEach((p) => {
+        const pNet = String(p.network || '').trim().toLowerCase();
+        if (netId && pNet !== netId) return;
+        if (p.subcategory_id) present.add(p.subcategory_id);
+      });
+      const subs = subsOfRoot.filter((s) => present.has(s.id));
+      prodFSubcatNetwork.disabled = subs.length === 0;
+      prodFSubcatNetwork.innerHTML =
+        '<option value="">Todas</option>' +
+        subs.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
+    }
+
+    prodFCatNetwork?.addEventListener('change', () => {
+      const raw = prodFCatNetwork.value;
+      if (raw) {
+        const sepIdx = raw.indexOf('::');
+        const netId = sepIdx >= 0 ? raw.slice(0, sepIdx) : '';
+        const catRef = sepIdx >= 0 ? raw.slice(sepIdx + 2) : raw;
+        const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+        const root = allCats.find((c) => !c.parentId && (c.id === catRef || c.name === catRef));
+        // Fija a la vez los filtros «Red» y «Categoría» ya existentes (reutiliza
+        // el motor de filtrado de prodFilterApply: no se duplica lógica).
+        if (prodFNetwork && netId) prodFNetwork.value = netId;
+        if (prodFCat) prodFCat.value = root ? root.name : catRef;
+        if (prodSubcatFilter) prodSubcatFilter.value = '';
+      }
+      syncSubcatFilter();
+      syncCatNetworkFilter();
+      syncSubcatNetworkFilter();
+      prodFilterApply();
+    });
+
+    prodFSubcatNetwork?.addEventListener('change', () => {
+      if (prodSubcatFilter) prodSubcatFilter.value = prodFSubcatNetwork.value;
+      prodFilterApply();
+    });
 
     // ─── Selector Global de Ordenación del Catálogo Público (Tienda Web) ──────
     const prodToolbarSort = document.getElementById('prodToolbarSort');
@@ -4255,17 +4376,29 @@ function renderTableRows(products, resetPage = true) {
       prodFilterApply();
     });
 
-    prodFNetwork?.addEventListener('change', prodFilterApply);
+    prodFNetwork?.addEventListener('change', () => {
+      // Cambiar la red fija la agrupación de «Cat/Redes» (con una red
+      // concreta ya no hace falta agrupar por optgroup) y su selección deja
+      // de ser válida si apuntaba a otra red.
+      syncCatNetworkFilter();
+      syncSubcatNetworkFilter();
+      prodFilterApply();
+    });
     prodFPhotos?.addEventListener('change', prodFilterApply);
 
     // Al arrancar, sincronizar redes
     syncNetworkFilter();
+    syncCatNetworkFilter();
+    syncSubcatNetworkFilter();
 
     prodFReset?.addEventListener('click', () => {
       if (inputFilterList) inputFilterList.value = '';
       if (prodFCat) prodFCat.value = '';
       syncSubcatFilter();
       if (prodFNetwork) prodFNetwork.value = '';
+      if (prodFCatNetwork) prodFCatNetwork.value = '';
+      syncCatNetworkFilter();
+      syncSubcatNetworkFilter();
       if (prodFPhotos) prodFPhotos.value = '';
       if (prodFSort) prodFSort.value = 'default';
       prodSortDir = 'desc';
@@ -7263,6 +7396,8 @@ function renderTableRows(products, resetPage = true) {
 
       syncSubcatFilter();
       syncNetworkFilter();
+      syncCatNetworkFilter();
+      syncSubcatNetworkFilter();
       syncSubcatAssign();
       syncAliSubcatAssign();
       syncProductFormSubcategories();
