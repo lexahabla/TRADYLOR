@@ -59,6 +59,7 @@ export const GET: APIRoute = () => {
     openai: Boolean((process.env.OPENAI_API_KEY ?? '').trim()),
     anthropic: Boolean((process.env.ANTHROPIC_API_KEY ?? '').trim()),
     groq: Boolean((process.env.GROQ_API_KEY ?? '').trim()),
+    gemini: Boolean((process.env.GEMINI_API_KEY ?? '').trim()),
     flux: Boolean((process.env.FLUX_API_KEY ?? '').trim()),
     textAiProvider: (process.env.TEXT_AI_PROVIDER ?? 'openai').trim(),
     imageAiProvider: (process.env.IMAGE_AI_PROVIDER ?? 'openai').trim(),
