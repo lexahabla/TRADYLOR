@@ -40,9 +40,12 @@ export function getActiveBuyerProfile(): BuyerProfile | null {
 }
 
 /**
- * Guarda el resultado del Perfilador como un nuevo perfil nombrado
- * y lo marca como activo. Igual que el resto de mutaciones, sólo se refleja
- * en la nube si hay sesión (si no, el push a /api/radar se ignora con 401).
+ * Guarda el resultado del Perfilador como un nuevo perfil nombrado y lo marca
+ * como activo. Máximo 6 perfiles: uno por cada uso del paso 1 del Perfilador.
+ * Si ya había un perfil guardado para ese mismo uso, se SUSTITUYE (conserva
+ * su id y fecha de creación) en vez de amontonar varios perfiles con el mismo
+ * uso. Igual que el resto de mutaciones, sólo se refleja en la nube si hay
+ * sesión (si no, el push a /api/radar se ignora con 401).
  */
 export function saveBuyerProfile(input: { name?: string; usage: string; budget: string; priority: string }): BuyerProfile {
   const data = loadRadar();
@@ -51,17 +54,19 @@ export function saveBuyerProfile(input: { name?: string; usage: string; budget: 
   // presupuesto + prioridad): el usuario ya no lo escribe a mano.
   const name = buyerProfileDisplayName(input);
   const color = hslString(buyerProfileColor(input));
+  const existing = (data.buyerProfiles ?? []).find((p) => p.usage === input.usage);
   const profile: BuyerProfile = {
-    id: shortId('bp'),
+    id: existing?.id ?? shortId('bp'),
     name,
     color,
     usage: input.usage,
     budget: input.budget,
     priority: input.priority,
-    createdAt: now,
+    createdAt: existing?.createdAt ?? now,
     updatedAt: now,
   };
-  data.buyerProfiles = [profile, ...(data.buyerProfiles ?? [])].slice(0, BUYER_PROFILE_MAX);
+  const otherUsages = (data.buyerProfiles ?? []).filter((p) => p.usage !== input.usage);
+  data.buyerProfiles = [profile, ...otherUsages].slice(0, BUYER_PROFILE_MAX);
   data.activeBuyerProfileId = profile.id;
   persist(data);
   void pushToCloud(data);

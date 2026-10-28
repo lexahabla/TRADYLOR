@@ -787,6 +787,9 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
   .buyer-profile-meta {
     display: flex; gap: 0.75rem; font-size: 0.78rem; color: var(--color-text-dim); flex-wrap: wrap;
   }
+  .buyer-profile-subtitles {
+    font-size: 0.74rem; color: var(--color-text-dim); opacity: 0.8; margin-top: 0.2rem; line-height: 1.4;
+  }
   .buyer-profile-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
   .buyer-profile-btn-active, .buyer-profile-btn-delete {
     padding: 0.4rem 0.75rem; font-size: 0.78rem; font-weight: 700; border-radius: 8px; cursor: pointer; border: none;
@@ -810,6 +813,7 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
 
 <script>
   import { getBuyerProfiles, setActiveBuyerProfile, deleteBuyerProfile } from '../utils/buyerProfileStore';
+  import { buyerProfileColor, buyerProfileGroupsLine, buyerProfileSubtitlesLine, hslString } from '../types/buyerProfile';
 
   (function () {
     const list = document.getElementById('buyerProfilesList');
@@ -833,16 +837,14 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
 
       list.innerHTML = profiles.map((p) => {
         const isActive = p.id === activeId;
+        const color = hslString(buyerProfileColor(p));
         return `
           <div class="buyer-profile-item" data-bp-id="${p.id}">
-            <span class="buyer-profile-color-dot" style="background:${p.color || '#3b82f6'}" aria-hidden="true"></span>
+            <span class="buyer-profile-color-dot" style="background:${color}" aria-hidden="true"></span>
             <div class="buyer-profile-info">
               <div class="buyer-profile-name">${p.name}</div>
-              <div class="buyer-profile-meta">
-                <span>${p.usage}</span>
-                <span>${p.budget}</span>
-                <span>${p.priority}</span>
-              </div>
+              <div class="buyer-profile-meta">${buyerProfileGroupsLine(p)}</div>
+              <div class="buyer-profile-subtitles">${buyerProfileSubtitlesLine(p)}</div>
             </div>
             <div class="buyer-profile-actions">
               ${isActive

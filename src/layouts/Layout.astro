@@ -503,6 +503,13 @@ const headerCategoryPanelHtml = `
         cursor: pointer;
         transition: background 0.16s ease, color 0.16s ease;
       }
+      .nav-profile-option-dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+      }
       .nav-profile-option:hover {
         background: rgba(59, 130, 246, 0.16);
         color: #ffffff;
@@ -3816,7 +3823,14 @@ const headerCategoryPanelHtml = `
           setActiveBuyerProfile,
         } from '../utils/buyerProfileStore';
         import type { SavedProduct, UserProfile } from '../types/radar';
-        import { BUYER_PROFILE_BUDGET_RANGES, type BuyerProfile } from '../types/buyerProfile';
+        import {
+          BUYER_PROFILE_BUDGET_RANGES,
+          buyerProfileColor,
+          buyerProfileDisplayName,
+          contrastTextColor,
+          hslString,
+          type BuyerProfile,
+        } from '../types/buyerProfile';
         import { openSharePanel } from '../utils/shareUi';
 
         // ---------------------------------------------------------- helpers UI
@@ -3910,6 +3924,7 @@ const headerCategoryPanelHtml = `
         const buyerProfileBtn = $<HTMLButtonElement>('[data-buyer-profile-btn]');
         const buyerProfilePanel = $('[data-buyer-profile-panel]');
         const buyerProfileLabel = $('[data-buyer-profile-label]');
+        const buyerProfileDot = buyerProfileBtn?.querySelector<HTMLElement>('.nav-profile-dot') ?? null;
 
         function escapeHtmlNav(value: string): string {
           return value.replace(/[&<>"']/g, (ch) => {
@@ -3941,6 +3956,7 @@ const headerCategoryPanelHtml = `
           if (!user) {
             buyerProfileLabel.textContent = 'INACTIVO';
             buyerProfileWrap.classList.remove('has-active-profile');
+            if (buyerProfileDot) buyerProfileDot.style.background = '';
             setBuyerProfilePanelOpen(false);
             return;
           }
@@ -3949,6 +3965,7 @@ const headerCategoryPanelHtml = `
           const active = getActiveBuyerProfile();
           buyerProfileWrap.classList.toggle('has-active-profile', Boolean(active));
           buyerProfileLabel.textContent = active ? active.name : (profiles.length ? 'Elegir perfil' : 'Sin perfil');
+          if (buyerProfileDot) buyerProfileDot.style.background = active ? hslString(buyerProfileColor(active)) : '';
 
           if (profiles.length === 0) {
             buyerProfilePanel.innerHTML = `
@@ -3960,6 +3977,7 @@ const headerCategoryPanelHtml = `
 
           const itemsHtml = profiles.map((p: BuyerProfile) => `
             <button type="button" class="nav-profile-option${p.id === active?.id ? ' is-active' : ''}" data-bp-select="${p.id}">
+              <span class="nav-profile-option-dot" style="background:${hslString(buyerProfileColor(p))}" aria-hidden="true"></span>
               <span>${escapeHtmlNav(p.name)}</span>
               ${p.id === active?.id ? '<span class="nav-profile-option-check" aria-hidden="true">✓</span>' : ''}
               <span class="nav-profile-option-delete" data-bp-delete="${p.id}" title="Eliminar perfil" role="button" aria-label="Eliminar perfil ${escapeHtmlNav(p.name)}">
@@ -4028,33 +4046,16 @@ const headerCategoryPanelHtml = `
         // Filtro VISUAL (nunca oculta productos): marca con un badge las tarjetas
         // cuyo precio entra en el rango del perfil activo (y, si la prioridad es
         // calidad o precio, exige además buena valoración o descuento real).
-        // El badge muestra el NOMBRE del perfil activo y un COLOR según la
-        // combinación (uso + presupuesto + prioridad).
-        function profileDisplayName(p: { usage: string; budget: string; priority: string }): string {
-          const u = { productividad: 'Productividad', entretenimiento: 'Entretenimiento', creatividad: 'Creatividad', hogar: 'Hogar', movilidad: 'Movilidad', fitness: 'Fitness' }[p.usage] ?? p.usage;
-          const b = { low: 'Bajo', mid: 'Medio', high: 'Alto', premium: 'Premium' }[p.budget] ?? p.budget;
-          const pr = { price: 'Ahorro', quality: 'Calidad', balance: 'Equilibrio' }[p.priority] ?? p.priority;
-          return `${u} · ${pr} · ${b}`;
-        }
-        function profileColor(p: { usage: string; budget: string; priority: string }): string {
-          const str = `${p.usage}|${p.budget}|${p.priority}`;
-          let hash = 0;
-          for (let i = 0; i < str.length; i++) {
-            hash = ((hash << 5) - hash) + str.charCodeAt(i);
-            hash |= 0;
-          }
-          const h = Math.abs(hash) % 360;
-          const s = 55 + (Math.abs(hash) % 25);
-          const l = 50 + (Math.abs(hash) % 15);
-          return `hsl(${h}, ${s}%, ${l}%)`;
-        }
+        // El badge muestra el NOMBRE del perfil activo y el COLOR fijo de su uso
+        // (mismas funciones que el resultado del Perfilador y el selector del mainNav).
         function applyProfileMatchBadges(user: UserProfile | null): void {
           const cards = document.querySelectorAll<HTMLElement>('[data-pc-price]');
           if (!cards.length) return;
           const profile = user ? getActiveBuyerProfile() : null;
           const range = profile ? BUYER_PROFILE_BUDGET_RANGES[profile.budget] : null;
-          const pName = profile ? profileDisplayName(profile) : '';
-          const pColor = profile ? profileColor(profile) : '';
+          const pName = profile ? buyerProfileDisplayName(profile) : '';
+          const pColorHsl = profile ? buyerProfileColor(profile) : null;
+          const pColor = pColorHsl ? hslString(pColorHsl) : '';
 
           cards.forEach((card) => {
             const badge = card.querySelector<HTMLElement>('[data-profile-match-badge]');
@@ -4079,16 +4080,11 @@ const headerCategoryPanelHtml = `
               match = discount >= 10;
             }
             badge.hidden = !match;
-            if (match) {
+            if (match && pColorHsl) {
               badge.setAttribute('data-profile-name', pName);
               badge.style.setProperty('--badge-color-start', pColor);
               badge.style.setProperty('--badge-color-end', pColor);
-              // Color de texto contrastante sobre el fondo del badge
-              const m = /hsl\((\d+),\s*([\d.]+)%,\s*([\d.]+)%\)/.exec(pColor);
-              if (m) {
-                const lum = (0.299 * Number(m[1]) + 0.587 * Number(m[2]) + 0.114 * Number(m[3])) / 100;
-                badge.style.setProperty('--badge-text-color', lum > 0.5 ? '#0b121e' : '#ffffff');
-              }
+              badge.style.setProperty('--badge-text-color', contrastTextColor(pColorHsl));
               if (nameEl) nameEl.textContent = pName;
             }
           });

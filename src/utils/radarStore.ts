@@ -22,6 +22,7 @@ import {
   type Reminder,
   type SavedProduct,
 } from '../types/radar';
+import { BUYER_PROFILE_MAX, collapseBuyerProfilesByUsage } from '../types/buyerProfile';
 
 export { RADAR_STORAGE_KEY };
 
@@ -507,7 +508,7 @@ function mergeCloudRadar(local: RadarData, remote: RadarData): RadarData {
   const withoutDeleted = <T extends { id: string }>(list: T[]): T[] =>
     list.filter((item) => !(item && item.id in tombstones));
 
-  const buyerProfiles = withoutDeleted(unionById(remote.buyerProfiles, local.buyerProfiles, 8));
+  const buyerProfiles = collapseBuyerProfilesByUsage(withoutDeleted(unionById(remote.buyerProfiles, local.buyerProfiles, BUYER_PROFILE_MAX)));
   const comparatorHistory = withoutDeleted(unionById(remote.comparatorHistory, local.comparatorHistory, 30));
   const aiChats = withoutDeleted(unionById(remote.aiChats, local.aiChats, 30));
 

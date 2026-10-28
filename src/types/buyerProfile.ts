@@ -68,49 +68,203 @@ export const BUYER_PROFILE_PRIORITY_LABELS: Record<string, string> = {
   quality: 'Calidad / Durabilidad',
   balance: 'Equilibrio',
 };
-/** Máximo de perfiles de comprador guardados por usuario. */
-export const BUYER_PROFILE_MAX = 8;
 
 /**
- * Genera un nombre corto y descriptivo para una combinación de Perfil de Comprador.
- * Ejemplo: "Productividad · Equilibrio · Contenido" o "Movilidad · Premium · Rendimiento".
- * Se usa cuando el usuario guarda un perfil: ya no pone nombre a mano, se asigna
- * automáticamente a partir de uso + presupuesto + prioridad.
+ * Subtítulos de cada opción (el mismo texto que ya se ve bajo cada botón del
+ * Perfilador, `smw-option-desc` en `SmartMatcherWizard.astro`): explican a qué
+ * se refiere la combinación elegida en el resultado y en "Tus perfiles de
+ * comprador". Si en el futuro se añade una categoría nueva de uso, debe
+ * encajar como sinónimo dentro de uno de estos 6 grupos (no se crea un 7º).
+ */
+export const BUYER_PROFILE_USAGE_SUBTITLES: Record<string, string> = {
+  productividad: 'Trabajo, estudio o multitarea',
+  entretenimiento: 'Streaming, gaming, audio',
+  creatividad: 'Diseño, edición, creación',
+  hogar: 'Automatización y domótica',
+  movilidad: 'Portátiles, wearables, transporte',
+  fitness: 'Wearables, salud, bienestar',
+};
+export const BUYER_PROFILE_BUDGET_SUBTITLES: Record<string, string> = {
+  low: 'Calidad esencial, gran valor',
+  mid: 'Equilibrio perfecto calidad-precio',
+  high: 'Prestaciones profesionales',
+  premium: 'Sin límites, lo mejor del mercado',
+};
+export const BUYER_PROFILE_PRIORITY_SUBTITLES: Record<string, string> = {
+  price: 'Maximizar el ahorro y la oferta',
+  quality: 'Lo mejor aunque cueste más',
+  balance: 'Relación calidad-precio óptima',
+};
+
+/**
+ * Máximo de perfiles de comprador guardados por usuario: uno por cada uso del
+ * primer paso del Perfilador (6 usos → 6 perfiles como máximo). Guardar un
+ * perfil nuevo para un uso que ya tenía uno GUARDADO lo sustituye (ver
+ * `saveBuyerProfile` en `utils/buyerProfileStore.ts`); no se amontonan varios
+ * perfiles para el mismo uso.
+ */
+export const BUYER_PROFILE_MAX = 6;
+
+/**
+ * Nombre equivalente a cada una de las 72 combinaciones (6 usos × 4
+ * presupuestos × 3 prioridades) del Perfilador. Lista cerrada tal cual se
+ * definió en `perfilador.txt`. Clave: `uso|presupuesto|prioridad` (valores
+ * `data-value` del wizard, no las etiquetas legibles).
+ */
+const BUYER_PROFILE_NAMES: Record<string, string> = {
+  'productividad|low|price': 'Básico',
+  'productividad|low|quality': 'Esencial',
+  'productividad|low|balance': 'Útil',
+  'productividad|mid|price': 'Funcional',
+  'productividad|mid|quality': 'Pragmático',
+  'productividad|mid|balance': 'Eficiente',
+  'productividad|high|price': 'Avanzado',
+  'productividad|high|quality': 'Profesional',
+  'productividad|high|balance': 'Competitivo',
+  'productividad|premium|price': 'Ejecutivo',
+  'productividad|premium|quality': 'Supremo',
+  'productividad|premium|balance': 'Óptimo',
+
+  'entretenimiento|low|price': 'Casual',
+  'entretenimiento|low|quality': 'Lúdico',
+  'entretenimiento|low|balance': 'Divertido',
+  'entretenimiento|mid|price': 'Recreativo',
+  'entretenimiento|mid|quality': 'Inmersivo',
+  'entretenimiento|mid|balance': 'Dinámico',
+  'entretenimiento|high|price': 'Multimedia',
+  'entretenimiento|high|quality': 'Cinematográfico',
+  'entretenimiento|high|balance': 'Sensorial',
+  'entretenimiento|premium|price': 'Épico',
+  'entretenimiento|premium|quality': 'Legendario',
+  'entretenimiento|premium|balance': 'Absoluto',
+
+  'creatividad|low|price': 'Inspirador',
+  'creatividad|low|quality': 'Artístico',
+  'creatividad|low|balance': 'Expresivo',
+  'creatividad|mid|price': 'Creativo',
+  'creatividad|mid|quality': 'Detallista',
+  'creatividad|mid|balance': 'Versátil',
+  'creatividad|high|price': 'Diseñador',
+  'creatividad|high|quality': 'Virtuoso',
+  'creatividad|high|balance': 'Innovador',
+  'creatividad|premium|price': 'Maestro',
+  'creatividad|premium|quality': 'Visionario',
+  'creatividad|premium|balance': 'Genial',
+
+  'hogar|low|price': 'Conectado',
+  'hogar|low|quality': 'Domótico',
+  'hogar|low|balance': 'Práctico',
+  'hogar|mid|price': 'Automatizado',
+  'hogar|mid|quality': 'Inteligente',
+  'hogar|mid|balance': 'Sincronizado',
+  'hogar|high|price': 'Robusto',
+  'hogar|high|quality': 'Integrado',
+  'hogar|high|balance': 'Confortable',
+  'hogar|premium|price': 'Futurista',
+  'hogar|premium|quality': 'Autónomo',
+  'hogar|premium|balance': 'Vanguardista',
+
+  'movilidad|low|price': 'Portátil',
+  'movilidad|low|quality': 'Nómada',
+  'movilidad|low|balance': 'Urbano',
+  'movilidad|mid|price': 'Viajero',
+  'movilidad|mid|quality': 'Resistente',
+  'movilidad|mid|balance': 'Ágil',
+  'movilidad|high|price': 'Explorador',
+  'movilidad|high|quality': 'Audaz',
+  'movilidad|high|balance': 'Fluido',
+  'movilidad|premium|price': 'Extremo',
+  'movilidad|premium|quality': 'Libertario',
+  'movilidad|premium|balance': 'Sofisticado',
+
+  'fitness|low|price': 'Activo',
+  'fitness|low|quality': 'Vital',
+  'fitness|low|balance': 'Saludable',
+  'fitness|mid|price': 'Energético',
+  'fitness|mid|quality': 'Sólido',
+  'fitness|mid|balance': 'Equilibrado',
+  'fitness|high|price': 'Atleta',
+  'fitness|high|quality': 'Rendimiento',
+  'fitness|high|balance': 'Excelente',
+  'fitness|premium|price': 'Olímpico',
+  'fitness|premium|quality': 'Elite',
+  'fitness|premium|balance': 'Insuperable',
+};
+
+/**
+ * Color fijo por uso (6 usos → 6 colores): el mismo para cualquier
+ * presupuesto/prioridad dentro de ese uso. Así el selector del mainNav, "Sin
+ * perfil" y las tarjetas de "Tus perfiles de comprador" usan siempre el mismo
+ * color para identificar un uso de un vistazo, con hasta 6 perfiles guardados.
+ */
+const BUYER_PROFILE_USAGE_COLORS: Record<string, { h: number; s: number; l: number }> = {
+  productividad: { h: 215, s: 80, l: 58 }, // azul
+  entretenimiento: { h: 280, s: 68, l: 62 }, // violeta
+  creatividad: { h: 322, s: 75, l: 60 }, // magenta
+  hogar: { h: 23, s: 82, l: 55 }, // naranja terracota
+  movilidad: { h: 190, s: 68, l: 46 }, // cian/teal
+  fitness: { h: 352, s: 75, l: 58 }, // coral
+};
+/** Color por defecto si el uso no está en la lista (no debería ocurrir con los 6 actuales). */
+const BUYER_PROFILE_FALLBACK_COLOR = { h: 215, s: 80, l: 58 };
+
+/**
+ * Genera el nombre equivalente a la combinación de Perfil de Comprador
+ * (uso + presupuesto + prioridad), tomado de la lista cerrada de
+ * `perfilador.txt` (72 combinaciones). Si la combinación no está en la lista
+ * (p. ej. un uso nuevo que todavía no se ha mapeado a uno de los 6 grupos),
+ * cae a un nombre genérico "Uso · Prioridad · Presupuesto" como red de
+ * seguridad para no dejar el perfil sin nombre.
  */
 export function buyerProfileDisplayName(profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'>): string {
+  const key = `${profile.usage}|${profile.budget}|${profile.priority}`;
+  const fixedName = BUYER_PROFILE_NAMES[key];
+  if (fixedName) return fixedName;
+
   const usage = BUYER_PROFILE_USAGE_LABELS[profile.usage] ?? profile.usage;
   const budget = BUYER_PROFILE_BUDGET_LABELS[profile.budget] ?? profile.budget;
-  const priority = BUYER_PROFILE_PRIORITY_LABELS[profile.priority] ?? profile.priority;
-
-  // Subtítulo corto según la prioridad, para diferenciar perfiles del mismo uso/presupuesto.
   const priorityShort: Record<string, string> = {
     price: 'Ahorro',
     quality: 'Calidad',
     balance: 'Equilibrio',
   };
-  const pShort = priorityShort[profile.priority] ?? profile.priority;
+  const pShort = priorityShort[profile.priority] ?? BUYER_PROFILE_PRIORITY_LABELS[profile.priority] ?? profile.priority;
 
   return `${usage} · ${pShort} · ${budget}`;
 }
 
 /**
- * Genera un color determinístico (HSL) para una combinación de perfil, para
- * usar en el badge "Encaja con tu perfil" y en el selector del mainNav.
- * Cada combinación (uso + presupuesto + prioridad) obtiene un color distinto
- * y estable entre sesiones.
+ * Línea con las 3 opciones elegidas (uso · presupuesto · prioridad), con sus
+ * etiquetas legibles. Ejemplo: "Creatividad · Hasta 100€ · Precio".
+ */
+export function buyerProfileGroupsLine(profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'>): string {
+  const usage = BUYER_PROFILE_USAGE_LABELS[profile.usage] ?? profile.usage;
+  const budget = BUYER_PROFILE_BUDGET_LABELS[profile.budget] ?? profile.budget;
+  const priority = BUYER_PROFILE_PRIORITY_LABELS[profile.priority] ?? profile.priority;
+  return `${usage} · ${budget} · ${priority}`;
+}
+
+/**
+ * Línea con los subtítulos de las 3 opciones elegidas, para entender a qué
+ * equivale cada una. Ejemplo: "Diseño, edición, creación · Calidad esencial,
+ * gran valor · Maximizar el ahorro y la oferta".
+ */
+export function buyerProfileSubtitlesLine(profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'>): string {
+  const usage = BUYER_PROFILE_USAGE_SUBTITLES[profile.usage] ?? '';
+  const budget = BUYER_PROFILE_BUDGET_SUBTITLES[profile.budget] ?? '';
+  const priority = BUYER_PROFILE_PRIORITY_SUBTITLES[profile.priority] ?? '';
+  return [usage, budget, priority].filter(Boolean).join(' · ');
+}
+
+/**
+ * Color fijo (HSL) del uso del perfil: 6 usos → 6 colores. Se usa en el badge
+ * "Encaja con tu perfil", el selector del mainNav y "Tus perfiles de
+ * comprador". No depende de presupuesto/prioridad (antes sí, por eso perfiles
+ * ya guardados con un color distinto se "autocorrigen" en cuanto se vuelven a
+ * pintar, sin necesitar migración de datos).
  */
 export function buyerProfileColor(profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'>): { h: number; s: number; l: number } {
-  const str = `${profile.usage}|${profile.budget}|${profile.priority}`;
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash |= 0;
-  }
-  const h = Math.abs(hash) % 360;
-  // Saturación y luminosidad en rango agradable para badges (no demasiado oscuro ni claro).
-  const s = 55 + (Math.abs(hash) % 25); // 55–80 %
-  const l = 50 + (Math.abs(hash) % 15); // 50–65 %
-  return { h, s, l };
+  return BUYER_PROFILE_USAGE_COLORS[profile.usage] ?? BUYER_PROFILE_FALLBACK_COLOR;
 }
 
 /** Convierte {h,s,l} a una cadena CSS hsl(). */
@@ -143,4 +297,29 @@ export function sanitizeBuyerProfile(input: BuyerProfile): BuyerProfile | null {
     createdAt: String(input?.createdAt || now).slice(0, 40),
     updatedAt: String(input?.updatedAt || now).slice(0, 40),
   };
+}
+
+/**
+ * Colapsa una lista de perfiles de comprador a como máximo uno por `usage`
+ * (gana el de `updatedAt`/`createdAt` más reciente) y la recorta a
+ * `BUYER_PROFILE_MAX`. Se usa tras fusionar perfiles de varios dispositivos
+ * (cliente y servidor): sin esto, guardar el mismo uso en dos dispositivos
+ * sin conexión podría dejar dos perfiles para un único uso tras sincronizar.
+ */
+export function collapseBuyerProfilesByUsage(list: BuyerProfile[]): BuyerProfile[] {
+  const stampOf = (p: BuyerProfile): number => {
+    const ms = Date.parse(String(p.updatedAt || p.createdAt || ''));
+    return Number.isFinite(ms) ? ms : 0;
+  };
+  const byUsage = new Map<string, BuyerProfile>();
+  for (const profile of list) {
+    if (!profile || typeof profile.usage !== 'string') continue;
+    const current = byUsage.get(profile.usage);
+    if (!current || stampOf(profile) >= stampOf(current)) {
+      byUsage.set(profile.usage, profile);
+    }
+  }
+  return [...byUsage.values()]
+    .sort((a, b) => stampOf(b) - stampOf(a))
+    .slice(0, BUYER_PROFILE_MAX);
 }

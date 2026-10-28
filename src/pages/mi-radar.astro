@@ -338,6 +338,14 @@ if (!sessionUser) {
     background: rgba(16, 185, 129, 0.08);
   }
 
+  .radar-tool-item-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  }
+
   .radar-tool-item-name {
     flex: 1;
     min-width: 0;
@@ -1329,6 +1337,7 @@ if (!sessionUser) {
   } from '../utils/buyerProfileStore';
   import { openSharePanel } from '../utils/shareUi';
   import { RETURN_FLOW_MIN_AGE_MS } from '../types/radar';
+  import { buyerProfileColor, hslString } from '../types/buyerProfile';
   import type { ProjectFolder, SavedProduct } from '../types/radar';
 
   const $ = <T extends HTMLElement = HTMLElement>(selector: string): T | null =>
@@ -1592,6 +1601,7 @@ if (!sessionUser) {
       profilesHost.innerHTML = profiles.length
         ? profiles.map((p) => `
             <div class="radar-tool-item${p.id === active?.id ? ' is-active' : ''}">
+              <span class="radar-tool-item-dot" style="background:${hslString(buyerProfileColor(p))}" aria-hidden="true"></span>
               <button type="button" class="radar-tool-item-name" data-tool-activate-profile="${p.id}" title="Marcar como perfil activo">
                 ${p.id === active?.id ? '✓ ' : ''}${escapeHtml(p.name)}
               </button>

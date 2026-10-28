@@ -6,6 +6,7 @@ import { trackEvent } from './analytics';
 import { findCatalogProduct } from './catalog';
 import {
   BUYER_PROFILE_MAX,
+  collapseBuyerProfilesByUsage,
   sanitizeBuyerProfile,
   type BuyerProfile,
 } from '../types/buyerProfile';
@@ -490,7 +491,7 @@ export function syncRadar(userId: string, incoming: Partial<RadarData>): RadarDa
   const incomingBuyerProfiles = (Array.isArray(incoming.buyerProfiles) ? incoming.buyerProfiles : [])
     .map(sanitizeBuyerProfile)
     .filter((p): p is BuyerProfile => Boolean(p));
-  const buyerProfiles = mergeById(incomingBuyerProfiles, current.buyerProfiles ?? [], BUYER_PROFILE_MAX);
+  const buyerProfiles = collapseBuyerProfilesByUsage(mergeById(incomingBuyerProfiles, current.buyerProfiles ?? [], BUYER_PROFILE_MAX));
   // Perfil activo: lo decide el cliente que sincroniza (puede mandar '' para
   // "ninguno"); si no lo incluye (cliente antiguo) se conserva el de la nube.
   // Sólo es válido si sigue existiendo entre los perfiles ya fusionados.

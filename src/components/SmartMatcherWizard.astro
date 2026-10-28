@@ -459,7 +459,14 @@
 <script>
   import { getSession } from '../utils/auth';
   import { saveBuyerProfile, getBuyerProfiles } from '../utils/buyerProfileStore';
-  import { BUYER_PROFILE_BUDGET_LABELS, BUYER_PROFILE_PRIORITY_LABELS, BUYER_PROFILE_USAGE_LABELS, buyerProfileDisplayName } from '../types/buyerProfile';
+  import {
+    buyerProfileColor,
+    buyerProfileDisplayName,
+    buyerProfileGroupsLine,
+    buyerProfileSubtitlesLine,
+    contrastTextColor,
+    hslString,
+  } from '../types/buyerProfile';
 
   const PENDING_QUIZ_KEY = 'tradylor-pending-quiz';
 
@@ -542,19 +549,25 @@
       const isLogged = Boolean(session.user);
 
       if (badgeEl && titleEl && descEl) {
-        const usageLabel = BUYER_PROFILE_USAGE_LABELS[answers.usage || 'productividad'] ?? 'Productividad';
-        const budgetLabel = BUYER_PROFILE_BUDGET_LABELS[answers.budget || 'mid'] ?? 'Moderado';
-        const priorityLabel = BUYER_PROFILE_PRIORITY_LABELS[answers.priority || 'balance'] ?? 'Equilibrio';
+        const profileAnswers = {
+          usage: answers.usage || 'productividad',
+          budget: answers.budget || 'mid',
+          priority: answers.priority || 'balance',
+        };
+        const name = buyerProfileDisplayName(profileAnswers);
+        const color = hslString(buyerProfileColor(profileAnswers));
+        const textColor = contrastTextColor(buyerProfileColor(profileAnswers));
 
-        badgeEl.textContent = 'Tu perfil de comprador';
-        titleEl.textContent = `${usageLabel} · ${budgetLabel} · ${priorityLabel}`;
-        descEl.textContent = 'Este es el perfil que guardaremos con el nombre generado a partir de tus respuestas. Lo usamos para el marcado visual en el catálogo y para que puedas cambiar de perfil desde la barra superior cuando quieras.';
+        // Línea 1 (badge, color según el uso): el NOMBRE equivalente a la combinación.
+        badgeEl.textContent = name;
+        badgeEl.style.background = color;
+        badgeEl.style.color = textColor;
+        // Línea 2 (título): las 3 opciones elegidas.
+        titleEl.textContent = buyerProfileGroupsLine(profileAnswers);
+        // Línea 3 (descripción): a qué equivale cada opción elegida.
+        descEl.textContent = buyerProfileSubtitlesLine(profileAnswers);
         if (saveProfileName) {
-          saveProfileName.textContent = buyerProfileDisplayName({
-            usage: answers.usage || 'productividad',
-            budget: answers.budget || 'mid',
-            priority: answers.priority || 'balance',
-          });
+          saveProfileName.textContent = name;
         }
       }
 

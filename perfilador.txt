@@ -1,0 +1,78 @@
+1. Productividad
+1.	Productividad · Hasta 100€ · Precio → Básico
+2.	Productividad · Hasta 100€ · Calidad → Esencial
+3.	Productividad · Hasta 100€ · Equilibrio → Útil
+4.	Productividad · 100€ – 400€ · Precio → Funcional
+5.	Productividad · 100€ – 400€ · Calidad → Pragmático
+6.	Productividad · 100€ – 400€ · Equilibrio → Eficiente
+7.	Productividad · 400€ – 1000€ · Precio → Avanzado
+8.	Productividad · 400€ – 1000€ · Calidad → Profesional
+9.	Productividad · 400€ – 1000€ · Equilibrio → Competitivo
+10.	Productividad · Más de 1000€ · Precio → Ejecutivo
+11.	Productividad · Más de 1000€ · Calidad → Supremo
+12.	Productividad · Más de 1000€ · Equilibrio → Óptimo
+2. Entretenimiento
+13.	Entretenimiento · Hasta 100€ · Precio → Casual
+14.	Entretenimiento · Hasta 100€ · Calidad → Lúdico
+15.	Entretenimiento · Hasta 100€ · Equilibrio → Divertido
+16.	Entretenimiento · 100€ – 400€ · Precio → Recreativo
+17.	Entretenimiento · 100€ – 400€ · Calidad → Inmersivo
+18.	Entretenimiento · 100€ – 400€ · Equilibrio → Dinámico
+19.	Entretenimiento · 400€ – 1000€ · Precio → Multimedia
+20.	Entretenimiento · 400€ – 1000€ · Calidad → Cinematográfico
+21.	Entretenimiento · 400€ – 1000€ · Equilibrio → Sensorial
+22.	Entretenimiento · Más de 1000€ · Precio → Épico
+23.	Entretenimiento · Más de 1000€ · Calidad → Legendario
+24.	Entretenimiento · Más de 1000€ · Equilibrio → Absoluto
+3. Creatividad
+25.	Creatividad · Hasta 100€ · Precio → Inspirador
+26.	Creatividad · Hasta 100€ · Calidad → Artístico
+27.	Creatividad · Hasta 100€ · Equilibrio → Expresivo
+28.	Creatividad · 100€ – 400€ · Precio → Creativo
+29.	Creatividad · 100€ – 400€ · Calidad → Detallista
+30.	Creatividad · 100€ – 400€ · Equilibrio → Versátil
+31.	Creatividad · 400€ – 1000€ · Precio → Diseñador
+32.	Creatividad · 400€ – 1000€ · Calidad → Virtuoso
+33.	Creatividad · 400€ – 1000€ · Equilibrio → Innovador
+34.	Creatividad · Más de 1000€ · Precio → Maestro
+35.	Creatividad · Más de 1000€ · Calidad → Visionario
+36.	Creatividad · Más de 1000€ · Equilibrio → Genial
+4. Hogar Inteligente
+37.	Hogar Inteligente · Hasta 100€ · Precio → Conectado
+38.	Hogar Inteligente · Hasta 100€ · Calidad → Domótico
+39.	Hogar Inteligente · Hasta 100€ · Equilibrio → Práctico
+40.	Hogar Inteligente · 100€ – 400€ · Precio → Automatizado
+41.	Hogar Inteligente · 100€ – 400€ · Calidad → Inteligente
+42.	Hogar Inteligente · 100€ – 400€ · Equilibrio → Sincronizado
+43.	Hogar Inteligente · 400€ – 1000€ · Precio → Robusto
+44.	Hogar Inteligente · 400€ – 1000€ · Calidad → Integrado
+45.	Hogar Inteligente · 400€ – 1000€ · Equilibrio → Confortable
+46.	Hogar Inteligente · Más de 1000€ · Precio → Futurista
+47.	Hogar Inteligente · Más de 1000€ · Calidad → Autónomo
+48.	Hogar Inteligente · Más de 1000€ · Equilibrio → Vanguardista
+5. Movilidad
+49.	Movilidad · Hasta 100€ · Precio → Portátil
+50.	Movilidad · Hasta 100€ · Calidad → Nómada
+51.	Movilidad · Hasta 100€ · Equilibrio → Urbano
+52.	Movilidad · 100€ – 400€ · Precio → Viajero
+53.	Movilidad · 100€ – 400€ · Calidad → Resistent
+54.	Movilidad · 100€ – 400€ · Equilibrio → Ágil
+55.	Movilidad · 400€ – 1000€ · Precio → Explorador
+56.	Movilidad · 400€ – 1000€ · Calidad → Audaz
+57.	Movilidad · 400€ – 1000€ · Equilibrio → Fluido
+58.	Movilidad · Más de 1000€ · Precio → Extremo
+59.	Movilidad · Más de 1000€ · Calidad → Libertario
+60.	Movilidad · Más de 1000€ · Equilibrio → Sofisticado
+6. Fitness y Salud
+61.	Fitness y Salud · Hasta 100€ · Precio → Activo
+62.	Fitness y Salud · Hasta 100€ · Calidad → Vital
+63.	Fitness y Salud · Hasta 100€ · Equilibrio → Saludable
+64.	Fitness y Salud · 100€ – 400€ · Precio → Energético
+65.	Fitness y Salud · 100€ – 400€ · Calidad → Sólido
+66.	Fitness y Salud · 100€ – 400€ · Equilibrio → Equilibrado
+67.	Fitness y Salud · 400€ – 1000€ · Precio → Atleta
+68.	Fitness y Salud · 400€ – 1000€ · Calidad → Rendimiento
+69.	Fitness y Salud · 400€ – 1000€ · Equilibrio → Excelente
+70.	Fitness y Salud · Más de 1000€ · Precio → Olímpico
+71.	Fitness y Salud · Más de 1000€ · Calidad → Elite
+72.	Fitness y Salud · Más de 1000€ · Equilibrio → Insuperable
