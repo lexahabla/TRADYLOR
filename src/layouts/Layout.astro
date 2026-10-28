@@ -3985,6 +3985,11 @@ const headerCategoryPanelHtml = `
 
           if (profiles.length === 0) {
             buyerProfilePanel.innerHTML = `
+              <div class="nav-profile-option nav-profile-option--clear" data-bp-clear style="display:flex;align-items:center;gap:0.55rem;">
+                <input type="checkbox" style="margin:0;width:16px;height:16px;flex-shrink:0;" />
+                <span style="font-weight:700;">SIN PERFIL</span>
+              </div>
+              <div class="nav-dropdown-sep" role="separator"></div>
               <p class="nav-profile-hint">Aún no tienes perfiles de comprador guardados. Completa el Perfilador y guárdalos en tu perfil.</p>
               <a href="/herramientas/perfilador" class="nav-profile-create">+ Crear mi primer perfil</a>
             `;
@@ -4003,6 +4008,11 @@ const headerCategoryPanelHtml = `
           `).join('');
 
           buyerProfilePanel.innerHTML = `
+            <div class="nav-profile-option nav-profile-option--clear" data-bp-clear style="display:flex;align-items:center;gap:0.55rem;">
+              <input type="checkbox" style="margin:0;width:16px;height:16px;flex-shrink:0;" />
+              <span style="font-weight:700;">SIN PERFIL</span>
+            </div>
+            <div class="nav-dropdown-sep" role="separator"></div>
             ${itemsHtml}
             ${active ? '<button type="button" class="nav-profile-option nav-profile-option--clear" data-bp-clear>Desactivar perfil</button>' : ''}
             <div class="nav-dropdown-sep" role="separator"></div>
