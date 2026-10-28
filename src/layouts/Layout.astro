@@ -3980,7 +3980,10 @@ const headerCategoryPanelHtml = `
           const profiles = getBuyerProfiles();
           const active = getActiveBuyerProfile();
           buyerProfileWrap.classList.toggle('has-active-profile', Boolean(active));
-          buyerProfileLabel.textContent = active ? active.name : (profiles.length ? 'Elegir perfil' : 'Sin perfil');
+          // "SIN PERFIL" (mayúsculas vía CSS text-transform) sólo cuando no hay
+          // perfil activo: tanto si el usuario lo acaba de desactivar como si
+          // aún no ha elegido ninguno.
+          buyerProfileLabel.textContent = active ? active.name : 'SIN PERFIL';
           if (buyerProfileDot) buyerProfileDot.style.background = active ? hslString(buyerProfileColor(active)) : '';
 
           if (profiles.length === 0) {

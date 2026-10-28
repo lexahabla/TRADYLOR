@@ -879,6 +879,7 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
 
 <script>
   import { getBuyerProfiles, setActiveBuyerProfile, deleteBuyerProfile } from '../utils/buyerProfileStore';
+  import { onRadarChange } from '../utils/radarStore';
   import { buyerProfileColor, buyerProfileGroupsLine, buyerProfileSubtitlesLine, contrastTextColor, hslString } from '../types/buyerProfile';
 
   (function () {
@@ -979,5 +980,8 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
     }
 
     renderProfiles();
+    // Mismo store que el selector del MainNav: si se activa/desactiva un
+    // perfil desde el nav (o desde otra pestaña), esta lista se refresca sola.
+    onRadarChange(renderProfiles);
   })();
 </script>

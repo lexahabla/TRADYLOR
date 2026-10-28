@@ -73,10 +73,20 @@ export function saveBuyerProfile(input: { name?: string; usage: string; budget: 
   return profile;
 }
 
-/** Marca (o quita, con `null`) el perfil activo del selector del mainNav. */
+/**
+ * Marca (o quita, con `null`) el perfil activo del selector del mainNav.
+ *
+ * Al desactivar se guarda `''` (string vacío), NUNCA `undefined`: el servidor
+ * (`syncRadar`) distingue "el cliente no informa del campo" (clave ausente,
+ * conserva lo que haya en la nube) de "el cliente pide explícitamente que no
+ * haya ninguno activo" (clave presente con `''`). Como `JSON.stringify`
+ * elimina las claves con valor `undefined`, enviar `undefined` hacía que la
+ * desactivación nunca llegara al servidor: el siguiente push/pull la
+ * revertía trayendo de vuelta el perfil activo antiguo de la nube.
+ */
 export function setActiveBuyerProfile(id: string | null): void {
   const data = loadRadar();
-  data.activeBuyerProfileId = id ?? undefined;
+  data.activeBuyerProfileId = id ?? '';
   persist(data);
   void pushToCloud(data);
 }
