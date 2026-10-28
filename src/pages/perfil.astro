@@ -769,7 +769,10 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
   .btn-secondary:disabled { opacity: .6; cursor: not-allowed; }
 </style>
 
-<style>
+/* is:global: la lista se pinta con innerHTML en runtime y esos nodos no
+   llevan el data-astro-cid de la página, así que el scope los dejaría sin
+   estilos (botones con el aspecto por defecto del navegador). */
+<style is:global>
   .buyer-profiles-section { margin-top: 1rem; }
   .buyer-profiles-list { display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1rem; }
   .buyer-profile-item {
@@ -782,18 +785,25 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
     flex: 1; min-width: 0;
     display: flex; flex-direction: column; gap: 0.45rem;
   }
-  /* Mismo lenguaje visual que el badge del resultado del Perfilador: pastilla
-     de color (uno distinto por perfil, nunca se repite entre los guardados). */
-  .smw-result-badge {
+  /* Nombre del perfil: misma pastilla "kicker" de la web (ToolPageHeader),
+     recoloreada con el color fijo de cada perfil. */
+  .tool-kicker {
     display: inline-flex;
     align-items: center;
-    width: fit-content;
+    gap: 0.4rem;
     font-size: 0.74rem;
     font-weight: 800;
     text-transform: uppercase;
-    letter-spacing: 0.07em;
+    letter-spacing: 0.12em;
+    color: #34d399;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.28);
     padding: 0.35rem 0.9rem;
     border-radius: 999px;
+  }
+  .buyer-profile-name {
+    width: fit-content;
+    margin-bottom: 0;
     overflow-wrap: anywhere;
     box-shadow: 0 3px 10px -3px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
@@ -803,11 +813,11 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
   .buyer-profile-subtitles {
     font-size: 0.74rem; color: var(--color-text-dim); opacity: 0.8; line-height: 1.4;
   }
-  .buyer-profile-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+  .buyer-profile-actions { display: flex; gap: 0.5rem; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
   .buyer-profile-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
     font-family: var(--font-body); font-weight: 700; font-size: 0.78rem;
-    padding: 0.55rem 1rem; border-radius: 999px;
+    padding: 0.55rem 1rem; border-radius: var(--border-radius-sm);
     background: rgba(255, 255, 255, 0.04); color: var(--color-text-muted);
     border: 1px solid var(--color-border); cursor: pointer; white-space: nowrap;
     transition: all .2s ease;
@@ -815,26 +825,50 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
   .buyer-profile-btn svg { flex-shrink: 0; }
   .buyer-profile-btn:hover:not(:disabled) {
     color: var(--color-text-main);
-    background: rgba(96, 165, 250, 0.12);
-    border-color: rgba(96, 165, 250, .5);
     transform: translateY(-1px);
-    box-shadow: 0 6px 16px -6px rgba(59, 130, 246, .45);
   }
   .buyer-profile-btn:disabled { cursor: not-allowed; }
-  .buyer-profile-btn--active {
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.28), rgba(16, 185, 129, 0.12));
-    color: #6ee7b7;
-    border-color: rgba(16, 185, 129, 0.5);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+
+  /* Activar: botón primario azul de la web (mismo lenguaje que .btn-primary
+     de la página: tipografía de la web, fondo --color-primary). */
+  .buyer-profile-btn--primary {
+    background: var(--color-primary); color: #fff; border: 1px solid transparent;
+    font-family: var(--font-body); font-weight: 600;
+    box-shadow: 0 6px 16px -6px rgba(59, 130, 246, .45);
   }
+  .buyer-profile-btn--primary:hover:not(:disabled) {
+    background: var(--color-primary-hover); color: #fff;
+    box-shadow: 0 8px 20px -6px rgba(59, 130, 246, .55);
+  }
+
+  /* Estado: píldora verde informativa (no es un botón). */
+  .buyer-profile-status {
+    display: inline-flex; align-items: center; gap: .4rem;
+    font-family: var(--font-body); font-weight: 700; font-size: 0.78rem;
+    padding: 0.55rem 1rem; border-radius: var(--border-radius-sm);
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.28), rgba(16, 185, 129, 0.12));
+    color: #6ee7b7; border: 1px solid rgba(16, 185, 129, 0.5);
+    white-space: nowrap; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  }
+
+  /* Desactivar: reversible, neutro y claramente separado de "Eliminar". */
+  .buyer-profile-btn--clear {
+    background: rgba(255, 255, 255, 0.06); color: var(--color-text-main);
+    border: 1px solid rgba(255, 255, 255, 0.24); font-weight: 600;
+  }
+  .buyer-profile-btn--clear:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12); color: #fff;
+    border-color: rgba(255, 255, 255, 0.45);
+    box-shadow: 0 6px 16px -6px rgba(255, 255, 255, 0.18);
+  }
+
+  /* Eliminar: rojo, acción destructiva. */
   .buyer-profile-btn--delete {
-    width: 2.35rem; height: 2.35rem; padding: 0; flex-shrink: 0;
-    border-radius: 50%;
-    background: rgba(239, 68, 68, 0.08); color: #fca5a5; border-color: rgba(239, 68, 68, 0.28);
+    background: rgba(239, 68, 68, 0.14); color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.45);
   }
   .buyer-profile-btn--delete:hover:not(:disabled) {
-    background: rgba(239, 68, 68, 0.22); color: #fecaca; border-color: rgba(239, 68, 68, .55);
-    transform: scale(1.08);
+    background: #dc2626; color: #fff; border-color: #dc2626;
     box-shadow: 0 6px 16px -6px rgba(239, 68, 68, .55);
   }
   .buyer-profiles-empty {
@@ -852,6 +886,7 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
     if (!list) return;
 
     function renderProfiles() {
+      if (!list) return;
       const profiles = getBuyerProfiles();
       const activeId = (() => {
         try {
@@ -875,22 +910,27 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
         return `
           <div class="buyer-profile-item" data-bp-id="${p.id}">
             <div class="buyer-profile-info">
-              <div class="smw-result-badge" style="background:${color};color:${textColor}">${p.name}</div>
+              <span class="tool-kicker buyer-profile-name" style="background:${color};color:${textColor};border-color:${color}">${p.name}</span>
               <div class="buyer-profile-meta">${buyerProfileGroupsLine(p)}</div>
               <div class="buyer-profile-subtitles">${buyerProfileSubtitlesLine(p)}</div>
             </div>
             <div class="buyer-profile-actions">
               ${isActive
-                ? `<button type="button" class="buyer-profile-btn buyer-profile-btn--active" data-bp-set="${p.id}" disabled>
+                ? `<span class="buyer-profile-status">
                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
                      Activo
+                   </span>
+                   <button type="button" class="buyer-profile-btn buyer-profile-btn--clear" data-bp-clear="${p.id}" title="Desactivar perfil">
+                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+                     Desactivar perfil
                    </button>`
-                : `<button type="button" class="buyer-profile-btn" data-bp-set="${p.id}">
+                : `<button type="button" class="buyer-profile-btn buyer-profile-btn--primary" data-bp-set="${p.id}">
                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/></svg>
                      Usar este perfil
                    </button>`}
               <button type="button" class="buyer-profile-btn buyer-profile-btn--delete" data-bp-delete="${p.id}" title="Eliminar perfil" aria-label="Eliminar perfil ${p.name}">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                Eliminar
               </button>
             </div>
           </div>
@@ -898,7 +938,7 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
       }).join('');
 
       // Event listeners
-      list.querySelectorAll('[data-bp-set]').forEach((btn) => {
+      list.querySelectorAll<HTMLButtonElement>('[data-bp-set]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const id = btn.getAttribute('data-bp-set');
           if (!id || btn.disabled) return;
@@ -911,13 +951,25 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
         });
       });
 
-      list.querySelectorAll('[data-bp-delete]').forEach((btn) => {
+      list.querySelectorAll<HTMLButtonElement>('[data-bp-delete]').forEach((btn) => {
         btn.addEventListener('click', async () => {
           const id = btn.getAttribute('data-bp-delete');
           if (!id) return;
           if (!confirm('¿Eliminar este perfil de comprador?')) return;
           try {
             deleteBuyerProfile(id);
+            renderProfiles();
+          } catch {
+            /* silencioso */
+          }
+        });
+      });
+
+      // Desactivar el perfil activo desde "Tus perfiles de comprador".
+      list.querySelectorAll<HTMLButtonElement>('[data-bp-clear]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          try {
+            setActiveBuyerProfile(null);
             renderProfiles();
           } catch {
             /* silencioso */

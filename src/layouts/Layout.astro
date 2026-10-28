@@ -517,6 +517,22 @@ const headerCategoryPanelHtml = `
       .nav-profile-option.is-active {
         color: #34d399;
       }
+      /* Sólo aparece con un perfil activo: permite volver a "sin perfil".
+         Se pinta con punto neutro a la izquierda para no confundirse con un
+         perfil (color) ni con la acción destructiva de eliminar. */
+      .nav-profile-option--clear {
+        color: #93c5fd;
+        font-weight: 700;
+      }
+      .nav-profile-option--clear::before {
+        content: '';
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        border: 2px solid #64748b;
+        box-sizing: border-box;
+      }
       .nav-profile-option-check {
         margin-left: auto;
         color: #34d399;
@@ -3988,7 +4004,7 @@ const headerCategoryPanelHtml = `
 
           buyerProfilePanel.innerHTML = `
             ${itemsHtml}
-            ${active ? '<button type="button" class="nav-profile-option" data-bp-clear>Ningún perfil activo</button>' : ''}
+            ${active ? '<button type="button" class="nav-profile-option nav-profile-option--clear" data-bp-clear>Desactivar perfil</button>' : ''}
             <div class="nav-dropdown-sep" role="separator"></div>
             <a href="/herramientas/perfilador" class="nav-profile-create">+ Crear nuevo perfil</a>
           `;
