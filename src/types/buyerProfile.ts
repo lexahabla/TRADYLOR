@@ -245,15 +245,24 @@ export function buyerProfileGroupsLine(profile: Pick<BuyerProfile, 'usage' | 'bu
 }
 
 /**
- * Línea con los subtítulos de las 3 opciones elegidas, para entender a qué
- * equivale cada una. Ejemplo: "Diseño, edición, creación · Calidad esencial,
- * gran valor · Maximizar el ahorro y la oferta".
+ * Los subtítulos de las 3 opciones elegidas, por separado, para entender a
+ * qué equivale cada una. Ejemplo: ["Diseño, edición, creación", "Calidad
+ * esencial, gran valor", "Maximizar el ahorro y la oferta"].
  */
-export function buyerProfileSubtitlesLine(profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'>): string {
+export function buyerProfileSubtitlesList(profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'>): string[] {
   const usage = BUYER_PROFILE_USAGE_SUBTITLES[profile.usage] ?? '';
   const budget = BUYER_PROFILE_BUDGET_SUBTITLES[profile.budget] ?? '';
   const priority = BUYER_PROFILE_PRIORITY_SUBTITLES[profile.priority] ?? '';
-  return [usage, budget, priority].filter(Boolean).join(' · ');
+  return [usage, budget, priority].filter(Boolean);
+}
+
+/**
+ * Línea con los subtítulos de las 3 opciones elegidas, unidos en una sola
+ * frase. Ejemplo: "Diseño, edición, creación · Calidad esencial, gran valor
+ * · Maximizar el ahorro y la oferta".
+ */
+export function buyerProfileSubtitlesLine(profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'>): string {
+  return buyerProfileSubtitlesList(profile).join(' · ');
 }
 
 /**

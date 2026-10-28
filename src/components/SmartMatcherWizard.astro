@@ -128,7 +128,6 @@
         </div>
 
         <div class="smw-save-profile" data-save-profile hidden>
-          <span class="smw-save-name" data-save-profile-name></span>
           <button type="button" class="smw-save-btn" data-save-profile-btn>💾 Guardar mi perfil</button>
         </div>
         <p class="smw-save-note" data-save-profile-note aria-live="polite"></p>
@@ -340,6 +339,7 @@
   .smw-save-profile {
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 0.6rem;
     max-width: 480px;
     margin: 0 auto 0.6rem;
@@ -347,14 +347,6 @@
 
   .smw-save-profile[hidden] {
     display: none;
-  }
-
-  .smw-save-name {
-    flex: 1;
-    font-size: 0.85rem;
-    color: #e5e7eb;
-    font-weight: 600;
-    overflow-wrap: anywhere;
   }
 
   .smw-save-btn {
@@ -409,6 +401,7 @@
     line-height: 1.6;
     max-width: 520px;
     margin: 0 auto 1.5rem;
+    white-space: pre-line;
   }
 
   .smw-restart {
@@ -463,7 +456,7 @@
     buyerProfileColor,
     buyerProfileDisplayName,
     buyerProfileGroupsLine,
-    buyerProfileSubtitlesLine,
+    buyerProfileSubtitlesList,
     contrastTextColor,
     hslString,
   } from '../types/buyerProfile';
@@ -513,7 +506,6 @@
     const resultLockedEl = wizard.querySelector<HTMLElement>('[data-result-locked]');
     const resultUnlockBtn = wizard.querySelector<HTMLButtonElement>('[data-result-unlock]');
     const saveProfileWrap = wizard.querySelector<HTMLElement>('[data-save-profile]');
-    const saveProfileName = wizard.querySelector<HTMLElement>('[data-save-profile-name]');
     const saveProfileBtn = wizard.querySelector<HTMLButtonElement>('[data-save-profile-btn]');
     const saveProfileNote = wizard.querySelector<HTMLElement>('[data-save-profile-note]');
 
@@ -564,11 +556,8 @@
         badgeEl.style.color = textColor;
         // Línea 2 (título): las 3 opciones elegidas.
         titleEl.textContent = buyerProfileGroupsLine(profileAnswers);
-        // Línea 3 (descripción): a qué equivale cada opción elegida.
-        descEl.textContent = buyerProfileSubtitlesLine(profileAnswers);
-        if (saveProfileName) {
-          saveProfileName.textContent = name;
-        }
+        // Líneas 3-5 (descripción): un subtítulo por línea, uno debajo de otro.
+        descEl.textContent = buyerProfileSubtitlesList(profileAnswers).join('\n');
       }
 
       // Gate de registro: guardar el perfil (y que te acompañe en la web) requiere sesión.
