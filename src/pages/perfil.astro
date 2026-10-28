@@ -776,13 +776,19 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
     display: flex; align-items: center; gap: 0.85rem; padding: 0.85rem 1rem;
     background: #0d121f; border: 1px solid var(--color-border); border-radius: var(--border-radius-md);
   }
-  .buyer-profile-color-dot {
-    width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0;
-    border: 2px solid rgba(255,255,255,0.2); box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
-  }
   .buyer-profile-info { flex: 1; min-width: 0; }
+  /* Mismo lenguaje visual que el badge del resultado del Perfilador (smw-result-badge):
+     pastilla de color (uno distinto por perfil, nunca se repite entre los guardados). */
   .buyer-profile-name {
-    font-weight: 700; color: var(--color-text-main); margin: 0 0 0.15rem; overflow-wrap: anywhere;
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.3rem 0.8rem;
+    border-radius: 999px;
+    margin: 0 0 0.45rem;
+    overflow-wrap: anywhere;
   }
   .buyer-profile-meta {
     display: flex; gap: 0.75rem; font-size: 0.78rem; color: var(--color-text-dim); flex-wrap: wrap;
@@ -791,20 +797,28 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
     font-size: 0.74rem; color: var(--color-text-dim); opacity: 0.8; margin-top: 0.2rem; line-height: 1.4;
   }
   .buyer-profile-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
-  .buyer-profile-btn-active, .buyer-profile-btn-delete {
-    padding: 0.4rem 0.75rem; font-size: 0.78rem; font-weight: 700; border-radius: 8px; cursor: pointer; border: none;
+  .buyer-profile-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .4rem;
+    font-family: var(--font-body); font-weight: 700; font-size: 0.78rem;
+    padding: 0.5rem 0.9rem; border-radius: var(--border-radius-sm);
+    background: var(--color-surface-subtle); color: var(--color-text-muted);
+    border: 1px solid var(--color-border); cursor: pointer; white-space: nowrap;
+    transition: all .2s ease;
   }
-  .buyer-profile-btn-active {
-    background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35);
+  .buyer-profile-btn:hover:not(:disabled) {
+    color: var(--color-text-main); border-color: rgba(96, 165, 250, .4); transform: translateY(-1px);
   }
-  .buyer-profile-btn-active:hover { background: rgba(59, 130, 246, 0.25); }
-  .buyer-profile-btn-active.is-active {
+  .buyer-profile-btn:disabled { cursor: not-allowed; }
+  .buyer-profile-btn--active {
     background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.45);
   }
-  .buyer-profile-btn-delete {
-    background: rgba(239, 68, 68, 0.1); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3);
+  .buyer-profile-btn--delete {
+    width: 2.2rem; padding: 0.5rem; flex-shrink: 0;
+    background: rgba(239, 68, 68, 0.1); color: #fca5a5; border-color: rgba(239, 68, 68, 0.3);
   }
-  .buyer-profile-btn-delete:hover { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
+  .buyer-profile-btn--delete:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.18); color: #fecaca; border-color: rgba(239, 68, 68, .45);
+  }
   .buyer-profiles-empty {
     padding: 1.5rem; text-align: center; color: var(--color-text-dim);
     background: rgba(255,255,255,0.02); border: 1px dashed rgba(255,255,255,0.12); border-radius: var(--border-radius-md);
@@ -813,7 +827,7 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
 
 <script>
   import { getBuyerProfiles, setActiveBuyerProfile, deleteBuyerProfile } from '../utils/buyerProfileStore';
-  import { buyerProfileColor, buyerProfileGroupsLine, buyerProfileSubtitlesLine, hslString } from '../types/buyerProfile';
+  import { buyerProfileColor, buyerProfileGroupsLine, buyerProfileSubtitlesLine, contrastTextColor, hslString } from '../types/buyerProfile';
 
   (function () {
     const list = document.getElementById('buyerProfilesList');
@@ -837,20 +851,23 @@ const profileTypeLabel = PROFILE_TYPE_OPTIONS.find((option) => option.value === 
 
       list.innerHTML = profiles.map((p) => {
         const isActive = p.id === activeId;
-        const color = hslString(buyerProfileColor(p));
+        const colorHsl = buyerProfileColor(p);
+        const color = hslString(colorHsl);
+        const textColor = contrastTextColor(colorHsl);
         return `
           <div class="buyer-profile-item" data-bp-id="${p.id}">
-            <span class="buyer-profile-color-dot" style="background:${color}" aria-hidden="true"></span>
             <div class="buyer-profile-info">
-              <div class="buyer-profile-name">${p.name}</div>
+              <div class="buyer-profile-name" style="background:${color};color:${textColor}">${p.name}</div>
               <div class="buyer-profile-meta">${buyerProfileGroupsLine(p)}</div>
               <div class="buyer-profile-subtitles">${buyerProfileSubtitlesLine(p)}</div>
             </div>
             <div class="buyer-profile-actions">
               ${isActive
-                ? '<button type="button" class="buyer-profile-btn-active buyer-profile-btn-active--set" data-bp-set="${p.id}" disabled>Activo</button>'
-                : '<button type="button" class="buyer-profile-btn-active" data-bp-set="${p.id}">Usar este perfil</button>'}
-              <button type="button" class="buyer-profile-btn-delete" data-bp-delete="${p.id}" title="Eliminar perfil">🗑️</button>
+                ? `<button type="button" class="buyer-profile-btn buyer-profile-btn--active" data-bp-set="${p.id}" disabled>✓ Activo</button>`
+                : `<button type="button" class="buyer-profile-btn" data-bp-set="${p.id}">Usar este perfil</button>`}
+              <button type="button" class="buyer-profile-btn buyer-profile-btn--delete" data-bp-delete="${p.id}" title="Eliminar perfil" aria-label="Eliminar perfil ${p.name}">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
             </div>
           </div>
         `;
