@@ -14,7 +14,7 @@
  * ==============================================================================
  */
 
-import { z } from 'astro:content';
+import { z } from 'zod';
 import { productSchema, type Product } from '../content.config';
 import { toStructuredProduct, type Product as FlatProduct } from '../data/products';
 

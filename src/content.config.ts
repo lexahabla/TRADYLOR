@@ -1,4 +1,4 @@
-import { z } from 'astro:content';
+import { z } from 'zod';
 
 /**
  * ==============================================================================
@@ -27,7 +27,7 @@ const productSchema = z.object({
   description: z.string().default(''),
 
   // ─── Ficha técnica objetiva (contrato n8n: { "Autonomía": "30 horas" }) ────
-  specs: z.record(z.string()).optional(),
+  specs: z.record(z.string(), z.string()).optional(),
 
   // ─── Product Classification ───────────────────────────────────────────────
   category: z.string(),
@@ -91,8 +91,8 @@ const productSchema = z.object({
   // ─── Affiliate & External Links ────────────────────────────────────────────
   affiliate: z.object({
     primaryStore: z.string().default('Amazon'),
-    primaryUrl: z.string().url(),
-    buyNowUrl: z.string().url().optional(),
+    primaryUrl: z.url(),
+    buyNowUrl: z.url().optional(),
     asin: z.string().optional(),
     alternativeStore: z.string().optional(),
     alternativeUrl: z.string().optional(),

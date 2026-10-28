@@ -116,10 +116,10 @@ const initialTotalPages = Math.ceil(initialTotalProducts / PRODUCTS_PER_PAGE);
 const pagerCurrentPage = 1;
 // Calcula qué páginas pintar (igual que updateControls del cliente): hasta 7 consecutivas;
 // si hay más de 7: primera (1), anterior, actual, posterior, última y (...) en los huecos.
-const pagerPages = (totalPages, currentPage) => {
+const pagerPages = (totalPages: number, currentPage: number) => {
   if (totalPages <= 1) return [];
   if (totalPages <= 7) {
-    const pages = [];
+    const pages: Array<{ num: number | null; gap: boolean; current?: boolean }> = [];
     for (let i = 1; i <= totalPages; i++) {
       pages.push({ num: i, gap: false, current: i === currentPage });
     }
@@ -128,7 +128,7 @@ const pagerPages = (totalPages, currentPage) => {
   const wanted = [...new Set([1, totalPages, currentPage - 1, currentPage, currentPage + 1])]
     .filter((n) => n >= 1 && n <= totalPages)
     .sort((a, b) => a - b);
-  const pages = [];
+  const pages: Array<{ num: number | null; gap: boolean; current?: boolean }> = [];
   wanted.forEach((n, index) => {
     if (index > 0 && n - wanted[index - 1] > 1) {
       pages.push({ num: null, gap: true });
@@ -719,7 +719,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       </div>
 
       <!-- Tabla de productos del catálogo (registrados en products.json) -->
-      <div id="productsPaginationTop" class="ac-pager" style="border: none;" {initialTotalPages <= 1 ? 'hidden' : ''}>
+      <div id="productsPaginationTop" class="ac-pager" style="border: none;" hidden={initialTotalPages <= 1}>
         <span id="paginationTotalTop" class="ac-page-info">Mostrando 1–{Math.min(initialPageProducts.length, initialTotalProducts)} de {initialTotalProducts}</span>
         <label class="ac-per-page" title="Elige cuántos productos quieres ver por página">
           Por página
@@ -789,7 +789,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </tbody>
         </table>
       </div>
-      <div id="productsPagination" class="ac-pager" style="border: none;" {initialTotalPages <= 1 ? 'hidden' : ''}>
+      <div id="productsPagination" class="ac-pager" style="border: none;" hidden={initialTotalPages <= 1}>
         <span id="paginationTotal" class="ac-page-info">Mostrando 1–{Math.min(initialPageProducts.length, initialTotalProducts)} de {initialTotalProducts}</span>
         <label class="ac-per-page" title="Elige cuántos productos quieres ver por página">
           Por página
