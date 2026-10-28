@@ -658,7 +658,8 @@ export function smartSort(groups: Array<CrossMerchantGroup & { category: string;
 export async function buildAndUpsertProducts(
   groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }>,
   dryRun: boolean,
-  enrich = true
+  enrich = true,
+  opts?: { onProgress?: (p: { processed: number; total: number; upserted: number; updated: number; current: string | null }) => void; concurrency?: number }
 ): Promise<{ upserted: number; updated: number; wouldUpsert: number; wouldUpdate: number; aiEnrichedText: number; aiEnrichedImages: number }> {
   const existingProducts = readProductsFromFile();
   const existingIds = new Set(existingProducts.map((p) => p.id));
@@ -672,7 +673,11 @@ export async function buildAndUpsertProducts(
   let aiEnrichedImagesCount = 0;
 
   const pipelineConfig = getPipelineConfig();
+  const totalGroups = groups.length;
+  let processedCount = 0;
 
+  // Procesa grupo a grupo (secuencial para no corromper el estado compartido
+  // de existingProducts/existingIds) y reporta progreso tras cada uno.
   for (const group of groups) {
     const canonical = group.canonical;
     const affiliateUrl = group.allAffiliateUrls[group.allNetworks[0]] || canonical.affiliateUrl;
@@ -979,6 +984,15 @@ export async function buildAndUpsertProducts(
       wouldUpsert++;
       existingIds.add(baseId);
     }
+
+    processedCount++;
+    opts?.onProgress?.({
+      processed: processedCount,
+      total: totalGroups,
+      upserted,
+      updated,
+      current: product.title ?? null,
+    });
   }
 
   if (!dryRun) {
