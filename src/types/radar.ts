@@ -5,8 +5,17 @@
  * Sin imports de Node: este módulo se importa desde scripts de navegador
  * (utils/radarStore.ts, utils/auth.ts) y desde el backend (lib/radarAuth.ts,
  * lib/radarStore.ts). Sólo tipos y constantes ligeras.
+ *
+ * El Perfil de Comprador (`BuyerProfile`) NO es un concepto de Mi Radar: es
+ * del Perfilador (`SmartMatcherWizard`) y vive en `./buyerProfile.ts`. Aquí
+ * solo se importa su tipo porque `RadarData` lo transporta como uno más de
+ * los "registros de herramienta" que sincroniza (junto a `comparatorHistory`
+ * y `aiChats`), igual que Mi Radar transporta sin "ser dueño" de esos otros
+ * dominios tampoco.
  * ==============================================================================
  */
+
+import type { BuyerProfile } from './buyerProfile';
 
 /** Preferencias del usuario para las recomendaciones de productos. */
 export interface UserPreferences {
@@ -134,28 +143,6 @@ export const REMINDER_MAX_PER_USER = 20;
 /** Horizonte máximo de programación: 1 año. */
 export const REMINDER_MAX_HORIZON_MS = 365 * 24 * 60 * 60 * 1000;
 
-/**
- * Perfil de Comprador guardado: resultado nombrado del Perfilador
- * (uso + presupuesto + prioridad). Un usuario puede guardar varios; el
- * selector del mainNav marca uno como "activo" (`RadarData.activeBuyerProfileId`).
- * El activo actúa como filtro VISUAL (badge "Encaja con tu perfil") en el
- * catálogo, nunca oculta productos.
- */
-export interface BuyerProfile {
-  id: string;
-  name: string;
-  /** Uso principal elegido en el Perfilador (ver data-value de SmartMatcherWizard). */
-  usage: string;
-  /** Presupuesto elegido en el Perfilador: low | mid | high | premium. */
-  budget: string;
-  /** Prioridad elegida en el Perfilador: price | quality | balance. */
-  priority: string;
-  /** Color generado automáticamente para la combinación (HSL string). */
-  color?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 /** Comparativa guardada desde el Comparador (Centro de Herramientas). */
 export interface ComparatorHistoryEntry {
   id: string;
@@ -235,90 +222,3 @@ export const RADAR_STORAGE_KEY = 'tradylor-radar-v1';
 
 /** Umbral del Return Flow en /mi-radar: se pregunta a partir de 24h. */
 export const RETURN_FLOW_MIN_AGE_MS = 24 * 60 * 60 * 1000;
-
-/**
- * Etiquetas legibles de los valores `data-value` del Perfilador
- * (SmartMatcherWizard). Se comparten aquí para que el selector del mainNav,
- * Mi Radar y el badge "Encaja con tu perfil" no dupliquen el texto.
- */
-export const BUYER_PROFILE_USAGE_LABELS: Record<string, string> = {
-  productividad: 'Productividad',
-  entretenimiento: 'Entretenimiento',
-  creatividad: 'Creatividad',
-  hogar: 'Hogar Inteligente',
-  movilidad: 'Movilidad',
-  fitness: 'Fitness y Salud',
-};
-export const BUYER_PROFILE_BUDGET_LABELS: Record<string, string> = {
-  low: 'Hasta 100€',
-  mid: '100€ – 400€',
-  high: '400€ – 1000€',
-  premium: 'Más de 1000€',
-};
-export const BUYER_PROFILE_BUDGET_RANGES: Record<string, [number, number]> = {
-  low: [0, 100],
-  mid: [100, 400],
-  high: [400, 1000],
-  premium: [1000, Infinity],
-};
-export const BUYER_PROFILE_PRIORITY_LABELS: Record<string, string> = {
-  price: 'Precio',
-  quality: 'Calidad / Durabilidad',
-  balance: 'Equilibrio',
-};
-/** Máximo de perfiles de comprador guardados por usuario. */
-export const BUYER_PROFILE_MAX = 8;
-
-/**
- * Genera un nombre corto y descriptivo para una combinación de Perfil de Comprador.
- * Ejemplo: "Productividad · Equilibrio · Contenido" o "Movilidad · Premium · Rendimiento".
- * Se usa cuando el usuario guarda un perfil: ya no pone nombre a mano, se asigna
- * automáticamente a partir de uso + presupuesto + prioridad.
- */
-export function buyerProfileDisplayName(profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'>): string {
-  const usage = BUYER_PROFILE_USAGE_LABELS[profile.usage] ?? profile.usage;
-  const budget = BUYER_PROFILE_BUDGET_LABELS[profile.budget] ?? profile.budget;
-  const priority = BUYER_PROFILE_PRIORITY_LABELS[profile.priority] ?? profile.priority;
-
-  // Subtítulo corto según la prioridad, para diferenciar perfiles del mismo uso/presupuesto.
-  const priorityShort: Record<string, string> = {
-    price: 'Ahorro',
-    quality: 'Calidad',
-    balance: 'Equilibrio',
-  };
-  const pShort = priorityShort[profile.priority] ?? profile.priority;
-
-  return `${usage} · ${pShort} · ${budget}`;
-}
-
-/**
- * Genera un color determinístico (HSL) para una combinación de perfil, para
- * usar en el badge "Encaja con tu perfil" y en el selector del mainNav.
- * Cada combinación (uso + presupuesto + prioridad) obtiene un color distinto
- * y estable entre sesiones.
- */
-export function buyerProfileColor(profile: Pick<BuyerProfile, 'usage' | 'budget' | 'priority'>): { h: number; s: number; l: number } {
-  const str = `${profile.usage}|${profile.budget}|${profile.priority}`;
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash |= 0;
-  }
-  const h = Math.abs(hash) % 360;
-  // Saturación y luminosidad en rango agradable para badges (no demasiado oscuro ni claro).
-  const s = 55 + (Math.abs(hash) % 25); // 55–80 %
-  const l = 50 + (Math.abs(hash) % 15); // 50–65 %
-  return { h, s, l };
-}
-
-/** Convierte {h,s,l} a una cadena CSS hsl(). */
-export function hslString(c: { h: number; s: number; l: number }): string {
-  return `hsl(${c.h}, ${c.s}%, ${c.l}%)`;
-}
-
-/** Color de texto adecuado sobre un fondo HSL (blanco o negro según luminosidad). */
-export function contrastTextColor(c: { h: number; s: number; l: number }): string {
-  // Fórmula aproximada de luminancia percibida.
-  const lum = (0.299 * c.h + 0.587 * c.s + 0.114 * c.l) / 100;
-  return lum > 0.5 ? '#0b121e' : '#ffffff';
-}

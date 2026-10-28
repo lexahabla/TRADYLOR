@@ -246,11 +246,13 @@ src/pages/upayp1b4/preview-card.astro
 src/pages/upayp1b4/trafico-ventas/guia.astro
 src/pages/upayp1b4/trafico-ventas/index.astro
 src/pages/upayp1b4/usuarios.astro
+src/types/buyerProfile.ts
 src/types/radar.ts
 src/utils/affiliate.ts
 src/utils/aliCatalogFilters.ts
 src/utils/amazon.ts
 src/utils/auth.ts
+src/utils/buyerProfileStore.ts
 src/utils/radarStore.ts
 src/utils/share.ts
 src/utils/shareEmail.ts

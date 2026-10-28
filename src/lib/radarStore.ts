@@ -5,13 +5,13 @@ import { dataFile } from './paths';
 import { trackEvent } from './analytics';
 import { findCatalogProduct } from './catalog';
 import {
-  BUYER_PROFILE_BUDGET_LABELS,
   BUYER_PROFILE_MAX,
-  BUYER_PROFILE_PRIORITY_LABELS,
-  BUYER_PROFILE_USAGE_LABELS,
+  sanitizeBuyerProfile,
+  type BuyerProfile,
+} from '../types/buyerProfile';
+import {
   DEFAULT_PROJECT,
   type AiChatEntry,
-  type BuyerProfile,
   type ComparatorHistoryEntry,
   type PendingExit,
   type ProjectFolder,
@@ -305,25 +305,8 @@ function mergeById<T extends { id: string; createdAt: string; updatedAt?: string
     .slice(0, max);
 }
 
-/** Valida un perfil de comprador recibido del cliente (nunca confiar en el payload). */
-function sanitizeBuyerProfile(input: BuyerProfile): BuyerProfile | null {
-  const id = String(input?.id ?? '').trim().slice(0, 64);
-  const name = String(input?.name ?? '').trim().slice(0, 60);
-  if (!id || !name) return null;
-  const usage = (BUYER_PROFILE_USAGE_LABELS[input?.usage] ? input.usage : 'productividad');
-  const budget = (BUYER_PROFILE_BUDGET_LABELS[input?.budget] ? input.budget : 'mid');
-  const priority = (BUYER_PROFILE_PRIORITY_LABELS[input?.priority] ? input.priority : 'balance');
-  const now = new Date().toISOString();
-  return {
-    id,
-    name,
-    usage,
-    budget,
-    priority,
-    createdAt: String(input?.createdAt || now).slice(0, 40),
-    updatedAt: String(input?.updatedAt || now).slice(0, 40),
-  };
-}
+/* Validación de perfil de comprador: vive en `../types/buyerProfile.ts`
+ * (dominio del Perfilador, no de Mi Radar). Se importa como `sanitizeBuyerProfile`. */
 
 /** Valida una comparativa guardada (ids de producto como strings cortos). */
 function sanitizeComparatorEntry(input: ComparatorHistoryEntry): ComparatorHistoryEntry | null {

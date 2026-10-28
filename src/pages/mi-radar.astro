@@ -1306,12 +1306,9 @@ if (!sessionUser) {
     createProject,
     createReminder,
     deleteAiChat,
-    deleteBuyerProfile,
     deleteComparatorHistoryEntry,
     deleteProject,
-    getActiveBuyerProfile,
     getAiChats,
-    getBuyerProfiles,
     getComparatorHistory,
     getProjects,
     getRadarProducts,
@@ -1321,10 +1318,15 @@ if (!sessionUser) {
     onRadarChange,
     removeProduct,
     resolveExit,
-    setActiveBuyerProfile,
     setProductAlert,
     setProductNote,
   } from '../utils/radarStore';
+  import {
+    deleteBuyerProfile,
+    getActiveBuyerProfile,
+    getBuyerProfiles,
+    setActiveBuyerProfile,
+  } from '../utils/buyerProfileStore';
   import { openSharePanel } from '../utils/shareUi';
   import { RETURN_FLOW_MIN_AGE_MS } from '../types/radar';
   import type { ProjectFolder, SavedProduct } from '../types/radar';

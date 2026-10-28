@@ -3802,19 +3802,21 @@ const headerCategoryPanelHtml = `
         // =====================================================================
         import { getSession, getCachedSession, initAuth, logout, onAuthChange } from '../utils/auth';
         import {
-          deleteBuyerProfile,
-          getActiveBuyerProfile,
-          getBuyerProfiles,
           getRadarProducts,
           isSaved,
           onRadarChange,
           removeProduct,
           saveToRadar,
-          setActiveBuyerProfile,
           trackExitClick,
         } from '../utils/radarStore';
-        import type { BuyerProfile, SavedProduct, UserProfile } from '../types/radar';
-        import { BUYER_PROFILE_BUDGET_RANGES } from '../types/radar';
+        import {
+          deleteBuyerProfile,
+          getActiveBuyerProfile,
+          getBuyerProfiles,
+          setActiveBuyerProfile,
+        } from '../utils/buyerProfileStore';
+        import type { SavedProduct, UserProfile } from '../types/radar';
+        import { BUYER_PROFILE_BUDGET_RANGES, type BuyerProfile } from '../types/buyerProfile';
         import { openSharePanel } from '../utils/shareUi';
 
         // ---------------------------------------------------------- helpers UI

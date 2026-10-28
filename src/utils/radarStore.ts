@@ -15,16 +15,12 @@ import {
   DEFAULT_PROJECT,
   RADAR_STORAGE_KEY,
   type AiChatEntry,
-  type BuyerProfile,
   type ComparatorHistoryEntry,
   type PendingExit,
   type ProjectFolder,
   type RadarData,
   type Reminder,
   type SavedProduct,
-  buyerProfileColor,
-  buyerProfileDisplayName,
-  hslString,
 } from '../types/radar';
 
 export { RADAR_STORAGE_KEY };
@@ -36,7 +32,6 @@ const listeners = new Set<Listener>();
 /** Las bajas se recuerdan 180 días (hasta 500): el servidor aplica el mismo límite. */
 const TOMBSTONE_TTL_MS = 180 * 24 * 60 * 60 * 1000;
 const TOMBSTONE_MAX = 500;
-const BUYER_PROFILE_MAX = 8;
 const COMPARATOR_HISTORY_MAX = 30;
 const AI_CHATS_MAX = 30;
 
@@ -81,7 +76,8 @@ function cleanTombstones(input: unknown): Record<string, number> {
   return out;
 }
 
-function withTombstone(map: Record<string, number> | undefined, id: string, at: number): Record<string, number> {
+/** Fusiona una baja nueva en el mapa de tombstones (gana la más reciente). Compartido por Mi Radar y los stores que viven encima (p. ej. el Perfilador). */
+export function withTombstone(map: Record<string, number> | undefined, id: string, at: number): Record<string, number> {
   return cleanTombstones({ ...(map ?? {}), [id]: Math.max(at, map?.[id] ?? 0) });
 }
 
@@ -127,7 +123,8 @@ export function loadRadar(): RadarData {
 /** Cuenta los cambios locales: una respuesta de sincronización antigua no debe pisar uno posterior. */
 let localRev = 0;
 
-function persist(data: RadarData): RadarData {
+/** Guarda en LocalStorage y notifica a los listeners. Compartido por Mi Radar y los stores que viven encima (p. ej. el Perfilador). */
+export function persist(data: RadarData): RadarData {
   localRev += 1;
   try {
     localStorage.setItem(RADAR_STORAGE_KEY, JSON.stringify(data));
@@ -377,69 +374,22 @@ export async function setProductAlert(input: {
   }
 }
 
-/* ---------------------------------------------------- perfiles de comprador */
-
-function shortId(prefix: string): string {
+/**
+ * Generador de ids cortos y únicos, infraestructura compartida por los stores
+ * que viven encima de Mi Radar (perfiles del Perfilador, comparativas del
+ * Comparador, chats del Dependiente IA).
+ */
+export function shortId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Todos los perfiles de comprador guardados (requiere haberlos creado con sesión). */
-export function getBuyerProfiles(): BuyerProfile[] {
-  return loadRadar().buyerProfiles ?? [];
-}
-
-/** Perfil marcado como activo (el que usa el badge "Encaja con tu perfil"), o null. */
-export function getActiveBuyerProfile(): BuyerProfile | null {
-  const data = loadRadar();
-  return data.buyerProfiles?.find((p) => p.id === data.activeBuyerProfileId) ?? null;
-}
-
-/**
- * Guarda el resultado del Perfilador como un nuevo perfil nombrado
- * y lo marca como activo. Igual que el resto de mutaciones, sólo se refleja
- * en la nube si hay sesión (si no, el push a /api/radar se ignora con 401).
+/*
+ * Los perfiles de comprador (Perfilador) ya no viven aquí: su store propio
+ * está en `./buyerProfileStore.ts` (CRUD) y sus tipos/etiquetas en
+ * `../types/buyerProfile.ts`. Ese store reutiliza loadRadar/persist/
+ * pushToCloud/withTombstone/shortId de este fichero como motor de
+ * almacenamiento, igual que comparativas y chats IA.
  */
-export function saveBuyerProfile(input: { name?: string; usage: string; budget: string; priority: string }): BuyerProfile {
-  const data = loadRadar();
-  const now = new Date().toISOString();
-  // El nombre se genera automáticamente a partir de la combinación (uso +
-  // presupuesto + prioridad): el usuario ya no lo escribe a mano.
-  const name = buyerProfileDisplayName(input);
-  const color = hslString(buyerProfileColor(input));
-  const profile: BuyerProfile = {
-    id: shortId('bp'),
-    name,
-    color,
-    usage: input.usage,
-    budget: input.budget,
-    priority: input.priority,
-    createdAt: now,
-    updatedAt: now,
-  };
-  data.buyerProfiles = [profile, ...(data.buyerProfiles ?? [])].slice(0, BUYER_PROFILE_MAX);
-  data.activeBuyerProfileId = profile.id;
-  persist(data);
-  void pushToCloud(data);
-  return profile;
-}
-
-/** Marca (o quita, con `null`) el perfil activo del selector del mainNav. */
-export function setActiveBuyerProfile(id: string | null): void {
-  const data = loadRadar();
-  data.activeBuyerProfileId = id ?? undefined;
-  persist(data);
-  void pushToCloud(data);
-}
-
-export function deleteBuyerProfile(id: string): void {
-  const data = loadRadar();
-  data.buyerProfiles = (data.buyerProfiles ?? []).filter((p) => p.id !== id);
-  if (data.activeBuyerProfileId === id) data.activeBuyerProfileId = undefined;
-  // Baja en la nube: sin la marca, la fusión por unión del servidor lo resucitaría.
-  data.removedToolRecords = withTombstone(data.removedToolRecords, id, Date.now());
-  persist(data);
-  void pushToCloud(data);
-}
 
 /* ------------------------------------------------------ comparativas guardadas */
 
@@ -588,7 +538,8 @@ function storeCloudRadar(remote: RadarData): RadarData {
   return merged;
 }
 
-function pushToCloud(data: RadarData): Promise<void> {
+/** Empuja el radar completo a la nube (sólo si hay sesión). Compartido por Mi Radar y los stores que viven encima (p. ej. el Perfilador). */
+export function pushToCloud(data: RadarData): Promise<void> {
   const body = JSON.stringify(data);
   const rev = localRev;
   pushChain = pushChain.then(() => pushSnapshot(body, rev));
