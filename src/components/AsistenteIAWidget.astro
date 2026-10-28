@@ -2,9 +2,9 @@
 /**
  * TRADYLOR — WIDGET FLOTANTE ASISTENTE IA (Dependiente IA)
  *
- * Chat flotante (esquina inferior derecha) que consume
- * POST /api/asistente-ia. Se inyecta en Layout.astro para que esté disponible
- * en todas las páginas públicas.
+ * Botón flotante (esquina inferior derecha) que abre un modal grande a
+ * pantalla completa y consume POST /api/asistente-ia. Se inyecta en
+ * Layout.astro para que esté disponible en todas las páginas públicas.
  *
  * Respuesta del servidor: { respuesta, tipo, productos?, usuario? }
  *   - tipo 'saludo': texto de bienvenida.
@@ -33,19 +33,25 @@ const {
     {toggleLabel}
   </button>
   <div id="ia-chat-window" class="hidden" role="dialog" aria-modal="true" aria-label="Chat asistente IA">
-    <div class="chat-header">
-      <span>{headerTitle}</span>
-      <button id="ia-close-btn" type="button" aria-label="Cerrar chat">✕</button>
-    </div>
-    <div id="ia-messages" role="log" aria-live="polite"></div>
-    <div class="chat-input-container">
-      <input
-        type="text"
-        id="ia-input"
-        placeholder={inputPlaceholder}
-        aria-label="Escribe tu consulta al asistente IA"
-      />
-      <button id="ia-send-btn" type="button">Enviar</button>
+    <div class="ia-backdrop" data-ia-close></div>
+    <div class="ia-dialog">
+      <div class="chat-header">
+        <span>{headerTitle}</span>
+        <div class="chat-header-actions">
+          <button id="ia-clear-btn" type="button" title="Limpiar la conversación" aria-label="Limpiar la conversación">🧹</button>
+          <button id="ia-close-btn" type="button" aria-label="Cerrar chat">✕</button>
+        </div>
+      </div>
+      <div id="ia-messages" role="log" aria-live="polite"></div>
+      <div class="chat-input-container">
+        <input
+          type="text"
+          id="ia-input"
+          placeholder={inputPlaceholder}
+          aria-label="Escribe tu consulta al asistente IA"
+        />
+        <button id="ia-send-btn" type="button">Enviar</button>
+      </div>
     </div>
   </div>
 </div>
@@ -76,35 +82,70 @@ const {
     background-color: #1e293b;
   }
 
+  /* Modal grande a pantalla completa (antes una ventanita de 350x450 pegada
+     al botón): backdrop a toda la pantalla + un diálogo grande centrado. */
   #ia-chat-window {
-    width: 350px;
-    height: 450px;
-    background: var(--color-bg-card, #111827);
-    border: 1px solid var(--color-border, #1f2937);
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
     display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    position: absolute;
-    bottom: 60px;
-    right: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    box-sizing: border-box;
   }
 
   #ia-chat-window.hidden {
     display: none;
   }
 
+  .ia-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(5, 8, 15, 0.78);
+    backdrop-filter: blur(3px);
+  }
+
+  .ia-dialog {
+    position: relative;
+    width: min(900px, 100%);
+    height: min(86vh, 820px);
+    background: var(--color-bg-card, #111827);
+    border: 1px solid var(--color-border, #1f2937);
+    border-radius: 18px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  @media (max-width: 760px) {
+    #ia-chat-window {
+      padding: 0;
+    }
+    .ia-dialog {
+      width: 100%;
+      height: 100%;
+      border-radius: 0;
+    }
+  }
+
   .chat-header {
     background: var(--color-bg-body, #0a0e17);
     color: var(--color-text-main, #f3f4f6);
-    padding: 12px 16px;
+    padding: 14px 18px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     font-weight: 600;
-    font-size: 15px;
+    font-size: 16px;
     border-bottom: 1px solid var(--color-border, #1f2937);
+  }
+
+  .chat-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
 
   .chat-header button {
@@ -112,44 +153,61 @@ const {
     border: none;
     color: var(--color-text-muted, #9ca3af);
     cursor: pointer;
-    font-size: 16px;
+    font-size: 17px;
     line-height: 1;
+    padding: 6px 8px;
+    border-radius: 8px;
+    transition: background 0.15s ease, color 0.15s ease;
   }
 
   .chat-header button:hover {
     color: var(--color-text-main, #f3f4f6);
+    background: rgba(255, 255, 255, 0.08);
   }
 
   #ia-messages {
     flex: 1;
-    padding: 12px;
+    padding: 1.1rem 1.25rem;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    font-size: 14px;
+    gap: 12px;
+    font-size: 15px;
     background: var(--color-bg-body, #0a0e17);
   }
 
   .msg-user {
     align-self: flex-end;
     background: var(--color-primary, #3b82f6);
-    padding: 8px 12px;
-    border-radius: 12px 12px 0 12px;
+    padding: 10px 14px;
+    border-radius: 14px 14px 2px 14px;
     color: #ffffff;
     max-width: 80%;
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .msg-ia {
     align-self: flex-start;
     background: var(--color-bg-card-hover, #162032);
-    padding: 8px 12px;
-    border-radius: 12px 12px 12px 0;
+    padding: 10px 14px;
+    border-radius: 14px 14px 14px 2px;
     border-left: 3px solid #3b82f6;
     color: var(--color-text-main, #f3f4f6);
-    max-width: 80%;
-    line-height: 1.5;
+    max-width: 85%;
+    line-height: 1.6;
   }
+
+  /* Formato legible dentro de una respuesta de la IA (ver formatIaReply) */
+  .msg-ia p { margin: 0 0 0.6rem; }
+  .msg-ia p:last-child { margin-bottom: 0; }
+  .msg-ia h3, .msg-ia h4 { margin: 0.2rem 0 0.5rem; color: #60a5fa; }
+  .msg-ia ul, .msg-ia ol { margin: 0 0 0.6rem; padding-left: 1.3rem; display: flex; flex-direction: column; gap: 0.25rem; }
+  .msg-ia li { line-height: 1.55; }
+  .msg-ia strong { color: #ffffff; }
+  .msg-ia code { background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 5px; padding: 0.1rem 0.35rem; font-size: 0.9em; }
+  .msg-ia pre { margin: 0 0 0.6rem; padding: 0.75rem 0.9rem; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; overflow-x: auto; }
+  .msg-ia pre code { background: none; border: 0; padding: 0; }
 
   /* Tarjetas de producto recomendadas (solo título + pro breve) */
   .ia-producto {
@@ -196,7 +254,7 @@ const {
   .chat-input-container {
     display: flex;
     border-top: 1px solid var(--color-border, #1f2937);
-    padding: 8px;
+    padding: 12px;
     background: var(--color-bg-card, #111827);
   }
 
@@ -204,9 +262,9 @@ const {
     flex: 1;
     border: 1px solid var(--color-border, #1f2937);
     outline: none;
-    padding: 8px;
-    border-radius: 6px;
-    font-size: 14px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 15px;
     background: var(--color-surface-subtle, #1a2234);
     color: var(--color-text-main, #f3f4f6);
   }
@@ -223,12 +281,12 @@ const {
     background: #2563eb;
     color: white;
     border: none;
-    padding: 8px 14px;
-    border-radius: 6px;
+    padding: 10px 18px;
+    border-radius: 8px;
     cursor: pointer;
     font-weight: 500;
-    font-size: 14px;
-    margin-left: 6px;
+    font-size: 15px;
+    margin-left: 8px;
   }
 
   #ia-send-btn:hover {
@@ -240,19 +298,73 @@ const {
   (() => {
     const toggleBtn = document.getElementById('ia-toggle-btn');
     const closeBtn = document.getElementById('ia-close-btn');
+    const clearBtn = document.getElementById('ia-clear-btn');
     const chatWindow = document.getElementById('ia-chat-window');
     const sendBtn = document.getElementById('ia-send-btn');
     const input = document.getElementById('ia-input');
     const messagesContainer = document.getElementById('ia-messages');
 
-    if (toggleBtn && closeBtn && chatWindow) {
-      toggleBtn.addEventListener('click', () => chatWindow.classList.toggle('hidden'));
-      closeBtn.addEventListener('click', () => chatWindow.classList.add('hidden'));
+    function closeChat() {
+      chatWindow?.classList.add('hidden');
     }
+
+    if (toggleBtn && chatWindow) {
+      toggleBtn.addEventListener('click', () => {
+        chatWindow.classList.toggle('hidden');
+        if (!chatWindow.classList.contains('hidden')) input?.focus();
+      });
+    }
+    closeBtn?.addEventListener('click', closeChat);
+    document.querySelector('.ia-backdrop[data-ia-close]')?.addEventListener('click', closeChat);
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && chatWindow && !chatWindow.classList.contains('hidden')) closeChat();
+    });
+    clearBtn?.addEventListener('click', () => {
+      if (messagesContainer) messagesContainer.innerHTML = '';
+    });
 
     function escapeHtml(texto) {
       const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
       return String(texto).replace(/[&<>"']/g, (ch) => map[ch] ?? ch);
+    }
+
+    /**
+     * Da formato legible a una respuesta de la IA (markdown ligero, sin
+     * librerías): bloques ```código```, encabezados #/##/###, listas con
+     * "- "/"1. ", **negrita**, `código en línea` y párrafos separados por
+     * líneas en blanco. Todo el texto se escapa antes de insertarse.
+     */
+    function formatIaReply(raw) {
+      const text = String(raw == null ? '' : raw);
+      const codeBlocks = [];
+      const withoutCode = text.replace(/```[a-zA-Z]*\n?([\s\S]*?)```/g, (_, code) => {
+        codeBlocks.push(code.replace(/\n$/, ''));
+        return '\u0000CB' + (codeBlocks.length - 1) + '\u0000';
+      });
+      const inline = (s) => escapeHtml(s)
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      const blocks = withoutCode.split(/\n{2,}/);
+      const html = blocks.map((block) => {
+        const trimmed = block.trim();
+        if (!trimmed) return '';
+        const cbMatch = trimmed.match(/^\u0000CB(\d+)\u0000$/);
+        if (cbMatch) return '<pre><code>' + escapeHtml(codeBlocks[Number(cbMatch[1])]) + '</code></pre>';
+        const lines = trimmed.split('\n');
+        const headingMatch = lines.length === 1 ? lines[0].match(/^(#{1,4})\s+(.*)$/) : null;
+        if (headingMatch) {
+          const level = Math.min(headingMatch[1].length + 2, 4);
+          return '<h' + level + '>' + inline(headingMatch[2]) + '</h' + level + '>';
+        }
+        if (lines.every((l) => /^\s*[-*]\s+/.test(l))) {
+          return '<ul>' + lines.map((l) => '<li>' + inline(l.replace(/^\s*[-*]\s+/, '')) + '</li>').join('') + '</ul>';
+        }
+        if (lines.every((l) => /^\s*\d+[.)]\s+/.test(l))) {
+          return '<ol>' + lines.map((l) => '<li>' + inline(l.replace(/^\s*\d+[.)]\s+/, '')) + '</li>').join('') + '</ol>';
+        }
+        return '<p>' + lines.map(inline).join('<br>') + '</p>';
+      }).join('');
+      return html || '<p></p>';
     }
 
     function renderProducto(p) {
@@ -275,7 +387,7 @@ const {
       if (data.respuesta) {
         const el = document.createElement('div');
         el.className = 'msg-ia';
-        el.innerHTML = escapeHtml(data.respuesta);
+        el.innerHTML = formatIaReply(data.respuesta);
         messagesContainer.appendChild(el);
       }
 
