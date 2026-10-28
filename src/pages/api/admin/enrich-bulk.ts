@@ -10,6 +10,7 @@ import {
   mergeWithMinimum,
   textProvider,
   imageProvider,
+  enrichConcurrency,
   type EnrichedText,
 } from '../../../lib/ai';
 import { enrichProductLocally, type LocalEnrichInput } from '../../../lib/localEnrich';
@@ -25,8 +26,10 @@ import {
   extractNormalizedTags,
   autoLinkAlternatives,
   roleIdsOf,
+  computeBadge,
 } from '../../../lib/curation';
 import { toHiResImageUrl } from '../../../lib/imageQuality';
+import { detectMerchantFromHost, defaultFulfillmentFor } from '../../../lib/merchant';
 
 const DEFAULT_IMAGE =
   'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=800&auto=format&fit=crop';
@@ -226,13 +229,29 @@ async function enrichSingleText(
     category: enrichment?.category || product.category,
     price: enrichment?.pricing?.price ?? product.price,
     originalPrice: enrichment?.pricing?.originalPrice ?? product.originalPrice,
-    brand: enrichment?.category ? product.brand : product.brand,
+    // Marca: sólo se rellena si faltaba (nunca sustituye una marca ya
+    // curada/verificada por la "mejor suposición" de la IA).
+    brand: product.brand || enrichment?.brand || undefined,
+    // Comerciante/distribuidor: si por lo que sea faltan (productos antiguos,
+    // altas manuales incompletas...) se deducen del propio enlace de
+    // afiliado, igual que hace el alta manual («Analizar Enlace»). Nunca
+    // sustituye un valor ya guardado.
+    merchant: product.merchant || detectMerchantFromHost(product.affiliateUrl || product.buyNowUrl) || product.merchant,
     ia_status: textStatus === 'ok' || textStatus === 'local' ? 'completed' : product.ia_status,
     ai_enriched: textStatus === 'ok',
     // textStatus nunca llega 'skipped' aquí (sin claves se marca 'local' y se
     // avisa en `warnings`), así que se conserva el error previo del producto.
     ai_error: product.ai_error,
   };
+  if (!updated.fulfillmentProvider && updated.merchant) {
+    updated.fulfillmentProvider = defaultFulfillmentFor(updated.merchant);
+  }
+  // Etiqueta destacada: sólo se calcula si el producto no tiene ninguna ya
+  // asignada (a mano o por «Construir Catálogo»); nunca se reemplaza una
+  // badge elegida explícitamente por el admin.
+  if (!updated.badge) {
+    updated.badge = computeBadge(updated as Product & { hsrScore?: number });
+  }
 
   return { product: updated, textStatus, imageStatus, warnings };
 }
@@ -263,11 +282,20 @@ export const POST: APIRoute = async ({ request }) => {
     return jsonResponse({ success: false, message: 'No hay productos que enriquecer.' }, 400);
   }
 
-  const results: Array<{ id: string; title: string; ok: boolean; textStatus: string; imageStatus: string; warnings: string[] }> = [];
+  const resultsByIndex: Array<{ id: string; title: string; ok: boolean; textStatus: string; imageStatus: string; warnings: string[] }> = new Array(targets.length);
   let processed = 0;
   let failed = 0;
 
-  for (const product of targets) {
+  // Concurrencia acotada por proveedor (ver TEXT_PROVIDER_CONCURRENCY en
+  // lib/ai.ts): permite procesar varios productos EN PARALELO sin saturar al
+  // proveedor de IA ni depender de que el llamante trocee la petición. Cada
+  // `upsertProduct`/lectura de products.json es síncrona (fs.*Sync, sin
+  // await de por medio), así que Node la ejecuta de un tirón: dos workers no
+  // pueden entrelazar su lectura+escritura y perderse cambios entre sí.
+  const concurrency = Math.max(1, Math.min(enrichConcurrency(), targets.length));
+  let cursor = 0;
+  async function processOne(index: number): Promise<void> {
+    const product = targets[index];
     try {
       const { product: updated, textStatus, imageStatus, warnings } = await enrichSingleText(product, forceImage);
 
@@ -300,13 +328,21 @@ export const POST: APIRoute = async ({ request }) => {
         }
       }
 
-      results.push({ id: updated.id, title: updated.title, ok: true, textStatus, imageStatus, warnings });
+      resultsByIndex[index] = { id: updated.id, title: updated.title, ok: true, textStatus, imageStatus, warnings };
       processed += 1;
     } catch (err: any) {
       failed += 1;
-      results.push({ id: product.id, title: product.title, ok: false, textStatus: 'error', imageStatus: 'error', warnings: [err?.message ?? String(err)] });
+      resultsByIndex[index] = { id: product.id, title: product.title, ok: false, textStatus: 'error', imageStatus: 'error', warnings: [err?.message ?? String(err)] };
     }
   }
+  async function worker(): Promise<void> {
+    while (cursor < targets.length) {
+      const index = cursor++;
+      await processOne(index);
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  const results = resultsByIndex;
 
   // Si se pidió normalización de tags en lote (ya se hizo por producto arriba),
   // persistir de forma explícita (upsertProduct ya escribe).
@@ -317,6 +353,7 @@ export const POST: APIRoute = async ({ request }) => {
     total: targets.length,
     processed,
     failed,
+    concurrency,
     results,
     message: dryRun
       ? `Simulación: ${processed} producto(s) se enriquecerían (${failed} con error).`

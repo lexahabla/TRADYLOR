@@ -754,6 +754,22 @@ async function buildAndUpsertProducts(
       rating: group.bestRating > 0 ? group.bestRating : undefined,
       reviewsCount: canonical.reviewCount > 0 ? canonical.reviewCount : undefined,
       brand: canonical.brand,
+      // Datos crudos de la red de origen: comisión, divisa, stock y
+      // visitas/alcance (si la red los facilita). `allNetworks[0]` es la red
+      // "ganadora" del grupo cross-merchant (mismo criterio que `merchant`
+      // y `affiliateUrl` justo arriba).
+      network: canonical.network || group.allNetworks[0],
+      currency: canonical.currency || group.allCurrencies[group.allNetworks[0]],
+      commissionRate: group.bestCommissionRate > 0 ? group.bestCommissionRate : undefined,
+      inStock: canonical.inStock,
+      visits: canonical._sourceUnified?.visits,
+      // Estado físico: por diseño, «Construir Catálogo» descarta la segunda
+      // mano antes de llegar aquí (ver `isSecondHand` en `qualityFilter`); se
+      // conserva igualmente si la red lo declara explícitamente como "Nuevo".
+      condition:
+        (canonical.extra?.['Estado'] as string | undefined) ??
+        (canonical.extra?.['Condición'] as string | undefined) ??
+        (canonical.extra?.['Condition'] as string | undefined),
       // El envío viaja en la proyección unificada (el canónico no lo declara).
       shippingInfo: canonical._sourceUnified?.shippingInfo ?? canonical.extra?.['Texto de envío'] as string | undefined,
       shippingDays: canonical._sourceUnified?.shippingDays,
@@ -898,6 +914,9 @@ async function buildAndUpsertProducts(
       if (finalText.techSheet?.trim()) product.techSheet = finalText.techSheet;
       if (finalText.specs && Object.keys(finalText.specs).length) product.specs = finalText.specs;
       if (!product.category && finalText.category) product.category = finalText.category;
+      // Marca: la IA sólo la aporta si el producto no tenía ninguna (nunca
+      // sobrescribe una marca ya curada/verificada).
+      if (!product.brand && finalText.brand) product.brand = finalText.brand;
       // El precio SIEMPRE es el real de la red (`group.bestPrice` /
       // `bestOriginalPrice`): el par oferta/original que calcula el
       // enriquecimiento es sólo de respaldo para el alta manual sin precio

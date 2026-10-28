@@ -19,9 +19,18 @@ export interface Product {
   merchant: string;
   /** Red de afiliados a la que pertenece el producto (amazon, aliexpress, ebay…). */
   network?: string;
+  /** Divisa declarada por la red de origen (normalmente EUR). */
+  currency?: string;
+  /** Comisión de afiliación (%) declarada por la red de origen (distinto de `commissionEstimate`, que es el importe en EUR). */
+  commissionRate?: number;
+  /** Disponibilidad declarada por la red de origen en el momento de importar/sincronizar. */
+  inStock?: boolean;
+  /** Visitas/alcance del producto cuando la red las facilita (AliExpress no las da). */
+  visits?: number;
   affiliateUrl: string;
   buyNowUrl?: string;
-  /** Datos extra del catálogo multi-red (incluye `crossMerchant.networks`). */
+  /** Datos extra del catálogo multi-red (incluye `crossMerchant.networks`) y campos personalizados
+   *  añadidos desde «Campos visibles en la ficha» (ver lib/productFieldsStore.ts). */
   extra?: Record<string, unknown>;
   /** Código ASIN de Amazon (autodetectado desde el enlace de afiliado). */
   asin?: string;

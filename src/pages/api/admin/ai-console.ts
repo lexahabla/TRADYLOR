@@ -6,6 +6,7 @@ import { testOpencodeCli } from '../../../lib/aiProviders';
 import { chatComplete, textProvider, type ChatMessage, type TextProvider } from '../../../lib/ai';
 import { adminIaSystemPrompt, withSkills } from '../../../lib/aiPersonas';
 import { getSkillsForPersona } from '../../../lib/aiSkillsStore';
+import { chatCompleteGrounded, isGroundingAvailable } from '../../../lib/geminiGrounded';
 
 export const prerender = false;
 
@@ -132,6 +133,29 @@ export const POST: APIRoute = async ({ request }) => {
     ? (providerRaw as TextProvider)
     : undefined;
 
+  // Búsqueda web en tiempo real (Google Search grounding, SDK @google/genai):
+  // se intenta cuando el admin deja el proveedor en "Automático" o elige
+  // Gemini explícitamente. Si Gemini no está configurado o la llamada falla,
+  // se cae al `chatComplete` de siempre (el proveedor por defecto/elegido),
+  // sin que el admin note más que la ausencia de fuentes citadas.
+  const wantsGrounding = (!provider || provider === 'gemini') && isGroundingAvailable();
+  if (wantsGrounding) {
+    try {
+      const grounded = await chatCompleteGrounded(finalMessages, { model, timeoutMs: 45_000 });
+      return json({
+        success: true,
+        mode: 'chat',
+        provider: 'gemini',
+        reply: grounded.text,
+        grounded: true,
+        citations: grounded.citations,
+        searchQueries: grounded.searchQueries,
+      });
+    } catch (error) {
+      console.warn('[AdminAiConsole] Gemini con Google Search no disponible, se usa el proveedor configurado:', error instanceof Error ? error.message : error);
+    }
+  }
+
   try {
     // jsonMode:false explícito: es chat libre (no una extracción estructurada),
     // y sin la palabra "json" en el prompt del sistema, OpenAI/Groq rechazan
@@ -139,7 +163,7 @@ export const POST: APIRoute = async ({ request }) => {
     // ambos). Antes se heredaba el jsonMode por defecto del proveedor (true
     // en OpenAI y Groq), así que el chat libre fallaba siempre con esos dos.
     const reply = await chatComplete(finalMessages, { provider, model, jsonMode: false });
-    return json({ success: true, mode: 'chat', provider: provider ?? textProvider(), reply });
+    return json({ success: true, mode: 'chat', provider: provider ?? textProvider(), reply, grounded: false });
   } catch (error) {
     return json({
       success: false,

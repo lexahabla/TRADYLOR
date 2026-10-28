@@ -2,7 +2,7 @@ import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../lib/adminAuth';
 import { maskKey } from '../../../lib/aiKeysStore';
 import { testOpencodeCli, testProvider } from '../../../lib/aiProviders';
-import { env, hasImageCredentials, hasTextCredentials, imageProvider, textProvider } from '../../../lib/ai';
+import { env, hasImageCredentials, hasTextCredentials, imageProvider, textProvider, enrichConcurrency } from '../../../lib/ai';
 
 export const prerender = false;
 
@@ -46,6 +46,9 @@ export const GET: APIRoute = async ({ request }) => {
       imageProvider: activeImage,
       imageReady: hasImageCredentials(),
       textKeyMasked: maskKey(env(activeText === 'anthropic' ? 'ANTHROPIC_API_KEY' : activeText === 'groq' ? 'GROQ_API_KEY' : activeText === 'nvidia' ? 'NVIDIA_API_KEY' : activeText === 'openrouter' ? 'OPENROUTER_API_KEY' : activeText === 'gemini' ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY')),
+      /** Nº de productos que «Enriquecer» puede procesar EN PARALELO con el
+       *  proveedor de texto activo (ver TEXT_PROVIDER_CONCURRENCY en lib/ai.ts). */
+      enrichConcurrency: hasTextCredentials() ? enrichConcurrency(activeText) : 1,
     },
     providers,
     checkedAt: new Date().toISOString(),

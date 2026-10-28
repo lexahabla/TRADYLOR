@@ -1,4 +1,4 @@
-﻿.dockerignore
+.dockerignore
 .env.example
 .gitattributes
 .gitignore
@@ -85,6 +85,7 @@ src/lib/categories.ts
 src/lib/curation.ts
 src/lib/deletedProducts.ts
 src/lib/excelExport.ts
+src/lib/geminiGrounded.ts
 src/lib/imageQuality.ts
 src/lib/jsonStore.ts
 src/lib/localEnrich.ts
@@ -95,6 +96,7 @@ src/lib/marketingEmail.ts
 src/lib/marketingInsights.ts
 src/lib/marketingLeads.ts
 src/lib/media.ts
+src/lib/merchant.ts
 src/lib/networks/connectors/adapters/amazonProductAdapter.ts
 src/lib/networks/connectors/adapters/ebayProductAdapter.ts
 src/lib/networks/connectors/aliexpress.ts
@@ -120,6 +122,7 @@ src/lib/pipeline/stagePublish.ts
 src/lib/pipeline/types.ts
 src/lib/priceAlerts.ts
 src/lib/priceHistory.ts
+src/lib/productFieldsStore.ts
 src/lib/productNetwork.ts
 src/lib/productStore.ts
 src/lib/purchaseUrl.ts
@@ -143,9 +146,9 @@ src/lib/validateProducts.ts
 src/middleware.ts
 src/pages/api/admin/add-product.ts
 src/pages/api/admin/ai-console.ts
-src/pages/api/admin/ai-skills.ts
 src/pages/api/admin/ai-keys/index.ts
 src/pages/api/admin/ai-keys/test.ts
+src/pages/api/admin/ai-skills.ts
 src/pages/api/admin/ai-status.ts
 src/pages/api/admin/aliexpress/catalog.ts
 src/pages/api/admin/alternatives.ts
@@ -166,6 +169,7 @@ src/pages/api/admin/migrate-categories.ts
 src/pages/api/admin/networks.ts
 src/pages/api/admin/normalize-tags.ts
 src/pages/api/admin/pipeline/index.ts
+src/pages/api/admin/product-fields.ts
 src/pages/api/admin/sections.ts
 src/pages/api/admin/sections/suggestions.ts
 src/pages/api/admin/synthesize-title.ts

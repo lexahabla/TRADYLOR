@@ -4,6 +4,7 @@ import { asesorIaSystemPrompt, withSkills } from '../../../lib/aiPersonas';
 import { getSkillsForPersona } from '../../../lib/aiSkillsStore';
 import { getRadarSessionUser } from '../../../lib/radarAuth';
 import { aiAssistantPerIp, aiAssistantPerUser } from '../../../lib/rateLimit';
+import { chatCompleteGrounded, isGroundingAvailable } from '../../../lib/geminiGrounded';
 
 /**
  * ==============================================================================
@@ -71,7 +72,26 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const messages: ChatMessage[] = [{ role: 'system', content: systemPrompt(user?.name ?? undefined) }, ...history];
 
-    const reply = await chatComplete(messages, { temperature: 0.5, timeoutMs: 25_000, jsonMode: false });
+    // Búsqueda web en tiempo real (Google Search grounding, Gemini): permite
+    // al Asesor IA fundamentar comparativas y dudas técnicas con datos
+    // actuales. Si Gemini no está configurado o falla, se usa el proveedor de
+    // texto configurado de siempre (chatComplete), sin cambiar su respuesta.
+    let reply = '';
+    let grounded = false;
+    let citations: Array<{ title: string; url: string }> = [];
+    if (isGroundingAvailable()) {
+      try {
+        const result = await chatCompleteGrounded(messages, { temperature: 0.5, timeoutMs: 25_000 });
+        reply = result.text;
+        grounded = true;
+        citations = result.citations;
+      } catch (error) {
+        console.warn('[Dependiente IA] Gemini con Google Search no disponible, se usa el proveedor configurado:', error instanceof Error ? error.message : error);
+      }
+    }
+    if (!reply) {
+      reply = await chatComplete(messages, { temperature: 0.5, timeoutMs: 25_000, jsonMode: false });
+    }
     const trimmed = reply.trim()
       || 'No he encontrado una recomendación clara con esos datos: cuéntame tu presupuesto y para qué lo vas a usar.';
 
@@ -81,7 +101,7 @@ export const POST: APIRoute = async ({ request }) => {
       return json({ success: true, reply: teaser, locked: true });
     }
 
-    return json({ success: true, reply: trimmed, locked: false });
+    return json({ success: true, reply: trimmed, locked: false, grounded, citations: grounded ? citations : undefined });
   } catch (error) {
     // NOTA: el proxy de Easy Panel sustituye cualquier 5xx por su propia página
     // HTML (el cliente no puede parsearla y muestra un error genérico). Por eso

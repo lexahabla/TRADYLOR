@@ -111,6 +111,26 @@
     border-color: rgba(96, 165, 250, 0.3);
   }
 
+  .dia-sources {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.72rem;
+    color: #9ca3af;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+  }
+
+  .dia-sources a {
+    color: #60a5fa;
+    text-decoration: none;
+  }
+
+  .dia-sources a:hover {
+    text-decoration: underline;
+  }
+
   .dia-locked-banner {
     display: flex;
     align-items: center;
@@ -243,13 +263,18 @@
     const ESCAPE_MAP: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
     const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (ch) => ESCAPE_MAP[ch] ?? ch);
 
-    function appendMessage(role: 'user' | 'assistant', text: string): void {
+    function appendMessage(role: 'user' | 'assistant', text: string, citations?: Array<{ title: string; url: string }>): void {
       if (!messagesEl) return;
       const el = document.createElement('div');
       el.className = `dia-message dia-message--${role}`;
+      const sourcesHtml = citations && citations.length
+        ? `<div class="dia-sources">Fuentes: ${citations
+            .map((c) => `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(c.title || c.url)}</a>`)
+            .join(' · ')}</div>`
+        : '';
       el.innerHTML = `
         <span class="dia-avatar" aria-hidden="true">${role === 'assistant' ? '🤖' : '🙂'}</span>
-        <div class="dia-bubble">${escapeHtml(text).replace(/\n/g, '<br/>')}</div>
+        <div class="dia-bubble">${escapeHtml(text).replace(/\n/g, '<br/>')}${sourcesHtml}</div>
       `;
       messagesEl.appendChild(el);
       messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -288,13 +313,13 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ messages: history.map((h) => ({ role: h.role, content: h.content })) }),
         });
-        const data = (await res.json().catch(() => ({}))) as { success?: boolean; reply?: string; message?: string; locked?: boolean };
+        const data = (await res.json().catch(() => ({}))) as { success?: boolean; reply?: string; message?: string; locked?: boolean; grounded?: boolean; citations?: Array<{ title: string; url: string }> };
         if (!res.ok || !data.success) {
           appendMessage('assistant', data.message || 'Ups, se me ha atragantado la respuesta. Vuelve a preguntar en unos segundos y lo intento de nuevo.');
           if (hint) hint.textContent = data.message && res.status === 429 ? data.message : '';
           return;
         }
-        appendMessage('assistant', data.reply ?? '');
+        appendMessage('assistant', data.reply ?? '', data.grounded ? data.citations : undefined);
         history.push({ role: 'assistant', content: data.reply ?? '', at: new Date().toISOString() });
         const isLocked = Boolean(data.locked);
         if (lockedBanner) lockedBanner.hidden = !isLocked;

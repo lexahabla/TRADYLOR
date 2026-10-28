@@ -39,6 +39,14 @@ export interface Product {
   buyNowUrl?: string;
   /** Red de afiliados a la que pertenece el producto (amazon, aliexpress, ebay.). */
   network?: string;
+  /** Divisa declarada por la red de origen (normalmente EUR). */
+  currency?: string;
+  /** Comisión de afiliación (%) declarada por la red de origen (distinto de `commissionEstimate`, que es el importe en EUR). */
+  commissionRate?: number;
+  /** Disponibilidad declarada por la red de origen. */
+  inStock?: boolean;
+  /** Visitas/alcance del producto cuando la red las facilita (AliExpress no las da). */
+  visits?: number;
   /** Datos extra del catálogo multi-red (incluye `crossMerchant.networks`). */
   extra?: Record<string, unknown>;
   /** Código ASIN de Amazon (se autodetecta al pegar el enlace de afiliado). */
@@ -245,6 +253,13 @@ export function toStructuredProduct(flat: Product): ProductSchema {
     verdict: flat.verdict,
     techSheet: flat.techSheet,
     priceHistory: flat.priceHistory,
+    network: flat.network,
+    currency: flat.currency,
+    commissionRate: flat.commissionRate,
+    commissionEstimate: flat.commissionEstimate,
+    inStock: flat.inStock,
+    visits: flat.visits,
+    extra: flat.extra,
   };
 }
 

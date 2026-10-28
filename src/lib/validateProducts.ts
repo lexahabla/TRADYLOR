@@ -188,5 +188,12 @@ function normalizeToProduct(schema: Product): FlatProduct {
     ai_enriched: schema.ai_enriched,
     ai_error: schema.ai_error,
     title_short: schema.title_short,
+    network: schema.network,
+    currency: schema.currency,
+    commissionRate: schema.commissionRate,
+    commissionEstimate: schema.commissionEstimate,
+    inStock: schema.inStock,
+    visits: schema.visits,
+    extra: schema.extra,
   };
 }

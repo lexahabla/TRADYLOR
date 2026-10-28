@@ -327,6 +327,18 @@ export const POST: APIRoute = async ({ request }) => {
           ? Math.max(0, Math.round(Number(body.shippingDays)))
           : undefined,
       freeShipping: typeof body?.freeShipping === 'boolean' ? body.freeShipping : undefined,
+      // Estado físico (Nuevo/Usado/Reacondicionado...) y datos crudos de la red
+      // de origen: si el llamante los envía (p. ej. integraciones externas o un
+      // reproceso), se guardan; si no, se completan más abajo desde lo existente.
+      condition: body?.condition ? String(body.condition).trim() : undefined,
+      network: body?.network ? String(body.network).trim() : undefined,
+      currency: body?.currency ? String(body.currency).trim() : undefined,
+      commissionRate: body?.commissionRate != null && Number.isFinite(Number(body.commissionRate)) ? Number(body.commissionRate) : undefined,
+      commissionEstimate: body?.commissionEstimate != null && Number.isFinite(Number(body.commissionEstimate)) ? Number(body.commissionEstimate) : undefined,
+      sales30d: body?.sales30d != null && Number.isFinite(Number(body.sales30d)) ? Number(body.sales30d) : undefined,
+      inStock: typeof body?.inStock === 'boolean' ? body.inStock : undefined,
+      visits: body?.visits != null && Number.isFinite(Number(body.visits)) ? Number(body.visits) : undefined,
+      extra: body?.extra && typeof body.extra === 'object' && !Array.isArray(body.extra) ? body.extra : undefined,
     };
 
     if (enrichment) {
@@ -341,6 +353,9 @@ export const POST: APIRoute = async ({ request }) => {
         base.specs = { ...(base.specs ?? {}), ...enrichment.specs };
       }
       if (!base.category && enrichment.category) base.category = enrichment.category;
+      // Marca: la IA sólo la aporta si el producto no tenía ninguna (nunca
+      // sobrescribe una marca ya curada/escrita a mano).
+      if (!base.brand && enrichment.brand) base.brand = enrichment.brand;
       // Red de seguridad final: siempre más pros que contras en lo que se
       // va a guardar, pase lo que pase arriba (ver enforceMoreProsThanCons).
       const balanced = enforceMoreProsThanCons(base.pros ?? [], base.cons ?? []);
@@ -391,15 +406,36 @@ export const POST: APIRoute = async ({ request }) => {
         const CURATION_FIELDS = [
           'sourceId', 'category_id', 'subcategory_id', 'ia_status', 'link_status',
           'normalized_tags', 'alternative_product_ids', 'alternatives',
-          'conversion_score', 'commissionEstimate', 'sales30d',
+          'conversion_score',
           'audit_status', 'audit_score', 'audit_reasons',
           'pipeline_version', 'pipeline_run_at', 'ai_enriched', 'ai_error',
-          'sourceDescription', 'condition',
+          'sourceDescription',
         ] as const;
         for (const field of CURATION_FIELDS) {
           if ((existing as any)[field] !== undefined) {
             (base as any)[field] = (existing as any)[field];
           }
+        }
+        // Condición física y datos crudos de la red de origen: el body SÍ
+        // puede traerlos explícitamente (p. ej. un reproceso o una integración
+        // externa); sólo se restauran desde lo ya guardado si el llamante no
+        // los ha enviado en absoluto (si no, nunca se podrían actualizar).
+        const OVERRIDABLE_CURATION_FIELDS = [
+          'condition', 'network', 'currency', 'commissionRate', 'commissionEstimate',
+          'sales30d', 'inStock', 'visits',
+        ] as const;
+        for (const field of OVERRIDABLE_CURATION_FIELDS) {
+          if ((base as any)[field] === undefined && (existing as any)[field] !== undefined) {
+            (base as any)[field] = (existing as any)[field];
+          }
+        }
+        // `extra`: fusión superficial (igual que en /api/products/add) para no
+        // perder la comparativa multitienda ni los campos personalizados ya
+        // guardados cuando este endpoint actualiza un producto existente.
+        if (body?.extra && typeof body.extra === 'object' && !Array.isArray(body.extra)) {
+          base.extra = { ...(existing.extra ?? {}), ...(body.extra as Record<string, unknown>) };
+        } else if (existing.extra) {
+          base.extra = existing.extra;
         }
         // Categorización jerárquica: si la categoría o la subcategoría han
         // cambiado, se recalculan los ids de categories.json (la curación

@@ -3,6 +3,7 @@ import { chatComplete, hasTextCredentials, type ChatMessage } from '../../lib/ai
 import { asesorIaSystemPrompt, withSkills } from '../../lib/aiPersonas';
 import { getSkillsForPersona } from '../../lib/aiSkillsStore';
 import { getRadarSessionUser } from '../../lib/radarAuth';
+import { chatCompleteGrounded, isGroundingAvailable } from '../../lib/geminiGrounded';
 
 /**
  * ==============================================================================
@@ -109,15 +110,35 @@ export const POST: APIRoute = async ({ request }) => {
     const timeout = setTimeout(() => controller.abort(), 25_000);
 
     let respuesta: string;
+    let grounded = false;
+    let citations: Array<{ title: string; url: string }> = [];
     try {
-      respuesta = await Promise.race([
-        chatComplete(messages, { temperature: 0.5, timeoutMs: 25_000, jsonMode: true }),
-        new Promise<string>((_, reject) =>
-          controller.signal.addEventListener('abort', () =>
-            reject(new Error('Tiempo de espera agotado. Inténtalo de nuevo.')),
+      // Búsqueda web en tiempo real (Google Search grounding, Gemini): se
+      // intenta primero si hay clave de Gemini configurada; si falla o no
+      // está disponible, se usa el proveedor de texto de siempre.
+      if (isGroundingAvailable()) {
+        try {
+          const grounded_ = await chatCompleteGrounded(messages, { temperature: 0.5, timeoutMs: 25_000 });
+          respuesta = grounded_.text;
+          grounded = true;
+          citations = grounded_.citations;
+        } catch (error) {
+          console.warn('[Asistente IA] Gemini con Google Search no disponible, se usa el proveedor configurado:', error instanceof Error ? error.message : error);
+          respuesta = '';
+        }
+      } else {
+        respuesta = '';
+      }
+      if (!respuesta) {
+        respuesta = await Promise.race([
+          chatComplete(messages, { temperature: 0.5, timeoutMs: 25_000, jsonMode: true }),
+          new Promise<string>((_, reject) =>
+            controller.signal.addEventListener('abort', () =>
+              reject(new Error('Tiempo de espera agotado. Inténtalo de nuevo.')),
+            ),
           ),
-        ),
-      ]);
+        ]);
+      }
     } finally {
       clearTimeout(timeout);
     }
@@ -149,13 +170,15 @@ export const POST: APIRoute = async ({ request }) => {
         tipo: 'recomendacion',
         productos,
         usuario: nombreUsuario ?? null,
+        grounded,
+        citations: grounded ? citations : undefined,
       });
     }
 
     const trimmed = textoPlano
       || 'No he encontrado una recomendación clara con esos datos: cuéntame tu presupuesto y para qué lo vas a usar.';
 
-    return json({ respuesta: trimmed, tipo: 'general', productos: [], usuario: nombreUsuario ?? null });
+    return json({ respuesta: trimmed, tipo: 'general', productos: [], usuario: nombreUsuario ?? null, grounded, citations: grounded ? citations : undefined });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     console.error('[Asistente IA]:', msg);

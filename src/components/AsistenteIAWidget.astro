@@ -209,6 +209,26 @@ const {
   .msg-ia pre { margin: 0 0 0.6rem; padding: 0.75rem 0.9rem; background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; overflow-x: auto; }
   .msg-ia pre code { background: none; border: 0; padding: 0; }
 
+  .ia-sources {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 0.72rem;
+    color: var(--color-text-dim, #6b7280);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.6rem;
+  }
+
+  .ia-sources a {
+    color: #60a5fa;
+    text-decoration: none;
+  }
+
+  .ia-sources a:hover {
+    text-decoration: underline;
+  }
+
   /* Tarjetas de producto recomendadas (solo título + pro breve) */
   .ia-producto {
     align-self: flex-start;
@@ -388,6 +408,14 @@ const {
         const el = document.createElement('div');
         el.className = 'msg-ia';
         el.innerHTML = formatIaReply(data.respuesta);
+        if (data.grounded && Array.isArray(data.citations) && data.citations.length) {
+          const sources = document.createElement('div');
+          sources.className = 'ia-sources';
+          sources.innerHTML = 'Fuentes: ' + data.citations
+            .map((c) => `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(c.title || c.url)}</a>`)
+            .join(' · ');
+          el.appendChild(sources);
+        }
         messagesContainer.appendChild(el);
       }
 

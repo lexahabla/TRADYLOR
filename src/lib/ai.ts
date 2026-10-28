@@ -51,6 +51,8 @@ export interface EnrichedText {
   cons: string[];
   verdict: string;
   category?: string;
+  /** Marca/fabricante deducida del título cuando el producto no la trae ya. Nunca sobrescribe una marca ya conocida (ver overlayEnrichedText). */
+  brand?: string;
   /** Par oferta/original con descuento realista (EUR). */
   pricing?: EnrichedPricing;
 }
@@ -112,6 +114,31 @@ export function textProvider(): TextProvider {
   if (value === 'openrouter') return 'openrouter';
   if (value === 'gemini') return 'gemini';
   return 'openai';
+}
+
+/**
+ * Cuántas llamadas de enriquecimiento masivo («Enriquecer») se pueden lanzar
+ * EN PARALELO por proveedor sin agotar sus límites de peticiones. Los planes
+ * gratuitos (Groq, NVIDIA NIM, OpenRouter ":free") tienen cuotas de peticiones
+ * por minuto más bajas; los de pago (OpenAI, Anthropic, Gemini) toleran más
+ * concurrencia. Es una estimación conservadora, no un límite exacto del
+ * proveedor: si la IA empieza a devolver 429 a mitad de lote, `chatComplete`/
+ * `enrichProductText` ya hacen fallback automático a otro proveedor
+ * configurado antes de caer a la plantilla local.
+ */
+export const TEXT_PROVIDER_CONCURRENCY: Record<TextProvider, number> = {
+  openai: 5,
+  anthropic: 5,
+  gemini: 4,
+  groq: 2,
+  nvidia: 2,
+  openrouter: 2,
+};
+
+/** Capacidad de enriquecimiento simultáneo del proveedor de texto activo. */
+export function enrichConcurrency(providerOverride?: TextProvider): number {
+  const provider = providerOverride ?? textProvider();
+  return TEXT_PROVIDER_CONCURRENCY[provider] ?? 2;
 }
 
 export function imageProvider(): ImageProvider {
@@ -482,9 +509,10 @@ const TEXT_SYSTEM_PROMPT = [
   '- specs: entre 4 y 8 pares clave/valor cortos (p. ej. "Autonomía": "Hasta 30 horas"). Si te dieron especificaciones del comercio, prioriza usar esas tal cual (o muy ligeramente reformateadas); si no, omite las que no conozcas.',
   '- techSheet: párrafo de 3 a 6 líneas en español con datos objetivos de la ficha técnica (materiales, medidas, peso, conectividad, compatibilidades, garantía, contenido de la caja). Usa " · " para separar datos. Básate en las especificaciones del comercio si te las dieron; no inventes cifras que no conozcas.',
   '- category: nombre corto de categoría (ej. "Audio & Sonido").',
+  '- brand: marca o fabricante del producto (string corto, ej. "Samsung", "Xiaomi", "Anker") SÓLO si se puede deducir con confianza del título/la descripción/la categoría. Si no hay ninguna pista fiable, responde "" (cadena vacía); nunca inventes una marca que el texto no sugiera.',
   '- description: 2 o 3 frases en español de REDACCIÓN TÉCNICA CONCISA, orientadas a decisión de compra. Si se aporta una descripción previa, reescríbela mejorando claridad, precisión y fluidez (sin inventar datos ni superlativos).',
   '- pricing: objeto { currentPrice, originalPrice } en euros. Si en la entrada ya hay un precio de oferta, consérvalo EXACTAMENTE como currentPrice y genera un originalPrice superior con un descuento realista (entre 15% y 35%, nunca más del 40%). Si no hay ningún precio, propón un par realista para la categoría del producto. Formato: dos decimales terminando en ,99 o ,95. originalPrice SIEMPRE mayor que currentPrice. Descuentos absurdos (>50%) o mínimos (<10%) quedan prohibidos.',
-  'Responde SOLO con JSON válido con claves: title, description, specs, techSheet, pros, cons, verdict, category, pricing.',
+  'Responde SOLO con JSON válido con claves: title, description, specs, techSheet, pros, cons, verdict, category, brand, pricing.',
 ].join('\n');
 
 /**
@@ -688,6 +716,9 @@ export function overlayEnrichedText(local: EnrichedText, ai: EnrichedText): Enri
     description: pick(ai.description, local.description),
     verdict: pick(ai.verdict, local.verdict),
     category: pick(ai.category, local.category),
+    // Marca: SOLO se rellena si no había ninguna ya conocida (nunca sustituye
+    // una marca curada/verificada por la "mejor suposición" de la IA).
+    brand: local.brand || ai.brand,
     // La ficha técnica la marca el comercio: lo ya extraído localmente
     // prevalece sobre lo que "adivine" la IA para las mismas claves; la IA
     // sólo aporta claves adicionales que falten.
@@ -747,6 +778,7 @@ function normalizeEnrichedText(raw: any): EnrichedText {
     cons,
     verdict: String(raw?.verdict ?? '').replace(/\s+/g, ' ').trim().slice(0, 400),
     category: String(raw?.category ?? '').replace(/\s+/g, ' ').trim().slice(0, 60) || undefined,
+    brand: String(raw?.brand ?? '').replace(/\s+/g, ' ').trim().slice(0, 60) || undefined,
     pricing: normalizePricing(raw?.pricing),
   };
 }

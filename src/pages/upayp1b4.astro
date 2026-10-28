@@ -369,6 +369,21 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 
           <div class="form-row two-cols">
             <div class="form-group">
+              <label for="prodCondition" class="field-label">
+                <span>Estado físico</span>
+                <span class="label-hint">Se muestra como pastilla «Estado» en el catálogo y en Importar</span>
+              </label>
+              <select id="prodCondition">
+                <option value="">Nuevo (por defecto)</option>
+                <option value="Reacondicionado por el vendedor">Reacondicionado por el vendedor (RxV)</option>
+                <option value="Usado">Usado</option>
+                <option value="De exposición">De exposición</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row two-cols">
+            <div class="form-group">
               <label for="prodRating" class="field-label">
                 <span>Valoración (0–5)</span>
                 <span class="label-hint">Se muestra en la ficha y en las cards</span>
@@ -475,6 +490,21 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </div>
           </div>
 
+          <!-- Campos adicionales (personalizados): se crean y se marcan
+               visibles/ocultos desde «Catálogo › Campos visibles en la
+               ficha». Cada uno vive en product.extra[clave] y aparece aquí
+               automáticamente en cuanto se da de alta; vacío mientras no se
+               haya creado ninguno. -->
+          <div class="form-row" id="customFieldsSection" hidden>
+            <div class="form-group full-width">
+              <label class="field-label">
+                <span>Campos adicionales</span>
+                <span class="label-hint">Definidos desde «Catálogo › Campos visibles en la ficha»</span>
+              </label>
+              <div id="customFieldsContainer" class="custom-fields-container"></div>
+            </div>
+          </div>
+
           <!-- Botones de Acción -->
           <div class="form-actions">
             <button type="button" id="btnAiEnrich" class="btn-ai">
@@ -563,6 +593,39 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             </div><!-- /.form-preview-col -->
           </div><!-- /.form-basic-grid -->
         </form>
+      </div>
+    </section>
+
+    <!-- 1b. CAMPOS VISIBLES EN LA FICHA DEL PRODUCTO (desde Catálogo) -->
+    <section data-admin-view="products" class:list={['admin-card', 'hidden-section', { 'is-visible': initialSection === 'products' }]}>
+      <div class="card-header card-header-toggle" id="fieldVisibilityToggle" role="button" aria-expanded="false" aria-controls="fieldVisibilityPanel" tabindex="0">
+        <div class="header-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </div>
+        <div style="flex:1;">
+          <h2 class="card-title">Campos visibles en la ficha del producto</h2>
+          <p class="card-desc">Elige qué campos del catálogo se muestran en la página pública de cada producto y añade campos nuevos (aparecen como un input más en «1. Extracción &amp; Alta de Producto»). Los campos existentes quedan visibles por defecto: nada cambia hasta que los desactives aquí.</p>
+        </div>
+        <button type="button" class="btn-ghost btn-sm" id="btnToggleFieldVisibility" aria-label="Mostrar campos visibles" style="margin-left:auto;">
+          <span id="fieldVisibilityToggleLabel">Mostrar</span>
+        </button>
+      </div>
+      <div id="fieldVisibilityPanel" class="field-visibility-panel" hidden>
+        <h3 class="field-visibility-subtitle">Campos de serie</h3>
+        <div id="baseFieldsList" class="field-toggle-list">
+          <div class="loading-panel">Cargando campos...</div>
+        </div>
+        <h3 class="field-visibility-subtitle">Campos personalizados</h3>
+        <div id="customFieldsList" class="field-toggle-list"></div>
+        <div class="custom-field-add-row">
+          <input type="text" id="newCustomFieldLabel" placeholder="Nombre del campo nuevo (ej: Garantía, Certificación...)" maxlength="60" />
+          <label class="filter-check"><input type="checkbox" id="newCustomFieldVisible" checked /> Visible en la ficha</label>
+          <button type="button" class="btn-success btn-sm" id="btnAddCustomField">➕ Añadir campo</button>
+        </div>
+        <p id="fieldVisibilityStatus" class="field-visibility-status" aria-live="polite"></p>
       </div>
     </section>
 
@@ -770,7 +833,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                       const cond = p.condition || p.specs?.['Estado'] || p.specs?.['Condición'] || p.specs?.['Condition'];
                       if (!cond) return <span class="cond-pill cond-unknown">—</span>;
                       const isUsed = /used|pre-owned|refurbished|reacondicionad|segunda\s*mano|usad[oa]|open\s*box|seminuev/i.test(cond);
-                      return <span class={`cond-pill ${isUsed ? 'cond-used' : 'cond-new'}`}>{cond}</span>;
+                      if (isUsed) return <span class="cond-pill cond-used" title="Reacondicionado por el vendedor">RxV</span>;
+                      return <span class="cond-pill cond-new">{cond}</span>;
                     })()}
                   </td>
                   <td class="col-price"><span class="price-val">{p.price.toFixed(2)} €</span></td>
@@ -1532,7 +1596,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           </div>
           <div style="flex: 1;">
             <h2 class="card-title">Personalidades de IA</h2>
-            <p class="card-desc">Dos personalidades, un mismo modelo. <strong>Dependiente IA</strong> atiende al usuario en el widget flotante y en la página de la herramienta. <strong>Consola IA</strong> asiste al administrador desde el botón 🤖 del panel.</p>
+            <p class="card-desc">Dos personalidades, un mismo modelo. <strong>Dependiente IA</strong> atiende al usuario en el widget flotante y en la página de la herramienta. <strong>Consola IA</strong> asiste al administrador desde el botón 🤖 del panel. Si hay clave de <strong>Google Gemini</strong> configurada, ambas razonan con búsqueda web en tiempo real (Google Search grounding, SDK oficial <code>@google/genai</code>) y citan sus fuentes; sin ella, usan el proveedor de texto configurado de siempre.</p>
           </div>
         </div>
 
@@ -1540,13 +1604,13 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <div class="dia-persona">
             <span class="dia-persona-badge is-customer">👤 Usuario final</span>
             <h3 class="dia-persona-name">Dependiente IA</h3>
-            <p class="dia-persona-desc">Ayuda y orienta al usuario sobre el funcionamiento de la tienda y sus productos (widget flotante + página «Dependiente IA»).</p>
+            <p class="dia-persona-desc">Ayuda y orienta al usuario sobre el funcionamiento de la tienda y sus productos (widget flotante + página «Dependiente IA»). Con Gemini conectado, puede debatir y fundamentar comparativas con datos actuales de la web.</p>
             <code class="dia-persona-skill" data-skill-persona="dependiente">Skill actual: cargando…</code>
           </div>
           <div class="dia-persona">
             <span class="dia-persona-badge is-admin">🛠 Administrador</span>
             <h3 class="dia-persona-name">Consola IA</h3>
-            <p class="dia-persona-desc">Ayuda al administrador a gestionar la tienda: catálogo, pipeline, métricas y marketing (botón 🤖 del panel).</p>
+            <p class="dia-persona-desc">Ayuda al administrador a gestionar la tienda: catálogo, pipeline, métricas y marketing (botón 🤖 del panel). Con Gemini conectado y "Automático"/"Google Gemini" seleccionado, busca en la web en tiempo real para fundamentar sus respuestas.</p>
             <code class="dia-persona-skill" data-skill-persona="admin">Skill actual: cargando…</code>
           </div>
         </div>
@@ -2072,6 +2136,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     const prodCons = document.getElementById('prodCons');
     const prodBrand = document.getElementById('prodBrand');
     const prodFulfillment = document.getElementById('prodFulfillment');
+    const prodCondition = document.getElementById('prodCondition');
     const prodRating = document.getElementById('prodRating');
     const prodReviews = document.getElementById('prodReviews');
     const prodSpecs = document.getElementById('prodSpecs');
@@ -2781,6 +2846,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           fillIfEmpty(prodBuyNowUrl, data.buyNowUrl || '');
           fillIfEmpty(prodBrand, data.brand || '');
           fillIfEmpty(prodFulfillment, data.fulfillmentProvider || '');
+          if (prodCondition && !prodCondition.value && data.condition) {
+            const hasOption = Array.from(prodCondition.options).some((o) => o.value === data.condition);
+            prodCondition.value = hasOption ? data.condition : '';
+          }
           fillIfEmpty(prodRating, data.rating ?? '');
           fillIfEmpty(prodReviews, data.reviewsCount ?? '');
           fillIfEmpty(prodShippingInfo, data.shippingInfo || '');
@@ -2884,6 +2953,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       prodCons.value = '';
       if (prodBrand) prodBrand.value = '';
       if (prodFulfillment) prodFulfillment.value = '';
+      if (prodCondition) prodCondition.value = '';
       if (prodRating) prodRating.value = '';
       if (prodReviews) prodReviews.value = '';
       if (prodSpecs) prodSpecs.value = '';
@@ -2895,6 +2965,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       if (galleryFileInput) galleryFileInput.value = '';
       scrapedGallery = [];
       scrapeExtras = { brand: '', rating: null, reviewsCount: null, specs: null };
+      if (window.tradylorCustomFields) window.tradylorCustomFields.setFormValues({});
       previewIndex = 0;
       renderGallery();
       updatePreview();
@@ -2958,6 +3029,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           specs: optional(textToSpecs(prodSpecs?.value)),
           brand: optional(prodBrand?.value.trim()),
           fulfillmentProvider: optional(prodFulfillment?.value.trim()),
+          condition: optional(prodCondition?.value.trim()),
           rating: prodRating?.value !== '' && prodRating?.value != null
             ? Math.min(5, Math.max(0, Number(prodRating.value)))
             : optional(''),
@@ -2977,6 +3049,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             .split('\n')
             .map((s) => s.trim())
             .filter(Boolean),
+          extra: window.tradylorCustomFields ? window.tradylorCustomFields.getFormValues() : undefined,
         };
 
         if (btnSaveProduct) {
@@ -3265,9 +3338,10 @@ const USED_CONDITION_RE = /used|pre-owned|refurbished|reacondicionad|segunda\s*m
 function prodConditionBadge(p) {
   const raw = p.condition || (p.specs && (p.specs['Estado'] || p.specs['Condición'] || p.specs['Condition']));
   if (!raw) return '<span class="cond-pill cond-unknown">—</span>';
-  const text = escapeHtml(String(raw));
   const isUsed = USED_CONDITION_RE.test(String(raw));
-  return `<span class="cond-pill ${isUsed ? 'cond-used' : 'cond-new'}">${text}</span>`;
+  if (isUsed) return '<span class="cond-pill cond-used" title="Reacondicionado por el vendedor">RxV</span>';
+  const text = escapeHtml(String(raw));
+  return `<span class="cond-pill cond-new">${text}</span>`;
 }
 
 function renderTableRows(products, resetPage = true) {
@@ -3429,6 +3503,29 @@ function renderTableRows(products, resetPage = true) {
               ${p.specs && Object.keys(p.specs).length ? `<div class="aff-detail-item"><dt>Especificaciones</dt><dd>${Object.entries(p.specs).map(([k, v]) => `${escapeHtml ? escapeHtml(k) : k}: ${escapeHtml ? escapeHtml(String(v)) : v}`).join(' · ')}</dd></div>` : ''}
               ${Array.isArray(p.pros) && p.pros.length ? `<div class="aff-detail-item"><dt>Pros</dt><dd>${p.pros.join(' · ')}</dd></div>` : ''}
               ${Array.isArray(p.cons) && p.cons.length ? `<div class="aff-detail-item"><dt>Contras</dt><dd>${p.cons.join(' · ')}</dd></div>` : ''}
+              ${p.condition ? `<div class="aff-detail-item"><dt>Estado físico</dt><dd>${escapeHtml ? escapeHtml(p.condition) : p.condition}</dd></div>` : ''}
+              ${(() => {
+                // Datos crudos de la red de origen capturados en «Importar»/«Construir
+                // Catálogo»: igual que la tabla de Importar, se listan aquí para que
+                // «coincidan los datos de la tabla catálogo con los de Importar».
+                const raw = [
+                  ['Red', p.network],
+                  ['Divisa', p.currency],
+                  ['Comisión (%)', p.commissionRate != null ? `${p.commissionRate}%` : null],
+                  ['Stock', typeof p.inStock === 'boolean' ? (p.inStock ? 'En stock' : 'Sin stock') : null],
+                  ['Visitas', p.visits],
+                ].filter(([, v]) => v != null && v !== '');
+                return raw.map(([k, v]) => `<div class="aff-detail-item"><dt>${k}</dt><dd>${escapeHtml ? escapeHtml(String(v)) : v}</dd></div>`).join('');
+              })()}
+              ${(() => {
+                // Resto de `extra` específico del conector (Tienda, Almacén Local,
+                // Comisión Hot, Choice...), excluyendo el bloque interno `crossMerchant`.
+                if (!p.extra || typeof p.extra !== 'object') return '';
+                return Object.entries(p.extra)
+                  .filter(([k, v]) => k !== 'crossMerchant' && v != null && v !== '' && typeof v !== 'object')
+                  .map(([k, v]) => `<div class="aff-detail-item"><dt>${escapeHtml ? escapeHtml(k) : k}</dt><dd>${escapeHtml ? escapeHtml(String(v)) : v}</dd></div>`)
+                  .join('');
+              })()}
               ${Array.isArray(p.gallery) && p.gallery.length ? `<div class="aff-detail-item is-images"><dt>Galería (${p.gallery.length})</dt><dd class="aff-detail-thumbs">${p.gallery.map((u)=>`<a href="${u}" target="_blank" rel="noopener noreferrer"><img src="${u}" alt="" loading="lazy" /></a>`).join('')}</dd></div>` : ''}
             </dl></td>
           </tr>
@@ -3572,9 +3669,11 @@ function renderTableRows(products, resetPage = true) {
               if (prodFreeShipping) prodFreeShipping.checked = product.freeShipping === true;
               if (prodBrand) prodBrand.value = product.brand || '';
               if (prodFulfillment) prodFulfillment.value = product.fulfillmentProvider || '';
+              if (prodCondition) prodCondition.value = product.condition || '';
               if (prodRating) prodRating.value = product.rating != null ? String(product.rating) : '';
               if (prodReviews) prodReviews.value = product.reviewsCount != null ? String(product.reviewsCount) : '';
               if (prodSpecs) prodSpecs.value = specsToText(product.specs);
+              if (window.tradylorCustomFields) window.tradylorCustomFields.setFormValues(product.extra);
               scrapeExtras = {
                 brand: product.brand || '',
                 rating: product.rating ?? null,
@@ -4384,8 +4483,25 @@ function renderTableRows(products, resetPage = true) {
         return;
       }
 
+      // Capacidad de IA en paralelo del proveedor activo (ver
+      // TEXT_PROVIDER_CONCURRENCY en lib/ai.ts): si no se puede consultar, 2
+      // a la vez es un valor conservador y seguro para cualquier proveedor.
+      let concurrency = 2;
+      try {
+        const statusRes = await fetch('/api/admin/ai-status', { cache: 'no-store' });
+        const statusData = await statusRes.json();
+        const hinted = Number(statusData?.active?.enrichConcurrency);
+        if (Number.isFinite(hinted) && hinted >= 1) concurrency = Math.min(hinted, ids.length);
+      } catch { /* se usa el valor conservador por defecto */ }
+
       ensureEnrichProgress();
       enrichProgressEl.hidden = false;
+      const progressTitleEl = document.getElementById('enrichProgressTitle');
+      if (progressTitleEl) {
+        progressTitleEl.textContent = concurrency > 1
+          ? `Enriqueciendo con IA… (hasta ${concurrency} productos a la vez)`
+          : 'Enriqueciendo con IA… (de uno en uno: el proveedor activo no admite más peticiones simultáneas)';
+      }
       const total = ids.length;
       let done = 0;
       let okCount = 0;
@@ -4401,48 +4517,51 @@ function renderTableRows(products, resetPage = true) {
       // campos vacíos) más filtrado de galería de baja calidad y vinculación
       // automática de alternativas. `forceImage: false` evita que un
       // enriquecimiento MASIVO sustituya en cadena fotos reales del comercio
-      // por una genérica de IA (sólo rellena huecos). Se llama producto a
-      // producto (en vez de mandar todos los IDs de golpe) para poder mostrar
-      // el progreso en vivo; una pausa corta entre peticiones evita saturar
-      // de golpe al proveedor de IA (que además reintenta con otro proveedor
-      // si el por defecto falla: ver `enrichProductText`).
-      const prodEnrichDelayMs = 300;
-      try {
-        for (let i = 0; i < ids.length; i++) {
-          const id = ids[i];
-          const product = (currentProducts || []).find((p) => p.id === id);
-          if (!product) continue;
-
-          try {
-            const res = await fetch('/api/admin/enrich-bulk', {
-              method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ids: [id], forceImage: false }),
-            });
-            const data = await res.json();
-            const row = Array.isArray(data.results) ? data.results[0] : null;
-            if (data.success && row?.ok) {
-              okCount++;
-              if (row.textStatus === 'ok') aiTextCount++;
-              else if (row.textStatus === 'local') localTextCount++;
-              if (row.imageStatus === 'ok') imageGeneratedCount++;
-              if (Array.isArray(row.warnings)) warnings.push(...row.warnings);
-            } else {
-              failCount++;
-              warnings.push(`${product.title || id}: ${row?.warnings?.[0] || data.message || 'error'}`);
-            }
-          } catch (err) {
+      // por una genérica de IA (sólo rellena huecos).
+      //
+      // Concurrencia acotada («toda la capacidad de IA que tengamos» sin
+      // saturar al proveedor): se procesan hasta `concurrency` productos a la
+      // vez en vez de uno a uno; cada hueco que se libera coge el siguiente
+      // id de la cola. El progreso (contador + barra) se actualiza con cada
+      // producto que termina, venga del worker que venga.
+      let nextIndex = 0;
+      async function enrichOne(id) {
+        const product = (currentProducts || []).find((p) => p.id === id);
+        if (!product) return;
+        try {
+          const res = await fetch('/api/admin/enrich-bulk', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids: [id], forceImage: false }),
+          });
+          const data = await res.json();
+          const row = Array.isArray(data.results) ? data.results[0] : null;
+          if (data.success && row?.ok) {
+            okCount++;
+            if (row.textStatus === 'ok') aiTextCount++;
+            else if (row.textStatus === 'local') localTextCount++;
+            if (row.imageStatus === 'ok') imageGeneratedCount++;
+            if (Array.isArray(row.warnings)) warnings.push(...row.warnings);
+          } else {
             failCount++;
-            warnings.push(`${product.title || id}: error de red`);
+            warnings.push(`${product.title || id}: ${row?.warnings?.[0] || data.message || 'error'}`);
           }
-
-          done++;
-          if (enrichProgressBar) enrichProgressBar.style.width = `${Math.round((done / total) * 100)}%`;
-          if (enrichProgressText) enrichProgressText.textContent = `${done} / ${total} productos procesados · ${aiTextCount} con IA · ${localTextCount} con plantilla local`;
-
-          if (prodEnrichDelayMs > 0 && i < ids.length - 1) {
-            await new Promise((resolve) => setTimeout(resolve, prodEnrichDelayMs));
-          }
+        } catch (err) {
+          failCount++;
+          warnings.push(`${product.title || id}: error de red`);
         }
+
+        done++;
+        if (enrichProgressBar) enrichProgressBar.style.width = `${Math.round((done / total) * 100)}%`;
+        if (enrichProgressText) enrichProgressText.textContent = `${done} / ${total} productos procesados · ${aiTextCount} con IA · ${localTextCount} con plantilla local`;
+      }
+      async function worker() {
+        while (nextIndex < ids.length) {
+          const id = ids[nextIndex++];
+          await enrichOne(id);
+        }
+      }
+      try {
+        await Promise.all(Array.from({ length: Math.max(1, concurrency) }, () => worker()));
 
         selectedProductIds.clear();
         updateProdSelCount();
@@ -5528,6 +5647,12 @@ function renderTableRows(products, resetPage = true) {
       // Estado físico (Nuevo/Usado/Reacondicionado...): dato clave para poder
       // filtrar después los productos de segunda mano en el catálogo.
       const condition = extraOf('Estado') || extraOf('Condición') || extraOf('Condition') || undefined;
+      // Ventas/alcance: `popularity` (campo propio de UnifiedProduct) o, en su
+      // defecto, el extra textual del conector.
+      const rawSales = product.popularity != null ? product.popularity : extraOf('Ventas (30 días)');
+      const sales30d = rawSales != null && rawSales !== '' && Number.isFinite(Number(rawSales))
+        ? Math.round(Number(rawSales))
+        : undefined;
       return {
         action: 'save',
         product: {
@@ -5561,6 +5686,20 @@ function renderTableRows(products, resetPage = true) {
           shippingInfo,
           shippingDays,
           freeShipping,
+          // Resto de datos crudos que la API de la red facilita: antes se
+          // descartaban al pulsar «Importar»/«Añadir» (sólo sobrevivía el
+          // subconjunto de arriba). Ahora viajan como campos propios
+          // (tipados) o dentro de `extra` (todo lo específico del conector:
+          // Tienda, Almacén Local, Comisión Hot, Choice...), igual que hace
+          // «Construir Catálogo».
+          network: product.network,
+          currency: product.currency,
+          commissionRate: typeof product.commissionRate === 'number' ? product.commissionRate : undefined,
+          commissionEstimate: typeof product.commissionAmount === 'number' ? product.commissionAmount : undefined,
+          sales30d,
+          inStock: typeof product.inStock === 'boolean' ? product.inStock : undefined,
+          visits: typeof product.visits === 'number' ? product.visits : undefined,
+          extra: product.extra && typeof product.extra === 'object' ? product.extra : undefined,
         },
       };
     }
@@ -6159,9 +6298,10 @@ function renderTableRows(products, resetPage = true) {
     function aliConditionBadge(product) {
       const raw = aliExtra(product, 'Estado') || aliExtra(product, 'Condición') || aliExtra(product, 'Condition');
       if (!raw) return '<span class="cond-pill cond-unknown">—</span>';
-      const text = escapeHtml(String(raw));
       const isUsed = ALI_USED_CONDITION_RE.test(String(raw));
-      return `<span class="cond-pill ${isUsed ? 'cond-used' : 'cond-new'}">${text}</span>`;
+      if (isUsed) return '<span class="cond-pill cond-used" title="Reacondicionado por el vendedor">RxV</span>';
+      const text = escapeHtml(String(raw));
+      return `<span class="cond-pill cond-new">${text}</span>`;
     }
 
     function aliDiscount(product) {
@@ -8812,11 +8952,21 @@ function renderTableRows(products, resetPage = true) {
       return html || '<p></p>';
     }
 
-    function aicAppend(role, text) {
+    function aicAppend(role, text, citations) {
       if (!aicMessages) return;
       const div = document.createElement('div');
       div.className = 'aic-msg is-' + role;
-      if (role === 'assistant') div.innerHTML = formatIaReply(text);
+      if (role === 'assistant') {
+        div.innerHTML = formatIaReply(text);
+        if (citations && citations.length) {
+          const sources = document.createElement('div');
+          sources.className = 'aic-sources';
+          sources.innerHTML = '🔎 Fuentes: ' + citations
+            .map((c) => `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener noreferrer nofollow">${escapeHtml(c.title || c.url)}</a>`)
+            .join(' · ');
+          div.appendChild(sources);
+        }
+      }
       else div.textContent = text;
       aicMessages.appendChild(div);
       aicMessages.scrollTop = aicMessages.scrollHeight;
@@ -8941,7 +9091,7 @@ function renderTableRows(products, resetPage = true) {
           aicHistory.push({ role: 'user', content: prompt });
           aicHistory.push({ role: 'assistant', content: data.reply || '' });
           while (aicHistory.length > 20) aicHistory.shift();
-          aicAppend('assistant', data.reply || '(sin respuesta)');
+          aicAppend('assistant', data.reply || '(sin respuesta)', data.grounded ? data.citations : null);
         }
       } catch (err) {
         aicAppend('error', (err && err.message) || 'Error de red al contactar con la consola.');
@@ -9107,6 +9257,257 @@ function renderTableRows(products, resetPage = true) {
     initAdminTooltips();
     // Re-aplicar tooltips cuando el DOM cambie (tablas renderizadas dinámicamente)
     new MutationObserver(initAdminTooltips).observe(document.body, { childList: true, subtree: true });
+  });
+</script>
+
+<!--
+  Panel «Campos visibles en la ficha del producto»: script aparte (mismo
+  patrón que window.tradylorAliFilters) para no acoplarlo al script principal
+  (9000+ líneas). Expone window.tradylorCustomFields para que el formulario
+  de «1. Extracción & Alta de Producto» lea/escriba los campos personalizados
+  sin que ambos scripts se conozcan entre sí.
+-->
+<script is:inline>
+  document.addEventListener('DOMContentLoaded', () => {
+    const fvToggle = document.getElementById('fieldVisibilityToggle');
+    const fvToggleBtn = document.getElementById('btnToggleFieldVisibility');
+    const fvToggleLabel = document.getElementById('fieldVisibilityToggleLabel');
+    const fvPanel = document.getElementById('fieldVisibilityPanel');
+    const baseFieldsList = document.getElementById('baseFieldsList');
+    const customFieldsList = document.getElementById('customFieldsList');
+    const newCustomFieldLabel = document.getElementById('newCustomFieldLabel');
+    const newCustomFieldVisible = document.getElementById('newCustomFieldVisible');
+    const btnAddCustomField = document.getElementById('btnAddCustomField');
+    const fieldVisibilityStatus = document.getElementById('fieldVisibilityStatus');
+    const customFieldsSection = document.getElementById('customFieldsSection');
+    const customFieldsContainer = document.getElementById('customFieldsContainer');
+
+    // El panel sólo existe para sesiones admin autenticadas; si falta, esta
+    // sección entera no está en el DOM (usuario sin permisos) y no hay nada que hacer.
+    if (!fvPanel) return;
+
+    let customFieldsCache = [];
+
+    function fvEscapeHtml(value) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => map[ch] || ch);
+    }
+
+    function fvSetStatus(msg, isError) {
+      if (!fieldVisibilityStatus) return;
+      fieldVisibilityStatus.textContent = msg || '';
+      fieldVisibilityStatus.style.color = isError ? '#f87171' : '#34d399';
+      if (msg) setTimeout(() => { fieldVisibilityStatus.textContent = ''; }, 4000);
+    }
+
+    function renderBaseFields(fields) {
+      if (!baseFieldsList) return;
+      if (!fields.length) {
+        baseFieldsList.innerHTML = '<p class="card-desc">Sin campos configurables.</p>';
+        return;
+      }
+      baseFieldsList.innerHTML = fields
+        .map(
+          (f) => `
+        <label class="field-toggle-item">
+          <input type="checkbox" data-base-field="${fvEscapeHtml(f.key)}"${f.visible ? ' checked' : ''} />
+          <span class="field-toggle-item-text">
+            <span class="field-toggle-item-label">${fvEscapeHtml(f.label)}</span>
+            <span class="field-toggle-item-hint">${fvEscapeHtml(f.hint || '')}</span>
+          </span>
+        </label>`
+        )
+        .join('');
+      baseFieldsList.querySelectorAll('[data-base-field]').forEach((box) => {
+        box.addEventListener('change', async () => {
+          const key = box.getAttribute('data-base-field');
+          const previous = !box.checked;
+          box.disabled = true;
+          try {
+            const res = await fetch('/api/admin/product-fields', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'set-base-visibility', key, visible: box.checked }),
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error('No se pudo guardar.');
+            fvSetStatus('✓ Guardado: se aplica en la próxima visita a la ficha.');
+          } catch (err) {
+            box.checked = previous;
+            fvSetStatus((err && err.message) || 'Error al guardar.', true);
+          } finally {
+            box.disabled = false;
+          }
+        });
+      });
+    }
+
+    function renderCustomFieldsList(fields) {
+      if (!customFieldsList) return;
+      if (!fields.length) {
+        customFieldsList.innerHTML = '<p class="card-desc">Todavía no has añadido ningún campo personalizado.</p>';
+        return;
+      }
+      customFieldsList.innerHTML = fields
+        .map(
+          (f) => `
+        <label class="field-toggle-item">
+          <input type="checkbox" data-custom-field-visibility="${fvEscapeHtml(f.key)}"${f.visible ? ' checked' : ''} />
+          <span class="field-toggle-item-text">
+            <span class="field-toggle-item-label">${fvEscapeHtml(f.label)}</span>
+            <span class="field-toggle-item-hint">product.extra.${fvEscapeHtml(f.key)}</span>
+          </span>
+          <button type="button" class="field-toggle-item-remove" data-custom-field-remove="${fvEscapeHtml(f.key)}" title="Eliminar campo (los valores ya guardados no se borran)" aria-label="Eliminar campo">✕</button>
+        </label>`
+        )
+        .join('');
+      customFieldsList.querySelectorAll('[data-custom-field-visibility]').forEach((box) => {
+        box.addEventListener('change', async () => {
+          const key = box.getAttribute('data-custom-field-visibility');
+          const previous = !box.checked;
+          box.disabled = true;
+          try {
+            const res = await fetch('/api/admin/product-fields', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'set-custom-visibility', key, visible: box.checked }),
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error('No se pudo guardar.');
+            const field = customFieldsCache.find((f) => f.key === key);
+            if (field) field.visible = box.checked;
+            renderCustomFieldInputs(customFieldsCache, window.tradylorCustomFields.getFormValues());
+            fvSetStatus('✓ Guardado');
+          } catch (err) {
+            box.checked = previous;
+            fvSetStatus((err && err.message) || 'Error al guardar.', true);
+          } finally {
+            box.disabled = false;
+          }
+        });
+      });
+      customFieldsList.querySelectorAll('[data-custom-field-remove]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const key = btn.getAttribute('data-custom-field-remove');
+          if (!confirm('¿Eliminar este campo personalizado? Los valores ya guardados en los productos no se borran, pero dejarán de verse en el formulario y en la ficha.')) return;
+          btn.disabled = true;
+          try {
+            const res = await fetch('/api/admin/product-fields', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'remove-custom-field', key }),
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error('No se pudo eliminar.');
+            fvSetStatus('✓ Campo eliminado');
+            await loadFieldVisibilityConfig(true);
+          } catch (err) {
+            fvSetStatus((err && err.message) || 'Error al eliminar.', true);
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    function renderCustomFieldInputs(fields, values) {
+      if (!customFieldsContainer || !customFieldsSection) return;
+      customFieldsSection.hidden = fields.length === 0;
+      const vals = values || {};
+      customFieldsContainer.innerHTML = fields
+        .map(
+          (f) => `
+        <div class="form-group full-width">
+          <label for="cf_${fvEscapeHtml(f.key)}" class="field-label">
+            <span>${fvEscapeHtml(f.label)}</span>
+            ${f.visible ? '<span class="label-hint">Visible en la ficha pública</span>' : '<span class="label-hint">Oculto en la ficha (actívalo en «Campos visibles en la ficha»)</span>'}
+          </label>
+          <input type="text" id="cf_${fvEscapeHtml(f.key)}" data-custom-field-input="${fvEscapeHtml(f.key)}" value="${fvEscapeHtml(vals[f.key] != null ? vals[f.key] : '')}" />
+        </div>`
+        )
+        .join('');
+    }
+
+    async function loadFieldVisibilityConfig(preserveFormValues) {
+      try {
+        const res = await fetch('/api/admin/product-fields', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data.success) return;
+        renderBaseFields(data.baseFields || []);
+        customFieldsCache = data.customFields || [];
+        renderCustomFieldsList(customFieldsCache);
+        const currentValues = preserveFormValues ? window.tradylorCustomFields.getFormValues() : {};
+        renderCustomFieldInputs(customFieldsCache, currentValues);
+      } catch {
+        if (baseFieldsList) baseFieldsList.innerHTML = '<p class="card-desc">No se pudo cargar (revisa tu conexión).</p>';
+      }
+    }
+
+    function fvTogglePanel(forceOpen) {
+      if (!fvPanel) return;
+      const isOpen = typeof forceOpen === 'boolean' ? forceOpen : fvPanel.hidden;
+      fvPanel.hidden = !isOpen;
+      fvToggle?.setAttribute('aria-expanded', String(isOpen));
+      if (fvToggleLabel) fvToggleLabel.textContent = isOpen ? 'Ocultar' : 'Mostrar';
+      if (isOpen) loadFieldVisibilityConfig(true);
+    }
+
+    // Mismo patrón que #categoryFormToggle: el header entero es clicable,
+    // pero si el clic viene del botón interno se cede el turno a su propio
+    // listener (evita togglear dos veces).
+    fvToggle?.addEventListener('click', (event) => {
+      if (event.target.closest('button')) return;
+      fvTogglePanel();
+    });
+    fvToggleBtn?.addEventListener('click', () => fvTogglePanel());
+
+    btnAddCustomField?.addEventListener('click', async () => {
+      const label = ((newCustomFieldLabel && newCustomFieldLabel.value) || '').trim();
+      if (!label) {
+        fvSetStatus('Escribe un nombre para el campo.', true);
+        newCustomFieldLabel?.focus();
+        return;
+      }
+      const visible = newCustomFieldVisible ? newCustomFieldVisible.checked : true;
+      btnAddCustomField.disabled = true;
+      try {
+        const res = await fetch('/api/admin/product-fields', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'add-custom-field', label, visible }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || 'No se pudo crear el campo.');
+        if (newCustomFieldLabel) newCustomFieldLabel.value = '';
+        fvSetStatus(`✓ Campo «${label}» creado: ya aparece en «1. Extracción & Alta de Producto».`);
+        await loadFieldVisibilityConfig(true);
+      } catch (err) {
+        fvSetStatus((err && err.message) || 'Error al crear el campo.', true);
+      } finally {
+        btnAddCustomField.disabled = false;
+      }
+    });
+
+    // Puente para el formulario de producto (mismo patrón que
+    // window.tradylorAliFilters): lee/escribe los valores de los campos
+    // personalizados sin acoplar este script al principal.
+    window.tradylorCustomFields = {
+      getFormValues() {
+        const out = {};
+        document.querySelectorAll('[data-custom-field-input]').forEach((input) => {
+          const key = input.getAttribute('data-custom-field-input');
+          const value = input.value.trim();
+          if (key && value) out[key] = value;
+        });
+        return out;
+      },
+      setFormValues(extra) {
+        renderCustomFieldInputs(customFieldsCache, extra && typeof extra === 'object' ? extra : {});
+      },
+    };
+
+    // Carga inicial silenciosa: deja listos los inputs del formulario desde
+    // el primer momento, aunque el panel de visibilidad siga plegado.
+    loadFieldVisibilityConfig(false);
   });
 </script>
   </>
@@ -9418,6 +9819,24 @@ function renderTableRows(products, resetPage = true) {
   :global(.cond-pill.cond-used) { color: #fcd34d; background: rgba(245, 158, 11, .12); border: 1px solid rgba(245, 158, 11, .32); }
   :global(.cond-pill.cond-unknown) { color: var(--color-text-dim); }
 
+  /* Panel «Campos visibles en la ficha del producto» (sección 1b) */
+  .field-visibility-panel { padding: 0 1.25rem 1.25rem; display: flex; flex-direction: column; gap: .6rem; }
+  .field-visibility-panel[hidden] { display: none; }
+  .field-visibility-subtitle { margin: .4rem 0 0; font-size: .82rem; font-weight: 800; color: var(--color-text-muted, #9ca3af); text-transform: uppercase; letter-spacing: .03em; }
+  .field-toggle-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .5rem; }
+  .field-toggle-item { display: flex; align-items: flex-start; gap: .55rem; padding: .55rem .7rem; background: var(--color-bg-card, #111827); border: 1px solid var(--color-border, #1f2937); border-radius: 10px; }
+  .field-toggle-item input[type="checkbox"] { margin-top: .2rem; flex-shrink: 0; }
+  .field-toggle-item-text { display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+  .field-toggle-item-label { font-weight: 700; font-size: .84rem; color: var(--color-text-main, #f3f4f6); }
+  .field-toggle-item-hint { font-size: .72rem; color: var(--color-text-dim, #6b7280); }
+  .field-toggle-item-remove { margin-left: auto; flex-shrink: 0; background: none; border: 0; color: var(--color-text-dim, #6b7280); cursor: pointer; font-size: .9rem; line-height: 1; padding: .2rem; }
+  .field-toggle-item-remove:hover { color: #f87171; }
+  .custom-field-add-row { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding-top: .4rem; border-top: 1px dashed var(--color-border, #1f2937); }
+  .custom-field-add-row input[type="text"] { flex: 1; min-width: 220px; }
+  .field-visibility-status { margin: 0; font-size: .78rem; min-height: 1em; }
+  .custom-fields-container { display: flex; flex-direction: column; gap: .65rem; }
+  .custom-fields-container .form-group { margin: 0; }
+
   /* Letrero «Añadido al catálogo» anclado sobre el botón Añadir */
   :global(.aff-actions) { position: relative; }
   :global(.ac-added-flag) { position: absolute; right: 0; bottom: calc(100% + 5px); z-index: 20; padding: .3rem .55rem; border-radius: 6px; font: inherit; font-size: .62rem; font-weight: 800; white-space: nowrap; color: #06281c; background: #34d399; box-shadow: 0 6px 16px rgba(16, 185, 129, .35); animation: ac-flag-in .18s ease; }
@@ -9622,6 +10041,9 @@ function renderTableRows(products, resetPage = true) {
   .aic-msg.is-assistant code { background: rgba(0, 0, 0, .35); border: 1px solid rgba(255, 255, 255, .1); border-radius: 5px; padding: .1rem .35rem; font-size: .85em; }
   .aic-msg.is-assistant pre { margin: 0 0 .6rem; padding: .75rem .9rem; background: rgba(0, 0, 0, .4); border: 1px solid rgba(255, 255, 255, .1); border-radius: 10px; overflow-x: auto; }
   .aic-msg.is-assistant pre code { background: none; border: 0; padding: 0; }
+  .aic-sources { margin-top: .5rem; padding-top: .5rem; border-top: 1px solid rgba(255, 255, 255, .12); font-size: .74rem; color: var(--color-text-dim, #6b7280); display: flex; flex-wrap: wrap; gap: .35rem .6rem; }
+  .aic-sources a { color: #93c5fd; text-decoration: none; }
+  .aic-sources a:hover { text-decoration: underline; }
   .aic-input-row { display: flex; gap: .5rem; padding: .85rem 1rem; border-top: 1px solid var(--color-border); }
   .aic-input-row input { flex: 1; min-width: 0; padding: .55rem .7rem; background: rgba(255, 255, 255, .04); border: 1px solid var(--color-border); border-radius: 8px; color: var(--color-text-main); font: inherit; font-size: .88rem; }
   @media (max-width: 760px) {

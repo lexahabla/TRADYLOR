@@ -217,6 +217,9 @@ export function enrichProductLocally(input: LocalEnrichInput): EnrichedText {
     cons,
     verdict: buildVerdict(input),
     category: input.category,
+    // Se conserva tal cual (nunca se "adivina" localmente): es la señal que
+    // usa overlayEnrichedText para decidir si la IA puede aportar una marca.
+    brand: input.brand || undefined,
     // Par oferta/original creíble: respeta el precio de oferta conocido
     // (scrape o escrito a mano) y genera el original con descuento 15–35 %.
     pricing:

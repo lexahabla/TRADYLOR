@@ -1501,6 +1501,32 @@ export const POST: APIRoute = async ({ request }) => {
         alternative_product_ids: Array.isArray(dataToSave.alternative_product_ids)
           ? (dataToSave.alternative_product_ids as unknown[]).map((v) => String(v ?? '').trim()).filter(Boolean)
           : existingProduct?.alternative_product_ids,
+        // Datos crudos de la red de origen (Importar/Afiliados): todo lo que la
+        // API de la red facilita y antes se descartaba al guardar manualmente
+        // desde el panel («Importar» o el formulario de Extracción & Alta).
+        // `undefined` → se conserva lo ya guardado; nunca se inventan valores.
+        network: strField(dataToSave.network, existingProduct?.network),
+        currency: strField(dataToSave.currency, existingProduct?.currency),
+        commissionRate: numField(dataToSave.commissionRate, existingProduct?.commissionRate),
+        commissionEstimate: numField(dataToSave.commissionEstimate, existingProduct?.commissionEstimate),
+        sales30d: numField(dataToSave.sales30d, existingProduct?.sales30d),
+        inStock:
+          dataToSave.inStock === undefined
+            ? existingProduct?.inStock
+            : typeof dataToSave.inStock === 'boolean'
+              ? dataToSave.inStock
+              : undefined,
+        visits: numField(dataToSave.visits, existingProduct?.visits),
+        // `extra`: fusión superficial (no se pierde lo ya guardado —p. ej. la
+        // comparativa multitienda de «Construir Catálogo»— al re-importar o
+        // editar manualmente); `null` explícito lo vacía.
+        extra: (() => {
+          if (dataToSave.extra === undefined) return existingProduct?.extra;
+          if (dataToSave.extra && typeof dataToSave.extra === 'object' && !Array.isArray(dataToSave.extra)) {
+            return { ...(existingProduct?.extra ?? {}), ...(dataToSave.extra as Record<string, unknown>) };
+          }
+          return undefined;
+        })(),
       };
 
       // Etiqueta destacada automática basada en datos técnicos e IA.

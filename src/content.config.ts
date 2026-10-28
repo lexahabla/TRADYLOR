@@ -161,6 +161,30 @@ const productSchema = z.object({
   shippingInfo: z.string().optional(), // texto visible: "Envío en 15 días"
   shippingDays: z.number().optional(),  // días estimados (entero)
   freeShipping: z.boolean().optional(), // envío estándar gratuito confirmado
+
+  // ─── Datos extra (passthrough) ─────────────────────────────────────────────
+  /** Red de afiliados explícita (amazon/aliexpress/ebay…) cuando el producto la declara. */
+  network: z.string().optional(),
+  /** Divisa declarada por la red de origen (normalmente EUR). */
+  currency: z.string().optional(),
+  /** Comisión de afiliación (%) declarada por la red de origen. */
+  commissionRate: z.number().optional(),
+  /** Comisión estimada en EUR por venta (alimenta conversion_score). */
+  commissionEstimate: z.number().optional(),
+  /** Disponibilidad declarada por la red de origen. */
+  inStock: z.boolean().optional(),
+  /** Visitas/alcance del producto cuando la red las facilita. */
+  visits: z.number().optional(),
+  /**
+   * Datos adicionales sin forma fija: comparativa multitienda de "Construir
+   * Catálogo" (`extra.crossMerchant`, ver lib/productNetwork.ts) y los campos
+   * personalizados que el admin añade desde «Campos visibles en la ficha»
+   * (ver lib/productFieldsStore.ts). Antes de 2026-10 este campo NO estaba
+   * declarado aquí: Zod lo descartaba en cada parse() y ni la comparativa
+   * multitienda ni ningún campo personalizado llegaban nunca a la ficha
+   * pública (sólo sobrevivía en products.json/el panel admin).
+   */
+  extra: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type Product = z.infer<typeof productSchema>;

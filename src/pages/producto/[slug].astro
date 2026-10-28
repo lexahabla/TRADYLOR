@@ -25,6 +25,7 @@ import { getCatalogProducts, findCatalogProduct, productKey } from '../../lib/ca
 import { isVideoUrl, videoThumbUrl } from '../../lib/media';
 import { resolveProductShipping } from '../../lib/shipping';
 import { getCrossMerchantOffers } from '../../lib/productNetwork';
+import { applyProductFieldVisibility, getVisibleCustomFieldEntries } from '../../lib/productFieldsStore';
 
 const allProducts = getCatalogProducts();
 const cleanMarketplaceSuffix = (text: string) => text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
@@ -32,7 +33,7 @@ const cleanMarketplaceSuffix = (text: string) => text.replace(/\s*[\-|:]\s*(Amaz
 // ---------------------------------------------------------------------------
 // Resolución del producto (slug canónico o id legado)
 // ---------------------------------------------------------------------------
-const product = findCatalogProduct(Astro.params.slug);
+let product = findCatalogProduct(Astro.params.slug);
 const displayTitle = product ? cleanMarketplaceSuffix(product.title) : '';
 const displayDescription = product ? cleanMarketplaceSuffix(product.description) : '';
 
@@ -40,6 +41,16 @@ const displayDescription = product ? cleanMarketplaceSuffix(product.description)
 if (!product) {
   return Astro.redirect('/', 302);
 }
+
+// Campos ocultos desde «Catálogo › Campos visibles en la ficha» (panel admin):
+// se clona el producto (nunca se muta: `getCatalogProducts()` cachea los
+// mismos objetos entre peticiones) y se vacían los campos desactivados ANTES
+// de derivar el resto de la página. Toda la UI de abajo ya está construida
+// sobre comprobaciones de veracidad (`{product.verdict && (...)}`, `{specs &&
+// (...)}`...), así que reacciona sola sin tocar esta plantilla. Por defecto
+// (sin configurar nada) no cambia nada: todo sigue visible como hasta ahora.
+product = applyProductFieldVisibility(product);
+const visibleCustomFields = getVisibleCustomFieldEntries(product);
 
 // Pantalla puente de Compra Delegada: resumen (envío, transportista, vendedor)
 // antes de salir con /api/redirect al enlace de afiliado (o buyNowUrl si existe).
@@ -635,6 +646,21 @@ const productSchema = {
           La ficha técnica detallada está en proceso de verificación. Los puntos
           fuertes y el veredicto inferior reflejan el estado actual del análisis.
         </div>
+      )}
+
+      {/* Campos personalizados añadidos desde el panel admin («1. Extracción
+           & Alta de Producto» › Campos adicionales) y marcados como visibles
+           en «Campos visibles en la ficha». Vacío en el 99% de los catálogos
+           (nadie ha añadido ninguno): no pinta nada por defecto. */}
+      {visibleCustomFields.length > 0 && (
+        <dl class="specs-grid custom-fields-grid">
+          {visibleCustomFields.map((field) => (
+            <div class="spec-row">
+              <dt class="spec-label">{field.label}</dt>
+              <dd class="spec-value">{field.value}</dd>
+            </div>
+          ))}
+        </dl>
       )}
     </section>
 
