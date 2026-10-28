@@ -724,14 +724,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <label for="prodFNetwork">Red</label>
             <select id="prodFNetwork" title="Filtra por la red de afiliación de origen del producto (AliExpress, eBay, Amazon…); se calcula a partir de los productos que haya en el catálogo"><option value="">Todas las redes</option></select>
           </div>
-          <div class="filter-field ali-f-cat">
-            <label for="prodFCatNetwork">Cat/Redes</label>
-            <select id="prodFCatNetwork" title="Categoría agrupada por red de afiliación: con 'Red' en Todas, se agrupan por red (optgroup); al elegir una opción, fija a la vez los filtros «Red» y «Categoría»"><option value="">Todas</option></select>
-          </div>
-          <div class="filter-field ali-f-cat">
-            <label for="prodFSubcatNetwork">SubCat/Redes</label>
-            <select id="prodFSubcatNetwork" disabled title="Subcategoría de la opción elegida en «Cat/Redes», acotada a los productos de esa red"><option value="">Todas</option></select>
-          </div>
           <div class="filter-field">
             <label for="prodFPhotos">Nº de fotos</label>
             <select id="prodFPhotos" title="Filtra por el número de fotos en la galería del producto (incluida la principal): útil para detectar fichas pobres en imágenes">
@@ -771,6 +763,19 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <span id="productSelCount">0 seleccionados</span>
             <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll" title="Seleccionar todo el catálogo completo">Catálogo</button>
             <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear" title="Vacía la selección actual de productos">Limpiar</button>
+          </div>
+
+          <!-- Fila propia, debajo del botón «Limpiar filtros» (el <br> fuerza el
+               salto dentro del flex-wrap, ver ".ali-filters-row > br" más abajo,
+               mismo truco que usa Importar para su fila de presets). -->
+          <br />
+          <div class="filter-field ali-f-cat">
+            <label for="prodFCatNetwork">Cat/Redes</label>
+            <select id="prodFCatNetwork" title="Categoría agrupada por red de afiliación: con 'Red' en Todas, se agrupan por red (optgroup); al elegir una opción, fija a la vez los filtros «Red» y «Categoría»"><option value="">Todas</option></select>
+          </div>
+          <div class="filter-field ali-f-cat">
+            <label for="prodFSubcatNetwork">SubCat/Redes</label>
+            <select id="prodFSubcatNetwork" disabled title="Subcategoría de la opción elegida en «Cat/Redes», acotada a los productos de esa red"><option value="">Todas</option></select>
           </div>
         </div>
 
@@ -4233,88 +4238,110 @@ function renderTableRows(products, resetPage = true) {
      */
     function syncCatNetworkFilter() {
       if (!prodFCatNetwork) return;
-      const current = prodFCatNetwork.value;
-      const fixedNetwork = (prodFNetwork && prodFNetwork.value) || '';
-      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+      // Función defensiva: un fallo aquí NUNCA debe cortar la recarga de la
+      // tabla. reloadProductsTable la llama ANTES de prodFilterApply, así que
+      // si lanzara sin capturarlo, el catch exterior de reloadProductsTable
+      // detendría la ejecución justo ahí y la tabla se quedaría con los datos
+      // viejos aunque el catálogo sí se hubiera actualizado en el servidor
+      // (mismo motivo por el que el resto de sync* de esta función ya se
+      // envuelven en try/catch más abajo).
+      try {
+        const current = prodFCatNetwork.value;
+        const fixedNetwork = (prodFNetwork && prodFNetwork.value) || '';
+        const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
 
-      // id de red -> { label, categorías: Map<clave, {id, name, count}> }
-      const byNetwork = new Map();
-      (currentProducts || []).forEach((p) => {
-        const netId = String(p.network || '').trim().toLowerCase();
-        if (!netId) return;
-        if (fixedNetwork && netId !== fixedNetwork) return;
-        const netLabel = String(p.network_label || '').trim() || (netId.charAt(0).toUpperCase() + netId.slice(1));
-        if (!byNetwork.has(netId)) byNetwork.set(netId, { label: netLabel, cats: new Map() });
-        const root = p.category_id
-          ? allCats.find((c) => c.id === p.category_id)
-          : (p.category ? allCats.find((c) => !c.parentId && c.name === p.category) : null);
-        const catName = root ? root.name : String(p.category || '').trim();
-        if (!catName) return;
-        const entry = byNetwork.get(netId);
-        const key = root ? root.id : `n:${catName.toLowerCase()}`;
-        if (!entry.cats.has(key)) entry.cats.set(key, { id: root ? root.id : '', name: catName, count: 0 });
-        entry.cats.get(key).count++;
-      });
+        // id de red -> { label, categorías: Map<clave, {id, name, count}> }
+        const byNetwork = new Map();
+        (currentProducts || []).forEach((p) => {
+          const netId = String(p.network || '').trim().toLowerCase();
+          if (!netId) return;
+          if (fixedNetwork && netId !== fixedNetwork) return;
+          const netLabel = String(p.network_label || '').trim() || (netId.charAt(0).toUpperCase() + netId.slice(1));
+          if (!byNetwork.has(netId)) byNetwork.set(netId, { label: netLabel, cats: new Map() });
+          const root = p.category_id
+            ? allCats.find((c) => c.id === p.category_id)
+            : (p.category ? allCats.find((c) => !c.parentId && c.name === p.category) : null);
+          const catName = root ? root.name : String(p.category || '').trim();
+          if (!catName) return;
+          const entry = byNetwork.get(netId);
+          const key = root ? root.id : `n:${catName.toLowerCase()}`;
+          if (!entry.cats.has(key)) entry.cats.set(key, { id: root ? root.id : '', name: catName, count: 0 });
+          entry.cats.get(key).count++;
+        });
 
-      const networksSorted = Array.from(byNetwork.entries()).sort((a, b) => a[1].label.localeCompare(b[1].label, 'es'));
-      let html = '<option value="">Todas</option>';
-      networksSorted.forEach(([netId, info]) => {
-        const cats = Array.from(info.cats.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'));
-        if (!cats.length) return;
-        const optionsHtml = cats
-          .map((cat) => `<option value="${escapeHtml(netId)}::${escapeHtml(cat.id || cat.name)}">${escapeHtml(cat.name)} (${cat.count})</option>`)
-          .join('');
-        html += fixedNetwork ? optionsHtml : `<optgroup label="${escapeHtml(info.label)}">${optionsHtml}</optgroup>`;
-      });
-      prodFCatNetwork.innerHTML = html;
-      if (current && Array.from(prodFCatNetwork.options).some((option) => option.value === current)) {
-        prodFCatNetwork.value = current;
-      } else {
-        prodFCatNetwork.value = '';
+        const networksSorted = Array.from(byNetwork.entries()).sort((a, b) => a[1].label.localeCompare(b[1].label, 'es'));
+        let html = '<option value="">Todas</option>';
+        networksSorted.forEach(([netId, info]) => {
+          const cats = Array.from(info.cats.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'));
+          if (!cats.length) return;
+          const optionsHtml = cats
+            .map((cat) => `<option value="${escapeHtml(netId)}::${escapeHtml(cat.id || cat.name)}">${escapeHtml(cat.name)} (${cat.count})</option>`)
+            .join('');
+          html += fixedNetwork ? optionsHtml : `<optgroup label="${escapeHtml(info.label)}">${optionsHtml}</optgroup>`;
+        });
+        prodFCatNetwork.innerHTML = html;
+        if (current && Array.from(prodFCatNetwork.options).some((option) => option.value === current)) {
+          prodFCatNetwork.value = current;
+        } else {
+          prodFCatNetwork.value = '';
+        }
+      } catch (err) {
+        console.error('[Catálogo] Error al sincronizar «Cat/Redes» (se ignora, no bloquea el resto del catálogo):', err);
       }
     }
 
     /** «SubCat/Redes»: subcategorías de la opción elegida en «Cat/Redes», acotadas a los productos de esa red. */
     function syncSubcatNetworkFilter() {
       if (!prodFSubcatNetwork) return;
-      const raw = prodFCatNetwork ? prodFCatNetwork.value : '';
-      if (!raw) {
-        prodFSubcatNetwork.innerHTML = '<option value="">Todas</option>';
-        prodFSubcatNetwork.disabled = true;
-        return;
-      }
-      const sepIdx = raw.indexOf('::');
-      const netId = sepIdx >= 0 ? raw.slice(0, sepIdx) : '';
-      const catRef = sepIdx >= 0 ? raw.slice(sepIdx + 2) : raw;
-      const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
-      const root = allCats.find((c) => !c.parentId && (c.id === catRef || c.name === catRef));
-      const subsOfRoot = root ? allCats.filter((c) => c.parentId === root.id) : [];
-      const present = new Set();
-      (currentProducts || []).forEach((p) => {
-        const pNet = String(p.network || '').trim().toLowerCase();
-        if (netId && pNet !== netId) return;
-        if (p.subcategory_id) present.add(p.subcategory_id);
-      });
-      const subs = subsOfRoot.filter((s) => present.has(s.id));
-      prodFSubcatNetwork.disabled = subs.length === 0;
-      prodFSubcatNetwork.innerHTML =
-        '<option value="">Todas</option>' +
-        subs.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
-    }
-
-    prodFCatNetwork?.addEventListener('change', () => {
-      const raw = prodFCatNetwork.value;
-      if (raw) {
+      // Misma protección que syncCatNetworkFilter: nunca debe poder romper
+      // reloadProductsTable ni ningún otro flujo que la llame.
+      try {
+        const raw = prodFCatNetwork ? prodFCatNetwork.value : '';
+        if (!raw) {
+          prodFSubcatNetwork.innerHTML = '<option value="">Todas</option>';
+          prodFSubcatNetwork.disabled = true;
+          return;
+        }
         const sepIdx = raw.indexOf('::');
         const netId = sepIdx >= 0 ? raw.slice(0, sepIdx) : '';
         const catRef = sepIdx >= 0 ? raw.slice(sepIdx + 2) : raw;
         const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
         const root = allCats.find((c) => !c.parentId && (c.id === catRef || c.name === catRef));
-        // Fija a la vez los filtros «Red» y «Categoría» ya existentes (reutiliza
-        // el motor de filtrado de prodFilterApply: no se duplica lógica).
-        if (prodFNetwork && netId) prodFNetwork.value = netId;
-        if (prodFCat) prodFCat.value = root ? root.name : catRef;
-        if (prodSubcatFilter) prodSubcatFilter.value = '';
+        const subsOfRoot = root ? allCats.filter((c) => c.parentId === root.id) : [];
+        const present = new Set();
+        (currentProducts || []).forEach((p) => {
+          const pNet = String(p.network || '').trim().toLowerCase();
+          if (netId && pNet !== netId) return;
+          if (p.subcategory_id) present.add(p.subcategory_id);
+        });
+        const subs = subsOfRoot.filter((s) => present.has(s.id));
+        prodFSubcatNetwork.disabled = subs.length === 0;
+        prodFSubcatNetwork.innerHTML =
+          '<option value="">Todas</option>' +
+          subs.map((s) => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.name)}</option>`).join('');
+      } catch (err) {
+        console.error('[Catálogo] Error al sincronizar «SubCat/Redes» (se ignora, no bloquea el resto del catálogo):', err);
+        prodFSubcatNetwork.disabled = true;
+      }
+    }
+
+    prodFCatNetwork?.addEventListener('change', () => {
+      try {
+        const raw = prodFCatNetwork.value;
+        if (raw) {
+          const sepIdx = raw.indexOf('::');
+          const netId = sepIdx >= 0 ? raw.slice(0, sepIdx) : '';
+          const catRef = sepIdx >= 0 ? raw.slice(sepIdx + 2) : raw;
+          const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
+          const root = allCats.find((c) => !c.parentId && (c.id === catRef || c.name === catRef));
+          // Fija a la vez los filtros «Red» y «Categoría» ya existentes (reutiliza
+          // el motor de filtrado de prodFilterApply: no se duplica lógica).
+          if (prodFNetwork && netId) prodFNetwork.value = netId;
+          if (prodFCat) prodFCat.value = root ? root.name : catRef;
+          if (prodSubcatFilter) prodSubcatFilter.value = '';
+        }
+      } catch (err) {
+        console.error('[Catálogo] Error al aplicar «Cat/Redes» (se ignora):', err);
       }
       syncSubcatFilter();
       syncCatNetworkFilter();
@@ -5107,6 +5134,12 @@ function renderTableRows(products, resetPage = true) {
           if (!dryRun) {
             await reloadProductsTable();
           }
+          const errorList = Array.isArray(data.errors) ? data.errors.filter(Boolean) : [];
+          const upserted = Number(data.upserted) || 0;
+          const updated = Number(data.updated) || 0;
+          const wouldUpsert = Number(data.wouldUpsert) || 0;
+          const wouldUpdate = Number(data.wouldUpdate) || 0;
+          const noNetworks = !(data.networksQueried || []).length;
           const lines = [
             `Redes consultadas: ${(data.networksQueried || []).join(', ') || 'ninguna'}`,
             `Productos brutos: ${data.rawTotal}`,
@@ -5115,11 +5148,39 @@ function renderTableRows(products, resetPage = true) {
             `Sin categoría: ${data.uncategorized ?? 0}`,
             `Ofertas estrella (hsr): ${data.hsrDetected}`,
             `IA - Texto enriquecido: ${data.aiEnrichedText ?? 0} · Imágenes generadas: ${data.aiEnrichedImages ?? 0}`,
-            dryRun ? `Se crearían: ${data.wouldUpsert ?? 0} · Se actualizarían: ${data.wouldUpdate ?? 0}`
-              : `Nuevos: ${data.upserted} · Actualizados: ${data.updated}`,
+            dryRun ? `Se crearían: ${wouldUpsert} · Se actualizarían: ${wouldUpdate}`
+              : `Nuevos: ${upserted} · Actualizados: ${updated}`,
             `Duración: ${Math.round(data.durationMs / 1000)}s`,
           ];
-          showAliStatus('success', dryRun ? '✅ Simulación completada' : '✅ Catálogo construido con éxito', lines.join(' · '));
+          // Los avisos por red (403/503, token caducado, límite de peticiones...)
+          // antes se descartaban en cuanto `success` era true: una red podía
+          // fallar en silencio mientras otras sí respondían, y el admin nunca
+          // se enteraba del motivo real de por qué faltaban productos.
+          if (errorList.length) {
+            lines.push(`Avisos de redes (${errorList.length}): ${errorList.slice(0, 5).join(' | ')}${errorList.length > 5 ? '…' : ''}`);
+          }
+          const detail = lines.join(' · ');
+          if (noNetworks) {
+            showAliStatus(
+              'warning',
+              '⚠️ Ninguna red conectada',
+              `No se ha consultado ninguna red de afiliados: revisa las credenciales en «1. Redes conectadas» (más arriba) antes de volver a pulsar. ${detail}`
+            );
+          } else if (!dryRun && upserted === 0 && updated === 0) {
+            showAliStatus(
+              'warning',
+              '⚠️ No se ha creado ni actualizado ningún producto',
+              `Las redes conectadas no han devuelto productos válidos esta vez (o ya estaban todos al día). Revisa los avisos de red y el estado de las credenciales en «1. Redes conectadas». ${detail}`
+            );
+          } else if (!dryRun && upserted === 0 && updated > 0) {
+            showAliStatus(
+              'warning',
+              '⚠️ Sin productos nuevos (sólo se han actualizado los que ya había)',
+              `Los ${updated} producto(s) encontrados ya estaban en el catálogo: sólo se ha refrescado su precio/stock/comisión, por eso no aparece ninguna fila nueva en la tabla. ${detail}`
+            );
+          } else {
+            showAliStatus('success', dryRun ? '✅ Simulación completada' : '✅ Catálogo construido con éxito', detail);
+          }
         } else {
           showAliStatus('error', dryRun ? 'Error en simulación' : 'Error construyendo catálogo', data.errors?.join('\n') || 'Error desconocido');
         }
