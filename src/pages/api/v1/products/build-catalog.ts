@@ -94,7 +94,7 @@ const BUILD_CONFIG = {
 } as const;
 
 // ─── Interfaces internas ────────────────────────────────────────────────────
-interface CategoryBreakdown {
+export interface CategoryBreakdown {
   category: string;
   categoryId: string;
   subcategories: Record<string, { name: string; id: string; count: number }>;
@@ -133,7 +133,7 @@ interface CanonicalWithMeta extends CanonicalAffiliateProduct {
   _sourceUnified: UnifiedProduct;
 }
 
-interface CrossMerchantGroup {
+export interface CrossMerchantGroup {
   canonical: CanonicalWithMeta;
   variants: CanonicalWithMeta[];
   bestPrice: number;
@@ -213,7 +213,7 @@ function generateProductId(title: string, existingIds: Set<string>): string {
 
 // ─── Paso 1: Ingesión multi-comerciante (PARALELO por red) ──────────────────
 
-async function ingestAllNetworks(): Promise<{
+export async function ingestAllNetworks(): Promise<{
   canonicalProducts: CanonicalWithMeta[];
   byNetwork: Record<string, number>;
   networksQueried: string[];
@@ -363,7 +363,7 @@ async function ingestAllNetworks(): Promise<{
 }
 
 // ─── Paso 2: Filtro de calidad ─────────────────────────────────────────────
-function qualityFilter(products: CanonicalWithMeta[], filterStats: Record<string, number>): CanonicalWithMeta[] {
+export function qualityFilter(products: CanonicalWithMeta[], filterStats: Record<string, number>): CanonicalWithMeta[] {
   return products.filter((p) => {
     if (!isValidTitle(p.title)) {
       filterStats.invalid_title = (filterStats.invalid_title || 0) + 1;
@@ -407,7 +407,7 @@ function qualityFilter(products: CanonicalWithMeta[], filterStats: Record<string
 }
 
 // ─── Paso 3: Deduplicación cross-merchant (reutiliza curation.ts) ──────────
-function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantGroup[] {
+export function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantGroup[] {
   // 1) Agrupar por red nativa: detectDuplicates usa sourceId / URL canónica / título limpio
   // Pero aquí trabajamos cross-merchant, así que usamos lógica similar adaptada
   const groups: CrossMerchantGroup[] = [];
@@ -512,7 +512,7 @@ function deduplicateCrossMerchant(products: CanonicalWithMeta[]): CrossMerchantG
 }
 
 // ─── Paso 4: Categorización SOLO en existentes (roots + subs por keywords) ──
-async function autoCategorize(groups: CrossMerchantGroup[]): Promise<{
+export async function autoCategorize(groups: CrossMerchantGroup[]): Promise<{
   uncategorized: number;
   categorizedGroups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string }>;
   categoryBreakdown: CategoryBreakdown[];
@@ -612,7 +612,7 @@ async function autoCategorize(groups: CrossMerchantGroup[]): Promise<{
 }
 
 // ─── Paso 5: Detección ofertas estrella (HSR) ───────────────────────────────
-function detectHSR(groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string }>): Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }> {
+export function detectHSR(groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string }>): Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }> {
   const scored = groups.map((group) => {
     const discount = group.bestOriginalPrice > group.bestPrice
       ? calculateDiscountPercentage(group.bestOriginalPrice, group.bestPrice)
@@ -645,7 +645,7 @@ function detectHSR(groups: Array<CrossMerchantGroup & { category: string; subcat
 }
 
 // ─── Paso 6: Ordenación inteligente ────────────────────────────────────────
-function smartSort(groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }>): typeof groups {
+export function smartSort(groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }>): typeof groups {
   return groups.sort((a, b) => {
     if (a.isHSR !== b.isHSR) return a.isHSR ? -1 : 1;
     const scoreA = (a.bestSales * a.bestCommissionAmount) / Math.max(a.bestPrice, 1);
@@ -655,7 +655,7 @@ function smartSort(groups: Array<CrossMerchantGroup & { category: string; subcat
 }
 
 // ─── Paso 7: Construcción de Product + stamping pipeline + upsert atómico ────
-async function buildAndUpsertProducts(
+export async function buildAndUpsertProducts(
   groups: Array<CrossMerchantGroup & { category: string; subcategory?: string; categoryId?: string; subcategoryId?: string; isHSR: boolean; hsrScore: number }>,
   dryRun: boolean,
   enrich = true
@@ -998,9 +998,40 @@ export const POST: APIRoute = async ({ request, url }) => {
   if (!isValidApiToken(request)) return unauthorizedApiResponse();
 
   const dryRun = url.searchParams.get('dryRun') === '1';
-  // `?enrich=0` publica el catálogo sin llamar a la IA (muchos productos nuevos
-  // = muchos minutos de llamadas y límites de peticiones del proveedor).
   const enrich = url.searchParams.get('enrich') !== '0';
+
+  // Cuerpo opcional: { background?: boolean, concurrency?: number }
+  let body: { background?: boolean; concurrency?: number } | null = null;
+  try {
+    body = (await request.json()) as { background?: boolean; concurrency?: number } | null;
+  } catch {
+    // Sin cuerpo o cuerpo no JSON: se ignora, modo síncrono por defecto.
+  }
+
+  // ── Segundo plano: devuelve AL INMEDIATO y el panel polling por GET ───────
+  if (body?.background === true) {
+    const { startBuildCatalogJob } = await import('../../../../lib/buildCatalog/job');
+    const started = startBuildCatalogJob({
+      enrich,
+      dryRun,
+      concurrency: body.concurrency,
+    });
+    if (!started.ok) {
+      return new Response(
+        JSON.stringify({ success: false, message: started.message }),
+        { status: 409, headers: jsonHeaders },
+      );
+    }
+    return new Response(
+      JSON.stringify({
+        success: true,
+        background: true,
+        job: started.state,
+        message: 'Construcción lanzada en segundo plano. Consulta el avance con GET /api/v1/products/build-catalog.',
+      }),
+      { status: 202, headers: jsonHeaders },
+    );
+  }
 
   const startedAt = new Date().toISOString();
   const startTime = Date.now();
@@ -1121,4 +1152,23 @@ export const POST: APIRoute = async ({ request, url }) => {
     status: report.success ? 200 : 500,
     headers: jsonHeaders,
   });
+};
+
+/** GET /api/v1/products/build-catalog → devuelve el estado del job en segundo
+ * plano (si lo hay) para polling del panel. */
+export const GET: APIRoute = async ({ request }) => {
+  if (!isValidApiToken(request)) return unauthorizedApiResponse();
+
+  const { getBuildCatalogJob } = await import('../../../../lib/buildCatalog/job');
+  const job = getBuildCatalogJob();
+
+  return new Response(
+    JSON.stringify({
+      success: true,
+      job: job ?? null,
+      running: job ? job.status === 'running' : false,
+      message: job?.message || 'No hay ninguna construcción en marcha.',
+    }),
+    { status: 200, headers: jsonHeaders },
+  );
 };

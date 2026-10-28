@@ -5110,90 +5110,163 @@ function renderTableRows(products, resetPage = true) {
       btn.disabled = true;
       btn.classList.add('loading');
       if (btnSpinner) btnSpinner.hidden = false;
-      if (btnText) btnText.textContent = dryRun ? 'Probando…' : 'Construyendo…';
+      if (btnText) btnText.textContent = dryRun ? 'Probando…' : 'Lanzando…';
 
-      // Feedback en el cuadro #aliCatalogStatus (ahora junto a "1. Redes
-      // conectadas", ver networksCard), no en el de «Extracción & Alta»
-      // (showAlert queda arriba del todo, fuera de la vista: el aviso se
-      // pintaba pero nadie lo veía sin subir la página).
       showAliStatus('loading', dryRun ? 'Simulando construcción de catálogo…' : 'Construyendo catálogo multi-comerciante…',
         'Consultando APIs de todas las redes conectadas, normalizando, deduplicando cross-merchant, autoclasificando y detectando ofertas estrella. Esto puede tardar bastante más de 30-120 segundos si hay enriquecimiento con IA de por medio.');
 
+      // ── DRY-RUN: síncrono y rápido (sin IA) ────────────────────────────────
+      if (dryRun) {
+        try {
+          const apiToken = window.TRADYLOR_API_TOKEN;
+          const res = await fetch(`/api/v1/products/build-catalog?dryRun=1`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(apiToken ? { 'Authorization': `Bearer ${apiToken}` } : {})
+            },
+          });
+          const data = await res.json();
+
+          if (data.success) {
+            const errorList = Array.isArray(data.errors) ? data.errors.filter(Boolean) : [];
+            const lines = [
+              `Redes consultadas: ${(data.networksQueried || []).join(', ') || 'ninguna'}`,
+              `Productos brutos: ${data.rawTotal}`,
+              `Tras filtro calidad: ${data.afterQualityFilter}`,
+              `Grupos cross-merchant: ${data.crossMerchantGroups} (duplicados resueltos: ${data.duplicatesResolved})`,
+              `Sin categoría: ${data.uncategorized ?? 0}`,
+              `IA - Texto: ${data.aiEnrichedText ?? 0} · Imágenes: ${data.aiEnrichedImages ?? 0}`,
+              `Se crearían: ${Number(data.wouldUpsert || 0)} · Se actualizarían: ${Number(data.wouldUpdate || 0)}`,
+              `Duración: ${Math.round(data.durationMs / 1000)}s`,
+            ];
+            if (errorList.length) {
+              lines.push(`Avisos de redes (${errorList.length}): ${errorList.slice(0, 5).join(' | ')}${errorList.length > 5 ? '…' : ''}`);
+            }
+            showAliStatus('success', '✅ Simulación completada', lines.join(' · '));
+          } else {
+            showAliStatus('error', 'Error en simulación', data.errors?.join('\n') || 'Error desconocido');
+          }
+        } catch (err) {
+          console.error(err);
+          showAliStatus('error', 'Error de red', 'No se pudo contactar con /api/v1/products/build-catalog');
+        } finally {
+          btn.disabled = false;
+          btn.classList.remove('loading');
+          if (btnSpinner) btnSpinner.hidden = true;
+          if (btnText) btnText.textContent = '🔍 Probar Conexión';
+        }
+        return;
+      }
+
+      // ── BUILD REAL: segundo plano + polling ────────────────────────────────
       try {
         const apiToken = window.TRADYLOR_API_TOKEN;
-        const res = await fetch(`/api/v1/products/build-catalog${dryRun ? '?dryRun=1' : ''}`, {
+        const res = await fetch('/api/v1/products/build-catalog', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(apiToken ? { 'Authorization': `Bearer ${apiToken}` } : {})
           },
+          body: JSON.stringify({ background: true, concurrency: 2 }),
         });
         const data = await res.json();
 
-        if (data.success) {
-          if (!dryRun) {
-            await reloadProductsTable();
+        if (!data.success || !data.background || !data.job) {
+          throw new Error(data.message || 'No se pudo lanzar la construcción en segundo plano.');
+        }
+
+        const jobId = data.job.id;
+        let pollTimer = null;
+
+        const stopPolling = () => {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          btn.disabled = false;
+          btn.classList.remove('loading');
+          if (btnSpinner) btnSpinner.hidden = true;
+          if (btnText) btnText.textContent = '🏗️ Construir Catálogo';
+        };
+
+        const poll = async () => {
+          try {
+            const gres = await fetch('/api/v1/products/build-catalog', {
+              headers: { ...(apiToken ? { 'Authorization': `Bearer ${apiToken}` } : {}) }
+            });
+            const gdata = await gres.json();
+            const job = gdata.job;
+
+            if (!job) {
+              showAliStatus('warning', 'Sin job', 'No se encontró el estado de la construcción.');
+              stopPolling();
+              return;
+            }
+
+            // Actualiza mensaje de progreso
+            if (job.status === 'running') {
+              if (btnText) btnText.textContent = `Construyendo… (${job.processed}/${job.crossMerchantGroups})`;
+              showAliStatus('loading', 'Construyendo catálogo multi-comerciante…',
+                `${job.message}${job.current ? ` · Ahora: ${job.current}` : ''}`);
+              // Sigue polling
+              return;
+            }
+
+            // Terminado (done / error / cancelled / interrupted)
+            stopPolling();
+
+            if (job.status === 'done' && job.report) {
+              await reloadProductsTable();
+              const r = job.report;
+              const errorList = Array.isArray(r.errors) ? r.errors.filter(Boolean) : [];
+              const upserted = Number(r.upserted) || 0;
+              const updated = Number(r.updated) || 0;
+              const lines = [
+                `Redes consultadas: ${(r.networksQueried || []).join(', ') || 'ninguna'}`,
+                `Productos brutos: ${r.rawTotal}`,
+                `Tras filtro calidad: ${r.afterQualityFilter}`,
+                `Grupos cross-merchant: ${r.crossMerchantGroups}`,
+                `Nuevos: ${upserted} · Actualizados: ${updated}`,
+                `Duración: ${Math.round(r.durationMs / 1000)}s`,
+              ];
+              if (errorList.length) {
+                lines.push(`Avisos de redes (${errorList.length}): ${errorList.slice(0, 5).join(' | ')}${errorList.length > 5 ? '…' : ''}`);
+              }
+              const detail = lines.join(' · ');
+              if (upserted === 0 && updated === 0) {
+                showAliStatus('warning', '⚠️ No se ha creado ni actualizado ningún producto',
+                  `Las redes conectadas no han devuelto productos válidos (o ya estaban todos al día). ${detail}`);
+              } else if (upserted === 0 && updated > 0) {
+                showAliStatus('warning', '⚠️ Sin productos nuevos (sólo actualizados)',
+                  `Los ${updated} producto(s) ya estaban en el catálogo: se ha refrescado precio/stock, no hay filas nuevas. ${detail}`);
+              } else {
+                showAliStatus('success', '✅ Catálogo construido con éxito', detail);
+              }
+            } else if (job.status === 'cancelled') {
+              showAliStatus('warning', 'Construcción detenida', job.message || 'Se ha detenido la construcción del catálogo.');
+            } else if (job.status === 'interrupted') {
+              showAliStatus('warning', 'Servidor reiniciado', job.message || 'El servidor se reinició durante la ejecución.');
+            } else {
+              showAliStatus('error', 'Error construyendo catálogo', job.message || job.report?.errors?.join('\n') || 'Error desconocido');
+            }
+          } catch (err) {
+            console.error(err);
+            stopPolling();
+            showAliStatus('error', 'Error de red', 'No se pudo consultar el avance de la construcción.');
           }
-          const errorList = Array.isArray(data.errors) ? data.errors.filter(Boolean) : [];
-          const upserted = Number(data.upserted) || 0;
-          const updated = Number(data.updated) || 0;
-          const wouldUpsert = Number(data.wouldUpsert) || 0;
-          const wouldUpdate = Number(data.wouldUpdate) || 0;
-          const noNetworks = !(data.networksQueried || []).length;
-          const lines = [
-            `Redes consultadas: ${(data.networksQueried || []).join(', ') || 'ninguna'}`,
-            `Productos brutos: ${data.rawTotal}`,
-            `Tras filtro calidad: ${data.afterQualityFilter}`,
-            `Grupos cross-merchant: ${data.crossMerchantGroups} (duplicados resueltos: ${data.duplicatesResolved})`,
-            `Sin categoría: ${data.uncategorized ?? 0}`,
-            `Ofertas estrella (hsr): ${data.hsrDetected}`,
-            `IA - Texto enriquecido: ${data.aiEnrichedText ?? 0} · Imágenes generadas: ${data.aiEnrichedImages ?? 0}`,
-            dryRun ? `Se crearían: ${wouldUpsert} · Se actualizarían: ${wouldUpdate}`
-              : `Nuevos: ${upserted} · Actualizados: ${updated}`,
-            `Duración: ${Math.round(data.durationMs / 1000)}s`,
-          ];
-          // Los avisos por red (403/503, token caducado, límite de peticiones...)
-          // antes se descartaban en cuanto `success` era true: una red podía
-          // fallar en silencio mientras otras sí respondían, y el admin nunca
-          // se enteraba del motivo real de por qué faltaban productos.
-          if (errorList.length) {
-            lines.push(`Avisos de redes (${errorList.length}): ${errorList.slice(0, 5).join(' | ')}${errorList.length > 5 ? '…' : ''}`);
-          }
-          const detail = lines.join(' · ');
-          if (noNetworks) {
-            showAliStatus(
-              'warning',
-              '⚠️ Ninguna red conectada',
-              `No se ha consultado ninguna red de afiliados: revisa las credenciales en «1. Redes conectadas» (más arriba) antes de volver a pulsar. ${detail}`
-            );
-          } else if (!dryRun && upserted === 0 && updated === 0) {
-            showAliStatus(
-              'warning',
-              '⚠️ No se ha creado ni actualizado ningún producto',
-              `Las redes conectadas no han devuelto productos válidos esta vez (o ya estaban todos al día). Revisa los avisos de red y el estado de las credenciales en «1. Redes conectadas». ${detail}`
-            );
-          } else if (!dryRun && upserted === 0 && updated > 0) {
-            showAliStatus(
-              'warning',
-              '⚠️ Sin productos nuevos (sólo se han actualizado los que ya había)',
-              `Los ${updated} producto(s) encontrados ya estaban en el catálogo: sólo se ha refrescado su precio/stock/comisión, por eso no aparece ninguna fila nueva en la tabla. ${detail}`
-            );
-          } else {
-            showAliStatus('success', dryRun ? '✅ Simulación completada' : '✅ Catálogo construido con éxito', detail);
-          }
-        } else {
-          showAliStatus('error', dryRun ? 'Error en simulación' : 'Error construyendo catálogo', data.errors?.join('\n') || 'Error desconocido');
+        };
+
+        // Primera consulta inmediata + polling cada 3 segundos
+        await poll();
+        if (data.job && data.job.status === 'running') {
+          pollTimer = setInterval(poll, 3000);
+          // No se guarda pollTimer en cierre; el interval se detiene al terminar el job.
         }
       } catch (err) {
         console.error(err);
-        showAliStatus('error', 'Error de red', 'No se pudo contactar con /api/v1/products/build-catalog');
-      } finally {
-        if (btn) {
-          btn.disabled = false;
-          btn.classList.remove('loading');
-        }
+        btn.disabled = false;
+        btn.classList.remove('loading');
         if (btnSpinner) btnSpinner.hidden = true;
-        if (btnText) btnText.textContent = dryRun ? '🔍 Probar Conexión' : '🏗️ Construir Catálogo';
+        if (btnText) btnText.textContent = '🏗️ Construir Catálogo';
+        showAliStatus('error', 'Error construyendo catálogo', err instanceof Error ? err.message : 'Error desconocido');
       }
     }
 

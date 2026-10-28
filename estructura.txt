@@ -111,6 +111,7 @@ src/lib/networks/index.ts
 src/lib/networks/registry.ts
 src/lib/networks/types.ts
 src/lib/paths.ts
+src/lib/buildCatalog/job.ts
 src/lib/pipeline/config.ts
 src/lib/pipeline/index.ts
 src/lib/pipeline/job.ts
