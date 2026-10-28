@@ -76,19 +76,19 @@ const fmtPct = (n: number) => `${n.toFixed(1).replace('.', ',')}%`;
 </div>
 
 <script>
-  import { computeResumen, formatEUR } from '../../lib/salesLedgerCore';
+  import { computeResumen, formatEUR, type RegistroVenta } from '../../lib/salesLedgerCore';
 
   const contenedor = document.querySelector('[data-financial-cards]');
   if (contenedor) {
     // Registros completos embebidos por el servidor para poder recalcular en cliente.
-    const registros = JSON.parse(document.getElementById('ventas-registros-json')?.textContent || '[]');
+    const registros: RegistroVenta[] = JSON.parse(document.getElementById('ventas-registros-json')?.textContent || '[]');
 
-    const render = (regs) => {
+    const render = (regs: RegistroVenta[]) => {
       const r = computeResumen(regs);
       const pctAfiliado = r.comisionNetaTotal > 0 ? (r.ingresosAfiliacion / r.comisionNetaTotal) * 100 : 0;
       const pctDirecto = 100 - pctAfiliado;
 
-      const set = (k, v) => { const el = contenedor.querySelector(`[data-kpi="${k}"]`); if (el) el.textContent = v; };
+      const set = (k: string, v: string) => { const el = contenedor.querySelector(`[data-kpi="${k}"]`); if (el) el.textContent = v; };
       set('facturacion', formatEUR(r.facturacionTotal));
       set('comision', formatEUR(r.comisionNetaTotal));
       set('reparto', `${pctAfiliado.toFixed(0)}% / ${pctDirecto.toFixed(0)}%`);
@@ -98,8 +98,8 @@ const fmtPct = (n: number) => `${n.toFixed(1).replace('.', ',')}%`;
 
     render(registros);
 
-    window.addEventListener('ventas:rango-cambiado', (e) => {
-      const { desde, hasta } = e.detail;
+    window.addEventListener('ventas:rango-cambiado', (e: Event) => {
+      const { desde, hasta } = (e as CustomEvent<{ desde: string; hasta: string }>).detail;
       render(registros.filter((v) => v.fecha >= desde && v.fecha <= hasta));
     });
   }

@@ -199,7 +199,7 @@ export class AmazonProductAdapter {
     if (availability) technicalSpecs['Disponibilidad'] = availability;
     // Estado físico (PA-API sólo lo informa en listados de Amazon Warehouse /
     // vendedores de segunda mano; en nuevo no suele venir el campo).
-    const rawCondition = item.ItemInfo?.Condition?.Value?.trim();
+    const rawCondition = item.Offers?.Summaries?.[0]?.Condition?.Value?.trim();
     if (rawCondition) {
       const conditionEs: Record<string, string> = {
         New: 'Nuevo',

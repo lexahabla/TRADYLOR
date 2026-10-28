@@ -1027,7 +1027,7 @@ const productSchema = {
   import { isVideoUrl, videoEmbedUrl, videoThumbUrl } from '../../lib/media';
 
   document.addEventListener('DOMContentLoaded', () => {
-    const mainImg = document.getElementById('mainProductImg');
+    const mainImg = document.getElementById('mainProductImg') as HTMLImageElement | null;
     const mainVideoWrap = document.getElementById('mainVideoWrap');
     const mainVideoPlay = document.getElementById('mainVideoPlay');
     const thumbs = document.getElementById('productThumbs');
@@ -1037,14 +1037,17 @@ const productSchema = {
     const videoModal = document.getElementById('videoModal');
     const videoModalBody = document.getElementById('videoModalBody');
     if (!mainImg) return;
+    const img = mainImg;
 
-    const thumbBtns = thumbs ? Array.from(thumbs.querySelectorAll('.product-thumb')) : [];
-    const gallery = thumbBtns.map((b) => b.getAttribute('data-full')).filter(Boolean);
+    const thumbBtns = thumbs ? Array.from(thumbs.querySelectorAll<HTMLElement>('.product-thumb')) : [];
+    const gallery = thumbBtns
+      .map((b) => b.getAttribute('data-full'))
+      .filter((url): url is string => Boolean(url));
     let index = 0;
     let lastImageIndex = 0;
 
     // ── Modal de vídeo (lightbox) ──
-    function openVideoModal(url) {
+    function openVideoModal(url: string) {
       if (!videoModal || !videoModalBody || !url) return;
       videoModalBody.innerHTML = '';
       const embed = videoEmbedUrl(url, true);
@@ -1078,7 +1081,8 @@ const productSchema = {
 
     if (videoModal) {
       videoModal.addEventListener('click', (e) => {
-        if (e.target && e.target.closest && e.target.closest('[data-video-modal-close]')) closeVideoModal();
+        const target = e.target as HTMLElement | null;
+        if (target?.closest('[data-video-modal-close]')) closeVideoModal();
       });
       document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape' && !videoModal.hidden) closeVideoModal();
@@ -1094,7 +1098,7 @@ const productSchema = {
       if (mainVideoPlay) mainVideoPlay.hidden = true;
     }
 
-    function showMainVideo(item) {
+    function showMainVideo(item: string) {
       const still = videoThumbUrl(item);
       if (still) {
         // Plataforma (YouTube/Vimeo/DM): miniatura oficial en la imagen principal.
@@ -1102,11 +1106,11 @@ const productSchema = {
           mainVideoWrap.innerHTML = '';
           mainVideoWrap.hidden = true;
         }
-        mainImg.hidden = false;
-        mainImg.src = still;
+        img.hidden = false;
+        img.src = still;
       } else {
         // Archivo directo (mp4/webm): primer fotograma del propio vídeo.
-        mainImg.hidden = true;
+        img.hidden = true;
         if (mainVideoWrap) {
           mainVideoWrap.innerHTML = '';
           const v = document.createElement('video');
@@ -1122,7 +1126,7 @@ const productSchema = {
       if (mainVideoPlay) mainVideoPlay.hidden = false;
     }
 
-    function show(i) {
+    function show(i: number) {
       if (!gallery.length) return;
       index = (i + gallery.length) % gallery.length;
       const item = gallery[index];
@@ -1131,9 +1135,9 @@ const productSchema = {
         showMainVideo(item);
       } else {
         clearMainVideo();
-        mainImg.hidden = false;
+        img.hidden = false;
         lastImageIndex = index;
-        mainImg.src = item;
+        img.src = item;
       }
       thumbBtns.forEach((t, ti) => t.classList.toggle('is-active', ti === index));
       if (counter) counter.textContent = `${index + 1} / ${gallery.length}`;
@@ -1149,9 +1153,10 @@ const productSchema = {
 
     if (thumbs) {
       thumbs.addEventListener('click', (e) => {
-        const btn = e.target.closest('.product-thumb');
+        const target = e.target as HTMLElement | null;
+        const btn = target?.closest('.product-thumb');
         if (!btn) return;
-        const i = thumbBtns.indexOf(btn);
+        const i = thumbBtns.indexOf(btn as HTMLElement);
         if (i >= 0) show(i);
       });
     }

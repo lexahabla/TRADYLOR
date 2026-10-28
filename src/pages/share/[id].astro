@@ -659,7 +659,7 @@ const clientJson = JSON.stringify(clientData).replace(/</g, '\\u003c');
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, target }),
       });
-      const out = (await res.json().catch(() => ({}))) as { ok?: boolean; text?: string };
+      const out = (await res.json().catch(() => ({}))) as { ok?: boolean; text?: string; error?: string };
       if (!res.ok || !out.ok || !out.text) throw new Error(out.error || 'translate_failed');
       return out.text;
     }

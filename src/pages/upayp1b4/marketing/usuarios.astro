@@ -281,6 +281,12 @@ const payloadJson = JSON.stringify(payload).replace(/</g, '\\u003c');
       cartReminder?: { sentAtISO: string; count: number };
       purchases: Purchase[]; viewedNotBought: Viewed[]; savedCount: number;
       savedProducts: SavedProduct[];
+      tools: {
+        buyerProfilesCount: number;
+        activeBuyerProfileName?: string;
+        comparatorHistoryCount: number;
+        aiChatsCount: number;
+      };
     };
     leadScore: { value: number; band: 'caliente' | 'tibio' | 'frio'; factors: { label: string; points: number }[] };
   }

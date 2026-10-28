@@ -16,6 +16,7 @@ nixpacks.toml
 package.json
 package-lock.json
 perfilador.txt
+postcss.config.mjs
 public/favicon.svg
 public/site.webmanifest
 README.md

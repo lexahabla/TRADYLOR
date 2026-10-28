@@ -69,15 +69,17 @@ const formatDate = (iso: string) => {
 </div>
 
 <script>
+  import type { RegistroVenta, TipoVenta } from '../../lib/salesLedgerCore';
+
   const tbody = document.querySelector('[data-sales-history]');
   if (tbody) {
-    const registros = JSON.parse(document.getElementById('ventas-registros-json')?.textContent || '[]');
-    const eur = (n) => `${n.toFixed(2).replace('.', ',')} €`;
-    const formatDate = (iso) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
-    const badges = { afiliado: 'border-sky-500/30 bg-sky-500/15 text-sky-300', directa: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300', comision: 'border-violet-500/30 bg-violet-500/15 text-violet-300' };
-    const etiqueta = { afiliado: 'Afiliado', directa: 'Directa', comision: 'Comisión' };
+    const registros: RegistroVenta[] = JSON.parse(document.getElementById('ventas-registros-json')?.textContent || '[]');
+    const eur = (n: number) => `${n.toFixed(2).replace('.', ',')} €`;
+    const formatDate = (iso: string) => { const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+    const badges: Record<TipoVenta, string> = { afiliado: 'border-sky-500/30 bg-sky-500/15 text-sky-300', directa: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300', comision: 'border-violet-500/30 bg-violet-500/15 text-violet-300' };
+    const etiqueta: Record<TipoVenta, string> = { afiliado: 'Afiliado', directa: 'Directa', comision: 'Comisión' };
 
-    const render = (regs) => {
+    const render = (regs: RegistroVenta[]) => {
       if (!regs.length) {
         tbody.innerHTML = `<tr><td colspan="6" class="px-5 py-10 text-center text-sm text-slate-500">Sin ventas en el periodo seleccionado.</td></tr>`;
         return;
@@ -99,8 +101,8 @@ const formatDate = (iso: string) => {
       `).join('');
     };
 
-    window.addEventListener('ventas:rango-cambiado', (e) => {
-      const { desde, hasta } = e.detail;
+    window.addEventListener('ventas:rango-cambiado', (e: Event) => {
+      const { desde, hasta } = (e as CustomEvent<{ desde: string; hasta: string }>).detail;
       render(registros.filter((v) => v.fecha >= desde && v.fecha <= hasta));
     });
   }

@@ -62,12 +62,14 @@ const fmt = new Intl.NumberFormat('es-ES');
 </div>
 
 <script>
+  import type { PuntoIngreso } from '../../lib/salesLedgerCore';
+
   const contenedor = document.querySelector('[data-revenue-chart]');
   if (contenedor) {
-    const serie = JSON.parse(document.getElementById('ventas-serie-json')?.textContent || '[]');
+    const serie: PuntoIngreso[] = JSON.parse(document.getElementById('ventas-serie-json')?.textContent || '[]');
     const fmt = new Intl.NumberFormat('es-ES');
 
-    const render = (data) => {
+    const render = (data: PuntoIngreso[]) => {
       const maxBruta = data.length ? Math.max(...data.map((p) => p.facturacionBruta)) : 0;
       contenedor.innerHTML = data.map((punto) => {
         const pctBruta = maxBruta > 0 ? Math.max(Math.round((punto.facturacionBruta / maxBruta) * 100), 6) : 0;
@@ -85,8 +87,8 @@ const fmt = new Intl.NumberFormat('es-ES');
       }).join('');
     };
 
-    window.addEventListener('ventas:rango-cambiado', (e) => {
-      const { desde, hasta } = e.detail;
+    window.addEventListener('ventas:rango-cambiado', (e: Event) => {
+      const { desde, hasta } = (e as CustomEvent<{ desde: string; hasta: string }>).detail;
       // La serie trae `fecha` ISO (yyyy-mm-dd): filtra bien aunque el rango cruce de año.
       render(serie.filter((p) => p.fecha >= desde && p.fecha <= hasta));
     });

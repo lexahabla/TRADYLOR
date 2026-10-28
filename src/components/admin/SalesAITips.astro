@@ -57,20 +57,21 @@ const etiquetaTipo: Record<ConsejoVentasIA['tipo'], string> = {
 
 <script>
   import { getConsejosVentasIA } from '../../lib/salesLedgerCore';
+  import type { RegistroVenta, ConsejoVentasIA } from '../../lib/salesLedgerCore';
 
   const root = document.querySelector('[data-sales-ai-tips]');
   const list = root?.querySelector('[data-tips-list]');
   if (root && list) {
-    const registros = JSON.parse(document.getElementById('ventas-registros-json')?.textContent || '[]');
+    const registros: RegistroVenta[] = JSON.parse(document.getElementById('ventas-registros-json')?.textContent || '[]');
 
-    const styles = {
+    const styles: Record<ConsejoVentasIA['tipo'], { badge: string; borde: string; icono: string }> = {
       oportunidad: { badge: 'border-emerald-500/30 bg-emerald-500/15 text-emerald-300', borde: 'hover:border-emerald-400/50', icono: '📈' },
       alerta: { badge: 'border-rose-500/30 bg-rose-500/15 text-rose-300', borde: 'hover:border-rose-400/50', icono: '⚠️' },
       info: { badge: 'border-sky-500/30 bg-sky-500/15 text-sky-300', borde: 'hover:border-sky-400/50', icono: '💡' },
     };
-    const etiqueta = { oportunidad: 'Oportunidad', alerta: 'Alerta', info: 'Info' };
+    const etiqueta: Record<ConsejoVentasIA['tipo'], string> = { oportunidad: 'Oportunidad', alerta: 'Alerta', info: 'Info' };
 
-    const render = (regs) => {
+    const render = (regs: RegistroVenta[]) => {
       const consejos = getConsejosVentasIA(regs);
       list.innerHTML = consejos.map((consejo) => {
         const s = styles[consejo.tipo];
@@ -90,8 +91,8 @@ const etiquetaTipo: Record<ConsejoVentasIA['tipo'], string> = {
       }).join('');
     };
 
-    window.addEventListener('ventas:rango-cambiado', (e) => {
-      const { desde, hasta } = e.detail;
+    window.addEventListener('ventas:rango-cambiado', (e: Event) => {
+      const { desde, hasta } = (e as CustomEvent<{ desde: string; hasta: string }>).detail;
       render(registros.filter((v) => v.fecha >= desde && v.fecha <= hasta));
     });
   }
