@@ -541,7 +541,7 @@ reprocesa el catálogo por defecto). Hay dos modos:
 | `confirm` | boolean | **Obligatorio** (`true`) para escribir sobre todo el catálogo (`scope:'all'` sin `dryRun`). Sin él → `400`. |
 | `dryRun` | boolean | `true` = ingest → audit → categorize **sin persistir**. En `mode:'dedupe'` es la simulación (default: simulación). |
 | `enrich` | boolean | `false` desactiva la IA de texto (default `true`). |
-| `provider` | string | Fuerza el proveedor de IA para esta tanda: `openai`, `anthropic` o `groq`. Útil cuando el proveedor por defecto (`TEXT_AI_PROVIDER`) agota su límite de peticiones y hay otro con claves configuradas. |
+| `provider` | string | Fuerza el proveedor de IA para esta tanda: `openai`, `anthropic`, `groq`, `nvidia`, `openrouter` o `gemini` (tabla completa en «Proveedores y credenciales» más abajo). Útil cuando el proveedor por defecto (`TEXT_AI_PROVIDER`) agota su límite de peticiones y hay otro con claves configuradas. |
 | `model` | string | Fuerza el **modelo** de IA para esta tanda (p. ej. `openai/gpt-oss-120b`). Los límites de Groq son **por modelo** (TPD): agotar uno no agota el resto. Vacío = el modelo por defecto del proveedor. |
 | `background` | boolean | `true` lanza el reproceso en **segundo plano** y responde al instante con `202` (§5.2). Es la única forma viable de reprocesar el catálogo entero con IA. |
 
@@ -686,6 +686,9 @@ pisa la redacción editorial anterior. El fallo queda registrado en `ai_error`
 | `openai` | `OPENAI_API_KEY` (+ `OPENAI_MODEL`) | Requiere saldo en la cuenta: sin créditos responde `429 insufficient_quota`. |
 | `anthropic` | `ANTHROPIC_API_KEY` (+ `ANTHROPIC_MODEL`) | Si la clave **no** está vinculada a un workspace, hace falta además `ANTHROPIC_WORKSPACE_ID` (cabecera `anthropic-workspace-id`); si falta, la API responde `400`. |
 | `groq` | `GROQ_API_KEY` (+ `GROQ_MODEL`) | Plan gratuito con **límite diario de tokens por modelo** (`TPD`): al agotarse responde `429` y el lote se queda sin enriquecer. Se puede forzar otro modelo con `model` (o `GROQ_MODEL`) porque los cubos de cuota son independientes. |
+| `nvidia` | `NVIDIA_API_KEY` (+ `NVIDIA_MODEL`) | API NIM gratuita (créditos de cortesía de NVIDIA); modelo por defecto `nvidia/nemotron-3.5-super-vl-120b-a12b`. No admite `response_format: json_object` en todos sus modelos, así que el modo JSON estricto queda desactivado para este proveedor. |
+| `openrouter` | `OPENROUTER_API_KEY` (+ `OPENROUTER_MODEL`) | Modelos con sufijo `:free` sin coste (límite de peticiones por día); modelo por defecto `deepseek/deepseek-chat-v3-0324:free`. Igual que NVIDIA, sin modo JSON estricto garantizado en todos los modelos. |
+| `gemini` | `GEMINI_API_KEY` (+ `GEMINI_MODEL`) | API oficial de Google AI Studio (`ai.google.dev`), formato propio `contents`/`systemInstruction` (no compatible con el resto de proveedores); consumo por token, modelo por defecto `gemini-3.8-flash`. |
 
 ---
 
