@@ -367,21 +367,30 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 60_0
 }
 
 /**
- * Llamada de bajo nivel a la API de Google Gemini (generateContent). Formato
- * propio (no compatible con OpenAI): `contents` con roles 'user'/'model' y
- * `systemInstruction` aparte (sin rol 'system' dentro de `contents`).
- * Usada por `chatComplete` (consolas de IA) y por enriquecimiento/extracción/
- * síntesis de título cuando `TEXT_AI_PROVIDER=gemini` (o se fuerza ese proveedor).
+ * Modelo de reserva si el principal da 503 (sobrecarga momentánea de Google,
+ * confirmado en vivo probando varias versiones contra la API real: 3.8 y 3.7
+ * devolvían 503/timeout, 3.5 respondía bien) o 404 (modelo retirado/renombrado,
+ * como pasó con gemini-2.5-flash → "ya no disponible para nuevos usuarios").
+ * Una versión anterior de Gemini Flash, estable y con buena disponibilidad.
  */
-async function callGeminiRaw(opts: {
-  model?: string;
-  systemText?: string;
-  contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>;
-  temperature: number;
-  maxOutputTokens?: number;
-  timeoutMs: number;
-}): Promise<string> {
-  const modelName = opts.model?.trim() || env('GEMINI_MODEL') || 'gemini-3.8-flash';
+const GEMINI_FALLBACK_MODEL = 'gemini-3.5-flash';
+
+/**
+ * Llamada de bajo nivel a la API de Google Gemini (generateContent) para UN
+ * modelo concreto. Formato propio (no compatible con OpenAI): `contents` con
+ * roles 'user'/'model' y `systemInstruction` aparte (sin rol 'system' dentro
+ * de `contents`).
+ */
+async function callGeminiModel(
+  modelName: string,
+  opts: {
+    systemText?: string;
+    contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>;
+    temperature: number;
+    maxOutputTokens?: number;
+    timeoutMs: number;
+  }
+): Promise<string> {
   const response = await fetchWithTimeout(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent`,
     {
@@ -403,6 +412,33 @@ async function callGeminiRaw(opts: {
   }
   const payload = await response.json();
   return (payload?.candidates?.[0]?.content?.parts ?? []).map((part: any) => part?.text ?? '').join('');
+}
+
+/**
+ * Llamada a Gemini con reintento automático de modelo: si el modelo pedido
+ * (por defecto o forzado) da 503/404/429, se reintenta UNA vez con
+ * GEMINI_FALLBACK_MODEL antes de rendirse. Usada por `chatComplete`
+ * (consolas de IA) y por enriquecimiento/extracción/síntesis de título
+ * cuando TEXT_AI_PROVIDER=gemini (o se fuerza ese proveedor).
+ */
+async function callGeminiRaw(opts: {
+  model?: string;
+  systemText?: string;
+  contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>;
+  temperature: number;
+  maxOutputTokens?: number;
+  timeoutMs: number;
+}): Promise<string> {
+  const modelName = opts.model?.trim() || env('GEMINI_MODEL') || 'gemini-3.8-flash';
+  try {
+    return await callGeminiModel(modelName, opts);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const isRetryable = /respondió (503|404|429)\b/.test(msg);
+    if (!isRetryable || modelName === GEMINI_FALLBACK_MODEL) throw error;
+    console.warn(`[Gemini] ${modelName} no disponible ahora mismo (${msg.slice(0, 90)}…); reintentando con ${GEMINI_FALLBACK_MODEL}.`);
+    return callGeminiModel(GEMINI_FALLBACK_MODEL, opts);
+  }
 }
 
 /** Extrae el primer objeto JSON válido aunque el modelo añada ```json o texto alrededor. */
