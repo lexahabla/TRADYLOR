@@ -831,327 +831,46 @@ export async function buildAndUpsertProducts(
   let aiEnrichedTextCount = 0;
   let aiEnrichedImagesCount = 0;
 
-  const pipelineConfig = getPipelineConfig();
+    const concurrency = Math.max(1, Number(process.env.BUILD_CATALOG_CONCURRENCY) || 3);
   const totalGroups = groups.length;
   let processedCount = 0;
 
-  // Procesa grupo a grupo (secuencial para no corromper el estado compartido
-  // de existingProducts/existingIds) y reporta progreso tras cada uno.
-  for (const group of groups) {
-    const canonical = group.canonical;
-    const affiliateUrl = group.allAffiliateUrls[group.allNetworks[0]] || canonical.affiliateUrl;
-    const merchantName = cleanMerchant(group.allMerchantNames[group.allNetworks[0]]) || canonical.merchantName;
+  // Procesa en lotes de `concurrency`. La construcción de cada producto (incluye
+  // enriquecimiento IA) es independiente, así que se ejecuta en paralelo dentro
+  // del lote; la aplicación al catálogo (upsert) es secuencial para no corromper
+  // el estado compartido de existingProducts/existingIds.
+  for (let batchStart = 0; batchStart < totalGroups; batchStart += concurrency) {
+    const batch = groups.slice(batchStart, batchStart + concurrency);
 
-    // Identidad del producto: el `sourceId` externo (ASIN / Item ID) es la clave
-    // más fuerte; si no hay, se usa la URL canónica.
-    const sourceId = String(canonical.externalId || '').trim()
-      || extractSourceId({ sourceId: canonical.externalId, affiliateUrl } as any);
-    const canonicalUrl = canonicalProductUrl(affiliateUrl);
+    const built = await Promise.all(batch.map(async (group) => buildSingleProduct(group, {
+      existingProducts, existingIds, deletedIds, pipelineConfig, enrich,
+    })));
 
-    // ¿Este producto YA está en el catálogo? Si lo está, se ACTUALIZA (con su
-    // id) en vez de crear una copia "-2" con el mismo sourceId.
-    let existingIndex = -1;
-    if (sourceId) {
-      existingIndex = existingProducts.findIndex((p) => extractSourceId(p) === sourceId);
-    }
-    if (existingIndex === -1 && canonicalUrl) {
-      existingIndex = existingProducts.findIndex(
-        (p) => canonicalProductUrl(p.affiliateUrl) === canonicalUrl || canonicalProductUrl(p.buyNowUrl) === canonicalUrl,
-      );
-    }
+    for (const result of built) {
+      if (result.status === 'skip') continue;
+      const { baseId, product, existingIndex } = result;
 
-    // Id destino: el del producto existente o, si es nuevo, uno generado.
-    const baseId = existingIndex >= 0 ? existingProducts[existingIndex].id : generateProductId(canonical.title, existingIds);
-    existingIds.add(baseId);
-
-    // Saltar tombstones
-    if (deletedIds.has(baseId)) {
-      continue;
-    }
-
-    // Duplicado contra catálogo existente (reutiliza stageIngest).
-    // El `sourceId` se pasa explícitamente: si no, `extractSourceId` no puede
-    // compararlo con el del catálogo y el duplicado se escapaba.
-    const duplicateHit = findIngestDuplicate(existingProducts, {
-      ...canonical,
-      id: baseId,
-      sourceId,
-      category: group.category || 'Tecnología',
-      merchant: merchantName,
-      affiliateUrl,
-    } as any, baseId);
-
-    if (duplicateHit && existingIndex === -1) {
-      existingIndex = existingProducts.findIndex((p) => p.id === duplicateHit.duplicateOf);
-    }
-
-    const discountPct = calculateDiscountPercentage(group.bestOriginalPrice, group.bestPrice);
-    const hsrBadge = group.isHSR ? 'Oferta Estrella' : undefined;
-
-    const upgraded = upgradeImages({
-      mainImage: canonical.mainImage,
-      extraImages: canonical.extraImages,
-      gallery: group.allExtraImages,
-    });
-
-    const product: Product = {
-      id: baseId,
-      title: canonical.title,
-      description: canonical.description || `${canonical.brand ?? canonical.merchantName} · ${canonical.category}`,
-      price: group.bestPrice,
-      originalPrice: group.bestOriginalPrice > group.bestPrice ? group.bestOriginalPrice : undefined,
-      image: upgraded.mainImage || canonical.mainImage || '',
-      gallery: upgraded.gallery,
-      category: group.category || '', // vacío si no encaja
-      subcategory_id: group.subcategoryId,
-      merchant: cleanMerchant(group.allMerchantNames[group.allNetworks[0]]) || canonical.merchantName,
-      affiliateUrl: group.allAffiliateUrls[group.allNetworks[0]] || canonical.affiliateUrl,
-      buyNowUrl: group.allDirectUrls[group.allNetworks[0]] || canonical.directUrl,
-      asin: canonical.network === 'amazon' ? canonical.externalId : undefined,
-      pros: [
-        `Disponible en ${group.allNetworks.length} comerciante(s)`,
-        ...(discountPct > 0 ? [`Descuento ${discountPct}%`] : []),
-        ...(group.bestCommissionRate > 0 ? [`Comisión ${group.bestCommissionRate}%`] : []),
-      ],
-      cons: group.variants.length > 0 ? [`Comparar precios en ${group.allNetworks.join(', ')}`] : [],
-      badge: hsrBadge,
-      rating: group.bestRating > 0 ? group.bestRating : undefined,
-      reviewsCount: canonical.reviewCount > 0 ? canonical.reviewCount : undefined,
-      brand: canonical.brand,
-      // Datos crudos de la red de origen: comisión, divisa, stock y
-      // visitas/alcance (si la red los facilita). `allNetworks[0]` es la red
-      // "ganadora" del grupo cross-merchant (mismo criterio que `merchant`
-      // y `affiliateUrl` justo arriba).
-      network: canonical.network || group.allNetworks[0],
-      currency: canonical.currency || group.allCurrencies[group.allNetworks[0]],
-      commissionRate: group.bestCommissionRate > 0 ? group.bestCommissionRate : undefined,
-      inStock: canonical.inStock,
-      visits: canonical._sourceUnified?.visits,
-      // Estado físico: por diseño, «Construir Catálogo» descarta la segunda
-      // mano antes de llegar aquí (ver `isSecondHand` en `qualityFilter`); se
-      // conserva igualmente si la red lo declara explícitamente como "Nuevo".
-      condition:
-        (canonical.extra?.['Estado'] as string | undefined) ??
-        (canonical.extra?.['Condición'] as string | undefined) ??
-        (canonical.extra?.['Condition'] as string | undefined),
-      // El envío viaja en la proyección unificada (el canónico no lo declara).
-      shippingInfo: canonical._sourceUnified?.shippingInfo ?? canonical.extra?.['Texto de envío'] as string | undefined,
-      shippingDays: canonical._sourceUnified?.shippingDays,
-      freeShipping: canonical.extra?.['Envío gratis'] === true,
-      sourceId: canonical.externalId,
-      category_id: group.categoryId,
-      // Pipeline fields
-      audit_status: 'pending',
-      audit_score: 0,
-      audit_reasons: [],
-      ia_status: 'pending',
-      // El estado del enlace lo recalcula `computeEditorialStatus` (activo si el
-      // producto trae URL de afiliado); el valor inicial evita dejar el campo
-      // vacío en el objeto intermedio.
-      link_status: group.allAffiliateUrls[0] || canonical.affiliateUrl ? 'active' : 'pending',
-      normalized_tags: [],
-      conversion_score: 0,
-      pipeline_version: pipelineConfig.version,
-      pipeline_run_at: new Date().toISOString(),
-      commissionEstimate: group.bestCommissionAmount,
-      sales30d: group.bestSales,
-      extra: {
-        ...canonical.extra,
-        crossMerchant: {
-          networks: group.allNetworks,
-          affiliateUrls: group.allAffiliateUrls,
-          directUrls: group.allDirectUrls,
-          merchantNames: group.allMerchantNames,
-          prices: group.allPrices,
-          originalPrices: group.allOriginalPrices,
-          currencies: group.allCurrencies,
-          variantsCount: group.variants.length + 1,
-          hsr: group.isHSR,
-          hsrScore: group.hsrScore,
-        },
-      },
-    };
-
-    // `computeBadge` lee precio/rating/ventas/etc. del propio producto, así que
-    // necesita que `product` ya exista: no se puede llamar dentro de su propio
-    // literal (eso lanzaba "Cannot access 'product' before initialization" y
-    // abortaba TODO el build en el primer producto no marcado como HSR).
-    if (!product.badge) {
-      product.badge = computeBadge(product as Product & { hsrScore?: number });
-    }
-
-    const existingProduct = existingIndex >= 0 ? existingProducts[existingIndex] : undefined;
-
-    // ─── Curaduría: un resync NUNCA debe perder lo ya conseguido ────────────
-    // Categoría: una vez asignada (a mano en el panel o por un
-    // `autoCategorize` anterior) queda "pegajosa": sólo se recalcula
-    // mientras el producto siga sin categoría. Sin esto, cada «Construir
-    // Catálogo» podía reasignar (o vaciar) la categoría que el admin eligió
-    // a mano.
-    if (existingProduct?.category_id) {
-      product.category = existingProduct.category || product.category;
-      product.category_id = existingProduct.category_id;
-      product.subcategory_id = existingProduct.subcategory_id ?? product.subcategory_id;
-    }
-
-    // Imágenes: la galería SIEMPRE se amplía con lo nuevo que traiga este
-    // sync (nunca se descarta nada ya guardado) y la foto principal real
-    // nunca se sustituye por otra, para no cambiarle la imagen a un producto
-    // que el visitante ya puede haber visto.
-    if (existingProduct) {
-      const mergedGallery = new Set<string>([
-        ...(existingProduct.image && existingProduct.image !== '—' ? [existingProduct.image] : []),
-        ...(existingProduct.gallery ?? []),
-        ...(product.gallery ?? []),
-      ]);
-      product.gallery = [...mergedGallery].slice(0, MAX_PRODUCT_IMAGES);
-      if (existingProduct.image && existingProduct.image !== '—') {
-        product.image = existingProduct.image;
+      if (existingIndex >= 0) {
+        const prev = existingProducts[existingIndex];
+        existingProducts[existingIndex] = { ...prev, ...product, id: prev.id };
+        updated++;
+        wouldUpdate++;
+      } else {
+        existingProducts.unshift(product);
+        upserted++;
+        wouldUpsert++;
+        existingIds.add(baseId);
       }
-    }
 
-    // Texto editorial: si la ficha YA se completó en un pase anterior, se
-    // conserva tal cual (precio, comisión, enlaces, ventas y galería sí se
-    // refrescan en cada sync; el texto curado/IA no se pisa con los datos
-    // crudos de la red que trae `product` hasta aquí).
-    const alreadyEnriched = Boolean(existingProduct?.ia_status === 'completed');
-    if (alreadyEnriched && existingProduct) {
-      product.title = existingProduct.title;
-      product.description = existingProduct.description;
-      product.pros = existingProduct.pros;
-      product.cons = existingProduct.cons;
-      product.verdict = existingProduct.verdict;
-      product.techSheet = existingProduct.techSheet;
-      product.specs = existingProduct.specs;
-      product.ia_status = existingProduct.ia_status;
-      if (existingProduct.badge) product.badge = existingProduct.badge;
-    }
-
-    // ─── Enriquecimiento con IA (texto + imagen) ────────────────────────────────
-    // Misma calidad que "Enriquecer con IA (título + ficha + imagen)": base
-    // SIEMPRE local (gratis, sin claves) y overlay de IA por encima cuando
-    // hay credenciales, con fallback automático entre proveedores si el por
-    // defecto falla (ver `enrichProductText`). Corre para productos NUEVOS o
-    // que aún no se completaron; nunca para fichas ya enriquecidas (se
-    // protegieron más arriba). Con `?enrich=0` se publica el catálogo sin
-    // llamar a la IA (publicación rápida); se puede completar después por
-    // lotes con el Pipeline.
-    if (enrich && !alreadyEnriched) {
-      const localText = enrichProductLocally({
-        title: product.title,
-        description: product.description,
-        category: product.category,
-        brand: product.brand,
-        merchant: product.merchant,
-        price: product.price,
-        originalPrice: product.originalPrice,
-        rating: product.rating,
-        reviewsCount: product.reviewsCount,
-        url: product.affiliateUrl,
-        pros: product.pros,
-        cons: product.cons,
+      processedCount++;
+      opts?.onProgress?.({
+        processed: processedCount,
+        total: totalGroups,
+        upserted,
+        updated,
+        current: product.title ?? null,
       });
-
-      let finalText = localText;
-      if (hasTextCredentials()) {
-        try {
-          const aiText = await enrichProductText({
-            title: product.title,
-            description: product.description,
-            category: product.category,
-            url: product.affiliateUrl,
-            price: product.price,
-            originalPrice: product.originalPrice,
-          });
-          finalText = overlayEnrichedText(localText, aiText);
-          aiEnrichedTextCount++;
-        } catch (aiError) {
-          console.warn(`[BuildCatalog] Sin enriquecimiento de IA para "${product.title}" (se usa ficha local):`, aiError);
-        }
-      }
-
-      if (finalText.title?.trim()) product.title = finalText.title.trim();
-      if (finalText.description?.trim()) product.description = finalText.description;
-      if (finalText.pros.length) product.pros = finalText.pros;
-      if (finalText.cons.length) product.cons = finalText.cons;
-      if (finalText.verdict) product.verdict = finalText.verdict;
-      if (finalText.techSheet?.trim()) product.techSheet = finalText.techSheet;
-      if (finalText.specs && Object.keys(finalText.specs).length) product.specs = finalText.specs;
-      if (!product.category && finalText.category) product.category = finalText.category;
-      // Marca: la IA sólo la aporta si el producto no tenía ninguna (nunca
-      // sobrescribe una marca ya curada/verificada).
-      if (!product.brand && finalText.brand) product.brand = finalText.brand;
-      // El precio SIEMPRE es el real de la red (`group.bestPrice` /
-      // `bestOriginalPrice`): el par oferta/original que calcula el
-      // enriquecimiento es sólo de respaldo para el alta manual sin precio
-      // conocido y nunca debe sustituir un precio real ya capturado.
-      product.ia_status = 'completed';
-
-      // Imagen: sólo si falta (nunca sustituye una foto real del comercio).
-      if ((!product.image || product.image === '—') && hasImageCredentials()) {
-        try {
-          const imageResult = await generateProductImage(product.title);
-          product.image = imageResult.url;
-          product.gallery = [imageResult.url, ...(product.gallery || [])].slice(0, MAX_PRODUCT_IMAGES);
-          aiEnrichedImagesCount++;
-        } catch (imgError) {
-          console.warn(`[BuildCatalog] Error generando imagen para ${product.id}:`, imgError);
-        }
-      }
     }
-
-    // Stamping pipeline: auditoría
-    const auditResult = runStageAudit(product, pipelineConfig);
-    if (auditResult.ok && auditResult.product) {
-      product.audit_status = (auditResult.product as any).audit_status ?? 'pending';
-      product.audit_score = (auditResult.product as any).audit_score ?? 0;
-      product.audit_reasons = (auditResult.product as any).audit_reasons ?? [];
-    }
-
-    // Editorial status
-    const editorial = computeEditorialStatus(product);
-    product.ia_status = editorial.ia_status;
-    product.link_status = editorial.link_status;
-
-    // Tags normalizados
-    product.normalized_tags = extractNormalizedTags(product);
-
-    // Conversion score real (no hsrScore)
-    product.conversion_score = computeConversionScore(product);
-
-    if (existingIndex >= 0) {
-      const prev = existingProducts[existingIndex];
-      // Al actualizar NO se puede perder lo ya curado. La pasada actual puede
-      // no encontrar categoría (viene `category: ''`) o no traer subcategoría,
-      // y el producto puede haberse localizado por URL canónica o por duplicado
-      // (en cuyo caso el id generado NO es el id real). Si se sobrescribiera,
-      // el producto renombraría y dejaría de aparecer en las secciones que lo
-      // referencian.
-      existingProducts[existingIndex] = {
-        ...prev,
-        ...product,
-        id: prev.id,
-        category: product.category || prev.category || '',
-        category_id: product.category_id ?? prev.category_id,
-        subcategory_id: product.subcategory_id ?? prev.subcategory_id,
-      };
-      updated++;
-      wouldUpdate++;
-    } else {
-      existingProducts.unshift(product);
-      upserted++;
-      wouldUpsert++;
-      existingIds.add(baseId);
-    }
-
-    processedCount++;
-    opts?.onProgress?.({
-      processed: processedCount,
-      total: totalGroups,
-      upserted,
-      updated,
-      current: product.title ?? null,
-    });
   }
 
   if (!dryRun) {
