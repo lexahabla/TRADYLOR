@@ -20,7 +20,7 @@
  * ==============================================================================
  */
 
-import type { Product as ProductSchema } from '../content/config';
+import type { Product as ProductSchema } from '../content.config';
 
 // â”€â”€â”€ Flat Product Interface (backward-compatible with products.json) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 export interface Product {

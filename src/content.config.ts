@@ -1,4 +1,4 @@
-import { z, defineCollection } from 'astro:content';
+import { z } from 'astro:content';
 
 /**
  * ==============================================================================
@@ -166,9 +166,4 @@ const productSchema = z.object({
 export type Product = z.infer<typeof productSchema>;
 export { productSchema };
 
-export const collections = {
-  products: defineCollection({
-    type: 'content',
-    schema: productSchema,
-  }),
-};
+export const collections = {};

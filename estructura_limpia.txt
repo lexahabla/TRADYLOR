@@ -54,7 +54,7 @@ src/components/ReturnBanner.astro
 src/components/SmartMatcherWizard.astro
 src/components/TestProofBadge.astro
 src/components/TransparencyDashboard.astro
-src/content/config.ts
+src/content.config.ts
 src/data/categories.json
 src/data/metricasGlosario.ts
 src/data/mockAnalytics.ts

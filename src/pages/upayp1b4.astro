@@ -1916,7 +1916,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 </script>
 
 {isAuthenticated && sessionUser && sessionUser.role === 'admin' && (
-<!-- Modal para crear/editar sección con productos seleccionados -->
+  <>
+    <!-- Modal para crear/editar sección con productos seleccionados -->
 <div class="admin-modal" id="createSectionModal" hidden role="dialog" aria-modal="true" aria-labelledby="createSectionModalTitle">
   <div class="admin-modal-backdrop" data-create-section-close></div>
   <div class="admin-modal-dialog">
@@ -9034,6 +9035,7 @@ function renderTableRows(products, resetPage = true) {
     new MutationObserver(initAdminTooltips).observe(document.body, { childList: true, subtree: true });
   });
 </script>
+  </>
 )}
 
 <style>
