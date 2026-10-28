@@ -2,11 +2,10 @@
 .env.example
 .gitattributes
 .gitignore
-.opencode/plans/whimsical-drifting-ember-agent-a5319448934576f49.md
 AGENTS.md
 astro.config.mjs
+chat.js
 deploy.ps1
-deploy.sh
 docker/entrypoint.sh
 Dockerfile
 docs/api-v1.md
@@ -16,6 +15,7 @@ estructura_limpia.txt
 nixpacks.toml
 package.json
 package-lock.json
+perfilador.txt
 public/favicon.svg
 public/site.webmanifest
 README.md
@@ -259,5 +259,4 @@ src/utils/shareEmail.ts
 src/utils/shareUi.ts
 src/utils/translate.ts
 tailwind.config.mjs
-test-navigation.ps1
 tsconfig.json
