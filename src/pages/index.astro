@@ -194,13 +194,29 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
 
       <!-- Selector de ordenación del catálogo (alineado a la derecha) -->
       <div class="catalog-sort-bar">
-        <label for="catalogSortSelect" class="catalog-sort-label">Ordenar catálogo:</label>
+        <label for="catalogSortSelect" class="catalog-sort-label">
+          <span class="catalog-sort-label-full">Ordenar catálogo:</span>
+          <span class="catalog-sort-label-short">Ordenar:</span>
+        </label>
         <select id="catalogSortSelect" class="catalog-sort-select" aria-label="Ordenar catálogo">
           <option value="precio_desc" selected={activeSort === 'precio_desc'}>Precio de mayor a menor</option>
           <option value="precio_asc" selected={activeSort === 'precio_asc'}>Precio de menor a mayor</option>
           <option value="valoracion" selected={activeSort === 'valoracion'}>Mejor valorados</option>
           <option value="ventas" selected={activeSort === 'ventas'}>Más vendidos</option>
+          <option value="score" selected={activeSort === 'score'}>Más destacados</option>
         </select>
+
+        <!-- Filtro opcional por Perfil de Comprador (Perfilador): se rellena y
+             se muestra por JS sólo si el usuario tiene perfiles guardados.
+             A diferencia del badge "Encaja con tu perfil" (siempre visual,
+             nunca oculta nada), este control SÍ oculta los productos que no
+             encajan, de forma explícita y reversible (opción "Todos"). -->
+        <div class="catalog-profile-filter" data-profile-filter-wrap hidden>
+          <label for="catalogProfileFilterSelect" class="catalog-sort-label">Perfil:</label>
+          <select id="catalogProfileFilterSelect" class="catalog-sort-select" aria-label="Filtrar por perfil de comprador" data-profile-filter-select>
+            <option value="">Todos los productos</option>
+          </select>
+        </div>
       </div>
 
       <div class="products-grid">
@@ -594,6 +610,66 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   })();
 </script>
 
+<script>
+  // Filtro opcional por Perfil de Comprador en el catálogo (catalog-sort-bar):
+  // se rellena y se muestra solo si el usuario tiene perfiles guardados.
+  // A diferencia del badge "Encaja con tu perfil" (siempre visual, nunca
+  // oculta nada), este control SÍ oculta las tarjetas que no encajan; se
+  // revierte con la opción "Todos los productos".
+  import { getBuyerProfiles } from '../utils/buyerProfileStore';
+  import { onRadarChange } from '../utils/radarStore';
+  import { matchesBuyerProfileCard } from '../types/buyerProfile';
+
+  (() => {
+    const wrap = document.querySelector<HTMLElement>('[data-profile-filter-wrap]');
+    const select = document.querySelector<HTMLSelectElement>('[data-profile-filter-select]');
+    if (!wrap || !select) return;
+
+    function applyFilter(): void {
+      const profileId = select!.value;
+      const profile = profileId ? getBuyerProfiles().find((p) => p.id === profileId) : null;
+      document.querySelectorAll<HTMLElement>('.products-grid [data-pc-price]').forEach((card) => {
+        if (!profile) {
+          card.style.display = '';
+          return;
+        }
+        const match = matchesBuyerProfileCard(
+          {
+            price: Number(card.dataset.pcPrice),
+            rating: Number(card.dataset.pcRating) || 0,
+            score: Number(card.dataset.pcScore) || 0,
+            discount: Number(card.dataset.pcDiscount) || 0,
+          },
+          profile,
+        );
+        card.style.display = match ? '' : 'none';
+      });
+    }
+
+    function renderOptions(): void {
+      const profiles = getBuyerProfiles();
+      wrap!.hidden = profiles.length === 0;
+      if (profiles.length === 0) return;
+      const previous = select!.value;
+      select!.innerHTML = [
+        '<option value="">Todos los productos</option>',
+        ...profiles.map((p) => `<option value="${p.id}">${p.name}</option>`),
+      ].join('');
+      // Conserva la selección si el perfil sigue existiendo; si no, no filtra
+      // nada por defecto (el filtro es una elección explícita del usuario,
+      // no se activa solo porque haya un perfil activo).
+      select!.value = profiles.some((p) => p.id === previous) ? previous : '';
+      applyFilter();
+    }
+
+    select.addEventListener('change', applyFilter);
+    renderOptions();
+    // Si se activa/crea/borra un perfil desde el nav o desde /perfil, esta
+    // lista y el filtro en curso se mantienen al día sin recargar.
+    onRadarChange(renderOptions);
+  })();
+</script>
+
 <style>
   /* ============ DESIGN TOKENS & BASE ============ */
   :root {
@@ -800,6 +876,9 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     letter-spacing: 0.05em;
     white-space: nowrap;
   }
+  .catalog-sort-label-short {
+    display: none;
+  }
   .catalog-sort-select {
     padding: 0.35rem 0.75rem;
     background: #0b1220;
@@ -815,6 +894,13 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   .catalog-sort-select:focus {
     border-color: #60a5fa;
   }
+  .catalog-profile-filter {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding-left: 0.65rem;
+    border-left: 1px solid var(--color-border);
+  }
 
   .catalog-header-bar .section-header {
     margin-bottom: 0;
@@ -826,6 +912,34 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       flex-direction: column;
       align-items: flex-start;
       gap: 1.25rem;
+    }
+    /* Barra de orden más estrecha en móvil/tablet: menos relleno, sin el
+       rótulo largo (se sustituye por "Ordenar:") y el filtro de perfil se
+       apila debajo en vez de estirar la barra a lo ancho. */
+    .catalog-sort-bar {
+      flex-wrap: wrap;
+      width: 100%;
+      max-width: 320px;
+      gap: 0.45rem;
+      padding: 0.4rem 0.6rem;
+      margin: -0.75rem 0 1.5rem auto;
+    }
+    .catalog-sort-label-full {
+      display: none;
+    }
+    .catalog-sort-label-short {
+      display: inline;
+    }
+    .catalog-sort-select {
+      padding: 0.3rem 0.5rem;
+      font-size: 0.76rem;
+    }
+    .catalog-profile-filter {
+      flex-basis: 100%;
+      padding-left: 0;
+      padding-top: 0.4rem;
+      border-left: none;
+      border-top: 1px solid var(--color-border);
     }
   }
 

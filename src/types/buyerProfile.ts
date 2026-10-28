@@ -281,6 +281,27 @@ export function hslString(c: { h: number; s: number; l: number }): string {
   return `hsl(${c.h}, ${c.s}%, ${c.l}%)`;
 }
 
+/**
+ * ¿Encaja un producto con un perfil de comprador? Mismo criterio que usa el
+ * badge "Encaja con tu perfil" del catálogo (precio dentro del rango de
+ * presupuesto + una condición extra según la prioridad) y el filtro opcional
+ * por perfil de `catalog-sort-bar` (`index.astro`). Recibe los datos ya
+ * calculados que trae cada tarjeta (`data-pc-price/rating/score/discount` en
+ * `ProductCard.astro`), no el producto completo: así sirve igual en el nav
+ * (Layout.astro) y en la home, sin duplicar la comparación en dos sitios.
+ */
+export function matchesBuyerProfileCard(
+  card: { price: number; rating?: number; score?: number; discount?: number },
+  profile: Pick<BuyerProfile, 'budget' | 'priority'>,
+): boolean {
+  const range = BUYER_PROFILE_BUDGET_RANGES[profile.budget];
+  if (!range || !Number.isFinite(card.price)) return false;
+  if (card.price < range[0] || card.price > range[1]) return false;
+  if (profile.priority === 'quality') return (card.rating ?? 0) >= 4 || (card.score ?? 0) >= 60;
+  if (profile.priority === 'price') return (card.discount ?? 0) >= 10;
+  return true;
+}
+
 /** Color de texto adecuado sobre un fondo HSL (blanco o negro según luminosidad). */
 export function contrastTextColor(c: { h: number; s: number; l: number }): string {
   // Fórmula aproximada de luminancia percibida.

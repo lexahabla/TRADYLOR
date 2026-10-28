@@ -529,8 +529,6 @@
      * el selector del mainNav y el badge "Encaja con tu perfil".
      */
     const showResult = async () => {
-      stashPendingQuizAnswers(answers);
-
       stepEls.forEach((el) => { el.hidden = true; });
       indicators.forEach((el) => {
         el.classList.remove('is-active');
@@ -539,6 +537,14 @@
 
       const session = await getSession().catch(() => ({ authenticated: false, user: null, googleEnabled: false }));
       const isLogged = Boolean(session.user);
+
+      // Sólo hace falta guardar en sessionStorage cuando falta sesión: es lo
+      // único que necesita sobrevivir al "Regístrate" + redirección de vuelta
+      // a esta página. Si ya hay sesión, dejarlo aquí (como antes) hacía que
+      // la SIGUIENTE visita a esta página, desde cualquier punto, saltara
+      // directa al resultado en vez de empezar por el paso 1.
+      if (isLogged) clearPendingQuizAnswers();
+      else stashPendingQuizAnswers(answers);
 
       if (badgeEl && titleEl && descEl) {
         const profileAnswers = {
@@ -605,14 +611,27 @@
       });
     });
 
-    restartBtn?.addEventListener('click', () => {
+    const resetWizard = () => {
       Object.keys(answers).forEach((key) => { delete answers[key]; });
       wizard.querySelectorAll('.smw-option.is-selected').forEach((el) => el.classList.remove('is-selected'));
       if (resultEl) resultEl.hidden = true;
       showStep(0);
+    };
+
+    restartBtn?.addEventListener('click', () => {
+      resetWizard();
     });
 
     showStep(0);
+
+    // Si el navegador restaura esta página desde la caché de atrás/adelante
+    // (bfcache: back/forward sin recargar), el script NO se re-ejecuta y el
+    // DOM se queda tal cual estaba (p. ej. mostrando el resultado). Forzamos
+    // el reinicio para que "entrar al Perfilador desde cualquier punto"
+    // arranque siempre en el paso 1.
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) resetWizard();
+    });
 
     // Si el usuario completó el quiz sin sesión, se guarda en sessionStorage
     // (stashPendingQuizAnswers) para poder desbloquear el resultado nada más
