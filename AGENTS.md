@@ -138,6 +138,11 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   `ANTHROPIC_WORKSPACE_ID` es opcional: sólo hace falta si la clave de Anthropic
   NO está vinculada a un workspace (las claves de administración de la organización
   lo exigen en la cabecera `anthropic-workspace-id`; sin él la API responde 400).
+  También `GEMINI_API_KEY` + `TEXT_AI_PROVIDER=gemini` (Google AI Studio,
+  ai.google.dev; modelo por defecto `gemini-3.8-flash`, sobreescribible con
+  `GEMINI_MODEL`). Todos los proveedores de texto (`lib/ai.ts`) alimentan tanto
+  la consola de IA del backend (`/api/admin/ai-console`, panel admin) como el
+  Asistente IA del frontend (`/api/asistente-ia`, widget flotante).
 - Claves de cada red de afiliación (opcional; activa los conectores correspondientes).
   `EBAY_COMMISSION_RATE` (opcional): % base de comisión EPN que usa el catálogo de
   eBay para la columna "Comisión %" (4-6%; por defecto 5).

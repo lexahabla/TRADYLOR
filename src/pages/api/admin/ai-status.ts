@@ -24,16 +24,17 @@ export const GET: APIRoute = async ({ request }) => {
   const authError = requireAdminAuth(request);
   if (authError) return authError;
 
-  const [openai, nvidia, openrouter, anthropic, groq, opencode] = await Promise.all([
+  const [openai, nvidia, openrouter, anthropic, groq, gemini, opencode] = await Promise.all([
     testProvider('openai'),
     testProvider('nvidia'),
     testProvider('openrouter'),
     testProvider('anthropic'),
     testProvider('groq'),
+    testProvider('gemini'),
     testOpencodeCli(),
   ]);
 
-  const providers = [opencode, openai, nvidia, openrouter, anthropic, groq];
+  const providers = [opencode, openai, nvidia, openrouter, anthropic, groq, gemini];
   const activeText = textProvider();
   const activeImage = imageProvider();
 
@@ -44,7 +45,7 @@ export const GET: APIRoute = async ({ request }) => {
       textReady: hasTextCredentials(),
       imageProvider: activeImage,
       imageReady: hasImageCredentials(),
-      textKeyMasked: maskKey(env(activeText === 'anthropic' ? 'ANTHROPIC_API_KEY' : activeText === 'groq' ? 'GROQ_API_KEY' : activeText === 'nvidia' ? 'NVIDIA_API_KEY' : activeText === 'openrouter' ? 'OPENROUTER_API_KEY' : 'OPENAI_API_KEY')),
+      textKeyMasked: maskKey(env(activeText === 'anthropic' ? 'ANTHROPIC_API_KEY' : activeText === 'groq' ? 'GROQ_API_KEY' : activeText === 'nvidia' ? 'NVIDIA_API_KEY' : activeText === 'openrouter' ? 'OPENROUTER_API_KEY' : activeText === 'gemini' ? 'GEMINI_API_KEY' : 'OPENAI_API_KEY')),
     },
     providers,
     checkedAt: new Date().toISOString(),

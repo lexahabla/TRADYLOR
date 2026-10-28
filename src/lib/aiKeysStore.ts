@@ -18,13 +18,14 @@ import { dataFile } from './paths';
  *   groq        → GROQ_API_KEY         (plan gratuito con límite diario)
  *   nvidia      → NVIDIA_API_KEY       (NIM: API gratuita para sus modelos)
  *   openrouter  → OPENROUTER_API_KEY   (router con modelos `:free`)
+ *   gemini      → GEMINI_API_KEY       (Google AI Studio; API oficial)
  *
  * Seguridad: las claves se devuelven SÓLO enmascaradas al navegador; la
  * escritura exige sesión de administrador (requireAdminAuth en el endpoint).
  * ==============================================================================
  */
 
-export type AiProviderId = 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter';
+export type AiProviderId = 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter' | 'gemini';
 
 export interface AiKeysFile {
   openai?: string;
@@ -32,6 +33,7 @@ export interface AiKeysFile {
   groq?: string;
   nvidia?: string;
   openrouter?: string;
+  gemini?: string;
   updatedAt?: string;
 }
 
@@ -42,11 +44,12 @@ const ENV_TO_PROVIDER: Record<string, AiProviderId> = {
   GROQ_API_KEY: 'groq',
   NVIDIA_API_KEY: 'nvidia',
   OPENROUTER_API_KEY: 'openrouter',
+  GEMINI_API_KEY: 'gemini',
 };
 
 const KEYS_FILE = () => dataFile('ai-keys.json');
 
-export const AI_PROVIDER_IDS: AiProviderId[] = ['openai', 'anthropic', 'groq', 'nvidia', 'openrouter'];
+export const AI_PROVIDER_IDS: AiProviderId[] = ['openai', 'anthropic', 'groq', 'nvidia', 'openrouter', 'gemini'];
 
 /** Lee el almacén; archivo ausente o corrupto ⇒ objeto vacío (nunca lanza). */
 export function readAiKeys(): AiKeysFile {

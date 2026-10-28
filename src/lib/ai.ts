@@ -11,15 +11,16 @@ import { storedKeyForEnv } from './aiKeysStore';
  * producto con OpenAI Images o Flux (Black Forest Labs).
  *
  * Variables de entorno (ver .env.example):
- *   TEXT_AI_PROVIDER   openai (por defecto) | anthropic
+ *   TEXT_AI_PROVIDER   openai (por defecto) | anthropic | groq | nvidia | openrouter | gemini
  *   OPENAI_API_KEY / OPENAI_MODEL            (por defecto gpt-4o-mini)
  *   ANTHROPIC_API_KEY / ANTHROPIC_MODEL      (por defecto claude-3-5-sonnet-latest)
+ *   GEMINI_API_KEY / GEMINI_MODEL            (por defecto gemini-3.8-flash; Google AI Studio)
  *   IMAGE_AI_PROVIDER  openai (por defecto) | flux
  *   IMAGE_MODEL        (por defecto gpt-image-1; acepta dall-e-3)
  *   FLUX_API_KEY / FLUX_ENDPOINT
  */
 
-export type TextProvider = 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter';
+export type TextProvider = 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter' | 'gemini';
 export type ImageProvider = 'openai' | 'flux';
 
 /**
@@ -69,6 +70,7 @@ const AI_KEY_ENVS = new Set([
   'GROQ_API_KEY',
   'NVIDIA_API_KEY',
   'OPENROUTER_API_KEY',
+  'GEMINI_API_KEY',
 ]);
 
 /** Lee variables de entorno con el patrón del proyecto (process.env ?? import.meta.env). */
@@ -94,6 +96,7 @@ export function textProvider(): TextProvider {
   if (value === 'groq') return 'groq';
   if (value === 'nvidia') return 'nvidia';
   if (value === 'openrouter') return 'openrouter';
+  if (value === 'gemini') return 'gemini';
   return 'openai';
 }
 
@@ -107,15 +110,17 @@ export function hasTextCredentials(providerOverride?: TextProvider): boolean {
   if (provider === 'groq') return Boolean(env('GROQ_API_KEY'));
   if (provider === 'nvidia') return Boolean(env('NVIDIA_API_KEY'));
   if (provider === 'openrouter') return Boolean(env('OPENROUTER_API_KEY'));
+  if (provider === 'gemini') return Boolean(env('GEMINI_API_KEY'));
   return Boolean(env('OPENAI_API_KEY'));
 }
 
 /** Clave de entorno que necesita cada proveedor de texto (para mensajes de error). */
-function textKeyEnvName(provider: TextProvider): string {
+export function textKeyEnvName(provider: TextProvider): string {
   if (provider === 'anthropic') return 'ANTHROPIC_API_KEY';
   if (provider === 'groq') return 'GROQ_API_KEY';
   if (provider === 'nvidia') return 'NVIDIA_API_KEY';
   if (provider === 'openrouter') return 'OPENROUTER_API_KEY';
+  if (provider === 'gemini') return 'GEMINI_API_KEY';
   return 'OPENAI_API_KEY';
 }
 
@@ -267,6 +272,20 @@ export async function chatComplete(
       const payload = await response.json();
       return (payload?.content ?? []).map((block: any) => block?.text ?? '').join('');
     }
+    if (provider === 'gemini') {
+      const system = messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
+      const turns = messages.filter((m) => m.role !== 'system');
+      return callGeminiRaw({
+        model,
+        systemText: system || undefined,
+        contents: turns.map((m) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }],
+        })),
+        temperature: opts.temperature ?? 0.6,
+        timeoutMs: opts.timeoutMs ?? 90_000,
+      });
+    }
     return callOpenAiCompat(provider, {
       messages,
       temperature: opts.temperature ?? 0.6,
@@ -337,6 +356,45 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 60_0
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Llamada de bajo nivel a la API de Google Gemini (generateContent). Formato
+ * propio (no compatible con OpenAI): `contents` con roles 'user'/'model' y
+ * `systemInstruction` aparte (sin rol 'system' dentro de `contents`).
+ * Usada por `chatComplete` (consolas de IA) y por enriquecimiento/extracción/
+ * síntesis de título cuando `TEXT_AI_PROVIDER=gemini` (o se fuerza ese proveedor).
+ */
+async function callGeminiRaw(opts: {
+  model?: string;
+  systemText?: string;
+  contents: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }>;
+  temperature: number;
+  maxOutputTokens?: number;
+  timeoutMs: number;
+}): Promise<string> {
+  const modelName = opts.model?.trim() || env('GEMINI_MODEL') || 'gemini-3.8-flash';
+  const response = await fetchWithTimeout(
+    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': env('GEMINI_API_KEY') },
+      body: JSON.stringify({
+        ...(opts.systemText ? { systemInstruction: { parts: [{ text: opts.systemText }] } } : {}),
+        contents: opts.contents,
+        generationConfig: {
+          temperature: opts.temperature,
+          ...(opts.maxOutputTokens ? { maxOutputTokens: opts.maxOutputTokens } : {}),
+        },
+      }),
+    },
+    opts.timeoutMs
+  );
+  if (!response.ok) {
+    throw new Error(`Gemini respondió ${response.status}: ${(await response.text()).slice(0, 200)}`);
+  }
+  const payload = await response.json();
+  return (payload?.candidates?.[0]?.content?.parts ?? []).map((part: any) => part?.text ?? '').join('');
 }
 
 /** Extrae el primer objeto JSON válido aunque el modelo añada ```json o texto alrededor. */
@@ -459,6 +517,18 @@ export async function enrichProductText(input: {
       }
       const payload = await response.json();
       const text = (payload?.content ?? []).map((block: any) => block?.text ?? '').join('');
+      return normalizeEnrichedText(parseLooseJson(text));
+    }
+
+    if (provider === 'gemini') {
+      const text = await callGeminiRaw({
+        model: modelForThis,
+        systemText: TEXT_SYSTEM_PROMPT,
+        contents: [{ role: 'user', parts: [{ text: userContext }] }],
+        temperature: 0.4,
+        maxOutputTokens: 1200,
+        timeoutMs: 60_000,
+      });
       return normalizeEnrichedText(parseLooseJson(text));
     }
 
@@ -803,6 +873,14 @@ export async function extractProductPageFields(input: {
     }
     const payload = await response.json();
     raw = parseLooseJson((payload?.content ?? []).map((block: any) => block?.text ?? '').join(''));
+  } else if (provider === 'gemini') {
+    raw = parseLooseJson(await callGeminiRaw({
+      systemText: PAGE_EXTRACT_SYSTEM_PROMPT,
+      contents: [{ role: 'user', parts: [{ text: userContext }] }],
+      temperature: 0.2,
+      maxOutputTokens: 1000,
+      timeoutMs: 55_000,
+    }));
   } else {
     raw = parseLooseJson(await callOpenAiCompat(provider, {
       messages: [
@@ -988,6 +1066,14 @@ export async function synthesizeProductTitle(input: {
     }
     const payload = await response.json();
     text = (payload?.content ?? []).map((block: any) => block?.text ?? '').join('');
+  } else if (provider === 'gemini') {
+    text = await callGeminiRaw({
+      systemText: TITLE_SYSTEM_PROMPT,
+      contents: [{ role: 'user', parts: [{ text: userContext }] }],
+      temperature: 0.3,
+      maxOutputTokens: 150,
+      timeoutMs: 45_000,
+    });
   } else {
     text = await callOpenAiCompat(provider, {
       messages: [

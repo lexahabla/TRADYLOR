@@ -27,7 +27,7 @@ export interface PipelineOptions {
   /** Desactiva la llamada a la IA de texto en la Etapa 3 (default: activada). */
   enrich?: boolean;
   /** Fuerza el proveedor de IA de texto para esta ejecución. */
-  provider?: 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter';
+  provider?: 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter' | 'gemini';
   /**
    * Fuerza el MODELO de IA para esta ejecución. Los límites de peticiones de
    * Groq son por modelo: agotar el TPD de uno no agota el de los demás.
@@ -163,7 +163,7 @@ export async function reprocessCatalog(
   options: {
     dryRun?: boolean;
     enrich?: boolean;
-    provider?: 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter';
+    provider?: 'openai' | 'anthropic' | 'groq' | 'nvidia' | 'openrouter' | 'gemini';
     model?: string;
   } = {},
 ): Promise<ReprocessResult> {

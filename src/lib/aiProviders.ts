@@ -125,6 +125,17 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
     pricingNote: 'Plan gratuito con límite diario de tokens por modelo (TPD).',
     docsUrl: 'https://console.groq.com/docs',
   },
+  {
+    id: 'gemini',
+    name: 'Google Gemini',
+    chatUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent',
+    modelsUrl: 'https://generativelanguage.googleapis.com/v1beta/models',
+    envKey: 'GEMINI_API_KEY',
+    defaultModel: 'gemini-3.8-flash',
+    freeModels: [],
+    pricingNote: 'API oficial de Google AI Studio: consumo por token (pago por uso); consulta la cuota gratuita vigente en ai.google.dev.',
+    docsUrl: 'https://ai.google.dev/gemini-api/docs',
+  },
 ];
 
 export function getProviderInfo(id: string): AiProviderInfo | undefined {
@@ -212,6 +223,11 @@ export async function testProvider(provider: AiProviderId): Promise<ProviderStat
       delete headers.Authorization;
       headers['x-api-key'] = key;
       headers['anthropic-version'] = '2023-06-01';
+    }
+    if (provider === 'gemini') {
+      // Gemini no usa Bearer: valida con su propio header de API key.
+      delete headers.Authorization;
+      headers['x-goog-api-key'] = key;
     }
     if (provider === 'openrouter') {
       headers['HTTP-Title'] = 'Tradylor Admin';

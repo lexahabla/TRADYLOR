@@ -58,6 +58,8 @@ export const POST: APIRoute = async ({ request }) => {
     if (provider === 'anthropic') {
       headers['x-api-key'] = candidateKey;
       headers['anthropic-version'] = '2023-06-01';
+    } else if (provider === 'gemini') {
+      headers['x-goog-api-key'] = candidateKey;
     } else {
       headers.Authorization = `Bearer ${candidateKey}`;
       if (provider === 'openrouter') headers['HTTP-Title'] = 'Tradylor Admin';
