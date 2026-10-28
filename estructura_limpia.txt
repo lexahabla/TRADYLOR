@@ -247,6 +247,7 @@ src/pages/upayp1b4/preview-card.astro
 src/pages/upayp1b4/trafico-ventas/guia.astro
 src/pages/upayp1b4/trafico-ventas/index.astro
 src/pages/upayp1b4/usuarios.astro
+src/styles/tailwind.css
 src/types/buyerProfile.ts
 src/types/radar.ts
 src/utils/affiliate.ts

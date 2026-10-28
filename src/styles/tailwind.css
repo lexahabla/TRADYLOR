@@ -1,0 +1,24 @@
+/**
+ * ==============================================================================
+ * TRADYLOR — ENTRADA DE TAILWIND (PostCSS)
+ * ==============================================================================
+ * Hasta el commit 3bc9015 esto lo resolvía la integración oficial
+ * `@astrojs/tailwind`, que inyectaba las utilidades automáticamente en cada
+ * página. Esa integración se quitó por ser incompatible con Astro 7 (peer
+ * dependency inválida) y se migró a un `postcss.config.mjs` con el plugin
+ * `tailwindcss` a pelo — pero sin ESTE fichero, PostCSS no tenía ninguna
+ * directiva `@tailwind` en todo el proyecto donde inyectar las utilidades
+ * generadas: Tailwind quedó registrado pero sin ningún punto de entrada, así
+ * que no generaba ni servía NINGUNA clase. El efecto visual es que todo lo
+ * escrito en Tailwind (Tráfico y Ventas, su Glosario, Mi Radar) se renderiza
+ * con las clases puestas pero sin ningún estilo real detrás: cajas sin flex,
+ * sin espaciado, sin colores, sin bordes redondeados.
+ *
+ * `corePlugins.preflight: false` en tailwind.config.mjs sigue desactivando el
+ * reset global (@tailwind base), así que importar esto en el layout
+ * compartido no toca el diseño del resto del sitio.
+ * ==============================================================================
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
