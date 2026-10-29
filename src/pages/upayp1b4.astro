@@ -5343,6 +5343,7 @@ function renderTableRows(products, resetPage = true) {
     }
 
     // Chips de URL en los detalles: copiar al portapapeles y desplegar/ocultar.
+    // Chips de texto largo: desplegar/ocultar.
     document.addEventListener('click', async (event) => {
       const copyBtn = event.target.closest?.('.url-chip-copy');
       if (copyBtn) {
@@ -5368,14 +5369,14 @@ function renderTableRows(products, resetPage = true) {
         }
         return;
       }
-      const toggleBtn = event.target.closest?.('.url-chip-toggle');
+      const toggleBtn = event.target.closest?.('.url-chip-toggle, .text-chip-toggle');
       if (toggleBtn) {
         event.stopPropagation();
-        const chip = toggleBtn.closest('.url-chip');
+        const chip = toggleBtn.closest('.url-chip, .text-chip');
         if (chip) {
           const open = chip.classList.toggle('is-open');
           toggleBtn.setAttribute('aria-expanded', String(open));
-          toggleBtn.setAttribute('title', open ? 'Ocultar la URL completa' : 'Mostrar u ocultar la URL completa');
+          toggleBtn.setAttribute('title', open ? 'Ocultar contenido completo' : 'Mostrar u ocultar contenido completo');
         }
       }
     });
@@ -5824,6 +5825,27 @@ function renderTableRows(products, resetPage = true) {
         </span>`;
     }
 
+    /** Chip de texto largo: una línea con ellipsis + desplegar para ver todo. */
+    function renderTextChip(raw) {
+      const text = escapeHtml(raw);
+      return `
+        <span class="text-chip">
+          <span class="text-chip-text" title="${text}">${text}</span>
+          <button type="button" class="text-chip-btn text-chip-toggle" title="Mostrar u ocultar texto completo" aria-label="Desplegar texto">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </span>`;
+    }
+
+    /** Renderiza un valor de celda de detalle: URL → chip con copiar; texto largo → chip desplegable; texto corto → plano. */
+    function renderDetailValue(value) {
+      const raw = String(value);
+      if (/^https?:\/\//i.test(raw)) return renderUrlChip(raw);
+      // Texto largo: más de 120 caracteres o con saltos de línea → chip desplegable
+      if (raw.length > 120 || /\n/.test(raw)) return renderTextChip(raw);
+      return escapeHtml(raw);
+    }
+
     /** URLs de imagen del detalle (extras «Imágenes», galería e imagen principal), sin repetir. */
     function detailImageUrls(product) {
       const urls = [];
@@ -5890,10 +5912,7 @@ function renderTableRows(products, resetPage = true) {
       const fields = rows
         .filter(([, value]) => value != null && value !== '')
         .map(([label, value]) => {
-          const raw = String(value);
-          const cell = /^https?:\/\//i.test(raw)
-            ? renderUrlChip(raw)
-            : escapeHtml(raw);
+          const cell = renderDetailValue(value);
           return `<div class="aff-detail-item"><dt>${escapeHtml(label)}</dt><dd>${cell}</dd></div>`;
         })
         .join('');
@@ -12607,5 +12626,76 @@ function renderTableRows(products, resetPage = true) {
 .status-alert.alert-loading {
   border-left: 4px solid #3b82f6;
 }
+
+/* ===== Tabla Importar: columna Producto más ancha, otras justas ===== */
+:global(.products-table .aff-name) {
+  width: 42%;
+  min-width: 220px;
+}
+:global(.products-table .aff-num) {
+  width: 1%;
+  white-space: nowrap;
+}
+:global(.products-table .aff-num.ac-discount) { width: 8%; }
+:global(.products-table .aff-actions) {
+  width: 14%;
+  white-space: nowrap;
+}
+
+/* ===== Chip de texto desplegable (estilo url-chip para texto largo) ===== */
+:global(.text-chip) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0.15rem 0.35rem;
+  background: rgba(148, 163, 184, 0.07);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 6px;
+  vertical-align: middle;
+}
+:global(.text-chip-text) {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-main);
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+:global(.text-chip.is-open) {
+  display: flex;
+  align-items: flex-start;
+}
+:global(.text-chip.is-open .text-chip-btn) {
+  margin-top: 1px;
+}
+:global(.text-chip.is-open .text-chip-text) {
+  white-space: normal;
+  word-break: break-word;
+  overflow: visible;
+}
+:global(.text-chip-btn) {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-dim);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+}
+:global(.text-chip-btn:hover) {
+  color: #93c5fd;
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
 </style>
 
