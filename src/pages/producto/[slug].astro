@@ -335,6 +335,50 @@ const productSchema = {
         </div>
       </div>
 
+      <!-- Productos relacionados / variantes del mismo modelo (tipo Amazon: tarjetas con característica diferenciadora) -->
+      {(hasVariants || sameCategoryRelated.length > 0) ? (
+        <section class="variant-row-section container">
+          <div class="variant-row-header">
+            <span class="variant-row-tag">Otras versiones</span>
+            <h3 class="variant-row-title">Elige otra versión de este producto</h3>
+          </div>
+          <div class="variant-row-grid">
+            {variantProducts.map((p) => {
+              const feat = p.variantFeature ? p.variantFeature : '';
+              return (
+                <a href={`/producto/${encodeURIComponent(productKey(p))}`} class="variant-row-card alt-variant">
+                  <img
+                    src={p.image}
+                    alt={p.title}
+                    loading="lazy"
+                    width="140"
+                    height="140"
+                    class="variant-row-image"
+                  />
+                  <span class="variant-row-feat">{feat}</span>
+                  <span class="variant-row-price">{formatCurrency(p.price)}</span>
+                </a>
+              );
+            })}
+            {!hasVariants && sameCategoryRelated.map((p) => {
+              return (
+                <a href={`/producto/${encodeURIComponent(productKey(p))}`} class="variant-row-card alt-related">
+                  <img
+                    src={p.image}
+                    alt={p.title}
+                    loading="lazy"
+                    width="140"
+                    height="140"
+                    class="variant-row-image"
+                  />
+                  <span class="variant-row-price">{formatCurrency(p.price)}</span>
+                </a>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
       <!-- Columna derecha: Panel de información + CTA pegajoso -->
       <div class="product-info-panel">
 
@@ -1024,80 +1068,10 @@ const productSchema = {
         </div>
       </section>
     )}
-
+    
     <!-- ======================================================
-         PRODUCTOS RELACIONADOS (variantes del mismo modelo + misma categoría)
+         AVISO DE AFILIACIÓN (Transparencia obligatoria)
          ====================================================== -->
-    {(hasVariants || sameCategoryRelated.length > 0) ? (
-      <section class="variant-section container">
-        <div class="variant-header">
-          <span class="variant-tag">Productos relacionados</span>
-          <h2 class="variant-title">Otras versiones y productos similares</h2>
-          <p class="variant-subtitle">
-            {hasVariants ? 'Mismo producto con características distintas.' : 'Productos de la misma categoría que podrían interesarte.'}
-          </p>
-          {hasVariants && (
-            <span class="variant-badge is-related">✓ Relacionado</span>
-          )}
-        </div>
-
-        <div class="alternatives-grid">
-          {variantProducts.map((p) => {
-            const feat = p.variantFeature ? ` · ${p.variantFeature}` : '';
-            return (
-              <a href={`/producto/${encodeURIComponent(productKey(p))}`} class="alternative-card alt-variant">
-                <img
-                  src={p.image}
-                  alt={p.title}
-                  loading="lazy"
-                  width="120"
-                  height="120"
-                  class="alt-image"
-                />
-                <h3 class="alt-title">{cleanMarketplaceSuffix(p.title)}</h3>
-                <span class="alt-feature">{feat}</span>
-                <span class="alt-price">{formatCurrency(p.price)}</span>
-                {p.rating && (
-                  <span class="alt-rating">
-                    <svg width="12" height="12" viewBox="0 0 20 20" fill="#f59e0b">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                    {p.rating.toFixed(1)}
-                  </span>
-                )}
-                <span class="alt-cta">Ver versión →</span>
-              </a>
-            );
-          })}
-          {!hasVariants && sameCategoryRelated.map((p) => {
-            return (
-              <a href={`/producto/${encodeURIComponent(productKey(p))}`} class="alternative-card alt-related">
-                <img
-                  src={p.image}
-                  alt={p.title}
-                  loading="lazy"
-                  width="120"
-                  height="120"
-                  class="alt-image"
-                />
-                <h3 class="alt-title">{cleanMarketplaceSuffix(p.title)}</h3>
-                <span class="alt-price">{formatCurrency(p.price)}</span>
-                {p.rating && (
-                  <span class="alt-rating">
-                    <svg width="12" height="12" viewBox="0 0 20 20" fill="#f59e0b">
-                      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8-2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                    </svg>
-                    {p.rating.toFixed(1)}
-                  </span>
-                )}
-                <span class="alt-cta">Ver producto →</span>
-              </a>
-            );
-          })}
-        </div>
-      </section>
-    ) : null}
-
     <!-- ======================================================
          AVISO DE AFILIACIÓN (Transparencia obligatoria)
          ====================================================== -->
@@ -2745,5 +2719,85 @@ const productSchema = {
   .alt-related:hover {
     border-color: #a855f7;
     background: rgba(139, 92, 246, 0.05);
+  }
+
+  /* ===== Tarjetas de variantes debajo de la galería (tipo Amazon) ===== */
+  .variant-row-section {
+    margin: 2rem 0;
+    text-align: center;
+  }
+  .variant-row-header {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+  }
+  .variant-row-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.5rem;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #60a5fa;
+    width: fit-content;
+  }
+  .variant-row-title {
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--color-text-main);
+    margin: 0;
+    line-height: 1.2;
+  }
+  .variant-row-grid {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    overflow-x: auto;
+    padding-bottom: 0.75rem;
+    scrollbar-width: thin;
+  }
+  .variant-row-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 150px;
+    flex-shrink: 0;
+    text-decoration: none;
+    color: var(--color-text-main);
+    border: 2px solid rgba(96, 165, 250, 0.3);
+    border-radius: 8px;
+    padding: 0.75rem;
+    background: var(--color-bg-card);
+    transition: all 0.2s ease;
+  }
+  .variant-row-card:hover {
+    border-color: #60a5fa;
+    background: rgba(96, 165, 250, 0.05);
+    transform: translateY(-2px);
+  }
+  .variant-row-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 6px;
+    margin-bottom: 0.25rem;
+  }
+  .variant-row-feat {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #60a5fa;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .variant-row-price {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--color-text-main);
   }
 </style>
