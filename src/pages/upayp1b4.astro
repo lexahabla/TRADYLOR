@@ -6364,7 +6364,7 @@ function renderTableRows(products, resetPage = true) {
     bindSubcatDestCascade(aliCatAssign, aliSubcatAssign);
 
     // Columnas de la tabla de afiliados (la columna «Tienda» se eliminó).
-    const ALI_COLS = 12;
+    const ALI_COLS = 9;
     let aliProducts = [];
     let aliVisible = [];
     /** Productos por página de la tabla de afiliados (25 / 50 / 75). */
@@ -6736,14 +6736,11 @@ function renderTableRows(products, resetPage = true) {
                 <th class="ac-th-check"><input type="checkbox" data-ac-checkall aria-label="Seleccionar la página actual" /></th>
                 <th>Foto</th>
                 <th>Producto</th>
-                <th>Estado</th>
                 <th class="aff-num">Precio</th>
-                <th class="aff-num">Precio orig.</th>
                 <th class="aff-num">Dto.</th>
                 <th class="aff-num">Comisión %</th>
                 <th class="aff-num">Comisión €</th>
                 <th class="aff-num">Ventas</th>
-                <th class="aff-num">Valoración</th>
                 <th></th>
               </tr>
             </thead>
@@ -6771,14 +6768,11 @@ function renderTableRows(products, resetPage = true) {
                     <strong>${escapeHtml(product.title)}</strong>
                     <span>${escapeHtml(product.network)}${product.category ? ` · ${escapeHtml(product.category)}` : ''}${estadoPill}</span>
                   </td>
-                  <td>${aliConditionBadge(product)}</td>
                   <td class="aff-num">${money(product.price, product.currency)}</td>
-                  <td class="aff-num">${product.originalPrice != null ? money(product.originalPrice, product.currency) : '—'}</td>
                   <td class="aff-num ac-discount">${discount ? escapeHtml(discount) : '—'}</td>
                   <td class="aff-num">${product.commissionRate != null ? `${product.commissionRate}%` : '—'}</td>
                   <td class="aff-num">${product.commissionAmount != null ? money(product.commissionAmount, product.currency) : '—'}</td>
                   <td class="aff-num">${sales != null ? sales : '—'}</td>
-                  <td class="aff-num">${product.rating != null ? `${product.rating} / 5` : '—'}</td>
                     <td class="aff-actions">
                       <button type="button" class="${addBtnClass}" data-ac-import="${index}"${yaAnadido ? ' disabled title="Ya está en el catálogo"' : ''}>${yaAnadido ? 'Añadido' : 'Añadir'}</button>
                       <button type="button" class="btn-danger-ghost btn-sm" data-ac-remove="${index}" title="Quitar de la tabla">✕</button>
