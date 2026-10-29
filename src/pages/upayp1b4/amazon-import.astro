@@ -130,11 +130,18 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
           var msg = 'Éxito: ' + data.message + '\nASIN: ' + data.asin;
           if (data.warnings && data.warnings.length) msg += '\n\nAvisos:\n• ' + data.warnings.join('\n• ');
           showResult('ok', msg);
-          // Invalidar caché del catálogo para que el panel vea los datos frescos.
+          // Invalidar caché del catálogo en el servidor para que el panel vea los datos frescos.
           fetch('/api/admin/catalog/clear-cache', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
           }).catch(function () { /* no crítico: el usuario puede limpiar manualmente */ });
+          // Notificar a otras pestañas (p. ej. la de Catálogo) que se guardó un producto,
+          // para que refresquen su tabla automáticamente.
+          try {
+            var bc = new BroadcastChannel('tradylor-catalog');
+            bc.postMessage({ action: 'product-saved', asin: data.asin });
+            bc.close();
+          } catch (e) { /* BroadcastChannel no soportado: ignorar */ }
         } else {
           showResult('error', 'Error: ' + (data.message || 'Error desconocido'));
         }

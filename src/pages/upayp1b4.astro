@@ -2073,6 +2073,17 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // prodFilterApply() para no lanzar dos fetch simultáneos.
     let productRefreshInFlight = false;
 
+    // Escuchar notificaciones de guardado de productos desde otras pestañas
+    // (p. ej. Amazon JSON) para refrescar la tabla de Catálogo automáticamente.
+    try {
+      const catalogBc = new BroadcastChannel('tradylor-catalog');
+      catalogBc.onmessage = function (event) {
+        if (event.data && event.data.action === 'product-saved') {
+          reloadProductsTable();
+        }
+      };
+    } catch (e) { /* BroadcastChannel no soportado: ignorar */ }
+
     // Inputs
     const inputScrapeUrl = document.getElementById('inputScrapeUrl');
     const btnScrape = document.getElementById('btnScrape');
