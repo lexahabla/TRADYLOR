@@ -100,6 +100,7 @@ export interface NormalizedAmazonProduct {
   sourceId?: string;
   network?: string;
   raw?: AmazonScrapedProduct;
+  extra?: Record<string, unknown>;
 }
 
 /** Opciones del pipeline de importación. */
@@ -283,27 +284,43 @@ export async function scrapeAmazonProduct(
  * Intenta varios nombres de campo porque ScraperAPI puede devolver variantes
  * (price / original_price / list_price, reviews / review_count, etc.).
  */
-export function normalizeScrapedAmazonData(raw: AmazonScrapedProduct): NormalizedAmazonProduct {
-  const asin = sanitizeAsin(raw.asin || '');
-  const title = String(raw.title || '').trim() || `Producto Amazon ${asin}`;
+export function normalizeScrapedAmazonData(
+  raw: AmazonScrapedProduct,
+  asinFallback?: string,
+): NormalizedAmazonProduct {
+  const asin = sanitizeAsin(raw.asin || asinFallback || '');
+  const title =
+    String(raw.title || '').trim() ||
+    String(raw.name || '').trim() ||
+    `Producto Amazon ${asin}`;
   const merchant = String(raw.merchant || raw.seller || 'Amazon').trim();
 
-  const price = raw.price != null ? Number(raw.price) : undefined;
+  const price =
+    raw.price != null
+      ? Number(raw.price)
+      : raw.pricing != null
+        ? Number(String(raw.pricing).replace(/[^0-9.,]/g, '').replace(',', '.'))
+        : undefined;
   const originalPrice =
     raw.original_price != null
       ? Number(raw.original_price)
       : raw.list_price != null
         ? Number(raw.list_price)
-        : undefined;
+        : raw.originalPrice != null
+          ? Number(raw.originalPrice)
+          : undefined;
 
   const image = String(raw.image || '').trim();
   const gallery = Array.isArray(raw.images)
     ? raw.images.map(String).filter((u) => /^https?:\/\//i.test(u))
-    : image
-      ? [image]
-      : [];
+    : raw.high_res_images != null && Array.isArray(raw.high_res_images)
+      ? raw.high_res_images.map(String).filter((u) => /^https?:\/\//i.test(u))
+      : image
+        ? [image]
+        : [];
 
-  const specs = (raw.specifications || raw.specs || {}) as Record<string, string>;
+  const specs =
+    (raw.specifications || raw.specs || raw.product_information || {}) as Record<string, string>;
 
   const rating = raw.rating != null ? Number(raw.rating) : undefined;
   const reviewsCount =
@@ -311,14 +328,34 @@ export function normalizeScrapedAmazonData(raw: AmazonScrapedProduct): Normalize
       ? Number(raw.reviews)
       : raw.review_count != null
         ? Number(raw.review_count)
-        : undefined;
+        : raw.total_reviews != null
+          ? Number(raw.total_reviews)
+          : raw.total_ratings != null
+            ? Number(raw.total_ratings)
+            : undefined;
 
-  const description = String(raw.description || '').trim();
+  const description =
+    String(raw.description || '').trim() ||
+    String(raw.full_description || '').trim() ||
+    String(raw.sourceDescription || '').trim();
   const availability = String(raw.availability || '').toLowerCase();
   const inStock =
     availability.includes('in stock') ||
     availability.includes('disponible') ||
+    availability.includes('en stock') ||
     availability.includes('en stock');
+
+  const pros =
+    Array.isArray(raw.feature_bullets) && raw.feature_bullets.length
+      ? raw.feature_bullets.map(String)
+      : undefined;
+  const cons: string[] = [];
+
+  const brand =
+    String(raw.brand || '').trim() ||
+    String(raw.marca || '').trim() ||
+    undefined;
+  const fulfillmentProvider = String(raw.sold_by || '').trim() || undefined;
 
   return {
     asin,
@@ -328,7 +365,7 @@ export function normalizeScrapedAmazonData(raw: AmazonScrapedProduct): Normalize
     originalPrice: Number.isFinite(originalPrice!) ? originalPrice : undefined,
     image,
     gallery,
-    brand: String(raw.brand || '').trim() || undefined,
+    brand,
     merchant,
     currency: String(raw.currency || 'EUR').trim() || 'EUR',
     inStock,
@@ -337,12 +374,20 @@ export function normalizeScrapedAmazonData(raw: AmazonScrapedProduct): Normalize
     specs: specs && Object.keys(specs).length ? specs : undefined,
     techSheet: undefined,
     affiliateUrl: String(
-      raw.affiliate_url || `https://www.amazon.es/dp/${asin}?tag=${ASSOCIATE_TAG}`,
+      raw.affiliate_url ||
+        raw.affiliateUrl ||
+        `https://www.amazon.es/dp/${asin || 'B000000000'}?tag=${ASSOCIATE_TAG}`,
     ).trim(),
-    buyNowUrl: String(raw.buy_now_url || '').trim() || undefined,
+    buyNowUrl: String(raw.buy_now_url || raw.buyNowUrl || '').trim() || undefined,
     sourceId: asin,
     network: 'amazon',
     raw,
+    extra: {
+      fulfillmentProvider,
+      pros,
+      cons,
+      sourceDescription: description,
+    },
   };
 }
 
@@ -715,10 +760,7 @@ export async function importAmazonProductFromRawJson(
   }
 
   // 2) Normalizar JSON crudo (sin llamar a ScraperAPI)
-  const normalized = normalizeScrapedAmazonData(raw);
-
-  // Fallback: si el JSON no trae ASIN en raíz, usar el del campo de texto.
-  if (!normalized.asin) normalized.asin = cleanAsin;
+  const normalized = normalizeScrapedAmazonData(raw, cleanAsin);
 
   // 3) Enriquecer con IA
   let enriched: FlatProduct;
