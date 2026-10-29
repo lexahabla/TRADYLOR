@@ -46,9 +46,9 @@ const CATEGORIES_PATH = dataFile('categories.json');
  */
 export const DEFAULT_CATEGORIES: Category[] = [
   {
-    id: 'informatica-oficina',
+    id: 'informatica',
     name: 'Informatica',
-    slug: 'informatica-oficina',
+    slug: 'informatica',
     icon: '💻',
     keywords: [
       'teclado', 'raton', 'ratón', 'mouse', 'monitor', 'portatil', 'portátil', 'laptop', 'macbook',
