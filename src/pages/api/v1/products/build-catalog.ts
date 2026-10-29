@@ -39,7 +39,7 @@ import { getPipelineConfig } from '../../../../lib/pipeline/config';
 import { computeEditorialStatus, extractNormalizedTags, computeConversionScore, computeBadge } from '../../../../lib/curation';
 import { isSecondHand } from '../../../../utils/aliCatalogFilters';
 import { incrementMetric, touchMetrics } from '../../../../lib/pipeline/metrics';
-import { enrichProductText, generateProductImage, hasTextCredentials, hasImageCredentials, overlayEnrichedText } from '../../../../lib/ai';
+import { enrichProductText, generateProductImage, hasTextCredentials, hasImageCredentials, overlayEnrichedText, enrichConcurrency } from '../../../../lib/ai';
 import { enrichProductLocally } from '../../../../lib/localEnrich';
 import fs from 'fs';
 import path from 'path';
@@ -832,7 +832,7 @@ export async function buildAndUpsertProducts(
   let aiEnrichedImagesCount = 0;
 
   const pipelineConfig = getPipelineConfig();
-  const concurrency = Math.max(1, Number(process.env.BUILD_CATALOG_CONCURRENCY) || 3);
+  const concurrency = Math.max(1, Number(process.env.BUILD_CATALOG_CONCURRENCY) || enrichConcurrency());
   const totalGroups = groups.length;
   let processedCount = 0;
 
