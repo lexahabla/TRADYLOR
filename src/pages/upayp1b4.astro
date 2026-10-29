@@ -11882,22 +11882,23 @@ function renderTableRows(products, resetPage = true) {
      para la tabla de importación de 12 columnas) solo para #productsTable. */
   :global(#productsTable.products-table th:nth-child(1)),   /* Checkbox */
   :global(#productsTable.products-table td.col-check) {
-    width: 26px;
-    max-width: 26px;
-    padding: 0.6rem 0;           /* solo el checkbox, sin margen lateral extra */
+    width: 30px;
+    max-width: 30px;
+    padding: 0.6rem 0;           /* solo el checkbox, ~1px de margen cada lado */
     text-align: center;
   }
 
   :global(#productsTable.products-table th:nth-child(2)),   /* Imagen (ancho del th) */
   :global(#productsTable.products-table td.col-thumb) {
-    width: 52px;
-    max-width: 52px;
+    width: 60px;
+    max-width: 60px;
     padding: 0.6rem 0.25rem;
   }
 
-  :global(#productsTable.products-table th:nth-child(3)),   /* Producto / Título (más ancho) */
+  :global(#productsTable.products-table th:nth-child(3)),   /* Producto / Título */
   :global(#productsTable.products-table td.col-details) {
-    min-width: 260px;            /* ocupa el espacio restante */
+    width: 130px;
+    max-width: 130px;
   }
 
   :global(#productsTable.products-table th:nth-child(4)),   /* Comercio */
