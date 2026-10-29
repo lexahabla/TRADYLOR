@@ -18,7 +18,6 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
   <Fragment slot="header-end">
     {user && <AdminUserMenu user={user} active="amazon-import" />}
   </Fragment>
-
   <div class="admin-wrapper">
     <header class="admin-header">
       <div class="admin-header-main">
@@ -34,174 +33,199 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
 
     <AdminNav context="catalogo" active="amazon-import" user={user} />
 
-    <section data-admin-view="amazon-import" class:list={['admin-card', 'hidden-section', { 'is-visible': true }]} style="display: inline-block; width: 100%; max-width: 900px; text-align: left;">
-      <div class="card-header card-header-toggle">
+    <div id="amazonImportAlert" class="amazon-alert" hidden role="status"></div>
+
+    <form id="amazonImportForm" class="admin-card">
+      <div class="card-header">
         <div class="header-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-          </svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
         </div>
         <div>
-          <h2 class="card-title">Amazon (JSON)</h2>
-          <p class="card-desc">Pega el JSON crudo de ScraperAPI y el ASIN para importar el producto al catálogo sin pasar por el servidor de ScraperAPI.</p>
+          <span class="card-title">Importar producto desde JSON</span>
+          <p class="card-desc">Rellena el ASIN y el JSON crudo de ScraperAPI. El producto se guarda con upsert por ASIN para evitar duplicados.</p>
         </div>
       </div>
 
-      <form id="amazonImportForm" style="display: grid; gap: 1rem; max-width: 700px; margin: 0 auto;">
-        <div>
-          <label class="field-label">ASIN de Amazon (10 caracteres)</label>
-          <div style="display:flex; gap:.5rem; align-items:center; margin-bottom:.25rem;">
-            <input type="text" id="asinInput" placeholder="Ej: B01EXDG2MO" maxlength="20" style="flex:1;" />
-            <button type="button" id="btnFetchJson" class="btn-primary" style="padding:.5rem .8rem; font-size:.85rem; white-space:nowrap;">Obtener JSON</button>
-          </div>
-          <p class="label-hint">Puedes pegar el ASIN o una URL completa de Amazon.</p>
+      <div class="form-group">
+        <label class="field-label" for="asinInput">ASIN de Amazon <span class="label-hint">(10 caracteres, o URL completa)</span></label>
+        <div style="display:flex; gap:.5rem; align-items:center;">
+          <input id="asinInput" type="text" placeholder="Ej: B01EXDG2MO" maxlength="20" style="flex:1;" />
+          <button type="button" id="btnFetchJson" class="btn-primary btn-sm">Obtener JSON</button>
         </div>
+        <p class="label-hint">Puedes pegar el ASIN o una URL completa de Amazon.</p>
+      </div>
 
-        <div>
-          <label class="field-label">JSON crudo de ScraperAPI</label>
-          <textarea id="jsonInput" placeholder='El JSON se rellenará automáticamente al pulsar «Obtener JSON»...' style="width:100%; min-height: 260px; font-family: ui-monospace; background:#0b1220; border:1px solid #374151; color:#e5e7eb; border-radius:8px; padding:.6rem .8rem;"></textarea>
-          <p class="label-hint">O pulsa «Obtener JSON» para descargarlo automáticamente desde ScraperAPI.</p>
-        </div>
+      <div class="form-group">
+        <label class="field-label" for="jsonInput">JSON crudo de ScraperAPI</label>
+        <textarea id="jsonInput" placeholder='El JSON se rellenará automáticamente al pulsar «Obtener JSON»...' style="width:100%; min-height: 260px; font-family: ui-monospace; background:#0d121f; border:1px solid var(--color-border); color:var(--color-text-main); border-radius:var(--border-radius-sm); padding:.75rem 1rem;"></textarea>
+        <p class="label-hint">O pulsa «Obtener JSON» para descargarlo automáticamente desde ScraperAPI.</p>
+      </div>
 
-        <div class="checkbox-row">
-          <input type="checkbox" id="saveCheckbox" checked />
-          <label for="saveCheckbox">Guardar en el catálogo (desmarca para solo vista previa)</label>
-        </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="saveCheckbox" checked />
+        <label for="saveCheckbox">Guardar en el catálogo (desmarca para solo vista previa)</label>
+      </div>
 
+      <div class="form-actions">
         <button type="button" id="importBtn" class="btn-primary">Importar producto</button>
-        <button type="button" id="clearCacheBtn" class="btn-secondary" style="margin-left:.5rem;">Limpiar caché y actualizar catálogo</button>
-      </form>
+        <button type="button" id="clearCacheBtn" class="btn-secondary">Limpiar caché y actualizar catálogo</button>
+      </div>
+    </form>
 
-      <div id="resultBox" style="margin-top:1rem; padding:1rem; border-radius:8px; display:none;"></div>
-    </section>
+    <div id="resultBox" style="margin-top:1rem; padding:1rem; border-radius:var(--border-radius-sm); display:none;"></div>
   </div>
+</Layout>
 
-  <script is:inline>
-    (function () {
-      var asinInput = document.getElementById('asinInput');
-      var jsonInput = document.getElementById('jsonInput');
-      var saveCheckbox = document.getElementById('saveCheckbox');
-      var importBtn = document.getElementById('importBtn');
-      var clearCacheBtn = document.getElementById('clearCacheBtn');
-      var resultBox = document.getElementById('resultBox');
-      var fetchBtn = document.getElementById('btnFetchJson');
+<script is:inline>
+  (function () {
+    var asinInput = document.getElementById('asinInput');
+    var jsonInput = document.getElementById('jsonInput');
+    var saveCheckbox = document.getElementById('saveCheckbox');
+    var importBtn = document.getElementById('importBtn');
+    var clearCacheBtn = document.getElementById('clearCacheBtn');
+    var resultBox = document.getElementById('resultBox');
+    var fetchBtn = document.getElementById('btnFetchJson');
 
-      fetchBtn.addEventListener('click', function () {
-        var asin = asinInput.value.trim();
-        if (!asin) { showResult('error', 'Debes proporcionar un ASIN.'); return; }
-        var m = asin.match(/(?:dp|gp\/product|product)\/([A-Z0-9]{10})/i) || asin.match(/[?&]asin=([A-Z0-9]{10})/i);
-        if (m) asin = m[1];
-        fetchBtn.disabled = true;
-        fetchBtn.textContent = 'Cargando...';
-        resultBox.style.display = 'none';
-        fetch('/api/scrape?asin=' + encodeURIComponent(asin))
-          .then(function (r) { return r.json(); })
-          .then(function (data) {
-            jsonInput.value = JSON.stringify(data, null, 2);
-            showResult('ok', 'JSON obtenido de ScraperAPI.');
-          })
-          .catch(function (err) { showResult('error', 'Error al obtener JSON: ' + err.message); })
-          .finally(function () {
-            fetchBtn.disabled = false;
-            fetchBtn.textContent = 'Obtener JSON';
-          });
-      });
-
-      importBtn.addEventListener('click', function () {
-        var asin = asinInput.value.trim();
-        var rawText = jsonInput.value.trim();
-        var save = saveCheckbox.checked;
-
-        if (!asin) { showResult('error', 'Debes proporcionar un ASIN.'); return; }
-        if (!rawText) { showResult('error', 'Debes pegar el JSON crudo de ScraperAPI.'); return; }
-
-        var raw;
-        try { raw = JSON.parse(rawText); } catch (e) { showResult('error', 'JSON inválido: ' + e.message); return; }
-
-        importBtn.disabled = true;
-        importBtn.textContent = 'Importando...';
-        resultBox.style.display = 'none';
-
-        fetch('/api/admin/amazon/import-json', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ asin: asin, raw: raw, options: { save: save, imageOnlyIfMissing: true } })
+    fetchBtn.addEventListener('click', function () {
+      var asin = asinInput.value.trim();
+      if (!asin) { showResult('error', 'Debes proporcionar un ASIN.'); return; }
+      var m = asin.match(/(?:dp|gp\/product|product)\/([A-Z0-9]{10})/i) || asin.match(/[?&]asin=([A-Z0-9]{10})/i);
+      if (m) asin = m[1];
+      fetchBtn.disabled = true;
+      fetchBtn.textContent = 'Cargando...';
+      resultBox.style.display = 'none';
+      fetch('/api/scrape?asin=' + encodeURIComponent(asin))
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          jsonInput.value = JSON.stringify(data, null, 2);
+          showResult('ok', 'JSON obtenido de ScraperAPI.');
         })
+        .catch(function (err) { showResult('error', 'Error al obtener JSON: ' + err.message); })
+        .finally(function () {
+          fetchBtn.disabled = false;
+          fetchBtn.textContent = 'Obtener JSON';
+        });
+    });
+
+    importBtn.addEventListener('click', function () {
+      var asin = asinInput.value.trim();
+      var rawText = jsonInput.value.trim();
+      var save = saveCheckbox.checked;
+
+      if (!asin) { showResult('error', 'Debes proporcionar un ASIN.'); return; }
+      if (!rawText) { showResult('error', 'Debes pegar el JSON crudo de ScraperAPI.'); return; }
+
+      var raw;
+      try { raw = JSON.parse(rawText); } catch (e) { showResult('error', 'JSON inválido: ' + e.message); return; }
+
+      importBtn.disabled = true;
+      importBtn.textContent = 'Importando...';
+      resultBox.style.display = 'none';
+
+      fetch('/api/admin/amazon/import-json', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asin: asin, raw: raw, options: { save: save, imageOnlyIfMissing: true } })
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        if (data.success) {
+          var msg = 'Éxito: ' + data.message + '\nASIN: ' + data.asin;
+          if (data.warnings && data.warnings.length) msg += '\n\nAvisos:\n• ' + data.warnings.join('\n• ');
+          showResult('ok', msg);
+          // Invalidar caché del catálogo para que el panel vea los datos frescos.
+          fetch('/api/admin/catalog/clear-cache', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          }).catch(function () { /* no crítico: el usuario puede limpiar manualmente */ });
+        } else {
+          showResult('error', 'Error: ' + (data.message || 'Error desconocido'));
+        }
+      })
+      .catch(function (err) { showResult('error', 'Error de red: ' + err.message); })
+      .finally(function () {
+        importBtn.disabled = false;
+        importBtn.textContent = 'Importar producto';
+      });
+    });
+
+    // Botón: limpiar caché del catálogo y forzar refresco de datos.
+    clearCacheBtn.addEventListener('click', function () {
+      clearCacheBtn.disabled = true;
+      clearCacheBtn.textContent = 'Limpiando...';
+      resultBox.style.display = 'none';
+      fetch('/api/admin/catalog/clear-cache', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      })
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.success) {
-            var msg = 'Éxito: ' + data.message + '\nASIN: ' + data.asin;
-            if (data.warnings && data.warnings.length) msg += '\n\nAvisos:\n• ' + data.warnings.join('\n• ');
-            showResult('ok', msg);
-            // Invalidar caché del catálogo para que el panel vea los datos frescos.
-            fetch('/api/admin/catalog/clear-cache', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-            }).catch(function () { /* no crítico: el usuario puede limpiar manualmente */ });
+            showResult('ok', 'Caché del catálogo invalidado. Los datos se actualizarán en la próxima carga de la tabla.');
           } else {
-            showResult('error', 'Error: ' + (data.message || 'Error desconocido'));
+            showResult('error', 'Error al limpiar caché: ' + (data.message || 'desconocido'));
           }
         })
-        .catch(function (err) { showResult('error', 'Error de red: ' + err.message); })
+        .catch(function (err) { showResult('error', 'Error de red al limpiar caché: ' + err.message); })
         .finally(function () {
-          importBtn.disabled = false;
-          importBtn.textContent = 'Importar producto';
+          clearCacheBtn.disabled = false;
+          clearCacheBtn.textContent = 'Limpiar caché y actualizar catálogo';
         });
-      });
+    });
 
-      // Botón: limpiar caché del catálogo y forzar refresco de datos.
-      clearCacheBtn.addEventListener('click', function () {
-        clearCacheBtn.disabled = true;
-        clearCacheBtn.textContent = 'Limpiando...';
-        resultBox.style.display = 'none';
-        fetch('/api/admin/catalog/clear-cache', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        })
-          .then(function (r) { return r.json(); })
-          .then(function (data) {
-            if (data.success) {
-              showResult('ok', 'Caché del catálogo invalidado. Los datos se actualizarán en la próxima carga de la tabla.');
-            } else {
-              showResult('error', 'Error al limpiar caché: ' + (data.message || 'desconocido'));
-            }
-          })
-          .catch(function (err) { showResult('error', 'Error de red al limpiar caché: ' + err.message); })
-          .finally(function () {
-            clearCacheBtn.disabled = false;
-            clearCacheBtn.textContent = 'Limpiar caché y actualizar catálogo';
-          });
-      });
+    function showResult(type, text) {
+      resultBox.className = 'ai-result ' + type;
+      resultBox.textContent = text;
+      resultBox.style.display = 'block';
+    }
+  })();
+</script>
 
-      function showResult(type, text) {
-        resultBox.className = 'ai-result ' + type;
-        resultBox.textContent = text;
-        resultBox.style.display = 'block';
-      }
-    })();
-  </script>
+<style>
+  .admin-wrapper { max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; display: flex; flex-direction: column; gap: 2.5rem; }
+  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; border-bottom: 1px solid var(--color-border); }
+  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; width: fit-content; }
+  .admin-tag-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
+  .admin-tag-row .admin-tag-pill { margin: 0; }
+  .admin-tag-link { font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; text-decoration: none; transition: color 0.16s ease; }
+  .admin-tag-link:hover { color: #93c5fd; }
+  .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
+  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
+  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
 
-  <style>
-    .admin-wrapper { max-width: var(--max-width, 1200px); margin: 0 auto 0; padding: 2rem 1.25rem 5rem; text-align: center; }
-    .admin-card { background: var(--color-bg-card, #111827); border: 1px solid var(--color-border, #1f2937); border-radius: var(--border-radius-lg, 12px); padding: 2rem; }
-    .card-header { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
-    .header-icon { width: 32px; height: 32px; color: #60a5fa; }
-    .card-title { margin: 0; font-size: 1.1rem; color: var(--color-text-main, #f3f4f6); }
-    .card-desc { margin: .25rem 0 0; color: var(--color-text-muted, #9ca3af); font-size: .85rem; }
-    .field-label { display: block; font-size: .85rem; color: var(--color-text-muted); font-weight: 600; margin-bottom: .4rem; }
-    .label-hint { font-size: .78rem; color: #6b7280; margin-top: .25rem; }
-    input[type="text"], textarea { width: 100%; background: #0b1220; border: 1px solid #374151; border-radius: 8px; color: #e5e7eb; padding: .6rem .8rem; font-size: .9rem; box-sizing: border-box; }
-    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; resize: vertical; }
-    .checkbox-row { display: flex; align-items: center; gap: .5rem; margin-top: .5rem; }
-    .checkbox-row input { width: auto; margin: 0; }
-    .btn-primary { background: #38bdf8; color: #07111f; border: none; border-radius: 8px; padding: .6rem 1.25rem; font-weight: 800; cursor: pointer; font-size: .95rem; margin-top: .5rem; }
-    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
-    .btn-secondary { background: #6b7280; color: #fff; border: none; border-radius: 8px; padding: .6rem 1.25rem; font-weight: 800; cursor: pointer; font-size: .9rem; margin-top: .5rem; }
-    .btn-secondary:disabled { opacity: .6; cursor: not-allowed; }
-    .btn-secondary:hover:not(:disabled) { background: #4b5563; }
-    .btn-primary:hover:not(:disabled) { background: #7dd3fc; }
-    .ai-result { margin-top: 1rem; padding: 1rem; border-radius: 8px; display: none; }
-    .ai-result.ok { background: rgba(16, 185, 129, .12); border: 1px solid rgba(16, 185, 129, .3); color: #a7f3d0; }
-    .ai-result.error { background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); color: #fecaca; }
-  </style>
-</Layout>
+  .amazon-alert { padding: .85rem 1rem; border-radius: var(--border-radius-sm); font-size: .85rem; font-weight: 600; border: 1px solid transparent; }
+  .amazon-alert.is-success { color: #6ee7b7; background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }
+  .amazon-alert.is-error { color: #fecaca; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); }
+
+  .admin-card { background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-lg); padding: 2rem; box-shadow: var(--shadow-card); }
+  .card-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.75rem; padding-bottom: 1rem; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+  .header-icon { width: 42px; height: 42px; border-radius: 12px; background: rgba(59, 130, 246, 0.15); color: #60a5fa; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .card-title { font-family: var(--font-heading); font-size: 1.25rem; font-weight: 700; color: var(--color-text-main); }
+  .card-desc { font-size: 0.85rem; color: var(--color-text-muted); margin-top: 0.2rem; }
+
+  .form-group { display: flex; flex-direction: column; gap: .4rem; margin-bottom: 1rem; }
+  .field-label { display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; font-weight: 600; color: var(--color-text-main); }
+  .required { color: #f87171; }
+  .label-hint { font-size: 0.72rem; font-weight: 400; color: var(--color-text-dim); }
+
+  input[type="text"], input[type="email"], input[type="tel"], input[type="password"], select, textarea { width: 100%; box-sizing: border-box; background: #0d121f; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); padding: 0.75rem 1rem; color: var(--color-text-main); font-family: var(--font-body); font-size: 0.9rem; transition: all 0.2s ease; outline: none; }
+  input:focus, select:focus, textarea:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+
+  .checkbox-row { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+  .checkbox-row input { width: auto; margin: 0; }
+
+  .form-actions { display: flex; gap: 1rem; margin-top: 1rem; padding-top: 1.25rem; border-top: 1px solid var(--color-border); }
+  .btn-primary, .btn-secondary { font-family: var(--font-body); font-weight: 600; border: none; border-radius: var(--border-radius-sm); display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; transition: all 0.2s ease; cursor: pointer; padding: 0.75rem 1.25rem; }
+  .btn-primary { background: var(--color-primary); color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); transform: translateY(-1px); }
+  .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+  .btn-secondary { background: var(--color-surface-subtle); color: var(--color-text-muted); border: 1px solid var(--color-border); }
+  .btn-secondary:hover:not(:disabled) { color: var(--color-text-main); background: #242f45; }
+  .btn-secondary:disabled { opacity: .6; cursor: not-allowed; }
+
+  .btn-sm { padding: 0.5rem 0.9rem; font-size: 0.85rem; }
+
+  .ai-result { margin-top: 1rem; padding: 1rem; border-radius: var(--border-radius-sm); display: none; }
+  .ai-result.ok { background: rgba(16, 185, 129, .12); border: 1px solid rgba(16, 185, 129, .3); color: #a7f3d0; }
+  .ai-result.error { background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); color: #fecaca; }
+</style>
