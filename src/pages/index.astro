@@ -35,20 +35,24 @@ const queryParam = (Astro.url.searchParams.get('q') ?? '').trim();
 const queryTerm = queryParam.toLowerCase();
 
 const categoryMatches = (product: typeof allProducts[number], slug: string) => {
-  // 1) Si el producto tiene category_id, verificar que coincida con la categoría activa
+  // 1) Si el producto tiene category_id, verificar que coincida con el ID de la categoría activa
   if (product.category_id) {
     const cat = getCategoryById(product.category_id);
-    if (cat && cat.slug === slug) return true;
+    if (cat && (cat.id === slug || cat.slug === slug)) return true;
   }
   // 2) Si el producto tiene subcategory_id, verificar que su padre sea la categoría activa
   if (product.subcategory_id) {
     const sub = getCategoryById(product.subcategory_id);
     if (sub && sub.parentId) {
       const parent = getCategoryById(sub.parentId);
-      if (parent && parent.slug === slug) return true;
+      if (parent && (parent.id === slug || parent.slug === slug)) return true;
     }
   }
-  // 3) Comparar por nombre de categoría (método original, como fallback)
+  // 3) Comparar por nombre normalizado de categoría (fallback para productos sin category_id)
+  const productCatName = String(product.category || '').trim().toLowerCase();
+  const targetCat = getCategoryById(slug);
+  if (targetCat && productCatName === targetCat.name.toLowerCase()) return true;
+  // 4) Comparar por nombre de categoría directo (método original)
   const productCat = getCategoryById(String(product.category || ''));
   if (productCat && productCat.slug === slug) return true;
   return false;
