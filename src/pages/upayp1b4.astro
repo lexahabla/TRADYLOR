@@ -759,15 +759,14 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                Selección (contador + Catálogo + Limpiar) va justo después, y se
                preserva en cada repintado igual que el botón de Limpiar filtros. -->
           <div id="prodRangeFields" class="ali-range-fields">
-            <button type="button" id="prodFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
-            <span id="productSelCount">0 seleccionados</span>
-            <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll" title="Seleccionar todo el catálogo completo">Catálogo</button>
-            <button type="button" class="btn-secondary btn-sm" id="btnProdSelClear" title="Vacía la selección actual de productos">Limpiar</button>
+            <!-- prodFReset, productSelCount y btnProdSelAll se movieron a la
+                 fila de Cat/Redes/SubCat/Redes más abajo. Este contenedor
+                 queda vacío para mantener el <br> de salto de línea. -->
           </div>
 
-          <!-- Fila propia, debajo del botón «Limpiar filtros» (el <br> fuerza el
-               salto dentro del flex-wrap, ver ".ali-filters-row > br" más abajo,
-               mismo truco que usa Importar para su fila de presets). -->
+          <!-- Fila propia: Cat/Redes, SubCat/Redes + controles de selección
+               y «Limpiar filtros» en la misma línea (el <br> fuerza el salto
+               dentro del flex-wrap). -->
           <br />
           <div class="filter-field ali-f-cat">
             <label for="prodFCatNetwork">Cat/Redes</label>
@@ -777,6 +776,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <label for="prodFSubcatNetwork">SubCat/Redes</label>
             <select id="prodFSubcatNetwork" disabled title="Subcategoría de la opción elegida en «Cat/Redes», acotada a los productos de esa red"><option value="">Todas</option></select>
           </div>
+          <button type="button" id="prodFReset" class="btn-secondary btn-sm ali-f-reset">Limpiar filtros</button>
+          <span id="productSelCount">0 seleccionados</span>
+          <button type="button" class="btn-secondary btn-sm" id="btnProdSelAll" title="Seleccionar todo el catálogo completo">Catálogo</button>
         </div>
 
         <!-- Presets editoriales (filtros de 1 clic) - situado en la última fila dentro de div#prodFilters -->
@@ -9929,7 +9931,7 @@ function renderTableRows(products, resetPage = true) {
   :global(.aff-row) { cursor: pointer; }
   :global(.aff-row:hover) { background: rgba(96, 165, 250, .06); }
   :global(.aff-row.is-open) { background: rgba(96, 165, 250, .1); }
-  :global(.aff-thumb) { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 2px; background: #fff; border-radius: 6px; }
+  :global(.aff-thumb) { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 2px; background: #fff; border-radius: 6px; }
   :global(.aff-thumb img) { max-width: 100%; max-height: 100%; object-fit: contain; }
   :global(.aff-name) { max-width: 150px; min-width: 90px; }
   :global(.aff-name strong) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 650; font-size: .65rem; line-height: 1.3; }
@@ -9994,7 +9996,7 @@ function renderTableRows(products, resetPage = true) {
   .ali-preset-ico { font-size: .82rem; line-height: 1; }
 
   /* CAPA 2 · Controles principales + ordenación */
-  .ali-filters .filter-field.ali-f-cat { flex: 1 1 125px; min-width: 115px; }
+  .ali-filters .filter-field.ali-f-cat { flex: 1 1 85px; min-width: 80px; }
   .ali-filters .filter-field.ali-f-state { flex: 0 1 108px; min-width: 104px; }
   .ali-filters .filter-field.ali-f-network { flex: 1 1 150px; min-width: 130px; }
   .ali-filters .filter-field.ali-f-short { flex: 0 1 116px; min-width: 112px; }
@@ -11828,14 +11830,19 @@ function renderTableRows(products, resetPage = true) {
   :global(.products-table th:nth-child(12)),  /* Ventas */
   :global(.products-table th:nth-child(13))   /* Valoración */
   {
-    width: 55px;
-    max-width: 55px;
+    width: 85px;
+    max-width: 85px;
   }
 
   :global(.products-table th:nth-child(3)),   /* Producto */
   :global(.products-table th:nth-child(4))    /* Categoría */
   {
-    min-width: 110px;
+    min-width: 130px;
+  }
+
+  :global(.products-table th) {
+    white-space: normal;
+    padding: .45rem .35rem;
   }
 
   :global(.products-table th) {
