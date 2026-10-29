@@ -1,7 +1,11 @@
 ---
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import AdminNav from '../../components/AdminNav.astro';
+import AdminUserMenu from '../../components/AdminUserMenu.astro';
 import { requireAdminAuth, getSessionUser } from '../../lib/adminAuth';
 import { toPublicUser } from '../../lib/userStore';
-import AdminNav from '../../components/AdminNav.astro';
 
 const unauthorizedResponse = requireAdminAuth(Astro.request);
 if (unauthorizedResponse) return unauthorizedResponse;
@@ -10,42 +14,51 @@ const sessionUser = getSessionUser(Astro.request);
 const user = sessionUser ? toPublicUser(sessionUser) : null;
 ---
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Amazon (JSON) · Catálogo · Tradylor Admin</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-</head>
-<body>
-  <AdminNav context="catalogo" active="amazon-import" user={user} />
+<Layout title="Amazon (JSON) · Catálogo · Tradylor Admin" description="Importa productos de Amazon desde un JSON crudo de ScraperAPI al catálogo.">
+  <Fragment slot="header-end">
+    {user && <AdminUserMenu user={user} active="amazon-import" />}
+  </Fragment>
 
-  <main class="ai-wrap">
-    <h1>Importar producto Amazon desde JSON (ScraperAPI)</h1>
+  <div class="admin-wrapper">
+    <AdminNav context="catalogo" active="amazon-import" user={user} />
 
-    <div class="ai-card">
-      <label class="ai-label">ASIN de Amazon (10 caracteres)</label>
-      <input type="text" id="asinInput" placeholder="Ej: B01EXDG2MO" maxlength="20" />
-      <p class="ai-hint">Puedes pegar aquí el ASIN o una URL completa de Amazon; se extraerá automáticamente.</p>
-    </div>
+    <section data-admin-view="amazon-import" class:list={['admin-card', 'hidden-section', { 'is-visible': true }]}>
+      <div class="card-header card-header-toggle">
+        <div class="header-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+          </svg>
+        </div>
+        <div>
+          <h2 class="card-title">Amazon (JSON)</h2>
+          <p class="card-desc">Pega el JSON crudo de ScraperAPI y el ASIN para importar el producto al catálogo sin pasar por el servidor de ScraperAPI.</p>
+        </div>
+      </div>
 
-    <div class="ai-card">
-      <label class="ai-label">JSON crudo de ScraperAPI</label>
-      <textarea id="jsonInput" placeholder='Pega aquí el objeto JSON completo devuelto por ScraperAPI...'></textarea>
-      <p class="ai-hint">Consíguelo desde otro sitio donde ScraperAPI funcione (tu PC local, etc.) y pégalo aquí. Tradylor lo normalizará y guardará en el catálogo.</p>
-    </div>
+      <form id="amazonImportForm" style="display: grid; gap: 1rem; max-width: 900px;">
+        <div>
+          <label class="field-label">ASIN de Amazon (10 caracteres)</label>
+          <input type="text" id="asinInput" placeholder="Ej: B01EXDG2MO" maxlength="20" />
+          <p class="label-hint">Puedes pegar el ASIN o una URL completa de Amazon.</p>
+        </div>
 
-    <div class="ai-row">
-      <label class="ai-checkbox">
-        <input type="checkbox" id="saveCheckbox" checked /> Guardar en el catálogo (desmarca para solo vista previa)
-      </label>
-    </div>
+        <div>
+          <label class="field-label">JSON crudo de ScraperAPI</label>
+          <textarea id="jsonInput" placeholder='Pega aquí el objeto JSON completo...' style="width:100%; min-height: 260px; font-family: ui-monospace; background:#0b1220; border:1px solid #374151; color:#e5e7eb; border-radius:8px; padding:.6rem .8rem;"></textarea>
+          <p class="label-hint">Obtén el JSON desde otro sitio donde ScraperAPI funcione y pégalo aquí.</p>
+        </div>
 
-    <button class="ai-btn" id="importBtn">Importar producto</button>
+        <div class="checkbox-row">
+          <input type="checkbox" id="saveCheckbox" checked />
+          <label for="saveCheckbox">Guardar en el catálogo (desmarca para solo vista previa)</label>
+        </div>
 
-    <div id="resultBox" class="ai-result"></div>
-  </main>
+        <button type="button" id="importBtn" class="btn-primary">Importar producto</button>
+      </form>
+
+      <div id="resultBox" style="margin-top:1rem; padding:1rem; border-radius:8px; display:none;"></div>
+    </section>
+  </div>
 
   <script is:inline>
     (function () {
@@ -60,22 +73,11 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
         var rawText = jsonInput.value.trim();
         var save = saveCheckbox.checked;
 
-        if (!asin) {
-          showResult('error', 'Debes proporcionar un ASIN.');
-          return;
-        }
-        if (!rawText) {
-          showResult('error', 'Debes pegar el JSON crudo de ScraperAPI.');
-          return;
-        }
+        if (!asin) { showResult('error', 'Debes proporcionar un ASIN.'); return; }
+        if (!rawText) { showResult('error', 'Debes pegar el JSON crudo de ScraperAPI.'); return; }
 
         var raw;
-        try {
-          raw = JSON.parse(rawText);
-        } catch (e) {
-          showResult('error', 'El JSON no es válido: ' + e.message);
-          return;
-        }
+        try { raw = JSON.parse(rawText); } catch (e) { showResult('error', 'JSON inválido: ' + e.message); return; }
 
         importBtn.disabled = true;
         importBtn.textContent = 'Importando...';
@@ -84,26 +86,19 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
         fetch('/api/admin/amazon/import-json', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            asin: asin,
-            raw: raw,
-            options: { save: save, imageOnlyIfMissing: true }
-          })
+          body: JSON.stringify({ asin: asin, raw: raw, options: { save: save, imageOnlyIfMissing: true } })
         })
         .then(function (r) { return r.json(); })
         .then(function (data) {
           if (data.success) {
-            showResult('ok', 'Éxito: ' + data.message + (data.saved ? '' : ' (no guardado).') + '\nASIN: ' + data.asin);
-            if (data.warnings && data.warnings.length) {
-              showResult('ok', 'Éxito: ' + data.message + '\n\nAvisos:\n• ' + data.warnings.join('\n• '));
-            }
+            var msg = 'Éxito: ' + data.message + '\nASIN: ' + data.asin;
+            if (data.warnings && data.warnings.length) msg += '\n\nAvisos:\n• ' + data.warnings.join('\n• ');
+            showResult('ok', msg);
           } else {
             showResult('error', 'Error: ' + (data.message || 'Error desconocido'));
           }
         })
-        .catch(function (err) {
-          showResult('error', 'Error de red: ' + err.message);
-        })
+        .catch(function (err) { showResult('error', 'Error de red: ' + err.message); })
         .finally(function () {
           importBtn.disabled = false;
           importBtn.textContent = 'Importar producto';
@@ -119,23 +114,23 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
   </script>
 
   <style>
-    .ai-wrap { max-width: 900px; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #e5e7eb; }
-    .ai-wrap h1 { font-size: 1.25rem; margin: 0 0 1.5rem; color: #60a5fa; }
-    .ai-card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
-    .ai-label { display: block; font-size: 0.85rem; color: #9ca3af; margin-bottom: 0.4rem; font-weight: 600; }
-    input[type="text"], textarea { width: 100%; background: #0b1220; border: 1px solid #374151; border-radius: 8px; color: #e5e7eb; padding: 0.6rem 0.8rem; font-size: 0.9rem; }
-    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; min-height: 320px; resize: vertical; }
-    .ai-row { margin-bottom: 1rem; }
-    .ai-checkbox { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: #e5e7eb; cursor: pointer; }
-    .ai-checkbox input { width: auto; margin: 0; }
-    .ai-btn { background: #38bdf8; color: #07111f; border: none; border-radius: 8px; padding: 0.6rem 1.25rem; font-weight: 800; cursor: pointer; font-size: 0.95rem; }
-    .ai-btn:disabled { opacity: .6; cursor: not-allowed; }
-    .ai-btn:hover:not(:disabled) { background: #7dd3fc; }
-    .ai-result { margin-top: 1.5rem; padding: 1rem; border-radius: 8px; display: none; }
+    .admin-wrapper { max-width: var(--max-width, 1200px); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+    .admin-card { background: var(--color-bg-card, #111827); border: 1px solid var(--color-border, #1f2937); border-radius: var(--border-radius-lg, 12px); padding: 2rem; }
+    .card-header { display: flex; align-items: center; gap: .75rem; margin-bottom: 1rem; }
+    .header-icon { width: 32px; height: 32px; color: #60a5fa; }
+    .card-title { margin: 0; font-size: 1.1rem; color: var(--color-text-main, #f3f4f6); }
+    .card-desc { margin: .25rem 0 0; color: var(--color-text-muted, #9ca3af); font-size: .85rem; }
+    .field-label { display: block; font-size: .85rem; color: var(--color-text-muted); font-weight: 600; margin-bottom: .4rem; }
+    .label-hint { font-size: .78rem; color: #6b7280; margin-top: .25rem; }
+    input[type="text"], textarea { width: 100%; background: #0b1220; border: 1px solid #374151; border-radius: 8px; color: #e5e7eb; padding: .6rem .8rem; font-size: .9rem; box-sizing: border-box; }
+    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; resize: vertical; }
+    .checkbox-row { display: flex; align-items: center; gap: .5rem; margin-top: .5rem; }
+    .checkbox-row input { width: auto; margin: 0; }
+    .btn-primary { background: #38bdf8; color: #07111f; border: none; border-radius: 8px; padding: .6rem 1.25rem; font-weight: 800; cursor: pointer; font-size: .95rem; margin-top: .5rem; }
+    .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-primary:hover:not(:disabled) { background: #7dd3fc; }
+    .ai-result { margin-top: 1rem; padding: 1rem; border-radius: 8px; display: none; }
     .ai-result.ok { background: rgba(16, 185, 129, .12); border: 1px solid rgba(16, 185, 129, .3); color: #a7f3d0; }
-    .ai-result.err { background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); color: #fecaca; }
-    .ai-result pre { margin: .5rem 0 0; font-size: .8rem; overflow: auto; max-height: 300px; white-space: pre-wrap; word-break: break-word; }
-    .ai-hint { font-size: .78rem; color: #6b7280; margin-top: .25rem; }
+    .ai-result.error { background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); color: #fecaca; }
   </style>
-</body>
-</html>
+</Layout>
