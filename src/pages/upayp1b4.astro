@@ -11816,6 +11816,26 @@ function renderTableRows(products, resetPage = true) {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.8rem;
+    table-layout: fixed;
+  }
+
+  :global(.products-table th:nth-child(6)),   /* Estado */
+  :global(.products-table th:nth-child(7)),   /* Precio */
+  :global(.products-table th:nth-child(8)),   /* Precio orig. */
+  :global(.products-table th:nth-child(9)),   /* Dto. */
+  :global(.products-table th:nth-child(10)),  /* Comisión % */
+  :global(.products-table th:nth-child(11)),  /* Comisión € */
+  :global(.products-table th:nth-child(12)),  /* Ventas */
+  :global(.products-table th:nth-child(13))   /* Valoración */
+  {
+    width: 55px;
+    max-width: 55px;
+  }
+
+  :global(.products-table th:nth-child(3)),   /* Producto */
+  :global(.products-table th:nth-child(4))    /* Categoría */
+  {
+    min-width: 110px;
   }
 
   :global(.products-table th) {
