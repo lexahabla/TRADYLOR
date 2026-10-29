@@ -11877,6 +11877,66 @@ function renderTableRows(products, resetPage = true) {
     max-width: 110px;
   }
 
+  /* ── Tabla de catálogo (productsTable): anchos de columna ajustados ──
+     Sobrescribe las reglas nth-child genéricas de .products-table (escritas
+     para la tabla de importación de 12 columnas) solo para #productsTable. */
+  :global(#productsTable.products-table th:nth-child(1)),   /* Checkbox */
+  :global(#productsTable.products-table td.col-check) {
+    width: 26px;
+    max-width: 26px;
+    padding: 0.6rem 0;           /* solo el checkbox, sin margen lateral extra */
+    text-align: center;
+  }
+
+  :global(#productsTable.products-table th:nth-child(2)),   /* Imagen (ancho del th) */
+  :global(#productsTable.products-table td.col-thumb) {
+    width: 52px;
+    max-width: 52px;
+    padding: 0.6rem 0.25rem;
+  }
+
+  :global(#productsTable.products-table th:nth-child(3)),   /* Producto / Título (más ancho) */
+  :global(#productsTable.products-table td.col-details) {
+    min-width: 260px;            /* ocupa el espacio restante */
+  }
+
+  :global(#productsTable.products-table th:nth-child(4)),   /* Comercio */
+  :global(#productsTable.products-table td.col-merchant) {
+    width: 100px;
+    max-width: 100px;
+  }
+
+  :global(#productsTable.products-table th:nth-child(5)),   /* Estado (ancho del th) */
+  :global(#productsTable.products-table td.col-condition) {
+    width: 60px;
+    max-width: 60px;
+  }
+
+  :global(#productsTable.products-table th:nth-child(6)),   /* Precio */
+  :global(#productsTable.products-table td.col-price) {
+    width: 82px;
+    max-width: 82px;
+  }
+
+  :global(#productsTable.products-table th:nth-child(7)),   /* Score */
+  :global(#productsTable.products-table td.col-score) {
+    width: 70px;
+    max-width: 70px;
+  }
+
+  :global(#productsTable.products-table th:nth-child(8)),   /* Enlace Afiliado */
+  :global(#productsTable.products-table td.col-link) {
+    width: 110px;
+    max-width: 110px;
+  }
+
+  :global(#productsTable.products-table th:nth-child(9)),   /* Acciones */
+  :global(#productsTable.products-table td.col-actions) {
+    width: 92px;
+    max-width: 92px;
+    white-space: nowrap;
+  }
+
   :global(.products-table th) {
     white-space: normal;
     padding: .45rem .35rem;
