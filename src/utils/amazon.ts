@@ -132,3 +132,20 @@ export function extractAsinFromUrl(url: string): string {
   return match ? match[1].toUpperCase() : '';
 }
 
+/**
+ * Extrae el ASIN de una URL de Amazon O valida un ASIN recibido directamente.
+ * Devuelve el ASIN normalizado (10 caracteres alfanuméricos, mayúsculas) o
+ * lanza un error descriptivo si no se puede obtener uno válido.
+ *
+ * @param input  URL completa de Amazon o un ASIN directo (10 chars).
+ * @returns      ASIN normalizado y validado.
+ */
+export function extractOrValidateAsin(input: string): string {
+  const trimmed = String(input ?? '').trim();
+  if (!trimmed) throw new Error('No se proporcionó una URL ni un ASIN de Amazon.');
+  if (isValidAsin(trimmed)) return sanitizeAsin(trimmed);
+  const extracted = extractAsinFromUrl(trimmed);
+  if (extracted) return extracted;
+  throw new Error(`No se pudo extraer un ASIN válido de: ${trimmed}`);
+}
+
