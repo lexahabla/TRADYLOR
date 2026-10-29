@@ -101,6 +101,7 @@ export interface NormalizedAmazonProduct {
   network?: string;
   raw?: AmazonScrapedProduct;
   extra?: Record<string, unknown>;
+  videos?: string[];
 }
 
 /** Opciones del pipeline de importación. */
@@ -312,17 +313,31 @@ export function normalizeScrapedAmazonData(
 
   const image = String(raw.image || '').trim();
   const allImages: string[] = [];
-  if (Array.isArray(raw.high_res_images)) {
-    allImages.push(...raw.high_res_images.filter((u: unknown) => /^https?:\/\//i.test(String(u))));
-  }
-  if (Array.isArray(raw.images)) {
-    for (const u of raw.images) {
-      const s = String(u);
-      if (/^https?:\/\//i.test(s) && !allImages.includes(s)) allImages.push(s);
-    }
-  }
-  if (image && !allImages.includes(image)) allImages.unshift(image);
-  const gallery = allImages;
+  const seen = new Set<string>();
+  const addImage = (u: unknown) => {
+    const s = String(u || '').trim();
+    if (!s || !/^https?:\/\//i.test(s)) return;
+    if (/sprite|icon|logo|spacer|blank|pixel|transparent|1x1/i.test(s)) return;
+    if (seen.has(s)) return;
+    seen.add(s);
+    allImages.push(s);
+  };
+  if (Array.isArray(raw.high_res_images)) raw.high_res_images.forEach(addImage);
+  if (Array.isArray(raw.images)) raw.images.forEach(addImage);
+  if (image && !seen.has(image)) allImages.unshift(image);
+  const gallery = allImages.slice(0, 8);
+
+  const videos: string[] = [];
+  const seenV = new Set<string>();
+  const addVideo = (u: unknown) => {
+    const s = String(u || '').trim();
+    if (!s || !/^https?:\/\//i.test(s)) return;
+    if (seenV.has(s)) return;
+    seenV.add(s);
+    videos.push(s);
+  };
+  if (Array.isArray(raw.videos)) raw.videos.forEach(addVideo);
+  if (raw.video_urls && Array.isArray(raw.video_urls)) raw.video_urls.forEach(addVideo);
 
   const specs =
     (raw.specifications || raw.specs || raw.product_information || {}) as Record<string, string>;
@@ -387,11 +402,13 @@ export function normalizeScrapedAmazonData(
     sourceId: asin,
     network: 'amazon',
     raw,
+    videos: videos.length ? videos : undefined,
     extra: {
       fulfillmentProvider,
       pros,
       cons,
       sourceDescription: description,
+      ...(videos.length ? { videos } : {}),
     },
   };
 }
