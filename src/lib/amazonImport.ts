@@ -131,22 +131,141 @@ export interface ImportAmazonResult {
    ─────────────────────────────────────────────────────────────────────────── */
 
 /**
+ * Espera un tiempo dado en milisegundos (útil para backoff entre reintentos).
+ */
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Detecta si el cuerpo de una respuesta es una página HTML de bloqueo/captcha
+ * en lugar del JSON estructurado de ScraperAPI.
+ */
+function looksLikeBlockPage(body: string): boolean {
+  const trimmed = body.trim();
+  if (!trimmed) return false;
+  // Si empieza con <!DOCTYPE o <html, es casi seguro una página HTML.
+  if (/^\s*<!DOCTYPE\s/i.test(trimmed) || /^\s*<html\b/i.test(trimmed)) {
+    return true;
+  }
+  // Títulos típicos de páginas de bloqueo/captcha de Amazon/ScraperAPI.
+  const blockSignals = [
+    'captcha',
+    'access denied',
+    'blocked',
+    'robot check',
+    'unusual traffic',
+    'api key invalid',
+    'invalid api key',
+    'rate limit',
+    'quota exceeded',
+    'service unavailable',
+    'temporarily unavailable',
+  ];
+  const lower = trimmed.toLowerCase();
+  return blockSignals.some((s) => lower.includes(s));
+}
+
+/**
  * Llama a la API estructurada de Amazon de ScraperAPI para un ASIN concreto
  * (región España). Requiere la variable de entorno SCRAPER_API_KEY.
+ *
+ * Incluye reintentos con backoff exponencial (máx. 3 intentos) para absorber
+ * bloqueos temporales (HTTP 503, página de captcha/bloqueo de Amazon) y
+ * errores de red transitorios. Si ScraperAPI devuelve HTML en lugar de JSON
+ * (página de bloqueo), se detecta y se informa con un mensaje claro.
  */
-export async function scrapeAmazonProduct(asin: string): Promise<AmazonScrapedProduct> {
+export async function scrapeAmazonProduct(
+  asin: string,
+  opts: { maxRetries?: number; retryDelayMs?: number } = {},
+): Promise<AmazonScrapedProduct> {
   if (!SCRAPER_API_KEY) {
     throw new Error(
       'Falta la variable de entorno SCRAPER_API_KEY para consumir ScraperAPI.',
     );
   }
+  const maxRetries = opts.maxRetries ?? 3;
+  const retryDelayMs = opts.retryDelayMs ?? 2000;
+
   const url = `${SCRAPER_API_BASE}?api_key=${encodeURIComponent(SCRAPER_API_KEY)}&asin=${encodeURIComponent(asin)}&country_code=es`;
-  const response = await fetch(url);
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`ScraperAPI respondió ${response.status}: ${text.slice(0, 200)}`);
+
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          // User-Agent de navegador para reducir la probabilidad de que Amazon
+          // devuelva una página de captcha/bloqueo a través de ScraperAPI.
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36',
+        },
+      });
+
+      const text = await response.text();
+
+      // ── Éxito: intentamos parsear JSON ──
+      if (response.ok) {
+        try {
+          return JSON.parse(text) as AmazonScrapedProduct;
+        } catch {
+          // La respuesta tiene HTTP 200 pero no es JSON: puede ser una página
+          // de bloqueo/captcha de Amazon envuelta por ScraperAPI.
+          if (looksLikeBlockPage(text)) {
+            const snippet = text.slice(0, 120).replace(/\s+/g, ' ');
+            throw new Error(
+              `ScraperAPI devolvió una página de bloqueo/captcha (no JSON) en el intento ${attempt}/${maxRetries}: "${snippet}". Posible IP bloqueada o captcha de Amazon.`,
+            );
+          }
+          throw new Error(
+            `ScraperAPI respondió ${response.status} con contenido no JSON (${text.length} bytes): ${text.slice(0, 200)}`,
+          );
+        }
+      }
+
+      // ── Errores de HTTP ──
+      const isRetryable =
+        response.status === 429 ||
+        response.status === 502 ||
+        response.status === 503 ||
+        response.status === 504;
+
+      // Clasificamos el error para dar un mensaje útil.
+      let reason = `ScraperAPI respondió ${response.status}`;
+      const lower = text.toLowerCase();
+      if (lower.includes('invalid api key') || lower.includes('api key invalid')) {
+        reason += ' (clave de API inválida — revisa SCRAPER_API_KEY)';
+      } else if (lower.includes('quota exceeded') || lower.includes('rate limit')) {
+        reason += ' (cuota/límite de peticiones agotado)';
+      } else if (lower.includes('blocked') || looksLikeBlockPage(text)) {
+        reason += ' (IP bloqueada o página de captcha de Amazon)';
+      } else if (response.status === 503) {
+        reason += ' (servicio no disponible temporalmente)';
+      }
+      reason += `: ${text.slice(0, 200)}`;
+
+      lastError = new Error(reason);
+
+      // Si no es reintentoable o ya agotamos los intentos, lanzamos.
+      if (!isRetryable || attempt === maxRetries) {
+        throw lastError;
+      }
+    } catch (error: any) {
+      lastError = error;
+      const msg = error instanceof Error ? error.message : String(error);
+      // Si ya es un error de bloqueo claro, no reintentamos.
+      if (/bloqueo|captcha|clave de API inválida|cuota\/límite/.test(msg)) {
+        throw error;
+      }
+      if (attempt === maxRetries) {
+        throw error;
+      }
+    }
+
+    // Backoff exponencial: 2s, 4s, 8s…
+    await sleepMs(retryDelayMs * 2 ** (attempt - 1));
   }
-  return (await response.json()) as AmazonScrapedProduct;
+
+  throw lastError ?? new Error('ScraperAPI falló sin devolver error detectable.');
 }
 
 /* ───────────────────────────────────────────────────────────────────────────
