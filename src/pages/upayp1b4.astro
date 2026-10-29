@@ -9922,7 +9922,7 @@ function renderTableRows(products, resetPage = true) {
   :global(.aff-table) { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .7rem; background: rgba(255, 255, 255, .02); table-layout: auto; }
   :global(.aff-table th) { position: sticky; top: 0; z-index: 1; padding: .35rem .4rem; text-align: left; font-size: .52rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-muted); background: #121826; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
   :global(.aff-table td) { padding: .3rem .4rem; color: var(--color-text-main); border-bottom: 1px solid rgba(255, 255, 255, .05); vertical-align: middle; }
-  :global(.aff-num) { text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .7rem; }
+  :global(.aff-num) { text-align: center; font-variant-numeric: tabular-nums; white-space: normal; font-size: .7rem; }
   :global(.aff-num small) { display: block; color: #6ee7b7; font-size: .62rem; }
   :global(.aff-row) { cursor: pointer; }
   :global(.aff-row:hover) { background: rgba(96, 165, 250, .06); }
@@ -9932,7 +9932,7 @@ function renderTableRows(products, resetPage = true) {
   :global(.aff-name) { min-width: 200px; max-width: 300px; }
   :global(.aff-name strong) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 650; font-size: .65rem; line-height: 1.3; }
   :global(.aff-name span) { display: block; margin-top: .1rem; color: var(--color-text-dim); font-size: .55rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  :global(.aff-actions) { display: flex; align-items: center; justify-content: flex-end; gap: .3rem; white-space: nowrap; }
+  :global(.aff-actions) { display: flex; align-items: center; justify-content: center; gap: .2rem; white-space: normal; }
   :global(.aff-actions .btn-sm) { padding: .2rem .4rem; font-size: .6rem; }
   :global(.aff-caret) { width: 24px; height: 24px; color: #93c5fd; background: rgba(96, 165, 250, .1); border: 1px solid rgba(96, 165, 250, .25); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-body); font-size: .7rem; font-weight: 700; transition: all .2s ease; }
   :global(.aff-row.is-open .aff-caret) { transform: rotate(90deg); }
@@ -11824,22 +11824,27 @@ function renderTableRows(products, resetPage = true) {
   :global(.products-table th:nth-child(8)),   /* Comisión % */
   :global(.products-table th:nth-child(9)),   /* Comisión € */
   :global(.products-table th:nth-child(10)),  /* Ventas */
+  {
+    width: 65px;
+    max-width: 65px;
+  }
+
   :global(.products-table th:nth-child(11))   /* Valoración */
   {
-    width: 75px;
-    max-width: 75px;
+    width: 95px;
+    max-width: 95px;
   }
 
   :global(.products-table th:nth-child(3)),   /* Producto */
   {
-    min-width: 220px;
+    min-width: 200px;
     max-width: 260px;
   }
 
   :global(.products-table th:nth-child(12))   /* Acciones */
   {
-    width: 60px;
-    max-width: 60px;
+    width: 90px;
+    max-width: 90px;
   }
 
   :global(.products-table th) {
