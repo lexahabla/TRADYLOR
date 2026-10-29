@@ -25,6 +25,7 @@ import { productSchema } from '../content.config';
 import { safeValidate } from './validateProducts';
 import { readJsonArrayFile, writeJsonArrayFile } from './jsonStore';
 import { dataFile } from './paths';
+import { invalidateCatalogCache } from './catalog';
 import {
   extractOrValidateAsin,
   isValidAsin,
@@ -620,6 +621,10 @@ export function upsertAmazonProductByAsin(
   if (!writeJsonArrayFile(DATA_FILE_PATH, products)) {
     throw new Error('Error de escritura en el servidor de archivos.');
   }
+
+  // Invalidar el caché en memoria del catálogo para que getCatalogProducts()
+  // devuelva los datos recién escritos en la próxima lectura.
+  invalidateCatalogCache();
 
   return { product, updated, asin };
 }

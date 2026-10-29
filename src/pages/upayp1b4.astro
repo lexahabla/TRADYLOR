@@ -2068,6 +2068,11 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
 <script is:inline>
   // Inicialización de estado y elementos DOM
   document.addEventListener('DOMContentLoaded', () => {
+    // Flag compartido: evita peticiones concurrentes al servidor al cambiar
+    // filtros de la tabla de productos. Se usa en reloadProductsTable() y
+    // prodFilterApply() para no lanzar dos fetch simultáneos.
+    let productRefreshInFlight = false;
+
     // Inputs
     const inputScrapeUrl = document.getElementById('inputScrapeUrl');
     const btnScrape = document.getElementById('btnScrape');
@@ -3325,6 +3330,9 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
     // 4. ELIMINAR Y EDITAR PRODUCTOS DE LA TABLA
     // =========================================================================
      async function reloadProductsTable() {
+      // Marcar que hay un refresh en curso para evitar doble fetch
+      // cuando prodFilterApply() se invoque al final de esta misma función.
+      productRefreshInFlight = true;
       try {
         const res = await fetch('/api/products/add');
         const data = await res.json();
@@ -3943,7 +3951,11 @@ function renderTableRows(products, resetPage = true) {
       return product.image ? 1 : 0;
     }
 
-    function prodFilterApply() {
+    /**
+     * Lógica de filtrado y ordenado sobre `currentProducts` (ya en memoria).
+     * No hace fetch: asume que currentProducts está actualizado.
+     */
+    function runProdFilterApply() {
       const q = (inputFilterList?.value || '').trim().toLowerCase();
       const cat = prodFCat?.value || '';
       const subcatId = prodSubcatFilter?.value || '';
@@ -4055,6 +4067,41 @@ function renderTableRows(products, resetPage = true) {
       // de src/lib/catalogSort.ts (este script is:inline no puede importarla).
       const diversified = ['precio_desc', 'precio_asc', 'publicados', 'nombre', 'categoria', 'comercio', 'default'].includes(sortKey) ? filtered : applyCatalogDiversity(filtered);
       renderTableRows(diversified);
+    }
+
+    /**
+     * Wrapper de prodFilterApply que, antes de filtrar, refresca los datos
+     * del servidor (/api/products/add) para que la tabla siempre muestre el
+     * catálogo más reciente sin cambiar de pantalla ni de sección.
+     * Evita peticiones concurrentes mediante productRefreshInFlight.
+     */
+    function prodFilterApply() {
+      if (productRefreshInFlight) {
+        // Ya hay un refresh en curso (p. ej. desde reloadProductsTable):
+        // solo filtramos con los datos actuales y salimos.
+        runProdFilterApply();
+        return;
+      }
+      productRefreshInFlight = true;
+      fetch('/api/products/add')
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.success && Array.isArray(data.products)) {
+            currentProducts = data.products;
+            aliInvalidateEstado();
+            prodBuildRanges();
+            syncNetworkFilter();
+            syncCatNetworkFilter();
+            syncSubcatNetworkFilter();
+          }
+        })
+        .catch(function (err) {
+          console.error('Error al refrescar productos desde el servidor:', err);
+        })
+        .finally(function () {
+          productRefreshInFlight = false;
+          runProdFilterApply();
+        });
     }
 
     // ─── Paginación del catálogo de productos ─────────────────────────────────

@@ -57,6 +57,7 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
         </div>
 
         <button type="button" id="importBtn" class="btn-primary">Importar producto</button>
+        <button type="button" id="clearCacheBtn" class="btn-secondary" style="margin-left:.5rem;">Limpiar caché y actualizar catálogo</button>
       </form>
 
       <div id="resultBox" style="margin-top:1rem; padding:1rem; border-radius:8px; display:none;"></div>
@@ -69,6 +70,7 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
       var jsonInput = document.getElementById('jsonInput');
       var saveCheckbox = document.getElementById('saveCheckbox');
       var importBtn = document.getElementById('importBtn');
+      var clearCacheBtn = document.getElementById('clearCacheBtn');
       var resultBox = document.getElementById('resultBox');
       var fetchBtn = document.getElementById('btnFetchJson');
 
@@ -119,6 +121,11 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
             var msg = 'Éxito: ' + data.message + '\nASIN: ' + data.asin;
             if (data.warnings && data.warnings.length) msg += '\n\nAvisos:\n• ' + data.warnings.join('\n• ');
             showResult('ok', msg);
+            // Invalidar caché del catálogo para que el panel vea los datos frescos.
+            fetch('/api/admin/catalog/clear-cache', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+            }).catch(function () { /* no crítico: el usuario puede limpiar manualmente */ });
           } else {
             showResult('error', 'Error: ' + (data.message || 'Error desconocido'));
           }
@@ -128,6 +135,30 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
           importBtn.disabled = false;
           importBtn.textContent = 'Importar producto';
         });
+      });
+
+      // Botón: limpiar caché del catálogo y forzar refresco de datos.
+      clearCacheBtn.addEventListener('click', function () {
+        clearCacheBtn.disabled = true;
+        clearCacheBtn.textContent = 'Limpiando...';
+        resultBox.style.display = 'none';
+        fetch('/api/admin/catalog/clear-cache', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (data.success) {
+              showResult('ok', 'Caché del catálogo invalidado. Los datos se actualizarán en la próxima carga de la tabla.');
+            } else {
+              showResult('error', 'Error al limpiar caché: ' + (data.message || 'desconocido'));
+            }
+          })
+          .catch(function (err) { showResult('error', 'Error de red al limpiar caché: ' + err.message); })
+          .finally(function () {
+            clearCacheBtn.disabled = false;
+            clearCacheBtn.textContent = 'Limpiar caché y actualizar catálogo';
+          });
       });
 
       function showResult(type, text) {
@@ -153,6 +184,9 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
     .checkbox-row input { width: auto; margin: 0; }
     .btn-primary { background: #38bdf8; color: #07111f; border: none; border-radius: 8px; padding: .6rem 1.25rem; font-weight: 800; cursor: pointer; font-size: .95rem; margin-top: .5rem; }
     .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-secondary { background: #6b7280; color: #fff; border: none; border-radius: 8px; padding: .6rem 1.25rem; font-weight: 800; cursor: pointer; font-size: .9rem; margin-top: .5rem; }
+    .btn-secondary:disabled { opacity: .6; cursor: not-allowed; }
+    .btn-secondary:hover:not(:disabled) { background: #4b5563; }
     .btn-primary:hover:not(:disabled) { background: #7dd3fc; }
     .ai-result { margin-top: 1rem; padding: 1rem; border-radius: 8px; display: none; }
     .ai-result.ok { background: rgba(16, 185, 129, .12); border: 1px solid rgba(16, 185, 129, .3); color: #a7f3d0; }

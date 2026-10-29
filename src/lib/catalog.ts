@@ -141,6 +141,16 @@ export function getCatalogProducts(): Product[] {
  * Clave de ruta canónica de un producto: slug si existe (contrato n8n), id si no.
  * Se usa en /producto/[slug], /checkout/[id] y /api/redirect?id=.
  */
+/**
+ * Invalida el caché en memoria del catálogo (`catalogCache`). Se debe llamar
+ * después de cualquier escritura en `products.json` (alta, edición, borrado,
+ * importación JSON de Amazon, etc.) para que `getCatalogProducts()` devuelva
+ * los datos frescos en la próxima petición en lugar del snapshot en memoria.
+ */
+export function invalidateCatalogCache(): void {
+  catalogCache = null;
+}
+
 export function productKey(product: Product): string {
   return (product.slug && product.slug.trim()) || product.id;
 }
