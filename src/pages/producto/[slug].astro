@@ -335,50 +335,6 @@ const productSchema = {
         </div>
       </div>
 
-      <!-- Productos relacionados / variantes del mismo modelo (tipo Amazon: tarjetas con característica diferenciadora) -->
-      {(hasVariants || sameCategoryRelated.length > 0) ? (
-        <section class="variant-row-section container">
-          <div class="variant-row-header">
-            <span class="variant-row-tag">Otras versiones</span>
-            <h3 class="variant-row-title">Elige otra versión de este producto</h3>
-          </div>
-          <div class="variant-row-grid">
-            {variantProducts.map((p) => {
-              const feat = p.variantFeature ? p.variantFeature : '';
-              return (
-                <a href={`/producto/${encodeURIComponent(productKey(p))}`} class="variant-row-card alt-variant">
-                  <img
-                    src={p.image}
-                    alt={p.title}
-                    loading="lazy"
-                    width="140"
-                    height="140"
-                    class="variant-row-image"
-                  />
-                  <span class="variant-row-feat">{feat}</span>
-                  <span class="variant-row-price">{formatCurrency(p.price)}</span>
-                </a>
-              );
-            })}
-            {!hasVariants && sameCategoryRelated.map((p) => {
-              return (
-                <a href={`/producto/${encodeURIComponent(productKey(p))}`} class="variant-row-card alt-related">
-                  <img
-                    src={p.image}
-                    alt={p.title}
-                    loading="lazy"
-                    width="140"
-                    height="140"
-                    class="variant-row-image"
-                  />
-                  <span class="variant-row-price">{formatCurrency(p.price)}</span>
-                </a>
-              );
-            })}
-          </div>
-        </section>
-      ) : null}
-
       <!-- Columna derecha: Panel de información + CTA pegajoso -->
       <div class="product-info-panel">
 
