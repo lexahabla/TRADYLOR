@@ -35,6 +35,9 @@ const queryParam = (Astro.url.searchParams.get('q') ?? '').trim();
 const queryTerm = queryParam.toLowerCase();
 
 const categoryMatches = (product: typeof allProducts[number], slug: string) => {
+  // 0) Comparación directa: si el category_id del producto coincide con el slug, match
+  if (product.category_id && (product.category_id === slug || product.category_id.toLowerCase() === slug.toLowerCase())) return true;
+  if (product.subcategory_id && (product.subcategory_id === slug || product.subcategory_id.toLowerCase() === slug.toLowerCase())) return true;
   // 1) Si el producto tiene category_id, verificar que coincida con el ID de la categoría activa
   if (product.category_id) {
     const cat = getCategoryById(product.category_id);
