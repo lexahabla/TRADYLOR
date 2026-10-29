@@ -181,6 +181,19 @@ export function normalizeProductKey(value: string | null | undefined): string {
 }
 
 /**
+ * Detecta si una URL es un placeholder de Amazon (sin affiliate_url real de
+ * ScraperAPI). Cuando ScraperAPI no devuelve `affiliate_url`, el pipeline de
+ * importación genera `https://www.amazon.es/dp/B000000000?tag=tradylor-21`
+ * (con el ASIN placeholder B000000000). Todos los productos de Amazon sin
+ * URL real comparten esta misma URL normalizada, lo que provocaba falsos
+ * positivos de duplicado al editar cualquiera de ellos.
+ */
+export function isPlaceholderUrl(value: string | null | undefined): boolean {
+  const key = normalizeProductKey(value);
+  return /amazon\.es\/dp\/b000000000/i.test(key) || /amazon\.\w+\/dp\/b000000000/i.test(key);
+}
+
+/**
  * Busca en el catálogo un producto que YA exista y coincida con el candidato
  * por URL de afiliado/tienda o por título (normalizados). Sirve para no crear
  * filas repetidas en products.json.
@@ -200,15 +213,20 @@ export function findDuplicateProduct(
   const urls = new Set(
     (candidate.urls ?? [])
       .map((value) => normalizeProductKey(value))
-      .filter(Boolean),
+      .filter(Boolean)
+      // Excluir URLs placeholder de Amazon: no sirven para detectar duplicados
+      // porque todos los productos importados sin affiliate_url real las comparten.
+      .filter((key) => !isPlaceholderUrl(key)),
   );
   const titleKey = normalizeProductKey(candidate.title);
   if (!urls.size && !titleKey) return undefined;
 
   return products.find((item) => {
     if (ignored.has(item.id)) return false;
-    if (item.affiliateUrl && urls.has(normalizeProductKey(item.affiliateUrl))) return true;
-    if (item.buyNowUrl && urls.has(normalizeProductKey(item.buyNowUrl))) return true;
+    if (item.affiliateUrl && !isPlaceholderUrl(item.affiliateUrl) && urls.has(normalizeProductKey(item.affiliateUrl)))
+      return true;
+    if (item.buyNowUrl && !isPlaceholderUrl(item.buyNowUrl) && urls.has(normalizeProductKey(item.buyNowUrl)))
+      return true;
     return Boolean(titleKey) && titleKey === normalizeProductKey(item.title);
   });
 }

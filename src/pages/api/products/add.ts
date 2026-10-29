@@ -6,6 +6,7 @@ import {
   writeProductsToFile,
   slugify,
   findDuplicateProduct,
+  normalizeProductKey,
   type Product,
 } from '../../../lib/productStore';
 import { addDeletedId, removeDeletedId } from '../../../lib/deletedProducts';
@@ -1347,12 +1348,33 @@ export const POST: APIRoute = async ({ request }) => {
       // Duplicados: si OTRA fila del catálogo ya comparte URL de afiliado o
       // título (normalizados), no se crea una segunda copia. El propio id del
       // producto se ignora para no bloquear sus actualizaciones.
+      //
+      // Al editar, excluimos de la comprobación las URLs que el producto
+      // YA tiene guardadas (no son cambios → no deben bloquear). Esto es
+      // crítico para productos de Amazon importados desde JSON que, al no
+      // tener affiliate_url real de ScraperAPI, comparten el placeholder
+      // https://www.amazon.es/dp/B000000000?tag=tradylor-21 y, sin esta
+      // exclusión, cualquier producto de Amazon se considera duplicado de
+      // cualquier otro.
+      const existingUrls = existingProduct
+        ? [existingProduct.affiliateUrl, existingProduct.buyNowUrl]
+        : [];
+      const urlsToCheck = [dataToSave.affiliateUrl, dataToSave.buyNowUrl, (dataToSave as { url?: string }).url]
+        .map((u) => {
+          if (!u) return undefined;
+          const normalized = normalizeProductKey(u);
+          // Si el producto existente ya tiene esta URL normalizada, no es un cambio: excluir.
+          if (existingUrls.some((eu) => eu && normalizeProductKey(eu) === normalized)) return undefined;
+          return u;
+        })
+        .filter(Boolean);
+
       const duplicate = findDuplicateProduct(
         currentProducts,
         {
           id: productId,
           title: dataToSave.title,
-          urls: [dataToSave.affiliateUrl, dataToSave.buyNowUrl, (dataToSave as { url?: string }).url],
+          urls: urlsToCheck,
         },
         productId,
       );
