@@ -65,7 +65,7 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
 
       <div class="form-actions">
         <button type="button" id="importBtn" class="btn-primary">Importar producto</button>
-        <button type="button" id="clearCacheBtn" class="btn-secondary">Limpiar caché y actualizar catálogo</button>
+        <button type="button" id="clearCacheBtn" class="btn-secondary">Limpiar</button>
       </div>
     </form>
 
@@ -146,28 +146,13 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
       });
     });
 
-    // Botón: limpiar caché del catálogo y forzar refresco de datos.
+    // Botón Limpiar: recarga la página para actualizar el catálogo.
     clearCacheBtn.addEventListener('click', function () {
       clearCacheBtn.disabled = true;
       clearCacheBtn.textContent = 'Limpiando...';
-      resultBox.style.display = 'none';
-      fetch('/api/admin/catalog/clear-cache', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      })
-        .then(function (r) { return r.json(); })
-        .then(function (data) {
-          if (data.success) {
-            showResult('ok', 'Caché del catálogo invalidado. Los datos se actualizarán en la próxima carga de la tabla.');
-          } else {
-            showResult('error', 'Error al limpiar caché: ' + (data.message || 'desconocido'));
-          }
-        })
-        .catch(function (err) { showResult('error', 'Error de red al limpiar caché: ' + err.message); })
-        .finally(function () {
-          clearCacheBtn.disabled = false;
-          clearCacheBtn.textContent = 'Limpiar caché y actualizar catálogo';
-        });
+      setTimeout(function () {
+        location.reload();
+      }, 300);
     });
 
     function showResult(type, text) {
