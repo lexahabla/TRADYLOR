@@ -717,6 +717,9 @@ export async function importAmazonProductFromRawJson(
   // 2) Normalizar JSON crudo (sin llamar a ScraperAPI)
   const normalized = normalizeScrapedAmazonData(raw);
 
+  // Fallback: si el JSON no trae ASIN en raíz, usar el del campo de texto.
+  if (!normalized.asin) normalized.asin = cleanAsin;
+
   // 3) Enriquecer con IA
   let enriched: FlatProduct;
   try {
