@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { requireAdminAuth } from '../../../../lib/adminAuth';
+import { isValidApiToken, unauthorizedApiResponse } from '../../../../lib/apiAuth';
 import { importAmazonProductFromRawJson, type ImportAmazonOptions } from '../../../../lib/amazonImport';
 
 export const prerender = false;
@@ -36,7 +36,7 @@ const parseBody = async (request: Request): Promise<{
  * cliente ya obtuvo externamente (evita que el servidor de Tradylor llame a
  * ScraperAPI y se saltee bloqueos IP / anti-bot de Amazon).
  *
- * Requiere sesión de admin (cookie tradylor_admin_session).
+ * Autenticación: Bearer token TRADYLOR_API_TOKEN.
  *
  * Body JSON:
  * {
@@ -53,8 +53,9 @@ const parseBody = async (request: Request): Promise<{
  * Respuesta: { success, asin, product, updated, saved, message, warnings }
  */
 export const POST: APIRoute = async ({ request }) => {
-  const unauthorizedResponse = requireAdminAuth(request);
-  if (unauthorizedResponse) return unauthorizedResponse;
+  if (!isValidApiToken(request)) {
+    return unauthorizedApiResponse();
+  }
 
   const parsed = await parseBody(request);
   if (!parsed || !parsed.asin) {
