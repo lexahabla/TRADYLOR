@@ -1332,12 +1332,16 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       const currentProducts = readProductsFromFile();
-      const productId =
-        dataToSave.id ||
-        currentProducts.find((p) => p.affiliateUrl === dataToSave.affiliateUrl)?.id ||
-        currentProducts.find((p) => p.asin === dataToSave.asin)?.id ||
-        currentProducts.find((p) => p.sourceId === dataToSave.sourceId)?.id ||
-        slugify(dataToSave.title);
+      // Cuando se edita un producto existente, el id es la fuente de verdad.
+      // Solo usamos fallback por URL/ASIN/sourceId para altas nuevas (sin id).
+      let productId = String(dataToSave.id || '').trim();
+      if (!productId || !currentProducts.some((p) => p.id === productId)) {
+        productId =
+          currentProducts.find((p) => p.affiliateUrl === dataToSave.affiliateUrl)?.id ||
+          currentProducts.find((p) => p.asin === dataToSave.asin)?.id ||
+          currentProducts.find((p) => p.sourceId === dataToSave.sourceId)?.id ||
+          slugify(dataToSave.title);
+      }
       const existingProduct = currentProducts.find((p) => p.id === productId);
 
       // Duplicados: si OTRA fila del catálogo ya comparte URL de afiliado o
