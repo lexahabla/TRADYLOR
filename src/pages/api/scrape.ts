@@ -3,7 +3,8 @@ import type { APIRoute } from 'astro';
 export const GET: APIRoute = async ({ url }) => {
     // Tomamos el ASIN de la URL o usamos el de prueba por defecto
     const asin = url.searchParams.get('asin') || 'B01EXDG2MO';
-    const apiKey = import.meta.env.SCRAPER_API_KEY;
+    const apiKey = import.meta.env.SCRAPER_API_KEY || process.env.SCRAPER_API_KEY;
+    const countryCode = process.env.SCRAPER_API_COUNTRY_CODE?.trim() || 'es';
 
     if (!apiKey) {
         return new Response(
@@ -12,7 +13,7 @@ export const GET: APIRoute = async ({ url }) => {
         );
     }
 
-    const targetUrl = `https://api.scraperapi.com/structured/amazon/product/v1?api_key=${apiKey}&asin=${asin}&country_code=es`;
+    const targetUrl = `https://api.scraperapi.com/structured/amazon/product/v1?api_key=${apiKey}&asin=${asin}&country_code=${encodeURIComponent(countryCode)}`;
 
     try {
         const response = await fetch(targetUrl);

@@ -16,7 +16,7 @@ function jsonResponse(body: unknown, status: number): Response {
  *
  * Ejecuta el pipeline completo de ingestión de un producto de Amazon:
  *   1. Extrae/valida el ASIN (URL completa o ASIN directo, 10 chars).
- *   2. Llama a ScraperAPI estructurada (country_code=es, SCRAPER_API_KEY).
+ *   2. Llama a ScraperAPI estructurada (región SCRAPER_API_COUNTRY_CODE, por defecto 'es').
  *   3. Normaliza campos crudos al modelo interno.
  *   4. Enriquece por IA (texto editorial con esquema estructurado).
  *   5. Upsert por ASIN (clave primaria única) en products.json — evita duplicados.
@@ -38,12 +38,13 @@ function jsonResponse(body: unknown, status: number): Response {
  * Respuesta: { success, asin, product, updated, saved, message, warnings }
  */
 
-const parseBody = async (request: Request): Promise<{ asinOrUrl?: string; options?: ImportAmazonOptions } | null> => {
+const parseBody = async (request: Request): Promise<{ asinOrUrl?: string; countryCode?: string; options?: ImportAmazonOptions } | null> => {
   try {
     const body = await request.json();
     if (!body || typeof body !== 'object') return null;
     return {
       asinOrUrl: typeof body.asinOrUrl === 'string' ? body.asinOrUrl : undefined,
+      countryCode: typeof body.countryCode === 'string' ? body.countryCode : undefined,
       options: body.options && typeof body.options === 'object' ? body.options : undefined,
     };
   } catch {
@@ -66,7 +67,10 @@ export const POST: APIRoute = async ({ request }) => {
   const { asinOrUrl, options } = parsed;
 
   try {
-    const result = await importAmazonProduct(asinOrUrl, options ?? {});
+    const result = await importAmazonProduct(asinOrUrl, {
+      ...(options ?? {}),
+      countryCode: parsed.countryCode ?? options?.countryCode ?? undefined,
+    });
     const status = result.success ? 200 : 422;
     return jsonResponse(result, status);
   } catch (error: any) {
