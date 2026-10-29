@@ -34,8 +34,25 @@ const activeCategory = categoryParam ? getCategoryById(categoryParam) ?? null : 
 const queryParam = (Astro.url.searchParams.get('q') ?? '').trim();
 const queryTerm = queryParam.toLowerCase();
 
-const categoryMatches = (productCategory: string, slug: string) =>
-  getCategoryById(productCategory)?.slug === slug;
+const categoryMatches = (product: typeof allProducts[number], slug: string) => {
+  // 1) Si el producto tiene category_id, verificar que coincida con la categoría activa
+  if (product.category_id) {
+    const cat = getCategoryById(product.category_id);
+    if (cat && cat.slug === slug) return true;
+  }
+  // 2) Si el producto tiene subcategory_id, verificar que su padre sea la categoría activa
+  if (product.subcategory_id) {
+    const sub = getCategoryById(product.subcategory_id);
+    if (sub && sub.parentId) {
+      const parent = getCategoryById(sub.parentId);
+      if (parent && parent.slug === slug) return true;
+    }
+  }
+  // 3) Comparar por nombre de categoría (método original, como fallback)
+  const productCat = getCategoryById(String(product.category || ''));
+  if (productCat && productCat.slug === slug) return true;
+  return false;
+};
 
 // Sin ?q= no hay filtro de texto: todo el catálogo es visible.
 const matchesQuery = (p: typeof allProducts[number]) =>
@@ -45,7 +62,7 @@ const matchesQuery = (p: typeof allProducts[number]) =>
 
 const visibleProducts = allProducts.filter((p) => {
   const byCategory = activeCategory
-    ? categoryMatches(String(p.category ?? ''), activeCategory.slug)
+    ? categoryMatches(p, activeCategory.slug)
     : true;
   return byCategory && matchesQuery(p);
 });
