@@ -1335,6 +1335,8 @@ export const POST: APIRoute = async ({ request }) => {
       const productId =
         dataToSave.id ||
         currentProducts.find((p) => p.affiliateUrl === dataToSave.affiliateUrl)?.id ||
+        currentProducts.find((p) => p.asin === dataToSave.asin)?.id ||
+        currentProducts.find((p) => p.sourceId === dataToSave.sourceId)?.id ||
         slugify(dataToSave.title);
       const existingProduct = currentProducts.find((p) => p.id === productId);
 
