@@ -13,7 +13,7 @@ export const GET: APIRoute = async ({ url }) => {
         );
     }
 
-    const targetUrl = `https://api.scraperapi.com/structured/amazon/product/v1?api_key=${apiKey}&asin=${asin}&country_code=${encodeURIComponent(countryCode)}`;
+    const targetUrl = `https://api.scraperapi.com/structured/amazon/product/v1?api_key=${apiKey}&asin=${asin}&country_code=${encodeURIComponent(countryCode)}&retry_404=true`;
 
     try {
         const response = await fetch(targetUrl);

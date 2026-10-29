@@ -191,7 +191,7 @@ export async function scrapeAmazonProduct(
   const retryDelayMs = opts.retryDelayMs ?? 2000;
 
   const countryCode = opts.countryCode ?? SCRAPER_API_COUNTRY_CODE;
-  const url = `${SCRAPER_API_BASE}?api_key=${encodeURIComponent(SCRAPER_API_KEY)}&asin=${encodeURIComponent(asin)}&country_code=${encodeURIComponent(countryCode)}`;
+  const url = `${SCRAPER_API_BASE}?api_key=${encodeURIComponent(SCRAPER_API_KEY)}&asin=${encodeURIComponent(asin)}&country_code=${encodeURIComponent(countryCode)}&retry_404=true`;
 
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -221,7 +221,7 @@ export async function scrapeAmazonProduct(
             );
           }
           throw new Error(
-            `ScraperAPI respondió ${response.status} con contenido no JSON (${text.length} bytes): ${text.slice(0, 200)}`,
+            `ScraperAPI respondió ${response.status} con contenido no JSON (${text.length} bytes): ${text.slice(0, 800)}`,
           );
         }
       }
@@ -245,7 +245,9 @@ export async function scrapeAmazonProduct(
       } else if (response.status === 503) {
         reason += ' (servicio no disponible temporalmente)';
       }
-      reason += `: ${text.slice(0, 200)}`;
+      // Mostramos más cuerpo de respuesta para diagnosticar (clave, cuota, error de ScraperAPI…)
+      const snippet = text.slice(0, 800).replace(/\s+/g, ' ');
+      reason += `: "${snippet}"`;
 
       lastError = new Error(reason);
 
