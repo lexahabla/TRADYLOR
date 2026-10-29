@@ -112,8 +112,10 @@ const pageHref = (page: number) => {
 // ─── Ordenación con el motor centralizado ───────────────────────────────────
 const sorted = sortCatalogProducts(visibleProducts, activeSort);
 
-// Regla de Alternancia y Diversidad (los criterios de orden "exacto" quedan exentos):
-const diversified = DIVERSITY_EXEMPT_SORTS.includes(activeSort)
+// Regla de Alternancia y Diversidad (los criterios de orden "exacto" quedan exentos).
+// Cuando hay filtro de categoría activo, se OMITE la diversidad: el usuario quiere
+// ver TODOS los productos de esa categoría, no una selección deduplicada.
+const diversified = DIVERSITY_EXEMPT_SORTS.includes(activeSort) || activeCategory
   ? sorted
   : applyCatalogDiversity(sorted, { rowSize: 4, pageSize: 40 });
 
