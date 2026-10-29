@@ -1,5 +1,12 @@
 ---
-export const prerender = false;
+import { requireAdminAuth, getSessionUser, toPublicUser } from '../../lib/adminAuth';
+import AdminNav from '../../components/AdminNav.astro';
+
+const unauthorizedResponse = requireAdminAuth(Astro.request);
+if (unauthorizedResponse) return unauthorizedResponse;
+
+const sessionUser = getSessionUser(Astro.request);
+const user = sessionUser ? toPublicUser(sessionUser) : null;
 ---
 
 <!DOCTYPE html>
@@ -7,58 +14,37 @@ export const prerender = false;
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Importar producto Amazon desde JSON | Tradylor Admin</title>
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #0b1120; color: #e5e7eb; margin: 0; padding: 2rem; }
-    .wrap { max-width: 900px; margin: 0 auto; }
-    h1 { font-size: 1.25rem; margin-bottom: 1.5rem; color: #60a5fa; }
-    .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
-    label { display: block; font-size: 0.85rem; color: #9ca3af; margin-bottom: 0.4rem; font-weight: 600; }
-    input[type="text"], textarea { width: 100%; background: #0b1220; border: 1px solid #374151; border-radius: 8px; color: #e5e7eb; padding: 0.6rem 0.8rem; font-size: 0.9rem; }
-    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; min-height: 320px; resize: vertical; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } body { padding: 1rem; } }
-    button.btn { background: #38bdf8; color: #07111f; border: none; border-radius: 8px; padding: 0.6rem 1.25rem; font-weight: 800; cursor: pointer; font-size: 0.95rem; }
-    button.btn:disabled { opacity: .6; cursor: not-allowed; }
-    button.btn:hover:not(:disabled) { background: #7dd3fc; }
-    .result { margin-top: 1.5rem; padding: 1rem; border-radius: 8px; display: none; }
-    .result.ok { background: rgba(16, 185, 129, .12); border: 1px solid rgba(16, 185, 129, .3); color: #a7f3d0; }
-    .result.err { background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); color: #fecaca; }
-    .result pre { margin: .5rem 0 0; font-size: .8rem; overflow: auto; max-height: 300px; white-space: pre-wrap; word-break: break-word; }
-    .hint { font-size: .78rem; color: #6b7280; margin-top: .25rem; }
-    .flex { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
-    .checkbox-row { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
-    .checkbox-row input { width: auto; margin: 0; }
-  </style>
+  <title>Amazon (JSON) · Catálogo · Tradylor Admin</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 </head>
 <body>
-  <div class="wrap">
+  <AdminNav context="catalogo" active="amazon-import" user={user} />
+
+  <main class="ai-wrap">
     <h1>Importar producto Amazon desde JSON (ScraperAPI)</h1>
 
-    <div class="card">
-      <label>ASIN de Amazon (10 caracteres)</label>
+    <div class="ai-card">
+      <label class="ai-label">ASIN de Amazon (10 caracteres)</label>
       <input type="text" id="asinInput" placeholder="Ej: B01EXDG2MO" maxlength="20" />
-      <p class="hint">Puedes pegar aquí el ASIN o una URL completa de Amazon; se extraerá automáticamente.</p>
+      <p class="ai-hint">Puedes pegar aquí el ASIN o una URL completa de Amazon; se extraerá automáticamente.</p>
     </div>
 
-    <div class="card">
-      <label>JSON crudo de ScraperAPI</label>
+    <div class="ai-card">
+      <label class="ai-label">JSON crudo de ScraperAPI</label>
       <textarea id="jsonInput" placeholder='Pega aquí el objeto JSON completo devuelto por ScraperAPI...'></textarea>
-      <p class="hint">Consíguelo desde otro sitio donde ScraperAPI funcione (tu PC local, etc.) y pégalo aquí. Tradylor lo normalizará y guardará en el catálogo.</p>
+      <p class="ai-hint">Consíguelo desde otro sitio donde ScraperAPI funcione (tu PC local, etc.) y pégalo aquí. Tradylor lo normalizará y guardará en el catálogo.</p>
     </div>
 
-    <div class="flex">
-      <div class="checkbox-row">
-        <input type="checkbox" id="saveCheckbox" checked />
-        <label for="saveCheckbox" style="margin:0; font-weight:normal;">Guardar en el catálogo (desmarca para solo vista previa)</label>
-      </div>
+    <div class="ai-row">
+      <label class="ai-checkbox">
+        <input type="checkbox" id="saveCheckbox" checked /> Guardar en el catálogo (desmarca para solo vista previa)
+      </label>
     </div>
 
-    <button class="btn" id="importBtn">Importar producto</button>
+    <button class="ai-btn" id="importBtn">Importar producto</button>
 
-    <div id="resultBox" class="result"></div>
-  </div>
+    <div id="resultBox" class="ai-result"></div>
+  </main>
 
   <script is:inline>
     (function () {
@@ -108,7 +94,7 @@ export const prerender = false;
           if (data.success) {
             showResult('ok', 'Éxito: ' + data.message + (data.saved ? '' : ' (no guardado).') + '\nASIN: ' + data.asin);
             if (data.warnings && data.warnings.length) {
-              showResult('ok', showResult.okText + '\n\nAvisos:\n• ' + data.warnings.join('\n• '));
+              showResult('ok', 'Éxito: ' + data.message + '\n\nAvisos:\n• ' + data.warnings.join('\n• '));
             }
           } else {
             showResult('error', 'Error: ' + (data.message || 'Error desconocido'));
@@ -124,11 +110,31 @@ export const prerender = false;
       });
 
       function showResult(type, text) {
-        resultBox.className = 'result ' + type;
+        resultBox.className = 'ai-result ' + type;
         resultBox.textContent = text;
         resultBox.style.display = 'block';
       }
     })();
   </script>
+
+  <style>
+    .ai-wrap { max-width: 900px; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color: #e5e7eb; }
+    .ai-wrap h1 { font-size: 1.25rem; margin: 0 0 1.5rem; color: #60a5fa; }
+    .ai-card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .ai-label { display: block; font-size: 0.85rem; color: #9ca3af; margin-bottom: 0.4rem; font-weight: 600; }
+    input[type="text"], textarea { width: 100%; background: #0b1220; border: 1px solid #374151; border-radius: 8px; color: #e5e7eb; padding: 0.6rem 0.8rem; font-size: 0.9rem; }
+    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; min-height: 320px; resize: vertical; }
+    .ai-row { margin-bottom: 1rem; }
+    .ai-checkbox { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; color: #e5e7eb; cursor: pointer; }
+    .ai-checkbox input { width: auto; margin: 0; }
+    .ai-btn { background: #38bdf8; color: #07111f; border: none; border-radius: 8px; padding: 0.6rem 1.25rem; font-weight: 800; cursor: pointer; font-size: 0.95rem; }
+    .ai-btn:disabled { opacity: .6; cursor: not-allowed; }
+    .ai-btn:hover:not(:disabled) { background: #7dd3fc; }
+    .ai-result { margin-top: 1.5rem; padding: 1rem; border-radius: 8px; display: none; }
+    .ai-result.ok { background: rgba(16, 185, 129, .12); border: 1px solid rgba(16, 185, 129, .3); color: #a7f3d0; }
+    .ai-result.err { background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); color: #fecaca; }
+    .ai-result pre { margin: .5rem 0 0; font-size: .8rem; overflow: auto; max-height: 300px; white-space: pre-wrap; word-break: break-word; }
+    .ai-hint { font-size: .78rem; color: #6b7280; margin-top: .25rem; }
+  </style>
 </body>
 </html>
