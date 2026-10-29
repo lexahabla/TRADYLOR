@@ -20,9 +20,21 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
   </Fragment>
 
   <div class="admin-wrapper">
+    <header class="admin-header">
+      <div class="admin-header-main">
+        <div class="admin-tag-row">
+          <a class="admin-tag-link" href="/upayp1b4">Panel de control</a>
+          <span class="admin-tag-sep" aria-hidden="true">/</span>
+          <div class="admin-tag-pill">Catálogo</div>
+        </div>
+        <h1 class="admin-title">Amazon (JSON)</h1>
+        <p class="admin-subtitle">Pega el JSON crudo de ScraperAPI y el ASIN para importar el producto al catálogo sin pasar por el servidor de ScraperAPI.</p>
+      </div>
+    </header>
+
     <AdminNav context="catalogo" active="amazon-import" user={user} />
 
-    <section data-admin-view="amazon-import" class:list={['admin-card', 'hidden-section', { 'is-visible': true }]} style="margin-top: 75px; display: inline-block; width: 100%; max-width: 900px; text-align: left;">
+    <section data-admin-view="amazon-import" class:list={['admin-card', 'hidden-section', { 'is-visible': true }]} style="display: inline-block; width: 100%; max-width: 900px; text-align: left;">
       <div class="card-header card-header-toggle">
         <div class="header-icon">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
