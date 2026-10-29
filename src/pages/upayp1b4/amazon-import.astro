@@ -1,5 +1,6 @@
 ---
-import { requireAdminAuth, getSessionUser, toPublicUser } from '../../lib/adminAuth';
+import { requireAdminAuth, getSessionUser } from '../../lib/adminAuth';
+import { toPublicUser } from '../../lib/userStore';
 import AdminNav from '../../components/AdminNav.astro';
 
 const unauthorizedResponse = requireAdminAuth(Astro.request);
