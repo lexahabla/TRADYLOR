@@ -684,6 +684,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <button type="button" class="btn-secondary btn-sm" id="btnProdCreateSubcat" title="Crear una subcategoría vinculada a la categoría destino">➕ Subcat</button>
             <button type="button" class="btn-secondary btn-sm" id="btnProdAssignCat" title="Asigna la categoría y subcategoría elegidas a todos los productos seleccionados">Asignar categoría</button>
             <button type="button" class="btn-success btn-sm" id="btnProdVariantGroup" title="Relaciona los productos seleccionados como variantes de un mismo modelo (ej: 2 TB, 4 TB)">🔗 Variantes</button>
+            <button type="button" class="btn-danger-ghost btn-sm" id="btnProdUndoVariantGroup" title="Deshacer variante: elimina el grupo de variantes de los productos seleccionados">✕ Deshacer</button>
             <button type="button" class="btn-success btn-sm" id="btnProdMakeSection" title="Crea una sección temática de la portada con los productos seleccionados">Crear sección</button>
           </div>
 
@@ -840,7 +841,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                   <td class="col-check"><input type="checkbox" data-prod-check data-id={p.id} /></td>
                   <td class="col-thumb"><img src={p.image} alt={p.title} class="thumb-img" loading="lazy" /></td>
                   <td class="col-details">
-                    <a href={`/producto/${encodeURIComponent((p.slug && p.slug.trim()) || p.id)}`} class="row-title">{p.title_short || p.title}</a>
+                    <a href={`/producto/${encodeURIComponent((p.slug && p.slug.trim()) || p.id)}`} class="row-title">{p.title_short || p.title}{p.variantGroup ? ' <span class="variant-related-badge" title="Producto relacionado (variantes del mismo modelo)">🔗</span>' : ''}</a>
                     <div class="row-meta"><span class="pill-category">{p.category}</span></div>
                   </td>
                   <td class="col-merchant"><span class="merchant-badge">{p.network_label || p.merchant || '—'}</span></td>
@@ -3477,7 +3478,7 @@ function renderTableRows(products, resetPage = true) {
               ${(() => {
                 const targetSlug = (p.slug && p.slug.trim() && p.slug !== 'undefined' && p.slug !== 'null') ? p.slug.trim() : p.id;
                 const displayTitle = p.title_short || p.title;
-                return `<a href="/producto/${encodeURIComponent(targetSlug)}" class="row-title" data-id="${p.id}" data-slug="${p.slug || ''}" target="_blank" rel="noopener" title="Ver ficha pública del producto">${escapeHtml ? escapeHtml(displayTitle) : displayTitle}</a>`;
+                return `<a href="/producto/${encodeURIComponent(targetSlug)}" class="row-title" data-id="${p.id}" data-slug="${p.slug || ''}" target="_blank" rel="noopener" title="Ver ficha pública del producto">${escapeHtml ? escapeHtml(displayTitle) : displayTitle}${p.variantGroup ? ' <span class="variant-related-badge" title="Producto relacionado (variantes del mismo modelo)">🔗</span>' : ''}</a>`;
               })()}
               <div class="row-meta">
                 <span class="pill-category">${p.category || '—'}</span>
@@ -4645,6 +4646,42 @@ function renderTableRows(products, resetPage = true) {
       }
       // Abrir el modal pre-cargado con los productos seleccionados
       openVariantGroupModalMulti(ids);
+    });
+    // ── Deshacer variante: elimina el grupo de variantes de los productos seleccionados ──
+    const btnProdUndoVariantGroup = document.getElementById('btnProdUndoVariantGroup');
+    btnProdUndoVariantGroup?.addEventListener('click', async () => {
+      const ids = Array.from(selectedProductIds);
+      if (!ids.length) {
+        showAlert('warning', 'Sin selección', 'Marca primero los productos en la tabla de los que quieres quitar el grupo de variantes.');
+        return;
+      }
+      showAlert('loading', 'Deshaciendo variantes...', `Eliminando grupo de variantes de ${ids.length} producto(s).`);
+      try {
+        // Primero obtenemos el variantGroup actual de cada producto para poder desvincularlo
+        const res = await fetch('/api/products/add', { cache: 'no-store' });
+        const data = await res.json();
+        const allProducts = data.success && Array.isArray(data.products) ? data.products : [];
+        const toUndo = ids.filter(id => {
+          const p = allProducts.find(pp => pp.id === id);
+          return p && Boolean(p.variantGroup);
+        });
+        if (!toUndo.length) {
+          showAlert('warning', 'Sin variantes', 'Ninguno de los productos seleccionados pertenece a un grupo de variantes.');
+          return;
+        }
+        // Desvincular cada producto (enviar variantGroup vacío)
+        for (const id of toUndo) {
+          await fetch('/api/admin/products/variant-group', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ variantGroup: 'undo-all', productId: id }),
+          });
+        }
+        showAlert('success', 'Variantes deshechas', `Se eliminó el grupo de variantes de ${toUndo.length} producto(s).`);
+        await reloadProductsTable();
+      } catch {
+        showAlert('error', 'Error de red', 'No se pudo contactar con el servidor.');
+      }
     });
     // Asignar una Etiqueta Destacada (Badge) a todos los productos seleccionados.
     const prodBadgeAssign = document.getElementById('prodBadgeAssign');
@@ -12229,6 +12266,21 @@ function renderTableRows(products, resetPage = true) {
     border-radius: 6px;
     font-size: 0.68rem;
     font-weight: 600;
+  }
+
+  :global(.variant-related-badge) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.64rem;
+    font-weight: 700;
+    color: #60a5fa;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 4px;
+    padding: 0.05rem 0.4rem;
+    margin-left: 0.3rem;
+    vertical-align: middle;
   }
 
   :global(.price-val) {
