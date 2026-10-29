@@ -1332,7 +1332,10 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       const currentProducts = readProductsFromFile();
-      const productId = dataToSave.id || slugify(dataToSave.title);
+      const productId =
+        dataToSave.id ||
+        currentProducts.find((p) => p.affiliateUrl === dataToSave.affiliateUrl)?.id ||
+        slugify(dataToSave.title);
       const existingProduct = currentProducts.find((p) => p.id === productId);
 
       // Duplicados: si OTRA fila del catálogo ya comparte URL de afiliado o
