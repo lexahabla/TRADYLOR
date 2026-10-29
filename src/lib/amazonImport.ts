@@ -311,13 +311,18 @@ export function normalizeScrapedAmazonData(
           : undefined;
 
   const image = String(raw.image || '').trim();
-  const gallery = Array.isArray(raw.images)
-    ? raw.images.map(String).filter((u) => /^https?:\/\//i.test(u))
-    : raw.high_res_images != null && Array.isArray(raw.high_res_images)
-      ? raw.high_res_images.map(String).filter((u) => /^https?:\/\//i.test(u))
-      : image
-        ? [image]
-        : [];
+  const allImages: string[] = [];
+  if (Array.isArray(raw.high_res_images)) {
+    allImages.push(...raw.high_res_images.filter((u: unknown) => /^https?:\/\//i.test(String(u))));
+  }
+  if (Array.isArray(raw.images)) {
+    for (const u of raw.images) {
+      const s = String(u);
+      if (/^https?:\/\//i.test(s) && !allImages.includes(s)) allImages.push(s);
+    }
+  }
+  if (image && !allImages.includes(image)) allImages.unshift(image);
+  const gallery = allImages;
 
   const specs =
     (raw.specifications || raw.specs || raw.product_information || {}) as Record<string, string>;
@@ -481,7 +486,7 @@ export async function enrichAmazonProductData(
     description: finalDescription,
     price,
     originalPrice: originalPrice ?? price * 1.2,
-    image: normalized.image || '',
+    image: normalized.image || normalized.gallery?.[0] || '',
     gallery: normalized.gallery?.length
       ? [...normalized.gallery]
       : normalized.image
