@@ -12,6 +12,7 @@ docs/api-v1.md
 docs/deploy-easypanel.md
 estructura.txt
 estructura_limpia.txt
+gemini.service.ts
 nixpacks.toml
 package.json
 package-lock.json
@@ -215,6 +216,7 @@ src/pages/api/radar/projects.ts
 src/pages/api/radar/reminders.ts
 src/pages/api/radar/remove.ts
 src/pages/api/redirect.ts
+src/pages/api/scrape.ts
 src/pages/api/search.ts
 src/pages/api/share/card.ts
 src/pages/api/share/email.ts
