@@ -9926,7 +9926,7 @@ function renderTableRows(products, resetPage = true) {
   :global(.aff-table) { width: 100%; border-collapse: separate; border-spacing: 0; font-size: .7rem; background: rgba(255, 255, 255, .02); table-layout: auto; }
   :global(.aff-table th) { position: sticky; top: 0; z-index: 1; padding: .35rem .4rem; text-align: left; font-size: .52rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--color-text-muted); background: #121826; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
   :global(.aff-table td) { padding: .3rem .4rem; color: var(--color-text-main); border-bottom: 1px solid rgba(255, 255, 255, .05); vertical-align: middle; }
-  :global(.aff-num) { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .7rem; }
+  :global(.aff-num) { text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; font-size: .7rem; }
   :global(.aff-num small) { display: block; color: #6ee7b7; font-size: .62rem; }
   :global(.aff-row) { cursor: pointer; }
   :global(.aff-row:hover) { background: rgba(96, 165, 250, .06); }
@@ -11846,7 +11846,7 @@ function renderTableRows(products, resetPage = true) {
   }
 
   :global(.products-table th) {
-    text-align: left;
+    text-align: center;
     padding: 0.4rem 0.5rem;
     color: var(--color-text-dim);
     font-size: 0.62rem;
@@ -11857,6 +11857,7 @@ function renderTableRows(products, resetPage = true) {
   }
 
   :global(.products-table td) {
+    text-align: center;
     padding: 0.6rem 0.5rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     vertical-align: middle;
