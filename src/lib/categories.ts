@@ -161,7 +161,7 @@ export const DEFAULT_CATEGORIES: Category[] = [
 ];
 
 /** Normaliza cualquier entrada legible (nombre, slug o acentos) para comparar. */
-function normalizeKey(text: string): string {
+export function normalizeKey(text: string): string {
   return String(text)
     .toLowerCase()
     .normalize('NFD')

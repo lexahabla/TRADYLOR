@@ -4,7 +4,7 @@ import ProductCard from '../components/ProductCard.astro';
 import MethodSection from '../components/home/MethodSection.astro';
 import { getCatalogProducts } from '../lib/catalog';
 import { readSections } from '../lib/sections';
-import { getCategoryById } from '../lib/categories';
+import { getCategoryById, normalizeKey } from '../lib/categories';
 import { applyCatalogDiversity } from '../lib/catalogDiversity';
 import { getGlobalCatalogSort, sortCatalogProducts, DIVERSITY_EXEMPT_SORTS } from '../lib/catalogSort';
 
@@ -49,12 +49,17 @@ const categoryMatches = (product: typeof allProducts[number], slug: string) => {
     }
   }
   // 3) Comparar por nombre normalizado de categoría (fallback para productos sin category_id)
-  const productCatName = String(product.category || '').trim().toLowerCase();
+  const productCatName = normalizeKey(String(product.category || ''));
   const targetCat = getCategoryById(slug);
-  if (targetCat && productCatName === targetCat.name.toLowerCase()) return true;
+  if (targetCat && normalizeKey(targetCat.name) === productCatName) return true;
   // 4) Comparar por nombre de categoría directo (método original)
   const productCat = getCategoryById(String(product.category || ''));
   if (productCat && productCat.slug === slug) return true;
+  // 5) Comparación contiene: si el nombre del producto contiene el nombre de la categoría o viceversa
+  if (targetCat) {
+    const targetName = normalizeKey(targetCat.name);
+    if (productCatName && (productCatName.includes(targetName) || targetName.includes(productCatName))) return true;
+  }
   return false;
 };
 
