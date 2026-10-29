@@ -155,6 +155,7 @@ src/pages/api/admin/ai-skills.ts
 src/pages/api/admin/ai-status.ts
 src/pages/api/admin/aliexpress/catalog.ts
 src/pages/api/admin/alternatives.ts
+src/pages/api/admin/amazon/import-json.ts
 src/pages/api/admin/amazon/import.ts
 src/pages/api/admin/analytics/export.ts
 src/pages/api/admin/analytics/ignored-ips.ts

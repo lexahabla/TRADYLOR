@@ -683,6 +683,117 @@ export async function importAmazonProduct(
 }
 
 /**
+ * Ejecuta el pipeline de Amazon a partir de un JSON crudo de ScraperAPI que
+ * el cliente ya obtuvo externamente (evita que el servidor de Tradylor tenga
+ * que llamar a ScraperAPI y así se saltea bloqueos IP / anti-bot de Amazon).
+ *
+ * Pasos:
+ *   1. Validar ASIN.
+ *   2. Normalizar el JSON crudo al modelo interno (salta la llamada a ScraperAPI).
+ *   3. Enriquecer con IA (texto editorial + imagen opcional).
+ *   4. Upsert por ASIN (deduplicación) en products.json.
+ *
+ * Devuelve { success, product, updated, asin, message, warnings }.
+ */
+export async function importAmazonProductFromRawJson(
+  asin: string,
+  raw: AmazonScrapedProduct,
+  options: ImportAmazonOptions = {},
+): Promise<ImportAmazonResult> {
+  const warnings: string[] = [];
+
+  // 1) Validar ASIN
+  let cleanAsin: string;
+  try {
+    cleanAsin = extractOrValidateAsin(asin);
+  } catch (error: any) {
+    return {
+      success: false,
+      message: error?.message || 'ASIN inválido',
+      warnings,
+    };
+  }
+
+  // 2) Normalizar JSON crudo (sin llamar a ScraperAPI)
+  const normalized = normalizeScrapedAmazonData(raw);
+
+  // 3) Enriquecer con IA
+  let enriched: FlatProduct;
+  try {
+    enriched = await enrichAmazonProductData(normalized, {
+      textProvider: options.textProvider,
+      imageProvider: options.imageProvider,
+    });
+  } catch (error: any) {
+    warnings.push(
+      `IA de texto no disponible: ${error?.message || error}. Producto con datos locales.`,
+    );
+    enriched = {
+      id: `amazon-${cleanAsin.toLowerCase()}`,
+      title: normalized.title,
+      description: normalized.description || '',
+      price: normalized.price ?? 0,
+      originalPrice: normalized.originalPrice ?? (normalized.price ?? 0) * 1.2,
+      image: normalized.image || '',
+      gallery: normalized.gallery,
+      category: 'Tecnología',
+      merchant: normalized.merchant,
+      brand: normalized.brand || normalized.merchant || 'Comercio Externo',
+      affiliateUrl: normalized.affiliateUrl || '',
+      buyNowUrl: normalized.buyNowUrl || getAmazonAddToCartUrl(cleanAsin),
+      asin: cleanAsin,
+      pros: [],
+      cons: [],
+      network: 'amazon',
+      currency: normalized.currency,
+      inStock: normalized.inStock,
+      sourceId: cleanAsin,
+      specs: normalized.specs,
+      rating: normalized.rating,
+      reviewsCount: normalized.reviewsCount,
+      techSheet: normalized.techSheet,
+      verdict: undefined,
+      link_status: 'active',
+      ia_status: 'completed',
+      fulfillmentProvider: 'Amazon Logistics',
+      extra: { scraperApiSource: normalized.raw, importSource: 'scraperapi-amazon-json' },
+    };
+  }
+
+  // 4) Upsert por ASIN
+  let saved = false;
+  let updated = false;
+  if (options.save !== false) {
+    try {
+      const result = upsertAmazonProductByAsin(enriched);
+      saved = true;
+      updated = result.updated;
+    } catch (error: any) {
+      return {
+        success: false,
+        message: `Error al guardar: ${error?.message || error}`,
+        warnings,
+        asin: cleanAsin,
+      };
+    }
+  }
+
+  return {
+    success: true,
+    product: enriched,
+    updated,
+    saved,
+    asin: cleanAsin,
+    message: saved
+      ? updated
+        ? 'Producto actualizado (upsert por ASIN desde JSON).'
+        : 'Producto guardado (upsert por ASIN desde JSON).'
+      : 'Vista previa generada desde JSON (no guardada).',
+    warnings,
+  };
+}
+
+/**
  * Valida (sin persistir) que un ASIN o URL de Amazon sea correcto y que
  * ScraperAPI devuelva datos. Útil para pre-visualizar antes de guardar.
  */
