@@ -11883,59 +11883,58 @@ function renderTableRows(products, resetPage = true) {
   :global(#productsTable.products-table th:nth-child(1)),   /* Checkbox */
   :global(#productsTable.products-table td.col-check) {
     width: 30px;
-    max-width: 30px;
-    padding: 0.6rem 0;           /* solo el checkbox, ~1px de margen cada lado */
+    padding: 0.6rem 0;           /* ~1px de margen cada lado */
     text-align: center;
   }
 
   :global(#productsTable.products-table th:nth-child(2)),   /* Imagen (ancho del th) */
   :global(#productsTable.products-table td.col-thumb) {
     width: 60px;
-    max-width: 60px;
     padding: 0.6rem 0.25rem;
+    text-align: center;
   }
 
   :global(#productsTable.products-table th:nth-child(3)),   /* Producto / Título */
   :global(#productsTable.products-table td.col-details) {
     width: 130px;
-    max-width: 130px;
+    text-align: left;
   }
 
   :global(#productsTable.products-table th:nth-child(4)),   /* Comercio */
   :global(#productsTable.products-table td.col-merchant) {
     width: 100px;
-    max-width: 100px;
+    text-align: center;
   }
 
-  :global(#productsTable.products-table th:nth-child(5)),   /* Estado (ancho del th) */
+  :global(#productsTable.products-table th:nth-child(5)),   /* Estado */
   :global(#productsTable.products-table td.col-condition) {
-    width: 60px;
-    max-width: 60px;
+    width: 20px;
+    text-align: center;
   }
 
   :global(#productsTable.products-table th:nth-child(6)),   /* Precio */
   :global(#productsTable.products-table td.col-price) {
     width: 82px;
-    max-width: 82px;
+    text-align: center;
   }
 
   :global(#productsTable.products-table th:nth-child(7)),   /* Score */
   :global(#productsTable.products-table td.col-score) {
     width: 70px;
-    max-width: 70px;
+    text-align: center;
   }
 
   :global(#productsTable.products-table th:nth-child(8)),   /* Enlace Afiliado */
   :global(#productsTable.products-table td.col-link) {
-    width: 110px;
-    max-width: 110px;
+    width: 75px;
+    text-align: center;
   }
 
   :global(#productsTable.products-table th:nth-child(9)),   /* Acciones */
   :global(#productsTable.products-table td.col-actions) {
-    width: 92px;
-    max-width: 92px;
+    width: 120px;
     white-space: nowrap;
+    text-align: right;
   }
 
   :global(.products-table th) {
