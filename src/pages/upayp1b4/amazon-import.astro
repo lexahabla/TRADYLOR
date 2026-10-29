@@ -38,14 +38,17 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
       <form id="amazonImportForm" style="display: grid; gap: 1rem; max-width: 700px; margin: 0 auto;">
         <div>
           <label class="field-label">ASIN de Amazon (10 caracteres)</label>
-          <input type="text" id="asinInput" placeholder="Ej: B01EXDG2MO" maxlength="20" />
+          <div style="display:flex; gap:.5rem; align-items:center; margin-bottom:.25rem;">
+            <input type="text" id="asinInput" placeholder="Ej: B01EXDG2MO" maxlength="20" style="flex:1;" />
+            <button type="button" id="btnFetchJson" class="btn-primary" style="padding:.5rem .8rem; font-size:.85rem; white-space:nowrap;">Obtener JSON</button>
+          </div>
           <p class="label-hint">Puedes pegar el ASIN o una URL completa de Amazon.</p>
         </div>
 
         <div>
           <label class="field-label">JSON crudo de ScraperAPI</label>
-          <textarea id="jsonInput" placeholder='Pega aquí el objeto JSON completo...' style="width:100%; min-height: 260px; font-family: ui-monospace; background:#0b1220; border:1px solid #374151; color:#e5e7eb; border-radius:8px; padding:.6rem .8rem;"></textarea>
-          <p class="label-hint">Obtén el JSON desde otro sitio donde ScraperAPI funcione y pégalo aquí.</p>
+          <textarea id="jsonInput" placeholder='El JSON se rellenará automáticamente al pulsar «Obtener JSON»...' style="width:100%; min-height: 260px; font-family: ui-monospace; background:#0b1220; border:1px solid #374151; color:#e5e7eb; border-radius:8px; padding:.6rem .8rem;"></textarea>
+          <p class="label-hint">O pulsa «Obtener JSON» para descargarlo automáticamente desde ScraperAPI.</p>
         </div>
 
         <div class="checkbox-row">
@@ -67,6 +70,28 @@ const user = sessionUser ? toPublicUser(sessionUser) : null;
       var saveCheckbox = document.getElementById('saveCheckbox');
       var importBtn = document.getElementById('importBtn');
       var resultBox = document.getElementById('resultBox');
+      var fetchBtn = document.getElementById('btnFetchJson');
+
+      fetchBtn.addEventListener('click', function () {
+        var asin = asinInput.value.trim();
+        if (!asin) { showResult('error', 'Debes proporcionar un ASIN.'); return; }
+        var m = asin.match(/(?:dp|gp\/product|product)\/([A-Z0-9]{10})/i) || asin.match(/[?&]asin=([A-Z0-9]{10})/i);
+        if (m) asin = m[1];
+        fetchBtn.disabled = true;
+        fetchBtn.textContent = 'Cargando...';
+        resultBox.style.display = 'none';
+        fetch('/api/scrape?asin=' + encodeURIComponent(asin))
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            jsonInput.value = JSON.stringify(data, null, 2);
+            showResult('ok', 'JSON obtenido de ScraperAPI.');
+          })
+          .catch(function (err) { showResult('error', 'Error al obtener JSON: ' + err.message); })
+          .finally(function () {
+            fetchBtn.disabled = false;
+            fetchBtn.textContent = 'Obtener JSON';
+          });
+      });
 
       importBtn.addEventListener('click', function () {
         var asin = asinInput.value.trim();
