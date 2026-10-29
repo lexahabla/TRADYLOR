@@ -831,7 +831,8 @@ export async function buildAndUpsertProducts(
   let aiEnrichedTextCount = 0;
   let aiEnrichedImagesCount = 0;
 
-    const concurrency = Math.max(1, Number(process.env.BUILD_CATALOG_CONCURRENCY) || 3);
+  const pipelineConfig = getPipelineConfig();
+  const concurrency = Math.max(1, Number(process.env.BUILD_CATALOG_CONCURRENCY) || 3);
   const totalGroups = groups.length;
   let processedCount = 0;
 
