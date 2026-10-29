@@ -6317,7 +6317,7 @@ function renderTableRows(products, resetPage = true) {
     bindSubcatDestCascade(aliCatAssign, aliSubcatAssign);
 
     // Columnas de la tabla de afiliados (la columna «Tienda» se eliminó).
-    const ALI_COLS = 14;
+    const ALI_COLS = 12;
     let aliProducts = [];
     let aliVisible = [];
     /** Productos por página de la tabla de afiliados (25 / 50 / 75). */
@@ -6689,7 +6689,6 @@ function renderTableRows(products, resetPage = true) {
                 <th class="ac-th-check"><input type="checkbox" data-ac-checkall aria-label="Seleccionar la página actual" /></th>
                 <th>Foto</th>
                 <th>Producto</th>
-                <th>Categoría</th>
                 <th>Estado</th>
                 <th class="aff-num">Precio</th>
                 <th class="aff-num">Precio orig.</th>
@@ -6698,7 +6697,6 @@ function renderTableRows(products, resetPage = true) {
                 <th class="aff-num">Comisión €</th>
                 <th class="aff-num">Ventas</th>
                 <th class="aff-num">Valoración</th>
-                <th>Envío</th>
                 <th></th>
               </tr>
             </thead>
@@ -6726,7 +6724,6 @@ function renderTableRows(products, resetPage = true) {
                     <strong>${escapeHtml(product.title)}</strong>
                     <span>${escapeHtml(product.network)}${product.category ? ` · ${escapeHtml(product.category)}` : ''}${estadoPill}</span>
                   </td>
-                  <td>${escapeHtml(product.category || '—')}</td>
                   <td>${aliConditionBadge(product)}</td>
                   <td class="aff-num">${money(product.price, product.currency)}</td>
                   <td class="aff-num">${product.originalPrice != null ? money(product.originalPrice, product.currency) : '—'}</td>
@@ -6735,7 +6732,6 @@ function renderTableRows(products, resetPage = true) {
                   <td class="aff-num">${product.commissionAmount != null ? money(product.commissionAmount, product.currency) : '—'}</td>
                   <td class="aff-num">${sales != null ? sales : '—'}</td>
                   <td class="aff-num">${product.rating != null ? `${product.rating} / 5` : '—'}</td>
-                  <td>${shippingDays != null ? `${escapeHtml(shippingDays)} d` : product.shippingInfo ? escapeHtml(product.shippingInfo) : '—'}</td>
                     <td class="aff-actions">
                       <button type="button" class="${addBtnClass}" data-ac-import="${index}"${yaAnadido ? ' disabled title="Ya está en el catálogo"' : ''}>${yaAnadido ? 'Añadido' : 'Añadir'}</button>
                       <button type="button" class="btn-danger-ghost btn-sm" data-ac-remove="${index}" title="Quitar de la tabla">✕</button>
@@ -9933,7 +9929,7 @@ function renderTableRows(products, resetPage = true) {
   :global(.aff-row.is-open) { background: rgba(96, 165, 250, .1); }
   :global(.aff-thumb) { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 2px; background: #fff; border-radius: 6px; }
   :global(.aff-thumb img) { max-width: 100%; max-height: 100%; object-fit: contain; }
-  :global(.aff-name) { max-width: 150px; min-width: 90px; }
+  :global(.aff-name) { min-width: 200px; max-width: 300px; }
   :global(.aff-name strong) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 650; font-size: .65rem; line-height: 1.3; }
   :global(.aff-name span) { display: block; margin-top: .1rem; color: var(--color-text-dim); font-size: .55rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   :global(.aff-actions) { display: flex; align-items: center; justify-content: flex-end; gap: .3rem; white-space: nowrap; }
@@ -11821,23 +11817,29 @@ function renderTableRows(products, resetPage = true) {
     table-layout: fixed;
   }
 
-  :global(.products-table th:nth-child(6)),   /* Estado */
-  :global(.products-table th:nth-child(7)),   /* Precio */
-  :global(.products-table th:nth-child(8)),   /* Precio orig. */
-  :global(.products-table th:nth-child(9)),   /* Dto. */
-  :global(.products-table th:nth-child(10)),  /* Comisión % */
-  :global(.products-table th:nth-child(11)),  /* Comisión € */
-  :global(.products-table th:nth-child(12)),  /* Ventas */
-  :global(.products-table th:nth-child(13))   /* Valoración */
+  :global(.products-table th:nth-child(4)),   /* Estado */
+  :global(.products-table th:nth-child(5)),   /* Precio */
+  :global(.products-table th:nth-child(6)),   /* Precio orig. */
+  :global(.products-table th:nth-child(7)),   /* Dto. */
+  :global(.products-table th:nth-child(8)),   /* Comisión % */
+  :global(.products-table th:nth-child(9)),   /* Comisión € */
+  :global(.products-table th:nth-child(10)),  /* Ventas */
+  :global(.products-table th:nth-child(11))   /* Valoración */
   {
-    width: 85px;
-    max-width: 85px;
+    width: 75px;
+    max-width: 75px;
   }
 
   :global(.products-table th:nth-child(3)),   /* Producto */
-  :global(.products-table th:nth-child(4))    /* Categoría */
   {
-    min-width: 130px;
+    min-width: 220px;
+    max-width: 260px;
+  }
+
+  :global(.products-table th:nth-child(12))   /* Acciones */
+  {
+    width: 60px;
+    max-width: 60px;
   }
 
   :global(.products-table th) {
