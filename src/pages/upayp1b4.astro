@@ -861,6 +861,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                   <td class="col-link"><a href={p.affiliateUrl} target="_blank" class="test-link">Probar Enlace</a></td>
                   <td class="col-actions text-right">
                     <a href={`/producto/${encodeURIComponent((p.slug && p.slug.trim()) || p.id)}`} class="btn-icon-action btn-preview-card">👁️</a>
+                    <button type="button" class="btn-icon-action btn-variant-group" data-id="${p.id}" title="🔗 Relacionar como variante">🔗</button>
                   </td>
                 </tr>
               ))
@@ -1906,6 +1907,42 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       <div class="admin-modal-actions">
         <button type="button" class="btn-secondary" data-admin-modal-close>Cancelar</button>
         <button type="button" class="btn-success" id="btnLinkAltSave">Guardar vínculos</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="variantGroupModal" class="admin-modal admin-modal-wide" hidden>
+    <div class="admin-modal-backdrop" data-admin-modal-close></div>
+    <div class="admin-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="variantGroupTitle">
+      <button type="button" class="admin-modal-close" data-admin-modal-close aria-label="Cerrar">×</button>
+      <h3 id="variantGroupTitle" class="admin-modal-title">🔗 Relacionar como Variante <span class="admin-modal-subtitle" id="variantGroupProductName"></span></h3>
+      <p class="admin-modal-text">Agrupa este producto con otros de la misma marca/modelo pero con una característica diferente (ej: disco duro 2 TB, 4 TB, 256 GB). Todos los productos de un mismo grupo aparecerán como tarjetas relacionadas en la ficha del producto.</p>
+
+      <div class="variant-group-form">
+        <label class="admin-modal-field">
+          <span>Grupo de variantes</span>
+          <input type="text" id="variantGroupName" placeholder="Ej: Disco Duro WD Black" />
+          <p class="label-hint">ID del grupo. Todos los productos con este ID se consideran variantes del mismo modelo.</p>
+        </label>
+
+        <label class="admin-modal-field">
+          <span>Característica que diferencia esta variante</span>
+          <input type="text" id="variantGroupFeature" placeholder="Ej: 2 TB" />
+          <p class="label-hint">La característica que hace único a este producto dentro del grupo (capacidad, color, tamaño…). Se mostrará en la ficha junto a cada tarjeta relacionada.</p>
+        </label>
+
+        <div class="variant-group-others">
+          <h4 class="variant-group-heading">Otros productos del grupo</h4>
+          <p class="label-hint">Selecciona los productos que son variantes de este mismo modelo:</p>
+          <div id="variantGroupOthers" class="variant-group-list"></div>
+        </div>
+
+        <p id="variantGroupStatus" class="admin-modal-status" hidden></p>
+      </div>
+
+      <div class="admin-modal-actions">
+        <button type="button" class="btn-secondary" data-admin-modal-close>Cancelar</button>
+        <button type="button" class="btn-success" id="btnVariantGroupSave">Guardar grupo</button>
       </div>
     </div>
   </div>
@@ -3485,6 +3522,9 @@ function renderTableRows(products, resetPage = true) {
               })()}
               <button type="button" class="btn-icon-action btn-link-alternatives" data-id="${p.id}" title="🔗 Vincular Alternativas">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+              </button>
+              <button type="button" class="btn-icon-action btn-variant-group" data-id="${p.id}" title="🔗 Relacionar como variante">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
               </button>
               <button type="button" class="btn-icon-action btn-edit-row" data-id="${p.id}" title="Cargar en formulario">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
@@ -8682,6 +8722,14 @@ function renderTableRows(products, resetPage = true) {
       openLinkAlternativesModal(btn.getAttribute('data-id'));
     });
 
+    document.addEventListener('click', (event) => {
+      const btn = event.target.closest?.('.btn-variant-group');
+      if (!btn) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openVariantGroupModal(btn.getAttribute('data-id'));
+    });
+
     async function openLinkAlternativesModal(id) {
       if (!id) return;
       linkAltProductId = id;
@@ -8772,6 +8820,112 @@ function renderTableRows(products, resetPage = true) {
         }
       } catch {
         if (linkAltStatus) { linkAltStatus.hidden = false; linkAltStatus.className = 'admin-modal-status is-error'; linkAltStatus.textContent = 'Error de red al guardar.'; }
+      }
+    });
+
+    // =========================================================================
+    // MODAL: RELACIONAR COMO VARIANTE (grupo de productos mismo modelo)
+    // =========================================================================
+    let variantGroupProductId = '';
+    let variantGroupSelectedOthers = new Set(); // IDs de otros productos del grupo
+
+    const variantGroupModal = document.getElementById('variantGroupModal');
+    const variantGroupProductName = document.getElementById('variantGroupProductName');
+    const variantGroupNameInput = document.getElementById('variantGroupName');
+    const variantGroupFeatureInput = document.getElementById('variantGroupFeature');
+    const variantGroupOthersList = document.getElementById('variantGroupOthers');
+    const variantGroupStatus = document.getElementById('variantGroupStatus');
+
+    async function openVariantGroupModal(id) {
+      if (!id || !variantGroupModal) return;
+      variantGroupProductId = id;
+      variantGroupSelectedOthers = new Set();
+      if (variantGroupStatus) { variantGroupStatus.hidden = true; }
+      if (variantGroupNameInput) variantGroupNameInput.value = '';
+      if (variantGroupFeatureInput) variantGroupFeatureInput.value = '';
+      if (variantGroupProductName) variantGroupProductName.textContent = '';
+
+      // Cargar datos del producto desde currentProducts (ya en memoria)
+      const p = (currentProducts || []).find((prod) => prod.id === id);
+      if (p) {
+        if (variantGroupProductName) variantGroupProductName.textContent = p.title;
+        if (p.variantGroup && variantGroupNameInput) variantGroupNameInput.value = p.variantGroup;
+        if (p.variantFeature && variantGroupFeatureInput) variantGroupFeatureInput.value = p.variantFeature;
+      }
+
+      // Cargar otros productos del catálogo para seleccionar como variantes
+      try {
+        const res = await fetch('/api/products/add', { cache: 'no-store' });
+        const data = await res.json();
+        const all = data.success && Array.isArray(data.products) ? data.products : [];
+        const others = all.filter((prod) => prod.id !== id);
+
+        if (variantGroupOthersList) {
+          variantGroupOthersList.innerHTML = others.map((prod) => {
+            const already = prod.variantGroup && prod.variantFeature ? ' (ya en grupo)' : '';
+            const isSelected = variantGroupSelectedOthers.has(prod.id) ? ' checked' : '';
+            return `
+              <label style="display:flex;align-items:center;gap:.5rem;padding:.4rem;border:1px solid var(--color-border);border-radius:6px;margin-bottom:.5rem;cursor:pointer;">
+                <input type="checkbox" value="${prod.id}"${isSelected} style="accent-color:#60a5fa;" />
+                <img src="${prod.image || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=60&auto=format&fit=crop'}" alt="" style="width:40px;height:40px;object-fit:cover;border-radius:4px;" />
+                <div style="flex:1;min-width:0;">
+                  <div style="font-weight:600;color:var(--color-text-main);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(prod.title)}</div>
+                  <div style="font-size:.75rem;color:var(--color-text-muted);">${prod.merchant || '—'}${prod.price != null ? ` · ${Number(prod.price).toFixed(2)} €` : ''}${already}</div>
+                </div>
+              </label>
+            `;
+          }).join('');
+
+          // Manejar clicks en checkboxes
+          variantGroupOthersList.querySelectorAll('input[type="checkbox"]').forEach((cb) => {
+            cb.addEventListener('change', (e) => {
+              const val = e.target.value;
+              if (e.target.checked) variantGroupSelectedOthers.add(val);
+              else variantGroupSelectedOthers.delete(val);
+            });
+          });
+        }
+      } catch { /* silencioso */ }
+
+      openAdminModal(variantGroupModal);
+    }
+
+    document.getElementById('btnVariantGroupSave')?.addEventListener('click', async () => {
+      if (!variantGroupProductId) return;
+      const groupName = variantGroupNameInput?.value?.trim();
+      const feature = variantGroupFeatureInput?.value?.trim();
+
+      if (!groupName) {
+        if (variantGroupStatus) { variantGroupStatus.hidden = false; variantGroupStatus.className = 'admin-modal-status is-error'; variantGroupStatus.textContent = 'Debes indicar el nombre del grupo de variantes.'; }
+        return;
+      }
+
+      const productIds = [variantGroupProductId, ...variantGroupSelectedOthers];
+      const featureById = { [variantGroupProductId]: feature || undefined };
+      // Para los otros productos, pediríamos la característica, pero por simplicidad
+      // dejamos vacío (el admin puede editar después). Se puede mejorar luego.
+      variantGroupSelectedOthers.forEach((id) => { featureById[id] = undefined; });
+
+      try {
+        const res = await fetch('/api/admin/products/variant-group', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            variantGroup: groupName,
+            productIds,
+            featureById,
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          if (variantGroupStatus) { variantGroupStatus.hidden = false; variantGroupStatus.className = 'admin-modal-status is-ok'; variantGroupStatus.textContent = data.message || 'Grupo de variantes guardado.'; }
+          await reloadProductsTable();
+          setTimeout(() => closeAdminModal(variantGroupModal), 800);
+        } else {
+          if (variantGroupStatus) { variantGroupStatus.hidden = false; variantGroupStatus.className = 'admin-modal-status is-error'; variantGroupStatus.textContent = data.message || 'No se pudo guardar el grupo.'; }
+        }
+      } catch {
+        if (variantGroupStatus) { variantGroupStatus.hidden = false; variantGroupStatus.className = 'admin-modal-status is-error'; variantGroupStatus.textContent = 'Error de red al guardar.'; }
       }
     });
 

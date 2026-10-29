@@ -110,6 +110,17 @@ export interface Product {
   ai_error?: string;
   /** Título sintetizado y corto (para product-cards). Si falta, se usa `title`. */
   title_short?: string;
+
+  /** Grupo de variantes: productos de la misma marca/modelo pero con una
+   * característica diferente (ej: disco duro 2 TB / 4 TB). Todos los productos
+   * de un mismo grupo comparten este ID. Los productos sin grupo tienen este
+   * campo undefined. */
+  variantGroup?: string;
+
+  /** Característica que diferencia a esta variante dentro de su grupo
+   * (ej: "2 TB", "4 TB", "256 GB", "Negro", "Azul"). Se muestra en la ficha
+   * del producto junto a la tarjeta de la variante relacionada. */
+  variantFeature?: string;
 }
 
 // Ruta al archivo de persistencia JSON
