@@ -1,0 +1,134 @@
+---
+export const prerender = false;
+---
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Importar producto Amazon desde JSON | Tradylor Admin</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: #0b1120; color: #e5e7eb; margin: 0; padding: 2rem; }
+    .wrap { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 1.25rem; margin-bottom: 1.5rem; color: #60a5fa; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    label { display: block; font-size: 0.85rem; color: #9ca3af; margin-bottom: 0.4rem; font-weight: 600; }
+    input[type="text"], textarea { width: 100%; background: #0b1220; border: 1px solid #374151; border-radius: 8px; color: #e5e7eb; padding: 0.6rem 0.8rem; font-size: 0.9rem; }
+    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; min-height: 320px; resize: vertical; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    @media (max-width: 640px) { .row { grid-template-columns: 1fr; } body { padding: 1rem; } }
+    button.btn { background: #38bdf8; color: #07111f; border: none; border-radius: 8px; padding: 0.6rem 1.25rem; font-weight: 800; cursor: pointer; font-size: 0.95rem; }
+    button.btn:disabled { opacity: .6; cursor: not-allowed; }
+    button.btn:hover:not(:disabled) { background: #7dd3fc; }
+    .result { margin-top: 1.5rem; padding: 1rem; border-radius: 8px; display: none; }
+    .result.ok { background: rgba(16, 185, 129, .12); border: 1px solid rgba(16, 185, 129, .3); color: #a7f3d0; }
+    .result.err { background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .3); color: #fecaca; }
+    .result pre { margin: .5rem 0 0; font-size: .8rem; overflow: auto; max-height: 300px; white-space: pre-wrap; word-break: break-word; }
+    .hint { font-size: .78rem; color: #6b7280; margin-top: .25rem; }
+    .flex { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
+    .checkbox-row { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+    .checkbox-row input { width: auto; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Importar producto Amazon desde JSON (ScraperAPI)</h1>
+
+    <div class="card">
+      <label>ASIN de Amazon (10 caracteres)</label>
+      <input type="text" id="asinInput" placeholder="Ej: B01EXDG2MO" maxlength="20" />
+      <p class="hint">Puedes pegar aquí el ASIN o una URL completa de Amazon; se extraerá automáticamente.</p>
+    </div>
+
+    <div class="card">
+      <label>JSON crudo de ScraperAPI</label>
+      <textarea id="jsonInput" placeholder='Pega aquí el objeto JSON completo devuelto por ScraperAPI...'></textarea>
+      <p class="hint">Consíguelo desde otro sitio donde ScraperAPI funcione (tu PC local, etc.) y pégalo aquí. Tradylor lo normalizará y guardará en el catálogo.</p>
+    </div>
+
+    <div class="flex">
+      <div class="checkbox-row">
+        <input type="checkbox" id="saveCheckbox" checked />
+        <label for="saveCheckbox" style="margin:0; font-weight:normal;">Guardar en el catálogo (desmarca para solo vista previa)</label>
+      </div>
+    </div>
+
+    <button class="btn" id="importBtn">Importar producto</button>
+
+    <div id="resultBox" class="result"></div>
+  </div>
+
+  <script is:inline>
+    (function () {
+      var asinInput = document.getElementById('asinInput');
+      var jsonInput = document.getElementById('jsonInput');
+      var saveCheckbox = document.getElementById('saveCheckbox');
+      var importBtn = document.getElementById('importBtn');
+      var resultBox = document.getElementById('resultBox');
+
+      importBtn.addEventListener('click', function () {
+        var asin = asinInput.value.trim();
+        var rawText = jsonInput.value.trim();
+        var save = saveCheckbox.checked;
+
+        if (!asin) {
+          showResult('error', 'Debes proporcionar un ASIN.');
+          return;
+        }
+        if (!rawText) {
+          showResult('error', 'Debes pegar el JSON crudo de ScraperAPI.');
+          return;
+        }
+
+        var raw;
+        try {
+          raw = JSON.parse(rawText);
+        } catch (e) {
+          showResult('error', 'El JSON no es válido: ' + e.message);
+          return;
+        }
+
+        importBtn.disabled = true;
+        importBtn.textContent = 'Importando...';
+        resultBox.style.display = 'none';
+
+        fetch('/api/admin/amazon/import-json', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            asin: asin,
+            raw: raw,
+            options: { save: save, imageOnlyIfMissing: true }
+          })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          if (data.success) {
+            showResult('ok', 'Éxito: ' + data.message + (data.saved ? '' : ' (no guardado).') + '\nASIN: ' + data.asin);
+            if (data.warnings && data.warnings.length) {
+              showResult('ok', showResult.okText + '\n\nAvisos:\n• ' + data.warnings.join('\n• '));
+            }
+          } else {
+            showResult('error', 'Error: ' + (data.message || 'Error desconocido'));
+          }
+        })
+        .catch(function (err) {
+          showResult('error', 'Error de red: ' + err.message);
+        })
+        .finally(function () {
+          importBtn.disabled = false;
+          importBtn.textContent = 'Importar producto';
+        });
+      });
+
+      function showResult(type, text) {
+        resultBox.className = 'result ' + type;
+        resultBox.textContent = text;
+        resultBox.style.display = 'block';
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -244,6 +244,7 @@ src/pages/p/[id].ts
 src/pages/perfil.astro
 src/pages/producto/[slug].astro
 src/pages/share/[id].astro
+src/pages/upayp1b4/amazon-import.astro
 src/pages/upayp1b4.astro
 src/pages/upayp1b4/curation.astro
 src/pages/upayp1b4/marketing/calendario.astro
