@@ -12277,6 +12277,9 @@ function renderTableRows(products, resetPage = true) {
     padding: 0.6rem 0.5rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     vertical-align: middle;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   :global(.product-row:hover) {
@@ -12475,6 +12478,14 @@ function renderTableRows(products, resetPage = true) {
   :global(.aff-detail-grid) {
     max-width: 100%;
     overflow-x: auto;
+  }
+
+  /* En móvil, el grid de detalle se apila en una sola columna para no
+   * desplazar las columnas de la tabla principal. */
+  @media (max-width: 720px) {
+    :global(.aff-detail-grid) {
+      grid-template-columns: 1fr !important;
+    }
   }
 
   /* ===== Chips de URL compactos (una línea + copiar + desplegar) ===== */

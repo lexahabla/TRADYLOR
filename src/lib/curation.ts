@@ -235,9 +235,17 @@ export const CONVERSION_SCORE_SCALE = 5;
 export function computeConversionScore(product: Product): number {
   const price = Math.max(Number(product.price) || 0, 1);
   const storedCommission = Number(product.commissionEstimate);
-  const commission = Number.isFinite(storedCommission) && storedCommission > 0
-    ? storedCommission
-    : price * 0.05;
+  const commissionRate = Number(product.commissionRate);
+  // Comisión en €: prioriza commissionEstimate (monto fijo), luego
+  // commissionRate (porcentaje sobre el precio), y por último 5% por defecto.
+  let commission: number;
+  if (Number.isFinite(storedCommission) && storedCommission > 0) {
+    commission = storedCommission;
+  } else if (Number.isFinite(commissionRate) && commissionRate > 0) {
+    commission = price * (commissionRate / 100);
+  } else {
+    commission = price * 0.05;
+  }
   const storedSales = Number(product.sales30d);
   const sales = Number.isFinite(storedSales) && storedSales > 0 ? storedSales : 1;
   const rating = Number(product.rating);

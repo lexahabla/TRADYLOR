@@ -57,21 +57,45 @@ if (!sessionUser) {
       <div class="radar-tools-head">
         <h2 class="radar-section-title">Mis herramientas</h2>
       </div>
-      <div class="radar-tools-grid">
-        <article class="radar-tool-card">
-          <h3 class="radar-tool-card-title">🧭 Perfiles de comprador</h3>
-          <div class="radar-tool-card-list" data-radar-tool-profiles></div>
-          <a href="/herramientas/perfilador" class="radar-tool-card-link">+ Crear nuevo perfil</a>
+      <div class="radar-tools-chips" role="tablist" aria-label="Mis herramientas">
+        <!-- Pastilla 1: Perfiles de comprador -->
+        <article class="radar-tool-chip" data-radar-tool-chip="profiles" role="tab" aria-expanded="false">
+          <button type="button" class="radar-tool-chip-btn" aria-controls="radar-chip-profiles-content">
+            <span class="radar-tool-chip-icon">🧭</span>
+            <span class="radar-tool-chip-title">Perfiles de comprador</span>
+            <span class="radar-tool-chip-count" data-radar-tool-profiles-count>0</span>
+            <span class="radar-tool-chip-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="radar-tool-chip-content" id="radar-chip-profiles-content" hidden>
+            <div class="radar-tool-chip-list" data-radar-tool-profiles></div>
+            <a href="/herramientas/perfilador" class="radar-tool-chip-action">+ Crear nuevo perfil</a>
+          </div>
         </article>
-        <article class="radar-tool-card">
-          <h3 class="radar-tool-card-title">⚖️ Comparativas guardadas</h3>
-          <div class="radar-tool-card-list" data-radar-tool-comparisons></div>
-          <a href="/herramientas/comparador" class="radar-tool-card-link">+ Ir al comparador</a>
+        <!-- Pastilla 2: Comparativas guardadas -->
+        <article class="radar-tool-chip" data-radar-tool-chip="comparisons" role="tab" aria-expanded="false">
+          <button type="button" class="radar-tool-chip-btn" aria-controls="radar-chip-comparisons-content">
+            <span class="radar-tool-chip-icon">⚖️</span>
+            <span class="radar-tool-chip-title">Comparativas guardadas</span>
+            <span class="radar-tool-chip-count" data-radar-tool-comparisons-count>0</span>
+            <span class="radar-tool-chip-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="radar-tool-chip-content" id="radar-chip-comparisons-content" hidden>
+            <div class="radar-tool-chip-list" data-radar-tool-comparisons></div>
+            <a href="/herramientas/comparador" class="radar-tool-chip-action">+ Ir al comparador</a>
+          </div>
         </article>
-        <article class="radar-tool-card">
-          <h3 class="radar-tool-card-title">🤖 Conversaciones con el Asesor IA</h3>
-          <div class="radar-tool-card-list" data-radar-tool-aichats></div>
-          <a href="/herramientas/dependiente-ia" class="radar-tool-card-link">+ Nueva conversación</a>
+        <!-- Pastilla 3: Conversaciones IA -->
+        <article class="radar-tool-chip" data-radar-tool-chip="aichats" role="tab" aria-expanded="false">
+          <button type="button" class="radar-tool-chip-btn" aria-controls="radar-chip-aichats-content">
+            <span class="radar-tool-chip-icon">🤖</span>
+            <span class="radar-tool-chip-title">Asesor IA</span>
+            <span class="radar-tool-chip-count" data-radar-tool-aichats-count>0</span>
+            <span class="radar-tool-chip-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="radar-tool-chip-content" id="radar-chip-aichats-content" hidden>
+            <div class="radar-tool-chip-list" data-radar-tool-aichats></div>
+            <a href="/herramientas/dependiente-ia" class="radar-tool-chip-action">+ Nueva conversación</a>
+          </div>
         </article>
       </div>
     </section>
@@ -261,7 +285,7 @@ if (!sessionUser) {
     display: none;
   }
 
-  /* Mis herramientas */
+  /* Mis herramientas — pastillas desplegables */
   .radar-tools-section {
     margin-bottom: 2.5rem;
   }
@@ -286,39 +310,124 @@ if (!sessionUser) {
     text-decoration: underline;
   }
 
-  .radar-tools-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-  }
-
-  .radar-tool-card {
+  .radar-tools-chips {
     display: flex;
     flex-direction: column;
-    gap: 0.6rem;
-    padding: 1.1rem;
+    gap: 0.5rem;
+  }
+
+  .radar-tool-chip {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
     background: var(--color-bg-card);
     border: 1px solid var(--color-border);
     border-radius: var(--border-radius-md);
+    overflow: hidden;
   }
 
-  .radar-tool-card-title {
-    margin: 0;
-    font-size: 0.9rem;
-    font-weight: 700;
+  .radar-tool-chip-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6rem;
+    padding: 0.85rem 1rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
     color: var(--color-text-main);
+    transition: background 0.2s ease, border-color 0.2s ease;
   }
 
-  .radar-tool-card-list {
+  .radar-tool-chip-btn:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .radar-tool-chip-btn[aria-expanded="true"] {
+    background: rgba(52, 211, 153, 0.08);
+    border-bottom: 1px solid rgba(52, 211, 153, 0.3);
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  .radar-tool-chip-icon {
+    font-size: 1.2rem;
+    flex-shrink: 0;
+  }
+
+  .radar-tool-chip-title {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.95rem;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .radar-tool-chip-count {
+    flex-shrink: 0;
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--color-text-dim);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--color-border);
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .radar-tool-chip-chevron {
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    color: var(--color-text-dim);
+    transition: transform 0.2s ease;
+  }
+
+  .radar-tool-chip-btn[aria-expanded="true"] .radar-tool-chip-chevron {
+    transform: rotate(180deg);
+  }
+
+  .radar-tool-chip-content {
+    padding: 0.75rem 1rem 1rem;
+    border-top: none;
+    animation: radarChipSlideDown 0.2s ease;
+  }
+
+  @keyframes radarChipSlideDown {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .radar-tool-chip-list {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
     min-height: 1.5rem;
+    margin-bottom: 0.6rem;
   }
 
-  .radar-tool-card-empty {
-    font-size: 0.78rem;
+  .radar-tool-chip-empty {
+    font-size: 0.82rem;
     color: var(--color-text-dim);
+    margin-bottom: 0.6rem;
+  }
+
+  .radar-tool-chip-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #60a5fa;
+    text-decoration: none;
+  }
+
+  .radar-tool-chip-action:hover {
+    text-decoration: underline;
   }
 
   .radar-tool-item {
@@ -376,9 +485,16 @@ if (!sessionUser) {
     color: #f87171;
   }
 
-  @media (max-width: 900px) {
-    .radar-tools-grid {
-      grid-template-columns: 1fr;
+  @media (max-width: 640px) {
+    .radar-tools-chips {
+      gap: 0.4rem;
+    }
+    .radar-tool-chip-btn {
+      padding: 0.7rem 0.85rem;
+      gap: 0.5rem;
+    }
+    .radar-tool-chip-title {
+      font-size: 0.88rem;
     }
   }
 
@@ -1598,6 +1714,7 @@ if (!sessionUser) {
     if (profilesHost) {
       const profiles = getBuyerProfiles();
       const active = getActiveBuyerProfile();
+      if (profilesCountEl) profilesCountEl.textContent = String(profiles.length);
       profilesHost.innerHTML = profiles.length
         ? profiles.map((p) => `
             <div class="radar-tool-item${p.id === active?.id ? ' is-active' : ''}">
@@ -1610,11 +1727,12 @@ if (!sessionUser) {
               </button>
             </div>
           `).join('')
-        : '<p class="radar-tool-card-empty">Aún no tienes perfiles guardados.</p>';
+        : '<p class="radar-tool-chip-empty">Aún no tienes perfiles guardados.</p>';
     }
 
     if (comparisonsHost) {
       const history = getComparatorHistory();
+      if (comparisonsCountEl) comparisonsCountEl.textContent = String(history.length);
       comparisonsHost.innerHTML = history.length
         ? history.slice(0, 5).map((c) => `
             <div class="radar-tool-item">
@@ -1624,11 +1742,12 @@ if (!sessionUser) {
               </button>
             </div>
           `).join('')
-        : '<p class="radar-tool-card-empty">Aún no has guardado ninguna comparativa.</p>';
+        : '<p class="radar-tool-chip-empty">Aún no has guardado ninguna comparativa.</p>';
     }
 
     if (aiChatsHost) {
       const chats = getAiChats();
+      if (aichatsCountEl) aichatsCountEl.textContent = String(chats.length);
       aiChatsHost.innerHTML = chats.length
         ? chats.slice(0, 5).map((c) => `
             <div class="radar-tool-item">
@@ -1638,13 +1757,27 @@ if (!sessionUser) {
               </button>
             </div>
           `).join('')
-        : '<p class="radar-tool-card-empty">Aún no has hablado con el Asesor IA.</p>';
+        : '<p class="radar-tool-chip-empty">Aún no has hablado con el Asesor IA.</p>';
     }
   }
 
   document.querySelector('[data-radar-tools-section]')?.addEventListener('click', (event) => {
     const target = event.target as Element | null;
     if (!target) return;
+    // Desplegar/ocultar pastilla de herramienta
+    const chipBtn = target.closest<HTMLElement>('.radar-tool-chip-btn');
+    if (chipBtn) {
+      event.stopPropagation();
+      const chip = chipBtn.closest<HTMLElement>('.radar-tool-chip');
+      const content = chipBtn.nextElementSibling;
+      const expanded = chipBtn.getAttribute('aria-expanded') === 'true';
+      chipBtn.setAttribute('aria-expanded', String(!expanded));
+      chip?.setAttribute('aria-expanded', String(!expanded));
+      if (content) content.hidden = expanded;
+      const chevron = chipBtn.querySelector('.radar-tool-chip-chevron');
+      if (chevron) chevron.style.transform = expanded ? 'rotate(0deg)' : 'rotate(180deg)';
+      return;
+    }
     const activateBtn = target.closest<HTMLElement>('[data-tool-activate-profile]');
     if (activateBtn?.dataset.toolActivateProfile) {
       setActiveBuyerProfile(activateBtn.dataset.toolActivateProfile);
