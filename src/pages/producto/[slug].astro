@@ -23,6 +23,7 @@ import ComparisonTable from '../../components/ComparisonTable.astro';
 import PriceHistoryChart from '../../components/PriceHistoryChart.astro';
 import { getCatalogProducts, findCatalogProduct, productKey } from '../../lib/catalog';
 import { isVideoUrl, videoThumbUrl } from '../../lib/media';
+import { areSameProductType } from '../../lib/curation';
 import { resolveProductShipping } from '../../lib/shipping';
 import { getCrossMerchantOffers } from '../../lib/productNetwork';
 import { applyProductFieldVisibility, getVisibleCustomFieldEntries } from '../../lib/productFieldsStore';
@@ -88,8 +89,8 @@ const galleryImages = [
 ].filter(Boolean);
 const hasGalleryCarousel = galleryImages.length > 1;
 
-// Comparativa: productos de la misma categoría (incluye el actual)
-const sameCategory = allProducts.filter((p) => p.category === product.category);
+// Comparativa: productos estrictamente del MISMO TIPO que el actual (nunca tipos incompatibles como monitor vs disco duro)
+const sameCategory = allProducts.filter((p) => p.id === product.id || areSameProductType(product as any, p as any));
 // Alternativas vinculadas desde el panel admin (cross-matching bidireccional).
 const linkedAlternativeProducts = (product.alternative_product_ids ?? [])
   .map((altId) => allProducts.find((p) => p.id === altId))
@@ -383,7 +384,13 @@ const productSchema = {
             )}
           </div>
           <p class="price-disclaimer">
-            Puede variar en el momento de la compra.
+            {product.lastPriceSync ? (
+              <span title={`Comprobado con la tienda: ${new Date(product.lastPriceSync).toLocaleDateString('es-ES')}`}>
+                ✓ Precio verificado · Puede variar en el momento de la compra.
+              </span>
+            ) : (
+              'Puede variar en el momento de la compra en la tienda oficial.'
+            )}
           </p>
         </div>
 

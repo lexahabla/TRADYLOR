@@ -672,6 +672,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <button type="button" class="btn-ai btn-sm" id="btnProdOpenCode" title="Asistente IA: consola de chat para curar el catálogo con instrucciones en lenguaje natural (usa los proveedores conectados y el CLI local)">🤖 Asistente IA</button>
           </div>
 
+          <!-- Categoría funcional: Precios -->
+          <div class="product-sel-group" data-group="pricing">
+            <span class="product-sel-group-label">Precios:</span>
+            <button type="button" class="btn-secondary btn-sm" id="btnSyncPrices" title="Consulta el precio en vivo en la tienda oficial (Amazon/ScraperAPI) y actualiza el precio actual y el histórico de los productos">🔄 Actualizar Precios</button>
+          </div>
+
           <!-- Categoría funcional: Categorías y Secciones -->
           <div class="product-sel-group" data-group="categories">
             <span class="product-sel-group-label">Categorías y Secciones:</span>
@@ -3581,22 +3587,25 @@ function renderTableRows(products, resetPage = true) {
                 ${p.is_duplicate ? `<span class="state-pill state-dup">♻️ ${p.possible_duplicate ? 'posible duplicado' : 'duplicado'}${p.duplicate_of ? ` de ${p.duplicate_of}` : ''}</span>` : ''}
               </dd></div>
               ${Array.isArray(p.normalized_tags) && p.normalized_tags.length ? `<div class="aff-detail-item"><dt>Tags normalizados (${p.normalized_tags.length})</dt><dd class="tag-chip-list">${p.normalized_tags.map((t) => `<span class="tag-chip">${escapeHtml ? escapeHtml(t) : t}</span>`).join('')}</dd></div>` : ''}
-              <div class="aff-detail-item"><dt>Alternativas vinculadas</dt><dd>
+              <div class="aff-detail-item aff-detail-alternatives"><dt>Alternativas vinculadas</dt><dd>
                 ${(() => {
                   const a = p.alternatives || {};
                   const links = Array.isArray(p.alternative_product_ids) ? p.alternative_product_ids.length : 0;
                   const premium = a.premiumOptionId ? 1 : 0;
                   const cheaper = (Array.isArray(a.cheaperOptionIds) ? a.cheaperOptionIds.length : 0) || (a.cheaperOptionId ? 1 : 0);
                   const similar = (Array.isArray(a.similarOptionIds) ? a.similarOptionIds.length : 0) || (a.similarOptionId ? 1 : 0);
-                  if (!links && !premium && !cheaper && !similar) return 'Ninguna';
+                  if (!links && !premium && !cheaper && !similar) {
+                    return `<div class="alt-links-summary"><span>0 vínculos</span></div>
+                    <button type="button" class="btn-secondary btn-sm btn-link-alternatives" data-id="${p.id}">🔗 Vincular Alternativas</button>`;
+                  }
                   return `<div class="alt-links-summary">
                     <span>${links} vínculo(s)</span>
                     <span>⭐ ${premium} principal</span>
                     <span>💰 ${cheaper} económica(s)</span>
                     <span>🎯 ${similar} competidor(es)</span>
-                  </div>`;
+                  </div>
+                  <button type="button" class="btn-secondary btn-sm btn-link-alternatives" data-id="${p.id}">🔗 Vincular Alternativas</button>`;
                 })()}
-                <button type="button" class="btn-secondary btn-sm btn-link-alternatives" data-id="${p.id}">🔗 Vincular Alternativas</button>
               </dd></div>
               ${p.rating != null ? `<div class="aff-detail-item"><dt>Valoración</dt><dd>${Number(p.rating).toFixed(1)} ★ ${p.reviewsCount != null ? `(${p.reviewsCount} opiniones)` : ''}</dd></div>` : ''}
               ${p.badge ? `<div class="aff-detail-item"><dt>Badge</dt><dd>${p.badge}</dd></div>` : ''}
@@ -8760,6 +8769,49 @@ function renderTableRows(products, resetPage = true) {
       }
     });
 
+    // ── Actualizar precios en vivo desde las tiendas (Amazon / ScraperAPI) ──
+    const btnSyncPrices = document.getElementById('btnSyncPrices');
+    btnSyncPrices?.addEventListener('click', async () => {
+      const selectedIds = Array.from(selectedProductIds);
+      const isBatch = selectedIds.length === 0;
+      const msg = isBatch
+        ? '¿Sincronizar el precio actual de los 10 productos con fecha de comprobación más antigua en la tienda en vivo (Amazon)?'
+        : `¿Sincronizar el precio actual de los ${selectedIds.length} producto(s) seleccionado(s) en la tienda en vivo?`;
+
+      if (!confirm(msg)) return;
+
+      btnSyncPrices.disabled = true;
+      btnSyncPrices.textContent = 'Actualizando precios…';
+
+      try {
+        const res = await fetch('/api/admin/sync-prices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(isBatch ? { limit: 10 } : { productIds: selectedIds }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          await reloadProductsTable();
+          const detail = (data.results || [])
+            .map((r) => `• ${r.title}: ${r.message || r.status}`)
+            .join('\n');
+          showAlert(
+            'success',
+            `Sincronización completada (${data.updated} con cambios de precio)`,
+            `Total consultados: ${data.total} | Actualizados: ${data.updated} | Sin cambios: ${data.unchanged} | Errores: ${data.errors}\n\n${detail}`
+          );
+        } else {
+          showAlert('error', 'Error al sincronizar precios', data.message || 'No se pudieron actualizar los precios.');
+        }
+      } catch (err) {
+        console.error(err);
+        showAlert('error', 'Error de red', 'No se pudo contactar con el endpoint de precios.');
+      } finally {
+        btnSyncPrices.disabled = false;
+        btnSyncPrices.textContent = '🔄 Actualizar Precios';
+      }
+    });
+
     // ── Edición rápida de categoría/subcategoría en la fila expandida ────────
     async function quickAssignCategory(id, categoryId, categoryName, subcategoryId) {
       try {
@@ -10497,7 +10549,6 @@ function renderTableRows(products, resetPage = true) {
 
   /* Estado de importación visible en cada fila */
   :global(.ac-state) { display: inline-block; margin-left: .35rem; padding: .05rem .3rem; border-radius: 999px; font-size: .56rem; font-weight: 800; vertical-align: 1px; white-space: nowrap; }
-  :global(.ac-state.is-imported) { color: #6ee7b7; background: rgba(16, 185, 129, .12); border: 1px solid rgba(16, 185, 129, .28); }
   :global(.ac-state.is-discarded) { color: #fca5a5; background: rgba(239, 68, 68, .1); border: 1px solid rgba(239, 68, 68, .28); }
 
   /* Columna «Estado» (condición física: Nuevo/Usado/Reacondicionado...) de
@@ -12257,71 +12308,15 @@ function renderTableRows(products, resetPage = true) {
     overflow-x: auto;
   }
 
-  :global(.products-table) {
+  :global(.products-table),
+  :global(#productsTable),
+  :global(#productsTable thead),
+  :global(#aliCatalogHost .products-table),
+  :global(#aliCatalogHost .products-table thead) {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.8rem;
-    /* table-layout: fixed;  ← eliminado para evitar recorte de columnas en filas detalle */
-  }
-
-  :global(.products-table th:nth-child(4)),   /* Estado */
-  {
-    width: 30px;
-    max-width: 30px;
-  }
-
-  :global(.products-table th:nth-child(5)),   /* Precio */
-  {
-    width: 55px;
-    max-width: 55px;
-  }
-
-  :global(.products-table th:nth-child(6)),   /* Precio orig. */
-  {
-    width: 60px;
-    max-width: 60px;
-  }
-
-  :global(.products-table th:nth-child(7)),   /* Dto. */
-  {
-    width: 42px;
-    max-width: 42px;
-  }
-
-  :global(.products-table th:nth-child(8)),   /* Comisión % */
-  {
-    width: 55px;
-    max-width: 55px;
-  }
-
-  :global(.products-table th:nth-child(9)),   /* Comisión € */
-  {
-    width: 55px;
-    max-width: 55px;
-  }
-
-  :global(.products-table th:nth-child(10)),  /* Ventas */
-  {
-    width: 50px;
-    max-width: 50px;
-  }
-
-  :global(.products-table th:nth-child(11))   /* Valoración */
-  {
-    width: 80px;
-    max-width: 80px;
-  }
-
-  :global(.products-table th:nth-child(3)),   /* Producto */
-  {
-    min-width: 180px;
-    max-width: 320px;
-  }
-
-  :global(.products-table th:nth-child(12))   /* Acciones */
-  {
-    width: 110px;
-    max-width: 110px;
+    table-layout: auto !important;
   }
 
   /* ── Tabla de catálogo (productsTable): anchos de columna ajustados ──
@@ -12634,19 +12629,27 @@ function renderTableRows(products, resetPage = true) {
   /* ===== Alternativas vinculadas: resumen en varias líneas ===== */
   :global(.alt-links-summary) {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-    margin-bottom: 0.35rem;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+    margin-bottom: 0.45rem;
     font-size: 0.72rem;
     color: var(--color-text-muted);
   }
   :global(.alt-links-summary span) {
     display: inline-flex;
     align-items: center;
-    padding: 0.1rem 0.4rem;
+    padding: 0.15rem 0.45rem;
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid var(--color-border);
     border-radius: 4px;
+    width: fit-content;
+    white-space: nowrap;
+  }
+  :global(.aff-detail-alternatives .btn-link-alternatives) {
+    display: inline-flex;
+    margin-top: 0.25rem;
+    width: fit-content;
     white-space: nowrap;
   }
 
@@ -13083,54 +13086,11 @@ function renderTableRows(products, resetPage = true) {
   border-left: 4px solid #3b82f6;
 }
 
-/* ===== Tabla Importar (#aliCatalogHost): distribución de columnas =====
-   La tabla usa `table-layout: fixed`: los anchos salen de los <th> de la
-   primera fila. Todas las columnas llevan ancho fijo EXCEPTO «Producto»
-   (3ª), que se queda sin ancho para absorber todo el espacio sobrante y
-   mostrar los títulos ENTEROS (sin recorte). Checkbox (1ª) intacta. */
-:global(#aliCatalogHost .products-table th:nth-child(2)) { width: 54px; }   /* Foto */
-:global(#aliCatalogHost .products-table th:nth-child(4)) { width: 72px; }   /* Precio */
-:global(#aliCatalogHost .products-table th:nth-child(5)) { width: 38px; }   /* Dto. */
-:global(#aliCatalogHost .products-table th:nth-child(6)) { width: 56px; }   /* Comisión % */
-:global(#aliCatalogHost .products-table th:nth-child(7)) { width: 64px; }   /* Comisión € */
-:global(#aliCatalogHost .products-table th:nth-child(8)) { width: 50px; }   /* Ventas */
-:global(#aliCatalogHost .products-table th:nth-child(9)) { width: 118px; }  /* Acciones (botones intactos) */
-/* La regla genérica de .products-table limita «Producto» a max-width:320px;
-   aquí se libera para que ocupe todo el ancho restante de la fila. */
-:global(#aliCatalogHost .products-table th:nth-child(3)) { width: 130px; max-width: 130px; min-width: 0; }
-
-/* ── Estilos de tabla Importar iguales a Catálogo (primeras 8 columnas) ── */
-:global(#aliCatalogHost .products-table) {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.8rem;
-  /* table-layout: fixed; ← heredado de .products-table */
-}
-
-:global(#aliCatalogHost .products-table th) {
-  text-align: center;
-  padding: 0.4rem 0.5rem;
-  color: var(--color-text-dim);
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--color-border);
-  white-space: normal;
-}
-
-:global(#aliCatalogHost .products-table td) {
-  text-align: center;
-  padding: 0.6rem 0.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  vertical-align: middle;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-:global(#aliCatalogHost .products-table th:first-child),
-:global(#aliCatalogHost .products-table td:first-child) {
+/* ===== Tabla Importar (#aliCatalogHost): diseño idéntico al Catálogo =====
+   Las 8 primeras columnas tienen el mismo diseño, medidas y estilo que la
+   tabla de Catálogo (#productsTable). */
+:global(#aliCatalogHost .products-table th:nth-child(1)),
+:global(#aliCatalogHost .products-table td:nth-child(1)) {
   width: 30px;
   padding: 0.6rem 0;
   text-align: center;
@@ -13147,6 +13107,43 @@ function renderTableRows(products, resetPage = true) {
 :global(#aliCatalogHost .products-table td:nth-child(3)) {
   width: 130px;
   text-align: left;
+}
+
+:global(#aliCatalogHost .products-table th:nth-child(4)),
+:global(#aliCatalogHost .products-table td:nth-child(4)) {
+  width: 82px;
+  text-align: center;
+}
+
+:global(#aliCatalogHost .products-table th:nth-child(5)),
+:global(#aliCatalogHost .products-table td:nth-child(5)) {
+  width: 42px;
+  text-align: center;
+}
+
+:global(#aliCatalogHost .products-table th:nth-child(6)),
+:global(#aliCatalogHost .products-table td:nth-child(6)) {
+  width: 55px;
+  text-align: center;
+}
+
+:global(#aliCatalogHost .products-table th:nth-child(7)),
+:global(#aliCatalogHost .products-table td:nth-child(7)) {
+  width: 64px;
+  text-align: center;
+}
+
+:global(#aliCatalogHost .products-table th:nth-child(8)),
+:global(#aliCatalogHost .products-table td:nth-child(8)) {
+  width: 50px;
+  text-align: center;
+}
+
+:global(#aliCatalogHost .products-table th:nth-child(9)),
+:global(#aliCatalogHost .products-table td:nth-child(9)) {
+  width: 120px;
+  text-align: right;
+  white-space: nowrap;
 }
 
 :global(#aliCatalogHost .products-table .aff-thumb img) {

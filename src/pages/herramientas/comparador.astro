@@ -11,6 +11,7 @@ import ComparisonTable from '../../components/ComparisonTable.astro';
 import { getCatalogProducts, productKey } from '../../lib/catalog';
 import { getCrossMerchantOffers } from '../../lib/productNetwork';
 import { getCategoryById } from '../../lib/categories';
+import { areSameProductType } from '../../lib/curation';
 
 export const prerender = false;
 
@@ -140,7 +141,7 @@ if (baseProduct) {
 
   const compareCat = compareCategoryOf(baseProduct);
   categoryRivals = approvedProducts
-    .filter((p) => p.id !== baseProduct.id && !roleIds.has(p.id) && compareCategoryOf(p).id === compareCat.id)
+    .filter((p) => p.id !== baseProduct.id && !roleIds.has(p.id) && areSameProductType(baseProduct, p))
     .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
     .slice(0, 2);
 

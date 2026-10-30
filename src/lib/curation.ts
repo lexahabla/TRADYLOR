@@ -907,14 +907,20 @@ export function ensureAlternativeRoles(productId: string): {
 }
 
 /**
- * Determina si dos productos son del mismo tipo o naturaleza para ser alternativas válidas.
+ * Determina si dos productos son del mismo tipo o naturaleza para comparativas
+ * y alternativas válidas (ej: monitor vs monitor, disco duro vs disco duro).
+ * NUNCA permite comparar tipos incompatibles (ej: monitor vs disco duro).
  */
-function areSameProductType(base: Product, candidate: Product): boolean {
+export function areSameProductType(base: Product, candidate: Product): boolean {
   if (base.id === candidate.id) return false;
 
   // 1) Si ambos tienen subcategoría asignada:
   if (base.subcategory_id && candidate.subcategory_id) {
     return base.subcategory_id === candidate.subcategory_id;
+  }
+  // Si uno tiene subcategoría y el otro tiene una subcategoría distinta, no son comparables:
+  if (base.subcategory_id && candidate.subcategory_id && base.subcategory_id !== candidate.subcategory_id) {
+    return false;
   }
 
   // 2) Categoría principal normalizada
@@ -928,21 +934,27 @@ function areSameProductType(base: Product, candidate: Product): boolean {
   const extractNatureTokens = (title: string): string[] => {
     const t = String(title || '').toLowerCase();
     const tokenGroups: string[][] = [
-      ['ssd', 'nvme', 'm.2', 'disco duro'],
+      ['ssd', 'nvme', 'm.2', 'disco duro', 'hdd', 'tarjeta micro sd', 'microsd', 'pendrive', 'memoria usb', 'almacenamiento'],
       ['power bank', 'powerbank', 'bateria portatil', 'batería portátil'],
-      ['auricular', 'auriculares', 'cascos', 'earbuds', 'headphone', 'tws'],
-      ['smartwatch', 'reloj inteligente', 'smart band', 'pulsera actividad'],
-      ['aspirador', 'aspiradora', 'robot aspirador', 'conga', 'roomba'],
+      ['auricular', 'auriculares', 'cascos', 'earbuds', 'headphone', 'headphones', 'tws', 'airpods'],
+      ['smartwatch', 'reloj inteligente', 'smart band', 'pulsera actividad', 'apple watch', 'garmin'],
+      ['aspirador', 'aspiradora', 'robot aspirador', 'conga', 'roomba', 'dyson'],
       ['freidora', 'air fryer', 'airfryer'],
-      ['cafetera', 'espresso'],
+      ['cafetera', 'espresso', 'nespresso', 'dolce gusto'],
       ['raton', 'ratón', 'mouse'],
       ['teclado', 'keyboard'],
-      ['monitor', 'pantalla gaming'],
+      ['monitor', 'pantalla gaming', 'pantalla pc', 'display'],
       ['televisor', 'smart tv', 'tv'],
-      ['portatil', 'portátil', 'laptop'],
-      ['smartphone', 'móvil', 'movil', 'telefono', 'teléfono'],
-      ['altavoz', 'speaker', 'soundbar', 'barra de sonido'],
+      ['portatil', 'portátil', 'laptop', 'notebook', 'ultrabook', 'macbook'],
+      ['tablet', 'ipad', 'tableta'],
+      ['smartphone', 'móvil', 'movil', 'telefono', 'teléfono', 'iphone'],
+      ['altavoz', 'altavoces', 'speaker', 'soundbar', 'barra de sonido'],
       ['taladro', 'atornillador'],
+      ['impresora', 'printer'],
+      ['camara', 'cámara', 'action cam', 'gopro', 'dashcam'],
+      ['proyector', 'projector'],
+      ['consola', 'playstation', 'ps5', 'xbox', 'nintendo switch'],
+      ['silla gaming', 'silla ergonomica', 'silla de oficina'],
     ];
 
     const matched: string[] = [];
@@ -963,17 +975,17 @@ function areSameProductType(base: Product, candidate: Product): boolean {
     return natureA.some((group) => natureB.includes(group));
   }
 
-  // Si uno tiene grupo de naturaleza pero el otro tiene otro grupo distinto:
-  if (natureA.length > 0 && natureB.length > 0 && !natureA.some((group) => natureB.includes(group))) {
+  // Si uno tiene un tipo específico identificado (ej: monitor) y el otro NO pertenece a ese grupo:
+  if (natureA.length > 0 || natureB.length > 0) {
     return false;
   }
 
-  // Si ambos comparten categoría y la similitud léxica es relevante:
+  // Si ambos comparten categoría y la similitud léxica es alta:
   if (sameCategory) {
-    return titleSimilarity(base.title, candidate.title) >= 0.25;
+    return titleSimilarity(base.title, candidate.title) >= 0.40;
   }
 
-  return titleSimilarity(base.title, candidate.title) >= 0.40;
+  return false;
 }
 
 /**
