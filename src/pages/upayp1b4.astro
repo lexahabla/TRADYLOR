@@ -12448,13 +12448,14 @@ function renderTableRows(products, resetPage = true) {
   }
 
   :global(.url-chip-text) {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
+    max-width: 140px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     color: #93c5fd;
-    font-size: 0.66rem;
+    font-size: 0.78rem;
     text-decoration: none;
     line-height: 1.3;
   }
