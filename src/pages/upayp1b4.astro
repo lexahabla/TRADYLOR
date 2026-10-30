@@ -3080,7 +3080,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           title: prodTitle.value.trim(),
           price: parseFloat(prodPrice.value) || 0,
           originalPrice: prodOriginalPrice.value ? parseFloat(prodOriginalPrice.value) : optional(''),
-          category: prodCategory.value.trim() || 'Tecnología',
+          category: prodCategory.value.trim() || '',
           subcategory: document.getElementById('prodSubcategory')?.value.trim() || '',
           merchant: prodMerchant.value || 'Amazon',
           affiliateUrl: prodAffiliateUrl.value.trim(),
@@ -3481,7 +3481,7 @@ function renderTableRows(products, resetPage = true) {
                 return `<a href="/producto/${encodeURIComponent(targetSlug)}" class="row-title" data-id="${p.id}" data-slug="${p.slug || ''}" target="_blank" rel="noopener" title="Ver ficha pública del producto">${escapeHtml ? escapeHtml(displayTitle) : displayTitle}${p.variantGroup ? ' <span class="variant-related-badge" title="Producto relacionado (variantes del mismo modelo)">🔗</span>' : ''}</a>`;
               })()}
               <div class="row-meta">
-                <span class="pill-category">${p.category || '—'}</span>
+                ${p.category ? `<span class="pill-category">${escapeHtml(p.category)}</span>` : ''}
                 ${p.subcategory_id ? `<span class="pill-subcategory">${escapeHtml((allCats.find((c) => c.id === p.subcategory_id) || {}).name || p.subcategory_id)}</span>` : ''}
                 ${p.badge ? `<span class="pill-badge">${p.badge}</span>` : ''}
                 ${p.is_duplicate ? `<span class="dup-pill" title="Duplicado ${p.duplicate_reason ? `(${p.duplicate_reason})` : ''}${p.duplicate_of ? ` de ${p.duplicate_of}` : ''}">${p.possible_duplicate ? '♻️ ¿Dup?' : '♻️ Dup'}</span>` : ''}
@@ -4583,24 +4583,35 @@ function renderTableRows(products, resetPage = true) {
       const subOwner = subcategoryName
         ? allCats.find((c) => c.parentId && c.name === subcategoryName)
         : undefined;
+      // Categoría destino (puede quedar vacía = limpiar la categoría de los
+      // productos seleccionados, para dejarlos sin categoría y filtrarlos
+      // después con el preset «Sin Categoria»).
       const categoryName = category || (subOwner ? (allCats.find((c) => c.id === subOwner?.parentId)?.name ?? '') : '');
-      if (!categoryName) {
-        showAlert('warning', 'Falta la categoría', 'Elige la categoría destino en la barra de selección.');
-        return;
-      }
+
       // Categorización bidireccional: se envían también los IDs jerárquicos
       // (category_id / subcategory_id) resueltos desde el caché de categorías.
-      const catObj = allCats.find((c) => !c.parentId && c.name === categoryName);
-      if (!catObj) {
-        showAlert('error', 'Categoría no encontrada', `«${categoryName}» no está en el catálogo. Recarga el panel.`);
-        return;
+      // Si categoryName está vacío se envía vacío para limpiar la categoría.
+      let categoryId = '';
+      let subcategoryId = '';
+      if (categoryName) {
+        const catObj = allCats.find((c) => !c.parentId && c.name === categoryName);
+        if (!catObj) {
+          showAlert('error', 'Categoría no encontrada', `«${categoryName}» no está en el catálogo. Recarga el panel.`);
+          return;
+        }
+        categoryId = catObj.id;
+        const subObj = subcategoryName
+          ? allCats.find((c) => c.name === subcategoryName && c.parentId === catObj.id)
+          : undefined;
+        subcategoryId = subObj?.id || '';
       }
-      const subObj = subcategoryName
-        ? allCats.find((c) => c.name === subcategoryName && c.parentId === catObj.id)
-        : undefined;
-      const categoryId = catObj?.id || '';
-      const subcategoryId = subObj?.id || '';
-      showAlert('loading', 'Asignando categoría...', `${ids.length} producto(s) → «${categoryName}»${subcategoryName ? ` › «${subcategoryName}»` : ''}.`);
+      showAlert(
+        'loading',
+        categoryName ? 'Asignando categoría...' : 'Limpiando categoría...',
+        categoryName
+          ? `${ids.length} producto(s) → «${categoryName}»${subcategoryName ? ` › «${subcategoryName}»` : ''}`
+          : `${ids.length} producto(s) → sin categoría`,
+      );
       try {
         const res = await fetch('/api/products/add', {
           method: 'POST',
@@ -4609,7 +4620,13 @@ function renderTableRows(products, resetPage = true) {
         });
         const data = await res.json();
         if (data.success) {
-          showAlert('success', 'Categoría asignada', `${ids.length} producto(s) en «${categoryName}» (${data.updated} cambiados).`);
+          showAlert(
+            'success',
+            categoryName ? 'Categoría asignada' : 'Categoría limpiada',
+            categoryName
+              ? `${ids.length} producto(s) en «${categoryName}» (${data.updated} cambiados).`
+              : `${ids.length} producto(s) sin categoría (${data.updated} cambiados).`,
+          );
           await reloadProductsTable();
 
           // Enriquecer los productos asignados con la misma lógica que el
@@ -10175,11 +10192,11 @@ function renderTableRows(products, resetPage = true) {
   :global(.aff-row.is-open) { background: rgba(96, 165, 250, .1); }
   :global(.aff-thumb) { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 2px; background: #fff; border-radius: 6px; }
   :global(.aff-thumb img) { max-width: 100%; max-height: 100%; object-fit: contain; }
-  :global(.aff-name) { min-width: 200px; }
+  :global(.aff-name) { min-width: 0; }
   /* Título SIN recorte: se muestra entero (wrapping completo). Los títulos de
      Amazon/AliExpress son larguísimos; overflow-wrap evita desbordes con
      palabras muy largas sin espacios. */
-  :global(.aff-name strong) { display: block; font-weight: 650; font-size: .65rem; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
+  :global(.aff-name strong) { display: block; font-weight: 650; font-size: .75rem; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
   :global(.aff-name span) { display: block; margin-top: .1rem; color: var(--color-text-dim); font-size: .55rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   :global(.aff-actions) { display: flex; align-items: center; justify-content: center; gap: .2rem; white-space: normal; }
   :global(.aff-actions .btn-sm) { padding: .2rem .4rem; font-size: .6rem; }
@@ -12846,7 +12863,7 @@ function renderTableRows(products, resetPage = true) {
 :global(#aliCatalogHost .products-table th:nth-child(9)) { width: 118px; }  /* Acciones (botones intactos) */
 /* La regla genérica de .products-table limita «Producto» a max-width:320px;
    aquí se libera para que ocupe todo el ancho restante de la fila. */
-:global(#aliCatalogHost .products-table th:nth-child(3)) { min-width: 0; max-width: none; }
+:global(#aliCatalogHost .products-table th:nth-child(3)) { width: 130px; max-width: 130px; min-width: 0; }
 
 /* ===== Chip de texto desplegable (estilo url-chip para texto largo) ===== */
 :global(.text-chip) {

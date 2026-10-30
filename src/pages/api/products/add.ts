@@ -1233,9 +1233,9 @@ export const POST: APIRoute = async ({ request }) => {
       // se persisten los IDs jerárquicos (category_id / subcategory_id).
       const categoryId = String(body.category_id ?? '').trim();
       const subcategoryId = String(body.subcategory_id ?? '').trim();
-      if (!ids.length || !category) {
+      if (!ids.length) {
         return new Response(
-          JSON.stringify({ success: false, message: 'Se requiere al menos un ID y una categoría.' }),
+          JSON.stringify({ success: false, message: 'Se requiere al menos un ID.' }),
           { status: 400, headers: { 'Content-Type': 'application/json' } }
         );
       }
@@ -1250,7 +1250,12 @@ export const POST: APIRoute = async ({ request }) => {
           p.category = category;
           changed = true;
         }
-        if (categoryId && p.category_id !== categoryId) {
+        // Categoría vacía (sin categoría): se borra también el id jerárquico
+        // para que el producto quede filtrado por el preset «Sin Categoria».
+        if (!category && p.category_id) {
+          p.category_id = undefined;
+          changed = true;
+        } else if (categoryId && p.category_id !== categoryId) {
           p.category_id = categoryId;
           changed = true;
         }
@@ -1458,10 +1463,12 @@ export const POST: APIRoute = async ({ request }) => {
       const keepUncategorized = body?.keepUncategorized === true;
       const resolvedCategoryName = keepUncategorized
         ? String(dataToSave.category ?? '').trim()
-        : resolveCategory(
-            dataToSave.category,
-            `${dataToSave.title} ${dataToSave.description || ''}`
-          );
+        : dataToSave.category === ''
+          ? ''
+          : resolveCategory(
+              dataToSave.category,
+              `${dataToSave.title} ${dataToSave.description || ''}`
+            );
       const subcategorySent = (dataToSave as Record<string, unknown>).subcategory;
       const subcategoryProvided = subcategorySent !== undefined;
       const requestedSubcategory = String(subcategorySent ?? '').trim();
@@ -1580,11 +1587,10 @@ export const POST: APIRoute = async ({ request }) => {
       const existingIndex = currentProducts.findIndex((p) => p.id === productId);
       let productToSave: Product = newProduct;
       if (existingIndex >= 0 && existingProduct) {
-        // Re-importación con keepUncategorized: si la fila existente ya tenía
-        // categoría curada, se conserva (nunca se vacía por re-importar).
-        if (keepUncategorized && !newProduct.category && existingProduct.category) {
-          newProduct.category = existingProduct.category;
-        }
+        // Re-importación con keepUncategorized: se respeta la categoría vacía
+        // enviada desde la importación de JSON (no se rellena ni se conserva
+        // una categoría previa; el producto queda sin categoría para asignarla
+        // después masivamente desde el panel).
         const categoryChanged = newProduct.category !== existingProduct.category;
         productToSave = {
           ...existingProduct,
