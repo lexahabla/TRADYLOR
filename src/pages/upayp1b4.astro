@@ -1251,6 +1251,16 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         <p class="admin-subtitle">Crea y mantiene las categorías y subcategorías disponibles para clasificar productos importados y añadidos manualmente. Se aplican al instante en el formulario de productos y en el importador de Afiliados.</p>
       </div>
 
+      <!-- Cabecera de categoría seleccionada (estilo catálogo público) -->
+      <div id="categoryHeaderBar" class="catalog-header-bar" hidden>
+        <div class="section-header">
+          <span class="section-tag">Categoría seleccionada</span>
+          <h2 class="section-title" id="categoryHeaderTitle">Nombre de la categoría</h2>
+          <p class="section-desc" id="categoryHeaderDesc">Productos de esta categoría.</p>
+        </div>
+        <div id="categoryHeaderImage" class="category-header-image" aria-hidden="true"></div>
+      </div>
+
       <!-- 1. Formulario de alta / edición de categorías (colapsable) -->
       <div class="admin-card">
         <div class="card-header" style="cursor: pointer;" id="categoryFormToggle" role="button" aria-expanded="false" aria-controls="categoryFormPanel" tabindex="0">
@@ -3579,7 +3589,12 @@ function renderTableRows(products, resetPage = true) {
                   const cheaper = (Array.isArray(a.cheaperOptionIds) ? a.cheaperOptionIds.length : 0) || (a.cheaperOptionId ? 1 : 0);
                   const similar = (Array.isArray(a.similarOptionIds) ? a.similarOptionIds.length : 0) || (a.similarOptionId ? 1 : 0);
                   if (!links && !premium && !cheaper && !similar) return 'Ninguna';
-                  return `${links} vínculo(s) · ⭐ ${premium} principal · 💰 ${cheaper} económica(s) · 🎯 ${similar} competidor(es)`;
+                  return `<div class="alt-links-summary">
+                    <span>${links} vínculo(s)</span>
+                    <span>⭐ ${premium} principal</span>
+                    <span>💰 ${cheaper} económica(s)</span>
+                    <span>🎯 ${similar} competidor(es)</span>
+                  </div>`;
                 })()}
                 <button type="button" class="btn-secondary btn-sm btn-link-alternatives" data-id="${p.id}">🔗 Vincular Alternativas</button>
               </dd></div>
@@ -6963,7 +6978,7 @@ function renderTableRows(products, resetPage = true) {
                   const estado = aliEstadoIndex().get(product.externalId);
                   const yaAnadido = estado === 'IMPORTED';
                   const estadoPill = estado === 'IMPORTED'
-                    ? '<span class="ac-state is-imported">✓ en catálogo</span>'
+                    ? ''  // Eliminado "✓ en catálogo" por diseño
                     : estado === 'DISCARDED'
                       ? '<span class="ac-state is-discarded">descartado</span>'
                       : '';
@@ -8098,7 +8113,54 @@ function renderTableRows(products, resetPage = true) {
         }
         return;
       }
+
+      // Click en la fila de categoría (no en botones) → selecciona categoría y muestra cabecera
+      const catRow = target.closest('.cat-row');
+      if (catRow && !target.closest('button')) {
+        const slug = catRow.dataset.slug;
+        const category = Array.isArray(categoriesCache) ? categoriesCache.find((c) => c.slug === slug) : undefined;
+        if (category) selectCategory(category);
+        return;
+      }
     });
+
+    /** Selecciona una categoría y muestra la cabecera visual con imagen representativa. */
+    let selectedCategorySlug = '';
+    async function selectCategory(category) {
+      selectedCategorySlug = category.slug;
+      const headerBar = document.getElementById('categoryHeaderBar');
+      const headerTitle = document.getElementById('categoryHeaderTitle');
+      const headerDesc = document.getElementById('categoryHeaderDesc');
+      const headerImage = document.getElementById('categoryHeaderImage');
+
+      if (headerBar) headerBar.hidden = false;
+      if (headerTitle) headerTitle.textContent = category.icon ? `${category.icon} ${category.name}` : category.name;
+      if (headerDesc) headerDesc.textContent = `${category.productCount ?? 0} producto(s) en esta categoría.`;
+
+      // Buscar imagen representativa: primer producto de esta categoría con imagen
+      if (headerImage) {
+        headerImage.style.backgroundImage = 'none';
+        try {
+          const res = await fetch(`/api/products/search?category=${encodeURIComponent(category.slug)}&limit=1`);
+          const data = await res.json();
+          if (data.success && Array.isArray(data.products) && data.products.length > 0) {
+            const product = data.products[0];
+            if (product.image) {
+              headerImage.style.backgroundImage = `linear-gradient(90deg, transparent 40%, rgba(11,18,32,0.95) 100%), url("${product.image}")`;
+              headerImage.style.backgroundSize = 'cover';
+              headerImage.style.backgroundPosition = 'center right';
+            }
+          }
+        } catch (_) {
+          // Silencioso: si falla, no hay imagen
+        }
+      }
+
+      // Resaltar fila seleccionada
+      document.querySelectorAll('.cat-row').forEach((row) => {
+        row.classList.toggle('is-selected', row.dataset.slug === category.slug);
+      });
+    }
 
     // Migración de categorías: vista previa (dry-run) + ejecución real.
 
@@ -10831,8 +10893,32 @@ function renderTableRows(products, resetPage = true) {
   .cat-row.is-subcategory { background: linear-gradient(90deg, rgba(52, 211, 153, 0.03) 0%, transparent 100%); }
   .cat-row.is-subcategory:hover { background: linear-gradient(90deg, rgba(52, 211, 153, 0.06) 0%, rgba(59, 130, 246, 0.04) 100%); }
 
+  /* Fila seleccionada en tabla de categorías */
+  .cat-row.is-selected { background: linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, rgba(16, 185, 129, 0.06) 100%); outline: 1px solid rgba(59, 130, 246, 0.3); outline-offset: -1px; }
+
   /* Loading / Empty states */
   .loading-row td, .empty-row td { padding: 2rem 1rem; text-align: center; color: var(--color-text-dim); }
+
+  /* Cabecera de categoría seleccionada (estilo catálogo público) */
+  .category-header-image {
+    flex: 0 0 180px;
+    height: 100px;
+    min-height: 80px;
+    border-radius: var(--border-radius-md);
+    background: linear-gradient(90deg, transparent 40%, rgba(11,18,32,0.95) 100%), var(--color-bg-card);
+    background-size: cover;
+    background-position: center right;
+    border: 1px solid var(--color-border);
+    box-shadow: inset 0 0 60px rgba(0,0,0,0.5);
+  }
+
+  @media (max-width: 768px) {
+    .category-header-image {
+      flex: 0 0 100%;
+      height: 120px;
+      order: 3;
+    }
+  }
 
   /* Responsive */
   @media (max-width: 900px) {
@@ -12175,7 +12261,7 @@ function renderTableRows(products, resetPage = true) {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.8rem;
-    table-layout: fixed;
+    /* table-layout: fixed;  ← eliminado para evitar recorte de columnas en filas detalle */
   }
 
   :global(.products-table th:nth-child(4)),   /* Estado */
@@ -12543,6 +12629,25 @@ function renderTableRows(products, resetPage = true) {
       grid-template-columns: 1fr !important;
       min-width: auto;
     }
+  }
+
+  /* ===== Alternativas vinculadas: resumen en varias líneas ===== */
+  :global(.alt-links-summary) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    margin-bottom: 0.35rem;
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+  }
+  :global(.alt-links-summary span) {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.1rem 0.4rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    white-space: nowrap;
   }
 
   /* ===== Chips de URL compactos (una línea + copiar + desplegar) ===== */
@@ -12993,6 +13098,73 @@ function renderTableRows(products, resetPage = true) {
 /* La regla genérica de .products-table limita «Producto» a max-width:320px;
    aquí se libera para que ocupe todo el ancho restante de la fila. */
 :global(#aliCatalogHost .products-table th:nth-child(3)) { width: 130px; max-width: 130px; min-width: 0; }
+
+/* ── Estilos de tabla Importar iguales a Catálogo (primeras 8 columnas) ── */
+:global(#aliCatalogHost .products-table) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  /* table-layout: fixed; ← heredado de .products-table */
+}
+
+:global(#aliCatalogHost .products-table th) {
+  text-align: center;
+  padding: 0.4rem 0.5rem;
+  color: var(--color-text-dim);
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--color-border);
+  white-space: normal;
+}
+
+:global(#aliCatalogHost .products-table td) {
+  text-align: center;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:global(#aliCatalogHost .products-table th:first-child),
+:global(#aliCatalogHost .products-table td:first-child) {
+  width: 30px;
+  padding: 0.6rem 0;
+  text-align: center;
+}
+
+:global(#aliCatalogHost .products-table th:nth-child(2)),
+:global(#aliCatalogHost .products-table td:nth-child(2)) {
+  width: 60px;
+  padding: 0.6rem 0.25rem;
+  text-align: center;
+}
+
+:global(#aliCatalogHost .products-table th:nth-child(3)),
+:global(#aliCatalogHost .products-table td:nth-child(3)) {
+  width: 130px;
+  text-align: left;
+}
+
+:global(#aliCatalogHost .products-table .aff-thumb img) {
+  width: 42px;
+  height: 42px;
+  max-width: 42px;
+  max-height: 42px;
+  object-fit: cover;
+  border-radius: 6px;
+  background: #080c14;
+  border: 1px solid var(--color-border);
+  display: block;
+  margin: 0 auto;
+}
+
+:global(#aliCatalogHost .aff-row:hover) {
+  background: rgba(255, 255, 255, 0.02);
+}
 
 /* ===== Chip de texto desplegable (estilo url-chip para texto largo) ===== */
 :global(.text-chip) {

@@ -22,18 +22,28 @@ const formatCurrency = (amount: number) =>
 const cleanMarketplaceSuffix = (text: string) =>
   text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
 
-const rootCategoryOf = (product: (typeof approvedProducts)[number]): { id: string; name: string } => {
-  const cat = getCategoryById(String(product.category_id ?? product.category ?? ''));
-  const root = cat?.parentId ? getCategoryById(cat.parentId) : cat;
-  return { id: root?.id ?? 'otros', name: root?.name ?? 'Otros productos' };
+/**
+ * Obtiene la categoría más específica del producto para comparativas.
+ * Usa la subcategoría si existe, si no la categoría raíz.
+ * Esto evita comparar productos de tipos distintos (ej: monitor vs disco duro)
+ * que compartan solo la categoría raíz (ej: "Informática").
+ */
+const compareCategoryOf = (product: (typeof approvedProducts)[number]): { id: string; name: string } => {
+  const catId = String(product.category_id ?? product.category ?? '');
+  const cat = getCategoryById(catId);
+  if (!cat) return { id: 'otros', name: 'Otros productos' };
+  // Si es subcategoría (tiene parentId), la usamos directamente para matching estricto
+  if (cat.parentId) return { id: cat.id, name: cat.name };
+  // Si es categoría raíz, la usamos tal cual
+  return { id: cat.id, name: cat.name };
 };
 
 const groupedOptions = new Map<string, { id: string; name: string; products: typeof approvedProducts }>();
 for (const product of approvedProducts) {
-  const root = rootCategoryOf(product);
-  const group = groupedOptions.get(root.id) ?? { id: root.id, name: root.name, products: [] as typeof approvedProducts };
+  const cat = compareCategoryOf(product);
+  const group = groupedOptions.get(cat.id) ?? { id: cat.id, name: cat.name, products: [] as typeof approvedProducts };
   group.products.push(product);
-  groupedOptions.set(root.id, group);
+  groupedOptions.set(cat.id, group);
 }
 for (const group of groupedOptions.values()) {
   group.products.sort((a, b) => cleanMarketplaceSuffix(a.title).localeCompare(cleanMarketplaceSuffix(b.title)));
@@ -128,9 +138,9 @@ if (baseProduct) {
   );
   const extraLinked = linkedProducts.filter((p) => !roleIds.has(p.id) && p.id !== baseProduct.id);
 
-  const rootId = rootCategoryOf(baseProduct).id;
+  const compareCat = compareCategoryOf(baseProduct);
   categoryRivals = approvedProducts
-    .filter((p) => p.id !== baseProduct.id && !roleIds.has(p.id) && rootCategoryOf(p).id === rootId)
+    .filter((p) => p.id !== baseProduct.id && !roleIds.has(p.id) && compareCategoryOf(p).id === compareCat.id)
     .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
     .slice(0, 2);
 
@@ -172,7 +182,7 @@ const comparisonMeta = baseProduct
   ? JSON.stringify({
       productIds: comparisonSet.map((p) => p.id),
       productKey: productKey(baseProduct),
-      categoryName: rootCategoryOf(baseProduct).name,
+      categoryName: compareCategoryOf(baseProduct).name,
     }).replace(/</g, '\\u003c')
   : null;
 
