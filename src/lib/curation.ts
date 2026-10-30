@@ -230,24 +230,32 @@ export function detectDuplicates(products: Product[]): Map<string, DuplicateFlag
  * - factor_valoracion: (rating/5) con leve boost por volumen de opiniones (≤1.25).
  * - ESCALA=5 traduce la ratio a la escala 0-100 (ratio 20 → 100 pts).
  */
-export const CONVERSION_SCORE_SCALE = 5;
+export const CONVERSION_SCORE_SCALE = 100;
 
 export function computeConversionScore(product: Product): number {
   const price = Math.max(Number(product.price) || 0, 1);
   const storedCommission = Number(product.commissionEstimate);
   const commissionRate = Number(product.commissionRate);
-  // Comisión en €: prioriza commissionEstimate (monto fijo), luego
-  // commissionRate (porcentaje sobre el precio), y por último 5% por defecto.
-  let commission: number;
+  // Comisión como porcentaje efectivo: prioriza commissionEstimate (monto fijo
+  // → se divide por price para obtener %), luego commissionRate, luego 5%.
+  let commissionRateEffective: number;
   if (Number.isFinite(storedCommission) && storedCommission > 0) {
-    commission = storedCommission;
+    commissionRateEffective = (storedCommission / price) * 100;
   } else if (Number.isFinite(commissionRate) && commissionRate > 0) {
-    commission = price * (commissionRate / 100);
+    commissionRateEffective = commissionRate;
   } else {
-    commission = price * 0.05;
+    commissionRateEffective = 5;
   }
+  // Ventas: usar sales30d real si existe; si no, estimar desde reviewsCount
+  // (heurística: ~1 de cada 100 compradores deja review, y asumimos ~30 días).
   const storedSales = Number(product.sales30d);
-  const sales = Number.isFinite(storedSales) && storedSales > 0 ? storedSales : 1;
+  let sales: number;
+  if (Number.isFinite(storedSales) && storedSales > 0) {
+    sales = storedSales;
+  } else {
+    const reviews = Number(product.reviewsCount);
+    sales = Number.isFinite(reviews) && reviews > 0 ? Math.max(1, Math.floor(reviews * 3)) : 1;
+  }
   const rating = Number(product.rating);
   const validRating = Number.isFinite(rating) && rating > 0 ? Math.min(5, rating) : 3.5;
   const reviews = Number(product.reviewsCount);
@@ -255,7 +263,9 @@ export function computeConversionScore(product: Product): number {
     ? Math.min(1.25, 1 + Math.log10(1 + reviews) * 0.05)
     : 1;
   const factorValoracion = (validRating / 5) * reviewBoost;
-  const raw = ((commission * sales) / price) * factorValoracion;
+  // Fórmula: tasa de comisión × ventas × factor de valoración × escala.
+  // Ya no dividimos commission por price (evita que el precio cancele el score).
+  const raw = (commissionRateEffective / 100) * sales * factorValoracion;
   return Math.max(0, Math.min(100, Math.round(raw * CONVERSION_SCORE_SCALE)));
 }
 

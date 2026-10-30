@@ -418,6 +418,35 @@ export function normalizeScrapedAmazonData(
     undefined;
   const fulfillmentProvider = String(raw.sold_by || '').trim() || undefined;
 
+  // ── Bestseller ranks → estimar ventas mensuales (sales30d) ──
+  let sales30dEstimate: number | undefined;
+  const bestsellerRanks = raw.bestsellerRanks;
+  if (Array.isArray(bestsellerRanks) && bestsellerRanks.length > 0) {
+    // Tomar el mejor (menor) rank entre todas las categorías
+    const bestRank = Math.min(
+      ...bestsellerRanks
+        .map((r: any) => Number(r?.rank || r?.Rank || r?.best_sellers_rank))
+        .filter((n: number) => Number.isFinite(n) && n > 0),
+    );
+    // Heurística de ventas mensuales basada en el rank de más vendidos de Amazon
+    if (bestRank <= 100) sales30dEstimate = 300;
+    else if (bestRank <= 500) sales30dEstimate = 150;
+    else if (bestRank <= 1_000) sales30dEstimate = 75;
+    else if (bestRank <= 5_000) sales30dEstimate = 30;
+    else if (bestRank <= 10_000) sales30dEstimate = 15;
+    else if (bestRank <= 50_000) sales30dEstimate = 5;
+    else if (bestRank <= 100_000) sales30dEstimate = 2;
+    else sales30dEstimate = 1;
+  }
+
+  // Comisión: también intentar capturar del raw si viene
+  const commissionRateFromRaw =
+    raw.commission_rate != null
+      ? Number(raw.commission_rate)
+      : raw.commissionRate != null
+        ? Number(raw.commissionRate)
+        : undefined;
+
   return {
     asin,
     title,
@@ -432,6 +461,8 @@ export function normalizeScrapedAmazonData(
     inStock,
     rating: Number.isFinite(rating!) ? rating : undefined,
     reviewsCount: Number.isFinite(reviewsCount!) ? reviewsCount : undefined,
+    sales30d: sales30dEstimate,
+    commissionRate: commissionRateFromRaw,
     specs: specs && Object.keys(specs).length ? specs : undefined,
     techSheet: undefined,
     affiliateUrl: String(
