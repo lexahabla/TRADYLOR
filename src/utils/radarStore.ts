@@ -142,6 +142,25 @@ export function onRadarChange(listener: Listener): () => void {
   return () => listeners.delete(listener);
 }
 
+/** Sincroniza desde la nube: trae buyerProfiles, activeBuyerProfileId y demás
+ * datos del servidor y los guarda en localStorage. Así el mismo usuario ve
+ * los mismos perfiles activos desde cualquier dispositivo/IP. Devuelve null si
+ * no hay sesión o falla la red (se queda con localStorage). */
+export async function syncRadarFromCloud(): Promise<RadarData | null> {
+  try {
+    const res = await fetch('/api/radar', { credentials: 'include' });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.success && data.radar) {
+      persist(data.radar as RadarData);
+      return data.radar as RadarData;
+    }
+  } catch {
+    /* sin red o sin sesión: se queda con localStorage */
+  }
+  return null;
+}
+
 /* ---------------------------------------------------------------- productos */
 
 export function getRadarProducts(): SavedProduct[] {
