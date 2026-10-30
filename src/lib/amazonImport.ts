@@ -154,8 +154,10 @@ function looksLikeBlockPage(body: string): boolean {
   if (/^\s*<!DOCTYPE\s/i.test(trimmed) || /^\s*<html\b/i.test(trimmed)) {
     return true;
   }
-  // Títulos típicos de páginas de bloqueo/captcha de Amazon/ScraperAPI.
+  // Señales de páginas de bloqueo/captcha/error de Amazon y ScraperAPI.
   const blockSignals = [
+    'page not found',
+    'sorry! we couldn\'t find that page',
     'captcha',
     'access denied',
     'blocked',
@@ -167,6 +169,7 @@ function looksLikeBlockPage(body: string): boolean {
     'quota exceeded',
     'service unavailable',
     'temporarily unavailable',
+    'automated access to amazon data',
   ];
   const lower = trimmed.toLowerCase();
   return blockSignals.some((s) => lower.includes(s));
@@ -216,15 +219,22 @@ export async function scrapeAmazonProduct(
           return JSON.parse(text) as AmazonScrapedProduct;
         } catch {
           // La respuesta tiene HTTP 200 pero no es JSON: puede ser una página
-          // de bloqueo/captcha de Amazon envuelta por ScraperAPI.
+          // de bloqueo/captcha de Amazon envuelta por ScraperAPI, o una página
+          // de error tipo "Page Not Found" (ASIN no existe en Amazon).
           if (looksLikeBlockPage(text)) {
             const snippet = text.slice(0, 120).replace(/\s+/g, ' ');
+            const lower = text.toLowerCase();
+            if (lower.includes('page not found') || lower.includes("sorry! we couldn't find that page")) {
+              throw new Error(
+                `Amazon no encontró el producto para el ASIN "${asin}" (página "Page Not Found" de Amazon). Verifica que el ASIN sea correcto y exista en Amazon ${countryCode}.`,
+              );
+            }
             throw new Error(
               `ScraperAPI devolvió una página de bloqueo/captcha (no JSON) en el intento ${attempt}/${maxRetries}: "${snippet}". Posible IP bloqueada o captcha de Amazon.`,
             );
           }
           throw new Error(
-            `ScraperAPI respondió ${response.status} con contenido no JSON (${text.length} bytes): ${text.slice(0, 800)}`,
+            `ScraperAPI respondió ${response.status} con contenido no JSON (${text.length} bytes). No se pudo parsear la respuesta del ASIN "${asin}".`,
           );
         }
       }
