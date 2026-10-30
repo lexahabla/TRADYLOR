@@ -5932,6 +5932,22 @@ function renderTableRows(products, resetPage = true) {
         </span>`;
     }
 
+    /** Chip compacto del nombre del producto (tabla Importar): una línea con
+     * ellipsis + botón copiar + desplegar para ver el nombre completo. */
+    function renderProductNameChip(name) {
+      const text = escapeHtml(name);
+      return `
+        <span class="url-chip">
+          <span class="url-chip-text" title="${text}">${text}</span>
+          <button type="button" class="url-chip-btn url-chip-copy" data-url="${text}" title="Copiar nombre del producto" aria-label="Copiar nombre del producto">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <button type="button" class="url-chip-btn url-chip-toggle" title="Mostrar u ocultar nombre completo" aria-label="Desplegar nombre del producto">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </span>`;
+    }
+
     /** Chip de texto largo: una línea con ellipsis + desplegar para ver todo. */
     function renderTextChip(raw) {
       const text = escapeHtml(raw);
@@ -6899,7 +6915,7 @@ function renderTableRows(products, resetPage = true) {
                   <td class="ac-td-check"><input type="checkbox" data-ac-check="${index}" aria-label="Seleccionar producto" ${checked} /></td>
                   <td><span class="aff-thumb">${product.image ? `<img src="${escapeHtml(product.image)}" alt="" loading="lazy" />` : ''}</span></td>
                   <td class="aff-name">
-                    <strong>${escapeHtml(product.title)}</strong>
+                    ${renderProductNameChip(product.title)}
                     <span>${escapeHtml(product.network)}${product.category ? ` · ${escapeHtml(product.category)}` : ''}${estadoPill}</span>
                   </td>
                   <td class="aff-num">${money(product.price, product.currency)}</td>
