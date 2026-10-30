@@ -445,11 +445,9 @@ export const POST: APIRoute = async ({ request }) => {
         // Categorización jerárquica: si la categoría o la subcategoría han
         // cambiado, se recalculan los ids de categories.json (la curación
         // heredada no debe dejar ids de la categoría anterior).
-        // Re-importación con keepUncategorized: si la fila existente ya tenía
-        // categoría curada, se conserva (nunca se vacía por re-importar).
-        if (keepUncategorized && !base.category && existing.category) {
-          base.category = existing.category;
-        }
+        // Con keepUncategorized (importación JSON) la categoría se respeta tal
+        // cual viene en el payload (vacía para asignarla después desde el
+        // panel); nunca se resucita una categoría previa al re-importar.
         const categoryChanged = base.category !== existing.category;
         if (categoryChanged || body?.subcategory !== undefined) {
           const resolvedIds = resolveCategoryIds(
