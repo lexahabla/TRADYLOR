@@ -307,22 +307,29 @@ export function normalizeScrapedAmazonData(
     `Producto Amazon ${asin}`;
   const merchant = String(raw.merchant || raw.seller || 'Amazon').trim();
 
+  // ── Precio: soporta número directo, objeto { value }, string o variantes ──
+  const priceFromObj = (v: unknown): number | undefined => {
+    if (v == null) return undefined;
+    if (typeof v === 'object' && !(v instanceof Array)) {
+      const o = v as Record<string, unknown>;
+      if (o.value != null) return Number(o.value);
+      if (o.amount != null) return Number(o.amount);
+      return undefined;
+    }
+    if (typeof v === 'string') return Number(String(v).replace(/[^0-9.,]/g, '').replace(',', '.'));
+    return Number(v);
+  };
   const price =
-    raw.price != null
-      ? Number(raw.price)
-      : raw.pricing != null
-        ? Number(String(raw.pricing).replace(/[^0-9.,]/g, '').replace(',', '.'))
-        : undefined;
+    priceFromObj(raw.price) ??
+    (raw.pricing != null ? Number(String(raw.pricing).replace(/[^0-9.,]/g, '').replace(',', '.')) : undefined);
   const originalPrice =
-    raw.original_price != null
-      ? Number(raw.original_price)
-      : raw.list_price != null
-        ? Number(raw.list_price)
-        : raw.originalPrice != null
-          ? Number(raw.originalPrice)
-          : undefined;
+    priceFromObj(raw.original_price) ??
+    priceFromObj(raw.list_price) ??
+    priceFromObj(raw.listPrice) ??
+    priceFromObj(raw.originalPrice) ??
+    undefined;
 
-  const image = String(raw.image || '').trim();
+  const image = String(raw.image || raw.thumbnailImage || '').trim();
   const allImages: string[] = [];
   const seen = new Set<string>();
   const addImage = (u: unknown) => {
@@ -333,8 +340,12 @@ export function normalizeScrapedAmazonData(
     seen.add(s);
     allImages.push(s);
   };
+  // Soporte para ambos esquemas: ScraperAPI (high_res_images / images) y
+  // JSON alternativo (highResolutionImages / galleryThumbnails).
   if (Array.isArray(raw.high_res_images)) raw.high_res_images.forEach(addImage);
+  if (Array.isArray(raw.highResolutionImages)) raw.highResolutionImages.forEach(addImage);
   if (Array.isArray(raw.images)) raw.images.forEach(addImage);
+  if (Array.isArray(raw.galleryThumbnails)) raw.galleryThumbnails.forEach(addImage);
   if (image && !seen.has(image)) allImages.unshift(image);
   const gallery = allImages.slice(0, 8);
 
@@ -350,37 +361,56 @@ export function normalizeScrapedAmazonData(
   if (Array.isArray(raw.videos)) raw.videos.forEach(addVideo);
   if (raw.video_urls && Array.isArray(raw.video_urls)) raw.video_urls.forEach(addVideo);
 
-  const specs =
-    (raw.specifications || raw.specs || raw.product_information || {}) as Record<string, string>;
-
-  const rating = raw.rating != null ? Number(raw.rating) : undefined;
+  const rating =
+    raw.rating != null ? Number(raw.rating) : raw.stars != null ? Number(raw.stars) : undefined;
   const reviewsCount =
     raw.reviews != null
       ? Number(raw.reviews)
       : raw.review_count != null
         ? Number(raw.review_count)
-        : raw.total_reviews != null
-          ? Number(raw.total_reviews)
-          : raw.total_ratings != null
-            ? Number(raw.total_ratings)
-            : undefined;
+        : raw.reviewsCount != null
+          ? Number(raw.reviewsCount)
+          : raw.total_reviews != null
+            ? Number(raw.total_reviews)
+            : raw.total_ratings != null
+              ? Number(raw.total_ratings)
+              : undefined;
 
   const description =
     String(raw.description || '').trim() ||
     String(raw.full_description || '').trim() ||
-    String(raw.sourceDescription || '').trim();
+    String(raw.sourceDescription || '').trim() ||
+    (Array.isArray(raw.features) && raw.features.length
+      ? raw.features.map(String).filter(Boolean).join('\n')
+      : '');
   const availability = String(raw.availability || '').toLowerCase();
   const inStock =
     availability.includes('in stock') ||
     availability.includes('disponible') ||
     availability.includes('en stock') ||
-    availability.includes('en stock');
+    availability.includes('en stock') ||
+    raw.inStock === true;
 
   const pros =
     Array.isArray(raw.feature_bullets) && raw.feature_bullets.length
       ? raw.feature_bullets.map(String)
-      : undefined;
+      : Array.isArray(raw.features) && raw.features.length
+        ? raw.features.map(String).filter(Boolean).slice(0, 6)
+        : undefined;
   const cons: string[] = [];
+
+  // ── Especs: soporta objeto clave/valor o array de { key, value } ──
+  let specs =
+    (raw.specifications || raw.specs || raw.product_information || {}) as Record<string, string>;
+  if ((!specs || Object.keys(specs).length === 0) && Array.isArray(raw.productOverview)) {
+    const fromOverview: Record<string, string> = {};
+    for (const item of raw.productOverview) {
+      if (item && typeof item === 'object' && item.key && item.value) {
+        fromOverview[String(item.key)] = String(item.value);
+      }
+    }
+    specs = Object.keys(fromOverview).length ? fromOverview : specs;
+  }
 
   const brand =
     String(raw.brand || '').trim() ||
