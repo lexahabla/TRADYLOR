@@ -6087,7 +6087,7 @@ function renderTableRows(products, resetPage = true) {
           originalPrice: product.originalPrice,
           image: product.image,
           gallery,
-          category: assignedCategory,
+          category: '', // Importar con categoría vacía: se asigna luego masivamente desde el panel
           merchant: product.network,
           affiliateUrl: affiliateLink,
           // ID externo del comerciante (Item ID de AliExpress / ASIN): se
