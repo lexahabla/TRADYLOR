@@ -593,7 +593,7 @@ export function upsertAmazonProductByAsin(
     const existing = products[existingIndex];
     // Conservar campos de curación existentes (no se pisan por una re-importación).
     const curationFields = [
-      'sourceId', 'category_id', 'subcategory_id', 'ia_status', 'link_status',
+      'sourceId', 'category', 'category_id', 'subcategory_id', 'ia_status', 'link_status',
       'normalized_tags', 'alternative_product_ids', 'alternatives',
       'conversion_score', 'audit_status', 'audit_score', 'audit_reasons',
       'pipeline_version', 'pipeline_run_at', 'ai_enriched', 'ai_error',
