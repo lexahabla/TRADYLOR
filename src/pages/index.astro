@@ -79,12 +79,6 @@ const visibleProducts = allProducts.filter((p) => {
   return byCategory && matchesQuery(p);
 });
 
-// Imagen representativa de la categoría activa para la cabecera visual
-const categoryHeaderProduct = activeCategory
-  ? (visibleProducts.find((p) => p.image && (p.rating ?? 0) >= 4) || visibleProducts.find((p) => p.image) || null)
-  : null;
-const categoryHeaderImage = categoryHeaderProduct?.image || null;
-
 // ─── Ordenación del catálogo público ─────────────────────────────────────────
 // 1. Criterio por defecto configurado desde el backend (previamente establecido):
 const globalDefaultSort = getGlobalCatalogSort();
@@ -231,11 +225,6 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
             </p>
           )}
         </div>
-        {activeCategory && categoryHeaderImage && (
-          <div class="catalog-header-visual" aria-hidden="true">
-            <img src={categoryHeaderImage} alt={activeCategory.name} loading="lazy" />
-          </div>
-        )}
       </div>
 
       <!-- Selector de ordenación del catálogo (alineado a la derecha). Incluye
@@ -908,38 +897,10 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   .catalog-header-bar {
     display: flex;
     flex-wrap: wrap;
-    align-items: center;
+    align-items: flex-end;
     justify-content: space-between;
     gap: 1.5rem;
     margin-bottom: 2.5rem;
-  }
-
-  .catalog-header-visual {
-    position: relative;
-    flex: 0 0 240px;
-    height: 120px;
-    border-radius: var(--border-radius-lg, 16px);
-    overflow: hidden;
-    background: #0b1220;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
-    /* Degradado de transparencia elegante a la derecha */
-    -webkit-mask-image: linear-gradient(to right, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0.35) 75%, rgba(0, 0, 0, 0) 100%);
-    mask-image: linear-gradient(to right, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 0.35) 75%, rgba(0, 0, 0, 0) 100%);
-  }
-
-  .catalog-header-visual img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center;
-    display: block;
-    filter: brightness(0.92) contrast(1.08);
-    transition: transform 0.4s ease;
-  }
-
-  .catalog-header-visual:hover img {
-    transform: scale(1.05);
   }
 
   .catalog-sort-bar {
@@ -992,12 +953,6 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       flex-direction: column;
       align-items: flex-start;
       gap: 1.25rem;
-    }
-    .catalog-header-visual {
-      flex: 0 0 auto;
-      width: 100%;
-      max-width: 280px;
-      height: 95px;
     }
     /* Barra de orden más estrecha en móvil/tablet: menos relleno, sin el
        rótulo largo (se sustituye por "Ordenar:") y el filtro de perfil se

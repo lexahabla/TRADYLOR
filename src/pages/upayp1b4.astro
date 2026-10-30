@@ -10398,9 +10398,12 @@ function renderTableRows(products, resetPage = true) {
     padding: 0.1rem 0.3rem;
   }
   :global(#aliCatalogHost .aff-name .url-chip-text) {
-    max-width: none;
+    max-width: 100%;
     flex: 1 1 auto;
-    min-width: 50px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 0.85rem;
   }
   :global(#aliCatalogHost .aff-name .url-chip-btn) {
@@ -13106,7 +13109,9 @@ function renderTableRows(products, resetPage = true) {
 :global(#aliCatalogHost .products-table th:nth-child(3)),
 :global(#aliCatalogHost .products-table td:nth-child(3)) {
   width: 130px;
+  max-width: 130px;
   text-align: left;
+  overflow: hidden;
 }
 
 :global(#aliCatalogHost .products-table th:nth-child(4)),
