@@ -160,6 +160,11 @@ export const POST: APIRoute = async ({ request }) => {
     }
 
     const warnings: string[] = [];
+    // Importación desde el JSON de una red: la categoría queda vacía a
+    // propósito (keepUncategorized) para asignarla después masivamente desde
+    // el panel; ni la IA ni suggestCategory deben rellenarla. Al re-importar
+    // un producto existente se conserva la categoría ya curada.
+    const keepUncategorized = body?.keepUncategorized === true;
     let textStatus: 'ok' | 'local' | 'skipped' | 'error' = 'skipped';
     let imageStatus: 'ok' | 'skipped' | 'error' = 'skipped';
     let enrichment: EnrichedText | null = null;
@@ -352,7 +357,7 @@ export const POST: APIRoute = async ({ request }) => {
       if (enrichment.specs && Object.keys(enrichment.specs).length) {
         base.specs = { ...(base.specs ?? {}), ...enrichment.specs };
       }
-      if (!base.category && enrichment.category) base.category = enrichment.category;
+      if (!base.category && !keepUncategorized && enrichment.category) base.category = enrichment.category;
       // Marca: la IA sólo la aporta si el producto no tenía ninguna (nunca
       // sobrescribe una marca ya curada/escrita a mano).
       if (!base.brand && enrichment.brand) base.brand = enrichment.brand;
@@ -382,7 +387,7 @@ export const POST: APIRoute = async ({ request }) => {
       }
     }
 
-    if (!base.category) {
+    if (!base.category && !keepUncategorized) {
       const suggestion = suggestCategory(`${base.title} ${base.description}`.toLowerCase());
       base.category = suggestion?.category.name || 'Tecnología';
     }
@@ -440,6 +445,11 @@ export const POST: APIRoute = async ({ request }) => {
         // Categorización jerárquica: si la categoría o la subcategoría han
         // cambiado, se recalculan los ids de categories.json (la curación
         // heredada no debe dejar ids de la categoría anterior).
+        // Re-importación con keepUncategorized: si la fila existente ya tenía
+        // categoría curada, se conserva (nunca se vacía por re-importar).
+        if (keepUncategorized && !base.category && existing.category) {
+          base.category = existing.category;
+        }
         const categoryChanged = base.category !== existing.category;
         if (categoryChanged || body?.subcategory !== undefined) {
           const resolvedIds = resolveCategoryIds(

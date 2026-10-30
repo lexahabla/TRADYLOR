@@ -226,7 +226,11 @@ async function enrichSingleText(
     specs: enrichment?.specs && Object.keys(enrichment.specs).length
       ? { ...(product.specs ?? {}), ...enrichment.specs }
       : product.specs,
-    category: enrichment?.category || product.category,
+    // Categoría: si el producto NO tiene ninguna (importación de JSON con
+    // keepUncategorized), el enriquecimiento NO la rellena — se asigna después
+    // en masa desde el panel. Los productos ya categorizados conservan el
+    // comportamiento anterior (la IA puede refinarla).
+    category: product.category ? (enrichment?.category || product.category) : '',
     price: enrichment?.pricing?.price ?? product.price,
     originalPrice: enrichment?.pricing?.originalPrice ?? product.originalPrice,
     // Marca: sólo se rellena si faltaba (nunca sustituye una marca ya

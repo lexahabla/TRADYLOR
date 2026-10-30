@@ -6080,6 +6080,10 @@ function renderTableRows(products, resetPage = true) {
         : undefined;
       return {
         action: 'save',
+        // El importador pide explícitamente NO categorizar: los productos del
+        // JSON entran con la categoría vacía y se clasifican DESPUÉS en masa
+        // desde el panel (preset «Sin Categoria» + «Asignar categoría»).
+        keepUncategorized: true,
         product: {
           title: product.title,
           description: product.description,
@@ -6290,6 +6294,10 @@ function renderTableRows(products, resetPage = true) {
             title: basic.title,
             description: product.description,
             category: basic.category,
+            // Importación desde el JSON de la red: la categoría queda vacía a
+            // propósito (se asigna después en masa desde el panel); el
+            // servidor no debe autocompletarla por keywords ni con IA.
+            keepUncategorized: true,
             price: basic.price,
             originalPrice: basic.originalPrice,
             image: basic.image,
@@ -10167,8 +10175,11 @@ function renderTableRows(products, resetPage = true) {
   :global(.aff-row.is-open) { background: rgba(96, 165, 250, .1); }
   :global(.aff-thumb) { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 2px; background: #fff; border-radius: 6px; }
   :global(.aff-thumb img) { max-width: 100%; max-height: 100%; object-fit: contain; }
-  :global(.aff-name) { min-width: 200px; max-width: 300px; }
-  :global(.aff-name strong) { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 650; font-size: .65rem; line-height: 1.3; }
+  :global(.aff-name) { min-width: 200px; }
+  /* Título SIN recorte: se muestra entero (wrapping completo). Los títulos de
+     Amazon/AliExpress son larguísimos; overflow-wrap evita desbordes con
+     palabras muy largas sin espacios. */
+  :global(.aff-name strong) { display: block; font-weight: 650; font-size: .65rem; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
   :global(.aff-name span) { display: block; margin-top: .1rem; color: var(--color-text-dim); font-size: .55rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   :global(.aff-actions) { display: flex; align-items: center; justify-content: center; gap: .2rem; white-space: normal; }
   :global(.aff-actions .btn-sm) { padding: .2rem .4rem; font-size: .6rem; }
@@ -12821,11 +12832,21 @@ function renderTableRows(products, resetPage = true) {
   border-left: 4px solid #3b82f6;
 }
 
-/* ===== Tabla Importar: columna Producto un poco más ancha ===== */
-:global(.products-table .aff-name) {
-  width: 34%;
-  min-width: 200px;
-}
+/* ===== Tabla Importar (#aliCatalogHost): distribución de columnas =====
+   La tabla usa `table-layout: fixed`: los anchos salen de los <th> de la
+   primera fila. Todas las columnas llevan ancho fijo EXCEPTO «Producto»
+   (3ª), que se queda sin ancho para absorber todo el espacio sobrante y
+   mostrar los títulos ENTEROS (sin recorte). Checkbox (1ª) intacta. */
+:global(#aliCatalogHost .products-table th:nth-child(2)) { width: 54px; }   /* Foto */
+:global(#aliCatalogHost .products-table th:nth-child(4)) { width: 72px; }   /* Precio */
+:global(#aliCatalogHost .products-table th:nth-child(5)) { width: 38px; }   /* Dto. */
+:global(#aliCatalogHost .products-table th:nth-child(6)) { width: 56px; }   /* Comisión % */
+:global(#aliCatalogHost .products-table th:nth-child(7)) { width: 64px; }   /* Comisión € */
+:global(#aliCatalogHost .products-table th:nth-child(8)) { width: 50px; }   /* Ventas */
+:global(#aliCatalogHost .products-table th:nth-child(9)) { width: 118px; }  /* Acciones (botones intactos) */
+/* La regla genérica de .products-table limita «Producto» a max-width:320px;
+   aquí se libera para que ocupe todo el ancho restante de la fila. */
+:global(#aliCatalogHost .products-table th:nth-child(3)) { min-width: 0; max-width: none; }
 
 /* ===== Chip de texto desplegable (estilo url-chip para texto largo) ===== */
 :global(.text-chip) {

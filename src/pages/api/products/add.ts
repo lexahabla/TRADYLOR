@@ -1448,10 +1448,20 @@ export const POST: APIRoute = async ({ request }) => {
 
       // Categoría y subcategoría elegidas en el panel: se guardan el nombre
       // (legado) y los ids jerárquicos de categories.json.
-      const resolvedCategoryName = resolveCategory(
-        dataToSave.category,
-        `${dataToSave.title} ${dataToSave.description || ''}`
-      );
+      //
+      // `keepUncategorized` (importación desde el JSON de una red): el cliente
+      // pide explícitamente NO categorizar — la categoría queda vacía para
+      // asignarla después masivamente desde el panel (preset «Sin Categoria»
+      // + «Asignar categoría»). Sin este flag, la categoría vacía caía en el
+      // fallback automático (suggestCategory por keywords o primera
+      // categoría) y el producto nunca aparecía como «sin categoría».
+      const keepUncategorized = body?.keepUncategorized === true;
+      const resolvedCategoryName = keepUncategorized
+        ? String(dataToSave.category ?? '').trim()
+        : resolveCategory(
+            dataToSave.category,
+            `${dataToSave.title} ${dataToSave.description || ''}`
+          );
       const subcategorySent = (dataToSave as Record<string, unknown>).subcategory;
       const subcategoryProvided = subcategorySent !== undefined;
       const requestedSubcategory = String(subcategorySent ?? '').trim();
@@ -1570,6 +1580,11 @@ export const POST: APIRoute = async ({ request }) => {
       const existingIndex = currentProducts.findIndex((p) => p.id === productId);
       let productToSave: Product = newProduct;
       if (existingIndex >= 0 && existingProduct) {
+        // Re-importación con keepUncategorized: si la fila existente ya tenía
+        // categoría curada, se conserva (nunca se vacía por re-importar).
+        if (keepUncategorized && !newProduct.category && existingProduct.category) {
+          newProduct.category = existingProduct.category;
+        }
         const categoryChanged = newProduct.category !== existingProduct.category;
         productToSave = {
           ...existingProduct,
