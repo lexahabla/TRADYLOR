@@ -17,7 +17,7 @@ import {
 import { MAX_PRODUCT_IMAGES } from '../../../lib/imageQuality';
 import { enrichProductLocally } from '../../../lib/localEnrich';
 import { findDuplicateProduct, readProductsFromFile, slugify, upsertProduct, writeProductsToFile, type Product } from '../../../lib/productStore';
-import { autoLinkAlternatives, computeBadge } from '../../../lib/curation';
+import { autoLinkAlternatives, computeBadge, computeConversionScore } from '../../../lib/curation';
 import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../../../utils/amazon';
 import { complementProductFromPage } from '../products/add';
 
@@ -398,6 +398,13 @@ export const POST: APIRoute = async ({ request }) => {
     if (!body?.badge) base.badge = computeBadge(base);
     // Marca de respaldo: si aún falta, usa el comerciante detectado.
     if (!base.brand) base.brand = base.merchant || 'Comercio Externo';
+
+    // Calcular conversion_score inicial si no tiene (productos recién importados
+    // o dados de alta sin score previo). El botón «⇅ Recalcular scores» permite
+    // refrescar todos los scores del catálogo en cualquier momento.
+    if (base.conversion_score == null) {
+      base.conversion_score = computeConversionScore(base);
+    }
 
     // ------------------------------------------------------------------
     // PASO 3 — Persistencia

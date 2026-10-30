@@ -3564,15 +3564,15 @@ function renderTableRows(products, resetPage = true) {
               </dd></div>
               ${p.rating != null ? `<div class="aff-detail-item"><dt>Valoración</dt><dd>${Number(p.rating).toFixed(1)} ★ ${p.reviewsCount != null ? `(${p.reviewsCount} opiniones)` : ''}</dd></div>` : ''}
               ${p.badge ? `<div class="aff-detail-item"><dt>Badge</dt><dd>${p.badge}</dd></div>` : ''}
-              ${p.description ? `<div class="aff-detail-item"><dt>Descripción</dt><dd>${escapeHtml ? escapeHtml(p.description) : p.description}</dd></div>` : ''}
-              ${p.verdict ? `<div class="aff-detail-item"><dt>Veredicto</dt><dd>${escapeHtml ? escapeHtml(p.verdict) : p.verdict}</dd></div>` : ''}
-              ${p.techSheet ? `<div class="aff-detail-item"><dt>Ficha técnica</dt><dd>${escapeHtml ? escapeHtml(p.techSheet) : p.techSheet}</dd></div>` : ''}
-              ${p.shippingInfo ? `<div class="aff-detail-item"><dt>Envío</dt><dd>${p.shippingInfo}${p.shippingDays != null ? ` (${p.shippingDays} d)` : ''}${p.freeShipping ? ' · gratis' : ''}</dd></div>` : ''}
+              ${p.description ? `<div class="aff-detail-item"><dt>Descripción</dt><dd>${renderDetailValue(p.description)}</dd></div>` : ''}
+              ${p.verdict ? `<div class="aff-detail-item"><dt>Veredicto</dt><dd>${renderDetailValue(p.verdict)}</dd></div>` : ''}
+              ${p.techSheet ? `<div class="aff-detail-item"><dt>Ficha técnica</dt><dd>${renderDetailValue(p.techSheet)}</dd></div>` : ''}
+              ${p.shippingInfo ? `<div class="aff-detail-item"><dt>Envío</dt><dd>${renderDetailValue(p.shippingInfo)}${p.shippingDays != null ? ` (${p.shippingDays} d)` : ''}${p.freeShipping ? ' · gratis' : ''}</dd></div>` : ''}
               ${p.buyNowUrl ? `<div class="aff-detail-item"><dt>Compra directa</dt><dd><a href="${p.buyNowUrl}" target="_blank" rel="nofollow noopener" class="test-link">Abrir Buy Now</a></dd></div>` : ''}
               <div class="aff-detail-item aff-detail-url"><dt>Enlace Afiliado</dt><dd><span class="url-chip"><a href="${p.affiliateUrl || '#'}" target="_blank" rel="nofollow noopener noreferrer" class="url-chip-text" title="${p.affiliateUrl || ''}" style="word-break:break-all;">${p.affiliateUrl ? (escapeHtml ? escapeHtml(p.affiliateUrl) : p.affiliateUrl) : '— Sin enlace de afiliado —'}</a><button type="button" class="url-chip-btn url-chip-copy" data-url="${p.affiliateUrl || ''}" title="Copiar enlace" aria-label="Copiar enlace"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button><button type="button" class="url-chip-btn url-chip-toggle" title="Mostrar u ocultar la URL completa" aria-label="Desplegar URL"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg></button></span></dd></div>
-              ${p.specs && Object.keys(p.specs).length ? `<div class="aff-detail-item"><dt>Especificaciones</dt><dd>${Object.entries(p.specs).map(([k, v]) => `${escapeHtml ? escapeHtml(k) : k}: ${escapeHtml ? escapeHtml(String(v)) : v}`).join(' · ')}</dd></div>` : ''}
-              ${Array.isArray(p.pros) && p.pros.length ? `<div class="aff-detail-item"><dt>Pros</dt><dd>${p.pros.join(' · ')}</dd></div>` : ''}
-              ${Array.isArray(p.cons) && p.cons.length ? `<div class="aff-detail-item"><dt>Contras</dt><dd>${p.cons.join(' · ')}</dd></div>` : ''}
+              ${p.specs && Object.keys(p.specs).length ? `<div class="aff-detail-item"><dt>Especificaciones</dt><dd>${renderDetailValue(Object.entries(p.specs).map(([k, v]) => `${escapeHtml ? escapeHtml(k) : k}: ${escapeHtml ? escapeHtml(String(v)) : v}`).join(' · '))}</dd></div>` : ''}
+              ${Array.isArray(p.pros) && p.pros.length ? `<div class="aff-detail-item"><dt>Pros</dt><dd>${renderDetailValue(p.pros.join(' · '))}</dd></div>` : ''}
+              ${Array.isArray(p.cons) && p.cons.length ? `<div class="aff-detail-item"><dt>Contras</dt><dd>${renderDetailValue(p.cons.join(' · '))}</dd></div>` : ''}
               ${p.condition ? `<div class="aff-detail-item"><dt>Estado físico</dt><dd>${escapeHtml ? escapeHtml(p.condition) : p.condition}</dd></div>` : ''}
               ${(() => {
                 // Datos crudos de la red de origen capturados en «Importar»/«Construir
@@ -3593,7 +3593,7 @@ function renderTableRows(products, resetPage = true) {
                 if (!p.extra || typeof p.extra !== 'object') return '';
                 return Object.entries(p.extra)
                   .filter(([k, v]) => k !== 'crossMerchant' && v != null && v !== '' && typeof v !== 'object')
-                  .map(([k, v]) => `<div class="aff-detail-item"><dt>${escapeHtml ? escapeHtml(k) : k}</dt><dd>${escapeHtml ? escapeHtml(String(v)) : v}</dd></div>`)
+                  .map(([k, v]) => `<div class="aff-detail-item"><dt>${escapeHtml ? escapeHtml(k) : k}</dt><dd>${renderDetailValue(String(v))}</dd></div>`)
                   .join('');
               })()}
               ${Array.isArray(p.gallery) && p.gallery.length ? `<div class="aff-detail-item is-images"><dt>Galería (${p.gallery.length})</dt><dd class="aff-detail-thumbs">${p.gallery.map((u)=>`<a href="${u}" target="_blank" rel="noopener noreferrer"><img src="${u}" alt="" loading="lazy" /></a>`).join('')}</dd></div>` : ''}
@@ -5960,6 +5960,39 @@ function renderTableRows(products, resetPage = true) {
         </span>`;
     }
 
+    /** Chip estilo url-chip para campos largos del detalle de producto: una
+     * línea con ellipsis + botón copiar + desplegar para ver el texto entero.
+     * Se usa en Descripción, Veredicto, Ficha técnica, Envío, Especificaciones,
+     * Pros/Contras y cualquier campo que ocupe más de 2 líneas. */
+    function renderDetailChip(raw) {
+      const text = escapeHtml(raw);
+      return `
+        <span class="url-chip">
+          <span class="url-chip-text" title="${text}">${text}</span>
+          <button type="button" class="url-chip-btn url-chip-copy" data-url="${text}" title="Copiar texto" aria-label="Copiar texto">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          </button>
+          <button type="button" class="url-chip-btn url-chip-toggle" title="Mostrar u ocultar texto completo" aria-label="Desplegar texto">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </span>`;
+    }
+
+    /** Devuelve true si un texto es «largo» (más de ~2 líneas o con saltos). */
+    function isLongText(text) {
+      if (!text) return false;
+      const s = String(text);
+      return s.length > 150 || /\n/.test(s);
+    }
+
+    /** Renderiza un valor de celda de detalle: si es largo → url-chip; si no → texto plano. */
+    function renderDetailValue(value) {
+      if (value == null || String(value).trim() === '') return '—';
+      const s = String(value);
+      if (isLongText(s)) return renderDetailChip(s);
+      return escapeHtml(s);
+    }
+
     /** Renderiza un valor de celda de detalle: URL → chip con copiar; texto largo → chip desplegable; texto corto → plano. */
     function renderDetailValue(value) {
       const raw = String(value);
@@ -8267,7 +8300,10 @@ function renderTableRows(products, resetPage = true) {
           return /\b(segunda\s+mano|reacondicionad[oa]s?|refurbished|pre-owned|usad[oa]s?|open\s*box|km\s*0|ex-demo|seminuev[oa]s?)\b/i.test(text);
         }
         case 'sin-ia':
-          return (product.ia_status || ((product.description || '').trim().length >= 60 ? 'completed' : 'pending')) !== 'completed';
+          // Producto sin enriquecer con IA: no tiene ai_enriched:true ni
+          // ia_status:'completed'. No usamos la longitud de descripción como
+          // heurística porque un texto largo no significa que haya pasado por IA.
+          return (product.ai_enriched !== true) && ((product.ia_status || '') !== 'completed');
         case 'sin-tags': {
           const tags = Array.isArray(product.normalized_tags) ? product.normalized_tags : [];
           return tags.length === 0;
@@ -12431,6 +12467,14 @@ function renderTableRows(products, resetPage = true) {
   :global(.product-detail-row > td) {
     background: rgba(4, 10, 18, 0.55);
     padding: 0.6rem 0.75rem;
+    overflow-x: auto;
+  }
+
+  /* El grid de detalle no debe forzar el ancho de la tabla: si el contenido
+   * es muy ancho, se hace scroll interno en lugar de desplazar columnas. */
+  :global(.aff-detail-grid) {
+    max-width: 100%;
+    overflow-x: auto;
   }
 
   /* ===== Chips de URL compactos (una línea + copiar + desplegar) ===== */
