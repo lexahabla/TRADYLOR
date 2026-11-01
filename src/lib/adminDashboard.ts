@@ -9,7 +9,7 @@ export const AFFILIATE_PROVIDERS = [
   { id: 'amazon', name: 'Amazon Associates', description: 'Programa de asociados de Amazon.', envKeys: ['AMAZON_ASSOCIATE_TAG', 'AMAZON_PA_API_KEY', 'AMAZON_PA_SECRET'] },
   { id: 'aliexpress', name: 'AliExpress Portals / Official Affiliate Program', description: 'Catálogo y enlaces de AliExpress.', envKeys: ['ALIEXPRESS_APP_KEY', 'ALIEXPRESS_APP_SECRET', 'ALIEXPRESS_TRACKING_ID'] },
   { id: 'ebay', name: 'eBay Partner Network', description: 'Ofertas, campañas y enlaces de eBay.', envKeys: ['EBAY_CAMPAIGN_ID', 'EBAY_CLIENT_ID', 'EBAY_CLIENT_SECRET'] },
-  { id: 'awin', name: 'Awin', description: 'Red de anunciantes y feeds de producto.', envKeys: ['AWIN_PUBLISHER_ID', 'AWIN_API_TOKEN'] },
+  { id: 'awin', name: 'Awin', description: 'Red de anunciantes y feeds de producto.', envKeys: ['AWIN_PUBLISHER_ID', 'AWIN_API_TOKEN', 'AWIN_FEED_URL'] },
   { id: 'cj', name: 'CJ Affiliate', description: 'Anunciantes, enlaces profundos y productos CJ.', envKeys: ['CJ_WEBSITE_ID', 'CJ_API_TOKEN'] },
   { id: 'admitad', name: 'Admitad', description: 'Ofertas y feeds de la red Admitad.', envKeys: ['ADMITAD_WEBSITE_ID', 'ADMITAD_API_TOKEN'] },
   { id: 'tradedoubler', name: 'Tradedoubler / Metapic', description: 'Campañas y monetización de Tradedoubler.', envKeys: ['TRADEDOUBLER_PARTNER_ID', 'TRADEDOUBLER_API_TOKEN'] },
