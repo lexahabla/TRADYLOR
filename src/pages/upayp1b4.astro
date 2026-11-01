@@ -1149,6 +1149,17 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <option value="DISCARDED">Descartados</option>
               </select>
             </div>
+            <!-- Calidad del comerciante: Oficiales / Autorizadas y descarte de vendedores particulares y brokers.
+                 Aplica a todas las redes de comercio (AliExpress, Amazon, eBay, Awin…). -->
+            <div class="filter-field ali-f-store-tier">
+              <label for="aliFStoreTier">Tipo de tienda</label>
+              <select id="aliFStoreTier" title="Filtra por nivel del vendedor: 'Oficiales + Autorizadas' descarta vendedores particulares y brokers (solo tiendas verificadas)">
+                <option value="all">Todos los vendedores</option>
+                <option value="official">Tiendas Oficiales / Flagship</option>
+                <option value="authorized">Tiendas Autorizadas / Certificadas</option>
+                <option value="verified">Oficiales + Autorizadas (sin particulares)</option>
+              </select>
+            </div>
             <div class="filter-field ali-sort-field">
               <label for="aliFSort">Ordenar por</label>
               <div class="ali-sort-group">
@@ -10693,6 +10704,7 @@ function renderTableRows(products, resetPage = true) {
   /* CAPA 2 · Controles principales + ordenación */
   .ali-filters .filter-field.ali-f-cat { flex: 1 1 85px; min-width: 80px; }
   .ali-filters .filter-field.ali-f-state { flex: 0 1 108px; min-width: 104px; }
+  .ali-filters .filter-field.ali-f-store-tier { flex: 0 1 170px; min-width: 152px; }
   .ali-filters .filter-field.ali-f-network { flex: 1 1 150px; min-width: 130px; }
   .ali-filters .filter-field.ali-f-short { flex: 0 1 116px; min-width: 112px; }
   .ali-filters .filter-field.ali-sort-field { flex: 0 1 215px; }

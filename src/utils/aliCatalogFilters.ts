@@ -66,6 +66,16 @@ export type AliImportState = 'PENDING' | 'IMPORTED' | 'DISCARDED';
 /** Filtro de estado: todos o un estado concreto. */
 export type AliEstadoFilter = AliImportState | 'ALL';
 
+/** Nivel de calidad del vendedor/tienda que el usuario puede seleccionar en el
+ * filtro «Tipo de tienda» de #affiliateFilters.
+ * 'all' = sin filtro; 'official' = solo Oficiales/Flagship; 'authorized' = solo
+ * Autorizadas/Certificadas; 'verified' = Oficiales + Autorizadas (descarta
+ * vendedores particulares y brokers). Aplica a todas las redes de comercio. */
+export type AliStoreTier = 'all' | 'official' | 'authorized' | 'verified';
+
+/** Clasificación real de una tienda tras aplicar `storeTierOf` a un producto. */
+export type AliStoreClass = 'official' | 'authorized' | 'individual';
+
 export type AliSortDir = 'asc' | 'desc';
 
 /** Claves de ordenación del desplegable «Ordenar por». */
@@ -101,6 +111,11 @@ export interface ProductFilterParams {
   estado?: AliEstadoFilter;
   /** Tienda / merchant (`extra.Tienda`). */
   shop?: string;
+  /** Nivel de calidad del vendedor/tienda para el filtro «Tipo de tienda» de #affiliateFilters.
+   * 'all' = sin filtro; 'official' = solo Oficiales/Flagship; 'authorized' = solo
+   * Autorizadas/Certificadas; 'verified' = Oficiales + Autorizadas (descarta
+   * vendedores particulares y brokers). Aplica a todas las redes. */
+  storeType?: AliStoreTier;
   /** Red / comerciante de origen (id de red conectada, p. ej. `aliexpress`). */
   network?: string;
   /** Precio de venta mínimo en €. */
@@ -173,6 +188,7 @@ export function defaultAliFilters(): ProductFilterParams {
     catL2: '',
     estado: 'ALL',
     shop: '',
+    storeType: 'all',
     sortBy: 'ventas',
     sortDir: 'desc',
   };
@@ -392,6 +408,53 @@ export function isSecondHand(product: UnifiedProduct): boolean {
   return secondHandPattern.test(text);
 }
 
+/* ────────────────────── TIPO DE TIENDA / NIVEL DEL VENDEDOR ────────────────── */
+
+/**
+ * Campos de `extra` que los conectores pueden usar para declarar el tipo de
+ * tienda/vendedor (Oficial, Flagship, Autorizada, Certificada, Particular, Broker…).
+ * Si un conector los rellena, se tiene prioridad sobre la inferencia por nombre.
+ */
+const STORE_TYPE_KEYS = [
+  'Tipo tienda', 'Tipo de tienda', 'Store Type', 'Seller Type',
+  'Sello vendedor', 'Seller Badge', 'Tienda Oficial',
+];
+
+/** Lee el tipo de tienda declarado explícitamente por el conector, si lo hay. */
+function declaredStoreType(product: UnifiedProduct): AliStoreClass | null {
+  const extra = product.extra;
+  if (!extra) return null;
+  for (const key of STORE_TYPE_KEYS) {
+    const value = extra[key];
+    if (value == null || value === '') continue;
+    const v = String(value).toLowerCase();
+    if (/official|flagship|top brand|tienda oficial|oficial\b/.test(v)) return 'official';
+    if (/authorized|certified|top select|top vendedor|autorizada|certificada/.test(v)) return 'authorized';
+    if (/individual|personal|particular|broker|corredor|vendedor individual/.test(v)) return 'individual';
+  }
+  return null;
+}
+
+/**
+ * Clasifica un producto por nivel de tienda, base del filtro «Tipo de tienda» de
+ * #affiliateFilters (Oficiales/Flagship, Autorizadas/Certificadas, y descarte de
+ * vendedores particulares y brokers). Funciona para todas las redes:
+ *   1. Dato explícito del conector en `extra` (claves de STORE_TYPE_KEYS).
+ *   2. Inferencia por el nombre de la tienda (`extra.Tienda`):
+ *      - Oficial/Flagship si el nombre trae 'Official' / 'Flagship' / 'Oficial'.
+ *      - Autorizada/Certificada si trae 'Authorized' / 'Certified' / 'Top Select' /
+ *        'Autorizada' / 'Certificada'.
+ *      - Cualquier otro vendedor se trata como 'individual' (particular/broker).
+ */
+export function storeTierOf(product: UnifiedProduct): AliStoreClass {
+  const declared = declaredStoreType(product);
+  if (declared) return declared;
+  const shop = String(extra(product, 'Tienda') ?? '');
+  if (/official|flagship|tienda oficial|oficial\b/i.test(shop)) return 'official';
+  if (/authorized|certified|top select|autorizada|certificada/i.test(shop)) return 'authorized';
+  return 'individual';
+}
+
 /* ────────────────────────────── PRESETS ──────────────────────────────────── */
 
 /** Columnas de las que hay datos reales en la caché cargada. */
@@ -491,6 +554,17 @@ export function filterAliCatalog(
       // `network` normalizado del conector (`aliexpress`, `amazon`, `AliExpress`…).
       const productNetwork = String(product.network ?? '').trim().toLowerCase();
       if (productNetwork !== params.network.trim().toLowerCase()) return false;
+    }
+
+    // Tipo de tienda / nivel del vendedor (Oficiales / Autorizadas / descarta
+    // particulares y brokers). 'all' = sin filtro.
+    if (params.storeType && params.storeType !== 'all') {
+      const tier = storeTierOf(product);
+      if (params.storeType === 'verified') {
+        if (tier !== 'official' && tier !== 'authorized') return false;
+      } else if (tier !== params.storeType) {
+        return false;
+      }
     }
 
     // Rango de precio
@@ -676,6 +750,18 @@ function buildChips(params: ProductFilterParams): AliChip[] {
   }
   if (params.shop) chips.push({ key: 'shop', label: params.shop, clear: (p) => { p.shop = ''; } });
   if (params.network) chips.push({ key: 'network', label: params.network, clear: (p) => { p.network = ''; } });
+  if (params.storeType && params.storeType !== 'all') {
+    const storeLabels: Record<Exclude<AliStoreTier, 'all'>, string> = {
+      official: 'Tiendas Oficiales / Flagship',
+      authorized: 'Tiendas Autorizadas / Certificadas',
+      verified: 'Oficiales + Autorizadas',
+    };
+    chips.push({
+      key: 'storeType',
+      label: storeLabels[params.storeType],
+      clear: (p) => { p.storeType = 'all'; },
+    });
+  }
   if (params.priceMin != null || params.priceMax != null) {
     const from = params.priceMin != null ? `${fmtNum(params.priceMin)} €` : '';
     const to = params.priceMax != null ? `${fmtNum(params.priceMax)} €` : '';
@@ -748,6 +834,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     'aliFImages',
     'aliFDiscMin',
     'aliFShop',
+    'aliFStoreTier',
     'aliFNetwork',
     'aliFChips',
   );
@@ -830,6 +917,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
 
     next.shop = (el.aliFShop as HTMLSelectElement | null)?.value ?? '';
     next.network = (el.aliFNetwork as HTMLSelectElement | null)?.value ?? '';
+    next.storeType = ((el.aliFStoreTier as HTMLSelectElement | null)?.value ?? 'all') as AliStoreTier;
 
     next.priceMin = numValue(el.aliFPriceMin);
     next.priceMax = numValue(el.aliFPriceMax);
@@ -1028,6 +1116,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     (el.aliFHot as HTMLInputElement | null)!.checked = Boolean(params.hotCommissionOnly);
     if (el.aliFSecondHand) (el.aliFSecondHand as HTMLInputElement).checked = Boolean(params.secondHandOnly);
     (el.aliFShop as HTMLSelectElement | null)!.value = params.shop ?? '';
+    (el.aliFStoreTier as HTMLSelectElement | null)!.value = params.storeType ?? '';
     (el.aliFNetwork as HTMLSelectElement | null)!.value = params.network ?? '';
 
     const sortSelect = el.aliFSort as HTMLSelectElement | null;
@@ -1125,7 +1214,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
   for (const id of [
     'aliFQ', 'aliFCat2', 'aliFState', 'aliFPriceMin', 'aliFPriceMax', 'aliFCommMin', 'aliFCommUnit',
     'aliFSalesMin', 'aliFRatingMin', 'aliFDiscMin', 'aliFImages', 'aliFFreeShip', 'aliFChoice',
-    'aliFHot', 'aliFSecondHand', 'aliFShop', 'aliFSort',
+    'aliFHot', 'aliFSecondHand', 'aliFShop', 'aliFStoreTier', 'aliFSort',
   ] as const) {
     const node = el[id];
     if (!node) continue;
