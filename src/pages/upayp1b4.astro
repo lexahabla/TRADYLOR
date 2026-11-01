@@ -10396,8 +10396,9 @@ function renderTableRows(products, resetPage = true) {
   :global(#aliCatalogHost .aff-name .url-chip) {
     width: 100%;
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: 0.25rem;
+    align-items: center;
   }
   :global(#aliCatalogHost .aff-name .url-chip-text) {
     flex: 1 1 auto;
@@ -10408,12 +10409,14 @@ function renderTableRows(products, resetPage = true) {
     white-space: nowrap;
   }
 
-  /* Desplegado: el texto se muestra completo y los botones se apilan debajo. */
+  /* Desplegado: el texto se muestra completo en varias líneas y los botones
+     quedan a la derecha de la primera línea. */
   :global(#aliCatalogHost .aff-name .url-chip.is-open) {
-    flex-direction: column;
+    flex-wrap: wrap;
     align-items: flex-start;
   }
   :global(#aliCatalogHost .aff-name .url-chip.is-open .url-chip-text) {
+    flex-basis: 100%;
     white-space: normal;
     word-break: break-all;
     overflow: visible;
