@@ -1265,6 +1265,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <button type="button" class="ali-preset" data-ali-preset="alto-margen" aria-pressed="false"><span class="ali-preset-ico">💰</span> Alto Margen</button>
               <button type="button" class="ali-preset" data-ali-preset="envio-express" aria-pressed="false"><span class="ali-preset-ico">⚡</span> Envío Exprés</button>
               <button type="button" class="ali-preset" data-ali-preset="segunda-mano" aria-pressed="false" title="Filtra exclusivamente productos de segunda mano o reacondicionados"><span class="ali-preset-ico">♻️</span> Segunda Mano</button>
+              <button type="button" class="ali-preset" data-ali-preset="solo-nuevos" aria-pressed="false" title="Filtra exclusivamente productos nuevos (descarta segunda mano, reacondicionados y usados)"><span class="ali-preset-ico">🆕</span> Solo Nuevos</button>
               <button type="button" class="ali-preset ali-preset-clear" data-ali-preset="clear" aria-pressed="false"><span class="ali-preset-ico">🗑️</span> Limpiar Filtros</button>
             </div>
           </div>
@@ -1275,6 +1276,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
             <label class="ali-check"><input type="checkbox" id="aliFChoice" /> <span>Solo AliExpress Choice / Almacén Local</span></label>
             <label class="ali-check"><input type="checkbox" id="aliFHot" /> <span>Solo con Comisión Hot (&gt; 0 %)</span></label>
             <label class="ali-check"><input type="checkbox" id="aliFSecondHand" /> <span>Solo segunda mano / reacondicionado</span></label>
+            <label class="ali-check"><input type="checkbox" id="aliFNewOnly" /> <span>Solo productos nuevos (sin estrenar)</span></label>
             <div class="filter-field ali-f-mini">
               <label for="aliFImages">Mín. imágenes</label>
               <input type="number" id="aliFImages" min="0" step="1" placeholder="0" inputmode="numeric" autocomplete="off" />

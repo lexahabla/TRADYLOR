@@ -149,6 +149,8 @@ export interface ProductFilterParams {
   inStockOnly?: boolean;
   /** Sólo productos de segunda mano o reacondicionados. */
   secondHandOnly?: boolean;
+  /** Sólo productos nuevos (descarta segunda mano, reacondicionados y usados). */
+  newOnly?: boolean;
   /** Campo de ordenación. */
   sortBy?: AliSortKey;
   /** Dirección del orden. */
@@ -195,6 +197,7 @@ export function defaultAliFilters(): ProductFilterParams {
     shop: '',
     storeOfficial: '',
     storeType: 'all',
+    newOnly: false,
     sortBy: 'ventas',
     sortDir: 'desc',
   };
@@ -231,6 +234,12 @@ export const ALI_PRESETS: AliPreset[] = [
     icon: '♻️',
     label: 'Segunda Mano',
     params: { secondHandOnly: true },
+  },
+  {
+    id: 'solo-nuevos',
+    icon: '🆕',
+    label: 'Solo Nuevos',
+    params: { newOnly: true },
   },
   { id: 'clear', icon: '🗑️', label: 'Limpiar Filtros', params: {} },
 ];
@@ -614,6 +623,7 @@ export function filterAliCatalog(
     if (params.choiceOnly && !isChoice(product)) return false;
     if (params.hotCommissionOnly && (hotCommissionPct(product) ?? 0) <= 0) return false;
     if (params.secondHandOnly && !isSecondHand(product)) return false;
+    if (params.newOnly && isSecondHand(product)) return false;
     if (params.inStockOnly && product.inStock === false) return false;
 
     // Texto libre: título + descripción + categoría + tienda
@@ -802,6 +812,7 @@ function buildChips(params: ProductFilterParams): AliChip[] {
   if (params.choiceOnly) chips.push({ key: 'choice', label: 'Choice / Almacén local', clear: (p) => { p.choiceOnly = false; } });
   if (params.hotCommissionOnly) chips.push({ key: 'hot', label: 'Comisión Hot', clear: (p) => { p.hotCommissionOnly = false; } });
   if (params.secondHandOnly) chips.push({ key: 'secondHand', label: 'Segunda mano', clear: (p) => { p.secondHandOnly = false; } });
+  if (params.newOnly) chips.push({ key: 'newOnly', label: 'Solo nuevos', clear: (p) => { p.newOnly = false; } });
   if (params.inStockOnly) chips.push({ key: 'stock', label: 'En stock', clear: (p) => { p.inStockOnly = false; } });
   return chips;
 }
@@ -813,6 +824,7 @@ function advancedCount(params: ProductFilterParams): number {
     params.choiceOnly,
     params.hotCommissionOnly,
     params.secondHandOnly,
+    params.newOnly,
     params.imagesMin != null,
     params.discountMin != null,
     params.shop,
@@ -852,6 +864,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     'aliFChoice',
     'aliFHot',
     'aliFSecondHand',
+    'aliFNewOnly',
     'aliFImages',
     'aliFDiscMin',
     'aliFShop',
@@ -962,6 +975,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     next.choiceOnly = Boolean((el.aliFChoice as HTMLInputElement | null)?.checked);
     next.hotCommissionOnly = Boolean((el.aliFHot as HTMLInputElement | null)?.checked);
     next.secondHandOnly = Boolean((el.aliFSecondHand as HTMLInputElement | null)?.checked);
+    next.newOnly = Boolean((el.aliFNewOnly as HTMLInputElement | null)?.checked);
 
     // Orden (capa conservada del diseño original)
     next.sortBy = ((el.aliFSort as HTMLSelectElement | null)?.value ?? 'ventas') as AliSortKey;
@@ -1185,6 +1199,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     (el.aliFChoice as HTMLInputElement | null)!.checked = Boolean(params.choiceOnly);
     (el.aliFHot as HTMLInputElement | null)!.checked = Boolean(params.hotCommissionOnly);
     if (el.aliFSecondHand) (el.aliFSecondHand as HTMLInputElement).checked = Boolean(params.secondHandOnly);
+    if (el.aliFNewOnly) (el.aliFNewOnly as HTMLInputElement).checked = Boolean(params.newOnly);
     (el.aliFShop as HTMLSelectElement | null)!.value = params.shop ?? '';
     (el.aliFStoreTier as HTMLSelectElement | null)!.value = params.storeType ?? '';
     (el.aliFStoreOfficial as HTMLSelectElement | null)!.value = params.storeOfficial ?? '';
@@ -1285,7 +1300,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
   for (const id of [
     'aliFQ', 'aliFCat2', 'aliFState', 'aliFPriceMin', 'aliFPriceMax', 'aliFCommMin', 'aliFCommUnit',
     'aliFSalesMin', 'aliFRatingMin', 'aliFDiscMin', 'aliFImages', 'aliFFreeShip', 'aliFChoice',
-    'aliFHot', 'aliFSecondHand', 'aliFShop', 'aliFStoreTier', 'aliFStoreOfficial', 'aliFSort',
+    'aliFHot', 'aliFSecondHand', 'aliFNewOnly', 'aliFShop', 'aliFStoreTier', 'aliFStoreOfficial', 'aliFSort',
   ] as const) {
     const node = el[id];
     if (!node) continue;
