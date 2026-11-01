@@ -10390,25 +10390,7 @@ function renderTableRows(products, resetPage = true) {
   :global(.aff-name strong) { display: block; font-weight: 650; font-size: .75rem; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
   :global(.aff-name span) { display: block; margin-top: .1rem; color: var(--color-text-dim); font-size: .55rem; overflow: hidden; text-overflow: ellipsis; }
 
-  /* url-chip dentro de la celda Producto de la tabla Importar: botones en la
-     misma línea que el texto, texto a la derecha, título más grande. */
-  :global(#aliCatalogHost .aff-name .url-chip) {
-    flex-wrap: nowrap;
-    width: 100%;
-    padding: 0.1rem 0.3rem;
-  }
-  :global(#aliCatalogHost .aff-name .url-chip-text) {
-    max-width: 100%;
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 0.85rem;
-  }
-  :global(#aliCatalogHost .aff-name .url-chip-btn) {
-    flex-shrink: 0;
-  }
+
   :global(.aff-actions) { display: revert-rule; align-items: center; justify-content: center; gap: .2rem; white-space: normal; }
   :global(.aff-actions .btn-sm) { padding: .2rem .4rem; font-size: .6rem; }
   :global(.aff-caret) { width: 24px; height: 24px; color: #93c5fd; background: rgba(96, 165, 250, .1); border: 1px solid rgba(96, 165, 250, .25); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-body); font-size: .7rem; font-weight: 700; transition: all .2s ease; }
