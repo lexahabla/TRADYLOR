@@ -70,6 +70,57 @@ interface CatalogCacheEntry {
   etag: string;
 }
 
+/**
+ * Clasifica un producto por nivel de tienda (igual que en el frontend,
+ * src/utils/aliCatalogFilters.ts :: storeTierOf). Lee el dato explícito del
+ * conector en `extra` o infiere del nombre de la tienda (merchantName /
+ * extra.Tienda). Devuelve 'official', 'authorized' o 'individual'.
+ */
+function classifyStoreTier(product: CanonicalAffiliateProduct): 'official' | 'authorized' | 'individual' {
+  const extra = product.extra;
+  if (extra) {
+    const keys = ['Tipo tienda', 'Tipo de tienda', 'Store Type', 'Seller Type',
+      'Sello vendedor', 'Seller Badge', 'Tienda Oficial'];
+    for (const key of keys) {
+      const value = extra[key];
+      if (value == null || value === '') continue;
+      const v = String(value).toLowerCase();
+      if (/official|flagship|top brand|tienda oficial|oficial\b/.test(v)) return 'official';
+      if (/authorized|certified|top select|top vendedor|autorizada|certificada/.test(v)) return 'authorized';
+      if (/individual|personal|particular|broker|corredor|vendedor individual/.test(v)) return 'individual';
+    }
+  }
+  const shop = String(product.merchantName || extra?.['Tienda'] || '').toLowerCase();
+  if (/official|flagship|tienda oficial|oficial\b/.test(shop)) return 'official';
+  if (/authorized|certified|top select|autorizada|certificada/.test(shop)) return 'authorized';
+  return 'individual';
+}
+
+/**
+ * Aplica los filtros de tienda a un array de productos canónicos. Devuelve
+ * sólo los que coinciden con el nivel de tienda y/o la tienda oficial
+ * seleccionada. Si ambos filtros están vacíos, devuelve el array intacto.
+ */
+function filterProductsByStore(products: CanonicalAffiliateProduct[], storeTier?: string, storeOfficial?: string): CanonicalAffiliateProduct[] {
+  if (!storeTier && !storeOfficial) return products;
+  const wantTier = storeTier && storeTier !== 'all' ? storeTier : null;
+  return products.filter((product) => {
+    if (wantTier) {
+      const tier = classifyStoreTier(product);
+      if (wantTier === 'verified') {
+        if (tier !== 'official' && tier !== 'authorized') return false;
+      } else if (tier !== wantTier) {
+        return false;
+      }
+    }
+    if (storeOfficial) {
+      const shop = String(product.merchantName || product.extra?.['Tienda'] || '');
+      if (shop !== storeOfficial) return false;
+    }
+    return true;
+  });
+}
+
 let catalogMemoryCache: CatalogCacheEntry | null = null;
 
 export function invalidateCatalogMemoryCache() {
@@ -211,7 +262,9 @@ export const POST: APIRoute = async ({ request }) => {
   const unauthorizedResponse = requireAdminAuth(request);
   if (unauthorizedResponse) return unauthorizedResponse;
 
-  const body = (await request.json().catch(() => ({}))) as { append?: boolean; networkId?: string };
+  const body = (await request.json().catch(() => ({}))) as { append?: boolean; networkId?: string; storeTier?: string; storeOfficial?: string };
+  const storeTier = body?.storeTier;
+  const storeOfficial = body?.storeOfficial;
   const connected = getConnectedNetworkIds();
   const targetNetworkId = body?.networkId;
   const networksToSync = targetNetworkId ? (connected.includes(targetNetworkId) ? [targetNetworkId] : []) : connected;
@@ -236,11 +289,12 @@ export const POST: APIRoute = async ({ request }) => {
         if (result.ok) {
           const aliSnapshot = readAliCatalog();
           if (aliSnapshot) {
-            for (const product of aliSnapshot.products) {
+            const filtered = filterProductsByStore(aliSnapshot.products, storeTier, storeOfficial);
+            for (const product of filtered) {
               mergedById.set(`${product.network}:${product.externalId}`, product);
             }
+            totalAdded += filtered.length;
           }
-          totalAdded += result.count;
         } else {
           errors.push(result.message);
         }
@@ -250,10 +304,11 @@ export const POST: APIRoute = async ({ request }) => {
           for (const keyword of CATALOG_KEYWORDS) {
             try {
               const batch = await searchCatalogBatch(connector, { query: keyword, limit: 20, page });
-              for (const product of batch) {
+              const filteredBatch = filterProductsByStore(batch, storeTier, storeOfficial);
+              for (const product of filteredBatch) {
                 mergedById.set(`${product.network}:${product.externalId}`, product);
               }
-              totalAdded += batch.length;
+              totalAdded += filteredBatch.length;
             } catch (error) {
               errors.push(error instanceof Error ? error.message : `Fallo con "${keyword}" en ${networkId} (página ${page})`);
             }

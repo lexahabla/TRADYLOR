@@ -1039,6 +1039,57 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                btnAliSync/aliCatalogMeta que se mantienen sincronizadas desde
                JS (ver aliSyncButtons / setAliMeta). -->
           <div class="ali-quick-sync">
+            <!-- Filtros de tienda para sincronización selectiva: sólo se
+                 descargarán y guardarán las tiendas que coincidan con estos
+                 filtros (nivel de tienda y/o tienda oficial concreta). -->
+            <div class="filter-field ali-f-store-tier">
+              <label for="aliFStoreTierSync">Nivel tienda</label>
+              <select id="aliFStoreTierSync" title="Filtra las tiendas a sincronizar por nivel del vendedor">
+                <option value="all">Todos los vendedores</option>
+                <option value="official">Oficiales / Flagship</option>
+                <option value="authorized">Autorizadas / Certificadas</option>
+                <option value="verified">Oficiales + Autorizadas</option>
+              </select>
+            </div>
+            <div class="filter-field ali-f-store-official">
+              <label for="aliFStoreOfficialSync">Tienda oficial</label>
+              <select id="aliFStoreOfficialSync" title="Sincroniza sólo esta tienda oficial concreta">
+                <option value="">Todas las tiendas oficiales</option>
+                <option value="ANBERNIC Official Store">ANBERNIC Official Store</option>
+                <option value="Miyoo Official Store">Miyoo Official Store</option>
+                <option value="Retroid Pocket Official Store">Retroid Pocket Official Store</option>
+                <option value="AYANEO Official Store">AYANEO Official Store</option>
+                <option value="GPD Official Store">GPD Official Store</option>
+                <option value="8BitDo Official Store">8BitDo Official Store</option>
+                <option value="VGN Official Store">VGN Official Store</option>
+                <option value="VXE Official Store">VXE Official Store</option>
+                <option value="Machnake Official Store">Machnake Official Store</option>
+                <option value="Keychron Official Store">Keychron Official Store</option>
+                <option value="Epomaker Official Store">Epomaker Official Store</option>
+                <option value="FIFINE Official Store">FIFINE Official Store</option>
+                <option value="Beelink Official Store">Beelink Official Store</option>
+                <option value="MINISFORUM Official Store">MINISFORUM Official Store</option>
+                <option value="KingSpec Store">KingSpec Store</option>
+                <option value="Netac Store">Netac Store</option>
+                <option value="Huananzhi Store">Huananzhi Store</option>
+                <option value="Thermalright Official Store">Thermalright Official Store</option>
+                <option value="Baseus Official Store">Baseus Official Store</option>
+                <option value="Ugreen Official Store">Ugreen Official Store</option>
+                <option value="Toocki Official Store">Toocki Official Store</option>
+                <option value="Essager Official Store">Essager Official Store</option>
+                <option value="Monorim Official Store">Monorim Official Store</option>
+                <option value="Ruima Store">Ruima Store</option>
+                <option value="Kaabo Store">Kaabo Store</option>
+                <option value="Inmotion Store">Inmotion Store</option>
+                <option value="Sonoff Official Store">Sonoff Official Store</option>
+                <option value="Tuya Certified Store">Tuya Certified Store</option>
+                <option value="Smart Life Certified Store">Smart Life Certified Store</option>
+                <option value="Aqara Official Store">Aqara Official Store</option>
+                <option value="HOTO Official Store">HOTO Official Store</option>
+                <option value="Deko Store">Deko Store</option>
+                <option value="Ningbo Tools Store">Ningbo Tools Store</option>
+              </select>
+            </div>
             <button type="button" id="btnBuildCatalogDryRun" class="btn-secondary btn-sm" title="Prueba la conexión con las redes: ejecuta la construcción del catálogo en modo simulación (dry-run), no guarda cambios, sólo muestra qué haría (incluidos los descartes de segunda mano y sin stock).">
               <span class="btn-text">🔍 Probar Conexión</span>
               <div class="btn-spinner" hidden></div>
@@ -7264,10 +7315,22 @@ function renderTableRows(products, resetPage = true) {
         showAliStatus('loading', 'Sincronizando catálogo', targetNetwork
           ? `Consultando la API de ${targetNetwork}...`
           : 'Consultando las redes conectadas en curso (puede tardar unos segundos)...');
+        // Filtros de tienda para sincronización selectiva (desde
+        // #ali-quick-sync). Sólo se descargarán y guardarán las tiendas que
+        // coincidan con el nivel de tienda y/o la tienda oficial elegida.
+        const syncStoreTierSel = document.getElementById('aliFStoreTierSync');
+        const syncStoreOfficialSel = document.getElementById('aliFStoreOfficialSync');
+        const syncStoreTier = syncStoreTierSel ? syncStoreTierSel.value : '';
+        const syncStoreOfficial = syncStoreOfficialSel ? syncStoreOfficialSel.value : '';
+
         const res = await fetch('/api/admin/catalog', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ networkId: targetNetwork || undefined })
+          body: JSON.stringify({
+            networkId: targetNetwork || undefined,
+            ...(syncStoreTier && syncStoreTier !== 'all' ? { storeTier: syncStoreTier } : {}),
+            ...(syncStoreOfficial ? { storeOfficial: syncStoreOfficial } : {}),
+          })
         });
         const data = await res.json();
         // El sync re-trae el catálogo completo: se levantan los descartes locales.
@@ -11272,6 +11335,10 @@ function renderTableRows(products, resetPage = true) {
   /* Acceso rápido (Probar Conexión + Sincronizar Redes + meta), justo debajo
      de #aliCatalogStatus: misma fila, alineados a la derecha. */
   .ali-quick-sync { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; flex-wrap: wrap; margin: .6rem 0; }
+  .ali-quick-sync .filter-field { min-width: auto; flex: 0 0 auto; margin: 0; }
+  .ali-quick-sync .filter-field label { font-size: .65rem; margin-bottom: .1rem; }
+  .ali-quick-sync .filter-field select { font-size: .72rem; padding: .32rem .5rem; min-width: 130px; max-width: 190px; }
+  .ali-quick-sync .filter-field.ali-f-store-official select { min-width: 160px; max-width: 220px; }
   .ali-import-actions .btn-sm { padding: .32rem .6rem; font-size: .68rem; }
   .ali-catalog-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; margin-left: auto; flex-wrap: wrap; }
   .ali-catalog-meta { color: var(--color-text-dim); font-size: .72rem; white-space: nowrap; }
