@@ -552,10 +552,19 @@ export class AwinConnector implements NetworkConnector {
       return { ok: false, message };
     }
 
+    // Limpieza básica de espacios accidentales en las credenciales.
+    const publisherId = String(creds.publisherId).trim();
+    const apiToken = String(creds.apiToken).trim();
+    if (!publisherId || !apiToken) {
+      const message = 'Publisher ID o API Token vacíos. Guarda las credenciales de Awin de nuevo.';
+      setNetworkStatus(this.networkId, 'error', message);
+      return { ok: false, message };
+    }
+
     try {
       const response = await fetchWithTimeout(
-        `${AWIN_API_BASE}/publishers/${encodeURIComponent(creds.publisherId)}/accounts`,
-        { headers: { Authorization: `Bearer ${creds.apiToken}`, Accept: 'application/json' } },
+        `${AWIN_API_BASE}/publishers/${encodeURIComponent(publisherId)}/accounts`,
+        { headers: { Authorization: `Bearer ${apiToken}`, Accept: 'application/json' } },
         8000,
       );
       if (response.ok) {
@@ -563,7 +572,19 @@ export class AwinConnector implements NetworkConnector {
         setNetworkStatus(this.networkId, 'connected', message);
         return { ok: true, message };
       }
-      const message = `Awin rechazó las credenciales (HTTP ${response.status}). Revisa el Publisher ID y el token.`;
+      // Leer el cuerpo de la respuesta de error para dar más detalles (p. ej. 404).
+      const errorBody = await response.text().catch(() => '');
+      let detail = '';
+      try {
+        const parsed = JSON.parse(errorBody);
+        detail = parsed?.message || parsed?.error || JSON.stringify(parsed).slice(0, 200);
+      } catch {
+        detail = errorBody.slice(0, 200);
+      }
+      const message =
+        response.status === 404
+          ? `Publisher ID "${publisherId}" no encontrado en Awin (HTTP 404). Verifica que el ID es correcto en tu cuenta de Awin (https://dashboard.awin.com). ${detail}`
+          : `Awin rechazó las credenciales (HTTP ${response.status}). Revisa el Publisher ID y el token. ${detail}`;
       setNetworkStatus(this.networkId, 'error', message);
       return { ok: false, message };
     } catch {
