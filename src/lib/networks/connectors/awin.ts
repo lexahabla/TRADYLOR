@@ -569,6 +569,11 @@ export class AwinConnector implements NetworkConnector {
         label: '/publishers/{id}/accounts (Bearer)',
       },
       {
+        url: `${AWIN_API_BASE}/publishers/${encodeURIComponent(publisherId)}/product-feeds`,
+        headers: { Authorization: `Bearer ${apiToken}`, Accept: 'application/json' },
+        label: '/publishers/{id}/product-feeds (Bearer)',
+      },
+      {
         url: `${AWIN_API_BASE}/publishers/${encodeURIComponent(publisherId)}`,
         headers: { Authorization: `Bearer ${apiToken}`, Accept: 'application/json' },
         label: '/publishers/{id} (Bearer)',
@@ -611,7 +616,7 @@ export class AwinConnector implements NetworkConnector {
           continue; // Probar el siguiente endpoint
         }
         if (response.status === 401 || response.status === 403) {
-          const message = `Awin rechazó las credenciales (HTTP ${response.status}). Token o Publisher ID incorrectos. ${detail}`;
+          const message = `Awin rechazó las credenciales (HTTP ${response.status}). Si usas un Código OAuth2, genera un API Token (Bearer) en https://dashboard.awin.com > API Credentials. ${detail}`;
           setNetworkStatus(this.networkId, 'error', message);
           return { ok: false, message };
         }
@@ -620,7 +625,7 @@ export class AwinConnector implements NetworkConnector {
       }
     }
 
-    const message = `No se pudo validar Awin. Último intento: ${lastError}. Verifica Publisher ID y API Token en https://dashboard.awin.com.`;
+    const message = `No se pudo validar Awin. Último intento: ${lastError}. Si usas un Código OAuth2, genera un API Token (Bearer) en https://dashboard.awin.com > API Credentials y pruébalo de nuevo.`;
     setNetworkStatus(this.networkId, 'error', message);
     return { ok: false, message };
   }
