@@ -1148,13 +1148,12 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
         </div>
 
         <!-- Filtros y ordenación del catálogo (3 capas; aplican ANTES de paginar)
-             Lógica y estado: src/utils/aliCatalogFilters.ts (ProductFilterParams).
-             La primera fila reúne el meta del catálogo y los controles de
-             sincronización (antes en #aliImportActions). -->
+             Lógica y estado: src/utils/aliCatalogFilters.ts (ProductFilterParams). -->
         <div id="affiliateFilters" class="ali-filters">
 
-          <!-- CAPA 1 · Buscador -->
-          <div class="ali-f-top">
+          <!-- CAPA 1+2 · Buscador + filtros principales en una sola fila -->
+          <div class="ali-filters-row">
+            <!-- Buscador (ocupa el espacio sobrante, no toda la fila) -->
             <div class="filter-field ali-f-search">
               <label for="aliFQ">Buscar</label>
               <div class="ali-search">
@@ -1166,22 +1165,59 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <span class="ali-f-count" id="aliFCount" title="Resultados que cumplen los filtros">0/0</span>
               </div>
             </div>
-          </div>
 
-          <!-- CAPA 2 · Filtros principales + ordenación, reagrupados: primero
-               procedencia/taxonomía del producto (red, categoría, subcategoría,
-               estado en catálogo), después orden + métricas numéricas (precio,
-               comisión, ventas, valoración) y el botón de más filtros. Los
-               presets van en su propia línea (el <br> fuerza el salto dentro
-               del flex-wrap; ver ".ali-filters-row > br" más abajo), igual que
-               en el Catálogo de Productos Registrados. -->
-          <div class="ali-filters-row">
-            <!-- El Comerciante/Red va PRIMERO: es el filtro "padre" del que
-                 dependen Categoría y Subcategoría (cascada), igual que
-                 Categoría → Subcategoría. -->
+            <!-- Comerciante / Red → Nivel tienda → Tienda oficial (agrupados) -->
             <div class="filter-field ali-f-network">
               <label for="aliFNetwork">Comerciante / Red</label>
               <select id="aliFNetwork" title="Filtra por la red de afiliación (comerciante) de origen: las categorías y subcategorías se ajustan al elegido"><option value="">Todas</option></select>
+            </div>
+            <div class="filter-field ali-f-store-tier">
+              <label for="aliFStoreTier">Nivel tienda</label>
+              <select id="aliFStoreTier" title="Filtra por nivel del vendedor: Oficiales/Flagship, Autorizadas/Certificadas, o ambas (descarta particulares y brokers)">
+                <option value="all">Todos los vendedores</option>
+                <option value="official">Oficiales / Flagship</option>
+                <option value="authorized">Autorizadas / Certificadas</option>
+                <option value="verified">Oficiales + Autorizadas</option>
+              </select>
+            </div>
+            <div class="filter-field ali-f-store-official">
+              <label for="aliFStoreOfficial">Tienda oficial</label>
+              <select id="aliFStoreOfficial" title="Filtra por una tienda oficial concreta de las redes conectadas">
+                <option value="" data-tier="">Todas las tiendas oficiales</option>
+                <option value="ANBERNIC Official Store" data-tier="official">ANBERNIC Official Store</option>
+                <option value="Miyoo Official Store" data-tier="official">Miyoo Official Store</option>
+                <option value="Retroid Pocket Official Store" data-tier="official">Retroid Pocket Official Store</option>
+                <option value="AYANEO Official Store" data-tier="official">AYANEO Official Store</option>
+                <option value="GPD Official Store" data-tier="official">GPD Official Store</option>
+                <option value="8BitDo Official Store" data-tier="official">8BitDo Official Store</option>
+                <option value="VGN Official Store" data-tier="official">VGN Official Store</option>
+                <option value="VXE Official Store" data-tier="official">VXE Official Store</option>
+                <option value="Machnake Official Store" data-tier="official">Machnake Official Store</option>
+                <option value="Keychron Official Store" data-tier="official">Keychron Official Store</option>
+                <option value="Epomaker Official Store" data-tier="official">Epomaker Official Store</option>
+                <option value="FIFINE Official Store" data-tier="official">FIFINE Official Store</option>
+                <option value="Beelink Official Store" data-tier="official">Beelink Official Store</option>
+                <option value="MINISFORUM Official Store" data-tier="official">MINISFORUM Official Store</option>
+                <option value="KingSpec Store" data-tier="official">KingSpec Store</option>
+                <option value="Netac Store" data-tier="official">Netac Store</option>
+                <option value="Huananzhi Store" data-tier="official">Huananzhi Store</option>
+                <option value="Thermalright Official Store" data-tier="official">Thermalright Official Store</option>
+                <option value="Baseus Official Store" data-tier="official">Baseus Official Store</option>
+                <option value="Ugreen Official Store" data-tier="official">Ugreen Official Store</option>
+                <option value="Toocki Official Store" data-tier="official">Toocki Official Store</option>
+                <option value="Essager Official Store" data-tier="official">Essager Official Store</option>
+                <option value="Monorim Official Store" data-tier="official">Monorim Official Store</option>
+                <option value="Ruima Store" data-tier="official">Ruima Store</option>
+                <option value="Kaabo Store" data-tier="official">Kaabo Store</option>
+                <option value="Inmotion Store" data-tier="official">Inmotion Store</option>
+                <option value="Sonoff Official Store" data-tier="official">Sonoff Official Store</option>
+                <option value="Tuya Certified Store" data-tier="authorized">Tuya Certified Store</option>
+                <option value="Smart Life Certified Store" data-tier="authorized">Smart Life Certified Store</option>
+                <option value="Aqara Official Store" data-tier="official">Aqara Official Store</option>
+                <option value="HOTO Official Store" data-tier="official">HOTO Official Store</option>
+                <option value="Deko Store" data-tier="official">Deko Store</option>
+                <option value="Ningbo Tools Store" data-tier="official">Ningbo Tools Store</option>
+              </select>
             </div>
             <div class="filter-field ali-f-cat">
               <label for="aliFCat1">Categoría</label>
@@ -1198,57 +1234,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <option value="PENDING">No añadidos</option>
                 <option value="IMPORTED">Añadidos al catálogo</option>
                 <option value="DISCARDED">Descartados</option>
-              </select>
-            </div>
-            <!-- Calidad del comerciante: nivel del vendedor (Oficial / Autorizada / Particular-Broker).
-                 Aplica a todas las redes de comercio (AliExpress, Amazon, eBay, Awin…). -->
-            <div class="filter-field ali-f-store-tier">
-              <label for="aliFStoreTier">Nivel tienda</label>
-              <select id="aliFStoreTier" title="Filtra por nivel del vendedor: Oficiales/Flagship, Autorizadas/Certificadas, o ambas (descarta particulares y brokers)">
-                <option value="all">Todos los vendedores</option>
-                <option value="official">Oficiales / Flagship</option>
-                <option value="authorized">Autorizadas / Certificadas</option>
-                <option value="verified">Oficiales + Autorizadas</option>
-              </select>
-            </div>
-            <!-- Tienda oficial / flagship concreta (lista de tiendas verificadas) -->
-            <div class="filter-field ali-f-store-official">
-              <label for="aliFStoreOfficial">Tienda oficial</label>
-              <select id="aliFStoreOfficial" title="Filtra por una tienda oficial concreta de las redes conectadas">
-                <option value="">Todas las tiendas oficiales</option>
-                <option value="ANBERNIC Official Store">ANBERNIC Official Store</option>
-                <option value="Miyoo Official Store">Miyoo Official Store</option>
-                <option value="Retroid Pocket Official Store">Retroid Pocket Official Store</option>
-                <option value="AYANEO Official Store">AYANEO Official Store</option>
-                <option value="GPD Official Store">GPD Official Store</option>
-                <option value="8BitDo Official Store">8BitDo Official Store</option>
-                <option value="VGN Official Store">VGN Official Store</option>
-                <option value="VXE Official Store">VXE Official Store</option>
-                <option value="Machnake Official Store">Machnake Official Store</option>
-                <option value="Keychron Official Store">Keychron Official Store</option>
-                <option value="Epomaker Official Store">Epomaker Official Store</option>
-                <option value="FIFINE Official Store">FIFINE Official Store</option>
-                <option value="Beelink Official Store">Beelink Official Store</option>
-                <option value="MINISFORUM Official Store">MINISFORUM Official Store</option>
-                <option value="KingSpec Store">KingSpec Store</option>
-                <option value="Netac Store">Netac Store</option>
-                <option value="Huananzhi Store">Huananzhi Store</option>
-                <option value="Thermalright Official Store">Thermalright Official Store</option>
-                <option value="Baseus Official Store">Baseus Official Store</option>
-                <option value="Ugreen Official Store">Ugreen Official Store</option>
-                <option value="Toocki Official Store">Toocki Official Store</option>
-                <option value="Essager Official Store">Essager Official Store</option>
-                <option value="Monorim Official Store">Monorim Official Store</option>
-                <option value="Ruima Store">Ruima Store</option>
-                <option value="Kaabo Store">Kaabo Store</option>
-                <option value="Inmotion Store">Inmotion Store</option>
-                <option value="Sonoff Official Store">Sonoff Official Store</option>
-                <option value="Tuya Certified Store">Tuya Certified Store</option>
-                <option value="Smart Life Certified Store">Smart Life Certified Store</option>
-                <option value="Aqara Official Store">Aqara Official Store</option>
-                <option value="HOTO Official Store">HOTO Official Store</option>
-                <option value="Deko Store">Deko Store</option>
-                <option value="Ningbo Tools Store">Ningbo Tools Store</option>
               </select>
             </div>
             <div class="filter-field ali-sort-field">
@@ -10773,7 +10758,7 @@ function renderTableRows(products, resetPage = true) {
      igual que en el Catálogo de Productos Registrados (#prodPresets). */
   .ali-filters-row > br { flex-basis: 100%; width: 100%; height: 0; margin: 0; border: 0; padding: 0; }
   .ali-filters .filter-field { min-width: 90px; flex: 0 1 auto; }
-  .ali-filters .filter-field.ali-f-search { flex: 1 1 180px; min-width: 150px; }
+  .ali-filters .filter-field.ali-f-search { flex: 1 1 200px; min-width: 160px; }
   .ali-filters .btn-secondary { flex-shrink: 0; padding: .5rem .8rem; font-size: .72rem; }
   .ali-sort-group { display: flex; gap: .3rem; align-items: center; }
   .ali-sort-group select { flex: 0 0 auto; min-width: 120px; max-width: 170px; }
@@ -10784,8 +10769,6 @@ function renderTableRows(products, resetPage = true) {
   /* ── Catálogo AliExpress: barra de filtros en 3 capas ─────────────────
      (clases nuevas; .ali-filters / .ali-filters-row / .ali-sort-group /
      .ali-range-* se comparten con la tabla de Productos Registrados) */
-  .ali-f-top { display: flex; align-items: flex-end; gap: .6rem; flex-wrap: wrap; }
-  .ali-filters .ali-f-top .ali-f-search { flex: 1 1 260px; min-width: 220px; }
   .ali-search { position: relative; display: flex; align-items: center; }
   .ali-search-icon { position: absolute; left: .6rem; color: var(--color-text-dim); pointer-events: none; }
   .ali-search input { padding-left: 1.8rem !important; padding-right: 3.4rem !important; }

@@ -1281,6 +1281,43 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     host.onChange();
   });
 
+  // Nivel tienda en cascada: al cambiar «Nivel tienda», filtra las opciones
+  // de «Tienda oficial» basándose en su data-tier (official / authorized).
+  // 'verified' muestra ambas, 'all' muestra todas.
+  function filterStoreOfficialOptions(): void {
+    const tierSelect = el.aliFStoreTier as HTMLSelectElement | null;
+    const officialSelect = el.aliFStoreOfficial as HTMLSelectElement | null;
+    if (!tierSelect || !officialSelect) return;
+    const tier = tierSelect.value;
+    const currentlySelected = officialSelect.value;
+    let stillVisible = false;
+    for (const option of officialSelect.options) {
+      const tierData = option.dataset.tier || '';
+      let show = false;
+      if (option.value === '') show = true; // «Todas las tiendas oficiales» siempre visible
+      else if (tier === 'all') show = true;
+      else if (tier === 'official' && tierData === 'official') show = true;
+      else if (tier === 'authorized' && tierData === 'authorized') show = true;
+      else if (tier === 'verified' && (tierData === 'official' || tierData === 'authorized')) show = true;
+      option.hidden = !show;
+      if (show && option.value === currentlySelected) stillVisible = true;
+    }
+    // Si la opción seleccionada quedó oculta, resetear a «Todas»
+    if (!stillVisible) {
+      officialSelect.value = '';
+      params.storeOfficial = '';
+    }
+    officialSelect.dispatchEvent(new Event('change'));
+  }
+
+  (el.aliFStoreTier as HTMLSelectElement | null)?.addEventListener('change', () => {
+    params.storeType = ((el.aliFStoreTier as HTMLSelectElement | null)?.value || 'all') as AliStoreTier;
+    filterStoreOfficialOptions();
+    activePreset = null;
+    paintIndicators();
+    host.onChange();
+  });
+
   // Orden: invertir dirección (mayor→menor / menor→mayor)
   (el.aliFSortDir as HTMLButtonElement | null)?.addEventListener('click', () => {
     params.sortDir = (params.sortDir ?? 'desc') === 'desc' ? 'asc' : 'desc';
@@ -1357,6 +1394,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
       presetNotice = null;
       writeToDom();
       paintIndicators();
+      filterStoreOfficialOptions();
       host.onChange();
     },
 
@@ -1368,6 +1406,8 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
   availability = computeAvailability(products);
   writeToDom();
   paintIndicators();
+  // Aplica la cascada inicial de Tienda oficial según el Nivel tienda
+  filterStoreOfficialOptions();
 
   mounted = controller;
   return controller;
