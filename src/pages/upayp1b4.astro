@@ -10390,6 +10390,22 @@ function renderTableRows(products, resetPage = true) {
   :global(.aff-name strong) { display: block; font-weight: 650; font-size: .75rem; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
   :global(.aff-name > span) { display: block; margin-top: .1rem; color: var(--color-text-dim); font-size: .55rem; overflow: hidden; text-overflow: ellipsis; }
 
+  /* url-chip en la celda Producto de la tabla Importar: ocupa todo el ancho de
+     la celda, el texto crece y los botones quedan a la derecha, igual que en
+     Enlace de Afiliado Final. */
+  :global(#aliCatalogHost .aff-name .url-chip) {
+    width: 100%;
+    display: flex;
+    flex-wrap: nowrap;
+  }
+  :global(#aliCatalogHost .aff-name .url-chip-text) {
+    flex: 1 1 auto;
+    max-width: none;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   :global(.aff-actions) { display: revert-rule; align-items: center; justify-content: center; gap: .2rem; white-space: normal; }
   :global(.aff-actions .btn-sm) { padding: .2rem .4rem; font-size: .6rem; }
