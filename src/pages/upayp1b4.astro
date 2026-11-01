@@ -1090,6 +1090,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                 <option value="Ningbo Tools Store">Ningbo Tools Store</option>
               </select>
             </div>
+            <!-- Forzar salto de línea: los botones van en la segunda fila, alineados a la derecha -->
+            <br style="flex-basis: 100%; width: 100%;" />
             <button type="button" id="btnBuildCatalogDryRun" class="btn-secondary btn-sm" title="Prueba la conexión con las redes: ejecuta la construcción del catálogo en modo simulación (dry-run), no guarda cambios, sólo muestra qué haría (incluidos los descartes de segunda mano y sin stock).">
               <span class="btn-text">🔍 Probar Conexión</span>
               <div class="btn-spinner" hidden></div>
@@ -6698,8 +6700,8 @@ function renderTableRows(products, resetPage = true) {
     aliCatAssign?.addEventListener('change', syncAliSubcatAssign);
     bindSubcatDestCascade(aliCatAssign, aliSubcatAssign);
 
-    // Columnas de la tabla de afiliados (la columna «Tienda» se eliminó).
-    const ALI_COLS = 9;
+    // Columnas de la tabla de afiliados (incluye la columna «Tienda»).
+    const ALI_COLS = 10;
     let aliProducts = [];
     let aliVisible = [];
     /** Productos por página de la tabla de afiliados (25 / 50 / 75). */
@@ -7071,6 +7073,7 @@ function renderTableRows(products, resetPage = true) {
                 <th class="ac-th-check"><input type="checkbox" data-ac-checkall aria-label="Seleccionar la página actual" /></th>
                 <th>Foto</th>
                 <th>Producto</th>
+                <th class="aff-num">Tienda</th>
                 <th class="aff-num">Precio</th>
                 <th class="aff-num">Dto.</th>
                 <th class="aff-num">Comisión %</th>
@@ -7103,6 +7106,7 @@ function renderTableRows(products, resetPage = true) {
                     ${renderProductNameChip(product.title)}
                     <span>${escapeHtml(product.network)}${product.category ? ` · ${escapeHtml(product.category)}` : ''}${estadoPill}</span>
                   </td>
+                  <td class="aff-num"><span class="aff-store">${escapeHtml(aliExtra(product, 'Tienda') || product.extra?.['Tienda'] || '—')}</span></td>
                   <td class="aff-num">${money(product.price, product.currency)}</td>
                   <td class="aff-num ac-discount">${discount ? escapeHtml(discount) : '—'}</td>
                   <td class="aff-num">${product.commissionRate != null ? `${product.commissionRate}%` : '—'}</td>

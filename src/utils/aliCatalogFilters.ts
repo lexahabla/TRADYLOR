@@ -573,9 +573,11 @@ export function filterAliCatalog(
     }
 
     // Tienda oficial concreta seleccionada en el select «Tienda oficial».
+    // Coincidencia flexible (contiene) para que funcione aunque haya pequeñas
+    // variaciones en el nombre devuelto por la red.
     if (params.storeOfficial) {
       const shop = String(extra(product, 'Tienda') ?? '');
-      if (shop !== params.storeOfficial) return false;
+      if (!shop || !shop.toLowerCase().includes(params.storeOfficial.toLowerCase())) return false;
     }
 
     // Rango de precio
