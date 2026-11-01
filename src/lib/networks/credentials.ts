@@ -109,6 +109,10 @@ const ENV_CREDENTIALS: Record<string, Record<string, string>> = {
     clientSecret: 'EBAY_CLIENT_SECRET',
     campaignId: 'EBAY_CAMPAIGN_ID',
   },
+  awin: {
+    publisherId: 'AWIN_PUBLISHER_ID',
+    apiToken: 'AWIN_API_TOKEN',
+  },
 };
 
 function envCredential(name: string): string {
