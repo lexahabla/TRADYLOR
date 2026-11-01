@@ -54,6 +54,7 @@ declare global {
       filterAliCatalog: typeof filterAliCatalog;
       mountAliFilters: typeof mountAliFilters;
       queryAliCatalog: typeof queryAliCatalog;
+      storeTierOf: typeof storeTierOf;
     };
   }
 }
@@ -1075,6 +1076,53 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     const shops = [...new Set(productsForCats.map((p) => extra(p, 'Tienda')).filter((v): v is string => Boolean(v)))].sort((a, b) => a.localeCompare(b, 'es'));
     setOptions(el.aliFShop as HTMLSelectElement | null, shops, 'Todas', params.shop);
     params.shop = (el.aliFShop as HTMLSelectElement | null)?.value || '';
+
+    // Poblar «Tienda oficial» con las tiendas reales encontradas en los productos
+    // sincronizados (extra.Tienda). Solo se muestran tiendas cuyo nivel no es
+    // 'individual' (es decir, oficiales, flagship, autorizadas o certificadas).
+    // Mapa tienda → producto de muestra para determinar el tier de cada tienda
+    const shopToProduct = new Map<string, UnifiedProduct>();
+    for (const p of productsForCats) {
+      const shop = extra(p, 'Tienda');
+      if (shop && typeof shop === 'string' && !shopToProduct.has(shop)) {
+        shopToProduct.set(shop, p);
+      }
+    }
+    const officialShops = [...shopToProduct.keys()]
+      .filter((shop) => {
+        const tier = storeTierOf(shopToProduct.get(shop)!);
+        return tier === 'official' || tier === 'authorized';
+      })
+      .sort((a, b) => a.localeCompare(b, 'es'));
+
+    const officialSelect = el.aliFStoreOfficial as HTMLSelectElement | null;
+    if (officialSelect) {
+      const currentValue = officialSelect.value;
+      const fragment = document.createDocumentFragment();
+      const any = document.createElement('option');
+      any.value = '';
+      any.textContent = 'Todas las tiendas oficiales';
+      any.dataset.tier = '';
+      fragment.appendChild(any);
+
+      for (const shop of officialShops) {
+        const option = document.createElement('option');
+        option.value = shop;
+        option.textContent = shop;
+        const sampleProduct = shopToProduct.get(shop);
+        option.dataset.tier = sampleProduct ? storeTierOf(sampleProduct) : 'individual';
+        fragment.appendChild(option);
+      }
+
+      officialSelect.textContent = '';
+      officialSelect.appendChild(fragment);
+      if (officialShops.some((s) => s === currentValue)) {
+        officialSelect.value = currentValue;
+      } else {
+        officialSelect.value = '';
+        params.storeOfficial = '';
+      }
+    }
   }
 
   function applyAvailability(): void {

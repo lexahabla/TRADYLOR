@@ -1186,39 +1186,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <label for="aliFStoreOfficial">Tienda oficial</label>
               <select id="aliFStoreOfficial" title="Filtra por una tienda oficial concreta de las redes conectadas">
                 <option value="" data-tier="">Todas las tiendas oficiales</option>
-                <option value="ANBERNIC Official Store" data-tier="official">ANBERNIC Official Store</option>
-                <option value="Miyoo Official Store" data-tier="official">Miyoo Official Store</option>
-                <option value="Retroid Pocket Official Store" data-tier="official">Retroid Pocket Official Store</option>
-                <option value="AYANEO Official Store" data-tier="official">AYANEO Official Store</option>
-                <option value="GPD Official Store" data-tier="official">GPD Official Store</option>
-                <option value="8BitDo Official Store" data-tier="official">8BitDo Official Store</option>
-                <option value="VGN Official Store" data-tier="official">VGN Official Store</option>
-                <option value="VXE Official Store" data-tier="official">VXE Official Store</option>
-                <option value="Machnake Official Store" data-tier="official">Machnake Official Store</option>
-                <option value="Keychron Official Store" data-tier="official">Keychron Official Store</option>
-                <option value="Epomaker Official Store" data-tier="official">Epomaker Official Store</option>
-                <option value="FIFINE Official Store" data-tier="official">FIFINE Official Store</option>
-                <option value="Beelink Official Store" data-tier="official">Beelink Official Store</option>
-                <option value="MINISFORUM Official Store" data-tier="official">MINISFORUM Official Store</option>
-                <option value="KingSpec Store" data-tier="official">KingSpec Store</option>
-                <option value="Netac Store" data-tier="official">Netac Store</option>
-                <option value="Huananzhi Store" data-tier="official">Huananzhi Store</option>
-                <option value="Thermalright Official Store" data-tier="official">Thermalright Official Store</option>
-                <option value="Baseus Official Store" data-tier="official">Baseus Official Store</option>
-                <option value="Ugreen Official Store" data-tier="official">Ugreen Official Store</option>
-                <option value="Toocki Official Store" data-tier="official">Toocki Official Store</option>
-                <option value="Essager Official Store" data-tier="official">Essager Official Store</option>
-                <option value="Monorim Official Store" data-tier="official">Monorim Official Store</option>
-                <option value="Ruima Store" data-tier="official">Ruima Store</option>
-                <option value="Kaabo Store" data-tier="official">Kaabo Store</option>
-                <option value="Inmotion Store" data-tier="official">Inmotion Store</option>
-                <option value="Sonoff Official Store" data-tier="official">Sonoff Official Store</option>
-                <option value="Tuya Certified Store" data-tier="authorized">Tuya Certified Store</option>
-                <option value="Smart Life Certified Store" data-tier="authorized">Smart Life Certified Store</option>
-                <option value="Aqara Official Store" data-tier="official">Aqara Official Store</option>
-                <option value="HOTO Official Store" data-tier="official">HOTO Official Store</option>
-                <option value="Deko Store" data-tier="official">Deko Store</option>
-                <option value="Ningbo Tools Store" data-tier="official">Ningbo Tools Store</option>
               </select>
             </div>
             <div class="filter-field ali-f-cat">
@@ -2151,8 +2118,8 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
   sólo expone funciones puras en `window`, no toca el DOM.
 -->
 <script>
-  import { filterAliCatalog, mountAliFilters, queryAliCatalog } from '../utils/aliCatalogFilters';
-  window.tradylorAliFilters = { filterAliCatalog, mountAliFilters, queryAliCatalog };
+  import { filterAliCatalog, mountAliFilters, queryAliCatalog, storeTierOf } from '../utils/aliCatalogFilters';
+  window.tradylorAliFilters = { filterAliCatalog, mountAliFilters, queryAliCatalog, storeTierOf };
 </script>
 
 {isAuthenticated && sessionUser && sessionUser.role === 'admin' && (
@@ -7031,6 +6998,59 @@ function renderTableRows(products, resetPage = true) {
       return `<div class="ac-pager">${info}${perPage}<div class="ac-page-nav">${btn('‹', page - 1, { disabled: page <= 1, title: 'Página anterior' })}${nums.join('')}${btn('›', page + 1, { disabled: page >= pages, title: 'Página siguiente' })}${btn('⏭', pages, { disabled: page >= pages, title: 'Ir al final de la tabla' })}</div></div>`;
     }
 
+    /**
+     * Pobla los selects de «Tienda oficial» (en #affiliateFilters y en
+     * .ali-quick-sync) con las tiendas reales encontradas en los productos
+     * sincronizados, filtrando solo aquellas cuyo nivel es oficial o
+     * autorizado (no vendedores particulares/brokers).
+     */
+    function populateStoreOfficialSelects(products) {
+      const shopToProduct = new Map();
+      for (const p of products) {
+        const shop = (p.extra && p.extra.Tienda) || '';
+        if (shop && !shopToProduct.has(shop)) {
+          shopToProduct.set(shop, p);
+        }
+      }
+      const officialShops = [...shopToProduct.keys()]
+        .filter((shop) => {
+          const p = shopToProduct.get(shop);
+          const tier = storeTierOf(p);
+          return tier === 'official' || tier === 'authorized';
+        })
+        .sort((a, b) => a.localeCompare(b, 'es'));
+
+      const buildOptions = (selectId) => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        const currentValue = select.value;
+        const fragment = document.createDocumentFragment();
+        const any = document.createElement('option');
+        any.value = '';
+        any.textContent = 'Todas las tiendas oficiales';
+        any.dataset.tier = '';
+        fragment.appendChild(any);
+        for (const shop of officialShops) {
+          const option = document.createElement('option');
+          option.value = shop;
+          option.textContent = shop;
+          const p = shopToProduct.get(shop);
+          option.dataset.tier = p ? storeTierOf(p) : 'individual';
+          fragment.appendChild(option);
+        }
+        select.textContent = '';
+        select.appendChild(fragment);
+        if (officialShops.some((s) => s === currentValue)) {
+          select.value = currentValue;
+        } else {
+          select.value = '';
+        }
+      };
+
+      buildOptions('aliFStoreOfficial');
+      buildOptions('aliFStoreOfficialSync');
+    }
+
     function renderAliCatalog() {
       if (!aliCatalogHost) return;
       // #affiliateFilters nunca se oculta: su primera fila (meta + Sincronizar)
@@ -7226,6 +7246,9 @@ function renderTableRows(products, resetPage = true) {
         // espera a tener el catálogo real al día.
         await currentProductsRefresh;
         aliFilterPanel?.refresh();
+        // Poblar selects de tienda oficial (en #affiliateFilters y en .ali-quick-sync)
+        // con las tiendas reales encontradas en los productos sincronizados.
+        populateStoreOfficialSelects(aliProducts);
         setAliMeta(data);
         renderAliCatalog();
         const connected = Array.isArray(data.networks) ? data.networks : [];
