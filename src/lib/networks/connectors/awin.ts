@@ -47,6 +47,11 @@ interface AwinCreds {
   publisherId: string;
   apiToken: string;
   productFeedApiKey?: string;
+  /** URL directa del feed de producto (Create-a-Feed). Si se define, se descarga
+   *  este feed directamente sin pasar por /publishers/{id}/product-feeds, por lo
+   *  que no es obligatorio el API Token Bearer. La URL ya debe contener la clave
+   *  del feed si Awin la requiere. */
+  feedUrl?: string;
 }
 
 interface AwinFeed {
@@ -69,15 +74,21 @@ type FeedRow = Record<string, string>;
 function resolveCreds(): AwinCreds | null {
   // Las credenciales pueden venir del panel (credentials.json) o de las
   // variables de entorno de EasyPanel (AWIN_PUBLISHER_ID, AWIN_API_TOKEN,
-  // AWIN_PRODUCT_FEED_API_KEY). getMergedCredentialValues las fusiona, por lo
-  // que el conector funciona tanto en desarrollo como en producción sin
-  // tocar credenciales.json. Nunca se lee desde el cliente.
+  // AWIN_PRODUCT_FEED_API_KEY, AWIN_FEED_URL). getMergedCredentialValues las
+  // fusiona, por lo que el conector funciona tanto en desarrollo como en
+  // producción sin tocar credenciales.json. Nunca se lee desde el cliente.
   const creds = getMergedCredentialValues('awin');
-  if (!creds.publisherId || !creds.apiToken) return null;
+
+  // Modo feed directo: si se configura una URL de feed (Create-a-Feed) se puede
+  // descargar productos sin API Token Bearer. Publisher ID es opcional en este
+  // modo y se usa solo como identificador interno.
+  if (!creds.publisherId && !creds.feedUrl) return null;
+
   return {
-    publisherId: creds.publisherId,
-    apiToken: creds.apiToken,
+    publisherId: creds.publisherId ?? '',
+    apiToken: creds.apiToken ?? '',
     productFeedApiKey: creds.productFeedApiKey ?? undefined,
+    feedUrl: creds.feedUrl ?? undefined,
   };
 }
 
@@ -296,11 +307,17 @@ async function fetchFeeds(creds: AwinCreds): Promise<AwinFeed[]> {
 /** Caché de filas ya parseadas para no re-descargar el feed en cada búsqueda. */
 const feedCache = new Map<string, { at: number; rows: FeedRow[] }>();
 
-async function loadFeedRows(feed: AwinFeed, productFeedApiKey?: string): Promise<FeedRow[]> {
+async function loadFeedRows(
+  feed: AwinFeed,
+  productFeedApiKey?: string,
+  applyApiKey = true,
+): Promise<FeedRow[]> {
   const cached = feedCache.get(feed.url);
   if (cached && Date.now() - cached.at < FEED_CACHE_TTL_MS) return cached.rows;
 
-  const feedUrl = appendFeedApiKey(feed.url, productFeedApiKey);
+  // Cuando la URL del feed ya trae la clave embebida (modo Create-a-Feed
+  // directo) no se añade el parámetro awin_product_feed_api_key de nuevo.
+  const feedUrl = applyApiKey ? appendFeedApiKey(feed.url, productFeedApiKey) : feed.url;
   const response = await fetchWithTimeout(feedUrl, {}, 20000);
   if (!response.ok) {
     throw new ConnectorError('awin', `Feed «${feed.title}»: HTTP ${response.status}.`);
@@ -565,9 +582,30 @@ export class AwinConnector implements NetworkConnector {
   async validate(): Promise<{ ok: boolean; message: string }> {
     const creds = resolveCreds();
     if (!creds) {
-      const message = 'Faltan credenciales obligatorias (Publisher ID o API Token).';
+      const message = 'Faltan credenciales: configura Publisher ID y API Token, o bien una URL de feed (AWIN_FEED_URL).';
       setNetworkStatus(this.networkId, 'error', message);
       return { ok: false, message };
+    }
+
+    // Modo feed directo: validar accediendo a la URL del feed. No requiere
+    // API Token Bearer porque la clave va embebida en la URL.
+    if (creds.feedUrl) {
+      try {
+        const response = await fetchWithTimeout(creds.feedUrl, {}, 15000);
+        if (response.ok) {
+          const message = 'Conexión verificada con Awin (feed directo).';
+          setNetworkStatus(this.networkId, 'connected', message);
+          return { ok: true, message };
+        }
+        const detail = await response.text().catch(() => '');
+        const message = `El feed directo respondió HTTP ${response.status}: ${detail.slice(0, 150)}`;
+        setNetworkStatus(this.networkId, 'error', message);
+        return { ok: false, message };
+      } catch (err) {
+        const message = `No se pudo acceder al feed directo de Awin: ${err instanceof Error ? err.message : String(err)}`;
+        setNetworkStatus(this.networkId, 'error', message);
+        return { ok: false, message };
+      }
     }
 
     const publisherId = String(creds.publisherId).trim();
@@ -665,13 +703,27 @@ export class AwinConnector implements NetworkConnector {
     const syncedAt = new Date().toISOString();
 
     let feeds: AwinFeed[];
-    try {
-      feeds = await fetchFeeds(creds);
-    } catch (error) {
-      console.warn('[AwinConnector] product-feeds no disponible:', error instanceof Error ? error.message : error);
-      return fallbackCanonicalProducts(params, creds.publisherId);
+
+    // Modo feed directo: usar la URL configurada en AWIN_FEED_URL sin consultar
+    // /publishers/{id}/product-feeds (que requiere Bearer token).
+    if (creds.feedUrl) {
+      feeds = [
+        {
+          id: 'direct-feed',
+          title: 'Feed directo (Create-a-Feed)',
+          url: creds.feedUrl,
+          active: true,
+        },
+      ];
+    } else {
+      try {
+        feeds = await fetchFeeds(creds);
+      } catch (error) {
+        console.warn('[AwinConnector] product-feeds no disponible:', error instanceof Error ? error.message : error);
+        return fallbackCanonicalProducts(params, creds.publisherId);
+      }
+      if (!feeds.length) return fallbackCanonicalProducts(params, creds.publisherId);
     }
-    if (!feeds.length) return fallbackCanonicalProducts(params, creds.publisherId);
 
     // Anunciantes activos primero; como mucho 3 feeds por búsqueda
     const ordered = [...feeds].sort((a, b) => Number(b.active) - Number(a.active));
@@ -683,7 +735,8 @@ export class AwinConnector implements NetworkConnector {
 
       let rows: FeedRow[];
       try {
-        rows = await loadFeedRows(feed, creds.productFeedApiKey);
+        // Si es feed directo, la URL ya trae la clave: no se añade de nuevo.
+        rows = await loadFeedRows(feed, creds.productFeedApiKey, !creds.feedUrl);
       } catch (error) {
         console.warn('[AwinConnector] Feed no descargado:', error instanceof Error ? error.message : error);
         continue;

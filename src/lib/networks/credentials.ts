@@ -113,6 +113,7 @@ const ENV_CREDENTIALS: Record<string, Record<string, string>> = {
     publisherId: 'AWIN_PUBLISHER_ID',
     apiToken: 'AWIN_API_TOKEN',
     productFeedApiKey: 'AWIN_PRODUCT_FEED_API_KEY',
+    feedUrl: 'AWIN_FEED_URL',
   },
 };
 
