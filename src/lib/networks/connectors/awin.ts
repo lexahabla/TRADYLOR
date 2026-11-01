@@ -552,7 +552,6 @@ export class AwinConnector implements NetworkConnector {
       return { ok: false, message };
     }
 
-    // Limpieza básica de espacios accidentales en las credenciales.
     const publisherId = String(creds.publisherId).trim();
     const apiToken = String(creds.apiToken).trim();
     if (!publisherId || !apiToken) {
@@ -561,37 +560,69 @@ export class AwinConnector implements NetworkConnector {
       return { ok: false, message };
     }
 
-    try {
-      const response = await fetchWithTimeout(
-        `${AWIN_API_BASE}/publishers/${encodeURIComponent(publisherId)}/accounts`,
-        { headers: { Authorization: `Bearer ${apiToken}`, Accept: 'application/json' } },
-        8000,
-      );
-      if (response.ok) {
-        const message = 'Conexión verificada con la API de Awin.';
-        setNetworkStatus(this.networkId, 'connected', message);
-        return { ok: true, message };
-      }
-      // Leer el cuerpo de la respuesta de error para dar más detalles (p. ej. 404).
-      const errorBody = await response.text().catch(() => '');
-      let detail = '';
+    // Intentar varios endpoints posibles de la API de Awin y varios formatos
+    // de autenticación para dar un diagnóstico preciso.
+    const attempts: Array<{ url: string; headers: Record<string, string>; label: string }> = [
+      {
+        url: `${AWIN_API_BASE}/publishers/${encodeURIComponent(publisherId)}/accounts`,
+        headers: { Authorization: `Bearer ${apiToken}`, Accept: 'application/json' },
+        label: '/publishers/{id}/accounts (Bearer)',
+      },
+      {
+        url: `${AWIN_API_BASE}/publishers/${encodeURIComponent(publisherId)}`,
+        headers: { Authorization: `Bearer ${apiToken}`, Accept: 'application/json' },
+        label: '/publishers/{id} (Bearer)',
+      },
+      {
+        url: `${AWIN_API_BASE}/publishers/${encodeURIComponent(publisherId)}/accounts`,
+        headers: { 'awin-access-token': apiToken, Accept: 'application/json' },
+        label: '/publishers/{id}/accounts (awin-access-token)',
+      },
+      {
+        url: `${AWIN_API_BASE}/accounts`,
+        headers: { Authorization: `Bearer ${apiToken}`, Accept: 'application/json' },
+        label: '/accounts (Bearer)',
+      },
+    ];
+
+    let lastError = '';
+    for (const attempt of attempts) {
       try {
-        const parsed = JSON.parse(errorBody);
-        detail = parsed?.message || parsed?.error || JSON.stringify(parsed).slice(0, 200);
-      } catch {
-        detail = errorBody.slice(0, 200);
+        const response = await fetchWithTimeout(attempt.url, { headers: attempt.headers }, 8000);
+        const body = await response.text().catch(() => '');
+
+        if (response.ok) {
+          const message = `Conexión verificada con Awin (${attempt.label}).`;
+          setNetworkStatus(this.networkId, 'connected', message);
+          return { ok: true, message };
+        }
+
+        // Capturar detalle del error para el diagnóstico.
+        let detail = '';
+        try {
+          const parsed = JSON.parse(body);
+          detail = parsed?.message || parsed?.error || body.slice(0, 150);
+        } catch {
+          detail = body.slice(0, 150);
+        }
+        lastError = `${attempt.label}: HTTP ${response.status} - ${detail}`;
+
+        if (response.status === 404) {
+          continue; // Probar el siguiente endpoint
+        }
+        if (response.status === 401 || response.status === 403) {
+          const message = `Awin rechazó las credenciales (HTTP ${response.status}). Token o Publisher ID incorrectos. ${detail}`;
+          setNetworkStatus(this.networkId, 'error', message);
+          return { ok: false, message };
+        }
+      } catch (err) {
+        lastError = `${attempt.label}: error de red - ${err instanceof Error ? err.message : String(err)}`;
       }
-      const message =
-        response.status === 404
-          ? `Publisher ID "${publisherId}" no encontrado en Awin (HTTP 404). Verifica que el ID es correcto en tu cuenta de Awin (https://dashboard.awin.com). ${detail}`
-          : `Awin rechazó las credenciales (HTTP ${response.status}). Revisa el Publisher ID y el token. ${detail}`;
-      setNetworkStatus(this.networkId, 'error', message);
-      return { ok: false, message };
-    } catch {
-      const message = 'No se pudo contactar con api.awin.com. Revisa la red del servidor.';
-      setNetworkStatus(this.networkId, 'error', message);
-      return { ok: false, message };
     }
+
+    const message = `No se pudo validar Awin. Último intento: ${lastError}. Verifica Publisher ID y API Token en https://dashboard.awin.com.`;
+    setNetworkStatus(this.networkId, 'error', message);
+    return { ok: false, message };
   }
 
   /**
