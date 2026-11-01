@@ -46,6 +46,7 @@ const MAX_FEEDS_PER_SEARCH = 3;
 interface AwinCreds {
   publisherId: string;
   apiToken: string;
+  productFeedApiKey?: string;
 }
 
 interface AwinFeed {
@@ -55,13 +56,24 @@ interface AwinFeed {
   active: boolean;
 }
 
+/** Añade la clave de API del feed de producto a la URL si está disponible. */
+function appendFeedApiKey(url: string, apiKey?: string): string {
+  if (!apiKey) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}awin_product_feed_api_key=${encodeURIComponent(apiKey)}`;
+}
+
 /** Fila del feed con las cabeceras normalizadas (minúsculas y sin tildes). */
 type FeedRow = Record<string, string>;
 
 function resolveCreds(): AwinCreds | null {
   const creds = getCredentialValues('awin');
   if (!creds?.publisherId || !creds?.apiToken) return null;
-  return { publisherId: creds.publisherId, apiToken: creds.apiToken };
+  return {
+    publisherId: creds.publisherId,
+    apiToken: creds.apiToken,
+    productFeedApiKey: creds.productFeedApiKey ?? undefined,
+  };
 }
 
 /* ---------------- Lectura y parseo del feed ---------------- */
@@ -279,11 +291,12 @@ async function fetchFeeds(creds: AwinCreds): Promise<AwinFeed[]> {
 /** Caché de filas ya parseadas para no re-descargar el feed en cada búsqueda. */
 const feedCache = new Map<string, { at: number; rows: FeedRow[] }>();
 
-async function loadFeedRows(feed: AwinFeed): Promise<FeedRow[]> {
+async function loadFeedRows(feed: AwinFeed, productFeedApiKey?: string): Promise<FeedRow[]> {
   const cached = feedCache.get(feed.url);
   if (cached && Date.now() - cached.at < FEED_CACHE_TTL_MS) return cached.rows;
 
-  const response = await fetchWithTimeout(feed.url, {}, 20000);
+  const feedUrl = appendFeedApiKey(feed.url, productFeedApiKey);
+  const response = await fetchWithTimeout(feedUrl, {}, 20000);
   if (!response.ok) {
     throw new ConnectorError('awin', `Feed «${feed.title}»: HTTP ${response.status}.`);
   }
@@ -665,7 +678,7 @@ export class AwinConnector implements NetworkConnector {
 
       let rows: FeedRow[];
       try {
-        rows = await loadFeedRows(feed);
+        rows = await loadFeedRows(feed, creds.productFeedApiKey);
       } catch (error) {
         console.warn('[AwinConnector] Feed no descargado:', error instanceof Error ? error.message : error);
         continue;

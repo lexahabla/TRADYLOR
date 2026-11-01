@@ -70,7 +70,8 @@ export const NETWORKS: NetworkDefinition[] = [
     docUrl: 'https://developer.awin.com/',
     fields: [
       { key: 'publisherId', label: 'Publisher ID', secret: false, required: true },
-      { key: 'apiToken', label: 'API Token', secret: true, required: true },
+      { key: 'apiToken', label: 'API Token (Bearer)', secret: true, required: true },
+      { key: 'productFeedApiKey', label: 'Product Feed API Key', secret: true, required: false, placeholder: 'Opcional: clave para descargar feeds de productos' },
     ],
   },
   {

@@ -112,6 +112,7 @@ const ENV_CREDENTIALS: Record<string, Record<string, string>> = {
   awin: {
     publisherId: 'AWIN_PUBLISHER_ID',
     apiToken: 'AWIN_API_TOKEN',
+    productFeedApiKey: 'AWIN_PRODUCT_FEED_API_KEY',
   },
 };
 
