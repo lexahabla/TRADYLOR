@@ -12,6 +12,18 @@
  *     para no almacenar campos que no se van a usar.
  *
  * Persistencia: `network-fields.json` en DATA_DIR (NO va a git).
+ *
+ * FUENTES DE LOS CAMPOS (claves tal como aparecen en `product.extra`):
+ *   - AliExpress: lib/networks/connectors/aliexpress.ts  → mapProduct() extra
+ *   - eBay:       lib/networks/connectors/adapters/ebayProductAdapter.ts
+ *                  → adaptSingle() extra (líneas ~366) y adaptSingleCanonical()
+ *                  → extra (líneas ~241)
+ *   - Amazon:     lib/lib/amazonImport.ts → importAmazonProduct() extra
+ *                  (líneas ~620) y amazonProductAdapter.ts (PA-API).
+ *                  Los campos de Amazon se preparan para cuando se conecte
+ *                  la API oficial desde hosting convencional (PA-API o
+ *                  ScraperAPI estructurado). Algunos son estimados/placeholder
+ *                  hasta que haya conexión real.
  * ============================================================================
  */
 import fs from 'node:fs';
@@ -26,7 +38,7 @@ export interface NetworkFieldDef {
 }
 
 export interface NetworkFieldsConfig {
-  id: string;           // id de la red (ej: 'aliexpress', 'ebay')
+  id: string;           // id de la red (ej: 'aliexpress', 'ebay', 'amazon')
   name: string;         // nombre legible
   /** Campos disponibles de esta red (no seleccionados aún). */
   available: NetworkFieldDef[];
@@ -43,11 +55,8 @@ interface StoreFile {
 const FILE_NAME = 'network-fields.json';
 
 /**
- * Campos disponibles por red. Se extraen de los `extra` que cada conector
- * escribe en `mapProduct`/`adaptSingle`. Se puede ampliar red por red.
- *
- * Fuente principal (verificada en el código):
- *   - AliExpress: lib/networks/connectors/aliexpress.ts  (mapProduct, extra)
+ * Campos disponibles por red. Claves coinciden con los `extra` que cada
+ * conector escribe en `product.extra`.
  */
 const FIELDS_BY_NETWORK: Record<string, NetworkFieldDef[]> = {
   aliexpress: [
@@ -80,21 +89,52 @@ const FIELDS_BY_NETWORK: Record<string, NetworkFieldDef[]> = {
     { key: 'Imágenes extra', label: 'Nº de imágenes extra' },
   ],
   ebay: [
-    { key: 'Marca', label: 'Marca / Fabricante' },
-    { key: 'Condición', label: 'Condición del artículo' },
-    { key: 'Envio', label: 'Tipo de envío' },
-    { key: 'Ubicación', label: 'Ubicación del vendedor' },
-    { key: 'Valoración vendedor', label: 'Valoración del vendedor' },
-    { key: 'Ventas', label: 'Ventas recientes' },
-    { key: 'Enlace de afiliado', label: 'Enlace de afiliado eBay' },
-    { key: 'URL del producto', label: 'URL del producto eBay' },
+    // ── Campos del objeto `extra` de adaptSingle() (verificado en código) ──
+    { key: 'eBay Item ID', label: 'eBay Item ID' },
+    { key: 'Legacy Item ID', label: 'Legacy Item ID' },
+    { key: 'Condition', label: 'Condición del artículo' },
+    { key: 'Buying Options', label: 'Opciones de compra' },
+    { key: 'Seller', label: 'Vendedor' },
+    { key: 'Seller Feedback %', label: 'Valoración vendedor (%)' },
+    { key: 'Seller Feedback Score', label: 'Puntuación vendedor' },
+    { key: 'Item Location', label: 'Ubicación del artículo' },
+    { key: 'Category IDs', label: 'ID de categorías' },
+    { key: 'Marketing Discount %', label: 'Descuento marketing (%)' },
+    { key: 'Adult Only', label: 'Solo adultos' },
+    { key: 'Item Group Type', label: 'Tipo de grupo de artículo' },
+    { key: 'Item Group ID', label: 'ID de grupo de artículo' },
+    { key: 'Product ID', label: 'ID de producto eBay' },
+    { key: 'Brand', label: 'Marca / Fabricante' },
+    { key: 'MPN', label: 'MPN' },
+    { key: 'EAN', label: 'EAN' },
+    { key: 'UPC', label: 'UPC' },
+    { key: 'GTIN', label: 'GTIN' },
+    // ── Campos del objeto `extra` de adaptSingleCanonical() ──
+    { key: 'Descuento', label: 'Descuento (%)' },
+    { key: 'Ventas (30 días)', label: 'Ventas (30 días)' },
+    { key: 'Envío', label: 'Tipo de envío' },
   ],
   amazon: [
-    { key: 'Marca', label: 'Marca / Fabricante' },
-    { key: 'Valoración', label: 'Valoración (estrellas)' },
-    { key: 'Opiniones', label: 'Nº de opiniones' },
-    { key: 'Envio Prime', label: 'Envío Prime' },
-    { key: 'Enlace de afiliado', label: 'Enlace de afiliado Amazon' },
+    // ── Campos de `extra` en amazonImport.ts (importAmazonProduct) ──
+    { key: 'scraperApiSource', label: 'Fuente ScraperAPI (raw)' },
+    { key: 'importSource', label: 'Origen de importación' },
+    // ── Campos típicos de Amazon PA-API / ScraperAPI estructurado ──
+    // (se preparan para cuando se conecte la API oficial desde hosting)
+    { key: 'asin', label: 'ASIN de Amazon' },
+    { key: 'Brand', label: 'Marca / Fabricante' },
+    { key: 'Merchant', label: 'Comerciante / Vendedor' },
+    { key: 'Rating', label: 'Valoración (estrellas)' },
+    { key: 'Reviews Count', label: 'Nº de opiniones' },
+    { key: 'Availability', label: 'Disponibilidad' },
+    { key: 'Currency', label: 'Moneda' },
+    { key: 'In Stock', label: 'En stock' },
+    { key: 'Fulfillment Provider', label: 'Proveedor de envío' },
+    { key: 'Product Group', label: 'Grupo de producto' },
+    { key: 'Product Type', label: 'Tipo de producto' },
+    { key: 'Condition', label: 'Estado físico' },
+    { key: 'Features', label: 'Características (bullet points)' },
+    { key: 'Buy Now URL', label: 'URL de compra directa' },
+    { key: 'Affiliate URL', label: 'Enlace de afiliado Amazon' },
     { key: 'URL del producto', label: 'URL del producto Amazon' },
   ],
 };
