@@ -10396,7 +10396,8 @@ function renderTableRows(products, resetPage = true) {
   :global(#aliCatalogHost .aff-name .url-chip) {
     width: 100%;
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    gap: 0.25rem;
   }
   :global(#aliCatalogHost .aff-name .url-chip-text) {
     flex: 1 1 auto;
@@ -10405,6 +10406,22 @@ function renderTableRows(products, resetPage = true) {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Desplegado: el texto se muestra completo y los botones se apilan debajo. */
+  :global(#aliCatalogHost .aff-name .url-chip.is-open) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  :global(#aliCatalogHost .aff-name .url-chip.is-open .url-chip-text) {
+    white-space: normal;
+    word-break: break-all;
+    overflow: visible;
+    max-width: none;
+  }
+  :global(#aliCatalogHost .aff-name .url-chip.is-open .url-chip-btn) {
+    margin-top: 1px;
+    align-self: flex-start;
   }
 
   :global(.aff-actions) { display: revert-rule; align-items: center; justify-content: center; gap: .2rem; white-space: normal; }
