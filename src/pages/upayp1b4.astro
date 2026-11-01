@@ -634,7 +634,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <select id="nfNetwork" class="sel-cat-assign" aria-label="Red de afiliación" title="Elige la red cuyos campos quieres configurar" style="flex:1 1 200px; min-width:150px;"></select>
           <select id="nfField" class="sel-cat-assign" aria-label="Campo de la red" title="Campo extra de la red para añadir a la captura" disabled style="flex:1 1 220px; min-width:150px;"></select>
           <button type="button" class="btn-success btn-sm" id="nfBtnAdd" disabled>➕ Añadir campo</button>
-          <label class="filter-check" style="margin-left:auto; cursor:pointer;"><input type="checkbox" id="nfCaptureAll" /> <span>Capturar todos los campos de esta red</span></label>
+          <div style="margin-left:auto; display:flex; align-items:center; gap:.25rem;">
+            <input type="checkbox" id="nfCaptureAll" style="margin:0;" />
+            <label for="nfCaptureAll" style="cursor:pointer; margin:0; white-space:nowrap;">Capturar todos los campos de esta red</label>
+          </div>
         </div>
         <div id="nfSelectedList" class="field-toggle-list"></div>
         <p id="nfStatus" class="field-visibility-status" aria-live="polite"></p>
@@ -1038,6 +1041,10 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <div class="ali-quick-sync">
             <button type="button" id="btnBuildCatalogDryRun" class="btn-secondary btn-sm" title="Prueba la conexión con las redes: ejecuta la construcción del catálogo en modo simulación (dry-run), no guarda cambios, sólo muestra qué haría (incluidos los descartes de segunda mano y sin stock).">
               <span class="btn-text">🔍 Probar Conexión</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <button type="button" id="btnBuildCatalog" class="btn-secondary btn-sm" title="Construye el catálogo multi-comerciante real desde los datos de las redes conectadas (guarda los resultados en segundo plano).">
+              <span class="btn-text">🏗️ Construir Catálogo</span>
               <div class="btn-spinner" hidden></div>
             </button>
             <button type="button" id="btnAliSyncTop" class="btn-primary btn-sm" title="Descarga o refresca el catálogo de afiliados contra las APIs de las redes conectadas (AliExpress, eBay…)">
