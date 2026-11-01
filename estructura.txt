@@ -113,6 +113,7 @@ src/lib/networks/customNetworks.ts
 src/lib/networks/index.ts
 src/lib/networks/registry.ts
 src/lib/networks/types.ts
+src/lib/networkFieldsStore.ts
 src/lib/paths.ts
 src/lib/pipeline/config.ts
 src/lib/pipeline/index.ts
@@ -173,6 +174,7 @@ src/pages/api/admin/marketing/usuarios/[id]/remind.ts
 src/pages/api/admin/marketing/usuarios/index.ts
 src/pages/api/admin/marketing/usuarios/integrations.ts
 src/pages/api/admin/migrate-categories.ts
+src/pages/api/admin/network-fields.ts
 src/pages/api/admin/networks.ts
 src/pages/api/admin/normalize-tags.ts
 src/pages/api/admin/pipeline/index.ts

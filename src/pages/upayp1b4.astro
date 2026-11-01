@@ -626,6 +626,18 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <button type="button" class="btn-success btn-sm" id="btnAddCustomField">➕ Añadir campo</button>
         </div>
         <p id="fieldVisibilityStatus" class="field-visibility-status" aria-live="polite"></p>
+
+        <!-- ─── Campos de redes de afiliación (reutiliza el mismo panel) ─── -->
+        <h3 class="field-visibility-subtitle">Campos de redes de afiliación</h3>
+        <p class="card-desc">Elige qué campos `extra` de cada red de afiliación (AliExpress, eBay, Amazon…) se capturan al sincronizar el catálogo. Marca «Capturar todos los campos» o elige campos individuales con el select y «Añadir campo».</p>
+        <div class="network-fields-row" style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:flex-end; margin:.5rem 0 1rem;">
+          <select id="nfNetwork" class="sel-cat-assign" aria-label="Red de afiliación" title="Elige la red cuyos campos quieres configurar" style="flex:1 1 200px; min-width:150px;"></select>
+          <select id="nfField" class="sel-cat-assign" aria-label="Campo de la red" title="Campo extra de la red para añadir a la captura" disabled style="flex:1 1 220px; min-width:150px;"></select>
+          <button type="button" class="btn-success btn-sm" id="nfBtnAdd" disabled>➕ Añadir campo</button>
+          <label class="filter-check" style="margin-left:auto; cursor:pointer;"><input type="checkbox" id="nfCaptureAll" /> <span>Capturar todos los campos de esta red</span></label>
+        </div>
+        <div id="nfSelectedList" class="field-toggle-list"></div>
+        <p id="nfStatus" class="field-visibility-status" aria-live="polite"></p>
       </div>
     </section>
 
@@ -10229,6 +10241,194 @@ function renderTableRows(products, resetPage = true) {
     // Carga inicial silenciosa: deja listos los inputs del formulario desde
     // el primer momento, aunque el panel de visibilidad siga plegado.
     loadFieldVisibilityConfig(false);
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  Panel «Campos de redes de afiliación» (dentro de «Campos visibles»)
+    // ═════════════════════════════════════════════════════════════════════════
+    const nfNetwork = document.getElementById('nfNetwork');
+    const nfField = document.getElementById('nfField');
+    const nfBtnAdd = document.getElementById('nfBtnAdd');
+    const nfCaptureAll = document.getElementById('nfCaptureAll');
+    const nfSelectedList = document.getElementById('nfSelectedList');
+    const nfStatus = document.getElementById('nfStatus');
+
+    function nfSetStatus(msg, isError) {
+      if (!nfStatus) return;
+      nfStatus.textContent = msg || '';
+      nfStatus.style.color = isError ? '#f87171' : '#34d399';
+      if (msg) setTimeout(() => { nfStatus.textContent = ''; }, 4000);
+    }
+
+    function nfEscapeHtml(value) {
+      const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+      return String(value == null ? '' : value).replace(/[&<>"']/g, (ch) => map[ch] || ch);
+    }
+
+    async function loadNetworkFields() {
+      if (!nfNetwork) return;
+      try {
+        const res = await fetch('/api/admin/network-fields', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data.success) throw new Error('No se pudo cargar.');
+        renderNetworkFields(data.networks || []);
+      } catch {
+        if (nfNetwork) nfNetwork.innerHTML = '<option>Error al cargar redes</option>';
+      }
+    }
+
+    function renderNetworkFields(configs) {
+      if (!nfNetwork) return;
+      nfNetwork.innerHTML = configs.map((c) => `<option value="${nfEscapeHtml(c.id)}">${nfEscapeHtml(c.name)}</option>`).join('');
+      nfNetwork.disabled = !configs.length;
+      if (configs.length) {
+        const first = configs[0];
+        nfCaptureAll.checked = !!first.captureAll;
+        renderFieldSelect(first);
+        renderSelectedList(first);
+      }
+    }
+
+    function renderFieldSelect(config) {
+      if (!nfField) return;
+      nfField.disabled = !!config.captureAll || !config.available.length;
+      nfField.innerHTML = config.available
+        .filter((f) => !config.selected.includes(f.key))
+        .map((f) => `<option value="${nfEscapeHtml(f.key)}">${nfEscapeHtml(f.label)}</option>`)
+        .join('');
+      if (nfBtnAdd) nfBtnAdd.disabled = nfField.disabled || !nfField.value;
+    }
+
+    function renderSelectedList(config) {
+      if (!nfSelectedList) return;
+      if (!config.selected.length) {
+        nfSelectedList.innerHTML = '<p class="card-desc">Sin campos individuales seleccionados.</p>';
+        return;
+      }
+      nfSelectedList.innerHTML = config.selected
+        .map((key) => {
+          const def = config.available.find((f) => f.key === key);
+          const label = def ? def.label : key;
+          return `
+        <label class="field-toggle-item">
+          <input type="checkbox" data-nf-field="${nfEscapeHtml(key)}" checked />
+          <span class="field-toggle-item-text">
+            <span class="field-toggle-item-label">${nfEscapeHtml(label)}</span>
+            <span class="field-toggle-item-hint">product.extra.${nfEscapeHtml(key)}</span>
+          </span>
+          <button type="button" class="field-toggle-item-remove" data-nf-remove="${nfEscapeHtml(key)}" title="Quitar campo de la selección" aria-label="Quitar campo">✕</button>
+        </label>`;
+        })
+        .join('');
+      nfSelectedList.querySelectorAll('[data-nf-remove]').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const key = btn.getAttribute('data-nf-remove');
+          if (!nfNetwork || !nfNetwork.value) return;
+          btn.disabled = true;
+          try {
+            const res = await fetch('/api/admin/network-fields', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ action: 'remove-field', networkId: nfNetwork.value, fieldKey: key }),
+            });
+            const data = await res.json();
+            if (!data.success) throw new Error(data.message || 'No se pudo quitar.');
+            const net = data.networks.find((n) => n.id === nfNetwork.value);
+            if (net) renderSelectedList(net);
+            nfSetStatus('✓ Campo quitado de la selección.');
+          } catch (err) {
+            nfSetStatus((err && err.message) || 'Error al quitar el campo.', true);
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    // Eventos: cambiar red
+    nfNetwork?.addEventListener('change', async () => {
+      const id = nfNetwork.value;
+      if (!nfBtnAdd || !nfField || !nfCaptureAll) return;
+      nfBtnAdd.disabled = true;
+      nfField.disabled = true;
+      nfField.innerHTML = '<option>Cargando campos…</option>';
+      try {
+        const res = await fetch('/api/admin/network-fields', { cache: 'no-store' });
+        const data = await res.json();
+        if (!data.success) throw new Error('No se pudo cargar.');
+        const net = data.networks.find((n) => n.id === id);
+        if (!net) return;
+        nfCaptureAll.checked = !!net.captureAll;
+        renderFieldSelect(net);
+        renderSelectedList(net);
+        nfField.disabled = !!net.captureAll || !net.available.length;
+        nfBtnAdd.disabled = nfField.disabled || !nfField.value;
+      } catch {
+        nfSetStatus('Error al cargar campos de la red.', true);
+      }
+    });
+
+    // Eventos: cambiar campo en select
+    nfField?.addEventListener('change', () => {
+      if (nfBtnAdd) nfBtnAdd.disabled = !nfField.value || nfField.disabled;
+    });
+
+    // Eventos: capturar todos / solo algunos
+    nfCaptureAll?.addEventListener('change', async () => {
+      if (!nfNetwork || !nfNetwork.value) return;
+      const captureAll = nfCaptureAll.checked;
+      nfCaptureAll.disabled = true;
+      try {
+        const res = await fetch('/api/admin/network-fields', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'set-capture-all', networkId: nfNetwork.value, captureAll }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || 'No se pudo guardar.');
+        const net = data.networks.find((n) => n.id === nfNetwork.value);
+        if (net) {
+          nfField.disabled = !!net.captureAll || !net.available.length;
+          nfBtnAdd.disabled = nfField.disabled || !nfField.value;
+          renderSelectedList(net);
+        }
+        nfSetStatus(captureAll ? '✓ Se capturarán todos los campos de esta red.' : '✓ Se capturarán solo los campos seleccionados.');
+      } catch (err) {
+        nfCaptureAll.checked = !captureAll;
+        nfSetStatus((err && err.message) || 'Error al guardar.', true);
+      } finally {
+        nfCaptureAll.disabled = false;
+      }
+    });
+
+    // Eventos: añadir campo individual
+    nfBtnAdd?.addEventListener('click', async () => {
+      if (!nfNetwork || !nfField || !nfNetwork.value || !nfField.value) return;
+      nfBtnAdd.disabled = true;
+      try {
+        const res = await fetch('/api/admin/network-fields', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'add-field', networkId: nfNetwork.value, fieldKey: nfField.value }),
+        });
+        const data = await res.json();
+        if (!data.success) throw new Error(data.message || 'No se pudo añadir el campo.');
+        const net = data.networks.find((n) => n.id === nfNetwork.value);
+        if (net) {
+          renderFieldSelect(net);
+          renderSelectedList(net);
+          nfField.disabled = !!net.captureAll || !net.available.length;
+          nfBtnAdd.disabled = nfField.disabled || !nfField.value;
+        }
+        nfSetStatus('✓ Campo añadido a la captura de esta red.');
+      } catch (err) {
+        nfSetStatus((err && err.message) || 'Error al añadir el campo.', true);
+      } finally {
+        nfBtnAdd.disabled = false;
+      }
+    });
+
+    // Cargar configuración de redes al iniciar
+    loadNetworkFields();
   });
 </script>
   </>
