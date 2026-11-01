@@ -111,6 +111,10 @@ export interface ProductFilterParams {
   estado?: AliEstadoFilter;
   /** Tienda / merchant (`extra.Tienda`). */
   shop?: string;
+  /** Tienda oficial concreta seleccionada en el select «Tienda oficial» de
+   * #affiliateFilters (lista de tiendas verificadas). Si se elige una, se
+   * descarta cualquier otra tienda. Aplica a todas las redes. */
+  storeOfficial?: string;
   /** Nivel de calidad del vendedor/tienda para el filtro «Tipo de tienda» de #affiliateFilters.
    * 'all' = sin filtro; 'official' = solo Oficiales/Flagship; 'authorized' = solo
    * Autorizadas/Certificadas; 'verified' = Oficiales + Autorizadas (descarta
@@ -188,6 +192,7 @@ export function defaultAliFilters(): ProductFilterParams {
     catL2: '',
     estado: 'ALL',
     shop: '',
+    storeOfficial: '',
     storeType: 'all',
     sortBy: 'ventas',
     sortDir: 'desc',
@@ -567,6 +572,12 @@ export function filterAliCatalog(
       }
     }
 
+    // Tienda oficial concreta seleccionada en el select «Tienda oficial».
+    if (params.storeOfficial) {
+      const shop = String(extra(product, 'Tienda') ?? '');
+      if (shop !== params.storeOfficial) return false;
+    }
+
     // Rango de precio
     const price = toNumber(product.price);
     if (params.priceMin != null && (price == null || price < params.priceMin)) return false;
@@ -762,6 +773,13 @@ function buildChips(params: ProductFilterParams): AliChip[] {
       clear: (p) => { p.storeType = 'all'; },
     });
   }
+  if (params.storeOfficial) {
+    chips.push({
+      key: 'storeOfficial',
+      label: `Tienda: ${params.storeOfficial}`,
+      clear: (p) => { p.storeOfficial = ''; },
+    });
+  }
   if (params.priceMin != null || params.priceMax != null) {
     const from = params.priceMin != null ? `${fmtNum(params.priceMin)} €` : '';
     const to = params.priceMax != null ? `${fmtNum(params.priceMax)} €` : '';
@@ -835,6 +853,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     'aliFDiscMin',
     'aliFShop',
     'aliFStoreTier',
+    'aliFStoreOfficial',
     'aliFNetwork',
     'aliFChips',
   );
@@ -918,6 +937,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     next.shop = (el.aliFShop as HTMLSelectElement | null)?.value ?? '';
     next.network = (el.aliFNetwork as HTMLSelectElement | null)?.value ?? '';
     next.storeType = ((el.aliFStoreTier as HTMLSelectElement | null)?.value ?? 'all') as AliStoreTier;
+    next.storeOfficial = (el.aliFStoreOfficial as HTMLSelectElement | null)?.value ?? '';
 
     next.priceMin = numValue(el.aliFPriceMin);
     next.priceMax = numValue(el.aliFPriceMax);
@@ -1117,6 +1137,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     if (el.aliFSecondHand) (el.aliFSecondHand as HTMLInputElement).checked = Boolean(params.secondHandOnly);
     (el.aliFShop as HTMLSelectElement | null)!.value = params.shop ?? '';
     (el.aliFStoreTier as HTMLSelectElement | null)!.value = params.storeType ?? '';
+    (el.aliFStoreOfficial as HTMLSelectElement | null)!.value = params.storeOfficial ?? '';
     (el.aliFNetwork as HTMLSelectElement | null)!.value = params.network ?? '';
 
     const sortSelect = el.aliFSort as HTMLSelectElement | null;
@@ -1214,7 +1235,7 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
   for (const id of [
     'aliFQ', 'aliFCat2', 'aliFState', 'aliFPriceMin', 'aliFPriceMax', 'aliFCommMin', 'aliFCommUnit',
     'aliFSalesMin', 'aliFRatingMin', 'aliFDiscMin', 'aliFImages', 'aliFFreeShip', 'aliFChoice',
-    'aliFHot', 'aliFSecondHand', 'aliFShop', 'aliFStoreTier', 'aliFSort',
+    'aliFHot', 'aliFSecondHand', 'aliFShop', 'aliFStoreTier', 'aliFStoreOfficial', 'aliFSort',
   ] as const) {
     const node = el[id];
     if (!node) continue;
