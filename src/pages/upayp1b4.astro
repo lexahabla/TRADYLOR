@@ -1043,7 +1043,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <span class="btn-text">🔍 Probar Conexión</span>
               <div class="btn-spinner" hidden></div>
             </button>
-            <button type="button" id="btnBuildCatalog" class="btn-secondary btn-sm" title="Construye el catálogo multi-comerciante real desde los datos de las redes conectadas (guarda los resultados en segundo plano).">
+            <button type="button" id="btnBuildCatalog" class="btn-ai btn-sm" title="Construye el catálogo multi-comerciante real desde los datos de las redes conectadas (guarda los resultados en segundo plano).">
               <span class="btn-text">🏗️ Construir Catálogo</span>
               <div class="btn-spinner" hidden></div>
             </button>
@@ -1088,10 +1088,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <option value="">Subcategoría destino…</option>
             </select>
             <button type="button" class="btn-success btn-sm" id="btnAliImportCat" title="Añade los productos marcados a la categoría elegida y los enriquece con IA (ficha completa: especificaciones, pros/contras y veredicto), igual que el botón «Enriquecer»">📥 Añadir a categoría</button>
-            <button type="button" class="btn-ai btn-sm" id="btnBuildCatalog" title="Construye el catálogo completo consultando TODAS las redes conectadas (eBay, AliExpress, etc.): descarta segunda mano y sin stock, normaliza, deduplica cross-merchant, autoclasifica, enriquece con IA y guarda en products.json. Proceso completo de un solo clic.">
-              <span class="btn-text">🏗️ Construir Catálogo</span>
-              <div class="btn-spinner" hidden></div>
-            </button>
+
           </div>
           <div id="aliCatalogDanger" class="ali-catalog-danger" hidden>
             <button type="button" id="btnAliDeleteSelected" class="btn-danger btn-sm" title="Elimina definitivamente los productos seleccionados del catálogo de afiliados (no se pueden recuperar salvo volviendo a sincronizar)">🗑️ Borrar seleccionados</button>
