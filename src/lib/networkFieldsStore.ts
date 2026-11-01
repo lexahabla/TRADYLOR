@@ -216,11 +216,21 @@ export function setNetworkFieldsConfig(configs: NetworkFieldsConfig[]): boolean 
   return writeStore(store);
 }
 
+/** Devuelve la definición conocida de una red (para inicializarla si falta en el store). */
+function knownNetwork(networkId: string): NetworkFieldsConfig | undefined {
+  return getKnownNetworks().find((n) => n.id === networkId);
+}
+
 /** Activa/desactiva "capturar todos los campos" de una red. */
 export function setNetworkCaptureAll(networkId: string, captureAll: boolean): boolean {
   const store = readStore();
-  const net = store.networks.find((n) => n.id === networkId);
-  if (!net) return false;
+  let net = store.networks.find((n) => n.id === networkId);
+  if (!net) {
+    const kn = knownNetwork(networkId);
+    if (!kn) return false;
+    net = { ...kn, selected: [], captureAll: false };
+    store.networks.push(net);
+  }
   net.captureAll = captureAll;
   return writeStore(store);
 }
@@ -228,8 +238,13 @@ export function setNetworkCaptureAll(networkId: string, captureAll: boolean): bo
 /** Añade un campo individual a la selección de una red. */
 export function addNetworkField(networkId: string, fieldKey: string): boolean {
   const store = readStore();
-  const net = store.networks.find((n) => n.id === networkId);
-  if (!net) return false;
+  let net = store.networks.find((n) => n.id === networkId);
+  if (!net) {
+    const kn = knownNetwork(networkId);
+    if (!kn) return false;
+    net = { ...kn, selected: [], captureAll: false };
+    store.networks.push(net);
+  }
   if (net.selected.includes(fieldKey)) return false;
   net.selected.push(fieldKey);
   return writeStore(store);
