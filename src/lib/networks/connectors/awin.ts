@@ -26,7 +26,7 @@ import {
   sampleProducts,
   type NetworkConnector,
 } from './base';
-import { getCredentialValues, setNetworkStatus } from '../credentials';
+import { getMergedCredentialValues, setNetworkStatus } from '../credentials';
 import type { CanonicalAffiliateProduct, UnifiedProduct, UnifiedSearchParams } from '../types';
 
 const AWIN_API_BASE = 'https://api.awin.com';
@@ -67,8 +67,13 @@ function appendFeedApiKey(url: string, apiKey?: string): string {
 type FeedRow = Record<string, string>;
 
 function resolveCreds(): AwinCreds | null {
-  const creds = getCredentialValues('awin');
-  if (!creds?.publisherId || !creds?.apiToken) return null;
+  // Las credenciales pueden venir del panel (credentials.json) o de las
+  // variables de entorno de EasyPanel (AWIN_PUBLISHER_ID, AWIN_API_TOKEN,
+  // AWIN_PRODUCT_FEED_API_KEY). getMergedCredentialValues las fusiona, por lo
+  // que el conector funciona tanto en desarrollo como en producción sin
+  // tocar credenciales.json. Nunca se lee desde el cliente.
+  const creds = getMergedCredentialValues('awin');
+  if (!creds.publisherId || !creds.apiToken) return null;
   return {
     publisherId: creds.publisherId,
     apiToken: creds.apiToken,
