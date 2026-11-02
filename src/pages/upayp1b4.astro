@@ -1039,57 +1039,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
                btnAliSync/aliCatalogMeta que se mantienen sincronizadas desde
                JS (ver aliSyncButtons / setAliMeta). -->
           <div class="ali-quick-sync">
-            <!-- Filtros de tienda para sincronización selectiva: sólo se
-                 descargarán y guardarán las tiendas que coincidan con estos
-                 filtros (nivel de tienda y/o tienda oficial concreta). -->
-            <div class="filter-field ali-f-store-tier">
-              <label for="aliFStoreTierSync">Nivel tienda</label>
-              <select id="aliFStoreTierSync" title="Filtra las tiendas a sincronizar por nivel del vendedor">
-                <option value="all">Todos los vendedores</option>
-                <option value="official">Oficiales / Flagship</option>
-                <option value="authorized">Autorizadas / Certificadas</option>
-                <option value="verified">Oficiales + Autorizadas</option>
-              </select>
-            </div>
-            <div class="filter-field ali-f-store-official">
-              <label for="aliFStoreOfficialSync">Tienda oficial</label>
-              <select id="aliFStoreOfficialSync" title="Sincroniza sólo esta tienda oficial concreta">
-                <option value="">Todas las tiendas oficiales</option>
-                <option value="ANBERNIC Official Store">ANBERNIC Official Store</option>
-                <option value="Miyoo Official Store">Miyoo Official Store</option>
-                <option value="Retroid Pocket Official Store">Retroid Pocket Official Store</option>
-                <option value="AYANEO Official Store">AYANEO Official Store</option>
-                <option value="GPD Official Store">GPD Official Store</option>
-                <option value="8BitDo Official Store">8BitDo Official Store</option>
-                <option value="VGN Official Store">VGN Official Store</option>
-                <option value="VXE Official Store">VXE Official Store</option>
-                <option value="Machnake Official Store">Machnake Official Store</option>
-                <option value="Keychron Official Store">Keychron Official Store</option>
-                <option value="Epomaker Official Store">Epomaker Official Store</option>
-                <option value="FIFINE Official Store">FIFINE Official Store</option>
-                <option value="Beelink Official Store">Beelink Official Store</option>
-                <option value="MINISFORUM Official Store">MINISFORUM Official Store</option>
-                <option value="KingSpec Store">KingSpec Store</option>
-                <option value="Netac Store">Netac Store</option>
-                <option value="Huananzhi Store">Huananzhi Store</option>
-                <option value="Thermalright Official Store">Thermalright Official Store</option>
-                <option value="Baseus Official Store">Baseus Official Store</option>
-                <option value="Ugreen Official Store">Ugreen Official Store</option>
-                <option value="Toocki Official Store">Toocki Official Store</option>
-                <option value="Essager Official Store">Essager Official Store</option>
-                <option value="Monorim Official Store">Monorim Official Store</option>
-                <option value="Ruima Store">Ruima Store</option>
-                <option value="Kaabo Store">Kaabo Store</option>
-                <option value="Inmotion Store">Inmotion Store</option>
-                <option value="Sonoff Official Store">Sonoff Official Store</option>
-                <option value="Tuya Certified Store">Tuya Certified Store</option>
-                <option value="Smart Life Certified Store">Smart Life Certified Store</option>
-                <option value="Aqara Official Store">Aqara Official Store</option>
-                <option value="HOTO Official Store">HOTO Official Store</option>
-                <option value="Deko Store">Deko Store</option>
-                <option value="Ningbo Tools Store">Ningbo Tools Store</option>
-              </select>
-            </div>
             <!-- Forzar salto de línea: los botones van en la segunda fila, alineados a la derecha -->
             <br style="flex-basis: 100%; width: 100%;" />
             <button type="button" id="btnBuildCatalogDryRun" class="btn-secondary btn-sm" title="Prueba la conexión con las redes: ejecuta la construcción del catálogo en modo simulación (dry-run), no guarda cambios, sólo muestra qué haría (incluidos los descartes de segunda mano y sin stock).">
@@ -1173,15 +1122,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
               <label for="aliFNetwork">Comerciante / Red</label>
               <select id="aliFNetwork" title="Filtra por la red de afiliación (comerciante) de origen: las categorías y subcategorías se ajustan al elegido"><option value="">Todas</option></select>
             </div>
-            <div class="filter-field ali-f-store-tier">
-              <label for="aliFStoreTier">Nivel tienda</label>
-              <select id="aliFStoreTier" title="Filtra por nivel del vendedor: Oficiales/Flagship, Autorizadas/Certificadas, o ambas (descarta particulares y brokers)">
-                <option value="all">Todos los vendedores</option>
-                <option value="official">Oficiales / Flagship</option>
-                <option value="authorized">Autorizadas / Certificadas</option>
-                <option value="verified">Oficiales + Autorizadas</option>
-              </select>
-            </div>
+
             <div class="filter-field ali-f-store-official">
               <label for="aliFStoreOfficial">Tienda oficial</label>
               <select id="aliFStoreOfficial" title="Filtra por una tienda oficial concreta de las redes conectadas">
@@ -6669,8 +6610,8 @@ function renderTableRows(products, resetPage = true) {
     aliCatAssign?.addEventListener('change', syncAliSubcatAssign);
     bindSubcatDestCascade(aliCatAssign, aliSubcatAssign);
 
-    // Columnas de la tabla de afiliados (incluye la columna «Tienda»).
-    const ALI_COLS = 10;
+    // Columnas de la tabla de afiliados (incluye las columnas «Comerciante» y «Estado»).
+    const ALI_COLS = 11;
     let aliProducts = [];
     let aliVisible = [];
     /** Productos por página de la tabla de afiliados (25 / 50 / 75). */
@@ -7095,12 +7036,13 @@ function renderTableRows(products, resetPage = true) {
                 <th class="ac-th-check"><input type="checkbox" data-ac-checkall aria-label="Seleccionar la página actual" /></th>
                 <th>Foto</th>
                 <th>Producto</th>
-                <th class="aff-num">Tienda</th>
+                <th class="aff-num">Comerciante</th>
                 <th class="aff-num">Precio</th>
                 <th class="aff-num">Dto.</th>
                 <th class="aff-num">Comisión %</th>
                 <th class="aff-num">Comisión €</th>
                 <th class="aff-num">Ventas</th>
+                <th class="aff-num">Estado</th>
                 <th></th>
               </tr>
             </thead>
@@ -7128,12 +7070,13 @@ function renderTableRows(products, resetPage = true) {
                     ${renderProductNameChip(product.title)}
                     <span>${escapeHtml(product.network)}${product.category ? ` · ${escapeHtml(product.category)}` : ''}${estadoPill}</span>
                   </td>
-                  <td class="aff-num"><span class="aff-store">${escapeHtml(aliExtra(product, 'Tienda') || product.extra?.['Tienda'] || '—')}</span></td>
+                  <td class="aff-num"><span class="aff-store">${escapeHtml(aliExtra(product, 'Comerciante') || product.extra?.['Comerciante'] || aliExtra(product, 'Tienda') || product.extra?.['Tienda'] || '—')}</span></td>
                   <td class="aff-num">${money(product.price, product.currency)}</td>
                   <td class="aff-num ac-discount">${discount ? escapeHtml(discount) : '—'}</td>
                   <td class="aff-num">${product.commissionRate != null ? `${product.commissionRate}%` : '—'}</td>
                   <td class="aff-num">${product.commissionAmount != null ? money(product.commissionAmount, product.currency) : '—'}</td>
                   <td class="aff-num">${sales != null ? sales : '—'}</td>
+                  <td class="aff-num">${aliConditionBadge(product)}</td>
                     <td class="aff-actions">
                       <button type="button" class="${addBtnClass}" data-ac-import="${index}"${yaAnadido ? ' disabled title="Ya está en el catálogo"' : ''}>${yaAnadido ? 'Añadido' : 'Añadir'}</button>
                       <button type="button" class="btn-danger-ghost btn-sm" data-ac-remove="${index}" title="Quitar de la tabla">✕</button>
@@ -10759,7 +10702,7 @@ function renderTableRows(products, resetPage = true) {
     align-self: flex-start;
   }
 
-  :global(.aff-actions) { display: revert-rule; align-items: center; justify-content: center; gap: .2rem; white-space: normal; }
+  :global(.aff-actions) { display: revert-rule; align-items: center; justify-content: flex-end; gap: .2rem; white-space: normal; }
   :global(.aff-actions .btn-sm) { padding: .2rem .4rem; font-size: .6rem; }
   :global(.aff-caret) { width: 24px; height: 24px; color: #93c5fd; background: rgba(96, 165, 250, .1); border: 1px solid rgba(96, 165, 250, .25); border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; font-family: var(--font-body); font-size: .7rem; font-weight: 700; transition: all .2s ease; }
   :global(.aff-row.is-open .aff-caret) { transform: rotate(90deg); }
@@ -13506,6 +13449,19 @@ function renderTableRows(products, resetPage = true) {
 :global(#aliCatalogHost .products-table th:nth-child(9)),
 :global(#aliCatalogHost .products-table td:nth-child(9)) {
   width: 120px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+:global(#aliCatalogHost .products-table th:nth-child(10)),
+:global(#aliCatalogHost .products-table td:nth-child(10)) {
+  width: 60px;
+  text-align: center;
+}
+
+:global(#aliCatalogHost .products-table th:nth-child(11)),
+:global(#aliCatalogHost .products-table td:nth-child(11)) {
+  width: 150px;
   text-align: right;
   white-space: nowrap;
 }
