@@ -326,6 +326,10 @@ async function loadFeedRows(
   const text = await readFeedText(response, FEED_MAX_BYTES);
   const rows = parseFeedText(text).slice(0, MAX_CACHED_ROWS);
 
+  if (rows.length === 0) {
+    console.warn(`[AwinConnector] Feed «${feed.title}»: se descargó pero no se parsearon filas (0 filas).`);
+  }
+
   if (feedCache.size >= MAX_FEED_CACHE) {
     const oldest = feedCache.keys().next().value;
     if (oldest) feedCache.delete(oldest);
@@ -351,8 +355,8 @@ const FEED_ALIASES = {
   merchantName: ['merchant_name', 'advertiser_name', 'shop_name', 'store_name', 'programme_name'],
   merchantId: ['merchant_id', 'advertiser_id', 'aw_merchant_id', 'programme_id'],
   brand: ['brand', 'product_brand', 'merchant_brand', 'manufacturer'],
-  category: ['category_name', 'category', 'primary_category', 'category_hierarchy', 'product_category'],
-  subCategory: ['sub_category_name', 'sub_category', 'subcategory', 'secondary_category'],
+  category: ['category_name', 'category', 'primary_category', 'category_hierarchy', 'product_category', 'google_product_category', 'product_type'],
+  subCategory: ['sub_category_name', 'sub_category', 'subcategory', 'secondary_category', 'product_type'],
   deliveryCost: ['delivery_cost', 'shipping_cost', 'postage', 'shipping'],
   deliveryTime: ['delivery_time', 'shipping_time', 'lead_time', 'delivery'],
   epc: ['epc'],
@@ -750,6 +754,10 @@ export class AwinConnector implements NetworkConnector {
         seen.add(product.externalId);
         matched.push(product);
       }
+    }
+
+    if (matched.length === 0) {
+      console.warn('[AwinConnector] No se obtuvieron productos reales del/los feed(s). Revisa que AWIN_FEED_URL apunte a un feed de productos válido.');
     }
 
     return matched;
