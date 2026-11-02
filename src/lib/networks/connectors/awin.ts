@@ -421,12 +421,28 @@ function isPlaceholderImage(url: string): boolean {
 
 /** Selecciona la imagen principal y la galería priorizando columnas grandes y descartando placeholders. */
 function pickFeedImages(row: FeedRow): { main: string; extra: string[] } {
-  const priorityKeys = ['large_image', 'aw_image_url', 'merchant_image_url', 'merchant_thumb_url', 'aw_thumb_url'];
-  const allImageKeys = Object.keys(row).filter((key) => key.includes('image'));
-  const orderedKeys = [
-    ...priorityKeys.filter((k) => allImageKeys.includes(k)),
-    ...allImageKeys.filter((k) => !priorityKeys.includes(k)),
+  // Columnas conocidas del feed Awin que contienen imágenes, por orden de preferencia
+  const knownImageKeys = [
+    'large_image',
+    'aw_image_url',
+    'merchant_image_url',
+    'alternate_image',
+    'alternate_image_two',
+    'alternate_image_three',
+    'alternate_image_four',
+    'merchant_thumb_url',
+    'aw_thumb_url',
+    'lifestyle_image_link',
   ];
+  // Cualquier otra columna que contenga image/thumb/photo/picture
+  const extraImageKeys = Object.keys(row).filter((key) => {
+    const lower = key.toLowerCase();
+    return (
+      /image|thumb|photo|picture/.test(lower) &&
+      !knownImageKeys.includes(key)
+    );
+  });
+  const orderedKeys = [...knownImageKeys, ...extraImageKeys];
   const images: string[] = [];
   for (const key of orderedKeys) {
     const value = row[key];

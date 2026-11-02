@@ -304,7 +304,7 @@ export const POST: APIRoute = async ({ request }) => {
         // de Awin). Se hace una sola llamada sin query para obtener todos
         // los productos del feed hasta el límite.
         try {
-          const batch = await searchCatalogBatch(connector, { limit: 1000 });
+          const batch = await searchCatalogBatch(connector, { limit: 2000 });
           const filteredBatch = filterProductsByStore(batch, storeTier, storeOfficial);
           for (const product of filteredBatch) {
             mergedById.set(`${product.network}:${product.externalId}`, product);
