@@ -7036,7 +7036,7 @@ function renderTableRows(products, resetPage = true) {
                 <th class="ac-th-check"><input type="checkbox" data-ac-checkall aria-label="Seleccionar la página actual" /></th>
                 <th>Foto</th>
                 <th>Producto</th>
-                <th class="aff-num">Comerciante</th>
+                <th class="aff-num">comercio</th>
                 <th class="aff-num">Precio</th>
                 <th class="aff-num">Dto.</th>
                 <th class="aff-num">Comisión %</th>
@@ -7056,6 +7056,7 @@ function renderTableRows(products, resetPage = true) {
                   const checked = aliSelected.has(product.externalId) ? ' checked' : '';
                   const estado = aliEstadoIndex().get(product.externalId);
                   const yaAnadido = estado === 'IMPORTED';
+                  const network = product.network ? String(product.network).replace(/^\w/, (c) => c.toUpperCase()) : '—';
                   const estadoPill = estado === 'IMPORTED'
                     ? ''  // Eliminado "✓ en catálogo" por diseño
                     : estado === 'DISCARDED'
@@ -7070,7 +7071,7 @@ function renderTableRows(products, resetPage = true) {
                     ${renderProductNameChip(product.title)}
                     <span>${escapeHtml(product.network)}${product.category ? ` · ${escapeHtml(product.category)}` : ''}${estadoPill}</span>
                   </td>
-                  <td class="aff-num"><span class="aff-store">${escapeHtml(aliExtra(product, 'Comerciante') || product.extra?.['Comerciante'] || aliExtra(product, 'Tienda') || product.extra?.['Tienda'] || '—')}</span></td>
+                  <td class="aff-num"><span class="aff-store">${escapeHtml(network)}</span></td>
                   <td class="aff-num">${money(product.price, product.currency)}</td>
                   <td class="aff-num ac-discount">${discount ? escapeHtml(discount) : '—'}</td>
                   <td class="aff-num">${product.commissionRate != null ? `${product.commissionRate}%` : '—'}</td>

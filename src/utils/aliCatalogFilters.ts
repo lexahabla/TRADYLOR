@@ -1200,10 +1200,10 @@ export function mountAliFilters(host: AliFilterHost): AliFiltersController {
     (el.aliFHot as HTMLInputElement | null)!.checked = Boolean(params.hotCommissionOnly);
     if (el.aliFSecondHand) (el.aliFSecondHand as HTMLInputElement).checked = Boolean(params.secondHandOnly);
     if (el.aliFNewOnly) (el.aliFNewOnly as HTMLInputElement).checked = Boolean(params.newOnly);
-    (el.aliFShop as HTMLSelectElement | null)!.value = params.shop ?? '';
-    (el.aliFStoreTier as HTMLSelectElement | null)!.value = params.storeType ?? '';
-    (el.aliFStoreOfficial as HTMLSelectElement | null)!.value = params.storeOfficial ?? '';
-    (el.aliFNetwork as HTMLSelectElement | null)!.value = params.network ?? '';
+    if (el.aliFShop) (el.aliFShop as HTMLSelectElement).value = params.shop ?? '';
+    if (el.aliFStoreTier) (el.aliFStoreTier as HTMLSelectElement).value = params.storeType ?? '';
+    if (el.aliFStoreOfficial) (el.aliFStoreOfficial as HTMLSelectElement).value = params.storeOfficial ?? '';
+    if (el.aliFNetwork) (el.aliFNetwork as HTMLSelectElement).value = params.network ?? '';
 
     const sortSelect = el.aliFSort as HTMLSelectElement | null;
     if (sortSelect) sortSelect.value = params.sortBy ?? 'ventas';
