@@ -348,8 +348,8 @@ const FEED_ALIASES = {
   directUrl: ['product_url', 'merchant_url', 'aw_product_url', 'url', 'link', 'product_link'],
   price: ['search_price', 'price', 'sale_price', 'current_price', 'price_incl_tax', 'price_eur', 'price_gbp'],
   originalPrice: ['rrp', 'high_price', 'high_street_price', 'original_price', 'list_price', 'old_price', 'was_price'],
-  discount: ['discount_percentage', 'discount', 'saving', 'discount_amount', 'promo_discount'],
-  commissionRate: ['commission_rate', 'aw_commission_rate', 'commission_percent', 'commission_pct', 'programme_commission', 'commission'],
+  discount: ['discount_percentage', 'discount', 'saving', 'discount_amount', 'promo_discount', 'savings_percent'],
+  commissionRate: ['commission_rate', 'aw_commission_rate', 'commission_percent', 'commission_pct', 'programme_commission', 'commission', 'commission_group'],
   stock: ['stock', 'in_stock', 'availability', 'stock_status', 'inventory_status'],
   currency: ['currency', 'currency_iso', 'currency_code', 'aw_currency'],
   merchantName: ['merchant_name', 'advertiser_name', 'shop_name', 'store_name', 'programme_name'],
@@ -412,6 +412,31 @@ function parseStock(value: string): boolean {
   return !/(sin stock|agotad|no disponible|unavailable|outofstock|out of stock|nostock|^no$|^0$|^false$)/i.test(value);
 }
 
+/** Detecta URLs de imagen placeholder (noimage.gif, etc.) para no usarlas como principal. */
+const IMAGE_PLACEHOLDERS = ['noimage.gif', 'noimage.png', 'noimage.jpg', 'placeholder', 'n/a'];
+function isPlaceholderImage(url: string): boolean {
+  const lower = url.toLowerCase();
+  return IMAGE_PLACEHOLDERS.some((p) => lower.includes(p));
+}
+
+/** Selecciona la imagen principal y la galería priorizando columnas grandes y descartando placeholders. */
+function pickFeedImages(row: FeedRow): { main: string; extra: string[] } {
+  const priorityKeys = ['large_image', 'aw_image_url', 'merchant_image_url', 'merchant_thumb_url', 'aw_thumb_url'];
+  const allImageKeys = Object.keys(row).filter((key) => key.includes('image'));
+  const orderedKeys = [
+    ...priorityKeys.filter((k) => allImageKeys.includes(k)),
+    ...allImageKeys.filter((k) => !priorityKeys.includes(k)),
+  ];
+  const images: string[] = [];
+  for (const key of orderedKeys) {
+    const value = row[key];
+    if (value && /^https?:\/\//i.test(value) && !isPlaceholderImage(value) && !images.includes(value)) {
+      images.push(value);
+    }
+  }
+  return { main: images[0] ?? '', extra: images.slice(1) };
+}
+
 /**
  * Mapea una fila del feed de Awin a CanonicalAffiliateProduct.
  * Devuelve `null` cuando la fila no trae lo mínimo (título + enlace).
@@ -451,9 +476,7 @@ function mapFeedRow(row: FeedRow, feed: AwinFeed, syncedAt: string): CanonicalAf
   const subCategory = pick(row, ...FEED_ALIASES.subCategory)
     || (hierarchy.length > 1 ? hierarchy[hierarchy.length - 1] : undefined);
 
-  const images = Object.entries(row)
-    .filter(([key, value]) => key.includes('image') && /^https?:\/\//i.test(value))
-    .map(([, value]) => value);
+  const images = pickFeedImages(row);
 
   const deliveryTime = pick(row, ...FEED_ALIASES.deliveryTime);
   const deliveryCost = pick(row, ...FEED_ALIASES.deliveryCost);
@@ -501,8 +524,8 @@ function mapFeedRow(row: FeedRow, feed: AwinFeed, syncedAt: string): CanonicalAf
     rating: toNumber(pick(row, ...FEED_ALIASES.rating)) ?? 0,
     reviewCount: toNumber(pick(row, ...FEED_ALIASES.reviewCount)) ?? 0,
     sales: toNumber(pick(row, ...FEED_ALIASES.sales)),
-    mainImage: images[0] ?? '',
-    extraImages: images.slice(1),
+    mainImage: images.main,
+    extraImages: images.extra,
     technicalSpecs,
     guarantee: pick(row, ...FEED_ALIASES.guarantee) || undefined,
     syncedAt,
