@@ -298,6 +298,21 @@ export const POST: APIRoute = async ({ request }) => {
         } else {
           errors.push(result.message);
         }
+      } else if (networkId === 'awin') {
+        // Awin en modo feed directo: descargar el feed completo sin filtrar
+        // por keywords de AliExpress (que no coinciden con los productos
+        // de Awin). Se hace una sola llamada sin query para obtener todos
+        // los productos del feed hasta el límite.
+        try {
+          const batch = await searchCatalogBatch(connector, { limit: 1000 });
+          const filteredBatch = filterProductsByStore(batch, storeTier, storeOfficial);
+          for (const product of filteredBatch) {
+            mergedById.set(`${product.network}:${product.externalId}`, product);
+          }
+          totalAdded += filteredBatch.length;
+        } catch (error) {
+          errors.push(error instanceof Error ? error.message : `Fallo en ${networkId}`);
+        }
       } else {
         const pages = body?.append ? [1, 2, 3] : [1];
         for (const page of pages) {

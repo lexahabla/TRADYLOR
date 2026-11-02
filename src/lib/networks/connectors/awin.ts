@@ -703,7 +703,9 @@ export class AwinConnector implements NetworkConnector {
       throw new ConnectorError(this.networkId, 'Awin no está conectado. Añade sus credenciales primero.');
     }
 
-    const limit = Math.min(Math.max(params.limit ?? 20, 1), 50);
+    const limit = params.query
+      ? Math.min(Math.max(params.limit ?? 20, 1), 50)
+      : Math.min(Math.max(params.limit ?? 200, 1), 1000);
     const syncedAt = new Date().toISOString();
 
     let feeds: AwinFeed[];
