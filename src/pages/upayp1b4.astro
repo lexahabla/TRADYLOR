@@ -6863,8 +6863,7 @@ function renderTableRows(products, resetPage = true) {
       if (!raw) return '<span class="cond-pill cond-unknown">—</span>';
       const isUsed = ALI_USED_CONDITION_RE.test(String(raw));
       if (isUsed) return '<span class="cond-pill cond-used" title="Reacondicionado por el vendedor">RxV</span>';
-      const text = escapeHtml(String(raw));
-      return `<span class="cond-pill cond-new">${text}</span>`;
+      return '<span class="cond-pill cond-new" title="Producto nuevo">nuevo</span>';
     }
 
     function aliDiscount(product) {
@@ -7198,11 +7197,15 @@ function renderTableRows(products, resetPage = true) {
         setAliMeta(data);
         renderAliCatalog();
         const connected = Array.isArray(data.networks) ? data.networks : [];
-        // Poblar selector de red para sincronización individual
+        // Poblar selector de red para sincronización individual.
+        // Usamos networksCache (todas las redes conocidas/configuradas) para que
+        // el select siempre muestre las opciones disponibles aunque el servidor
+        // no devuelva la lista completa en data.networks.
         if (aliSyncNetwork) {
           const currentValue = aliSyncNetwork.value;
+          const networkOptions = (networksCache || []).map((n) => n.id);
           aliSyncNetwork.innerHTML = '<option value="">Todas las conectadas</option>' +
-            connected.map((netId) => {
+            networkOptions.map((netId) => {
               const net = (networksCache || []).find((n) => n.id === netId);
               const label = net ? net.name : netId;
               return `<option value="${escapeHtml(netId)}">${escapeHtml(label)}</option>`;
@@ -7330,10 +7333,17 @@ function renderTableRows(products, resetPage = true) {
       showAliStatus('loading', 'Ampliando catálogo', 'Descargando más páginas de las redes conectadas (puede tardar)...');
         try {
           const targetNetwork = aliSyncNetwork?.value || '';
+          const cat1Sel = document.getElementById('aliFCat1');
+          const cat2Sel = document.getElementById('aliFCat2');
+          const cat1 = cat1Sel ? cat1Sel.value : '';
+          const cat2 = cat2Sel ? cat2Sel.value : '';
+          const body = { append: true, networkId: targetNetwork || undefined };
+          if (cat1) body.catL1 = cat1;
+          if (cat2) body.catL2 = cat2;
           const res = await fetch('/api/admin/catalog', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ append: true, networkId: targetNetwork || undefined }),
+            body: JSON.stringify(body),
           });
         const data = await res.json();
         aliProducts = Array.isArray(data.products) ? data.products : [];
@@ -13411,8 +13421,8 @@ function renderTableRows(products, resetPage = true) {
 
 :global(#aliCatalogHost .products-table th:nth-child(3)),
 :global(#aliCatalogHost .products-table td:nth-child(3)) {
-  width: 130px;
-  max-width: 130px;
+  width: 260px;
+  max-width: none;
   text-align: left;
   overflow: hidden;
 }
@@ -13449,7 +13459,7 @@ function renderTableRows(products, resetPage = true) {
 
 :global(#aliCatalogHost .products-table th:nth-child(9)),
 :global(#aliCatalogHost .products-table td:nth-child(9)) {
-  width: 120px;
+  width: 70px;
   text-align: center;
   white-space: nowrap;
 }
@@ -13462,7 +13472,7 @@ function renderTableRows(products, resetPage = true) {
 
 :global(#aliCatalogHost .products-table th:nth-child(11)),
 :global(#aliCatalogHost .products-table td:nth-child(11)) {
-  width: 150px;
+  width: 130px;
   text-align: right;
   white-space: nowrap;
 }
