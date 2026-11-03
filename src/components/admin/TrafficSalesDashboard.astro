@@ -430,23 +430,45 @@ const enCurso = resumen.meses[0]?.month ?? '';
 
   <!-- 4. Tabla por producto (catálogo completo, con buscador por nombre dentro
        del propio componente: no se limita al Top 10 como el ranking de arriba) -->
-  <section class="flex flex-col gap-4">
-    <div class="flex flex-wrap items-end justify-between gap-2">
-      <div>
-        <h2 class="text-base font-extrabold uppercase tracking-wider text-white">Rendimiento por producto</h2>
-        <p class="mt-1 text-xs text-slate-400">
-          Visitas, salidas a tienda y estado de fricción de cada ficha del catálogo. Busca por nombre para encontrar cualquier producto, tenga o no visitas en este periodo.
-        </p>
+  <section class="flex flex-col gap-4" data-producto-metricas-section>
+    <div class="card-header card-header-toggle" id="productoMetricasToggle" role="button" aria-expanded="true" tabindex="0">
+      <div class="header-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+        </svg>
       </div>
-      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500">{productosTabla.length} productos</span>
+      <div style="flex:1; min-width: 0;">
+        <h2 class="card-title">Rendimiento por producto</h2>
+        <p class="card-desc">Visitas, salidas a tienda y estado de fricción de cada ficha del catálogo. Busca por nombre para encontrar cualquier producto, tenga o no visitas en este periodo.</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2" id="productoMetricasFiltros">
+        <label class="filter-check" style="font-size: .75rem; margin: 0;">
+          <input type="checkbox" id="filtroEstadoAlta" value="alta" checked style="margin: 0 0 0 2px;" /> Alta
+        </label>
+        <label class="filter-check" style="font-size: .75rem; margin: 0;">
+          <input type="checkbox" id="filtroEstadoEstable" value="estable" checked style="margin: 0 0 0 2px;" /> Estable
+        </label>
+        <label class="filter-check" style="font-size: .75rem; margin: 0;">
+          <input type="checkbox" id="filtroEstadoFriccion" value="friccion" checked style="margin: 0 0 0 2px;" /> Fricción
+        </label>
+        <select id="ordenarPor" class="sel-cat-assign" style="font-size: .72rem; padding: .3rem .5rem; min-width: 140px;">
+          <option value="visitas">Ordenar: Visitas ↓</option>
+          <option value="conversiones">Ordenar: Conversiones ↓</option>
+          <option value="tasa">Ordenar: Tasa conversión ↓</option>
+          <option value="estado">Ordenar: Estado</option>
+        </select>
+      </div>
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500" id="productoMetricasContador">{productosTabla.length} productos</span>
     </div>
-    {productosTabla.length === 0 ? (
-      <p class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-8 text-center text-xs text-slate-500">
-        Todavía no hay productos en el catálogo.
-      </p>
-    ) : (
-      <ProductMetricsTable productos={productosTabla} />
-    )}
+    <div id="productoMetricasCuerpo" class="form-toggle-body flex flex-col gap-4">
+      {productosTabla.length === 0 ? (
+        <p class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-8 text-center text-xs text-slate-500">
+          Todavía no hay productos en el catálogo.
+        </p>
+      ) : (
+        <ProductMetricsTable productos={productosTabla} />
+      )}
+    </div>
   </section>
 
   <!-- 5. Histórico mensual + exportación + reset -->
@@ -671,5 +693,104 @@ const enCurso = resumen.meses[0]?.month ?? '';
     }
 
     tabs.forEach((tab) => tab.addEventListener('click', () => aplicar(tab.dataset.ejeTab || 'visitas')));
+  }
+</script>
+
+<script>
+  // ── Rendimiento por producto: plegable + filtros de estado + ordenamiento ──
+  const seccion = document.querySelector<HTMLElement>('[data-producto-metricas-section]');
+  if (!seccion) {
+    // ProductMetricsTable ya gestiona su propio buscador; nada más que hacer aquí.
+  } else {
+    const toggle = seccion.querySelector<HTMLElement>('#productoMetricasToggle');
+    const cuerpo = seccion.querySelector<HTMLElement>('#productoMetricasCuerpo');
+    const contador = seccion.querySelector<HTMLElement>('#productoMetricasContador');
+    const chkAlta = seccion.querySelector<HTMLInputElement>('#filtroEstadoAlta');
+    const chkEstable = seccion.querySelector<HTMLInputElement>('#filtroEstadoEstable');
+    const chkFriccion = seccion.querySelector<HTMLInputElement>('#filtroEstadoFriccion');
+    const ordenarPor = seccion.querySelector<HTMLSelectElement>('#ordenarPor');
+
+    // Tabla interna de ProductMetricsTable
+    const tabla = seccion.querySelector<HTMLElement>('[data-product-table]');
+    let filas: HTMLTableRowElement[] = [];
+    if (tabla) {
+      filas = Array.from(tabla.querySelectorAll<HTMLTableRowElement>('[data-fila-producto]'));
+    }
+
+    let expandido = true;
+
+    function setExpandido(exp: boolean) {
+      expandido = exp;
+      if (cuerpo) cuerpo.style.display = exp ? '' : 'none';
+      if (toggle) {
+        toggle.setAttribute('aria-expanded', String(exp));
+        const svg = toggle.querySelector('svg');
+        if (svg) svg.style.transform = exp ? 'rotate(0deg)' : 'rotate(180deg)';
+      }
+    }
+
+    if (toggle) {
+      toggle.style.cursor = 'pointer';
+      toggle.setAttribute('role', 'button');
+      toggle.addEventListener('click', () => setExpandido(!expandido));
+      toggle.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setExpandido(!expandido);
+        }
+      });
+      // Pequeña rotación del icono al empezar
+      const svg = toggle.querySelector('svg');
+      if (svg) svg.style.transition = 'transform .2s ease';
+    }
+    setExpandido(true);
+
+    function estadoDe(fila: HTMLTableRowElement): string {
+      return (fila.dataset.estado || '').toLowerCase();
+    }
+
+    function numeroDe(fila: HTMLTableRowElement, clave: string): number {
+      return Number(fila.dataset[clave as keyof HTMLTableRowElement] ?? 0);
+    }
+
+    function aplicarFiltroYOrden() {
+      const activos = new Set<string>();
+      if (chkAlta?.checked) activos.add('alta');
+      if (chkEstable?.checked) activos.add('estable');
+      if (chkFriccion?.checked) activos.add('friccion');
+
+      const claveOrden = ordenarPor?.value || 'visitas';
+
+      // Filtrar por estado
+      const visibles = filas.filter((f) => activos.has(estadoDe(f)));
+
+      // Ordenar
+      visibles.sort((a, b) => {
+        if (claveOrden === 'estado') {
+          const orden: Record<string, number> = { alta: 0, estable: 1, friccion: 2 };
+          return (orden[estadoDe(a)] ?? 99) - (orden[estadoDe(b)] ?? 99);
+        }
+        return numeroDe(b, claveOrden) - numeroDe(a, claveOrden);
+      });
+
+      // Aplicar visibilidad y orden en el DOM
+      filas.forEach((f) => f.classList.add('hidden'));
+      visibles.forEach((f, index) => {
+        f.classList.remove('hidden');
+        // Mover al final para reordenar visualmente
+        f.parentElement?.appendChild(f);
+      });
+
+      if (contador) {
+        contador.textContent = `${visibles.length} de ${filas.length} productos`;
+      }
+    }
+
+    [chkAlta, chkEstable, chkFriccion, ordenarPor].forEach((el) => {
+      el?.addEventListener('change', aplicarFiltroYOrden);
+    });
+
+    // Ejecutar al cargar para aplicar el orden por defecto
+    aplicarFiltroYOrden();
   }
 </script>

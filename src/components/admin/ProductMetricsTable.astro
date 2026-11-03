@@ -57,7 +57,7 @@ const clave = (texto: string) => texto.toLowerCase().normalize('NFD').replace(/[
           const badge = badges[producto.estado];
           const tasa = Math.max(Math.round(producto.tasaConversion * 10), 4);
           return (
-            <tr class="border-b border-white/5 transition last:border-b-0 hover:bg-sky-500/5" data-fila-producto data-titulo={clave(producto.titulo)}>
+            <tr class="border-b border-white/5 transition last:border-b-0 hover:bg-sky-500/5" data-fila-producto data-titulo={clave(producto.titulo)} data-visitas={producto.visitas} data-conversiones={producto.conversiones} data-tasa={producto.tasaConversion} data-estado={producto.estado}>
               <td class="px-5 py-3.5">
                 <div class="min-w-0">
                   <p class="text-sm font-semibold text-white">{producto.titulo}</p>
