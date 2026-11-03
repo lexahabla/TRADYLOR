@@ -163,6 +163,7 @@ const headerConfig = {
   transparency: { pill: 'Calidad y trazabilidad', titulo: 'Transparencia y Pipeline', subtitulo: 'El pipeline de 4 etapas evalúa cada producto del catálogo: auditoría, tags normalizados y score de conversión.' },
   'desarrollo-ia': { pill: 'Entrenamiento y conectividad', titulo: 'Desarrollo IA', subtitulo: 'Entrena y alimenta a las dos personalidades de IA de Tradylor, gestiona sus claves y comprueba la conexión con los proveedores.' },
 };
+const h = headerConfig[initialSection] || headerConfig.products;
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
@@ -174,9 +175,9 @@ const headerConfig = {
     <!-- 1. HEADER DEL PANEL (título y subtítulo dinámicos según sección activa) -->
     <header class="admin-header">
       <div class="admin-header-main">
-        <div class="admin-tag-pill"><%= headerConfig[initialSection]?.pill ?? headerConfig.products.pill %></div>
-        <h2 class="admin-title"><%= headerConfig[initialSection]?.titulo ?? headerConfig.products.titulo %></h2>
-        <p class="admin-subtitle"><%= headerConfig[initialSection]?.subtitulo ?? headerConfig.products.subtitulo %></p>
+        <div class="admin-tag-pill">{h.pill}</div>
+        <h2 class="admin-title">{h.titulo}</h2>
+        <p class="admin-subtitle">{h.subtitulo}</p>
       </div>
     </header>
 
