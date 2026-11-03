@@ -79,12 +79,22 @@ const items = context === 'catalogo' ? catalogItems : userItems;
 
     // Cambio de sección instantáneo: las secciones viven ya en el DOM (SSR),
     // así que se conmutan sin recargar la página.
+    // Cacheamos las referencias una sola vez para no hacer querySelectorAll
+    // (costoso en un DOM grande) cada vez que se cambia de pestaña.
+    const secciones = Array.from(document.querySelectorAll('section[data-admin-view]'));
+    const seccionPorId = new Map();
+    secciones.forEach((el) => {
+      const id = el.getAttribute('data-admin-view');
+      if (id) seccionPorId.set(id, el);
+    });
+
     const showSection = (section, { pushUrl = true, scroll = true } = {}) => {
       if (!section) return;
-      const targets = document.querySelectorAll(`section[data-admin-view="${section}"]`);
-      if (!targets.length) return;
-      document.querySelectorAll('section[data-admin-view]').forEach((el) => {
-        el.classList.toggle('is-visible', el.getAttribute('data-admin-view') === section);
+      const target = seccionPorId.get(section);
+      if (!target) return;
+      // Ocultar todas, mostrar solo la activa (más rápido que toggle con verificación)
+      secciones.forEach((el) => {
+        el.classList.toggle('is-visible', el === target);
       });
       setActiveItem(section);
       if (pushUrl) {
@@ -113,7 +123,7 @@ const items = context === 'catalogo' ? catalogItems : userItems;
       const section = url.searchParams.get('section');
       // Solo se interceptan las secciones que existen en esta misma página;
       // los enlaces a otras rutas (p. ej. la app de marketing) navegan normal.
-      if (!section || !document.querySelector(`section[data-admin-view="${section}"]`)) {
+      if (!section || !seccionPorId.has(section)) {
         closeMenu();
         return;
       }
