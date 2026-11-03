@@ -1503,7 +1503,7 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
           <a class="guide-link" href="/upayp1b4/trafico-ventas/guia">Guía y Glosario <span aria-hidden="true">→</span></a>
         </div>
       </div>
-      {initialSection === 'analytics' && <TrafficSalesDashboard />}
+      <TrafficSalesDashboard />
     </section>
 
     <section data-admin-view="transparency" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'transparency' }]}>
