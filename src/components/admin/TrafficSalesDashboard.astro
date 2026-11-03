@@ -442,20 +442,20 @@ const enCurso = resumen.meses[0]?.month ?? '';
         <p class="card-desc">Visitas, salidas a tienda y estado de fricción de cada ficha del catálogo. Busca por nombre para encontrar cualquier producto, tenga o no visitas en este periodo.</p>
       </div>
       <div class="flex flex-wrap items-center gap-2" id="productoMetricasFiltros">
-        <label class="filter-check" style="font-size: .75rem; margin: 0;">
-          <input type="checkbox" id="filtroEstadoAlta" value="alta" checked style="margin: 0 0 0 2px;" /> Alta
+        <label class="filter-check" id="filtroEstadoAlta">
+          <input type="checkbox" id="chkEstadoAlta" value="alta" checked style="margin:0;" /><span style="margin-left:.2rem;">Alta</span>
         </label>
-        <label class="filter-check" style="font-size: .75rem; margin: 0;">
-          <input type="checkbox" id="filtroEstadoEstable" value="estable" checked style="margin: 0 0 0 2px;" /> Estable
+        <label class="filter-check" id="filtroEstadoEstable">
+          <input type="checkbox" id="chkEstadoEstable" value="estable" checked style="margin:0;" /><span style="margin-left:.2rem;">Estable</span>
         </label>
-        <label class="filter-check" style="font-size: .75rem; margin: 0;">
-          <input type="checkbox" id="filtroEstadoFriccion" value="friccion" checked style="margin: 0 0 0 2px;" /> Fricción
+        <label class="filter-check" id="filtroEstadoFriccion">
+          <input type="checkbox" id="chkEstadoFriccion" value="friccion" checked style="margin:0;" /><span style="margin-left:.2rem;">Fricción</span>
         </label>
-        <select id="ordenarPor" class="sel-cat-assign" style="font-size: .72rem; padding: .3rem .5rem; min-width: 140px;">
-          <option value="visitas">Ordenar: Visitas ↓</option>
-          <option value="conversiones">Ordenar: Conversiones ↓</option>
-          <option value="tasa">Ordenar: Tasa conversión ↓</option>
-          <option value="estado">Ordenar: Estado</option>
+        <select id="ordenarPor" class="sel-cat-assign" aria-label="Ordenar productos por">
+          <option value="visitas">Visitas ↓</option>
+          <option value="conversiones">Conversiones ↓</option>
+          <option value="tasa">Tasa conversión ↓</option>
+          <option value="estado">Estado</option>
         </select>
       </div>
       <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500" id="productoMetricasContador">{productosTabla.length} productos</span>
@@ -705,9 +705,9 @@ const enCurso = resumen.meses[0]?.month ?? '';
     const toggle = seccion.querySelector<HTMLElement>('#productoMetricasToggle');
     const cuerpo = seccion.querySelector<HTMLElement>('#productoMetricasCuerpo');
     const contador = seccion.querySelector<HTMLElement>('#productoMetricasContador');
-    const chkAlta = seccion.querySelector<HTMLInputElement>('#filtroEstadoAlta');
-    const chkEstable = seccion.querySelector<HTMLInputElement>('#filtroEstadoEstable');
-    const chkFriccion = seccion.querySelector<HTMLInputElement>('#filtroEstadoFriccion');
+    const chkAlta = seccion.querySelector<HTMLInputElement>('#chkEstadoAlta');
+    const chkEstable = seccion.querySelector<HTMLInputElement>('#chkEstadoEstable');
+    const chkFriccion = seccion.querySelector<HTMLInputElement>('#chkEstadoFriccion');
     const ordenarPor = seccion.querySelector<HTMLSelectElement>('#ordenarPor');
 
     // Tabla interna de ProductMetricsTable
