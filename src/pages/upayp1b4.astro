@@ -596,54 +596,6 @@ const initialSection = allowedSections.includes(requestedSection) ? requestedSec
       </div>
     </section>
 
-    <!-- 1b. CAMPOS VISIBLES EN LA FICHA DEL PRODUCTO (desde Catálogo) -->
-    <section data-admin-view="products" class:list={['admin-card', 'hidden-section', { 'is-visible': initialSection === 'products' }]}>
-      <div class="card-header card-header-toggle" id="fieldVisibilityToggle" role="button" aria-expanded="false" aria-controls="fieldVisibilityPanel" tabindex="0">
-        <div class="header-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-            <circle cx="12" cy="12" r="3"></circle>
-          </svg>
-        </div>
-        <div style="flex:1;">
-          <h2 class="card-title">Campos visibles en la ficha del producto</h2>
-          <p class="card-desc">Elige qué campos del catálogo se muestran en la página pública de cada producto y añade campos nuevos (aparecen como un input más en «1. Extracción &amp; Alta de Producto»). Los campos existentes quedan visibles por defecto: nada cambia hasta que los desactives aquí.</p>
-        </div>
-        <button type="button" class="btn-ghost btn-sm" id="btnToggleFieldVisibility" aria-label="Mostrar campos visibles" style="margin-left:auto;">
-          <span id="fieldVisibilityToggleLabel">Mostrar</span>
-        </button>
-      </div>
-      <div id="fieldVisibilityPanel" class="field-visibility-panel" hidden>
-        <h3 class="field-visibility-subtitle">Campos de serie</h3>
-        <div id="baseFieldsList" class="field-toggle-list">
-          <div class="loading-panel">Cargando campos...</div>
-        </div>
-        <h3 class="field-visibility-subtitle">Campos personalizados</h3>
-        <div id="customFieldsList" class="field-toggle-list"></div>
-        <div class="custom-field-add-row">
-          <input type="text" id="newCustomFieldLabel" placeholder="Nombre del campo nuevo (ej: Garantía, Certificación...)" maxlength="60" />
-          <label class="filter-check"><input type="checkbox" id="newCustomFieldVisible" checked /> Visible en la ficha</label>
-          <button type="button" class="btn-success btn-sm" id="btnAddCustomField">➕ Añadir campo</button>
-        </div>
-        <p id="fieldVisibilityStatus" class="field-visibility-status" aria-live="polite"></p>
-
-        <!-- ─── Campos de redes de afiliación (reutiliza el mismo panel) ─── -->
-        <h3 class="field-visibility-subtitle">Campos de redes de afiliación</h3>
-        <p class="card-desc">Elige qué campos `extra` de cada red de afiliación (AliExpress, eBay, Amazon…) se capturan al sincronizar el catálogo. Marca «Capturar todos los campos» o elige campos individuales con el select y «Añadir campo».</p>
-        <div class="network-fields-row" style="display:flex; flex-wrap:wrap; gap:.5rem; align-items:flex-end; margin:.5rem 0 1rem;">
-          <select id="nfNetwork" class="sel-cat-assign" aria-label="Red de afiliación" title="Elige la red cuyos campos quieres configurar" style="flex:1 1 200px; min-width:150px;"></select>
-          <select id="nfField" class="sel-cat-assign" aria-label="Campo de la red" title="Campo extra de la red para añadir a la captura" disabled style="flex:1 1 220px; min-width:150px;"></select>
-          <button type="button" class="btn-success btn-sm" id="nfBtnAdd" disabled>➕ Añadir campo</button>
-          <div style="margin-left:auto; display:flex; align-items:center; gap:.25rem;">
-            <input type="checkbox" id="nfCaptureAll" style="margin:0;" />
-            <label for="nfCaptureAll" style="cursor:pointer; margin:0; white-space:nowrap;">Capturar todos los campos de esta red</label>
-          </div>
-        </div>
-        <div id="nfSelectedList" class="field-toggle-list"></div>
-        <p id="nfStatus" class="field-visibility-status" aria-live="polite"></p>
-      </div>
-    </section>
-
     <!-- 3. LISTADO RÁPIDO DE PRODUCTOS EXISTENTES -->
     <section data-admin-view="products" class:list={['admin-card', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'products' }]}>
        <div class="list-header-row">
