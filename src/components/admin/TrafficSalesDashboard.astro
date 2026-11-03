@@ -431,43 +431,44 @@ const enCurso = resumen.meses[0]?.month ?? '';
   <!-- 4. Tabla por producto (catálogo completo, con buscador por nombre dentro
        del propio componente: no se limita al Top 10 como el ranking de arriba) -->
   <section class="flex flex-col gap-4" data-producto-metricas-section>
-    <div class="card-header card-header-toggle" id="productoMetricasToggle" role="button" aria-expanded="true" tabindex="0">
-      <div class="header-icon">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-        </svg>
+    <div class="admin-card" id="productoMetricasWrapper">
+      <div class="card-header card-header-toggle" id="productoMetricasToggle" role="button" aria-expanded="true" tabindex="0">
+        <div class="header-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+          </svg>
+        </div>
+        <div style="flex:1; min-width: 0;">
+          <h2 class="card-title">Rendimiento por producto</h2>
+          <p class="card-desc">Visitas, salidas a tienda y estado de fricción de cada ficha del catálogo. Busca por nombre para encontrar cualquier producto, tenga o no visitas en este periodo.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3" id="productoMetricasFiltros">
+          <label class="filter-check" id="filtroEstadoAlta">
+            <input type="checkbox" id="chkEstadoAlta" value="alta" checked style="margin:0;" /><span style="margin-left:.2rem;">Alta demanda</span>
+          </label>
+          <label class="filter-check" id="filtroEstadoFriccion">
+            <input type="checkbox" id="chkEstadoFriccion" value="friccion" checked style="margin:0;" /><span style="margin-left:.2rem;">Requiere optimización</span>
+          </label>
+          <div class="flex flex-col items-start gap-1" style="min-width:150px;">
+            <label class="filter-check" style="font-size:.7rem; margin:0;">Tasa conversión ≥ <span id="valTasa">0%</span></label>
+            <input type="range" id="rangoTasa" min="0" max="100" step="1" value="0" style="width:130px; accent-color:#38bdf8;" />
+          </div>
+          <div class="flex flex-col items-start gap-1" style="min-width:150px;">
+            <label class="filter-check" style="font-size:.7rem; margin:0;">Conversiones ≥ <span id="valConv">0</span></label>
+            <input type="range" id="rangoConv" min="0" max="1000" step="1" value="0" style="width:130px; accent-color:#34d399;" />
+          </div>
+          <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500" id="productoMetricasContador">{productosTabla.length} productos</span>
+        </div>
       </div>
-      <div style="flex:1; min-width: 0;">
-        <h2 class="card-title">Rendimiento por producto</h2>
-        <p class="card-desc">Visitas, salidas a tienda y estado de fricción de cada ficha del catálogo. Busca por nombre para encontrar cualquier producto, tenga o no visitas en este periodo.</p>
+      <div id="productoMetricasCuerpo" class="form-toggle-body flex flex-col gap-4">
+        {productosTabla.length === 0 ? (
+          <p class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-8 text-center text-xs text-slate-500">
+            Todavía no hay productos en el catálogo.
+          </p>
+        ) : (
+          <ProductMetricsTable productos={productosTabla} />
+        )}
       </div>
-      <div class="flex flex-wrap items-center gap-2" id="productoMetricasFiltros">
-        <label class="filter-check" id="filtroEstadoAlta">
-          <input type="checkbox" id="chkEstadoAlta" value="alta" checked style="margin:0;" /><span style="margin-left:.2rem;">Alta</span>
-        </label>
-        <label class="filter-check" id="filtroEstadoEstable">
-          <input type="checkbox" id="chkEstadoEstable" value="estable" checked style="margin:0;" /><span style="margin-left:.2rem;">Estable</span>
-        </label>
-        <label class="filter-check" id="filtroEstadoFriccion">
-          <input type="checkbox" id="chkEstadoFriccion" value="friccion" checked style="margin:0;" /><span style="margin-left:.2rem;">Fricción</span>
-        </label>
-        <select id="ordenarPor" class="sel-cat-assign" aria-label="Ordenar productos por">
-          <option value="visitas">Visitas ↓</option>
-          <option value="conversiones">Conversiones ↓</option>
-          <option value="tasa">Tasa conversión ↓</option>
-          <option value="estado">Estado</option>
-        </select>
-      </div>
-      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500" id="productoMetricasContador">{productosTabla.length} productos</span>
-    </div>
-    <div id="productoMetricasCuerpo" class="form-toggle-body flex flex-col gap-4">
-      {productosTabla.length === 0 ? (
-        <p class="rounded-2xl border border-white/10 bg-white/[0.03] px-5 py-8 text-center text-xs text-slate-500">
-          Todavía no hay productos en el catálogo.
-        </p>
-      ) : (
-        <ProductMetricsTable productos={productosTabla} />
-      )}
     </div>
   </section>
 
@@ -697,7 +698,7 @@ const enCurso = resumen.meses[0]?.month ?? '';
 </script>
 
 <script>
-  // ── Rendimiento por producto: plegable + filtros de estado + ordenamiento ──
+  // ── Rendimiento por producto: plegable + filtros de estado + rangos de tasa y conversiones ──
   const seccion = document.querySelector<HTMLElement>('[data-producto-metricas-section]');
   if (!seccion) {
     // ProductMetricsTable ya gestiona su propio buscador; nada más que hacer aquí.
@@ -706,9 +707,11 @@ const enCurso = resumen.meses[0]?.month ?? '';
     const cuerpo = seccion.querySelector<HTMLElement>('#productoMetricasCuerpo');
     const contador = seccion.querySelector<HTMLElement>('#productoMetricasContador');
     const chkAlta = seccion.querySelector<HTMLInputElement>('#chkEstadoAlta');
-    const chkEstable = seccion.querySelector<HTMLInputElement>('#chkEstadoEstable');
     const chkFriccion = seccion.querySelector<HTMLInputElement>('#chkEstadoFriccion');
-    const ordenarPor = seccion.querySelector<HTMLSelectElement>('#ordenarPor');
+    const rangoTasa = seccion.querySelector<HTMLInputElement>('#rangoTasa');
+    const valTasa = seccion.querySelector<HTMLElement>('#valTasa');
+    const rangoConv = seccion.querySelector<HTMLInputElement>('#rangoConv');
+    const valConv = seccion.querySelector<HTMLElement>('#valConv');
 
     // Tabla interna de ProductMetricsTable
     const tabla = seccion.querySelector<HTMLElement>('[data-product-table]');
@@ -739,7 +742,6 @@ const enCurso = resumen.meses[0]?.month ?? '';
           setExpandido(!expandido);
         }
       });
-      // Pequeña rotación del icono al empezar
       const svg = toggle.querySelector('svg');
       if (svg) svg.style.transition = 'transform .2s ease';
     }
@@ -753,31 +755,27 @@ const enCurso = resumen.meses[0]?.month ?? '';
       return Number(fila.dataset[clave as keyof HTMLTableRowElement] ?? 0);
     }
 
-    function aplicarFiltroYOrden() {
+    function aplicarFiltro() {
       const activos = new Set<string>();
       if (chkAlta?.checked) activos.add('alta');
-      if (chkEstable?.checked) activos.add('estable');
       if (chkFriccion?.checked) activos.add('friccion');
 
-      const claveOrden = ordenarPor?.value || 'visitas';
+      const minTasa = rangoTasa ? Number(rangoTasa.value) : 0;
+      const minConv = rangoConv ? Number(rangoConv.value) : 0;
 
-      // Filtrar por estado
-      const visibles = filas.filter((f) => activos.has(estadoDe(f)));
+      if (valTasa) valTasa.textContent = `${minTasa}%`;
+      if (valConv) valConv.textContent = String(minConv);
 
-      // Ordenar
-      visibles.sort((a, b) => {
-        if (claveOrden === 'estado') {
-          const orden: Record<string, number> = { alta: 0, estable: 1, friccion: 2 };
-          return (orden[estadoDe(a)] ?? 99) - (orden[estadoDe(b)] ?? 99);
-        }
-        return numeroDe(b, claveOrden) - numeroDe(a, claveOrden);
+      const visibles = filas.filter((f) => {
+        const est = estadoDe(f);
+        const tasa = numeroDe(f, 'tasa') * 100; // data-tasa es 0-1, multiplicar por 100 para %
+        const conv = numeroDe(f, 'conversiones');
+        return activos.has(est) && tasa >= minTasa && conv >= minConv;
       });
 
-      // Aplicar visibilidad y orden en el DOM
       filas.forEach((f) => f.classList.add('hidden'));
-      visibles.forEach((f, index) => {
+      visibles.forEach((f) => {
         f.classList.remove('hidden');
-        // Mover al final para reordenar visualmente
         f.parentElement?.appendChild(f);
       });
 
@@ -786,11 +784,12 @@ const enCurso = resumen.meses[0]?.month ?? '';
       }
     }
 
-    [chkAlta, chkEstable, chkFriccion, ordenarPor].forEach((el) => {
-      el?.addEventListener('change', aplicarFiltroYOrden);
+    [chkAlta, chkFriccion, rangoTasa, rangoConv].forEach((el) => {
+      el?.addEventListener('change', aplicarFiltro);
+      el?.addEventListener('input', aplicarFiltro);
     });
 
-    // Ejecutar al cargar para aplicar el orden por defecto
-    aplicarFiltroYOrden();
+    // Ejecutar al cargar para aplicar filtros por defecto
+    aplicarFiltro();
   }
 </script>
