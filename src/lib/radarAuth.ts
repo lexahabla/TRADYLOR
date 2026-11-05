@@ -2,7 +2,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 import fs from 'node:fs';
 import path from 'node:path';
 import { dataFile, RADAR_AVATARS_DIR } from './paths';
-import { sendGenericMailSmtp, sendVerificationEmailSmtp } from './mailer';
+import { getSmtpConfig, sendGenericMailSmtp, sendVerificationEmailSmtp } from './mailer';
 import { radarEmailChanges } from './rateLimit';
 
 /**
@@ -139,6 +139,24 @@ export class RadarAuthError extends Error {
 }
 
 /* ------------------------------------------------------------ utilidades */
+
+/**
+ * Origen público para enlaces de correo y redirect_uri de Google. Tras el proxy
+ * de Easy Panel `request.url` llega como http://localhost:4321, así que en
+ * producción se usa el dominio canónico (PUBLIC_SITE_URL o el `site` de Astro).
+ */
+export function publicOrigin(request: Request): string {
+  const isProd = (process.env.NODE_ENV ?? '') === 'production';
+  if (isProd) {
+    const configured = (process.env.PUBLIC_SITE_URL ?? import.meta.env.PUBLIC_SITE_URL ?? '').trim();
+    try {
+      return new URL(configured || 'https://treidilor.com').origin;
+    } catch {
+      return 'https://treidilor.com';
+    }
+  }
+  return new URL(request.url).origin;
+}
 
 function uuid(): string {
   return randomBytes(16).toString('hex').replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
@@ -631,10 +649,31 @@ export function requestPasswordReset(email: string, origin: string): ResetReques
   user.updatedAt = new Date().toISOString();
   writeUsers(users);
 
-  const resetUrl = `${origin.replace(/\/$/, '')}/mi-radar?reset=${token}`;
+  const resetUrl = `${origin.replace(/\/$/, '')}/?reset=${token}`;
   const webhook = (process.env.N8N_RESET_WEBHOOK_URL ?? import.meta.env.N8N_RESET_WEBHOOK_URL ?? '').trim();
   let notified = false;
-  if (webhook) {
+  // SMTP directo si está configurado (mismo canal que activación y enlace mágico).
+  if (getSmtpConfig()) {
+    const safeName = escapeHtml(user.name || user.email.split('@')[0]);
+    const html = `
+    <div style="max-width:560px;margin:0 auto;font-family:Inter,Arial,sans-serif;background:#0d1422;color:#f3f4f6;padding:2rem;border-radius:16px">
+      <h1 style="font-size:1.4rem;margin:0 0 .5rem">Restablece tu contraseña, ${safeName}</h1>
+      <p style="color:#9ca3af;font-size:.9rem;line-height:1.6;margin:0 0 1.25rem">
+        Pulsa el botón para elegir una contraseña nueva en <strong>Mi Radar</strong>. El enlace es de un solo uso y caduca en 1 hora:
+      </p>
+      <a href="${resetUrl}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;font-weight:700;padding:.85rem 1.5rem;border-radius:11px;font-size:.9rem">
+        Cambiar mi contraseña
+      </a>
+      <p style="color:#6b7280;font-size:.75rem;margin-top:1.5rem">
+        Si no lo has pedido tú, ignora este email: tu contraseña seguirá igual.
+      </p>
+    </div>`;
+    const text = `Restablece tu contraseña de Mi Radar: ${resetUrl}
+
+Caduca en 1 hora. Si no lo has pedido tú, ignora este mensaje.`;
+    void sendGenericMailSmtp({ to: user.email, subject: 'Restablece tu contraseña de Mi Radar', html, text });
+    notified = true;
+  } else if (webhook) {
     fetch(webhook, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

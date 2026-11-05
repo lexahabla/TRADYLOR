@@ -1,5 +1,5 @@
 import type { APIRoute } from 'astro';
-import { requestMagicLogin, RadarAuthError } from '../../../../lib/radarAuth';
+import { requestMagicLogin, RadarAuthError, publicOrigin } from '../../../../lib/radarAuth';
 import { magicLinkRequestsPerIp } from '../../../../lib/rateLimit';
 
 export const prerender = false;
@@ -23,7 +23,7 @@ export const POST: APIRoute = async ({ request }) => {
     const body = await request.json();
     const email = String(body.email ?? '').trim();
     if (!email) return json({ success: false, message: 'Indica tu email.' }, 400);
-    const origin = new URL(request.url).origin;
+    const origin = publicOrigin(request);
     const result = await requestMagicLogin(email, origin);
     return json({
       success: true,

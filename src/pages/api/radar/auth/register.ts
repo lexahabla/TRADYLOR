@@ -7,8 +7,7 @@ import {
   isGmailEmail,
   registerRadarUser,
   RadarAuthError,
-  sendVerificationEmail,
-} from '../../../../lib/radarAuth';
+  sendVerificationEmail, publicOrigin } from '../../../../lib/radarAuth';
 
 export const prerender = false;
 
@@ -34,7 +33,7 @@ export const POST: APIRoute = async ({ request }) => {
     // Email no gmail: cuenta pendiente de activar. No se crea sesión; se envía
     // el email de bienvenida con el botón de activación.
     if (!user.verified) {
-      const origin = new URL(request.url).origin;
+      const origin = publicOrigin(request);
       const result = await sendVerificationEmail(full, origin);
       return json(
         { success: true, verificationPending: true, devVerifyUrl: result.devVerifyUrl },

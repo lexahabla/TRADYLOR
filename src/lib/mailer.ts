@@ -37,7 +37,7 @@ export async function sendVerificationEmailSmtp(payload: EmailPayload): Promise<
 
   const html = `
     <div style="max-width:560px;margin:0 auto;font-family:Inter,Arial,sans-serif;background:#0d1422;color:#f3f4f6;padding:2rem;border-radius:16px">
-      <h1 style="font-size:1.4rem;margin:0 0 .5rem">Bienvenido a Tradylor, ${payload.name}</h1>
+      <h1 style="font-size:1.4rem;margin:0 0 .5rem">Bienvenido a Tradylor, ${payload.name.replace(/[<>&"]/g, "")}</h1>
       <p style="color:#9ca3af;font-size:.9rem;line-height:1.6;margin:0 0 1.25rem">
         Gracias por crear tu cuenta de <strong>Mi Radar</strong>. Con ella puedes guardar productos,
         organizar listas de compra y retomar salidas desde cualquier dispositivo.

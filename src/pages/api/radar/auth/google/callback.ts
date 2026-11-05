@@ -4,6 +4,7 @@ import {
   createRadarSession,
   exchangeGoogleCode,
   getGoogleOAuthConfig,
+  publicOrigin,
   RadarAuthError,
   readOAuthStateCookie,
   upsertGoogleUser,
@@ -20,7 +21,7 @@ export const GET: APIRoute = async ({ request, redirect }) => {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
-  const origin = url.origin;
+  const origin = publicOrigin(request);
   const fail = (reason: string) => {
     const response = redirect(`/?auth_error=${encodeURIComponent(reason)}`);
     response.headers.append('Set-Cookie', clearOAuthStateCookie());

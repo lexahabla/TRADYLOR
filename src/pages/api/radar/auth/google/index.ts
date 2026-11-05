@@ -3,8 +3,7 @@ import { randomBytes } from 'node:crypto';
 import {
   buildGoogleAuthUrl,
   createOAuthStateCookie,
-  getGoogleOAuthConfig,
-} from '../../../../../lib/radarAuth';
+  getGoogleOAuthConfig, publicOrigin } from '../../../../../lib/radarAuth';
 
 export const prerender = false;
 
@@ -24,7 +23,7 @@ export const GET: APIRoute = ({ request, redirect }) => {
   }
 
   const state = randomBytes(16).toString('hex');
-  const origin = new URL(request.url).origin;
+  const origin = publicOrigin(request);
   const redirectUri = `${origin}/api/radar/auth/google/callback`;
   const response = redirect(buildGoogleAuthUrl(config, redirectUri, state));
   response.headers.append('Set-Cookie', createOAuthStateCookie(state));
