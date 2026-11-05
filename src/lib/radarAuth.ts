@@ -189,6 +189,9 @@ function assertPasswordStrength(password: string): void {
   if (typeof password !== 'string' || password.length < 8) {
     throw new RadarAuthError('La contraseña debe tener al menos 8 caracteres.');
   }
+  if (password.length > 128) {
+    throw new RadarAuthError('La contraseña no puede superar los 128 caracteres.');
+  }
 }
 
 /** Gmail se considera verificado por Google; el resto requiere activación por email. */
@@ -330,8 +333,10 @@ export function findRadarUserById(id: string): RadarUser | null {
 
 export function registerRadarUser(input: { email: string; password: string; name?: string; verified?: boolean }): PublicRadarUser {
   const email = String(input.email ?? '').trim().toLowerCase();
-  if (!EMAIL_RE.test(email)) throw new RadarAuthError('El email no es válido.');
+  if (!EMAIL_RE.test(email) || email.length > EMAIL_MAX) throw new RadarAuthError('El email no es válido.');
   assertPasswordStrength(String(input.password ?? ''));
+  const rawName = String(input.name ?? '').replace(/\s+/g, ' ').trim();
+  if (rawName.length > NAME_MAX) throw new RadarAuthError(`El nombre no puede superar los ${NAME_MAX} caracteres.`);
 
   const users = readUsers();
   if (users.some((u) => u.email === email)) {
@@ -340,11 +345,13 @@ export function registerRadarUser(input: { email: string; password: string; name
 
   const { salt, hash } = createPasswordHash(String(input.password));
   const now = new Date().toISOString();
-  const skipVerification = Boolean(input.verified) || isGmailEmail(email);
+  // Todo email (Gmail incluido) debe demostrar que controla la bandeja: si no, cualquiera
+  // podría registrar el correo de otra persona con su propia contraseña.
+  const skipVerification = Boolean(input.verified);
   const created: RadarUser = {
     id: uuid(),
     email,
-    name: String(input.name ?? '').trim() || email.split('@')[0],
+    name: rawName || email.split('@')[0],
     provider: 'email',
     passwordSalt: salt,
     passwordHash: hash,

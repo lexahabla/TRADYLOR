@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import { dataFile } from '../lib/paths';
 import type { Product } from './api/products/add';
 import { authenticateUser, clearAdminSession, createAdminSession, getSessionUser } from '../lib/adminAuth';
+import { clientIp, loginAttemptsPerEmail, loginAttemptsPerIp } from '../lib/rateLimit';
 import { getAmazonAssociateTag } from '../utils/amazon';
 import { enrichProductsForAdmin } from '../lib/curation';
 import { getGlobalCatalogSort } from '../lib/catalogSort';
@@ -37,9 +38,14 @@ if (Astro.request.method === 'POST') {
     });
   }
 
-  const login = !isAuthenticated
+  // Freno a la fuerza bruta: 20 intentos por hora y IP, 10 por hora y usuario.
+  const adminUserKey = String(formData.get('username') ?? '').trim().toLowerCase();
+  const adminBlocked = !isAuthenticated &&
+    (!loginAttemptsPerIp.hit(`admin:${clientIp(Astro.request)}`) || !loginAttemptsPerEmail.hit(`admin:${adminUserKey}`));
+  const login = !isAuthenticated && !adminBlocked
     ? authenticateUser(String(formData.get('username') ?? '').trim(), String(formData.get('password') ?? ''))
     : null;
+  if (login) loginAttemptsPerEmail.reset(`admin:${adminUserKey}`);
 
   if (login) {
     const redirectUrl = login.role === 'admin' ? '/upayp1b4' : '/upayp1b4/perfil';
@@ -58,10 +64,12 @@ if (Astro.request.method === 'POST') {
   }
 
   if (!isAuthenticated) {
-    loginError = 'El usuario o la contraseña no son correctos.';
+    loginError = adminBlocked
+      ? 'Demasiados intentos. Inténtalo de nuevo en una hora.'
+      : 'El usuario o la contraseña no son correctos.';
     if (isAjax) {
       return new Response(JSON.stringify({ success: false, message: loginError }), {
-        status: 401,
+        status: adminBlocked ? 429 : 401,
         headers: { 'Content-Type': 'application/json' },
       });
     }

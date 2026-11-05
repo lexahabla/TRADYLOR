@@ -9,6 +9,8 @@ import {
   toPublicRadarUser,
 } from '../../../../lib/radarAuth';
 
+import { clientIp, loginAttemptsPerEmail, loginAttemptsPerIp } from '../../../../lib/rateLimit';
+
 export const prerender = false;
 
 const json = (body: unknown, status: number) =>
@@ -29,7 +31,12 @@ const json = (body: unknown, status: number) =>
 export const POST: APIRoute = async ({ request, cookies }) => {
   try {
     const body = await request.json();
+    const emailKey = String(body.email ?? '').trim().toLowerCase();
+    if (!loginAttemptsPerIp.hit(clientIp(request)) || !loginAttemptsPerEmail.hit(emailKey)) {
+      return json({ success: false, message: 'Demasiados intentos. Inténtalo de nuevo en una hora.' }, 429);
+    }
     const user = loginRadarUser(String(body.email ?? ''), String(body.password ?? ''));
+    loginAttemptsPerEmail.reset(emailKey);
     const rememberMe = (body as { rememberMe?: unknown }).rememberMe === true;
     cookies.set(SESSION_COOKIE_NAME, radarSessionValue(user), radarSessionCookieOptions(rememberMe));
     return json(

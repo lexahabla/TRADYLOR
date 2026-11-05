@@ -66,3 +66,19 @@ export function createRateLimiter(max: number, windowMs: number): RateLimiter {
     },
   };
 }
+
+/** IP del cliente tras el proxy (primer valor de x-forwarded-for). */
+export function clientIp(request: Request): string {
+  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+}
+
+/** Intentos de login: 20 por hora y IP, y 10 por hora y email (fuerza bruta de contraseñas). */
+export const loginAttemptsPerIp: RateLimiter = createRateLimiter(20, 60 * 60 * 1000);
+export const loginAttemptsPerEmail: RateLimiter = createRateLimiter(10, 60 * 60 * 1000);
+
+/** Altas de cuenta por IP: 10 por hora (evita usar el SMTP para spam de bienvenidas). */
+export const registerPerIp: RateLimiter = createRateLimiter(10, 60 * 60 * 1000);
+
+/** Correos de activación / recuperación: 8 por hora y IP, 3 por hora y email destinatario. */
+export const mailRequestsPerIp: RateLimiter = createRateLimiter(8, 60 * 60 * 1000);
+export const mailRequestsPerEmail: RateLimiter = createRateLimiter(3, 60 * 60 * 1000);

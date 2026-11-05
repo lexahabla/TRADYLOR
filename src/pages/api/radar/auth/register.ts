@@ -4,10 +4,11 @@ import {
   findRadarUserById,
   getGoogleOAuthConfig,
   getRadarSessionUser,
-  isGmailEmail,
   registerRadarUser,
   RadarAuthError,
   sendVerificationEmail, publicOrigin } from '../../../../lib/radarAuth';
+
+import { clientIp, registerPerIp } from '../../../../lib/rateLimit';
 
 export const prerender = false;
 
@@ -19,13 +20,15 @@ const json = (body: unknown, status: number, headers: Record<string, string> = {
 
 export const POST: APIRoute = async ({ request }) => {
   try {
+    if (!registerPerIp.hit(clientIp(request))) {
+      return json({ success: false, message: 'Demasiados registros desde tu conexión. Inténtalo en una hora.' }, 429);
+    }
     const body = await request.json();
     const email = String(body.email ?? '').trim().toLowerCase();
     const user = registerRadarUser({
       email,
       password: String(body.password ?? ''),
       name: String(body.name ?? ''),
-      verified: isGmailEmail(email),
     });
     const full = findRadarUserById(user.id);
     if (!full) return json({ success: false, message: 'No se pudo crear la cuenta.' }, 500);

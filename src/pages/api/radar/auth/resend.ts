@@ -1,6 +1,8 @@
 import type { APIRoute } from 'astro';
 import { RadarAuthError, resendVerificationEmail, publicOrigin } from '../../../../lib/radarAuth';
 
+import { clientIp, mailRequestsPerEmail, mailRequestsPerIp } from '../../../../lib/rateLimit';
+
 export const prerender = false;
 
 const json = (body: unknown, status: number) =>
@@ -15,6 +17,9 @@ export const POST: APIRoute = async ({ request }) => {
     const body = await request.json();
     const email = String(body.email ?? '').trim();
     if (!email) return json({ success: false, message: 'Indica tu email.' }, 400);
+    if (!mailRequestsPerIp.hit(clientIp(request)) || !mailRequestsPerEmail.hit(email.toLowerCase())) {
+      return json({ success: false, message: 'Demasiadas solicitudes. Inténtalo en una hora.' }, 429);
+    }
     const origin = publicOrigin(request);
     const result = await resendVerificationEmail(email, origin);
     return json({
