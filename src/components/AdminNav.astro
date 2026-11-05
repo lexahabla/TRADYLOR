@@ -82,19 +82,26 @@ const items = context === 'catalogo' ? catalogItems : userItems;
     // Cacheamos las referencias una sola vez para no hacer querySelectorAll
     // (costoso en un DOM grande) cada vez que se cambia de pestaña.
     const secciones = Array.from(document.querySelectorAll('section[data-admin-view]'));
+    // Una misma vista puede tener VARIAS secciones en el DOM (Catálogo tiene tres:
+    // alta/edición, tabla de productos y «Secciones de la web»). Se guardan TODAS por
+    // id; antes sólo se guardaba la última y al volver a Catálogo desde otra pestaña
+    // se mostraba un único bloque (hacía falta recargar para ver el resto).
     const seccionPorId = new Map();
     secciones.forEach((el) => {
       const id = el.getAttribute('data-admin-view');
-      if (id) seccionPorId.set(id, el);
+      if (!id) return;
+      const lista = seccionPorId.get(id);
+      if (lista) lista.push(el);
+      else seccionPorId.set(id, [el]);
     });
 
     const showSection = (section, { pushUrl = true, scroll = true } = {}) => {
       if (!section) return;
-      const target = seccionPorId.get(section);
-      if (!target) return;
-      // Ocultar todas, mostrar solo la activa (más rápido que toggle con verificación)
+      const destino = seccionPorId.get(section);
+      if (!destino) return;
+      // Mostrar TODAS las secciones de la vista elegida y ocultar el resto
       secciones.forEach((el) => {
-        el.classList.toggle('is-visible', el === target);
+        el.classList.toggle('is-visible', destino.indexOf(el) !== -1);
       });
       setActiveItem(section);
       // Avisa a la cabecera de sección (upayp1b4.astro) para que siga a la pestaña activa.
