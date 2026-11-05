@@ -1,0 +1,96 @@
+---
+/**
+ * TRADYLOR — Cabecera de sección del backend (ÚNICA para todas las pantallas)
+ *
+ * Antes cada página copiaba su propio <header class="admin-header"> con CSS distinto
+ * (separaciones, tamaños y número de líneas de la descripción), de modo que el menú
+ * del backend cambiaba de altura al pasar de una sección a otra (hasta 93 px en
+ * escritorio y 145 px en móvil). Aquí la cabecera tiene una ALTURA FIJA:
+ *
+ *   etiqueta (1 línea) · título (1 línea) · descripción (hueco de 3 líneas; 4 en móvil)
+ *
+ * El menú queda siempre en la misma posición, también en las páginas con ruta propia
+ * (Amazon (JSON), Marketing y sus subsecciones, Tráfico y ventas, perfil...).
+ * Una descripción más larga que el hueco se recorta con «…» y su texto completo queda
+ * en el atributo `title`.
+ *
+ * Props:
+ *  - eyebrow:   texto de la etiqueta superior (si no hay `crumbs`).
+ *  - crumbs:    miga de pan [{ label, href? }]; el último elemento es la página actual.
+ *  - title:     título principal.
+ *  - subtitle:  descripción (texto). Alternativa: slot `subtitle` con marcado.
+ *  - headingLevel: 1 | 2 (nivel del título).
+ *  - ids:       ids opcionales de etiqueta/título/descripción (el panel los actualiza al
+ *               cambiar de pestaña).
+ *  - slot `actions`: botones a la derecha de la cabecera (no alteran su altura en escritorio).
+ */
+interface Crumb {
+  label: string;
+  href?: string;
+}
+interface Props {
+  eyebrow?: string;
+  crumbs?: Crumb[];
+  title: string;
+  subtitle?: string;
+  headingLevel?: 1 | 2;
+  ids?: { eyebrow?: string; title?: string; subtitle?: string };
+}
+
+const { eyebrow, crumbs, title, subtitle, headingLevel = 2, ids = {} } = Astro.props;
+const Heading = headingLevel === 1 ? 'h1' : 'h2';
+const hasSubtitleSlot = Astro.slots.has('subtitle');
+const hasActions = Astro.slots.has('actions');
+---
+
+<header class="admin-header">
+  <div class="admin-header-main">
+    <div class="admin-tag-row">
+      {crumbs && crumbs.length > 0 ? (
+        crumbs.map((crumb, index) => {
+          const isLast = index === crumbs.length - 1;
+          return (
+            <>
+              {isLast ? (
+                <div class="admin-tag-pill" aria-current="page">{crumb.label}</div>
+              ) : (
+                <a class:list={['admin-tag-link', { 'admin-crumb-root': index === 0 }]} href={crumb.href}>{crumb.label}</a>
+              )}
+              {!isLast && <span class:list={['admin-tag-sep', { 'admin-crumb-root': index === 0 }]} aria-hidden="true">/</span>}
+            </>
+          );
+        })
+      ) : (
+        <div class="admin-tag-pill" id={ids.eyebrow}>{eyebrow}</div>
+      )}
+    </div>
+    <Heading class="admin-title" id={ids.title}>{title}</Heading>
+    {hasSubtitleSlot ? (
+      <p class="admin-subtitle" id={ids.subtitle}><slot name="subtitle" /></p>
+    ) : (
+      <p class="admin-subtitle" id={ids.subtitle} title={subtitle}>{subtitle}</p>
+    )}
+  </div>
+  {hasActions && <div class="admin-header-actions"><slot name="actions" /></div>}
+</header>
+
+<style is:global>
+  .admin-header { position: relative; display: flex; flex-direction: column; padding-bottom: 2rem; background: #0a0e17; border-bottom: 1px solid var(--color-border); }
+  .admin-header .admin-header-main { display: flex; flex-direction: column; gap: 0.5rem; min-width: 0; }
+  .admin-header .admin-tag-row { display: flex; align-items: center; flex-wrap: nowrap; gap: 0.5rem; height: 1.25rem; margin: 0; overflow: hidden; white-space: nowrap; }
+  .admin-header .admin-tag-pill { display: inline-flex; align-items: center; margin: 0; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; line-height: 1.25rem; text-transform: uppercase; color: #60a5fa; width: fit-content; }
+  .admin-header .admin-tag-link { font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; line-height: 1.25rem; text-transform: uppercase; color: #60a5fa; text-decoration: none; transition: color 0.16s ease; }
+  .admin-header .admin-tag-link:hover { color: #93c5fd; }
+  .admin-header .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
+  .admin-header .admin-title { margin: 0; font-family: var(--font-heading); font-size: clamp(1.5rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; padding-bottom: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .admin-header .admin-subtitle { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; overflow: hidden; margin: 0; max-width: 900px; min-height: 4.8em; color: var(--color-text-muted); font-size: 0.95rem; line-height: 1.6; }
+  .admin-header .admin-header-actions { position: absolute; top: 0; right: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 0.6rem; }
+  @media (max-width: 760px) {
+    .admin-header .admin-header-actions { position: static; justify-content: flex-start; margin-top: 0.75rem; }
+  }
+  @media (max-width: 600px) {
+    /* En móvil la miga no cabe entera: se omite el primer nivel (el menú del backend está justo debajo). */
+    .admin-header .admin-crumb-root { display: none; }
+    .admin-header .admin-subtitle { -webkit-line-clamp: 4; line-clamp: 4; min-height: 6.4em; }
+  }
+</style>

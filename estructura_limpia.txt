@@ -48,6 +48,7 @@ src/components/ReturnBanner.astro
 src/components/SmartMatcherWizard.astro
 src/components/TestProofBadge.astro
 src/components/TransparencyDashboard.astro
+src/components/admin/AdminSectionHeader.astro
 src/components/admin/DateRangeFilter.astro
 src/components/admin/FinancialHeaderCards.astro
 src/components/admin/IpExclusionManager.astro

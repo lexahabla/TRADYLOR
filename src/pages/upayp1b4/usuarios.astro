@@ -3,6 +3,7 @@ export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
 import AdminNav from '../../components/AdminNav.astro';
+import AdminSectionHeader from '../../components/admin/AdminSectionHeader.astro';
 import AdminUserMenu from '../../components/AdminUserMenu.astro';
 import { getSessionUser } from '../../lib/adminAuth';
 import { listUsers } from '../../lib/userStore';
@@ -24,17 +25,12 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { 
     <AdminUserMenu user={sessionUser} active="usuarios" />
   </Fragment>
   <div class="admin-wrapper">
-    <header class="admin-header">
-      <div class="admin-header-main">
-        <div class="admin-tag-row">
-          <a class="admin-tag-link" href="/upayp1b4">Panel de control</a>
-          <span class="admin-tag-sep" aria-hidden="true">/</span>
-          <div class="admin-tag-pill">Administración de usuarios</div>
-        </div>
-        <h1 class="admin-title">Usuarios del panel</h1>
-        <p class="admin-subtitle">Cuenta las personas con acceso a Tradylor Admin. El rol decide qué pueden ver: los usuarios comunes sólo llegan a su perfil.</p>
-      </div>
-    </header>
+    <AdminSectionHeader
+      crumbs={[{ label: 'Panel de control', href: '/upayp1b4' }, { label: 'Administración de usuarios' }]}
+      headingLevel={1}
+      title="Usuarios del panel"
+      subtitle="Cuenta las personas con acceso a Tradylor Admin. El rol decide qué pueden ver: los usuarios comunes sólo llegan a su perfil."
+    />
 
     <AdminNav context="usuario" active="usuarios" user={sessionUser} />
 
@@ -336,17 +332,8 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { 
 </script>
 
 <style>
-  .admin-wrapper { max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; display: flex; flex-direction: column; gap: 2.5rem; }
-  .admin-header { display: flex; flex-direction: column; gap: 1.5rem; padding-bottom: 2rem; background: #0a0e17; border-bottom: 1px solid var(--color-border); }
-  .admin-tag-pill { display: inline-flex; align-items: center; gap: 0.5rem; margin: 0 0 0.4rem; padding: 0; background: none; border: 0; border-radius: 0; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; width: fit-content; }
-  .admin-tag-row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.4rem; }
-  .admin-tag-row .admin-tag-pill { margin: 0; }
-  .admin-tag-link { font-size: 0.74rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: #60a5fa; text-decoration: none; transition: color 0.16s ease; }
-  .admin-tag-link:hover { color: #93c5fd; }
-  .admin-tag-sep { font-size: 0.74rem; font-weight: 800; color: #60a5fa; opacity: 0.5; }
+  .admin-wrapper { max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; display: flex; flex-direction: column; gap: 30px; }
 
-  .admin-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 3.5vw, 2.4rem); font-weight: 800; color: var(--color-text-main); line-height: 1.2; margin-top: 0.5rem; }
-  .admin-subtitle { color: var(--color-text-muted); font-size: 0.95rem; max-width: 800px; line-height: 1.6; margin-top: 0.5rem; }
 
   .users-alert { padding: .85rem 1rem; border-radius: var(--border-radius-sm); font-size: .85rem; font-weight: 600; border: 1px solid transparent; }
   .users-alert.is-success { color: #6ee7b7; background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }

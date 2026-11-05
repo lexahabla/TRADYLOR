@@ -3,6 +3,7 @@ export const prerender = false;
 
 import Layout from '../layouts/Layout.astro';
 import AdminNav from '../components/AdminNav.astro';
+import AdminSectionHeader from '../components/admin/AdminSectionHeader.astro';
 import AdminUserMenu from '../components/AdminUserMenu.astro';
 import TrafficSalesDashboard from '../components/admin/TrafficSalesDashboard.astro';
 import fs from 'node:fs';
@@ -174,14 +175,13 @@ const h = headerConfig[initialSection] || headerConfig.products;
   {isAuthenticated && sessionUser ? (
   <div class="admin-wrapper">
     <!-- 1. HEADER DEL PANEL (título y subtítulo dinámicos según sección activa) -->
-    <header class="admin-header">
-      <div class="admin-header-main">
-        <div class="admin-tag-pill" id="adminHeaderPill">{h.pill}</div>
-        <h2 class="admin-title" id="adminHeaderTitle">{h.titulo}</h2>
-        <p class="admin-subtitle" id="adminHeaderSubtitle">{h.subtitulo}</p>
-      </div>
-      <script is:inline type="application/json" id="adminHeaderConfig" set:html={JSON.stringify(headerConfig)}></script>
-    </header>
+    <AdminSectionHeader
+      eyebrow={h.pill}
+      title={h.titulo}
+      subtitle={h.subtitulo}
+      ids={{ eyebrow: 'adminHeaderPill', title: 'adminHeaderTitle', subtitle: 'adminHeaderSubtitle' }}
+    />
+    <script is:inline type="application/json" id="adminHeaderConfig" set:html={JSON.stringify(headerConfig)}></script>
 
     <AdminNav context="catalogo" active={initialSection} user={sessionUser} />
 
@@ -8899,6 +8899,7 @@ function renderTableRows(products, resetPage = true) {
         pill.textContent = h.pill;
         title.textContent = h.titulo;
         subtitle.textContent = h.subtitulo;
+        subtitle.title = h.subtitulo;
         document.title = h.titulo + ' | Panel de Administración | Tradylor';
       });
     })();
