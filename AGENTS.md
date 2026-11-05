@@ -54,7 +54,7 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 
 ## Stack
 
-- **Framework**: Astro 4.x con TypeScript
+- **Framework**: Astro 7.x con TypeScript (ver `package.json`)
 - **Adapter**: `@astrojs/node` en modo `standalone` (SSR, output `server`)
 - **CSS**: CSS propio con variables + utilidades **Tailwind 3** (`tailwind.config.mjs`,
   `preflight` desactivado para no alterar el diseño existente)
@@ -191,3 +191,30 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 - Los redireccionamientos de afiliación salen por `src/pages/out/[id].astro`.
 - Documentación de la API pública en `docs/api-v1.md`; mantenerla actualizada si se
   cambian los endpoints de `src/pages/api/v1/`.
+
+## Diseño y UX (tareas con cambios visuales)
+
+- **Reutilizar antes de crear**: buscar primero en `src/components/` (y
+  `src/components/admin/`) y ampliar el componente existente (p. ej. `ProductCard`
+  con `layout="compact"`, `MetricCard`, `PeriodPicker`). No duplicar botones ni
+  tarjetas dentro de una página.
+- **Identidad**: usar sólo las variables de `src/layouts/Layout.astro` (`:root`:
+  `--color-*`, `--border-radius-*`, `--font-body`/`--font-heading`, `--max-width`,
+  `--shadow-*`). No introducir colores literales nuevos si existe variable.
+  El panel admin (`/upayp1b4`) hereda esas variables y sus clases base
+  (`.admin-card`, `.card-title`, `.card-desc`, `.header-icon`).
+- **Tailwind** sólo en las zonas del `content` de `tailwind.config.mjs`
+  (`trafico-ventas`, `components/admin`, `mi-radar`). Para ampliar el alcance,
+  avisar al usuario antes: puede activar clases "dormidas" en otras páginas.
+- **Accesibilidad**: foco visible (`:focus-visible`), `aria-label` en controles sólo
+  de icono, objetivos táctiles ≥ 44 px, contraste suficiente, navegación por
+  teclado, y estados comunicados también con texto o icono (no sólo color).
+- **Estados**: prever carga, vacío, error, éxito y datos incompletos; conservar el
+  contexto (filtros, página, scroll) al volver al listado o cerrar un panel.
+- **Escritorio y móvil**: comprobar ambos (breakpoints en uso: 960, 640, 600 y
+  480 px). Si cambia un patrón existente, explicar el problema y presentar la
+  solución para revisión antes de generalizarla.
+- **Bocetos**: si la tarea los pide, presentarlos antes de implementar.
+- **Verificación**: indicar qué se comprobó (`npm run check:inline`, `npm run build`,
+  prueba visual) y qué quedó pendiente; si no se puede renderizar la web, decirlo
+  expresamente en vez de darlo por verificado.
