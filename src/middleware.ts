@@ -55,7 +55,7 @@ try {
 const gzipAsync = promisify(gzip);
 
 /**
- * Comprime el HTML con gzip cuando el cliente lo admite. El servidor Node no
+ * Comprime el HTML y el JSON con gzip cuando el cliente lo admite. El servidor Node no
  * comprime y el proxy de producción tampoco lo hace con las respuestas
  * dinámicas (sin cabecera content-encoding): el panel enviaba ~1,06 MB y baja
  * a ~160 KB. Seguro por construcción: sólo GET 200 text/html sin codificar, y
@@ -66,7 +66,8 @@ async function maybeCompress(context: Parameters<MiddlewareHandler>[0], response
   try {
     if (context.request.method !== 'GET' || response.status !== 200 || !response.body) return response;
     if (response.headers.get('content-encoding')) return response;
-    if (!String(response.headers.get('content-type') ?? '').toLowerCase().startsWith('text/html')) return response;
+    const type = String(response.headers.get('content-type') ?? '').toLowerCase();
+    if (!type.startsWith('text/html') && !type.startsWith('application/json')) return response;
     if (!/gzip/i.test(context.request.headers.get('accept-encoding') ?? '')) return response;
     // Cookies pendientes de adjuntar: no tocar la respuesta.
     if ([...context.cookies.headers()].length > 0) return response;
@@ -96,7 +97,14 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
     return context.redirect('/upayp1b4');
   }
 
+  const startedAt = performance.now();
   const response = await next();
+  try {
+    // Visible en DevTools > Red > Tiempos: separa el coste del servidor del de la red.
+    response.headers.set('Server-Timing', `app;dur=${(performance.now() - startedAt).toFixed(1)}`);
+  } catch {
+    /* cabeceras inmutables: se omite */
+  }
 
   try {
     if (context.request.method === 'GET' && response.status === 200) {

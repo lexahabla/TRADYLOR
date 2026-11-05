@@ -8857,6 +8857,26 @@ function renderTableRows(products, resetPage = true) {
       }
     });
 
+    // ── Carga diferida por sección ───────────────────────────────────────────
+    // Ejecuta fn la PRIMERA vez que alguna de las secciones se muestra (o ya es la
+    // visible al cargar). Evita pedir al servidor, en cada visita al panel, datos
+    // que sólo usan secciones que quizá no se abran (IA, pipeline...).
+    function onSectionFirstShown(sections, fn) {
+      const list = Array.isArray(sections) ? sections : [sections];
+      let done = false;
+      const run = () => { if (done) return; done = true; fn(); };
+      const visibleNow = list.some((s) => document.querySelector('section[data-admin-view="' + s + '"].is-visible'));
+      if (visibleNow) { run(); return; }
+      document.addEventListener('admin:section-change', (event) => {
+        if (event.detail && list.indexOf(event.detail.section) !== -1) run();
+      });
+    }
+    // Trabajo no crítico: tras el primer pintado, en reposo del navegador.
+    function runWhenIdle(fn, timeout) {
+      if ('requestIdleCallback' in window) requestIdleCallback(fn, { timeout: timeout || 3000 });
+      else setTimeout(fn, 1200);
+    }
+
     // ── Cabecera única de sección: sigue a la pestaña activa ──────────────────
     (function () {
       const cfgEl = document.getElementById('adminHeaderConfig');
@@ -8982,7 +9002,7 @@ function renderTableRows(products, resetPage = true) {
       }
     });
 
-    loadOfferRefreshStatus();
+    runWhenIdle(loadOfferRefreshStatus, 3500);
 
     // ── Edición rápida de categoría/subcategoría en la fila expandida ────────
     async function quickAssignCategory(id, categoryId, categoryName, subcategoryId) {
@@ -9621,7 +9641,7 @@ function renderTableRows(products, resetPage = true) {
       if (ok) tpRunDedupe(true);
     });
 
-    if (btnPipelineRefresh) tpLoadMetrics();
+    if (btnPipelineRefresh) onSectionFirstShown('transparency', tpLoadMetrics);
 
     // ── Transparencia › Conectividad de IA: estado, claves y consola ─────────
     const AI_PROVIDER_NAMES = {
@@ -9998,8 +10018,8 @@ function renderTableRows(products, resetPage = true) {
 
     // Estado inicial: información local instantánea (el test de red real se
     // lanza con «↻ Probar conexión» o tras guardar una clave).
-    tpLoadAiStatus(false);
-    aiConsoleLoadProviders();
+    // (aiConsoleLoadProviders se llama al ABRIR la consola; no hace falta en cada carga.)
+    onSectionFirstShown(['desarrollo-ia', 'transparency'], () => tpLoadAiStatus(false));
 
     // ── Desarrollo IA › Skills de entrenamiento ─────────────────────────────
     const skillPersona = document.getElementById('skillPersona');
@@ -10099,7 +10119,7 @@ function renderTableRows(products, resetPage = true) {
       }
     });
 
-    skillsLoad();
+    onSectionFirstShown('desarrollo-ia', skillsLoad);
 
     // ── Tooltip global del panel (mejora visual de los `title` nativos) ─────
     const adminTooltipEl = document.createElement('div');
@@ -10588,8 +10608,8 @@ function renderTableRows(products, resetPage = true) {
       }
     });
 
-    // Cargar configuración de redes al iniciar
-    loadNetworkFields();
+    // Configuración de redes: no es crítica para el primer pintado.
+    runWhenIdle(loadNetworkFields, 3500);
   });
 </script>
   </>
