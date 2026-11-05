@@ -16,6 +16,7 @@ import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import { DATA_DIR, dataFile } from './paths';
 import {
+  getAnalyticsEpoch,
   getAnalyticsEvents,
   getIgnoredIps,
   onAnalyticsFlush,
@@ -106,6 +107,33 @@ const FUENTES: Array<{ id: FuenteId; etiqueta: string }> = [
 ];
 
 let storeCache: { resetAt: string | null; meses: MesAnalitica[] } | null = null;
+
+/**
+ * Memoria de agregados del panel. Recorrer TODOS los eventos en cada petición
+ * (periodo, meses, calendario) costaba ~0,2 s por cada 120.000 eventos y crecía
+ * sin parar. Los resultados valen unos segundos: un cuadro de mando no necesita
+ * ser exacto al milisegundo. Se invalida al instante al vaciar la medición.
+ */
+const MEMO_TTL_MS = 20_000;
+const MEMO_MAX = 40;
+const memo = new Map<string, { at: number; value: unknown }>();
+
+function memoized<T>(key: string, compute: () => T): T {
+  const now = Date.now();
+  const hit = memo.get(key);
+  if (hit && now - hit.at < MEMO_TTL_MS) return hit.value as T;
+  const value = compute();
+  memo.set(key, { at: now, value });
+  if (memo.size > MEMO_MAX) {
+    const oldest = memo.keys().next().value;
+    if (oldest !== undefined) memo.delete(oldest);
+  }
+  return value;
+}
+
+export function clearAnalyticsMemo(): void {
+  memo.clear();
+}
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
 /* ------------------------------------------------------------------ helpers */
@@ -411,7 +439,8 @@ const DAY_MS = 86_400_000;
 
 /** Métricas de los últimos `dias` días + periodo anterior (para variaciones). */
 export function getPeriodoDashboard(dias = 30): PeriodoDashboard {
-  const ahora = Date.now();
+  // Redondeo al minuto: sin él cada petición tendría una clave distinta y la memoria no serviría.
+  const ahora = Math.floor(Date.now() / 60_000) * 60_000;
   const desde = ahora - dias * DAY_MS;
   return getPeriodoRangoMs(desde, ahora, dias);
 }
@@ -432,6 +461,10 @@ export function getPeriodoRango(desdeISO: string, hastaISO: string): PeriodoDash
 }
 
 function getPeriodoRangoMs(desde: number, hasta: number, dias: number): PeriodoDashboard {
+  return memoized(`periodo|${getAnalyticsEpoch()}|${desde}|${hasta}|${dias}`, () => calcularPeriodoRangoMs(desde, hasta, dias));
+}
+
+function calcularPeriodoRangoMs(desde: number, hasta: number, dias: number): PeriodoDashboard {
   const longitud = hasta - desde;
   const desdeAnterior = desde - longitud;
   const eventos = getAnalyticsEvents();
@@ -454,6 +487,10 @@ function getPeriodoRangoMs(desde: number, hasta: number, dias: number): PeriodoD
  * Devuelve días (yyyy-mm-dd), meses (yyyy-mm) y años (yyyy) con al menos un evento.
  */
 export function getFechasConDatos(): { dias: string[]; meses: string[]; anios: string[] } {
+  return memoized(`fechas|${getAnalyticsEpoch()}`, calcularFechasConDatos);
+}
+
+function calcularFechasConDatos(): { dias: string[]; meses: string[]; anios: string[] } {
   const eventos = getAnalyticsEvents();
   const dias = new Set<string>();
   for (const event of eventos) {
@@ -539,16 +576,37 @@ function construirMes(month: string, eventos: AnalyticsEvent[]): MesAnalitica {
   };
 }
 
+/**
+ * Reagregar TODOS los eventos por mes es O(eventos) (~0,1 s por 120.000). Se hacía
+ * en cada persistencia (cada ~0,75 s con tráfico) y mantenía la CPU ocupada. Los
+ * meses en curso se recalculan al vuelo en getMesesAnalitica, así que basta con
+ * guardar el histórico como mucho una vez cada 30 s.
+ */
+const SYNC_MIN_INTERVAL_MS = 30_000;
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+let lastSyncAt = 0;
+
 onAnalyticsFlush(() => {
-  try {
-    sincronizarMeses();
-  } catch (error) {
-    console.warn('[Analytics] No se pudieron sincronizar los meses:', error);
-  }
+  if (syncTimer) return;
+  const wait = Math.max(0, SYNC_MIN_INTERVAL_MS - (Date.now() - lastSyncAt));
+  syncTimer = setTimeout(() => {
+    syncTimer = null;
+    lastSyncAt = Date.now();
+    try {
+      sincronizarMeses();
+    } catch (error) {
+      console.warn('[Analytics] No se pudieron sincronizar los meses:', error);
+    }
+  }, wait);
+  syncTimer.unref?.();
 });
 
 /** Histórico mensual completo: meses cerrados + mes en curso calculado al vuelo. */
 export function getMesesAnalitica(): ResumenAnalitica {
+  return memoized(`meses|${getAnalyticsEpoch()}|${getIgnoredIps().join(',')}`, calcularMesesAnalitica);
+}
+
+function calcularMesesAnalitica(): ResumenAnalitica {
   const store = leerStore();
   const eventos = getAnalyticsEvents();
   const enVivo = new Map<string, AnalyticsEvent[]>();
@@ -577,5 +635,6 @@ export function seleccionarMeses(resumen: ResumenAnalitica, claves: string[]): M
 export async function resetAnalitica(): Promise<void> {
   resetAnalytics();
   storeCache = { resetAt: new Date().toISOString(), meses: [] };
+  clearAnalyticsMemo();
   await escribirStore();
 }

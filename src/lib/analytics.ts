@@ -66,6 +66,12 @@ const FLUSH_DELAY_MS = 750;
 const DEFAULT_IGNORED_IPS = ['26.95.41.235'];
 
 let cache: AnalyticsEvent[] | null = null;
+
+/** Se incrementa al vaciar la medición: invalida los agregados memorizados (analyticsMonths.ts). */
+let epoch = 0;
+export function getAnalyticsEpoch(): number {
+  return epoch;
+}
 let pendingTimer: ReturnType<typeof setTimeout> | null = null;
 let dirty = false;
 let flushing = false;
@@ -254,6 +260,7 @@ export function getProductAnalytics(): ProductoMetricas[] {
 
 /** Vacia por completo la medición (eventos en memoria y en disco). */
 export function resetAnalytics(): void {
+  epoch++;
   cache = [];
   dirty = false;
   if (pendingTimer) {

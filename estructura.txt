@@ -25,6 +25,7 @@ scripts/check-inline-scripts.mjs
 scripts/register-ts.mjs
 scripts/repair-catalog.mjs
 scripts/reset-admin-password.mjs
+scripts/tests/analytics-memo.test.mjs
 scripts/tests/categories-cache.test.mjs
 scripts/tests/connectors.test.mjs
 scripts/tests/facets.test.mjs

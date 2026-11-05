@@ -1457,6 +1457,11 @@ const h = headerConfig[initialSection] || headerConfig.products;
       </div>
     </section>
 
+    {/* Tráfico y ventas SÓLO se renderiza cuando es la sección pedida (?section=analytics).
+        El dashboard agrega todos los eventos de analítica en cada petición y, estando siempre
+        incluido, encarecía TODAS las secciones del panel (en producción, ~6 s). Sin su sección
+        en el DOM, el enlace de la pestaña (/upayp1b4?section=analytics) navega con normalidad. */}
+    {initialSection === 'analytics' && (
     <section data-admin-view="analytics" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'analytics' }]}>
       <div class="view-heading-actions">
         <span class="data-example-pill">Datos de ejemplo</span>
@@ -1464,6 +1469,7 @@ const h = headerConfig[initialSection] || headerConfig.products;
       </div>
       <TrafficSalesDashboard />
     </section>
+    )}
 
     <section data-admin-view="transparency" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'transparency' }]}>
       <div class="admin-card">
