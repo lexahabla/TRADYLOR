@@ -656,6 +656,35 @@ export async function readScheduleConfig(): Promise<Record<string, SourceSchedul
 }
 
 /**
+ * Guarda la frecuencia/estado de una fuente en `offer-refresh.json` (escritura
+ * atómica). Valida: `everyHours` entero 1–720; `enabled` booleano.
+ */
+export async function writeScheduleConfig(
+  network: string,
+  patch: { enabled?: boolean; everyHours?: number },
+): Promise<Record<string, SourceSchedule>> {
+  const key = String(network || '').trim().toLowerCase();
+  if (!/^[a-z0-9_-]{2,30}$/.test(key)) throw new Error('Fuente no válida.');
+  const current = await readScheduleConfig();
+  const next: SourceSchedule = { ...(current[key] ?? { enabled: false, everyHours: 24, batchSize: 10, maxAgeHours: DEFAULT_MAX_AGE_HOURS }) };
+  if (patch.enabled !== undefined) next.enabled = patch.enabled === true;
+  if (patch.everyHours !== undefined) {
+    const hours = Math.round(Number(patch.everyHours));
+    if (!Number.isFinite(hours) || hours < 1 || hours > 720) throw new Error('La frecuencia debe estar entre 1 y 720 horas.');
+    next.everyHours = hours;
+    next.maxAgeHours = Math.max(DEFAULT_MAX_AGE_HOURS, hours * 3);
+  }
+  const merged = { ...current, [key]: next };
+  const fs = await import('node:fs');
+  const { dataFile } = await import('./paths');
+  const file = dataFile('offer-refresh.json');
+  const tmp = `${file}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ sources: merged }, null, 2), 'utf-8');
+  fs.renameSync(tmp, file);
+  return merged;
+}
+
+/**
  * Arranca el programador. APAGADO por defecto: sólo actúa con
  * `OFFER_REFRESH_ENABLED=true` en el entorno (activación en producción =
  * decisión y autorización aparte). Reutiliza el patrón setInterval+unref de

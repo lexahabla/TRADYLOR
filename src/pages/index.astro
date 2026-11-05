@@ -7,6 +7,7 @@ import { readSections } from '../lib/sections';
 import { getCategoryById, normalizeKey } from '../lib/categories';
 import { applyCatalogDiversity } from '../lib/catalogDiversity';
 import { getGlobalCatalogSort, sortCatalogProducts, DIVERSITY_EXEMPT_SORTS } from '../lib/catalogSort';
+import { applyFilters, buildFacets, type Selections } from '../lib/catalogFacets';
 
 export const prerender = false;
 
@@ -72,12 +73,60 @@ const matchesQuery = (p: typeof allProducts[number]) =>
   [p.title, p.description, p.merchant, p.brand]
     .some((field) => String(field ?? '').toLowerCase().includes(queryTerm));
 
-const visibleProducts = allProducts.filter((p) => {
+const matchedProducts = allProducts.filter((p) => {
   const byCategory = activeCategory
     ? categoryMatches(p, activeCategory.slug)
     : true;
   return byCategory && matchesQuery(p);
 });
+
+// ─── Filtros del catálogo (marca, atributos, condiciones comerciales) ────────
+// Opciones y recuentos salen de los productos PUBLICADOS de esta categoría/búsqueda
+// (lib/catalogFacets.ts), con la misma regla para API, JSON individual y masivo.
+const sp = Astro.url.searchParams;
+const numParam = (name: string): number | undefined => {
+  const raw = sp.get(name);
+  if (raw == null || raw.trim() === '') return undefined;
+  const n = Number(raw.replace(',', '.'));
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+};
+const selections: Selections = {
+  brand: sp.getAll('marca').filter(Boolean),
+  attrs: {},
+  minPrice: numParam('precio_min'),
+  maxPrice: numParam('precio_max'),
+  maxShippingCost: numParam('envio_max'),
+  maxDeliveryDays: numParam('plazo_max'),
+  onlyInStock: sp.get('stock') === '1',
+};
+for (const [key, value] of sp.entries()) {
+  if (key.startsWith('a_') && value) (selections.attrs![key.slice(2)] ??= []).push(value);
+}
+const facets = buildFacets(matchedProducts, selections, { categoryKey: activeCategory?.name });
+const activeFilterCount =
+  (selections.brand?.length ?? 0) +
+  Object.values(selections.attrs ?? {}).reduce((n, list) => n + list.length, 0) +
+  [selections.minPrice, selections.maxPrice, selections.maxShippingCost, selections.maxDeliveryDays].filter((v) => v !== undefined).length +
+  (selections.onlyInStock ? 1 : 0);
+const visibleProducts = activeFilterCount > 0 ? applyFilters(matchedProducts, selections) : matchedProducts;
+
+/** Añade las selecciones activas a una URL (paginación y orden conservan los filtros). */
+const appendFilters = (params: URLSearchParams) => {
+  selections.brand?.forEach((b) => params.append('marca', b));
+  for (const [key, list] of Object.entries(selections.attrs ?? {})) list.forEach((v) => params.append(`a_${key}`, String(v)));
+  if (selections.minPrice !== undefined) params.set('precio_min', String(selections.minPrice));
+  if (selections.maxPrice !== undefined) params.set('precio_max', String(selections.maxPrice));
+  if (selections.maxShippingCost !== undefined) params.set('envio_max', String(selections.maxShippingCost));
+  if (selections.maxDeliveryDays !== undefined) params.set('plazo_max', String(selections.maxDeliveryDays));
+  if (selections.onlyInStock) params.set('stock', '1');
+};
+const clearFiltersHref = (() => {
+  const params = new URLSearchParams();
+  if (activeCategory) params.set('category', activeCategory.slug);
+  if (queryTerm) params.set('q', queryParam);
+  const qs = params.toString();
+  return `/${qs ? `?${qs}` : ''}#catalogo`;
+})();
 
 // ─── Ordenación del catálogo público ─────────────────────────────────────────
 // 1. Criterio por defecto configurado desde el backend (previamente establecido):
@@ -95,6 +144,7 @@ const sortHref = (sortKey: string) => {
   if (activeCategory) params.set('category', activeCategory.slug);
   if (queryTerm) params.set('q', queryParam);
   params.set('sort', sortKey);
+  appendFilters(params);
   const qStr = params.toString();
   return `/${qStr ? `?${qStr}` : ''}#catalogo`;
 };
@@ -104,6 +154,7 @@ const pageHref = (page: number) => {
   if (activeCategory) params.set('category', activeCategory.slug);
   if (queryTerm) params.set('q', queryParam);
   if (activeSort) params.set('sort', activeSort);
+  appendFilters(params);
   if (page > 1) params.set('page', String(page));
   const qStr = params.toString();
   return `/${qStr ? `?${qStr}` : ''}#catalogo`;
@@ -115,7 +166,7 @@ const sorted = sortCatalogProducts(visibleProducts, activeSort);
 // Regla de Alternancia y Diversidad (los criterios de orden "exacto" quedan exentos).
 // Cuando hay filtro de categoría activo, se OMITE la diversidad: el usuario quiere
 // ver TODOS los productos de esa categoría, no una selección deduplicada.
-const diversified = DIVERSITY_EXEMPT_SORTS.includes(activeSort) || activeCategory
+const diversified = DIVERSITY_EXEMPT_SORTS.includes(activeSort) || activeCategory || activeFilterCount > 0
   ? sorted
   : applyCatalogDiversity(sorted, { rowSize: 4, pageSize: 40 });
 
@@ -233,6 +284,65 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
            catálogo (a diferencia del badge "Encaja con tu perfil", siempre
            visual, este SÍ oculta lo que no encaja) y vuelve a mostrar las
            etiquetas de los productos que sí encajan. -->
+      {matchedProducts.length > 0 && (
+        <details class="catalog-filters" open={activeFilterCount > 0}>
+          <summary class="catalog-filters-summary">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" /></svg>
+            <span>Filtros</span>
+            {activeFilterCount > 0 && <span class="catalog-filters-count">{activeFilterCount} activo{activeFilterCount === 1 ? '' : 's'} · {visibleProducts.length} resultado{visibleProducts.length === 1 ? '' : 's'}</span>}
+          </summary>
+          <form class="catalog-filters-form" method="get" action="/" aria-label="Filtrar catálogo">
+            {activeCategory && <input type="hidden" name="category" value={activeCategory.slug} />}
+            {queryTerm && <input type="hidden" name="q" value={queryParam} />}
+            {sp.get('sort') && <input type="hidden" name="sort" value={sp.get('sort')} />}
+
+            <div class="catalog-filters-grid">
+              {facets.groups.map((group) => (
+                <fieldset class="filter-group">
+                  <legend>{group.label}</legend>
+                  <ul class="filter-options">
+                    {group.options.slice(0, 12).map((option) => (
+                      <li>
+                        <label class="filter-option">
+                          <input
+                            type="checkbox"
+                            name={group.key === 'brand' ? 'marca' : `a_${group.key}`}
+                            value={String(option.value)}
+                            checked={option.selected}
+                          />
+                          <span class="filter-option-label">{option.label}</span>
+                          <span class="filter-option-count">({option.count})</span>
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </fieldset>
+              ))}
+
+              <fieldset class="filter-group filter-group-commercial">
+                <legend>Condiciones de la oferta</legend>
+                <p class="filter-help">Se cumplen todas a la vez en una misma oferta. Si una tienda no informa del envío o del plazo, no aparece al filtrar por ello.</p>
+                <div class="filter-fields">
+                  <label>Precio mín. (€)<input type="number" name="precio_min" min="0" step="1" inputmode="decimal" value={selections.minPrice ?? ''} /></label>
+                  <label>Precio máx. (€)<input type="number" name="precio_max" min="0" step="1" inputmode="decimal" value={selections.maxPrice ?? ''} /></label>
+                  <label>Envío máx. (€, 0 = gratis)<input type="number" name="envio_max" min="0" step="0.5" inputmode="decimal" value={selections.maxShippingCost ?? ''} /></label>
+                  <label>Plazo máx. (días)<input type="number" name="plazo_max" min="0" step="1" inputmode="numeric" value={selections.maxDeliveryDays ?? ''} /></label>
+                </div>
+                <label class="filter-option">
+                  <input type="checkbox" name="stock" value="1" checked={selections.onlyInStock} />
+                  <span class="filter-option-label">Solo con disponibilidad confirmada</span>
+                </label>
+              </fieldset>
+            </div>
+
+            <div class="catalog-filters-actions">
+              <button type="submit" class="filter-apply">Aplicar filtros</button>
+              {activeFilterCount > 0 && <a class="filter-clear" href={clearFiltersHref}>Quitar filtros</a>}
+            </div>
+          </form>
+        </details>
+      )}
+
       <div class="catalog-sort-bar">
         <label for="catalogSortSelect" class="catalog-sort-label">
           <span class="catalog-sort-label-full">Ordenar</span>
@@ -901,6 +1011,171 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     justify-content: space-between;
     gap: 1.5rem;
     margin-bottom: 2.5rem;
+  }
+
+  /* ─── Filtros del catálogo (desplegable; <details> nativo, sin JS) ─── */
+  .catalog-filters {
+    margin: -1rem 0 1.5rem;
+    background: rgba(15, 23, 42, 0.75);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+  }
+
+  .catalog-filters-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-height: 44px;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--color-text-main);
+  }
+
+  .catalog-filters-count {
+    margin-left: auto;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--color-accent);
+  }
+
+  .catalog-filters-form {
+    padding: 0.5rem 1rem 1rem;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .catalog-filters-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 1rem;
+    margin-top: 0.75rem;
+  }
+
+  .filter-group {
+    margin: 0;
+    padding: 0.75rem;
+    min-width: 0;
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+  }
+
+  .filter-group legend {
+    padding: 0 0.4rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .filter-options {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  .filter-option {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-height: 44px;
+    cursor: pointer;
+    color: var(--color-text-main);
+    font-size: 0.88rem;
+  }
+
+  .filter-option input[type='checkbox'] {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    accent-color: var(--color-primary);
+  }
+
+  .filter-option-count {
+    margin-left: auto;
+    color: var(--color-text-dim);
+    font-size: 0.78rem;
+  }
+
+  .filter-help {
+    margin: 0 0 0.6rem;
+    font-size: 0.75rem;
+    color: var(--color-text-dim);
+  }
+
+  .filter-fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .filter-fields label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+  }
+
+  .filter-fields input {
+    min-height: 44px;
+    padding: 0.4rem 0.6rem;
+    color: var(--color-text-main);
+    background: var(--color-bg-card);
+    border: 1px solid var(--color-border-hover);
+    border-radius: var(--border-radius-sm);
+    font: inherit;
+  }
+
+  .catalog-filters-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .filter-apply {
+    min-height: 44px;
+    padding: 0.5rem 1.25rem;
+    color: #fff;
+    background: var(--color-primary);
+    border: 0;
+    border-radius: var(--border-radius-sm);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .filter-apply:hover {
+    background: var(--color-primary-hover);
+  }
+
+  .filter-clear {
+    color: var(--color-text-muted);
+    text-decoration: underline;
+  }
+
+  .catalog-filters-summary:focus-visible,
+  .filter-option input:focus-visible,
+  .filter-fields input:focus-visible,
+  .filter-apply:focus-visible,
+  .filter-clear:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  @media (max-width: 600px) {
+    .catalog-filters {
+      margin-top: 0;
+    }
+
+    .filter-fields {
+      grid-template-columns: 1fr;
+    }
   }
 
   .catalog-sort-bar {

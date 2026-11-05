@@ -9,6 +9,7 @@ import {
   readScheduleConfig,
   refreshOffers,
   summarizeCoverage,
+  writeScheduleConfig,
 } from '../../../../lib/offerRefresh';
 
 export const prerender = false;
@@ -35,8 +36,13 @@ export const GET: APIRoute = async ({ request }) => {
     .filter((p) => !DEFAULT_ADAPTERS.some((a) => a.networks.includes(detectNetworkId(p)) && a.resolveSource(p)))
     .map((p) => ({ id: p.id, title: p.title_short || p.title, lastVerifiedAt: readRefreshMeta(p).lastVerifiedAt ?? null }));
 
+  const lastVerifiedAt = products
+    .map((p) => readRefreshMeta(p).lastVerifiedAt ?? '')
+    .reduce((max, iso) => (iso > max ? iso : max), '');
+
   return json({
     success: true,
+    lastVerifiedAt: lastVerifiedAt || null,
     schedulerEnabled: String(process.env.OFFER_REFRESH_ENABLED ?? '').trim().toLowerCase() === 'true',
     schedule,
     status: getRefreshStatus(),
@@ -66,6 +72,19 @@ export const POST: APIRoute = async ({ request }) => {
   } catch {
     body = {};
   }
+  // Frecuencia por fuente: { action: 'config', network: 'amazon', everyHours: 24, enabled: true }
+  if (body?.action === 'config') {
+    try {
+      const schedule = await writeScheduleConfig(String(body?.network ?? ''), {
+        enabled: typeof body?.enabled === 'boolean' ? body.enabled : undefined,
+        everyHours: body?.everyHours !== undefined ? Number(body.everyHours) : undefined,
+      });
+      return json({ success: true, schedule });
+    } catch (error) {
+      return json({ success: false, message: error instanceof Error ? error.message : 'Configuración no válida.' }, 400);
+    }
+  }
+
   const ids = Array.isArray(body?.ids) ? body.ids.map(String).filter(Boolean) : undefined;
   const all = body?.all === true;
   if (!ids?.length && !all) {
