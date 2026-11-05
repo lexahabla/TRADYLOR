@@ -92,8 +92,8 @@ export const POST: APIRoute = async ({ request }) => {
       .replace(productUrl, '')
       .replace(/\s+/g, ' ')
       .trim();
-  // Los clientes de correo necesitan URLs absolutas: la imagen relativa se resuelve contra tradylor.com.
-  const imageUrl = /^https?:\/\//i.test(product.image) ? product.image : new URL(product.image, 'https://tradylor.com').href;
+  // Los clientes de correo necesitan URLs absolutas: la imagen relativa se resuelve contra treidilor.com.
+  const imageUrl = /^https?:\/\//i.test(product.image) ? product.image : new URL(product.image, 'https://treidilor.com').href;
 
   const card = { message, title, category: product.category, imageUrl, ctaUrl: productUrl, lang };
   const sent = await sendGenericMailSmtp({

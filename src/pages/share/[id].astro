@@ -8,7 +8,7 @@
  *
  * Se llega desde la opción "A mi correo" del panel de compartir. Muestra la tarjeta del
  * producto (mensaje, título, imagen y botón "Ver la ficha del producto" que lleva a
- * https://tradylor.com/producto/<slug>), el selector de idioma y dos botones de envío:
+ * https://treidilor.com/producto/<slug>), el selector de idioma y dos botones de envío:
  * "Enviar a {tu correo}" y "Enviar a otra dirección" (una dirección que el usuario escribe).
  *
  * El mensaje es editable (botón "Editar texto") y traducible con el traductor de Google
@@ -53,7 +53,7 @@ const key = productKey(product);
 const langParam = (Astro.url.searchParams.get('lang') ?? '').trim().toLowerCase() as ShareLangCode;
 const lang: ShareLangCode = SHARE_LANG_CODES.includes(langParam) ? langParam : 'es';
 
-// Enlace a la ficha individual del producto en tradylor.com.
+// Enlace a la ficha individual del producto en treidilor.com.
 const productUrl = buildProductPageUrl(key);
 const rawMessage = buildShareText(
   'email',
@@ -65,7 +65,7 @@ const rawMessage = buildShareText(
 const message = rawMessage.replace(productUrl, '').replace(/\s+/g, ' ').trim();
 const absoluteImage = /^https?:\/\//i.test(product.image)
   ? product.image
-  : new URL(product.image, Astro.site ?? 'https://tradylor.com').href;
+  : new URL(product.image, Astro.site ?? 'https://treidilor.com').href;
 
 const cleanTitle = cleanShareTitle(product.title);
 

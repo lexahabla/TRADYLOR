@@ -157,7 +157,7 @@ async function fetchJson(url: string): Promise<Record<string, unknown> | null> {
   try {
     const res = await fetch(url, {
       signal: controller.signal,
-      headers: { Accept: 'application/json', 'User-Agent': 'tradylor-web/1.0 (+https://tradylor.com)' },
+      headers: { Accept: 'application/json', 'User-Agent': 'tradylor-web/1.0 (+https://treidilor.com)' },
     });
     if (!res.ok) return null;
     return (await res.json()) as Record<string, unknown>;

@@ -74,7 +74,7 @@ Notas:
 
 ## 4. Dominio
 
-1. Easy Panel → app → **Domains**: añadir `tradylor.com` y `www.tradylor.com`.
+1. Easy Panel → app → **Domains**: añadir `treidilor.com` y `www.treidilor.com`.
 2. En Hostinger, apuntar los DNS del dominio a la IP del VPS con Easy Panel
    (registro `A`, y `CNAME` para `www`).
 3. Easy Panel emite certificado Let's Encrypt y redirige HTTP → HTTPS.
@@ -82,8 +82,8 @@ Notas:
 ## 5. Verificación posterior al deploy
 
 ```bash
-curl -I https://tradylor.com/api/health     # 200 + {"status":"ok",...}
-open https://tradylor.com/upayp1b4             # login con ADMIN_USERNAME/PASSWORD
+curl -I https://treidilor.com/api/health     # 200 + {"status":"ok",...}
+open https://treidilor.com/upayp1b4             # login con ADMIN_USERNAME/PASSWORD
 ```
 
 Comprobar también: portada con productos, ficha `/producto/<slug>`, salida `/out/<id>`

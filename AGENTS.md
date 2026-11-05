@@ -28,10 +28,10 @@ al abrir el proyecto, y el agente debe seguirlas en cada sesión.
    git push origin main
    ```
 
-3. El push a `main` **despliega automáticamente** en https://tradylor.com
+3. El push a `main` **despliega automáticamente** en https://treidilor.com
    (webhook de GitHub → Easy Panel → build Docker, ~2-3 minutos). No hace falta
    tocar ningún panel. Para confirmar que el deploy terminó:
-   `curl https://tradylor.com/api/health` debe devolver `"status":"ok"` **y el
+   `curl https://treidilor.com/api/health` debe devolver `"status":"ok"` **y el
    campo `commit` igual al hash recién pusheado** (si no coincide, el build
    anterior sigue vivo: esperar y volver a consultar).
 4. **Los datos NO van en git**: productos, categorías, analytics,
@@ -59,7 +59,7 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 - **CSS**: CSS propio con variables + utilidades **Tailwind 3** (`tailwind.config.mjs`,
   `preflight` desactivado para no alterar el diseño existente)
 - **IA**: OpenAI / Anthropic (texto) y OpenAI Images / Flux (imagen) vía SSR endpoints
-- **Web**: sitio `https://tradylor.com`
+- **Web**: sitio `https://treidilor.com`
 - **Git**: repositorio ya inicializado en la raíz del proyecto
 
 ## Estructura principal

@@ -1,7 +1,7 @@
 # ==============================================================================
 # TRADYLOR - Imagen de producción (Easy Panel / Docker)
 # Astro 4 (SSR) con adaptador @astrojs/node en modo standalone.
-# Puerto de destino en Easy Panel: 4321 (tradylor.com / www.tradylor.com)
+# Puerto de destino en Easy Panel: 4321 (treidilor.com / www.treidilor.com)
 # ==============================================================================
 FROM node:22-bookworm-slim
 

@@ -3,7 +3,7 @@
  * ==============================================================================
  * TRADYLOR — MI RADAR (panel personal del usuario)
  * ==============================================================================
- * Página privada: requiere sesión (si no, redirige a tradylor.com). Secciones:
+ * Página privada: requiere sesión (si no, redirige a treidilor.com). Secciones:
  *   1. Barra superior: perfil + estado de sincronización.
  *   2. Return Flow: tarjeta "¿Llegaste a comprar…?" si hay salida pendiente
  *      de más de 24h.
@@ -20,7 +20,7 @@ import { REMINDER_REASONS } from '../types/radar';
 export const prerender = false;
 
 // Página privada: sin sesión válida, redirección inmediata al inicio
-// (tradylor.com en producción) en el propio servidor, sin pintar la página.
+// (treidilor.com en producción) en el propio servidor, sin pintar la página.
 const sessionUser = getRadarSessionUser(Astro.request);
 if (!sessionUser) {
   return Astro.redirect(new URL('/', Astro.request.url).href);
@@ -2437,9 +2437,9 @@ if (!sessionUser) {
   /* ------------------------------------------------------------- sesión */
 
   function updateStatus(user: { email: string; name?: string } | null): void {
-    // Página privada: sin sesión siempre se vuelve a tradylor.com.
+    // Página privada: sin sesión siempre se vuelve a treidilor.com.
     if (!user) {
-      window.location.replace('https://tradylor.com');
+      window.location.replace('https://treidilor.com');
     }
   }
 

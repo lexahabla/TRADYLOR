@@ -160,7 +160,7 @@ function extraerHost(referrer: string | undefined): string {
 
 let hostPropioCache: string | null = null;
 function hostPropio(): string {
-  hostPropioCache ??= (process.env.PUBLIC_HOST ?? 'tradylor.com').replace(/^www\./, '');
+  hostPropioCache ??= (process.env.PUBLIC_HOST ?? 'treidilor.com').replace(/^www\./, '');
   return hostPropioCache;
 }
 

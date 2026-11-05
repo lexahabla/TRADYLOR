@@ -32,8 +32,8 @@ let started = false;
 let running = false;
 
 function siteOrigin(): string {
-  const raw = process.env.PUBLIC_SITE_URL ?? import.meta.env.PUBLIC_SITE_URL ?? 'https://tradylor.com';
-  return String(raw).trim().replace(/\/$/, '') || 'https://tradylor.com';
+  const raw = process.env.PUBLIC_SITE_URL ?? import.meta.env.PUBLIC_SITE_URL ?? 'https://treidilor.com';
+  return String(raw).trim().replace(/\/$/, '') || 'https://treidilor.com';
 }
 
 const escapeHtml = (value: string): string =>

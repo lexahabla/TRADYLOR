@@ -46,7 +46,7 @@ const afiliacionAnchorHref = isHome ? '#aviso-afiliacion' : '/#aviso-afiliacion'
 
 // URLs absolutas para SEO/OG: el social scrapers exigen https:// completo,
 // y el dominio canónico sale de `site` (no del host del proxy).
-const siteOrigin = Astro.site ?? new URL('https://tradylor.com');
+const siteOrigin = Astro.site ?? new URL('https://treidilor.com');
 const toAbsolute = (value: string): string =>
   /^https?:\/\//i.test(value) ? value : new URL(value, siteOrigin).href;
 const resolvedCanonical = canonicalUrl
@@ -2868,14 +2868,14 @@ const headerCategoryPanelHtml = `
       "@context": "https://schema.org",
       "@type": "WebSite",
       "name": "Tradylor",
-      "url": "https://tradylor.com",
+      "url": "https://treidilor.com",
       "description": description,
       "publisher": {
         "@type": "Organization",
         "name": "Tradylor Media",
         "logo": {
           "@type": "ImageObject",
-          "url": "https://tradylor.com/logo.png"
+          "url": "https://treidilor.com/logo.png"
         }
       }
     })} />
@@ -4633,8 +4633,8 @@ const headerCategoryPanelHtml = `
         function writeTargetCookie(value: string, clear: boolean): void {
           const expires = clear ? ';expires=Thu, 01 Jan 1970 00:00:00 GMT' : '';
           const attrs = `;path=/${expires};SameSite=Lax`;
-          if (window.location.hostname.endsWith('tradylor.com')) {
-            document.cookie = `googtrans=${value}${attrs};domain=.tradylor.com`;
+          if (window.location.hostname.endsWith('treidilor.com')) {
+            document.cookie = `googtrans=${value}${attrs};domain=.treidilor.com`;
           } else {
             document.cookie = `googtrans=${value}${attrs}`;
           }

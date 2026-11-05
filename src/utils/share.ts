@@ -3,7 +3,7 @@
  * TRADYLOR — COMPARTIR DESDE MI RADAR (marketing indirecto)
  * ==============================================================================
  * Plantillas de texto + envío a cada red. Todo lo que sale de aquí apunta a la
- * ficha individual del producto: https://tradylor.com/producto/<slug>.
+ * ficha individual del producto: https://treidilor.com/producto/<slug>.
  *
  * Tono: recomendación de persona a persona, jamás "compra en mi enlace".
  *
@@ -47,7 +47,7 @@ export interface ShareCardInfo {
   category?: string;
   /** URL absoluta de la imagen del producto. */
   image: string;
-  /** Enlace a la ficha individual (https://tradylor.com/producto/<slug>). */
+  /** Enlace a la ficha individual (https://treidilor.com/producto/<slug>). */
   url: string;
   /** Ventajas del producto (máx. 3). */
   pros: string[];
@@ -60,7 +60,7 @@ export interface ShareResult {
   message?: string;
 }
 
-const ORIGIN = 'https://tradylor.com';
+const ORIGIN = 'https://treidilor.com';
 const LANG_STORAGE_KEY = 'tradylor_share_lang';
 
 interface LangPack {
@@ -802,7 +802,7 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
 }
 
 /**
- * URL de la ficha individual del producto en tradylor.com: https://tradylor.com/producto/<slug>.
+ * URL de la ficha individual del producto en treidilor.com: https://treidilor.com/producto/<slug>.
  * Es el enlace que llevan todos los canales de compartir (copiar enlace, WhatsApp, la tarjeta
  * del correo…): directo a la ficha, sin el salto por /p/<id> y sin parámetros UTM (nada en la
  * web los lee). `productKey` es la clave de ruta canónica del producto (slug, o id si no hay).

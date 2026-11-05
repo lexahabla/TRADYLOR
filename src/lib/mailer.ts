@@ -18,7 +18,7 @@ export function getSmtpConfig(): SmtpConfig | null {
   const host = (process.env.SMTP_HOST ?? import.meta.env.SMTP_HOST ?? '').trim();
   const user = (process.env.SMTP_USER ?? import.meta.env.SMTP_USER ?? '').trim();
   const pass = (process.env.SMTP_PASS ?? import.meta.env.SMTP_PASS ?? '').trim();
-  const from = (process.env.SMTP_FROM ?? import.meta.env.SMTP_FROM ?? 'Tradylor <no-reply@tradylor.com>').trim();
+  const from = (process.env.SMTP_FROM ?? import.meta.env.SMTP_FROM ?? 'Tradylor <no-reply@treidilor.com>').trim();
   const port = Number(process.env.SMTP_PORT ?? import.meta.env.SMTP_PORT ?? 587);
   if (!host || !user || !pass) return null;
   return { host, port, user, pass, from };

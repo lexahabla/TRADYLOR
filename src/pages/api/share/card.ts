@@ -28,7 +28,7 @@ export const GET: APIRoute = ({ request }) => {
   const key = productKey(product);
   const image = /^https?:\/\//i.test(product.image)
     ? product.image
-    : new URL(product.image, 'https://tradylor.com').href;
+    : new URL(product.image, 'https://treidilor.com').href;
 
   return json(
     {

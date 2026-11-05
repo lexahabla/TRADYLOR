@@ -1,6 +1,6 @@
 # API Pública v1 — Tradylor (automatización n8n)
 
-Base URL: `https://tradylor.com` (o `http://localhost:4321` en desarrollo)
+Base URL: `https://treidilor.com` (o `http://localhost:4321` en desarrollo)
 
 ## Autenticación
 
@@ -85,8 +85,8 @@ paginar mientras `page < totalPages`).
       "rating": 4.8,
       "reviewsCount": 1420,
       "badge": "Elección del Editor",
-      "detailUrl": "https://tradylor.com/producto/sony-wh-1000xm5",
-      "outboundUrl": "https://tradylor.com/out/sony-wh-1000xm5",
+      "detailUrl": "https://treidilor.com/producto/sony-wh-1000xm5",
+      "outboundUrl": "https://treidilor.com/out/sony-wh-1000xm5",
       "image": "https://..."
     }
   ]
@@ -100,7 +100,7 @@ paginar mientras `page < totalPages`).
 
 ```
 Method: GET
-URL: https://tradylor.com/api/v1/products?limit=100&page=1
+URL: https://treidilor.com/api/v1/products?limit=100&page=1
 Authentication: Generic Credential Type → Header Auth
   Name: Authorization
   Value: Bearer {{$env.TRADYLOR_API_TOKEN}}
