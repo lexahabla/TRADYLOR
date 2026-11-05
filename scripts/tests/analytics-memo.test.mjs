@@ -51,3 +51,35 @@ test('vaciar la medición invalida la memoria al instante', async () => {
   assert.equal(months.getFechasConDatos().dias.length, 0);
   assert.equal(months.getPeriodoDashboard(30).actual.pageViews ?? 0, 0);
 });
+
+test('el Top de productos resuelve títulos sin releer el catálogo del disco por cada id desconocido', async () => {
+  const fsMod = await import('node:fs');
+  const productsFile = path.join(dir, 'products.json');
+  fsMod.default.writeFileSync(productsFile, JSON.stringify([
+    { id: 'conocido-1', slug: 'conocido-uno', title: 'Título conocido', price: 10, pros: [], cons: [], category: 'Audio', merchant: 'Amazon', affiliateUrl: 'https://example.invalid/1', image: '/x.jpg', description: 'd' },
+  ]));
+  const catalog = await import('../../src/lib/catalog.ts');
+  catalog.invalidateCatalogCache();
+  const ev = [];
+  for (let i = 0; i < 600; i++) ev.push({ type: 'page_view', productId: 'retirado-' + (i % 300), sessionId: 's' + i, createdAt: new Date().toISOString() });
+  for (let i = 0; i < 10; i++) ev.push({ type: 'page_view', productId: 'conocido-uno', sessionId: 'k' + i, createdAt: new Date().toISOString() });
+
+  let lecturas = 0;
+  const original = fsMod.default.readFileSync;
+  fsMod.default.readFileSync = function (p, ...rest) {
+    if (String(p).endsWith('products.json')) lecturas++;
+    return original.call(this, p, ...rest);
+  };
+  try {
+    const top = months.computeTopProductos(ev, 3);
+    assert.equal(top[0].productId, 'conocido-uno');
+    assert.equal(top[0].titulo, 'Título conocido', 'el slug se resuelve a su título');
+    assert.equal(top[1].titulo, top[1].productId, 'un id retirado se muestra tal cual');
+    assert.ok(lecturas <= 2, 'no se relee products.json por cada id desconocido (lecturas: ' + lecturas + ')');
+    const completo = months.computeProductosCompleto(ev);
+    assert.ok(completo.some((p) => p.productId === 'retirado-5' && p.titulo === 'retirado-5'));
+    assert.ok(lecturas <= 4, 'tampoco en el listado completo (lecturas: ' + lecturas + ')');
+  } finally {
+    fsMod.default.readFileSync = original;
+  }
+});

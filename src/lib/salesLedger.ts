@@ -72,9 +72,16 @@ export function getRegistrosVentas(dias = HISTORY_DAYS): RegistroVenta[] {
     (e) => e.type === 'purchase' && Number.isFinite(Date.parse(e.createdAt)) && Date.parse(e.createdAt) >= desdeMs,
   );
 
+  // Un id ausente del catálogo relee products.json del disco: se resuelve una vez por id.
+  const productosPorId = new Map<string, ReturnType<typeof findCatalogProduct>>();
+  const buscarProducto = (id: string) => {
+    if (!productosPorId.has(id)) productosPorId.set(id, findCatalogProduct(id));
+    return productosPorId.get(id);
+  };
+
   return eventos
     .map((evento, index) => {
-      const product = evento.productId ? findCatalogProduct(evento.productId) : undefined;
+      const product = evento.productId ? buscarProducto(evento.productId) : undefined;
       const monto = typeof evento.amount === 'number' && evento.amount > 0
         ? evento.amount
         : (product?.price ?? 0);

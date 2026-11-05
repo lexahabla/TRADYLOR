@@ -708,13 +708,13 @@ const h = headerConfig[initialSection] || headerConfig.products;
         <div class="ali-filters-row">
           <div class="filter-field ali-f-search">
             <label for="inputFilterList">Buscar por nombre</label>
-            <input type="search" id="inputFilterList" placeholder="Filtrar por título, comerciante o red..." />
+            <input type="search" id="inputFilterList" placeholder="Título, comerciante o red…" />
           </div>
           <div class="filter-field">
             <label for="prodFCat">Categoría</label>
             <select id="prodFCat"><option value="">Todas</option></select>
           </div>
-          <div class="filter-field">
+          <div class="filter-field prod-f-sub">
             <label for="prodSubcatAssign">Subcategoría</label>
             <select id="prodSubcatAssign"><option value="">Todas las subcategorías</option></select>
           </div>
@@ -11018,6 +11018,60 @@ function renderTableRows(products, resetPage = true) {
   .prod-filters { margin-top: 0; margin-bottom: .8rem; }
   .prod-filters .filter-field select { min-width: 180px; width: auto; max-width: 100%; }
   .prod-filters .ali-sort-group select { min-width: 120px; width: auto; max-width: 170px; }
+
+  /* ── Filtros del Catálogo (#prodFilters): rejilla coherente ─────────────────
+     Antes: flex-wrap con anchos mínimos fijos y un <br> forzado; «Cat/Redes» quedaba
+     tapado por «SubCat/Redes», el botón ↓ del orden se ocultaba y las filas no se
+     alineaban. Ahora, rejilla de 12 columnas (escritorio), 6 (tablet) y 2 (móvil),
+     con alto de control uniforme. Sólo afecta a #prodFilters: la clase .ali-filters
+     se comparte con los filtros de AliExpress (Importar) y no se toca.
+     Escritorio — F1: Buscar · Categoría · Subcategoría · Red · Fotos
+                  F2: Ordenar · Valoración · Precio · Descuento
+                  F3: Cat/Redes · SubCat/Redes · contador · Catálogo · Limpiar filtros */
+  :global(#prodFilters .ali-filters-row) { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: .8rem; align-items: end; }
+  :global(#prodFilters .ali-filters-row > br) { display: none; }
+  :global(#prodFilters .ali-range-fields) { display: contents; }
+  :global(#prodFilters .filter-field) { grid-column: span 2; min-width: 0; width: auto; max-width: none; flex: none; display: grid; gap: .3rem; align-content: end; }
+  :global(#prodFilters .filter-field > label) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  :global(#prodFilters .filter-field select),
+  :global(#prodFilters .filter-field input[type="search"]),
+  :global(#prodFilters .filter-field input[type="number"]) { box-sizing: border-box; width: 100%; min-width: 0; max-width: none; height: 2.5rem; }
+  :global(#prodFilters .filter-field.ali-f-search) { grid-column: span 3; }
+  :global(#prodFilters .filter-field.prod-f-sub) { grid-column: span 3; }
+  :global(#prodFilters .filter-field.ali-sort-field),
+  :global(#prodFilters .filter-field.prod-range-field) { grid-column: span 3; }
+  :global(#prodFilters .ali-sort-group) { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+  :global(#prodFilters .ali-sort-group select) { flex: 1 1 auto; min-width: 0; max-width: none; width: auto; }
+  :global(#prodFilters .ali-sort-dir) { flex: 0 0 2.5rem; width: 2.5rem; min-width: 2.5rem; height: 2.5rem; padding: 0; }
+  :global(#prodFilters .prod-range-field .ali-pair) { display: flex; align-items: center; gap: .4rem; min-width: 0; }
+  :global(#prodFilters .prod-range-field .ali-pair input) { flex: 1 1 0; width: auto; min-width: 0; }
+  :global(#prodFilters .filter-field.ali-f-cat) { grid-column: span 3; order: 1; }
+  :global(#prodFilters #productSelCount) { grid-column: span 2; order: 2; align-self: center; margin: 0; text-align: right; white-space: nowrap; }
+  :global(#prodFilters #btnProdSelAll) { grid-column: span 2; order: 3; width: 100%; height: 2.5rem; }
+  :global(#prodFilters #btnProdSelClear) { order: 3; height: 2.5rem; }
+  :global(#prodFilters #prodFReset) { grid-column: span 2; order: 4; width: 100%; height: 2.5rem; min-height: 0; }
+  @media (max-width: 1023px) {
+    :global(#prodFilters .ali-filters-row) { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    :global(#prodFilters .filter-field),
+    :global(#prodFilters .filter-field.prod-f-sub),
+    :global(#prodFilters .filter-field.ali-sort-field),
+    :global(#prodFilters .filter-field.prod-range-field),
+    :global(#prodFilters .filter-field.ali-f-cat) { grid-column: span 3; }
+    :global(#prodFilters .filter-field.ali-f-search) { grid-column: span 6; }
+  }
+  @media (max-width: 600px) {
+    :global(#prodFilters .ali-filters-row) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    :global(#prodFilters .filter-field),
+    :global(#prodFilters .filter-field.ali-f-search),
+    :global(#prodFilters .filter-field.prod-f-sub),
+    :global(#prodFilters .filter-field.ali-sort-field),
+    :global(#prodFilters .filter-field.prod-range-field),
+    :global(#prodFilters .filter-field.ali-f-cat),
+    :global(#prodFilters #prodFReset) { grid-column: span 2; }
+    :global(#prodFilters #productSelCount),
+    :global(#prodFilters #btnProdSelAll) { grid-column: span 1; }
+    :global(#prodFilters #productSelCount) { text-align: left; }
+  }
   :global(.btn-danger-ghost.btn-sm) { padding: .3rem .55rem; font-size: .68rem; gap: .25rem; }
   /* Barra de selección masiva */
   .ali-selection { display: flex; align-items: center; gap: .55rem; flex-wrap: wrap; margin-bottom: .6rem; padding: .5rem .7rem; color: #7dd3fc; background: rgba(56, 189, 248, .08); border: 1px solid rgba(56, 189, 248, .3); border-radius: 10px; font-size: .74rem; font-weight: 700; }

@@ -23,7 +23,7 @@ import {
   resetAnalytics,
   type AnalyticsEvent,
 } from './analytics';
-import { findCatalogProduct, getCatalogProducts } from './catalog';
+import { getCatalogProducts } from './catalog';
 
 const MONTHS_PATH = dataFile('analytics-months.json');
 const MESES_ES = [
@@ -158,11 +158,17 @@ function extraerHost(referrer: string | undefined): string {
   }
 }
 
+let hostPropioCache: string | null = null;
+function hostPropio(): string {
+  hostPropioCache ??= (process.env.PUBLIC_HOST ?? 'tradylor.com').replace(/^www\./, '');
+  return hostPropioCache;
+}
+
 /** Clasifica el referente de una visita en una fuente de tráfico. */
 export function clasificarFuente(referrer: string | undefined): FuenteId {
   const host = extraerHost(referrer);
   if (!host) return 'directo';
-  const propio = (process.env.PUBLIC_HOST ?? 'tradylor.com').replace(/^www\./, '');
+  const propio = hostPropio();
   if (host === propio || host.endsWith(propio)) return 'directo';
   if (/google|bing|duckduckgo|yahoo|baidu|yandex|ecosia|brave|qwant/.test(host)) return 'organico';
   if (/facebook|instagram|twitter|x\.com|t\.co|tiktok|linkedin|pinterest|youtube|reddit|threads|whatsapp|telegram/.test(host)) return 'social';
@@ -208,21 +214,53 @@ function redondear(value: number, digits = 1): number {
   return Math.round(value * factor) / factor;
 }
 
-function tituloDeProducto(productId: string): string {
+/**
+ * Resolutor de títulos para las tablas de analítica. Antes cada id de producto
+ * distinto de los eventos llamaba a findCatalogProduct(), que para un id ausente
+ * del catálogo (productos retirados, ids antiguos, rutas inexistentes) RELEE y
+ * reparsea products.json del disco: con ~1.500 ids así, un solo periodo tardaba
+ * más de 1 s y el histórico mensual 2,5 s (en producción, ~6 s al abrir Tráfico
+ * y ventas). Ahora se construye un índice id/slug → título UNA vez por cálculo, a
+ * partir del catálogo ya en memoria; los ids que no están se muestran tal cual.
+ */
+function crearResolutorTitulos(): (productId: string) => string {
+  const indice = new Map<string, string>();
   try {
-    const product = findCatalogProduct(productId);
-    if (product?.title) return product.title;
+    for (const producto of getCatalogProducts()) {
+      if (!producto.title) continue;
+      indice.set(producto.id.toLowerCase(), producto.title);
+      if (producto.slug) indice.set(String(producto.slug).toLowerCase(), producto.title);
+    }
   } catch {
-    // Catálogo no disponible: se queda con el id.
+    // Catálogo no disponible: se queda con los ids.
   }
-  return productId;
+  return (productId: string): string => {
+    const clave = String(productId).toLowerCase();
+    const directo = indice.get(clave);
+    if (directo) return directo;
+    try {
+      const decodificado = indice.get(decodeURIComponent(clave));
+      if (decodificado) return decodificado;
+    } catch {
+      // id con % mal formado: sin título
+    }
+    return productId;
+  };
 }
 
 /* ------------------------------------------------------- cálculo de periodo */
 
 function eventosEnRango(events: AnalyticsEvent[], desdeMs: number, hastaMs: number): AnalyticsEvent[] {
+  // Las marcas ISO (YYYY-MM-DDTHH:mm:ss.sssZ) se ordenan como texto: evita ~120.000
+  // Date.parse por periodo. Formatos distintos caen al camino de siempre.
+  const desdeIso = new Date(desdeMs).toISOString();
+  const hastaIso = new Date(hastaMs).toISOString();
   return events.filter((event) => {
-    const ts = Date.parse(event.createdAt);
+    const iso = event.createdAt;
+    if (iso.length === 24 && iso.charCodeAt(10) === 84 && iso.charCodeAt(23) === 90) {
+      return iso >= desdeIso && iso < hastaIso;
+    }
+    const ts = Date.parse(iso);
     return Number.isFinite(ts) && ts >= desdeMs && ts < hastaMs;
   });
 }
@@ -373,17 +411,19 @@ export function computeTopProductos(events: AnalyticsEvent[], limite = 10): Prod
     else if (event.type === 'purchase') entry.compras += 1;
     byProduct.set(event.productId, entry);
   }
+  const titulo = crearResolutorTitulos();
+  // Se ordena y se recorta ANTES de resolver títulos: sólo hacen falta los del Top.
   return [...byProduct.entries()]
+    .sort((a, b) => b[1].visitas - a[1].visitas)
+    .slice(0, limite)
     .map(([productId, entry]) => ({
       productId,
-      titulo: tituloDeProducto(productId),
+      titulo: titulo(productId),
       visitas: entry.visitas,
       salidas: entry.salidas,
       compras: entry.compras,
       tasa: entry.visitas ? Math.min(redondear((entry.salidas / entry.visitas) * 100), 100) : 0,
-    }))
-    .sort((a, b) => b.visitas - a.visitas)
-    .slice(0, limite);
+    }));
 }
 
 /**
@@ -395,6 +435,7 @@ export function computeTopProductos(events: AnalyticsEvent[], limite = 10): Prod
  * contratos ya existentes.
  */
 export function computeProductosCompleto(events: AnalyticsEvent[]): ProductoMes[] {
+  const titulo = crearResolutorTitulos();
   const byProduct = new Map<string, { titulo: string; visitas: number; salidas: number; compras: number }>();
   for (const producto of getCatalogProducts()) {
     byProduct.set(producto.id, { titulo: producto.title || producto.id, visitas: 0, salidas: 0, compras: 0 });
@@ -402,7 +443,7 @@ export function computeProductosCompleto(events: AnalyticsEvent[]): ProductoMes[
   for (const event of events) {
     if (!event.productId) continue;
     const entry =
-      byProduct.get(event.productId) ?? { titulo: tituloDeProducto(event.productId), visitas: 0, salidas: 0, compras: 0 };
+      byProduct.get(event.productId) ?? { titulo: titulo(event.productId), visitas: 0, salidas: 0, compras: 0 };
     if (event.type === 'page_view') entry.visitas += 1;
     else if (event.type === 'outbound_click') entry.salidas += 1;
     else if (event.type === 'purchase') entry.compras += 1;
