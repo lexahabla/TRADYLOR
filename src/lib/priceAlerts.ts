@@ -4,6 +4,7 @@ import { sendGenericMailSmtp } from './mailer';
 import { findRadarUserById } from './radarAuth';
 import { collectPriceWatchItems, markPriceCheck } from './radarStore';
 import type { SavedProduct } from '../types/radar';
+import { DEFAULT_MAX_AGE_HOURS, freshnessOf } from './offerObservations';
 
 /**
  * ==============================================================================
@@ -64,6 +65,12 @@ interface CurrentPrice {
 function resolveCurrentPrice(product: SavedProduct): CurrentPrice | null {
   const catalog = findCatalogProduct(product.id);
   if (catalog && typeof catalog.price === 'number' && Number.isFinite(catalog.price)) {
+    // Las alertas son en EUR: no se compara contra otra moneda.
+    if (catalog.currency && String(catalog.currency).toUpperCase() !== 'EUR') return null;
+    // Una oferta verificada por el servicio de actualización cuya lectura ya no
+    // es vigente NO dispara avisos (se espera a una nueva verificación).
+    const verifiedAt = (catalog.extra as Record<string, any> | undefined)?.refresh?.lastVerifiedAt;
+    if (verifiedAt && freshnessOf(verifiedAt, DEFAULT_MAX_AGE_HOURS) === 'stale') return null;
     const stock = catalog.pricing?.stockStatus;
     return {
       price: catalog.price,

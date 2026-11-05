@@ -35,6 +35,8 @@ import {
 import { enrichProductText, buildRealisticPricing, overlayEnrichedText, enforceMoreProsThanCons, hasTextCredentials, type EnrichedText, type ImageProvider } from './ai';
 import { enrichProductLocally, type LocalEnrichInput } from './localEnrich';
 import { computeBadge } from './curation';
+import { brandIsMerchant, normalizeBrand, sameSourceId } from './offerIdentity';
+import { mergeReimport } from './reimportMerge';
 import type { Product as FlatProduct, Product as AdminProduct } from './productStore';
 
 const DATA_FILE_PATH = dataFile('products.json');
@@ -537,13 +539,20 @@ export async function enrichAmazonProductData(
 
   const finalTitle = enrichment?.title?.trim() || normalized.title;
   const finalDescription = enrichment?.description?.trim() || normalized.description || '';
+  // Precedencia: el dato del PROVEEDOR gana a la IA (antes la IA lo pisaba y la
+  // cabecera y las especificaciones podían mostrar marcas distintas).
   const finalSpecs =
     enrichment?.specs && Object.keys(enrichment.specs).length
-      ? { ...(normalized.specs ?? {}), ...enrichment.specs }
+      ? { ...enrichment.specs, ...(normalized.specs ?? {}) }
       : normalized.specs;
   const finalTechSheet = enrichment?.techSheet?.trim() || normalized.techSheet;
-  const finalBrand =
-    normalized.brand || enrichment?.brand || normalized.merchant || 'Comercio Externo';
+  // Marca = fabricante. Proveedor > IA (sólo si el proveedor no la da). Nunca el
+  // nombre de la tienda: si no hay marca fiable queda vacía y se muestra sin ella.
+  const providerBrand = normalizeBrand(normalized.brand).display;
+  const aiBrand = normalizeBrand(enrichment?.brand).display;
+  const brandSource: 'provider' | 'ai' | 'unknown' = providerBrand ? 'provider' : aiBrand && !brandIsMerchant(aiBrand, normalized.merchant) ? 'ai' : 'unknown';
+  const finalBrand: string | undefined =
+    brandSource === 'provider' ? providerBrand : brandSource === 'ai' ? aiBrand : undefined;
   const finalCategory = enrichment?.category || 'Tecnología';
 
   // Precios: respetar precio de scraping si existe, si no par realista.
@@ -620,6 +629,13 @@ export async function enrichAmazonProductData(
     extra: {
       scraperApiSource: normalized.raw,
       importSource: 'scraperapi-amazon',
+      // Procedencia: qué campos son hecho del proveedor, inferencia de IA o
+      // (más tarde) edición manual.
+      fieldSources: {
+        brand: brandSource,
+        specs: normalized.specs ? 'provider+ai' : enrichment?.specs ? 'ai' : 'none',
+        price: normalized.price ? 'provider' : 'estimated',
+      },
     },
   };
 
@@ -656,34 +672,19 @@ export function upsertAmazonProductByAsin(
       p.extra && typeof p.extra === 'object' && !Array.isArray(p.extra)
         ? String((p.extra as Record<string, unknown>).asin ?? '').trim()
         : '';
-    return Boolean(pAsin && pAsin === asin) || Boolean(extraAsin && extraAsin === asin);
+    return Boolean(pAsin && pAsin === asin) || Boolean(extraAsin && extraAsin === asin) || sameSourceId(p.sourceId, asin);
   });
 
   const updated = existingIndex >= 0;
   if (updated) {
-    const existing = products[existingIndex];
-    // Conservar campos de curación existentes (no se pisan por una re-importación).
-    const curationFields = [
-      'sourceId', 'category', 'category_id', 'subcategory_id', 'ia_status', 'link_status',
-      'normalized_tags', 'alternative_product_ids', 'alternatives',
-      'conversion_score', 'audit_status', 'audit_score', 'audit_reasons',
-      'pipeline_version', 'pipeline_run_at', 'ai_enriched', 'ai_error',
-      'sourceDescription',
-    ];
-    for (const field of curationFields) {
-      const existingObj = existing as unknown as Record<string, unknown>;
-      const productObj = product as unknown as Record<string, unknown>;
-      if (existingObj[field] !== undefined) {
-        productObj[field] = existingObj[field];
-      }
-    }
-    // Fusión superficial de `extra` para no perder datos previos.
-    if (existing.extra) {
-      product.extra = {
-        ...(existing.extra as Record<string, unknown>),
-        ...((product.extra ?? {}) as Record<string, unknown>),
-      };
-    }
+    // Fusión con precedencia por campo (lib/reimportMerge.ts): conserva
+    // histórico de precio, slug, variantes, curación, campos bloqueados por
+    // edición manual y la marca válida; el precio/stock/imágenes del proveedor
+    // vigente se actualizan. Antes la fila se sustituía casi entera.
+    product = mergeReimport(
+      products[existingIndex] as unknown as Record<string, unknown>,
+      product as unknown as Record<string, unknown>,
+    ) as unknown as FlatProduct;
     products[existingIndex] = product;
   } else {
     products.unshift(product);
@@ -770,7 +771,7 @@ export async function importAmazonProduct(
       gallery: normalized.gallery,
       category: 'Tecnología',
       merchant: normalized.merchant,
-      brand: normalized.brand || normalized.merchant || 'Comercio Externo',
+      brand: normalizeBrand(normalized.brand).display || undefined,
       affiliateUrl: normalized.affiliateUrl || '',
       buyNowUrl: normalized.buyNowUrl || getAmazonAddToCartUrl(asin),
       asin,
@@ -881,7 +882,7 @@ export async function importAmazonProductFromRawJson(
       gallery: normalized.gallery,
       category: 'Tecnología',
       merchant: normalized.merchant,
-      brand: normalized.brand || normalized.merchant || 'Comercio Externo',
+      brand: normalizeBrand(normalized.brand).display || undefined,
       affiliateUrl: normalized.affiliateUrl || '',
       buyNowUrl: normalized.buyNowUrl || getAmazonAddToCartUrl(cleanAsin),
       asin: cleanAsin,

@@ -69,6 +69,14 @@ export interface Product {
   freeShipping?: boolean;
   /** Histórico de precio (1 punto por día; se completa con cada visita). */
   priceHistory?: { date: string; price: number }[];
+  /** Agrupa variantes del mismo modelo (ver lib/productStore.ts). */
+  variantGroup?: string;
+  /** Rasgo que distingue esta variante dentro de su grupo (ej. "2 TB"). */
+  variantFeature?: string;
+  /** Última sincronización de precio con la fuente (ISO). */
+  lastPriceSync?: string;
+  /** Descripción original del comercio (sin bloques generados). */
+  sourceDescription?: string;
 
   // â”€â”€â”€ New structured fields (optional for backward compat) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   awardBadge?: string;
@@ -177,6 +185,13 @@ export function hasStructuredFields(product: Product): boolean {
 }
 
 // â”€â”€â”€ Migration helper: converts flat Product to structured Product â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/** Fecha (YYYY-MM-DD) de la última verificación real contra la fuente, o undefined. */
+function verifiedDate(flat: Product): string | undefined {
+  const refresh = (flat.extra as Record<string, unknown> | undefined)?.refresh as { lastVerifiedAt?: string } | undefined;
+  const iso = refresh?.lastVerifiedAt || flat.lastPriceSync;
+  return iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? iso.slice(0, 10) : undefined;
+}
+
 export function toStructuredProduct(flat: Product): ProductSchema {
   return {
     id: flat.id,
@@ -200,9 +215,13 @@ export function toStructuredProduct(flat: Product): ProductSchema {
       discountPercentage: flat.originalPrice
         ? Math.round(((flat.originalPrice - flat.price) / flat.originalPrice) * 100)
         : undefined,
-      priceLastChecked: new Date().toISOString().split('T')[0],
-      freeShipping: false,
-      stockStatus: 'En stock',
+      // Fecha REAL de la última verificación con la fuente (antes: la fecha de
+      // hoy en cada lectura, que hacía pasar por «verificado hoy» cualquier precio).
+      priceLastChecked: verifiedDate(flat),
+      freeShipping: flat.freeShipping === true,
+      // Sólo «Agotado» si la fuente lo declara; un dato desconocido no se
+      // presenta como agotado (ni se inventa más allá del valor por defecto).
+      stockStatus: flat.inStock === false ? 'Agotado' : 'En stock',
     },
     conversionHooks: {
       idealFor: flat.conversionHooks?.idealFor,
@@ -253,6 +272,10 @@ export function toStructuredProduct(flat: Product): ProductSchema {
     verdict: flat.verdict,
     techSheet: flat.techSheet,
     priceHistory: flat.priceHistory,
+    variantGroup: flat.variantGroup,
+    variantFeature: flat.variantFeature,
+    lastPriceSync: flat.lastPriceSync,
+    sourceDescription: flat.sourceDescription,
     network: flat.network,
     currency: flat.currency,
     commissionRate: flat.commissionRate,

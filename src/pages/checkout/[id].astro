@@ -232,8 +232,10 @@ const isSoldOut = stockStatus === 'Agotado';
           </dl>
 
           <p class="price-note">
-            Precio verificado el {pricing?.priceLastChecked ?? 'hoy'}. Puede variar en
-            el momento de la compra; el importe definitivo lo fija {provider}.
+            {pricing?.priceLastChecked
+              ? `Precio verificado el ${pricing.priceLastChecked}.`
+              : 'Precio pendiente de verificar con la tienda.'}
+            Puede variar en el momento de la compra; el importe definitivo lo fija {provider}.
           </p>
         </article>
 

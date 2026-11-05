@@ -16,6 +16,7 @@ import { startReminderScheduler } from './lib/reminders';
 import { getAllRadarUsers, getRadarSessionUser, recordRadarUserVisit, SESSION_COOKIE_NAME } from './lib/radarAuth';
 import { startMarketingScheduler } from './lib/marketingEmail';
 import { startPriceAlertScheduler } from './lib/priceAlerts';
+import { startOfferRefreshScheduler } from './lib/offerRefresh';
 
 // Los avisos diferidos de Mi Radar se envían desde el propio proceso SSR
 // (setInterval + unref): no hay cron externo. Se arranca una sola vez aquí.
@@ -26,6 +27,10 @@ startMarketingScheduler();
 // Alertas de bajada de precio de Mi Radar (comparación cada 6 h contra el
 // catálogo interno y la caché de AliExpress; email + badge en el panel).
 startPriceAlertScheduler();
+// Actualización programada de ofertas (precio, stock, envío): APAGADA por
+// defecto. Sólo actúa con OFFER_REFRESH_ENABLED=true; su activación en
+// producción requiere autorización aparte (consume créditos de ScraperAPI).
+startOfferRefreshScheduler();
 
 /**
  * Precalienta en el arranque las cachés en memoria más caras (catálogo,

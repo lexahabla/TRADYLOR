@@ -18,6 +18,8 @@ import { findAffiliateDescription } from '../affiliateCatalog';
 import { readDeletedIds } from '../deletedProducts';
 import { readProductsFromFile, type Product } from '../productStore';
 import { canonicalProductUrl, cleanTitleKey, extractSourceId } from '../curation';
+import { sameSourceId } from '../offerIdentity';
+import { readLockedFields, TRACKING_EXTRA_KEYS } from '../reimportMerge';
 import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../../utils/amazon';
 import type { PipelineInput, PipelineProduct, StageResult } from './types';
 
@@ -59,7 +61,9 @@ export function findIngestDuplicate(
     if (ignored.has(item.id)) continue;
 
     // 1) sourceId idéntico.
-    if (sourceId && extractSourceId(item) === sourceId) {
+    // sameSourceId normaliza `AE-123` ≡ `123` y el `v1|id|0` de eBay (antes
+    // la API y la URL/JSON no coincidían y se duplicaba la oferta).
+    if (sourceId && sameSourceId(extractSourceId(item), sourceId)) {
       return { reason: 'sourceId', duplicateOf: item.id };
     }
 
@@ -158,7 +162,9 @@ export function runStageIngest(
     originalPrice: data.originalPrice != null ? Number(data.originalPrice) : undefined,
     image: candidate.image || DEFAULT_IMAGE,
     gallery: data.gallery ?? existing?.gallery,
-    extra: data.extra ?? existing?.extra,
+    // Fusión (no sustitución): observaciones, señal, refresco y campos bloqueados
+    // del servicio de actualización sobreviven a la reimportación.
+    extra: data.extra || existing?.extra ? { ...(existing?.extra ?? {}), ...(data.extra ?? {}), ...pickTracking(existing?.extra) } : undefined,
     category: candidate.category,
     merchant: candidate.merchant,
     affiliateUrl,
@@ -206,5 +212,25 @@ export function runStageIngest(
       undefined,
   };
 
+  // Campos bloqueados por edición manual/revisión: se conserva el valor existente.
+  if (existing) {
+    const target = product as unknown as Record<string, unknown>;
+    for (const field of readLockedFields(existing as unknown as Record<string, unknown>)) {
+      if ((existing as unknown as Record<string, unknown>)[field] !== undefined) {
+        target[field] = (existing as unknown as Record<string, unknown>)[field];
+      }
+    }
+  }
+
   return { ok: true, stage: 'ingest', product };
+}
+
+/** Claves de `extra` que sólo gestiona el servicio de actualización. */
+function pickTracking(extra: Record<string, unknown> | undefined): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (!extra) return out;
+  for (const key of [...TRACKING_EXTRA_KEYS, 'lockedFields']) {
+    if (extra[key] !== undefined) out[key] = extra[key];
+  }
+  return out;
 }

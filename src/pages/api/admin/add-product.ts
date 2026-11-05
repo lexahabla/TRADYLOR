@@ -16,6 +16,8 @@ import {
 } from '../../../lib/ai';
 import { MAX_PRODUCT_IMAGES } from '../../../lib/imageQuality';
 import { enrichProductLocally } from '../../../lib/localEnrich';
+import { diffEditorialFields, lockFields } from '../../../lib/reimportMerge';
+import { brandIsMerchant } from '../../../lib/offerIdentity';
 import { findDuplicateProduct, readProductsFromFile, slugify, upsertProduct, writeProductsToFile, type Product } from '../../../lib/productStore';
 import { autoLinkAlternatives, computeBadge, computeConversionScore } from '../../../lib/curation';
 import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../../../utils/amazon';
@@ -126,6 +128,7 @@ export const POST: APIRoute = async ({ request }) => {
         id: requestedId,
         title,
         urls: [body?.affiliateUrl, body?.url, body?.buyNowUrl],
+        sourceId: body?.sourceId ? String(body.sourceId) : undefined,
       });
       if (duplicate) {
         // Auto-sanado: si venía de la tabla de afiliados y la fila existente
@@ -320,8 +323,9 @@ export const POST: APIRoute = async ({ request }) => {
       // Badge: si el usuario lo envió explícitamente se respeta; si no, se
       // asigna automáticamente tras construir el producto completo (ver más abajo).
       badge: body?.badge ? String(body.badge).trim() : undefined,
-      rating: body?.rating ? Number(body.rating) : 4.8,
-      reviewsCount: body?.reviewsCount ? Number(body.reviewsCount) : 100,
+      // Sin valoración declarada NO se inventa una (antes 4,8★ y 100 opiniones).
+      rating: body?.rating && Number(body.rating) > 0 ? Number(body.rating) : undefined,
+      reviewsCount: body?.reviewsCount && Number(body.reviewsCount) > 0 ? Number(body.reviewsCount) : undefined,
       specs: body?.specs && typeof body.specs === 'object' ? body.specs : undefined,
       fulfillmentProvider: body?.fulfillmentProvider
         ? String(body.fulfillmentProvider).trim()
@@ -396,8 +400,10 @@ export const POST: APIRoute = async ({ request }) => {
     // Etiqueta destacada automática basada en datos técnicos e análisis IA.
     // Sólo se calcula si el usuario no proporcionó una badge explícita.
     if (!body?.badge) base.badge = computeBadge(base);
-    // Marca de respaldo: si aún falta, usa el comerciante detectado.
-    if (!base.brand) base.brand = base.merchant || 'Comercio Externo';
+    // La marca es el FABRICANTE: ya no se rellena con el comerciante (la ficha
+    // mostraba la tienda como marca y chocaba con las especificaciones). Si el
+    // proveedor/IA no la dan, queda vacía.
+    if (base.brand && brandIsMerchant(base.brand, base.merchant)) base.brand = undefined;
 
     // Calcular conversion_score inicial si no tiene (productos recién importados
     // o dados de alta sin score previo). El botón «⇅ Recalcular scores» permite
@@ -448,6 +454,19 @@ export const POST: APIRoute = async ({ request }) => {
           base.extra = { ...(existing.extra ?? {}), ...(body.extra as Record<string, unknown>) };
         } else if (existing.extra) {
           base.extra = existing.extra;
+        }
+        // Identidad local y seguimiento que el formulario no conoce: no se pierden.
+        for (const field of ['priceHistory', 'variantGroup', 'variantFeature', 'lastPriceSync', 'slug'] as const) {
+          if ((base as any)[field] === undefined && (existing as any)[field] !== undefined) {
+            (base as any)[field] = (existing as any)[field];
+          }
+        }
+        // Guardar desde el panel = aprobación humana: los campos editoriales
+        // que cambian respecto a lo guardado se BLOQUEAN frente a futuras
+        // reimportaciones/actualizaciones (ediciones manuales y textos revisados).
+        const approvedFields = diffEditorialFields(existing as any, base as any);
+        if (approvedFields.length) {
+          Object.assign(base, lockFields(base as any, approvedFields));
         }
         // Categorización jerárquica: si la categoría o la subcategoría han
         // cambiado, se recalculan los ids de categories.json (la curación

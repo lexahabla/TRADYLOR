@@ -18,10 +18,6 @@ import type { CanonicalAffiliateProduct, UnifiedProduct, UnifiedSearchParams } f
 
 /** % base de comisión EPN (rango típico 4-6%). Configurable con EBAY_COMMISSION_RATE. */
 const EBAY_DEFAULT_COMMISSION_RATE = 5;
-/** Valoración por defecto cuando la API no informa de feedback (escala 0-5 ★). */
-const EBAY_DEFAULT_RATING = 4.5;
-/** Nº de opiniones por defecto cuando la API no informa de feedback. */
-const EBAY_DEFAULT_REVIEW_COUNT = 15;
 /** Texto de envío por defecto cuando eBay no entrega fechas estimadas. */
 const EBAY_DEFAULT_SHIPPING = 'Envío estándar eBay (3-5 días)';
 
@@ -176,15 +172,16 @@ export class EbayProductAdapter {
 
     // Social proof: feedback del vendedor en % → escala 5 ★. Si la Browse API no
     // lo informa, valores por defecto coherentes para que la tabla no muestre «—».
+    // Sin feedback del vendedor NO se inventa valoración (antes 4,5★ y 15
+    // opiniones): 0 = desconocido y la capa de presentación lo omite.
     let rating = 0;
     if (item.seller?.feedbackPercentage) {
       const fb = parseFloat(item.seller.feedbackPercentage);
       if (!Number.isNaN(fb)) rating = Math.round((fb / 100) * 5 * 10) / 10;
     }
-    if (!rating) rating = EBAY_DEFAULT_RATING;
     const reviewCount = item.seller?.feedbackScore && item.seller.feedbackScore > 0
       ? item.seller.feedbackScore
-      : EBAY_DEFAULT_REVIEW_COUNT;
+      : 0;
 
     // Imágenes: principal + secundarias (sin duplicar la principal)
     const mainImage = item.image?.imageUrl ?? item.product?.image?.imageUrl ?? '';
@@ -233,14 +230,38 @@ export class EbayProductAdapter {
       ? Math.round(price * (commissionRate / 100) * 100) / 100
       : 0;
 
-    const inStock = item.buyingOptions ? item.buyingOptions.includes('FIXED_PRICE') : true;
+    // Browse API: un resultado listado y comprable (FIXED_PRICE) está disponible;
+    // una subasta u otra modalidad NO significa agotado → desconocido.
+    const buyable = item.buyingOptions ? item.buyingOptions.includes('FIXED_PRICE') : true;
+    const inStock = buyable;
+    const availability: 'in_stock' | 'unknown' = buyable ? 'in_stock' : 'unknown';
 
     // Passthrough canónico: datos que la UI lee del `extra` y que el esquema
-    // canónico no cubre con campos propios (descuento 0%, envío por defecto,
-    // ventas no disponibles en la Browse API).
+    // canónico no cubre con campos propios. Se conservan los identificadores y
+    // atributos de oferta que antes se descartaban en esta ruta.
     const extra: Record<string, string | number | boolean | null> = {
       'Descuento': `${discountPercentage}%`,
       'Ventas (30 días)': 'n/d',
+      'Valoración de': item.seller?.feedbackPercentage ? 'vendedor' : null,
+      'ID anuncio': externalId,
+      'ID anuncio (legado)': item.legacyItemId ?? null,
+      'ID producto eBay': item.product?.productId ?? null,
+      'ID grupo variantes': item.itemGroupId ?? item.primaryItemGroup?.itemGroupId ?? null,
+      'Tipo grupo variantes': item.itemGroupType ?? null,
+      'MPN': item.product?.mpn ?? null,
+      'EAN': item.product?.ean?.join(', ') || null,
+      'UPC': item.product?.upc?.join(', ') || null,
+      'GTIN': item.product?.gtin ?? null,
+      'Modalidad de compra': item.buyingOptions?.join(', ') || null,
+      'Estado': item.condition ?? null,
+      'País del artículo': item.itemLocation?.country ?? null,
+      'IDs categoría': item.categories?.map((c) => c.categoryId).filter(Boolean).join(', ') || null,
+      'Alta del anuncio': item.itemCreationDate ?? null,
+      'Fin del anuncio': item.itemEndDate ?? null,
+      'Entrega estimada desde': shipping?.minEstimatedDeliveryDate ?? null,
+      'Entrega estimada hasta': shipping?.maxEstimatedDeliveryDate ?? null,
+      'Envía a': shipping?.shipToLocations?.countryCode ?? null,
+      '+18': item.adultOnly === true ? true : null,
     };
     if (!hasDeliveryDays) extra['Envío'] = EBAY_DEFAULT_SHIPPING;
 
@@ -256,6 +277,7 @@ export class EbayProductAdapter {
       currency,
       discountPercentage,
       inStock,
+      availability,
       commissionRate,
       estimatedCommission,
       category,

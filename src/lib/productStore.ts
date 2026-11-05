@@ -1,5 +1,6 @@
 import { dataFile } from './paths';
 import { readJsonArrayFile, writeJsonArrayFile } from './jsonStore';
+import { sameSourceId } from './offerIdentity';
 
 // Interfaz del producto (compartida por el panel admin y los endpoints de alta)
 export interface Product {
@@ -121,6 +122,11 @@ export interface Product {
    * (ej: "2 TB", "4 TB", "256 GB", "Negro", "Azul"). Se muestra en la ficha
    * del producto junto a la tarjeta de la variante relacionada. */
   variantFeature?: string;
+
+  /** Última sincronización de precio con la fuente (ISO). La escribe el servicio de actualización. */
+  lastPriceSync?: string;
+  /** Etiqueta legible de la red (compatibilidad con el panel de sincronización). */
+  network_label?: string;
 }
 
 // Ruta al archivo de persistencia JSON
@@ -213,7 +219,13 @@ export function isPlaceholderUrl(value: string | null | undefined): boolean {
  */
 export function findDuplicateProduct(
   products: Product[],
-  candidate: { id?: string | null; title?: string | null; urls?: Array<string | null | undefined> },
+  candidate: {
+    id?: string | null;
+    title?: string | null;
+    urls?: Array<string | null | undefined>;
+    /** Id externo (ASIN, Item ID de AliExpress, itemId de eBay): misma oferta aunque cambie el enlace. */
+    sourceId?: string | null;
+  },
   ignoreId?: string | null,
 ): Product | undefined {
   const ignored = new Set(
@@ -234,6 +246,9 @@ export function findDuplicateProduct(
 
   return products.find((item) => {
     if (ignored.has(item.id)) return false;
+    if (candidate.sourceId && (sameSourceId(candidate.sourceId, item.sourceId) || sameSourceId(candidate.sourceId, item.asin))) {
+      return true;
+    }
     if (item.affiliateUrl && !isPlaceholderUrl(item.affiliateUrl) && urls.has(normalizeProductKey(item.affiliateUrl)))
       return true;
     if (item.buyNowUrl && !isPlaceholderUrl(item.buyNowUrl) && urls.has(normalizeProductKey(item.buyNowUrl)))

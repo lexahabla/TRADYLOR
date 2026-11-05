@@ -52,9 +52,9 @@ const productSchema = z.object({
     currentPrice: z.number(),
     originalPrice: z.number().optional(),
     discountPercentage: z.number().optional(),
-    priceLastChecked: z
-      .string()
-      .default(() => new Date().toISOString().split('T')[0]),
+    // Fecha de la última verificación REAL con la fuente. Sin default: si nunca
+    // se verificó, queda vacía y la interfaz no afirma «verificado hoy».
+    priceLastChecked: z.string().optional(),
     freeShipping: z.boolean().default(false),
     stockStatus: z
       .enum(['En stock', 'Pocas unidades', 'Agotado'])
@@ -144,6 +144,11 @@ const productSchema = z.object({
   title_short: z.string().optional(),
   /** Descripción original del comercio (sin bloques generados por el enrichment). */
   sourceDescription: z.string().optional(),
+  /** Grupo de variantes del mismo modelo y rasgo que distingue a este producto. */
+  variantGroup: z.string().optional(),
+  variantFeature: z.string().optional(),
+  /** Última sincronización de precio con la fuente (ISO). */
+  lastPriceSync: z.string().optional(),
 
   // ─── Media & Visual ────────────────────────────────────────────────────────
   image: z.string().default('/images/placeholder-product.jpg'),

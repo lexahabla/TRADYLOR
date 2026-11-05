@@ -376,7 +376,11 @@ function mapCanonicalProduct(item: AliProduct, currency: string): CanonicalAffil
     originalPrice,
     currency,
     discountPercentage,
+    // La API de afiliados de AliExpress NO informa de stock: es desconocido,
+    // no «en stock». `inStock` se mantiene `true` por compatibilidad del
+    // contrato; los consumidores deben leer `availability`.
     inStock: true,
+    availability: 'unknown',
     commissionRate,
     hotCommissionRate: hotCommissionRate || undefined,
     estimatedCommission,

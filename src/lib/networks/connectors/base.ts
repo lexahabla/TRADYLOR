@@ -87,6 +87,8 @@ export function canonicalToUnified(product: CanonicalAffiliateProduct): UnifiedP
     'Reseñas': product.reviewCount || null,
     'Ventas (30 días)': product.sales != null ? product.sales : null,
     'Días de envío': shipDays ?? null,
+    'Disponibilidad':
+      product.availability === 'unknown' ? 'desconocida' : product.availability === 'out_of_stock' ? 'agotado' : product.availability === 'in_stock' ? 'en stock' : null,
     'Garantía': product.guarantee || null,
     'Mínimo histórico': product.historicalLow ? 'Sí' : null,
     'Resumen editorial': product.editorialSummary || null,

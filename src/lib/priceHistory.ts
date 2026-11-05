@@ -31,7 +31,7 @@ let flushing = false;
 const todayIso = (): string => new Date().toISOString().slice(0, 10);
 
 /** Punto del día para el producto (si hoy no hay, se añade al final). */
-function mergePoint(history: PricePoint[] | undefined, point: PricePoint): PricePoint[] {
+export function mergePoint(history: PricePoint[] | undefined, point: PricePoint): PricePoint[] {
   const clean = Array.isArray(history)
     ? history.filter((p) => p && typeof p.date === 'string' && Number.isFinite(p.price))
     : [];
@@ -59,8 +59,13 @@ function scheduleFlush(): void {
  */
 export function recordPricePoint(productId: string, price: number): boolean {
   if (!productId || !Number.isFinite(price) || price <= 0) return false;
-  const exists = readProductsFromFile().some((p) => p.id === productId);
-  if (!exists) return false;
+  const target = readProductsFromFile().find((p) => p.id === productId);
+  if (!target) return false;
+  // Si la oferta se verifica con su fuente (servicio de actualización), el
+  // histórico lo alimentan SÓLO esas lecturas confirmadas: el precio guardado
+  // que ve un visitante no es una observación.
+  const refresh = (target.extra as Record<string, unknown> | undefined)?.refresh as { lastVerifiedAt?: string } | undefined;
+  if (refresh?.lastVerifiedAt) return false;
 
   queue.set(productId, { date: todayIso(), price: Math.round(price * 100) / 100 });
   scheduleFlush();

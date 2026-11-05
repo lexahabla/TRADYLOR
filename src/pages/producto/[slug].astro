@@ -178,12 +178,14 @@ const productSchema = {
   name: product.title,
   description: product.description,
   image: product.image,
-  brand: { '@type': 'Brand', name: product.merchant },
+  // La marca es el fabricante; el vendedor va en offers.seller (antes se
+  // publicaba el comerciante como marca).
+  ...(product.brand ? { brand: { '@type': 'Brand', name: product.brand } } : {}),
   offers: {
     '@type': 'Offer',
-    priceCurrency: 'EUR',
+    priceCurrency: product.currency || 'EUR',
     price: product.price.toFixed(2),
-    availability: 'https://schema.org/InStock',
+    availability: product.inStock === false ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
     seller: { '@type': 'Organization', name: product.merchant },
     url: product.affiliateUrl || undefined,
     ...(schemaItemCondition && { itemCondition: schemaItemCondition }),

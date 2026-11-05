@@ -93,6 +93,10 @@ export function extractSourceId(
   const ali = haystack.match(/\/(?:item|goods)\/(?:.*?\/)?(?:ae01|item)?(?:_)?(\d{6,20})\.html/i)
     ?? haystack.match(/[?&](?:itemId|productId|productIds)=(\d{6,20})/i);
   if (ali) return `AE-${ali[1]}`;
+  // eBay: /itm/<itemId> o /itm/<slug>/<itemId> (el itemId de la API llega como
+  // `v1|<id>|0`; se compara con sameSourceId, que normaliza ambos formatos).
+  const ebay = haystack.match(/ebay\.[a-z.]+\/itm\/(?:[^/?#\s]+\/)?(\d{9,14})/i);
+  if (ebay) return ebay[1];
   return '';
 }
 

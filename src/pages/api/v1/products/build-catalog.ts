@@ -33,6 +33,8 @@ import { toHiResImageUrl, upgradeProductImages, MAX_PRODUCT_IMAGES } from '../..
 import { cleanTitleKey, canonicalProductUrl, extractSourceId, titleSimilarity } from '../../../../lib/curation';
 import { readDeletedIds } from '../../../../lib/deletedProducts';
 import { slugifyProduct, upsertCatalogProduct } from '../../../../lib/catalogStore';
+import { normalizeSourceId, sameSourceId } from '../../../../lib/offerIdentity';
+import { mergeReimport } from '../../../../lib/reimportMerge';
 import { findIngestDuplicate } from '../../../../lib/pipeline/stageIngest';
 import { runStageAudit } from '../../../../lib/pipeline/stageAudit';
 import { getPipelineConfig } from '../../../../lib/pipeline/config';
@@ -253,7 +255,7 @@ export async function ingestAllNetworks(): Promise<{
                 // dos búsquedas del mismo producto traen la MISMA id aunque
                 // cambien los parámetros del enlace. Con la URL canónica como
                 // clave principal, el mismo producto entraba dos veces.
-                const sourceId = extractSourceId({ sourceId: up.externalId, affiliateUrl: up.productUrl } as any);
+                const sourceId = normalizeSourceId(extractSourceId({ sourceId: up.externalId, affiliateUrl: up.productUrl } as any));
                 const dedupeKey = sourceId || canonicalProductUrl(up.productUrl) || cleanTitleKey(up.title);
                 if (seenGlobal.has(dedupeKey) || seenInNetwork.has(dedupeKey)) continue;
                 seenGlobal.add(dedupeKey);
@@ -315,7 +317,7 @@ export async function ingestAllNetworks(): Promise<{
             for (const product of batch) {
               if (networkCanonical.length >= BUILD_CONFIG.PER_NETWORK_LIMIT) break;
               // `sourceId` primero (misma clave que el pipeline y que la Etapa 1).
-              const sourceId = extractSourceId({ sourceId: product.externalId, affiliateUrl: product.affiliateUrl });
+              const sourceId = normalizeSourceId(extractSourceId({ sourceId: product.externalId, affiliateUrl: product.affiliateUrl }));
               const dedupeKey = sourceId || canonicalProductUrl(product.affiliateUrl) || cleanTitleKey(product.title);
               if (seenGlobal.has(dedupeKey) || seenInNetwork.has(dedupeKey)) continue;
               seenGlobal.add(dedupeKey);
@@ -677,7 +679,7 @@ async function buildSingleProduct(
   const canonicalUrl = canonicalProductUrl(affiliateUrl);
   let existingIndex = -1;
   if (sourceId) {
-    existingIndex = existingProducts.findIndex((p) => extractSourceId(p) === sourceId);
+    existingIndex = existingProducts.findIndex((p) => sameSourceId(extractSourceId(p), sourceId));
   }
   if (existingIndex === -1 && canonicalUrl) {
     existingIndex = existingProducts.findIndex(
@@ -717,7 +719,8 @@ async function buildSingleProduct(
     network: canonical.network || group.allNetworks[0],
     currency: canonical.currency || group.allCurrencies[group.allNetworks[0]],
     commissionRate: group.bestCommissionRate > 0 ? group.bestCommissionRate : undefined,
-    inStock: canonical.inStock, visits: canonical._sourceUnified?.visits,
+    // Disponibilidad desconocida → sin valor (no se afirma stock que la fuente no da).
+    inStock: canonical.availability === 'unknown' ? undefined : canonical.inStock, visits: canonical._sourceUnified?.visits,
     condition: canonical.extra?.['Estado'] ?? canonical.extra?.['Condición'] ?? canonical.extra?.['Condition'],
     shippingInfo: canonical._sourceUnified?.shippingInfo ?? canonical.extra?.['Texto de envío'],
     shippingDays: canonical._sourceUnified?.shippingDays,
@@ -811,7 +814,13 @@ async function buildSingleProduct(
   product.link_status = editorial.link_status;
   product.normalized_tags = extractNormalizedTags(product);
   product.conversion_score = computeConversionScore(product);
-  return { status: 'ok', baseId, product, existingIndex };
+  // Reimportación por API: misma fusión por campo que el JSON de Amazon
+  // (histórico, slug, variantes, observaciones, campos bloqueados y marca válida
+  // se conservan; precio/stock/imágenes del proveedor se actualizan).
+  const finalProduct = existingProduct
+    ? mergeReimport(existingProduct as any, product as any)
+    : product;
+  return { status: 'ok', baseId, product: finalProduct, existingIndex };
 }
 
 export async function buildAndUpsertProducts(

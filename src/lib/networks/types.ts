@@ -98,6 +98,12 @@ export interface CanonicalAffiliateProduct {
   currency: string;
   discountPercentage: number;
   inStock: boolean;
+  /**
+   * Disponibilidad declarada por la fuente. `unknown` = la fuente NO la informa
+   * (no equivale a «agotado» ni a «en stock»). Si falta, se asume el valor de
+   * `inStock` como hasta ahora.
+   */
+  availability?: 'in_stock' | 'out_of_stock' | 'unknown';
 
   commissionRate: number;
   estimatedCommission: number;
