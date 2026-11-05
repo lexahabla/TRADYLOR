@@ -209,6 +209,7 @@ export function writeCategories(categories: Category[]): void {
   // Escritura atómica (temporal + rename): el pipeline crea subcategorías
   // durante el reproceso y un fallo a mitad no debe dejar la taxonomía rota.
   writeJsonArrayFile(CATEGORIES_PATH, categories);
+  invalidateCategoriesCache();
 }
 
 /** Garantiza que el archivo existe con el esquema rico (migración perezosa). */
@@ -242,8 +243,39 @@ export function slugifyCategory(text: string): string {
     .slice(0, 60);
 }
 
+/**
+ * Caché en memoria de la taxonomía, invalidada por fecha y tamaño de
+ * categories.json (mismo criterio que catalog.ts). Antes cada llamada releía y
+ * reparseaba el fichero: páginas que la usan por producto (Calendario de
+ * Marketing, cuadro de mando, portada) pagaban cientos de lecturas por petición.
+ * Se devuelve una COPIA (los llamantes añaden/ordenan sobre el resultado y no
+ * deben contaminar la caché). Una escritura desde fuera de este módulo se
+ * detecta igualmente por la fecha del fichero.
+ */
+let categoriesCache: { key: string; list: Category[] } | null = null;
+
+function categoriesFileKey(): string {
+  try {
+    const stat = fs.statSync(CATEGORIES_PATH);
+    return `${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return 'missing';
+  }
+}
+
+const cloneCategories = (list: Category[]): Category[] =>
+  list.map((category) => ({ ...category, keywords: Array.isArray(category.keywords) ? [...category.keywords] : category.keywords }));
+
+export function invalidateCategoriesCache(): void {
+  categoriesCache = null;
+}
+
 export function getCategories(): Category[] {
-  return ensureCategoriesFile();
+  const key = categoriesFileKey();
+  if (categoriesCache && categoriesCache.key === key) return cloneCategories(categoriesCache.list);
+  const list = ensureCategoriesFile(); // puede (re)escribir el fichero: la clave se calcula después
+  categoriesCache = { key: categoriesFileKey(), list: cloneCategories(list) };
+  return list;
 }
 
 export function getCategoryBySlug(slug: string): Category | undefined {
