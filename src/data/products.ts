@@ -227,7 +227,9 @@ export function toStructuredProduct(flat: Product): ProductSchema {
       idealFor: flat.conversionHooks?.idealFor,
       notRecommendedFor: flat.conversionHooks?.notRecommendedFor,
       returnPolicyDays: flat.conversionHooks?.returnPolicyDays ?? 30,
-      rating: flat.conversionHooks?.rating ?? flat.rating ?? 4.5,
+      // Sin valoración declarada: 0 = desconocido (la interfaz no pinta estrellas).
+      // Antes se inventaba 4,5★ para cualquier producto sin dato.
+      rating: flat.conversionHooks?.rating ?? flat.rating ?? 0,
       totalReviewsCount: flat.conversionHooks?.totalReviewsCount ?? flat.reviewsCount ?? 0,
       satisfactionScore: flat.conversionHooks?.satisfactionScore ?? {
         positivePercentage: 85,

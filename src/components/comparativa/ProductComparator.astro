@@ -168,7 +168,7 @@ const formatCurrency = (amount: number) =>
                 {Object.keys(product.specs ?? {}).length === 0 && (
                   <div class="cmp-spec-row">
                     <dt>Valoración</dt>
-                    <dd>{product.rating ?? 'N/A'} / 5</dd>
+                    <dd>{product.rating ? `${product.rating} / 5` : 'Sin valoración'}</dd>
                   </div>
                 )}
                 <div class="cmp-spec-row">
@@ -188,7 +188,7 @@ const formatCurrency = (amount: number) =>
                 {(product.pros ?? []).slice(0, 3).map((pro) => (
                   <li>{pro}</li>
                 ))}
-                {(product.pros ?? []).length === 0 && <li>Valoración media: {product.rating ?? 'N/A'} / 5</li>}
+                {(product.pros ?? []).length === 0 && product.rating > 0 && <li>Valoración media: {product.rating} / 5</li>}
               </ul>
               <ul class="cmp-list cmp-list--cons">
                 {(product.cons ?? []).slice(0, 2).map((con) => (

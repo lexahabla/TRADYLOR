@@ -2,6 +2,7 @@
 import type { Product } from '../data/products';
 import { getAffiliateUrl, NETWORK_LABELS, type AffiliateNetwork } from '../utils/affiliate';
 import TestProofBadge from './TestProofBadge.astro';
+import { activeSignal, freshnessOf, DEFAULT_MAX_AGE_HOURS, type PriceSignal } from '../lib/offerObservations';
 import {
   extractAsinFromUrl,
   getAmazonAddToCartUrl,
@@ -171,6 +172,20 @@ if (prosCount + consCount > 0) {
 }
 
 // 2) Valoraciones: estrellas (70%) + volumen de opiniones (30%)
+// Señal pública de bajada: sólo si la lectura sigue vigente, no ha caducado y
+// el precio actual no ha subido por encima (ver lib/offerObservations.ts).
+const rawSignal = (product?.extra as Record<string, unknown> | undefined)?.priceSignal as PriceSignal | undefined;
+const lastVerified = (product?.extra as Record<string, any> | undefined)?.refresh?.lastVerifiedAt as string | undefined;
+const dropSignal = rawSignal
+  ? activeSignal(rawSignal, {
+      offerKey: rawSignal.offerKey,
+      currentPrice: Number(product?.price) || null,
+      stale: lastVerified ? freshnessOf(lastVerified, DEFAULT_MAX_AGE_HOURS) === 'stale' : true,
+    })
+  : null;
+const dropFmt = (value: number) =>
+  value.toLocaleString('es-ES', { style: 'currency', currency: (dropSignal?.currency || 'EUR').toUpperCase() });
+
 const ratingValue = Number(product?.rating) || 0;
 const reviewsValue = Number(product?.reviewsCount) || 0;
 if (ratingValue > 0 || reviewsValue > 0) {
@@ -363,6 +378,13 @@ const radarPayload = {
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
       <span data-profile-name-text>Encaja con tu perfil</span>
     </span>
+
+    {dropSignal && (
+      <p class="price-drop-badge" title={`Detectado el ${dropSignal.detectedAt.slice(0, 10)} · criterio de envío: ${dropSignal.shippingCriterion === 'standard' ? 'estándar' : dropSignal.shippingCriterion}`}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" /></svg>
+        <span>Bajó de <s>{dropFmt(dropSignal.previousPrice)}</s> a <strong>{dropFmt(dropSignal.price)}</strong></span>
+      </p>
+    )}
 
     {product.rating && (
       <div class="rating-box" aria-label={`Puntuación: ${product.rating} sobre 5`}>
@@ -637,6 +659,28 @@ const radarPayload = {
 
   .profile-match-badge[hidden] {
     display: none;
+  }
+
+  /* Señal pública de bajada (lectura verificada, vigencia limitada). Texto + icono,
+     no sólo color; reutiliza el acento verde del sitio. */
+  .price-drop-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 0.2rem 0.6rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--color-accent);
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: var(--border-radius-sm);
+  }
+
+  .price-drop-badge s {
+    color: var(--color-text-dim);
+    font-weight: 500;
   }
 
   .rating-box {
