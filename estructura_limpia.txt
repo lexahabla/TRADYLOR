@@ -23,11 +23,13 @@ public/favicon.svg
 public/site.webmanifest
 scripts/check-inline-scripts.mjs
 scripts/register-ts.mjs
+scripts/repair-catalog.mjs
 scripts/reset-admin-password.mjs
 scripts/tests/connectors.test.mjs
 scripts/tests/facets.test.mjs
 scripts/tests/identity.test.mjs
 scripts/tests/refresh.test.mjs
+scripts/tests/repair.test.mjs
 scripts/ts-resolve-hooks.mjs
 src/components/AdminNav.astro
 src/components/AdminUserMenu.astro
@@ -89,6 +91,7 @@ src/lib/buildCatalog/job.ts
 src/lib/catalog.ts
 src/lib/catalogDiversity.ts
 src/lib/catalogFacets.ts
+src/lib/catalogRepair.ts
 src/lib/catalogSort.ts
 src/lib/catalogStore.ts
 src/lib/categories.ts
