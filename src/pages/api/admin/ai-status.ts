@@ -31,7 +31,7 @@ export const GET: APIRoute = async ({ request }) => {
     testProvider('anthropic'),
     testProvider('groq'),
     testProvider('gemini'),
-    testOpencodeCli(),
+    testOpencodeCli(true), // comprobación manual: siempre en vivo
   ]);
 
   const providers = [opencode, openai, nvidia, openrouter, anthropic, groq, gemini];

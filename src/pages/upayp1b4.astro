@@ -9330,7 +9330,8 @@ function renderTableRows(products, resetPage = true) {
       }
     });
 
-    loadCategories();
+    // (La carga inicial de categorías ya se hace arriba, en «Carga inicial»: aquí se
+    // pedía una segunda vez /api/categories en cada visita.)
 
     // =========================================================================
     // TRANSPARENCIA Y PIPELINE (métricas de auditoría + reproceso)

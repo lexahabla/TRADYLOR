@@ -256,7 +256,24 @@ export async function testProvider(provider: AiProviderId): Promise<ProviderStat
 }
 
 /** Estado de opencode: depende del CLI instalado en el contenedor. */
-export async function testOpencodeCli(): Promise<ProviderStatus> {
+let opencodeProbe: { at: number; result: Promise<ProviderStatus> } | null = null;
+const OPENCODE_PROBE_TTL_MS = 60_000;
+
+/**
+ * Estado del CLI local de opencode. Lanzar `opencode --version` cuesta ~0,4 s
+ * y el panel lo pedía DOS veces en cada carga (ai-keys y ai-console). Se comparte
+ * una única comprobación (también entre peticiones simultáneas) durante 60 s;
+ * `force: true` (botón «Comprobar» del panel) la repite.
+ */
+export function testOpencodeCli(force = false): Promise<ProviderStatus> {
+  const now = Date.now();
+  if (!force && opencodeProbe && now - opencodeProbe.at < OPENCODE_PROBE_TTL_MS) return opencodeProbe.result;
+  const result = probeOpencodeCli();
+  opencodeProbe = { at: now, result };
+  return result;
+}
+
+async function probeOpencodeCli(): Promise<ProviderStatus> {
   const info = getProviderInfo('opencode');
   const base: ProviderStatus = {
     id: 'opencode',

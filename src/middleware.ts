@@ -17,6 +17,8 @@ import { getAllRadarUsers, getRadarSessionUser, recordRadarUserVisit, SESSION_CO
 import { startMarketingScheduler } from './lib/marketingEmail';
 import { startPriceAlertScheduler } from './lib/priceAlerts';
 import { startOfferRefreshScheduler } from './lib/offerRefresh';
+import { gzip } from 'node:zlib';
+import { promisify } from 'node:util';
 
 // Los avisos diferidos de Mi Radar se envían desde el propio proceso SSR
 // (setInterval + unref): no hay cron externo. Se arranca una sola vez aquí.
@@ -48,6 +50,39 @@ try {
   getAllRadarUsers();
 } catch (error) {
   console.warn('[Middleware] No se pudieron precalentar las cachés de arranque:', error);
+}
+
+const gzipAsync = promisify(gzip);
+
+/**
+ * Comprime el HTML con gzip cuando el cliente lo admite. El servidor Node no
+ * comprime y el proxy de producción tampoco lo hace con las respuestas
+ * dinámicas (sin cabecera content-encoding): el panel enviaba ~1,06 MB y baja
+ * a ~160 KB. Seguro por construcción: sólo GET 200 text/html sin codificar, y
+ * se omite si la petición tiene cookies pendientes de adjuntar (se conservarían
+ * sólo al devolver la respuesta original).
+ */
+async function maybeCompress(context: Parameters<MiddlewareHandler>[0], response: Response): Promise<Response> {
+  try {
+    if (context.request.method !== 'GET' || response.status !== 200 || !response.body) return response;
+    if (response.headers.get('content-encoding')) return response;
+    if (!String(response.headers.get('content-type') ?? '').toLowerCase().startsWith('text/html')) return response;
+    if (!/gzip/i.test(context.request.headers.get('accept-encoding') ?? '')) return response;
+    // Cookies pendientes de adjuntar: no tocar la respuesta.
+    if ([...context.cookies.headers()].length > 0) return response;
+
+    const raw = Buffer.from(await response.arrayBuffer());
+    const headers = new Headers(response.headers);
+    headers.delete('content-length');
+    headers.append('vary', 'Accept-Encoding');
+    if (raw.length < 1024) return new Response(raw, { status: response.status, statusText: response.statusText, headers });
+    const body = await gzipAsync(raw, { level: 5 });
+    headers.set('content-encoding', 'gzip');
+    return new Response(body, { status: response.status, statusText: response.statusText, headers });
+  } catch (error) {
+    console.warn('[Middleware] Compresión descartada:', error);
+    return response;
+  }
 }
 
 /** /producto/<slug> o /productos/<slug>, con o sin barra final. */
@@ -95,5 +130,5 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
     console.warn('[Middleware] Analítica de visita descartada:', error);
   }
 
-  return response;
+  return maybeCompress(context, response);
 };
