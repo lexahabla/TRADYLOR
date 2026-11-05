@@ -152,15 +152,16 @@ const requestedSection = Astro.url.searchParams.get('section') || 'products';
 const allowedSections = ['products', 'affiliates', 'categories', 'analytics', 'marketing', 'transparency', 'desarrollo-ia'];
 const initialSection = allowedSections.includes(requestedSection) ? requestedSection : 'products';
 
-// Título y subtítulo dinámicos del admin-header según la sección activa
-// (mismo contenido que los view-heading de Categorías, Transparencia, etc.)
+// Cabecera ÚNICA de sección. El servidor pinta la de la sección con la que carga la
+// página y el cliente la actualiza al cambiar de pestaña (evento `admin:section-change`
+// de AdminNav). Las secciones ya no llevan cabecera propia: se evita duplicarla.
 const headerConfig = {
   products: { pill: 'Gestión del catálogo', titulo: 'Catálogo', subtitulo: 'Extrae, edita y da de alta productos con enlaces de afiliación. Organiza tu catálogo y prepáralo para publicar.' },
-  affiliates: { pill: 'Importación de afiliados', titulo: 'Importar', subtitulo: 'Sincroniza catálogos de redes de afiliados (AliExpress, eBay…) y selecciona los productos para importar a tu catálogo.' },
-  categories: { pill: 'Organización del catálogo', titulo: 'Categorías', subtitulo: 'Crea y mantiene las categorías y subcategorías disponibles para clasificar productos importados y añadidos manualmente.' },
-  analytics: { pill: 'Actividad de la tienda', titulo: 'Tráfico y Ventas', subtitulo: 'Resumen global, ranking por producto y recomendaciones de IA.' },
-  marketing: { pill: 'Crecimiento y distribución', titulo: 'Marketing', subtitulo: 'Prepara conexiones con analítica, redes sociales, email y automatizaciones.' },
-  transparency: { pill: 'Calidad y trazabilidad', titulo: 'Transparencia y Pipeline', subtitulo: 'El pipeline de 4 etapas evalúa cada producto del catálogo: auditoría, tags normalizados y score de conversión.' },
+  affiliates: { pill: 'Importación de afiliados', titulo: 'Importar', subtitulo: 'Conecta tus redes de afiliados, sincroniza sus catálogos (AliExpress, eBay…) y selecciona los productos que quieres importar a tu catálogo.' },
+  categories: { pill: 'Organización del catálogo', titulo: 'Categorías', subtitulo: 'Crea y mantiene las categorías y subcategorías disponibles para clasificar productos importados y añadidos manualmente. Se aplican al instante en el formulario de productos y en el importador de Afiliados.' },
+  analytics: { pill: 'Actividad de la tienda', titulo: 'Tráfico y Ventas', subtitulo: 'Resumen global, ranking por producto y recomendaciones de IA. Pasa el cursor sobre el ? de cada métrica para ver su definición.' },
+  marketing: { pill: 'Crecimiento y distribución', titulo: 'Marketing', subtitulo: 'Prepara conexiones con analítica, redes sociales, email y automatizaciones. Las credenciales se leen desde el entorno del servidor.' },
+  transparency: { pill: 'Calidad y trazabilidad', titulo: 'Transparencia y Pipeline', subtitulo: 'El pipeline de 4 etapas (ingesta → auditoría → categorización → publicación) evalúa cada producto del catálogo. Estas mismas métricas alimentan el panel de transparencia de la web pública.' },
   'desarrollo-ia': { pill: 'Entrenamiento y conectividad', titulo: 'Desarrollo IA', subtitulo: 'Entrena y alimenta a las dos personalidades de IA de Tradylor, gestiona sus claves y comprueba la conexión con los proveedores.' },
 };
 const h = headerConfig[initialSection] || headerConfig.products;
@@ -175,10 +176,11 @@ const h = headerConfig[initialSection] || headerConfig.products;
     <!-- 1. HEADER DEL PANEL (título y subtítulo dinámicos según sección activa) -->
     <header class="admin-header">
       <div class="admin-header-main">
-        <div class="admin-tag-pill">{h.pill}</div>
-        <h2 class="admin-title">{h.titulo}</h2>
-        <p class="admin-subtitle">{h.subtitulo}</p>
+        <div class="admin-tag-pill" id="adminHeaderPill">{h.pill}</div>
+        <h2 class="admin-title" id="adminHeaderTitle">{h.titulo}</h2>
+        <p class="admin-subtitle" id="adminHeaderSubtitle">{h.subtitulo}</p>
       </div>
+      <script is:inline type="application/json" id="adminHeaderConfig" set:html={JSON.stringify(headerConfig)}></script>
     </header>
 
     <AdminNav context="catalogo" active={initialSection} user={sessionUser} />
@@ -1239,12 +1241,6 @@ const h = headerConfig[initialSection] || headerConfig.products;
     </section>
 
     <section data-admin-view="categories" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'categories' }]}>
-      <div class="view-heading">
-        <span class="admin-tag-pill">Organización del catálogo</span>
-        <h2 class="admin-title">Categorías</h2>
-        <p class="admin-subtitle">Crea y mantiene las categorías y subcategorías disponibles para clasificar productos importados y añadidos manualmente. Se aplican al instante en el formulario de productos y en el importador de Afiliados.</p>
-      </div>
-
       <!-- Cabecera de categoría seleccionada (estilo catálogo público) -->
       <div id="categoryHeaderBar" class="catalog-header-bar" hidden>
         <div class="section-header">
@@ -1429,13 +1425,8 @@ const h = headerConfig[initialSection] || headerConfig.products;
     </section>
 
     <section data-admin-view="marketing" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'marketing' }]}>
-      <div class="view-heading">
-        <span class="admin-tag-pill">Crecimiento y distribución</span>
-        <h2 class="admin-title">Marketing</h2>
-        <p class="admin-subtitle">Prepara conexiones con analítica, redes sociales, email y automatizaciones. Las credenciales se leen desde el entorno del servidor.</p>
-        <div class="view-heading-actions">
-          <a class="guide-link" href="/upayp1b4/marketing">Abrir el módulo de Marketing <span aria-hidden="true">→</span></a>
-        </div>
+      <div class="view-heading-actions">
+        <a class="guide-link" href="/upayp1b4/marketing">Abrir el módulo de Marketing <span aria-hidden="true">→</span></a>
       </div>
       <div class="mk-grid">
         <a class="mk-card" href="/upayp1b4/marketing/usuarios">
@@ -1467,25 +1458,14 @@ const h = headerConfig[initialSection] || headerConfig.products;
     </section>
 
     <section data-admin-view="analytics" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'analytics' }]}>
-      <div class="view-heading">
-        <span class="admin-tag-pill">Actividad de la tienda</span>
-        <h2 class="admin-title">Tráfico y Ventas</h2>
-        <p class="admin-subtitle">Resumen global, ranking por producto y recomendaciones de IA. Pasa el cursor sobre el <strong>?</strong> de cada métrica para ver su definición.</p>
-        <div class="view-heading-actions">
-          <span class="data-example-pill">Datos de ejemplo</span>
-          <a class="guide-link" href="/upayp1b4/trafico-ventas/guia">Guía y Glosario <span aria-hidden="true">→</span></a>
-        </div>
+      <div class="view-heading-actions">
+        <span class="data-example-pill">Datos de ejemplo</span>
+        <a class="guide-link" href="/upayp1b4/trafico-ventas/guia">Guía y Glosario <span aria-hidden="true">→</span></a>
       </div>
       <TrafficSalesDashboard />
     </section>
 
     <section data-admin-view="transparency" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'transparency' }]}>
-      <div class="view-heading">
-        <span class="admin-tag-pill">Calidad y trazabilidad</span>
-        <h2 class="admin-title">Transparencia y Pipeline</h2>
-        <p class="admin-subtitle">El pipeline de 4 etapas (ingesta → auditoría → categorización → publicación) evalúa cada producto del catálogo. Estas mismas métricas alimentan el panel de transparencia de la web pública.</p>
-      </div>
-
       <div class="admin-card">
         <div class="card-header">
           <div class="header-icon">
@@ -1600,12 +1580,6 @@ const h = headerConfig[initialSection] || headerConfig.products;
 
     <!-- ═══════════════════ DESARROLLO IA ═══════════════════ -->
     <section data-admin-view="desarrollo-ia" class:list={['admin-dashboard-view', 'hidden-section', { 'is-visible': initialSection === 'desarrollo-ia' }]}>
-      <div class="view-heading">
-        <span class="admin-tag-pill">Entrenamiento y conectividad</span>
-        <h2 class="admin-title">Desarrollo IA</h2>
-        <p class="admin-subtitle">Entrena y alimenta a las dos personalidades de IA de Tradylor, gestiona sus claves y comprueba la conexión con los proveedores.</p>
-      </div>
-
       <!-- ── Personalidades ── -->
       <div class="admin-card">
         <div class="card-header">
@@ -8882,6 +8856,26 @@ function renderTableRows(products, resetPage = true) {
         btnSyncPrices.textContent = '🔄 Actualizar Precios';
       }
     });
+
+    // ── Cabecera única de sección: sigue a la pestaña activa ──────────────────
+    (function () {
+      const cfgEl = document.getElementById('adminHeaderConfig');
+      const pill = document.getElementById('adminHeaderPill');
+      const title = document.getElementById('adminHeaderTitle');
+      const subtitle = document.getElementById('adminHeaderSubtitle');
+      if (!cfgEl || !pill || !title || !subtitle) return;
+      let config = {};
+      try { config = JSON.parse(cfgEl.textContent || '{}'); } catch (e) { return; }
+      document.addEventListener('admin:section-change', (event) => {
+        const section = event.detail && event.detail.section;
+        const h = config[section];
+        if (!h) return;
+        pill.textContent = h.pill;
+        title.textContent = h.titulo;
+        subtitle.textContent = h.subtitulo;
+        document.title = h.titulo + ' | Panel de Administración | Tradylor';
+      });
+    })();
 
     // ── Estado, actualización masiva y frecuencia de ofertas ─────────────────
     // Servicio único /api/admin/offers/refresh (misma cola y bloqueo que el

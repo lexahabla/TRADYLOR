@@ -26,6 +26,9 @@ interface Props {
 }
 
 const { user, seccion, breadcrumb, titulo, documentTitle, descripcion, sub } = Astro.props;
+// En la portada del módulo la migaja termina en «Marketing»; en una subsección
+// añade su nombre. Antes salía «Panel / Marketing / Marketing».
+const esPortada = breadcrumb === 'Marketing';
 ---
 
 <Layout title={documentTitle} description={descripcion}>
@@ -37,9 +40,15 @@ const { user, seccion, breadcrumb, titulo, documentTitle, descripcion, sub } = A
       <div class="admin-tag-row">
         <a class="admin-tag-link" href="/upayp1b4">Panel de administración</a>
         <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <a class="admin-tag-link" href="/upayp1b4/marketing">Marketing</a>
-        <span class="admin-tag-sep" aria-hidden="true">/</span>
-        <div class="admin-tag-pill">{breadcrumb}</div>
+        {esPortada ? (
+          <div class="admin-tag-pill" aria-current="page">Marketing</div>
+        ) : (
+          <>
+            <a class="admin-tag-link" href="/upayp1b4/marketing">Marketing</a>
+            <span class="admin-tag-sep" aria-hidden="true">/</span>
+            <div class="admin-tag-pill" aria-current="page">{breadcrumb}</div>
+          </>
+        )}
       </div>
       <h1 class="admin-title">{titulo}</h1>
       <p class="admin-subtitle">{sub}</p>

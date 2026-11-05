@@ -97,6 +97,8 @@ const items = context === 'catalogo' ? catalogItems : userItems;
         el.classList.toggle('is-visible', el === target);
       });
       setActiveItem(section);
+      // Avisa a la cabecera de sección (upayp1b4.astro) para que siga a la pestaña activa.
+      document.dispatchEvent(new CustomEvent('admin:section-change', { detail: { section } }));
       if (pushUrl) {
         const nextUrl = new URL(window.location.href);
         nextUrl.searchParams.set('section', section);
@@ -133,8 +135,9 @@ const items = context === 'catalogo' ? catalogItems : userItems;
     });
 
     window.addEventListener('popstate', () => {
-      const section = new URL(window.location.href).searchParams.get('section');
-      if (section) showSection(section, { pushUrl: false, scroll: false });
+      // Sin ?section= la página vuelve a su sección por defecto (Catálogo).
+      const section = new URL(window.location.href).searchParams.get('section') || 'products';
+      showSection(section, { pushUrl: false, scroll: false });
     });
   });
 </script>
