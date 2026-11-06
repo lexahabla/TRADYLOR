@@ -123,8 +123,18 @@ export interface RecordResult {
   warnings: string[];
   entities: { productsCreated: number; offersCreated: number; offersUpdated: number };
   candidates?: ReviewCandidate[];
+  /** Destino aplicado a una ficha NUEVA (sólo si se eligió uno): «Categoría» o «Categoría › Subcategoría». */
+  categoryApplied?: string;
   /** Registro normalizado (sólo en revisiones: permite resolverlas más adelante). */
   record?: CanonicalRecord;
+}
+
+/** Destino de las fichas NUEVAS del lote (ya validado en el servidor contra categories.json). */
+export interface ImportTarget {
+  category: string;
+  categoryId: string;
+  subcategoryId?: string;
+  subcategoryName?: string;
 }
 
 export interface ImportDefaults {

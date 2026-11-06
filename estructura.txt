@@ -42,6 +42,7 @@ scripts/tests/deploy-config.test.mjs
 scripts/tests/facets.test.mjs
 scripts/tests/form-conflicts.test.mjs
 scripts/tests/identity.test.mjs
+scripts/tests/import-target.test.mjs
 scripts/tests/json-import-limits.test.mjs
 scripts/tests/json-import.test.mjs
 scripts/tests/offer-conflicts.test.mjs

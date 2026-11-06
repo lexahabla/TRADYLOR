@@ -44,6 +44,7 @@ import {
   type CanonicalRecord,
   type Condition,
   type ImportDefaults,
+  type ImportTarget,
   type RecordResult,
   type ReviewCandidate,
   type StoredOffer,
@@ -255,7 +256,7 @@ function platformLabel(platform: string): string {
   return platform ? platform.charAt(0).toUpperCase() + platform.slice(1) : 'Comercio';
 }
 
-function buildProduct(rec: CanonicalRecord, id: string, batchId: string, nowIso: string): P {
+function buildProduct(rec: CanonicalRecord, id: string, batchId: string, nowIso: string, target?: ImportTarget, sourceCategory?: string): P {
   const o = rec.offer;
   const isAmazon = o.platform === 'amazon';
   const asin = isAmazon && o.externalId && /^[A-Z0-9]{10}$/i.test(o.externalId) ? o.externalId.toUpperCase() : undefined;
@@ -274,6 +275,8 @@ function buildProduct(rec: CanonicalRecord, id: string, batchId: string, nowIso:
     source: { channel: 'json', batchId, adapter: 'json-import' },
   };
   const extra: Any = { importMeta: { channel: 'json', batchId, importedAt: nowIso }, priceReading: reading };
+  // Trazabilidad: la categoría que traía la fuente se conserva aunque el destino elegido en el panel la sustituya.
+  if (target && sourceCategory && sourceCategory !== target.category) extra.importMeta.sourceCategory = sourceCategory;
   if (Object.keys(identifiers).length) extra.identifiers = identifiers;
   if (Object.keys(variantAttributes).length) extra.variantAttributes = variantAttributes;
 
@@ -310,6 +313,11 @@ function buildProduct(rec: CanonicalRecord, id: string, batchId: string, nowIso:
     // verificado» y el checkout «Precio verificado el…» cuando existe). Recibir un JSON no verifica nada.
     extra,
   };
+  // Destino elegido en el panel (ya validado): ids jerárquicos como los del resto del catálogo.
+  if (target) {
+    product.category_id = target.categoryId;
+    if (target.subcategoryId) product.subcategory_id = target.subcategoryId;
+  }
   for (const key of Object.keys(product)) if (product[key] === undefined) delete product[key];
   return product as unknown as P;
 }
@@ -475,6 +483,8 @@ export interface EngineOptions {
   deleted?: DeletedChecks;
   /** Índice global del primer registro de este bloque. */
   indexOffset?: number;
+  /** Destino (ya validado) de las fichas NUEVAS; no afecta a fichas existentes. Sin él rigen las reglas habituales. */
+  target?: ImportTarget;
 }
 
 export interface EngineOutput {
@@ -613,7 +623,10 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
 
       // Crear ficha nueva. Sin categoría NO se publica sola: queda en revisión con sus
       // datos completos para resolverla después (no afecta a vincular ofertas).
-      if (!rec.product.category) {
+      // El destino elegido en el panel manda sobre la categoría de la fuente, pero SOLO aquí (ficha nueva).
+      const sourceCategory = rec.product.category;
+      const createRec: CanonicalRecord = opts.target ? { ...rec, product: { ...rec.product, category: opts.target.category } } : rec;
+      if (!createRec.product.category) {
         results.push(result(gi, 'review', { ...base, offerKey, reasons: ['sin_categoria'], record: rec }));
         return;
       }
@@ -629,7 +642,7 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
       }
       // Nunca se reemplaza una ficha existente por colisión de id.
       if (index.byId.has(id)) id = `${id}-${shortHash(`${offerKey}|${gi}|${opts.batchId}`, 4)}`;
-      const product = buildProduct(rec, id, opts.batchId, opts.nowIso);
+      const product = buildProduct(createRec, id, opts.batchId, opts.nowIso, opts.target, sourceCategory);
       created.push(product);
       index.register(product);
       results.push(
@@ -638,6 +651,7 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
           productId: id,
           offerKey,
           entities: { productsCreated: 1, offersCreated: 1, offersUpdated: 0 },
+          ...(opts.target ? { categoryApplied: opts.target.subcategoryName ? `${opts.target.category} › ${opts.target.subcategoryName}` : opts.target.category } : {}),
         }),
       );
     } catch (error) {

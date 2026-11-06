@@ -8,7 +8,8 @@
  *     "records": [ {...}, {...} ],       // 1-100 registros por petición
  *     "defaults": { "platform", "currency", "sellerName", "condition", "category" },
  *     "indexOffset": 0,                  // posición global del primer registro
- *     "dryRun": false                    // true = simula sin escribir nada
+ *     "dryRun": false,                   // true = simula sin escribir nada
+ *     "target": { "categoryId", "subcategoryId" }  // opcional: destino de las fichas NUEVAS (validado)
  *   }
  *
  * El cliente trocea el JSON en bloques de hasta 100 registros y los envía en
@@ -27,6 +28,7 @@ import { isBuildCatalogJobRunning } from '../../../../lib/buildCatalog/job';
 import { isPipelineJobRunning } from '../../../../lib/pipeline/job';
 import { MAX_CHUNK_RECORDS, processChunk, readBatchReport, safeBatchId, summarize } from '../../../../lib/jsonImport/service';
 import { cleanText, normalizeCurrency, sanitizeJson } from '../../../../lib/jsonImport/normalize';
+import { resolveImportTarget } from '../../../../lib/jsonImport/categoryResolver';
 import type { ImportDefaults } from '../../../../lib/jsonImport/types';
 
 export const prerender = false;
@@ -81,6 +83,9 @@ export const POST: APIRoute = async ({ request }) => {
   if (!Array.isArray(records) || records.length === 0 || records.length > MAX_CHUNK_RECORDS) {
     return json({ success: false, message: `Envía entre 1 y ${MAX_CHUNK_RECORDS} registros por petición.` }, 400);
   }
+  // Destino opcional de las fichas NUEVAS: se valida contra categories.json (existe y la subcategoría es de esa categoría).
+  const resolved = resolveImportTarget(body.target);
+  if (resolved.error) return json({ success: false, message: resolved.error }, 400);
   const dryRun = body.dryRun === true;
   const indexOffset = Number.isInteger(body.indexOffset) && (body.indexOffset as number) >= 0 ? (body.indexOffset as number) : 0;
 
@@ -93,8 +98,8 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
-    const out = processChunk({ batchId, records, defaults: readDefaults(body.defaults), dryRun, indexOffset });
-    return json({ success: true, dryRun, changed: out.changed, backup: out.backup, results: out.results, summary: summarize(out.results) });
+    const out = processChunk({ batchId, records, defaults: readDefaults(body.defaults), dryRun, indexOffset, target: resolved.target });
+    return json({ success: true, dryRun, changed: out.changed, backup: out.backup, results: out.results, summary: summarize(out.results), target: resolved.target });
   } catch (error) {
     console.error('[API admin/json-import] Error:', error);
     return json({ success: false, message: (error as Error)?.message || 'Error inesperado al importar.' }, 500);

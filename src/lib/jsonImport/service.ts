@@ -24,7 +24,7 @@ import { DATA_FILE_PATH, readProductsFromFile, writeProductsToFile } from '../pr
 import { loadDeletedSnapshot, matchDeletedOffer, matchDeletedProduct } from '../deletedIdentity';
 import { invalidateCatalogCache } from '../catalog';
 import { runImport } from './engine';
-import type { ImportDefaults, Outcome, RecordResult } from './types';
+import type { ImportDefaults, ImportTarget, Outcome, RecordResult } from './types';
 import { adaptApifyAmazonItem, isApifyAmazonItem } from './apifyAmazon';
 import { resolveCatalogCategory } from './categoryResolver';
 
@@ -76,6 +76,8 @@ export function processChunk(input: {
   defaults: ImportDefaults;
   dryRun: boolean;
   indexOffset: number;
+  /** Destino ya validado de las fichas nuevas (opcional). */
+  target?: ImportTarget;
 }): ChunkOutput & { backup?: string } {
   const nowIso = new Date().toISOString();
   // ── Sección crítica síncrona: leer → aplicar → escribir una sola vez. ──
@@ -92,6 +94,7 @@ export function processChunk(input: {
       offer: (offerKey) => matchDeletedOffer(offerKey, snapshot),
     },
     indexOffset: input.indexOffset,
+    target: input.target,
   });
   let backup: string | undefined;
   if (out.changed && !input.dryRun) {

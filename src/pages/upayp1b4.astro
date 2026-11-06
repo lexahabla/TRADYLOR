@@ -1066,6 +1066,17 @@ const h = headerConfig[initialSection] || headerConfig.products;
           <button type="button" id="jsonImpCatCancel" class="btn-secondary btn-sm" hidden title="Detiene la ejecución en Apify; se conservan los productos ya extraídos">Cancelar extracción</button>
           <button type="button" id="jsonImpCatLoad" class="btn-secondary btn-sm" hidden>Cargar la última extracción</button>
         </div>
+        <div class="jsonimp-row jsonimp-row-wrap jsonimp-target-row">
+          <div class="jsonimp-target-field">
+            <label class="field-label" for="jsonImpTargetCat">Categoría de destino <span class="label-hint">(opcional)</span></label>
+            <select id="jsonImpTargetCat" class="jsonimp-input" aria-describedby="jsonImpTargetHint"><option value="">Automática (reglas habituales)</option></select>
+          </div>
+          <div class="jsonimp-target-field">
+            <label class="field-label" for="jsonImpTargetSub">Subcategoría de destino <span class="label-hint">(opcional)</span></label>
+            <select id="jsonImpTargetSub" class="jsonimp-input" aria-describedby="jsonImpTargetHint" disabled><option value="">Sin subcategoría</option></select>
+          </div>
+        </div>
+        <p id="jsonImpTargetHint" class="label-hint" role="status" aria-live="polite">Sin destino, cada producto nuevo sigue las reglas habituales (si no se puede decidir, queda en revisión). Con destino, se aplica a las fichas NUEVAS de la importación —también si pegas o subes un JSON— y manda sobre la categoría de Apify; las fichas existentes conservan la suya. Puedes cambiarlo antes de importar sin repetir la extracción.</p>
         <p id="jsonImpCatStatus" class="label-hint" role="status" aria-live="polite">Pega la URL de una categoría, búsqueda o lista de más vendidos de Amazon. Obtener los productos no los guarda: después puedes simularlos o pulsar «Importar registros válidos».</p>
       </div>
 
@@ -10855,6 +10866,9 @@ function renderTableRows(products, resetPage = true) {
     var catCancel = $('jsonImpCatCancel');
     var catLoad = $('jsonImpCatLoad');
     var catStatus = $('jsonImpCatStatus');
+    var targetCat = $('jsonImpTargetCat');
+    var targetSub = $('jsonImpTargetSub');
+    var targetHint = $('jsonImpTargetHint');
     if (!asinInput || !runBtn || !textArea) return;
 
     var MAX_CHARS = 10000000;
@@ -11020,9 +11034,58 @@ function renderTableRows(products, resetPage = true) {
       progressText.textContent = text;
     }
 
+    // ── Destino de categoría de las fichas NUEVAS (reutiliza categories.json vía /api/categories) ──
+    var targetCats = [];
+    var targetLoaded = false;
+    var lastTargetText = '';
+    function fillSelect(sel, placeholder, items) {
+      sel.textContent = '';
+      var first = document.createElement('option');
+      first.value = ''; first.textContent = placeholder;
+      sel.appendChild(first);
+      items.forEach(function (c) {
+        var o = document.createElement('option');
+        o.value = c.id; o.textContent = c.name;
+        sel.appendChild(o);
+      });
+    }
+    function refreshSubs() {
+      var catId = targetCat.value;
+      var subs = catId ? targetCats.filter(function (c) { return c.parentId === catId; }) : [];
+      fillSelect(targetSub, catId && !subs.length ? 'Esta categoría no tiene subcategorías' : 'Sin subcategoría', subs);
+      targetSub.disabled = running || !subs.length;
+    }
+    function chosenTarget() {
+      var catId = targetCat.value;
+      if (!catId) return { categoryId: '', subcategoryId: '', text: '' };
+      var cat = targetCats.filter(function (c) { return c.id === catId; })[0];
+      var sub = targetSub.value ? targetCats.filter(function (c) { return c.id === targetSub.value; })[0] : null;
+      var text = (cat ? cat.name : catId) + (sub ? ' › ' + sub.name : '');
+      return { categoryId: catId, subcategoryId: sub ? sub.id : '', text: text };
+    }
+    function loadTargetCategories() {
+      if (targetLoaded) return;
+      targetLoaded = true;
+      fetch('/api/categories', { credentials: 'same-origin', cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (d) {
+        if (!d || !d.success || !Array.isArray(d.categories)) throw new Error('bad');
+        targetCats = d.categories;
+        fillSelect(targetCat, 'Automática (reglas habituales)', targetCats.filter(function (c) { return !c.parentId; }));
+        refreshSubs();
+      }).catch(function () {
+        targetLoaded = false;
+        targetHint.textContent = 'No se pudieron cargar las categorías del catálogo: se aplicarán las reglas habituales. Vuelve a tocar el selector para reintentarlo.';
+      });
+    }
+    targetCat.addEventListener('change', refreshSubs);
+    ['focusin', 'pointerdown'].forEach(function (evt) {
+      targetCat.addEventListener(evt, loadTargetCategories);
+      targetSub.addEventListener(evt, loadTargetCategories);
+    });
+
     function setRunning(on) {
       running = on;
       runBtn.disabled = on; fetchBtn.disabled = on; iaBtn.disabled = on; clearBtn.disabled = on;
+      targetCat.disabled = on; targetSub.disabled = on || !targetSub.options || targetSub.options.length < 2;
       cancelBtn.hidden = !on;
     }
 
@@ -11039,6 +11102,8 @@ function renderTableRows(products, resetPage = true) {
       if (platformInput.value.trim()) defaults.platform = platformInput.value.trim();
       if (currencyInput.value.trim()) defaults.currency = currencyInput.value.trim();
       var dryRun = !saveCheck.checked;
+      var target = chosenTarget();
+      lastTargetText = target.text;
       var batchId = newBatchId();
       var total = parsed.records.length;
       var results = [];
@@ -11059,7 +11124,9 @@ function renderTableRows(products, resetPage = true) {
           slice.push(rec);
           sliceChars += recChars;
         }
-        return postChunk({ batchId: batchId, records: slice, defaults: defaults, dryRun: dryRun, indexOffset: offset }, 0).then(function (data) {
+        var body = { batchId: batchId, records: slice, defaults: defaults, dryRun: dryRun, indexOffset: offset };
+        if (target.categoryId) body.target = { categoryId: target.categoryId, subcategoryId: target.subcategoryId };
+        return postChunk(body, 0).then(function (data) {
           for (var i = 0; i < data.results.length; i++) results.push(data.results[i]);
           offset += slice.length;
           setProgress(offset, total, (dryRun ? 'Simulando' : 'Importando') + '… ' + offset + ' / ' + total);
@@ -11181,6 +11248,14 @@ function renderTableRows(products, resetPage = true) {
       countersBox.appendChild(counter('Errores', by.error.length));
 
       detailsBox.textContent = '';
+      var destination = document.createElement('p');
+      destination.className = 'label-hint';
+      destination.id = 'jsonImpDestination';
+      var applied = by.created.length;
+      destination.textContent = lastTargetText
+        ? 'Destino de las fichas nuevas: ' + lastTargetText + ' (' + applied + ' ficha(s) ' + (dryRun ? 'se crearían' : 'creadas') + ' con ese destino; las fichas existentes conservan su categoría).'
+        : 'Destino de las fichas nuevas: reglas habituales de clasificación (sin destino elegido).';
+      detailsBox.appendChild(destination);
       var describe = function (r) {
         var label = '#' + (r.index + 1) + (r.title ? ' · ' + r.title : '');
         return label + ' — ' + (r.reasons || []).map(reasonText).join('; ');
@@ -11395,6 +11470,7 @@ function renderTableRows(products, resetPage = true) {
     function initCategory() {
       if (catInitDone) return;
       catInitDone = true;
+      loadTargetCategories();
       catApi('GET', '').then(function (res) {
       var d = res.data || {};
       if (!res.ok || !d.success) { catRun.disabled = false; return; }
@@ -11488,6 +11564,10 @@ function renderTableRows(products, resetPage = true) {
   .jsonimp-cat-limit { display: flex; flex-direction: column; gap: .25rem; flex: 0 0 9rem; }
   .jsonimp-cat-limit .field-label { margin: 0; }
   .jsonimp-cat-row .jsonimp-input { min-height: 44px; }
+  .jsonimp-target-row { align-items: flex-end; margin-top: .5rem; }
+  .jsonimp-target-field { display: flex; flex-direction: column; gap: .25rem; flex: 1 1 14rem; min-width: 0; }
+  .jsonimp-target-field .field-label { margin: 0; }
+  .jsonimp-target-row .jsonimp-input { min-height: 44px; width: 100%; }
   /* En móvil .jsonimp-row pasa a columna: los flex-basis horizontales no deben convertirse en alturas. */
   @media (max-width: 640px) { .jsonimp-cat-row .jsonimp-cat-url, .jsonimp-cat-row .jsonimp-cat-limit { flex: 0 0 auto; width: 100%; } .jsonimp-cat-row .btn-sm { flex: 0 0 auto; } }
   .jsonimp-msg { padding: .8rem 1rem; border-radius: var(--border-radius-sm); border: 1px solid transparent; font-size: .85rem; margin-bottom: 1rem; }

@@ -92,6 +92,7 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `api/redirect.ts` - Salida registrada (302) al enlace de afiliado del checkout
   - `api/health.ts` - Healthcheck público para Docker / Easy Panel (sin auth)
   - `api/admin/add-product.ts` - Alta/actualización de producto con IA (texto + imagen)
+  - `api/admin/json-import/index.ts` - Importación JSON por bloques; admite `target:{categoryId,subcategoryId}` (destino de las fichas NUEVAS, validado contra categories.json; las existentes no se tocan)
   - `api/admin/pipeline/index.ts` - Métricas de auditoría y reproceso del catálogo
     (síncrono o en segundo plano con `background:true`; `mode:'cancel'` lo detiene)
   - `api/admin/users/` - CRUD de usuarios del backend (`index`, `[id]`, `[id]/avatar`)

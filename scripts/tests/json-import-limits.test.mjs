@@ -92,7 +92,7 @@ function makeClient(fetchImpl) {
     };
     return (nodes[id] = node);
   };
-  const ids = ['jsonImpAsin', 'jsonImpFetch', 'jsonImpAsinHint', 'jsonImpText', 'jsonImpFile', 'jsonImpFileInfo', 'jsonImpPlatform', 'jsonImpCurrency', 'jsonImpSave', 'jsonImpRun', 'jsonImpAmazonIa', 'jsonImpCancel', 'jsonImpClear', 'jsonImpAlert', 'jsonImpProgress', 'jsonImpBarFill', 'jsonImpProgressText', 'jsonImpReport', 'jsonImpReportTitle', 'jsonImpCounters', 'jsonImpDetails', 'jsonImpDownload', 'jsonImpCatBlock', 'jsonImpCatUrl', 'jsonImpCatLimit', 'jsonImpCatRun', 'jsonImpCatCancel', 'jsonImpCatLoad', 'jsonImpCatStatus'];
+  const ids = ['jsonImpAsin', 'jsonImpFetch', 'jsonImpAsinHint', 'jsonImpText', 'jsonImpFile', 'jsonImpFileInfo', 'jsonImpPlatform', 'jsonImpCurrency', 'jsonImpSave', 'jsonImpRun', 'jsonImpAmazonIa', 'jsonImpCancel', 'jsonImpClear', 'jsonImpAlert', 'jsonImpProgress', 'jsonImpBarFill', 'jsonImpProgressText', 'jsonImpReport', 'jsonImpReportTitle', 'jsonImpCounters', 'jsonImpDetails', 'jsonImpDownload', 'jsonImpCatBlock', 'jsonImpCatUrl', 'jsonImpCatLimit', 'jsonImpCatRun', 'jsonImpCatCancel', 'jsonImpCatLoad', 'jsonImpCatStatus', 'jsonImpTargetCat', 'jsonImpTargetSub', 'jsonImpTargetHint'];
   ids.forEach(el);
   nodes.jsonImpSave.checked = true;
   const sandbox = {
@@ -172,13 +172,14 @@ test('cliente: un error del servidor en mitad del lote se explica y permite rean
 });
 
 test('cliente: «URL de categoría» no hace ninguna petición al cargar la página; el estado se pide al usarlo y sólo una vez', async () => {
-  const { nodes, calls } = makeClient(async () => ({ ok: true, status: 200, json: async () => ({ success: true, configured: true, defaultLimit: 10, maxLimit: 50, active: null, latest: null }) }));
+  const { nodes, calls } = makeClient(async (url) => ({ ok: true, status: 200, json: async () => (String(url) === '/api/categories' ? { success: true, categories: [{ id: 'c1', name: 'Audio' }, { id: 's1', name: 'Bluetooth', parentId: 'c1' }] } : { success: true, configured: true, defaultLimit: 10, maxLimit: 50, active: null, latest: null }) }));
   assert.equal(calls.length, 0, 'al cargar no se llama a /api');
   assert.equal(nodes.jsonImpCatLimit.value, '', 'el valor inicial (10) lo pone el HTML, no el script');
   nodes.jsonImpCatBlock.fire('focusin');
   nodes.jsonImpCatBlock.fire('pointerdown');
   await new Promise((r) => setTimeout(r, 5));
-  assert.equal(calls.length, 1);
-  assert.match(String(calls[0][0]), /\/api\/admin\/category-extract$/);
+  assert.equal(calls.length, 2, 'una petición de estado y una de categorías, sólo una vez cada una');
+  assert.ok(calls.some((c) => /category-extract$/.test(String(c[0]))));
+  assert.ok(calls.some((c) => String(c[0]) === '/api/categories'));
   assert.equal(nodes.jsonImpCatLimit.max, '50');
 });
