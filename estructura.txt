@@ -47,6 +47,7 @@ scripts/tests/offer-conflicts.test.mjs
 scripts/tests/offers-integration.test.mjs
 scripts/tests/offers-preservation.test.mjs
 scripts/tests/price-verification.test.mjs
+scripts/tests/scrape-request.test.mjs
 scripts/tests/source-fingerprint.test.mjs
 scripts/tests/refresh.test.mjs
 scripts/tests/repair.test.mjs
@@ -180,6 +181,7 @@ src/lib/reminders.ts
 src/lib/salesLedger.ts
 src/lib/salesLedgerCore.ts
 src/lib/sectionSuggestions.ts
+src/lib/scraperMarket.ts
 src/lib/sections.ts
 src/lib/services/affiliateAdapter.ts
 src/lib/services/aiMasterPrompt.ts

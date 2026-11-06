@@ -161,6 +161,11 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   la consola de IA del backend (`/api/admin/ai-console`, panel admin) como el
   Asistente IA del frontend (`/api/asistente-ia`, widget flotante).
 - Claves de cada red de afiliación (opcional; activa los conectores correspondientes).
+  ScraperAPI (importación/«Obtener JSON» de Amazon por ASIN): `SCRAPER_API_KEY`;
+  `SCRAPER_API_TLD` (opcional, por defecto `es`) fija la tienda de Amazon y se envía
+  SIEMPRE explícita (sin ella ScraperAPI deduce el dominio de `country_code` y un valor
+  distinto de `es` consulta amazon.com → 404 «Page Not Found»); `SCRAPER_API_COUNTRY_CODE`
+  se alinea con ese dominio (ver `src/lib/scraperMarket.ts`).
   `EBAY_COMMISSION_RATE` (opcional): % base de comisión EPN que usa el catálogo de
   eBay para la columna "Comisión %" (4-6%; por defecto 5).
 - **Desarrollo remoto (opcional)**: `GITHUB_PAT` (push a GitHub desde el contenedor),

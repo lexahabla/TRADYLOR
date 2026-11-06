@@ -38,13 +38,13 @@ import { computeBadge } from './curation';
 import { brandIsMerchant, normalizeBrand, sameSourceId } from './offerIdentity';
 import { mergeReimport } from './reimportMerge';
 import { matchDeletedProduct } from './deletedIdentity';
+import { resolveAmazonMarket, marketQuery } from './scraperMarket';
 import type { Product as FlatProduct, Product as AdminProduct } from './productStore';
 
 const DATA_FILE_PATH = dataFile('products.json');
 
 /** Clave pública de ScraperAPI (sólo servidor; nunca se expone al cliente). */
 const SCRAPER_API_KEY = process.env.SCRAPER_API_KEY || '';
-const SCRAPER_API_COUNTRY_CODE = process.env.SCRAPER_API_COUNTRY_CODE?.trim() || 'es';
 
 /** Endpoint estructurado de Amazon de ScraperAPI (región España). */
 const SCRAPER_API_BASE = 'https://api.scraperapi.com/structured/amazon/product/v1';
@@ -199,8 +199,10 @@ export async function scrapeAmazonProduct(
   const maxRetries = opts.maxRetries ?? 3;
   const retryDelayMs = opts.retryDelayMs ?? 2000;
 
-  const countryCode = opts.countryCode ?? SCRAPER_API_COUNTRY_CODE;
-  const url = `${SCRAPER_API_BASE}?api_key=${encodeURIComponent(SCRAPER_API_KEY)}&asin=${encodeURIComponent(asin)}&country_code=${encodeURIComponent(countryCode)}&retry_404=true`;
+  // Dominio (tld) explícito: ver lib/scraperMarket.ts (sin él, un country_code distinto de «es» consulta amazon.com y da 404).
+  const market = resolveAmazonMarket(opts.countryCode);
+  const countryCode = market.countryCode;
+  const url = `${SCRAPER_API_BASE}?api_key=${encodeURIComponent(SCRAPER_API_KEY)}&asin=${encodeURIComponent(asin)}&${marketQuery(market)}&retry_404=true`;
 
   let lastError: unknown = null;
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
