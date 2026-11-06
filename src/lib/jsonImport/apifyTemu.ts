@@ -10,7 +10,8 @@
  *
  * Reglas (todas con prueba):
  *  - Moneda: sólo la que declara el actor (ISO). Si no es EUR → REVISIÓN (`moneda_no_euro`): no se convierte ni se asume
- *    mercado español. Un prefijo de mercado en `sourceUrl` distinto de /es/ también va a revisión.
+ *    mercado español. Un prefijo de mercado en la URL distinto de /es/ también va a revisión. VERIFICADO con ejecuciones reales
+ *    (7-nov-2026): una URL sin prefijo devuelve el mercado de EE. UU. en USD; con /es/ devuelve EUR y títulos en español.
  *  - Precio «desde» (texto «desde/from/+»), precio que varía entre variantes, oferta relámpago y descuentos con cupón/código
  *    → REVISIÓN: nunca se presentan como precio final garantizado.
  *  - Las variantes (`skus`) no se importan como fichas (una ficha = una variante): se avisa de cuántas hay; no heredan el
@@ -104,8 +105,9 @@ export function adaptApifyTemuItem(rawInput: unknown, ctx: AdaptContext = {}): A
   const currency = /^[A-Z]{3}$/.test(currencyRaw) ? currencyRaw : '';
   if (!currency) meta.errors.push('moneda_ausente_no_se_asume');
   else if (currency !== 'EUR') meta.review.push(`moneda_no_euro:${currency}`);
-  else meta.warnings.push('mercado_espana_no_verificable_por_la_moneda');
-  const market = marketOf(text(item.sourceUrl, 600));
+  const market = marketOf(text(item.sourceUrl, 600)) || marketOf(text(item.productUrl, 600));
+  // EUR + prefijo /es/ en la URL de origen = mercado español comprobado; EUR sin prefijo no lo demuestra (también es la moneda de DE/FR/IT…).
+  if (currency === 'EUR' && market !== 'es') meta.warnings.push('mercado_espana_no_verificable_por_la_moneda');
   if (market && market !== 'es') meta.review.push(`mercado_distinto_de_espana:${market}`);
 
   // ── Precio: sólo el que el actor da como actual; «desde», variable o condicionado → revisión ──

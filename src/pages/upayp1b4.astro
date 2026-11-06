@@ -11342,8 +11342,8 @@ function renderTableRows(products, resetPage = true) {
       temu: {
         label: 'URL de producto o de categoría de Temu',
         hint: '(opcional · extrae con Apify (hypebridge/temu-scraper); no guarda nada en el catálogo)',
-        placeholder: 'https://www.temu.com/category-o3-248.html',
-        idle: 'Pega la URL de un producto (…-g-<id>.html) o de una categoría (…-o3-<id>.html) de Temu. No se admiten búsquedas, colecciones, ofertas relámpago ni tiendas. Con una URL de producto se extrae solo ese producto. Una categoría puede devolver menos productos de los pedidos, o ninguno: eso no prueba que esté vacía. Coste aproximado: 0,03 USD de arranque + 0,022 USD por producto. Obtener los productos no los guarda: después puedes simularlos o pulsar «Importar registros válidos».'
+        placeholder: 'https://www.temu.com/es/category-o3-248.html',
+        idle: 'Pega la URL de un producto (…-g-<id>.html) o de una categoría (…-o3-<id>.html) de Temu España: debe llevar /es/ (sin él, Temu responde con el mercado de EE. UU. en USD). No se admiten búsquedas, colecciones, ofertas relámpago ni tiendas. Con una URL de producto se extrae solo ese producto. Una categoría puede devolver menos productos de los pedidos, o ninguno: eso no prueba que esté vacía. Coste aproximado: 0,03 USD de arranque + 0,016 USD por producto (medido: 10 productos = 0,19 USD). Obtener los productos no los guarda: después puedes simularlos o pulsar «Importar registros válidos».'
       }
     };
     function setSourceUi() {
@@ -11466,6 +11466,7 @@ function renderTableRows(products, resetPage = true) {
       if (!url) { setCatStatus(source === 'temu' ? 'Escribe la URL de un producto o de una categoría de Temu.' : 'Escribe la URL de la categoría de Amazon.', 'error'); catUrl.focus(); return; }
       if (!/^https:\/\//i.test(url)) { setCatStatus('La URL debe empezar por https://', 'error'); catUrl.focus(); return; }
       if (source === 'temu' && !/^https:\/\/(\w[\w-]*\.)*temu\.com\//i.test(url)) { setCatStatus('Solo se admiten URL de Temu (https://www.temu.com/…).', 'error'); catUrl.focus(); return; }
+      if (source === 'temu' && !/^https:\/\/[^/]+\/es(-[a-z]{2})?\//i.test(url)) { setCatStatus('La URL de Temu debe indicar el mercado español (https://www.temu.com/es/…): sin él se obtendrían precios en USD.', 'error'); catUrl.focus(); return; }
       if (!limitRaw || !/^\d+$/.test(limitRaw) || limit < 1) { setCatStatus('El máximo de productos debe ser un entero de 1 en adelante.', 'error'); catLimit.focus(); return; }
       if (limit > catMax) { setCatStatus('El máximo permitido por el servidor es ' + catMax + ' productos.', 'error'); catLimit.focus(); return; }
       setCatBusy(true);

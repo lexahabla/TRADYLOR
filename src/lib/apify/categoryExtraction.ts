@@ -200,8 +200,14 @@ export function validateTemuUrl(raw: unknown): { url: string; kind: UrlKind } {
     throw new ExtractionError('La portada de Temu no está admitida aquí (es un flujo de recomendaciones, no una categoría). Usa la URL de una categoría o de un producto.');
   }
   url.hash = '';
-  if (/(^|[-/])g-\d{6,20}\.html$/.test(path) || /[?&]goods_id=\d{6,20}/.test(url.search)) return { url: url.toString(), kind: 'product' };
-  if (/(^|[-/])o\d+-\d+\.html$/.test(path)) return { url: url.toString(), kind: 'category' };
+  const kind: UrlKind | null = /(^|[-/])g-\d{6,20}\.html$/.test(path) || /[?&]goods_id=\d{6,20}/.test(url.search) ? 'product' : /(^|[-/])o\d+-\d+\.html$/.test(path) ? 'category' : null;
+  if (kind) {
+    // Sin prefijo de mercado el actor usa el de EE. UU. y devuelve USD (verificado en una ejecución real): se rechaza ANTES de gastar.
+    if (!/^\/es(-[a-z]{2})?\//.test(path)) {
+      throw new ExtractionError('La URL de Temu no indica el mercado español: el actor usaría el de EE. UU. y devolvería precios en USD. Usa la URL con /es/, por ejemplo https://www.temu.com/es/category-o3-248.html (ábrela desde Temu España).');
+    }
+    return { url: url.toString(), kind };
+  }
   if (TEMU_CHANNEL.test(full)) throw new ExtractionError(TEMU_CHANNEL_MSG);
   throw new ExtractionError('Tipo de URL de Temu no admitido. Solo se admiten productos (…-g-<id>.html) y categorías (…-o3-<id>.html).');
 }
@@ -215,9 +221,12 @@ export function buildTemuInput(url: string, limit: number): Record<string, unkno
   return { startUrls: [{ url }], maxItems: limit, getProductDetails: process.env.APIFY_TEMU_GET_DETAILS !== 'false', extractReviews: false };
 }
 
-// Precio por evento (nivel FREE, el más caro): arranque 0,03 USD por GB de memoria, listado 0,006 y detalle 0,016 por producto.
+// Precio por evento (nivel FREE): arranque 0,03 USD por GB de memoria; 0,006 por producto de listado y 0,016 por producto con
+// detalle. MEDIDO en producción (7-nov-2026): 10 productos con detalle = 0,19 USD y 3 = 0,078 USD (0,03 + 0,016 × n): el evento
+// de detalle sustituye al de listado. El tope por ejecución sigue calculándose con listado+detalle (margen).
 const TEMU_START_USD = 0.03;
 const TEMU_PER_PRODUCT_USD = 0.006 + 0.016;
+const TEMU_MEASURED_PER_PRODUCT_USD = 0.016;
 /** El actor declara 4 GB por defecto (4 eventos de arranque); se pide el mínimo que declara (1 GB) para pagar 1. */
 export const TEMU_MEMORY_MB = 1024;
 
@@ -225,9 +234,9 @@ export function maxTemuChargeFor(limit: number, cap = extractionConfig().maxCost
   return Math.min(cap, Math.max(0.1, Math.round((TEMU_START_USD + limit * TEMU_PER_PRODUCT_USD) * 1.5 * 1000) / 1000));
 }
 
-/** Estimación del coste máximo en USD (arranque + listado + detalle por producto). */
+/** Estimación del coste en USD con detalle activado (arranque + 0,016 por producto, medido). */
 export function estimateTemuCost(limit: number): number {
-  return Math.round((TEMU_START_USD + limit * TEMU_PER_PRODUCT_USD) * 1000) / 1000;
+  return Math.round((TEMU_START_USD + limit * TEMU_MEASURED_PER_PRODUCT_USD) * 1000) / 1000;
 }
 
 /* ───────────────────────── Cliente de Apify ───────────────────────── */

@@ -23,8 +23,8 @@ cats.writeCategories([{ id: 'c-audio', name: 'Audio', slug: 'audio', icon: 'A', 
 cats.invalidateCategoriesCache();
 
 const SAMPLE = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'temu-sample.synthetic.json'), 'utf8'));
-const CAT = 'https://www.temu.com/category-o3-248.html';
-const PROD = 'https://www.temu.com/-g-601099513224343.html';
+const CAT = 'https://www.temu.com/es/category-o3-248.html';
+const PROD = 'https://www.temu.com/es/-g-601099513224343.html';
 const jobsFile = path.join(dir, 'category-extractions.json');
 const resetJobs = () => { fs.rmSync(jobsFile, { force: true }); fs.rmSync(path.join(dir, 'category-extractions'), { recursive: true, force: true }); };
 // Parámetros de ENTRADA reales del actor (build 0.2.13 consultado el 7-nov-2026): no se admiten nombres inventados.
@@ -38,9 +38,9 @@ const warn = (i) => adapt(i).__import.warnings;
 test('URL de Temu: admite producto y categoría; rechaza búsquedas, tiendas, colecciones, portada y destinos ajenos', () => {
   assert.deepEqual(lib.validateTemuUrl(PROD), { url: PROD, kind: 'product' });
   assert.equal(lib.validateTemuUrl(CAT).kind, 'category');
-  assert.equal(lib.validateTemuUrl('https://www.temu.com/es/category-o3-248.html').kind, 'category');
+  assert.equal(lib.validateTemuUrl('https://www.temu.com/es-en/category-o3-248.html').kind, 'category');
   assert.equal(lib.validateTemuUrl('https://www.temu.com/es/auriculares-flash-bluetooth-g-601099513224343.html').kind, 'product', 'una palabra como «flash» en el título del producto no es un canal');
-  assert.equal(lib.validateTemuUrl('https://www.temu.com/-o3-248.html').kind, 'category');
+  assert.equal(lib.validateTemuUrl('https://www.temu.com/es/-o3-248.html').kind, 'category');
   const cases = [
     ['', /Indica la URL/], ['temu.com/x', /no es válida/], ['http://www.temu.com/-g-601099513224343.html', /https/],
     ['https://user:pw@www.temu.com/-g-601099513224343.html', /credenciales/], ['https://www.amazon.es/dp/B01EXDG2MO', /Sólo se admiten URL de Temu/],
@@ -48,6 +48,8 @@ test('URL de Temu: admite producto y categoría; rechaza búsquedas, tiendas, co
     ['https://www.temu.com/search_result.html?search_key=auriculares', /búsquedas/], ['https://www.temu.com/es/algo?query=auriculares', /búsquedas/],
     ['https://www.temu.com/mall.html?mall_id=634418218148716', /tienda/], ['https://www.temu.com/', /portada/], ['https://www.temu.com/es', /portada/],
     ['https://www.temu.com/us/bestsellers.html', /colecciones y canales/], ['https://www.temu.com/channel/lightning-deals.html', /colecciones y canales/],
+    ['https://www.temu.com/category-o3-248.html', /no indica el mercado español/], ['https://www.temu.com/-g-601099513224343.html', /no indica el mercado español/],
+    ['https://www.temu.com/us/category-o3-248.html', /no indica el mercado español/], ['https://www.temu.com/de-en/category-o3-248.html', /no indica el mercado español/],
     ['https://www.temu.com/politica-de-privacidad.html', /Tipo de URL de Temu no admitido/], ['https://www.temu.com/' + 'a'.repeat(2100), /demasiado larga/],
   ];
   for (const [bad, re] of cases) assert.throws(() => lib.validateTemuUrl(bad), (e) => e instanceof lib.ExtractionError && re.test(e.message), String(bad).slice(0, 70));
@@ -68,7 +70,8 @@ test('entrada del actor de Temu: sólo parámetros de su esquema, límite → ma
 
 test('coste de Temu: 1 GB de memoria (arranque 0,03 USD), tope por ejecución y estimación documentada', () => {
   assert.equal(lib.TEMU_MEMORY_MB, 1024, 'el mínimo declarado por el actor; con su 4 GB por defecto el arranque costaría 4 veces más');
-  assert.equal(lib.estimateTemuCost(10), 0.25);
+  assert.equal(lib.estimateTemuCost(10), 0.19, 'medido en una ejecución real: 10 productos con detalle = 0,19 USD');
+  assert.equal(lib.estimateTemuCost(3), 0.078, 'medido: 3 productos = 0,078 USD');
   assert.equal(lib.maxTemuChargeFor(10), 0.375);
   assert.ok(lib.maxTemuChargeFor(100) <= 2 && lib.maxTemuChargeFor(1) >= 0.1);
 });
@@ -172,7 +175,7 @@ test('idempotencia entre orígenes: misma URL+límite+origen se reutiliza; otro 
     const [x, y] = [await jsonOf(a), await jsonOf(b)];
     assert.equal(x.job.id, y.job.id);
     assert.equal(runPosts(f).length, 1, 'doble clic = una ejecución');
-    assert.equal((await post({ source: 'temu', url: 'https://www.temu.com/category-o3-300.html', limit: 10 })).status, 409);
+    assert.equal((await post({ source: 'temu', url: 'https://www.temu.com/es/category-o3-300.html', limit: 10 })).status, 409);
     assert.equal((await post({ source: 'amazon', url: 'https://www.amazon.es/s?k=a', limit: 10 })).status, 409);
     const cfg = await jsonOf(await get());
     assert.equal(cfg.active.source, 'temu', 'al recargar se recupera la ejecución de Temu');
@@ -263,7 +266,9 @@ test('adaptador: moneda y mercado — sólo EUR del mercado español; USD, moned
   const noCurrency = temu.adaptApifyTemuItem({ ...SAMPLE[0], currency: undefined });
   assert.ok(noCurrency.__import.errors.includes('moneda_ausente_no_se_asume'));
   assert.equal(noCurrency.offer.currency, undefined);
-  assert.ok(warn(0).includes('mercado_espana_no_verificable_por_la_moneda'), 'EUR no demuestra mercado español: se avisa');
+  const eurNoMarket = temu.adaptApifyTemuItem({ ...SAMPLE[0], sourceUrl: undefined, productUrl: 'https://www.temu.com/-g-601099513224343.html' });
+  assert.ok(eurNoMarket.__import.warnings.includes('mercado_espana_no_verificable_por_la_moneda'), 'EUR sin prefijo de mercado no demuestra mercado español: se avisa');
+  assert.ok(!warn(0).includes('mercado_espana_no_verificable_por_la_moneda'), 'EUR + /es/ = mercado español comprobado');
   assert.deepEqual(rev(0), [], 'sourceUrl /es/ y EUR: sin motivo de revisión');
 });
 
@@ -342,6 +347,47 @@ test('Temu: destino de categoría, simulación y fichas existentes igual que Ama
   const other = run([{ ...SAMPLE[0], price: 11.5, skus: SAMPLE[0].skus.map((k) => ({ ...k, price: 11.5 })), extractedAt: '2026-11-06T12:00:00.000Z' }], { target: { category: 'Audio', categoryId: 'c-audio' } });
   assert.equal(other.results[0].outcome, 'updated', JSON.stringify(other.results[0]));
   assert.equal(readCatalog(dir)[0].category, 'Hogar', 'una ficha existente conserva su categoría');
+});
+
+/* ───────────── Muestras REALES del actor (ejecuciones de producción del 7-nov-2026, sin importar nada) ───────────── */
+
+const REAL_US = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'temu-real-sample-us.json'), 'utf8'));
+const REAL_ES = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'temu-real-sample-es.json'), 'utf8'));
+
+test('muestra REAL sin /es/ (categoría pedida sin mercado): 10 productos en USD → todos a revisión, ninguno se importa', () => {
+  assert.equal(REAL_US.length, 10);
+  assert.ok(REAL_US.every((o) => temu.isApifyTemuItem(o)));
+  const adapted = REAL_US.map((o) => temu.adaptApifyTemuItem(o, { resolveCategory: () => ({}) }));
+  assert.ok(adapted.every((r) => r.__import.errors.length === 0), 'sin errores de adaptación');
+  assert.ok(adapted.every((r) => r.__import.review.includes('moneda_no_euro:USD')), 'USD → revisión, sin convertir');
+  assert.ok(adapted.every((r) => r.offer.platform === 'temu' && /^\d{6,20}$/.test(r.offer.externalId) && r.offer.url.startsWith('https://www.temu.com/') && r.offer.affiliateUrl === undefined));
+  writeCatalog(dir, []);
+  const out = run(REAL_US, { target: { category: 'Audio', categoryId: 'c-audio' } });
+  assert.deepEqual(out.results.map((r) => r.outcome), Array(10).fill('review'));
+  assert.equal(readCatalog(dir).length, 0);
+});
+
+test('muestra REAL con /es/: EUR y mercado español comprobados → se importan; enlace de origen con /es/, sin afiliado, imágenes del producto', () => {
+  assert.equal(REAL_ES.length, 3);
+  const adapted = REAL_ES.map((o) => temu.adaptApifyTemuItem(o, { resolveCategory: () => ({}) }));
+  assert.ok(adapted.every((r) => r.__import.review.length === 0 && r.__import.errors.length === 0), JSON.stringify(adapted.map((r) => r.__import)));
+  adapted.forEach((r, i) => {
+    const o = REAL_ES[i];
+    assert.equal(r.offer.currency, 'EUR');
+    assert.equal(r.offer.price, o.price);
+    assert.match(r.offer.url, /^https:\/\/www\.temu\.com\/es\//);
+    const own = new Set([o.imageUrl, ...(o.galleryImages ?? [])]);
+    assert.ok(r.product.images.length > 0 && r.product.images.every((u) => own.has(u)), 'sólo imágenes del producto');
+    assert.ok(r.__import.warnings.some((w) => w.startsWith('variantes_no_importadas:')), 'las variantes no se importan como fichas');
+    assert.deepEqual(r.variant, {});
+  });
+  writeCatalog(dir, []);
+  const out = run(REAL_ES, { target: { category: 'Audio', categoryId: 'c-audio' } });
+  assert.deepEqual(out.results.map((r) => r.outcome), ['created', 'created', 'created']);
+  const stored = readCatalog(dir);
+  assert.ok(stored.every((p) => p.network === 'temu' && p.currency === 'EUR' && p.link_status === 'pending' && /temu\.com\/es\//.test(p.extra.sourceUrl) && p.category === 'Audio'));
+  assert.equal(run(REAL_ES, { target: { category: 'Audio', categoryId: 'c-audio' } }).results.filter((r) => r.outcome === 'created').length, 0, 'reimportar no duplica');
+  assert.equal(readCatalog(dir).length, 3);
 });
 
 test('el adaptador de Temu no usa IA ni red', () => {

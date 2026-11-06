@@ -174,9 +174,10 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   `APIFY_PROXY_COUNTRY` y `APIFY_LANGUAGE` (sólo si se definen se envían al actor). El límite de productos
   viaja a Apify (`maxItemsPerStartUrl`); no se envían `countryCode`/`zipCode` (cobran 0,06 USD por resultado).
   Temu (mismo bloque, selector «Origen»): actor `hypebridge/temu-scraper` (id 2CKn7F7pA4eH2mVRm; `APIFY_TEMU_ACTOR` lo
-  sobreescribe) con el mismo `APIFY_TOKEN`. Admite URL de producto (…-g-<id>.html) y de categoría (…-o3-<id>.html); rechaza
+  sobreescribe) con el mismo `APIFY_TOKEN`. Admite URL de producto (…-g-<id>.html) y de categoría (…-o3-<id>.html) CON
+  prefijo de mercado /es/ (sin él el actor responde con EE. UU. en USD; se rechaza antes de gastar); rechaza
   búsquedas, colecciones, ofertas relámpago, tiendas y portada. El límite viaja como `maxItems`; `getProductDetails` va activado
-  (`APIFY_TEMU_GET_DETAILS=false` lo desactiva) y se pide 1 GB de memoria (arranque 0,03 USD + ~0,022 USD por producto).
+  (`APIFY_TEMU_GET_DETAILS=false` lo desactiva) y se pide 1 GB de memoria (arranque 0,03 USD + 0,016 USD por producto; medido: 10 productos = 0,19 USD).
   Sólo EUR del mercado español se importa solo: otra moneda, «desde», precio variable, oferta relámpago o cupón → revisión.
   `EBAY_COMMISSION_RATE` (opcional): % base de comisión EPN que usa el catálogo de
   eBay para la columna "Comisión %" (4-6%; por defecto 5).
