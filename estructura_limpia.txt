@@ -46,6 +46,8 @@ scripts/tests/import-target.test.mjs
 scripts/tests/temu-extract.test.mjs
 scripts/tests/fixtures/temu-sample.synthetic.json
 scripts/tests/fixtures/temu-real-sample-es.json
+scripts/tests/fixtures/temu-real-sample-us-category-1893.json
+scripts/tests/fixtures/amazon-real-sample-es.json
 scripts/tests/fixtures/temu-real-sample-us.json
 scripts/tests/json-import-limits.test.mjs
 scripts/tests/json-import.test.mjs

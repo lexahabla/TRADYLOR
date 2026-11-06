@@ -426,3 +426,47 @@ test('lectura de elementos crudos (?raw=1): sólo lectura, requiere autenticaci�
     assert.equal(anon.status, 401);
   } finally { f.restore(); }
 });
+
+/* ───────────── Muestra REAL adjunta por el usuario (categoría 1893, mercado EE. UU.; no se importa) ───────────── */
+
+const REAL_1893 = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'temu-real-sample-us-category-1893.json'), 'utf8'));
+
+test('muestra real categoría 1893 (sin /es/): 10 productos en USD → adaptación sin errores, todos a revisión, nada se importa', () => {
+  assert.equal(REAL_1893.length, 10);
+  assert.ok(REAL_1893.every((o) => temu.isApifyTemuItem(o)));
+  const adapted = REAL_1893.map((o) => temu.adaptApifyTemuItem(o, { resolveCategory: () => ({}) }));
+  assert.ok(adapted.every((r) => r.__import.errors.length === 0));
+  assert.ok(adapted.every((r) => r.__import.review.length === 1 && r.__import.review[0] === 'moneda_no_euro:USD'), 'el único motivo es la moneda: ni «desde» ni variantes con precio distinto ni cupones');
+  // marketPrice 0 (precio de referencia ausente) no se presenta como «precio anterior»
+  assert.ok(adapted.every((r) => r.offer.originalPrice === undefined || r.offer.originalPrice > r.offer.price));
+  assert.equal(adapted[1].offer.originalPrice, undefined);
+  assert.equal(adapted[9].offer.originalPrice, 149.3);
+  // lo que la fuente no trae no se inventa (ninguna trae vendedor ni afiliado); la valoración es la de la fuente
+  assert.ok(adapted.every((r, i) => r.product.rating === REAL_1893[i].rating && r.product.reviewsCount === REAL_1893[i].reviewCount));
+  assert.ok(adapted.every((r) => r.offer.sellerName === undefined && r.offer.affiliateUrl === undefined));
+  // variantes: el primer producto trae 4 SKUs (dos con el mismo skuId) → se avisa, no se importan ni heredan precio
+  assert.ok(adapted[0].__import.warnings.includes('variantes_no_importadas:4'));
+  assert.deepEqual(adapted[0].variant, {});
+  // envío «Free Shipping» incondicional → gratis; sin texto → desconocido
+  assert.equal(adapted[0].offer.shipping.free, true);
+  assert.equal(adapted[2].offer.shipping, undefined);
+  // las imágenes de los SKUs que no están en la galería no se añaden (aquí todas coinciden con galleryImages)
+  adapted.forEach((r, i) => { const own = new Set([REAL_1893[i].imageUrl, ...REAL_1893[i].galleryImages]); assert.ok(r.product.images.every((u) => own.has(u))); });
+  // enlaces: URL de origen canónica de Temu
+  assert.ok(adapted.every((r, i) => r.offer.url === REAL_1893[i].productUrl && /-g-\d{6,20}\.html$/.test(r.offer.url)));
+  writeCatalog(dir, []);
+  const out = run(REAL_1893, { target: { category: 'Hogar', categoryId: 'c-hogar' } });
+  assert.deepEqual(out.results.map((r) => r.outcome), Array(10).fill('review'));
+  assert.equal(readCatalog(dir).length, 0);
+});
+
+test('muestra real 1893 con moneda EUR y /es/ simulados: la estructura real se importa limpia (10 fichas, sin duplicados al reimportar)', () => {
+  const es = REAL_1893.map((o) => ({ ...o, currency: 'EUR', sourceUrl: o.sourceUrl.replace('temu.com/', 'temu.com/es/'), skus: o.skus.map((s) => ({ ...s })) }));
+  writeCatalog(dir, []);
+  const target = { category: 'Hogar', categoryId: 'c-hogar' };
+  const out = run(es, { target });
+  assert.deepEqual(out.results.map((r) => r.outcome), Array(10).fill('created'), JSON.stringify(out.results.filter((r) => r.outcome !== 'created')));
+  assert.equal(readCatalog(dir).length, 10);
+  assert.equal(run(es, { target }).results.filter((r) => r.outcome === 'created').length, 0);
+  assert.equal(readCatalog(dir).length, 10);
+});

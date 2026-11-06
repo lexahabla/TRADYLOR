@@ -455,3 +455,26 @@ test('la extracción nunca ejecuta IA ni toca el catálogo: el módulo no import
   assert.doesNotMatch(src, /from '\.\.\/ai'|lib\/ai'|enrich|openai|anthropic/i);
   assert.doesNotMatch(src, /writeProductsToFile|productStore|updateCatalog/);
 });
+
+/* ───────────── Muestra REAL de Amazon (extracción de producción del 7-nov-2026, 10 productos, 0,04 USD; no se importó) ───────────── */
+
+test('muestra real de Amazon (categoría de portátiles, amazon.es): 10 productos EUR adaptados sin errores ni revisión; destino aplicado en simulación', async () => {
+  fs.writeFileSync(path.join(dir, 'products.json'), '[]'); // catálogo vacío: pruebas anteriores de este fichero ya importaron algunas de estas fichas
+  const real = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'amazon-real-sample-es.json'), 'utf8'));
+  assert.equal(real.length, 10);
+  assert.ok(real.every((o) => adapter.isApifyAmazonItem(o)));
+  const adapted = real.map((o) => adapter.adaptApifyAmazonItem(o, { capturedAt: '2026-11-07T00:28:40.000Z', resolveCategory: () => ({}) }));
+  assert.ok(adapted.every((r) => r.__import.errors.length === 0 && r.__import.review.length === 0), JSON.stringify(adapted.map((r) => r.__import.review)));
+  assert.ok(adapted.every((r) => r.offer.platform === 'amazon' && r.offer.currency === 'EUR' && r.offer.price > 0 && /^[A-Z0-9]{10}$/.test(r.offer.externalId)));
+  assert.ok(adapted.every((r) => r.product.images.length > 0 && r.product.images.every((u) => u.startsWith('https://') && !/aplus-media|brand-?story/i.test(u))), 'sólo imágenes del producto');
+  // vendedor de terceros conservado (sólo el nombre); variantes sin precio no se importan
+  assert.ok(adapted.some((r) => r.offer.sellerName && r.offer.sellerName !== 'Amazon'));
+  assert.ok(adapted.some((r) => r.__import.warnings.some((w) => w.startsWith('variantes_no_importadas:'))));
+  // simulación con destino: no escribe y todas las fichas nuevas llevan el destino
+  const service = await import('../../src/lib/jsonImport/service.ts');
+  const before = fs.readFileSync(path.join(dir, 'products.json'), 'utf8');
+  const out = service.processChunk({ batchId: 'amz-real-dry', records: real, defaults: {}, dryRun: true, indexOffset: 0, target: { category: 'Informatica', categoryId: 'informatica' } });
+  assert.deepEqual(out.results.map((r) => r.outcome), Array(10).fill('created'));
+  assert.ok(out.results.every((r) => r.categoryApplied === 'Informatica'));
+  assert.equal(fs.readFileSync(path.join(dir, 'products.json'), 'utf8'), before, 'la simulación no escribe');
+});
