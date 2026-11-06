@@ -1008,6 +1008,23 @@ const h = headerConfig[initialSection] || headerConfig.products;
             <div class="loading-panel">Cargando redes...</div>
           </div>
           <div id="removedNetworks" class="removed-networks"></div>
+
+          <!-- Acceso rápido (sin bajar hasta los filtros de la tabla, CAPA 0 /
+               ali-f-sync-row): probar conexión, sincronizar y ver el estado
+               del catálogo. btnAliSyncTop/aliCatalogMetaTop son copias de
+               btnAliSync/aliCatalogMeta que se mantienen sincronizadas desde
+               JS (ver aliSyncButtons / setAliMeta). -->
+          <div class="ali-quick-sync">
+            <button type="button" id="btnBuildCatalogDryRun" class="btn-secondary btn-sm" title="Prueba la conexión con las redes: ejecuta la construcción del catálogo en modo simulación (dry-run), no guarda cambios, sólo muestra qué haría (incluidos los descartes de segunda mano y sin stock).">
+              <span class="btn-text">🔍 Probar Conexión</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <button type="button" id="btnAliSyncTop" class="btn-primary btn-sm" title="Descarga o refresca el catálogo de afiliados contra las APIs de las redes conectadas (AliExpress, eBay…)">
+              <span class="btn-text">Sincronizar Redes</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
+            <span id="aliCatalogMetaTop" class="ali-catalog-meta">Cargando…</span>
+          </div>
         </div>
 
       </div>
@@ -1015,7 +1032,14 @@ const h = headerConfig[initialSection] || headerConfig.products;
 
     <!-- 2. Catálogo de Afiliados (sección propia, plegable) -->
     <section data-admin-view="affiliates" class:list={['admin-card', 'affiliates-catalog-section', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'affiliates' }]}>
-          <div class="list-header-row">
+          <div class="card-header">
+            <div class="header-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+              </svg>
+            </div>
             <div>
               <h2 class="card-title">2. Catálogo de Afiliados</h2>
               <p class="card-desc">Tabla amplia de todos los productos sincronizados con las redes conectadas (AliExpress, eBay…), guardados en el servidor. Usa «Sincronizar» para refrescarlo contra las APIs; se avisa si la caché supera las 6 horas.</p>
@@ -1028,29 +1052,6 @@ const h = headerConfig[initialSection] || headerConfig.products;
               <strong id="aliCatalogStatusTitle">Estado</strong>
               <p id="aliCatalogStatusText">Mensaje...</p>
             </div>
-          </div>
-
-          <!-- Acceso rápido (sin bajar hasta los filtros de la tabla, CAPA 0 /
-               ali-f-sync-row): probar conexión, sincronizar y ver el estado
-               del catálogo. btnAliSyncTop/aliCatalogMetaTop son copias de
-               btnAliSync/aliCatalogMeta que se mantienen sincronizadas desde
-               JS (ver aliSyncButtons / setAliMeta). -->
-          <div class="ali-quick-sync">
-            <!-- Forzar salto de línea: los botones van en la segunda fila, alineados a la derecha -->
-            <br style="flex-basis: 100%; width: 100%;" />
-            <button type="button" id="btnBuildCatalogDryRun" class="btn-secondary btn-sm" title="Prueba la conexión con las redes: ejecuta la construcción del catálogo en modo simulación (dry-run), no guarda cambios, sólo muestra qué haría (incluidos los descartes de segunda mano y sin stock).">
-              <span class="btn-text">🔍 Probar Conexión</span>
-              <div class="btn-spinner" hidden></div>
-            </button>
-            <button type="button" id="btnBuildCatalog" class="btn-ai btn-sm" title="Construye el catálogo multi-comerciante real desde los datos de las redes conectadas (guarda los resultados en segundo plano).">
-              <span class="btn-text">🏗️ Construir Catálogo</span>
-              <div class="btn-spinner" hidden></div>
-            </button>
-            <button type="button" id="btnAliSyncTop" class="btn-primary btn-sm" title="Descarga o refresca el catálogo de afiliados contra las APIs de las redes conectadas (AliExpress, eBay…)">
-              <span class="btn-text">Sincronizar Redes</span>
-              <div class="btn-spinner" hidden></div>
-            </button>
-            <span id="aliCatalogMetaTop" class="ali-catalog-meta">Cargando…</span>
           </div>
 
           <div id="searchStatus" class="status-alert" hidden>
@@ -1067,7 +1068,11 @@ const h = headerConfig[initialSection] || headerConfig.products;
         <!-- Acciones del catálogo: Construir Catálogo (multi-red) + alta directa
              en categorías/subcategorías existentes. -->
         <div id="aliImportActions" class="ali-import-actions">
-          <div id="aliImportTools" class="ali-import-tools" hidden>
+          <div id="aliImportTools" class="ali-import-tools">
+            <button type="button" data-keep-visible id="btnBuildCatalog" class="btn-ai btn-sm" title="Construye el catálogo multi-comerciante real desde los datos de las redes conectadas (guarda los resultados en segundo plano).">
+              <span class="btn-text">🏗️ Construir Catálogo</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
             <span class="ali-import-title">Añadir al catálogo</span>
             <br />
             <select id="aliCatAssign" class="sel-cat-assign" aria-label="Categoría destino" title="Categoría raíz donde añadir los productos marcados de la tabla">
@@ -6966,7 +6971,7 @@ function renderTableRows(products, resetPage = true) {
       // La barra de acciones sólo oculta su bloque de alta: la derecha
       // (meta + Sincronizar) debe estar siempre accesible, también con
       // la caché vacía, para poder lanzar la primera sincronización.
-      if (aliImportTools) aliImportTools.hidden = aliProducts.length === 0;
+      if (aliImportTools) aliImportTools.querySelectorAll(':scope > :not([data-keep-visible])').forEach((n) => { n.style.display = (aliProducts.length === 0) ? 'none' : ''; });
       if (btnAliMore) btnAliMore.hidden = aliProducts.length === 0;
       if (!aliProducts.length) {
         aliVisible = [];
@@ -7684,7 +7689,7 @@ function renderTableRows(products, resetPage = true) {
             aliCatalogHost.innerHTML = '<div class="empty-dashboard">Catálogo vaciado. Pulsa «Sincronizar» para descargar el catálogo de las redes conectadas.</div>';
           }
           if (aliFilters) aliFilters.hidden = false;
-          if (aliImportTools) aliImportTools.hidden = false;
+          if (aliImportTools) aliImportTools.querySelectorAll(':scope > :not([data-keep-visible])').forEach((n) => { n.style.display = (false) ? 'none' : ''; });
           if (btnAliMore) btnAliMore.hidden = true;
           setAliMeta(null);
           aliUpdateSelectionUI([]);
@@ -10639,7 +10644,7 @@ function renderTableRows(products, resetPage = true) {
       '[data-admin-view="products"].products-list-card > .list-header-row',
       '[data-admin-view="products"] .sections-admin > .list-header-row',
       '#networksCard > .card-header',
-      '[data-admin-view="affiliates"].affiliates-catalog-section > .list-header-row'
+      '[data-admin-view="affiliates"].affiliates-catalog-section > .card-header'
     ];
     function setFolded(header, folded) {
       header.setAttribute('aria-expanded', String(!folded));
