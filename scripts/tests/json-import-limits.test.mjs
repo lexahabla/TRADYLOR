@@ -92,9 +92,8 @@ function makeClient(fetchImpl) {
     };
     return (nodes[id] = node);
   };
-  const ids = ['jsonImpAsin', 'jsonImpFetch', 'jsonImpAsinHint', 'jsonImpText', 'jsonImpFile', 'jsonImpFileInfo', 'jsonImpPlatform', 'jsonImpCurrency', 'jsonImpSave', 'jsonImpRun', 'jsonImpAmazonIa', 'jsonImpCancel', 'jsonImpClear', 'jsonImpAlert', 'jsonImpProgress', 'jsonImpBarFill', 'jsonImpProgressText', 'jsonImpReport', 'jsonImpReportTitle', 'jsonImpCounters', 'jsonImpDetails', 'jsonImpDownload', 'jsonImpCatBlock', 'jsonImpCatUrl', 'jsonImpCatLimit', 'jsonImpCatRun', 'jsonImpCatCancel', 'jsonImpCatLoad', 'jsonImpCatStatus', 'jsonImpTargetCat', 'jsonImpTargetSub', 'jsonImpTargetHint', 'jsonImpSource', 'jsonImpCatLabelText', 'jsonImpCatLabelHint'];
+  const ids = ['jsonImpAsin', 'jsonImpFetch', 'jsonImpAsinHint', 'jsonImpText', 'jsonImpFile', 'jsonImpFileInfo', 'jsonImpPlatform', 'jsonImpCurrency', 'jsonImpActionZone', 'jsonImpSumCount', 'jsonImpSumSource', 'jsonImpSumTarget', 'jsonImpSimulate', 'jsonImpImport', 'jsonImpImportAi', 'jsonImpAiConfirm', 'jsonImpAiConfirmText', 'jsonImpAiConfirmGo', 'jsonImpAiConfirmNo', 'jsonImpEnrich', 'jsonImpEnrichTitle', 'jsonImpEnrichProgress', 'jsonImpEnrichBar', 'jsonImpEnrichText', 'jsonImpEnrichCounters', 'jsonImpEnrichDetails', 'jsonImpEnrichRetry', 'jsonImpCancel', 'jsonImpClear', 'jsonImpAlert', 'jsonImpProgress', 'jsonImpBarFill', 'jsonImpProgressText', 'jsonImpReport', 'jsonImpReportTitle', 'jsonImpCounters', 'jsonImpDetails', 'jsonImpDownload', 'jsonImpCatBlock', 'jsonImpCatUrl', 'jsonImpCatLimit', 'jsonImpCatRun', 'jsonImpCatCancel', 'jsonImpCatLoad', 'jsonImpCatStatus', 'jsonImpTargetCat', 'jsonImpTargetSub', 'jsonImpTargetHint', 'jsonImpSource', 'jsonImpCatLabelText', 'jsonImpCatLabelHint'];
   ids.forEach(el);
-  nodes.jsonImpSave.checked = true;
   const sandbox = {
     document: { getElementById: (i) => nodes[i], createElement: () => el('x'), body: { appendChild() {} } },
     fetch: (...a) => { calls.push(a); return fetchImpl ? fetchImpl(...a) : Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true, results: [] }) }); },
@@ -112,14 +111,14 @@ function makeClient(fetchImpl) {
 test('cliente: JSON vacío, malformado, sin productos o con más de 5.000 registros → mensaje útil, texto conservado y NINGUNA petición', async () => {
   const { nodes, calls } = makeClient();
   const cases = [
-    ['', /Pega un JSON o sube un archivo/],
+    ['', /Pega un JSON, sube un archivo o carga productos/],
     ['{no json', /JSON inválido/],
     ['[]', /no contiene ningún producto/],
     [JSON.stringify(Array.from({ length: 5001 }, () => ({ title: 'x' }))), /5001 registros; el máximo es 5000/],
   ];
   for (const [text, expected] of cases) {
     nodes.jsonImpText.value = text;
-    nodes.jsonImpRun.fire('click');
+    nodes.jsonImpImport.fire('click');
     await new Promise((r) => setTimeout(r, 5));
     assert.match(nodes.jsonImpAlert.textContent, expected);
     assert.equal(nodes.jsonImpText.value, text, 'el texto pegado no se borra');
@@ -130,7 +129,8 @@ test('cliente: JSON vacío, malformado, sin productos o con más de 5.000 regist
 test('cliente: más de 10 MB (texto o archivo) se rechaza antes de enviar nada', async () => {
   const { nodes, calls } = makeClient();
   nodes.jsonImpText.value = 'x'.repeat(10_000_001);
-  nodes.jsonImpRun.fire('click');
+  nodes.jsonImpImport.fire('click');
+  await new Promise((r) => setTimeout(r, 5));
   assert.match(nodes.jsonImpAlert.textContent, /supera los 10 MB/);
   nodes.jsonImpFile.files = [{ name: 'enorme.json', size: 10_000_001 }];
   nodes.jsonImpFile.fire('change');
@@ -146,7 +146,7 @@ test('cliente: envía bloques de 50 (nunca más de los 100 que admite el servido
     return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true, results: b.records.map((_, i) => ({ index: b.indexOffset + i, outcome: 'created', reasons: [], warnings: [], entities: { productsCreated: 1, offersCreated: 1, offersUpdated: 0 } })) }) });
   });
   nodes.jsonImpText.value = JSON.stringify(Array.from({ length: 120 }, (_, i) => jsonRecord(i + 1)));
-  nodes.jsonImpRun.fire('click');
+  nodes.jsonImpImport.fire('click');
   await new Promise((r) => setTimeout(r, 60));
   assert.deepEqual(sizes, [[0, 50], [50, 50], [100, 20]]);
   assert.ok(sizes.every(([, n]) => n <= service.MAX_CHUNK_RECORDS));
@@ -163,11 +163,11 @@ test('cliente: un error del servidor en mitad del lote se explica y permite rean
     return Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true, results: b.records.map((_, i) => ({ index: b.indexOffset + i, outcome: 'created', reasons: [], warnings: [], entities: { productsCreated: 1, offersCreated: 1, offersUpdated: 0 } })) }) });
   });
   nodes.jsonImpText.value = JSON.stringify(Array.from({ length: 80 }, (_, i) => jsonRecord(i + 1)));
-  nodes.jsonImpRun.fire('click');
+  nodes.jsonImpImport.fire('click');
   await new Promise((r) => setTimeout(r, 80));
   assert.match(nodes.jsonImpAlert.textContent, /se interrumpió: Envía entre 1 y 100 registros/);
-  assert.match(nodes.jsonImpAlert.textContent, /vuelve a pulsar «Importar»/);
-  assert.equal(nodes.jsonImpRun.disabled, false, 'los controles quedan activos para reanudar');
+  assert.match(nodes.jsonImpAlert.textContent, /vuelve a pulsar el botón/);
+  assert.equal(nodes.jsonImpImport.disabled, false, 'los controles quedan activos para reanudar');
   assert.equal(nodes.jsonImpText.value.length > 0, true, 'el JSON pegado se conserva');
 });
 

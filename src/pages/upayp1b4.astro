@@ -1084,7 +1084,7 @@ const h = headerConfig[initialSection] || headerConfig.products;
           </div>
         </div>
         <p id="jsonImpTargetHint" class="label-hint" role="status" aria-live="polite">Sin destino, cada producto nuevo sigue las reglas habituales (si no se puede decidir, queda en revisión). Con destino, se aplica a las fichas NUEVAS de la importación —también si pegas o subes un JSON— y manda sobre la categoría de Apify; las fichas existentes conservan la suya. Puedes cambiarlo antes de importar sin repetir la extracción.</p>
-        <p id="jsonImpCatStatus" class="label-hint" role="status" aria-live="polite">Pega la URL de una categoría, búsqueda o lista de más vendidos de Amazon. Obtener los productos no los guarda: después puedes simularlos o pulsar «Importar registros válidos».</p>
+        <p id="jsonImpCatStatus" class="label-hint" role="status" aria-live="polite">Pega la URL de una categoría, búsqueda o lista de más vendidos de Amazon. Obtener los productos no los guarda: después aparece la zona de acciones para simularlos o importarlos.</p>
       </div>
 
       <div class="jsonimp-block">
@@ -1106,17 +1106,31 @@ const h = headerConfig[initialSection] || headerConfig.products;
           <label class="field-label" for="jsonImpCurrency">Moneda por defecto <span class="label-hint">(si el JSON no la trae)</span></label>
           <input id="jsonImpCurrency" type="text" class="jsonimp-input" placeholder="EUR" maxlength="3" autocomplete="off" />
         </div>
-        <label class="jsonimp-check" for="jsonImpSave">
-          <input type="checkbox" id="jsonImpSave" checked />
-          <span>Guardar en el catálogo <span class="label-hint">(desmarca para solo simular)</span></span>
-        </label>
       </div>
 
-      <div class="jsonimp-actions">
-        <button type="button" id="jsonImpRun" class="btn-primary">Importar registros válidos</button>
-        <button type="button" id="jsonImpAmazonIa" class="btn-secondary btn-sm" title="Flujo anterior de Amazon: importa UN producto por ASIN y genera su ficha con IA (consume créditos de IA)">Importar producto Amazon con ficha IA</button>
-        <button type="button" id="jsonImpCancel" class="btn-secondary btn-sm" hidden>Cancelar</button>
-        <button type="button" id="jsonImpClear" class="btn-secondary btn-sm">Limpiar</button>
+      <div class="jsonimp-block jsonimp-actionzone" id="jsonImpActionZone" role="group" aria-labelledby="jsonImpZoneTitle" hidden>
+        <h3 class="jsonimp-report-title" id="jsonImpZoneTitle">Acciones sobre los productos cargados</h3>
+        <dl class="jsonimp-summary">
+          <div class="jsonimp-counter"><dt>Productos cargados</dt><dd id="jsonImpSumCount">0</dd></div>
+          <div class="jsonimp-counter"><dt>Origen</dt><dd id="jsonImpSumSource">—</dd></div>
+          <div class="jsonimp-counter"><dt>Destino de las fichas nuevas</dt><dd id="jsonImpSumTarget">Automático (reglas habituales de clasificación)</dd></div>
+        </dl>
+        <div class="jsonimp-actions">
+          <button type="button" id="jsonImpSimulate" class="btn-secondary" title="Valida los productos y muestra el informe. NUNCA guarda nada.">Simular importación</button>
+          <button type="button" id="jsonImpImport" class="btn-primary" title="Importa los registros válidos al catálogo, sin IA.">Importar al catálogo</button>
+          <button type="button" id="jsonImpImportAi" class="btn-primary" title="Importa y después enriquece con IA las fichas NUEVAS creadas (consume créditos de IA).">Importar y enriquecer con IA</button>
+          <button type="button" id="jsonImpCancel" class="btn-secondary btn-sm" hidden>Cancelar</button>
+          <button type="button" id="jsonImpClear" class="btn-secondary btn-sm">Limpiar</button>
+        </div>
+        <p class="label-hint">«Simular» nunca guarda. «Importar al catálogo» guarda sin IA. «Importar y enriquecer con IA» muestra antes cuántas fichas se procesarán y consume créditos de IA; solo enriquece las fichas nuevas, nunca las existentes. Se reutilizan los datos ya cargados: no se repite ninguna llamada a Apify ni a ScraperAPI.</p>
+      </div>
+
+      <div id="jsonImpAiConfirm" class="jsonimp-confirm" role="alertdialog" aria-labelledby="jsonImpAiConfirmText" hidden>
+        <p id="jsonImpAiConfirmText"></p>
+        <div class="jsonimp-actions">
+          <button type="button" id="jsonImpAiConfirmGo" class="btn-primary">Confirmar</button>
+          <button type="button" id="jsonImpAiConfirmNo" class="btn-secondary">Cancelar</button>
+        </div>
       </div>
 
       <div id="jsonImpAlert" class="jsonimp-msg" hidden role="status" aria-live="polite"></div>
@@ -1133,6 +1147,19 @@ const h = headerConfig[initialSection] || headerConfig.products;
         <div id="jsonImpDetails"></div>
         <div class="jsonimp-actions">
           <button type="button" id="jsonImpDownload" class="btn-secondary btn-sm" hidden>Descargar rechazados y pendientes (JSON)</button>
+        </div>
+      </div>
+
+      <div id="jsonImpEnrich" class="jsonimp-report" hidden>
+        <h3 class="jsonimp-report-title" id="jsonImpEnrichTitle">Enriquecimiento con IA</h3>
+        <div id="jsonImpEnrichProgress" class="jsonimp-progress" hidden>
+          <div class="jsonimp-bar" role="progressbar" aria-label="Progreso del enriquecimiento" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="jsonImpEnrichBar"></span></div>
+          <p id="jsonImpEnrichText" class="label-hint" role="status" aria-live="polite"></p>
+        </div>
+        <dl id="jsonImpEnrichCounters" class="jsonimp-counters"></dl>
+        <div id="jsonImpEnrichDetails"></div>
+        <div class="jsonimp-actions">
+          <button type="button" id="jsonImpEnrichRetry" class="btn-secondary" hidden>Reintentar enriquecimiento pendiente</button>
         </div>
       </div>
     </section>
@@ -10853,9 +10880,25 @@ function renderTableRows(products, resetPage = true) {
     var fileInfo = $('jsonImpFileInfo');
     var platformInput = $('jsonImpPlatform');
     var currencyInput = $('jsonImpCurrency');
-    var saveCheck = $('jsonImpSave');
-    var runBtn = $('jsonImpRun');
-    var iaBtn = $('jsonImpAmazonIa');
+    var zone = $('jsonImpActionZone');
+    var sumCount = $('jsonImpSumCount');
+    var sumSource = $('jsonImpSumSource');
+    var sumTarget = $('jsonImpSumTarget');
+    var simBtn = $('jsonImpSimulate');
+    var impBtn = $('jsonImpImport');
+    var aiBtn = $('jsonImpImportAi');
+    var aiConfirm = $('jsonImpAiConfirm');
+    var aiConfirmText = $('jsonImpAiConfirmText');
+    var aiConfirmGo = $('jsonImpAiConfirmGo');
+    var aiConfirmNo = $('jsonImpAiConfirmNo');
+    var enrichBox = $('jsonImpEnrich');
+    var enrichTitle = $('jsonImpEnrichTitle');
+    var enrichProgress = $('jsonImpEnrichProgress');
+    var enrichBar = $('jsonImpEnrichBar');
+    var enrichText = $('jsonImpEnrichText');
+    var enrichCounters = $('jsonImpEnrichCounters');
+    var enrichDetails = $('jsonImpEnrichDetails');
+    var enrichRetry = $('jsonImpEnrichRetry');
     var cancelBtn = $('jsonImpCancel');
     var clearBtn = $('jsonImpClear');
     var alertBox = $('jsonImpAlert');
@@ -10879,7 +10922,7 @@ function renderTableRows(products, resetPage = true) {
     var targetCat = $('jsonImpTargetCat');
     var targetSub = $('jsonImpTargetSub');
     var targetHint = $('jsonImpTargetHint');
-    if (!asinInput || !runBtn || !textArea) return;
+    if (!asinInput || !simBtn || !textArea) return;
 
     var MAX_CHARS = 10000000;
     var MAX_RECORDS = 5000;
@@ -10950,7 +10993,9 @@ function renderTableRows(products, resetPage = true) {
           textArea.value = JSON.stringify(res.data, null, 2);
           fileText = '';
           fileInfo.textContent = DEFAULT_FILE_INFO;
-          showMsg('ok', 'JSON del ASIN ' + r.asin + ' obtenido de ScraperAPI. Revísalo e impórtalo.');
+          loadMethod = 'ASIN o URL individual (ScraperAPI)';
+          refreshSummary();
+          showMsg('ok', 'JSON del ASIN ' + r.asin + ' obtenido de ScraperAPI. Revísalo y usa la zona de acciones: simular o importar.');
         })
         .catch(function (err) { showMsg('error', 'No se pudo obtener el JSON: ' + err.message); })
         .then(function () { fetchBtn.disabled = false; fetchBtn.textContent = label; });
@@ -10972,6 +11017,8 @@ function renderTableRows(products, resetPage = true) {
         fileText = String(reader.result || '');
         textArea.value = '';
         fileInfo.textContent = 'Archivo cargado: ' + file.name + ' (' + Math.round(file.size / 1024) + ' KB)';
+        loadMethod = 'Archivo ' + file.name;
+        refreshSummary();
         hideMsg();
       };
       reader.onerror = function () { showMsg('error', 'No se pudo leer el archivo.'); };
@@ -10979,6 +11026,8 @@ function renderTableRows(products, resetPage = true) {
     });
     textArea.addEventListener('input', function () {
       if (fileText) { fileText = ''; fileInput.value = ''; fileInfo.textContent = DEFAULT_FILE_INFO; }
+      loadMethod = 'JSON pegado';
+      scheduleSummary();
     });
 
     clearBtn.addEventListener('click', function () {
@@ -10987,6 +11036,8 @@ function renderTableRows(products, resetPage = true) {
       fileInfo.textContent = DEFAULT_FILE_INFO;
       setHint(DEFAULT_HINT, false);
       hideMsg(); progressBox.hidden = true; reportBox.hidden = true;
+      loadMethod = 'JSON pegado';
+      refreshSummary();
     });
 
     // ── Interpretación del JSON ─────────────────────────────────────────
@@ -11094,34 +11145,70 @@ function renderTableRows(products, resetPage = true) {
 
     function setRunning(on) {
       running = on;
-      runBtn.disabled = on; fetchBtn.disabled = on; iaBtn.disabled = on; clearBtn.disabled = on;
+      simBtn.disabled = on; impBtn.disabled = on; aiBtn.disabled = on; fetchBtn.disabled = on; clearBtn.disabled = on;
+      enrichRetry.disabled = on;
       targetCat.disabled = on; targetSub.disabled = on || !targetSub.options || targetSub.options.length < 2;
       cancelBtn.hidden = !on;
     }
 
-    runBtn.addEventListener('click', function () {
-      if (running) return;
-      hideMsg();
+    // ── Zona común de acciones: resumen de lo cargado, sea cual sea el método ──
+    var loadMethod = 'JSON pegado';
+    var summaryTimer = null;
+    function originLabel(records) {
+      var counts = {};
+      records.forEach(function (r) {
+        var o = (r && typeof r === 'object') ? r : {};
+        var offer = (o.offer && typeof o.offer === 'object') ? o.offer : {};
+        var p = String(offer.platform || o.platform || o.network || '').toLowerCase();
+        var url = String(offer.url || o.url || o.productUrl || '');
+        var name = 'Otro';
+        if (o.goodsId || p === 'temu' || url.indexOf('temu.com') >= 0) name = 'Temu';
+        else if (o.asin || p === 'amazon' || url.indexOf('amazon.') >= 0) name = 'Amazon';
+        else if (p) name = p.charAt(0).toUpperCase() + p.slice(1);
+        counts[name] = (counts[name] || 0) + 1;
+      });
+      return Object.keys(counts).map(function (k) { return k + ' (' + counts[k] + ')'; }).join(' · ');
+    }
+    function refreshSummary() {
+      clearTimeout(summaryTimer);
+      hideConfirm();
       var text = currentText();
-      if (!text) { showMsg('error', 'Pega un JSON o sube un archivo .json antes de importar.'); textArea.focus(); return; }
-      if (text.length > MAX_CHARS) { showMsg('error', 'El JSON supera los 10 MB permitidos.'); return; }
-      var parsed = readRecords(text);
-      if (parsed.error) { showMsg('error', parsed.error); return; }
+      zone.hidden = !text;
+      if (!text) return;
+      var parsed = text.length > MAX_CHARS ? { error: 'El JSON supera los 10 MB.' } : readRecords(text);
+      if (parsed.error) {
+        sumCount.textContent = 'JSON no válido';
+        sumSource.textContent = loadMethod;
+      } else {
+        sumCount.textContent = String(parsed.records.length);
+        sumSource.textContent = originLabel(parsed.records) + ' · ' + loadMethod;
+      }
+      var t = chosenTarget();
+      sumTarget.textContent = t.categoryId ? t.text : 'Automático (reglas habituales de clasificación)';
+    }
+    function scheduleSummary() { clearTimeout(summaryTimer); summaryTimer = setTimeout(refreshSummary, 250); }
+    targetCat.addEventListener('change', refreshSummary);
+    targetSub.addEventListener('change', refreshSummary);
 
+    // ── Recorrido único de importación (simular o importar) por bloques ──
+    function runFlow(opts) {
+      var text = currentText();
+      if (!text) { showMsg('error', 'Pega un JSON, sube un archivo o carga productos antes de continuar.'); textArea.focus(); return Promise.resolve(null); }
+      if (text.length > MAX_CHARS) { showMsg('error', 'El JSON supera los 10 MB permitidos.'); return Promise.resolve(null); }
+      var parsed = readRecords(text);
+      if (parsed.error) { showMsg('error', parsed.error); return Promise.resolve(null); }
       var defaults = parsed.defaults || {};
       if (platformInput.value.trim()) defaults.platform = platformInput.value.trim();
       if (currencyInput.value.trim()) defaults.currency = currencyInput.value.trim();
-      var dryRun = !saveCheck.checked;
+      var dryRun = opts.dryRun === true;
       var target = chosenTarget();
       lastTargetText = target.text;
       var batchId = newBatchId();
       var total = parsed.records.length;
       var results = [];
       cancelled = false;
-      reportBox.hidden = true;
-      setRunning(true);
+      if (!opts.silent) reportBox.hidden = true;
       setProgress(0, total, 'Preparando… 0 / ' + total);
-
       var offset = 0;
       function next() {
         if (cancelled || offset >= total) return Promise.resolve();
@@ -11143,16 +11230,205 @@ function renderTableRows(products, resetPage = true) {
           return next();
         });
       }
-      next().then(function () {
-        var interrupted = cancelled && results.length < total;
-        setProgress(results.length, total, interrupted ? 'Cancelado: ' + results.length + ' de ' + total + ' registros procesados.' : 'Completado: ' + results.length + ' de ' + total + ' registros.');
-        renderReport(results, total, dryRun, batchId, interrupted);
-        if (!dryRun && results.length) notifyCatalog();
-      }).catch(function (err) {
-        showMsg('error', 'La importación se interrumpió: ' + err.message + '. Los registros ya procesados están guardados; vuelve a pulsar «Importar» para continuar (los ya importados se omiten sin duplicarse).');
-        if (results.length) renderReport(results, total, dryRun, batchId, true);
+      return next().then(function () {
+        return { results: results, total: total, dryRun: dryRun, batchId: batchId, interrupted: cancelled && results.length < total };
+      }, function (err) {
+        err.partial = { results: results, total: total, dryRun: dryRun, batchId: batchId };
+        throw err;
+      });
+    }
+    function finishReport(r) {
+      setProgress(r.results.length, r.total, r.interrupted ? 'Cancelado: ' + r.results.length + ' de ' + r.total + ' registros procesados.' : 'Completado: ' + r.results.length + ' de ' + r.total + ' registros.');
+      renderReport(r.results, r.total, r.dryRun, r.batchId, r.interrupted);
+    }
+    function createdIds(results) {
+      return results.filter(function (x) { return x.outcome === 'created' && x.productId; }).map(function (x) { return x.productId; });
+    }
+    // Bloquea los controles y evita dobles envíos: mientras algo corre, ningún otro botón actúa.
+    function locked(fn) {
+      if (running || catBusy) return;
+      hideMsg();
+      hideConfirm();
+      setRunning(true);
+      Promise.resolve().then(fn).catch(function (err) {
+        var dry = err && err.partial && err.partial.dryRun;
+        showMsg('error', (dry ? 'La simulación se interrumpió: ' : 'La importación se interrumpió: ') + (err && err.message ? String(err.message).replace(/[.]+$/, '') : 'error') + (dry ? '. No se ha guardado nada.' : '. Los registros ya procesados están guardados; vuelve a pulsar el botón para continuar (los ya importados se omiten sin duplicarse).'));
+        if (err && err.partial && err.partial.results.length) renderReport(err.partial.results, err.partial.total, err.partial.dryRun, err.partial.batchId, true);
       }).then(function () { setRunning(false); });
+    }
+
+    simBtn.addEventListener('click', function () {
+      locked(function () {
+        return runFlow({ dryRun: true }).then(function (r) {
+          if (!r) return;
+          finishReport(r);
+          showMsg('ok', 'Simulación terminada: NO se ha guardado nada. Revisa el informe y, si es correcto, pulsa «Importar al catálogo».');
+        });
+      });
     });
+
+    impBtn.addEventListener('click', function () {
+      locked(function () {
+        return runFlow({ dryRun: false }).then(function (r) {
+          if (!r) return;
+          finishReport(r);
+          if (r.results.length) notifyCatalog();
+          var n = createdIds(r.results).length;
+          showMsg('ok', 'Importación terminada: ' + n + ' ficha(s) nueva(s) en el catálogo, sin IA. Puedes enriquecerlas después desde el catálogo.');
+        });
+      });
+    });
+
+    // ── Importar y enriquecer con IA: vista previa gratuita → confirmación → importación → enriquecimiento ──
+    var confirmMode = '';
+    var pendingIds = [];
+    var PENDING_KEY = 'jsonImpEnrichPending';
+    function hideConfirm() { aiConfirm.hidden = true; confirmMode = ''; }
+    function showConfirm(text, mode) { aiConfirmText.textContent = text; confirmMode = mode; aiConfirm.hidden = false; aiConfirmGo.focus(); }
+    function savePending() {
+      try { if (pendingIds.length) sessionStorage.setItem(PENDING_KEY, JSON.stringify(pendingIds)); else sessionStorage.removeItem(PENDING_KEY); } catch (e) { /* sin almacenamiento */ }
+    }
+
+    aiBtn.addEventListener('click', function () {
+      locked(function () {
+        // Vista previa SIN guardar ni gastar créditos: cuántas fichas nuevas se crearían.
+        return runFlow({ dryRun: true, silent: true }).then(function (r) {
+          if (!r) return;
+          progressBox.hidden = true;
+          if (r.interrupted) { showMsg('info', 'Vista previa cancelada: no se ha guardado ni enriquecido nada.'); return; }
+          var n = createdIds(r.results).length;
+          if (!n) {
+            showMsg('info', 'No hay fichas nuevas que enriquecer (' + r.total + ' registro(s): actualizaciones, ofertas vinculadas, repetidos o pendientes de revisión). Las fichas existentes nunca se enriquecen automáticamente. Usa «Importar al catálogo» si solo quieres aplicar los cambios.');
+            return;
+          }
+          var t = chosenTarget();
+          showConfirm('Se importarán los registros válidos de ' + r.total + ' producto(s) cargados y se enriquecerán con IA ' + n + ' ficha(s) NUEVA(S) (en lotes de 5, con progreso). Esto CONSUME CRÉDITOS DE IA. Destino: ' + (t.categoryId ? t.text : 'automático') + '. Las fichas existentes no se enriquecen. Si la IA falla, los productos importados se conservan y podrás reintentar solo lo pendiente.', 'import_ai');
+        });
+      });
+    });
+
+    aiConfirmNo.addEventListener('click', function () { hideConfirm(); });
+    aiConfirmGo.addEventListener('click', function () {
+      var mode = confirmMode;
+      if (!mode) return;
+      locked(function () {
+        if (mode === 'retry') return enrichIds(pendingIds.slice(), true);
+        return runFlow({ dryRun: false }).then(function (r) {
+          if (!r) return;
+          finishReport(r);
+          if (r.results.length) notifyCatalog();
+          var ids = createdIds(r.results);
+          showMsg('ok', 'Importación terminada: ' + ids.length + ' ficha(s) nueva(s). Ahora se enriquecen con IA.');
+          if (!ids.length) return;
+          pendingIds = ids.slice();
+          savePending();
+          return enrichIds(ids, false);
+        });
+      });
+    });
+
+    // ── Enriquecimiento por lotes con las herramientas existentes (/api/admin/enrich-bulk) ──
+    var ENRICH_BATCH = 5;
+    function setEnrichProgress(done, total, text) {
+      enrichProgress.hidden = false;
+      var pct = total ? Math.round((done / total) * 100) : 0;
+      enrichBar.style.width = pct + '%';
+      enrichProgress.querySelector('[role="progressbar"]').setAttribute('aria-valuenow', String(pct));
+      enrichText.textContent = text;
+    }
+    function enrichIds(ids, isRetry) {
+      var attempted = {};
+      var okIds = [];
+      var local = [];
+      var failed = [];
+      var done = 0;
+      var pos = 0;
+      cancelled = false;
+      enrichBox.hidden = false;
+      enrichTitle.textContent = isRetry ? 'Enriquecimiento con IA (reintento de lo pendiente)' : 'Enriquecimiento con IA';
+      enrichCounters.textContent = '';
+      enrichDetails.textContent = '';
+      enrichRetry.hidden = true;
+      setEnrichProgress(0, ids.length, 'Enriqueciendo con IA… 0 / ' + ids.length);
+      function nextBatch() {
+        if (cancelled || pos >= ids.length) return Promise.resolve();
+        var batch = ids.slice(pos, pos + ENRICH_BATCH);
+        pos += batch.length;
+        batch.forEach(function (id) { attempted[id] = true; });
+        return fetch('/api/admin/enrich-bulk', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ids: batch, forceImage: false })
+        }).then(function (res) {
+          return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
+        }).then(function (res) {
+          var rows = res.data && Array.isArray(res.data.results) ? res.data.results : [];
+          var byId = {};
+          rows.forEach(function (row) { byId[row.id] = row; });
+          batch.forEach(function (id) {
+            var row = byId[id];
+            if (res.ok && res.data && res.data.success && row && row.ok) {
+              if (row.textStatus === 'ok') okIds.push(id);
+              else local.push({ id: id, title: row.title || id });
+            } else {
+              failed.push({ id: id, title: (row && row.title) || id, reason: (row && row.warnings && row.warnings[0]) || (res.data && res.data.message) || ('Error ' + res.status) });
+            }
+          });
+        }, function () {
+          batch.forEach(function (id) { failed.push({ id: id, title: id, reason: 'error de red' }); });
+        }).then(function () {
+          done += batch.length;
+          setEnrichProgress(done, ids.length, 'Enriqueciendo con IA… ' + done + ' / ' + ids.length);
+          return nextBatch();
+        });
+      }
+      return nextBatch().then(function () {
+        var notRun = ids.filter(function (id) { return !attempted[id]; });
+        // Pendientes: con error, sin procesar (cancelado) y las que la IA no pudo completar (plantilla local).
+        pendingIds = failed.map(function (f) { return f.id; }).concat(notRun, local.map(function (l) { return l.id; }));
+        savePending();
+        setEnrichProgress(done, ids.length, (cancelled ? 'Cancelado: ' : 'Completado: ') + done + ' de ' + ids.length + ' ficha(s) procesadas.');
+        enrichCounters.textContent = '';
+        enrichCounters.appendChild(counter('Fichas a enriquecer', ids.length));
+        enrichCounters.appendChild(counter('Enriquecidas con IA', okIds.length));
+        enrichCounters.appendChild(counter('Con plantilla local (la IA no respondió)', local.length, 'El texto es el de la plantilla local, no de IA: se pueden reintentar'));
+        enrichCounters.appendChild(counter('Con error', failed.length));
+        enrichCounters.appendChild(counter('Sin procesar', notRun.length));
+        enrichDetails.textContent = '';
+        var d1 = detailList('Fichas con error de enriquecimiento', failed, function (f) { return f.title + ' [' + f.id + '] — ' + f.reason; });
+        var d2 = detailList('Fichas con plantilla local (IA no disponible)', local, function (l) { return l.title + ' [' + l.id + ']'; });
+        if (d1) enrichDetails.appendChild(d1);
+        if (d2) enrichDetails.appendChild(d2);
+        refreshRetry();
+        showMsg(pendingIds.length ? 'info' : 'ok', pendingIds.length
+          ? 'Enriquecimiento terminado con ' + pendingIds.length + ' ficha(s) pendiente(s). Los productos importados se conservan; puedes reintentar solo lo pendiente.'
+          : 'Enriquecimiento terminado: ' + okIds.length + ' ficha(s) enriquecida(s) con IA.');
+        if (okIds.length || local.length) notifyCatalog();
+      });
+    }
+    function refreshRetry() {
+      enrichRetry.hidden = !pendingIds.length;
+      enrichRetry.textContent = 'Reintentar enriquecimiento pendiente (' + pendingIds.length + ')';
+    }
+    enrichRetry.addEventListener('click', function () {
+      if (running || catBusy || !pendingIds.length) return;
+      showConfirm('Se reintentará el enriquecimiento con IA de ' + pendingIds.length + ' ficha(s) pendiente(s) (solo esas; no se vuelve a importar nada). Esto CONSUME CRÉDITOS DE IA.', 'retry');
+    });
+    // Pendientes de una operación anterior de esta sesión del navegador.
+    try {
+      var stored = JSON.parse(sessionStorage.getItem(PENDING_KEY) || '[]');
+      if (Array.isArray(stored) && stored.length) {
+        pendingIds = stored.filter(function (x) { return typeof x === 'string'; });
+        if (pendingIds.length) {
+          enrichBox.hidden = false;
+          enrichTitle.textContent = 'Enriquecimiento con IA';
+          enrichText.textContent = '';
+          enrichCounters.textContent = '';
+          enrichCounters.appendChild(counter('Pendientes de enriquecer', pendingIds.length));
+          refreshRetry();
+        }
+      }
+    } catch (e) { /* sin almacenamiento */ }
 
     cancelBtn.addEventListener('click', function () { cancelled = true; });
 
@@ -11337,13 +11613,13 @@ function renderTableRows(products, resetPage = true) {
         label: 'URL de categoría de Amazon',
         hint: '(opcional · extrae varios productos con Apify; no guarda nada en el catálogo)',
         placeholder: 'https://www.amazon.es/gp/browse.html?node=938008031',
-        idle: 'Pega la URL de una categoría, búsqueda o lista de más vendidos de Amazon. Obtener los productos no los guarda: después puedes simularlos o pulsar «Importar registros válidos».'
+        idle: 'Pega la URL de una categoría, búsqueda o lista de más vendidos de Amazon. Obtener los productos no los guarda: después aparece la zona de acciones para simularlos o importarlos.'
       },
       temu: {
         label: 'URL de producto o de categoría de Temu',
         hint: '(opcional · extrae con Apify (hypebridge/temu-scraper); no guarda nada en el catálogo)',
         placeholder: 'https://www.temu.com/es/category-o3-248.html',
-        idle: 'Pega la URL de un producto (…-g-<id>.html) o de una categoría (…-o3-<id>.html) de Temu España: debe llevar /es/ (sin él, Temu responde con el mercado de EE. UU. en USD). No se admiten búsquedas, colecciones, ofertas relámpago ni tiendas. Con una URL de producto se extrae solo ese producto. Una categoría puede devolver menos productos de los pedidos, o ninguno: eso no prueba que esté vacía. Coste aproximado: 0,03 USD de arranque + 0,016 USD por producto (medido: 10 productos = 0,19 USD). Obtener los productos no los guarda: después puedes simularlos o pulsar «Importar registros válidos».'
+        idle: 'Pega la URL de un producto (…-g-<id>.html) o de una categoría (…-o3-<id>.html) de Temu España: debe llevar /es/ (sin él, Temu responde con el mercado de EE. UU. en USD). No se admiten búsquedas, colecciones, ofertas relámpago ni tiendas. Con una URL de producto se extrae solo ese producto. Una categoría puede devolver menos productos de los pedidos, o ninguno: eso no prueba que esté vacía. Coste aproximado: 0,03 USD de arranque + 0,016 USD por producto (medido: 10 productos = 0,19 USD). Obtener los productos no los guarda: después aparece la zona de acciones para simularlos o importarlos.'
       }
     };
     function setSourceUi() {
@@ -11362,7 +11638,7 @@ function renderTableRows(products, resetPage = true) {
       catLimit.disabled = on;
       catRun.disabled = on || (catInitDone && !catConfigured);
       catCancel.hidden = !on;
-      if (!running) { runBtn.disabled = on; fetchBtn.disabled = on; iaBtn.disabled = on; }
+      if (!running) { simBtn.disabled = on; impBtn.disabled = on; aiBtn.disabled = on; fetchBtn.disabled = on; }
     }
     function costText(job) {
       return typeof job.costUsd === 'number' ? ' · coste Apify: ' + job.costUsd.toFixed(3) + ' USD' : '';
@@ -11389,13 +11665,15 @@ function renderTableRows(products, resetPage = true) {
       fileText = '';
       fileInput.value = '';
       fileInfo.textContent = DEFAULT_FILE_INFO;
+      loadMethod = 'URL de categoría de ' + (srcSel.value === 'temu' ? 'Temu' : 'Amazon');
+      refreshSummary();
       catLoad.hidden = true;
       var s = job.summary || {};
       var parts = [records.length + ' producto(s) obtenido(s)'];
       if (s.withReview) parts.push(s.withReview + ' con motivos de revisión (datos contradictorios, precio dudoso, moneda…; irán a revisión)');
       if (s.actorErrors) parts.push(s.actorErrors + ' con error del actor (se rechazarán)');
       var head = s.partial ? 'Resultado parcial (' + records.length + ' de máx. ' + job.limit + '): ' : 'Extracción completada: ';
-      showMsg('ok', head + parts.join(' · ') + costText(job) + '. NO se ha guardado nada: marca o desmarca «Guardar en el catálogo» y pulsa «Importar registros válidos» (con la casilla desmarcada solo simula).');
+      showMsg('ok', head + parts.join(' · ') + costText(job) + '. NO se ha guardado nada: usa «Simular importación», «Importar al catálogo» o «Importar y enriquecer con IA» en la zona de acciones.');
       setCatStatus('Última extracción: ' + parts.join(' · ') + costText(job) + '.', 'info');
     }
 
@@ -11559,35 +11837,6 @@ function renderTableRows(products, resetPage = true) {
       initCategory();
     }
 
-    // ── Flujo Amazon anterior (producto único por ASIN con ficha IA) ────
-    iaBtn.addEventListener('click', function () {
-      if (running) return;
-      hideMsg();
-      var r = extractAsin(asinInput.value);
-      if (!r.asin) { setHint(r.error, true); showMsg('error', r.error); asinInput.focus(); return; }
-      var text = currentText();
-      if (!text) { showMsg('error', 'Pega o descarga primero el JSON del producto de Amazon.'); return; }
-      var raw;
-      try { raw = JSON.parse(text); } catch (e) { showMsg('error', 'JSON inválido: ' + e.message); return; }
-      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) { showMsg('error', 'Este flujo importa un único producto (un objeto JSON de ScraperAPI).'); return; }
-      iaBtn.disabled = true;
-      var label = iaBtn.textContent;
-      iaBtn.textContent = 'Importando…';
-      fetch('/api/admin/amazon/import-json', {
-        method: 'POST', credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ asin: r.asin, raw: raw, options: { save: saveCheck.checked, imageOnlyIfMissing: true } })
-      }).then(function (res) { return res.json().catch(function () { return {}; }); })
-        .then(function (data) {
-          if (!data.success) { showMsg('error', 'Error: ' + (data.message || 'Error desconocido')); return; }
-          var msg = data.message + ' (ASIN ' + data.asin + ')';
-          if (data.warnings && data.warnings.length) msg += ' · Avisos: ' + data.warnings.join(' · ');
-          showMsg('ok', msg);
-          if (data.saved) notifyCatalog();
-        })
-        .catch(function (err) { showMsg('error', 'Error de red: ' + err.message); })
-        .then(function () { iaBtn.disabled = false; iaBtn.textContent = label; });
-    });
   })();
 </script>
   </>
@@ -11612,6 +11861,10 @@ function renderTableRows(products, resetPage = true) {
   .jsonimp-actions button { min-height: 44px; }
   .jsonimp-row .btn-sm { min-height: 44px; white-space: nowrap; }
   .jsonimp-hint-error { color: #fca5a5; }
+  .jsonimp-actionzone { border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); padding: 1rem; background: var(--color-bg-main, #0d121f); }
+  .jsonimp-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .6rem; margin: .5rem 0 0; }
+  .jsonimp-confirm { border: 1px solid #f59e0b; border-radius: var(--border-radius-sm); padding: 1rem; margin-bottom: 1rem; }
+  .jsonimp-confirm p { margin: 0 0 .5rem; }
   .jsonimp-cat-row { align-items: flex-end; }
   .jsonimp-cat-source { display: flex; flex-direction: column; gap: .25rem; max-width: 22rem; margin-bottom: .5rem; }
   .jsonimp-cat-source .field-label { margin: 0; }

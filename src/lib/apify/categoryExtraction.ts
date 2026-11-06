@@ -9,7 +9,9 @@
  *   maxSearchPagesPerStartUrl integer ≥ 1 (límite de páginas de búsqueda; se detiene con el primero de los dos límites)
  *   scrapeSellers boolean              (vendedor de la oferta principal)
  *   maxOffers integer                  (0: no se piden ofertas adicionales)
- *   proxyCountry / language            (sólo si se definen APIFY_PROXY_COUNTRY / APIFY_LANGUAGE)
+ *   language                           enum del actor (cs, da, de, en, es, fr…): «es» por defecto (amazon.es lo admite);
+ *                                      APIFY_LANGUAGE lo sustituye. No altera el dominio, el mercado ni la moneda (EUR).
+ *   proxyCountry                       sólo si se define APIFY_PROXY_COUNTRY (por defecto el actor elige según el dominio)
  * NO se envían `countryCode` ni `zipCode`: el actor cobra el evento «deliveryLocation» (0,06 USD por resultado).
  *
  * Ejecución (API de Apify v2, token sólo en el servidor, cabecera Authorization):
@@ -162,8 +164,9 @@ export function buildActorInput(url: string, limit: number): Record<string, unkn
   };
   const proxy = (process.env.APIFY_PROXY_COUNTRY ?? '').trim().toUpperCase();
   if (/^[A-Z]{2}$/.test(proxy)) input.proxyCountry = proxy;
+  // Idioma de la página: valores del enum del actor (`es` = español). Un idioma que el dominio no admita lo ignora el actor.
   const lang = (process.env.APIFY_LANGUAGE ?? '').trim();
-  if (/^[a-zA-Z_]{2,7}$/.test(lang)) input.language = lang;
+  input.language = /^[a-zA-Z_]{2,7}$/.test(lang) ? lang : 'es';
   return input;
 }
 
@@ -456,6 +459,8 @@ async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefi
     warnings.push(`el_actor_devolvio_mas_de_${job.limit}_productos:se_conservan_los_primeros_${job.limit}`);
     items = items.slice(0, job.limit);
   }
+  // APROXIMACIÓN: el dataset de Amazon no trae la hora de observación de cada producto; se usa el fin de la ejecución,
+  // que es posterior a la lectura real de cada página (puede diferir de ella en minutos). No es la hora exacta de captura.
   const capturedAt = job.finishedAt;
   const ctx = { capturedAt, runId: job.runId, resolveCategory: resolveCatalogCategory };
   const temu = job.source === 'temu';

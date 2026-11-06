@@ -1,0 +1,224 @@
+// Zona común de acciones del importador (script REAL del panel en un entorno simulado): simular / importar al catálogo /
+// importar y enriquecer con IA, para todos los métodos de carga. Servidor y enriquecimiento SIMULADOS: ninguna prueba
+// guarda en un catálogo real, llama a Apify/ScraperAPI ni gasta créditos de IA.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+
+const source = fs.readFileSync(new URL('../../src/pages/upayp1b4.astro', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const start = source.indexOf('<script is:inline>\n  // Importación de productos JSON');
+assert.ok(start > 0, 'script del bloque no encontrado');
+const clientScript = source.slice(start + '<script is:inline>\n'.length, source.indexOf('</script>', start));
+const ids = [...new Set([...source.matchAll(/id="(jsonImp[A-Za-z]+)"/g)].map((m) => m[1]))];
+
+function makeClient(fetchImpl) {
+  const calls = [];
+  const nodes = {};
+  const el = (id) => {
+    const listeners = {};
+    const node = {
+      id, value: '', textContent: '', hidden: true, disabled: false, checked: false, className: '', style: {}, files: [], children: [], max: '', placeholder: '',
+      classList: { toggle() {}, add() {} },
+      addEventListener: (t, f) => { (listeners[t] ||= []).push(f); },
+      fire: (t) => (listeners[t] || []).forEach((f) => f({ target: node, key: '', preventDefault() {} })),
+      appendChild: (c) => { node.children.push(c); return c; }, querySelector: () => ({ setAttribute() {} }), setAttribute() {}, focus() {}, remove() {}, click() {},
+    };
+    return (nodes[id] = node);
+  };
+  ids.forEach(el);
+  ['jsonImpPlatform', 'jsonImpCurrency', 'jsonImpAsin', 'jsonImpText', 'jsonImpCatUrl', 'jsonImpCatLimit', 'jsonImpTargetCat', 'jsonImpTargetSub'].forEach((i) => { nodes[i].hidden = false; });
+  nodes.jsonImpSource.value = 'amazon';
+  const store = { _m: {}, getItem(k) { return k in this._m ? this._m[k] : null; }, setItem(k, v) { this._m[k] = String(v); }, removeItem(k) { delete this._m[k]; } };
+  const sandbox = {
+    document: { getElementById: (i) => nodes[i], createElement: () => el('x'), body: { appendChild() {} } },
+    fetch: (...a) => { calls.push(a); return fetchImpl(...a); },
+    setTimeout, clearTimeout, sessionStorage: store, Promise, JSON, Math, Date, String, Array, Object, Boolean, Blob: class {}, URL: { createObjectURL: () => 'blob:', revokeObjectURL() {} },
+    FileReader: class {}, BroadcastChannel: class { postMessage() {} close() {} },
+    window: { IntersectionObserver: class {}, confirm: () => true },
+    IntersectionObserver: class { observe() {} disconnect() {} },
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(clientScript, sandbox);
+  return { nodes, calls, store };
+}
+
+const wait = (ms = 40) => new Promise((r) => setTimeout(r, ms));
+const resp = (data, status = 200) => ({ ok: status < 400, status, json: async () => data });
+const amz = (n, kind = 'new') => ({ asin: 'B0TEST000' + n, title: 'Producto Amazon ' + n, kind, externalId: 'a' + n, url: 'https://www.amazon.es/dp/B0TEST000' + n, price: 10 + n, currency: 'EUR' });
+const temuRec = (n) => ({ goodsId: '70100000000000' + n, title: 'Producto Temu ' + n, kind: 'new', externalId: 't' + n, productUrl: 'https://www.temu.com/es/-g-70100000000000' + n + '.html', price: 5 + n, currency: 'EUR' });
+
+/** Servidor simulado: json-import (nuevo → created; kind=existing → updated) y enrich-bulk configurable. */
+function fakeServer({ enrichFail = () => false, enrichLocal = () => false, extra } = {}) {
+  const log = { imports: [], enrich: [], other: [] };
+  const fn = async (url, init) => {
+    const u = String(url);
+    const body = init && init.body ? JSON.parse(init.body) : {};
+    if (extra) { const r = extra(u, init); if (r) return r; }
+    if (u === '/api/categories') return resp({ success: true, categories: [{ id: 'c1', name: 'Informatica' }, { id: 's1', name: 'Portatiles', parentId: 'c1' }] });
+    if (u.endsWith('/api/admin/json-import')) {
+      log.imports.push(body);
+      return resp({ success: true, results: body.records.map((r, i) => ({ index: body.indexOffset + i, outcome: r.kind === 'existing' ? 'updated' : 'created', productId: 'p-' + (r.externalId || i), title: r.title, reasons: [], warnings: [], entities: { productsCreated: r.kind === 'existing' ? 0 : 1, offersCreated: r.kind === 'existing' ? 0 : 1, offersUpdated: r.kind === 'existing' ? 1 : 0 } })) });
+    }
+    if (u.endsWith('/api/admin/enrich-bulk')) {
+      log.enrich.push(body);
+      return resp({ success: true, results: body.ids.map((id) => (enrichFail(id) ? { id, title: id, ok: false, textStatus: 'error', imageStatus: 'error', warnings: ['límite de la IA'] } : { id, title: id, ok: true, textStatus: enrichLocal(id) ? 'local' : 'ok', imageStatus: 'skipped', warnings: [] })) });
+    }
+    log.other.push(u);
+    return resp({ success: true });
+  };
+  return { fn, log };
+}
+const paste = (nodes, records) => { nodes.jsonImpText.value = JSON.stringify(records); nodes.jsonImpText.fire('input'); };
+
+test('zona común: oculta sin datos; con datos muestra nº de productos, origen (Amazon/Temu), método de carga y destino', async () => {
+  const { nodes } = makeClient(fakeServer().fn);
+  assert.notEqual(nodes.jsonImpActionZone.hidden, false, 'sin productos cargados no se muestra');
+  paste(nodes, [amz(1), amz(2), temuRec(3)]);
+  await wait(320);
+  assert.equal(nodes.jsonImpActionZone.hidden, false);
+  assert.equal(nodes.jsonImpSumCount.textContent, '3');
+  assert.match(nodes.jsonImpSumSource.textContent, /Amazon \(2\)/);
+  assert.match(nodes.jsonImpSumSource.textContent, /Temu \(1\)/);
+  assert.match(nodes.jsonImpSumSource.textContent, /JSON pegado/);
+  assert.match(nodes.jsonImpSumTarget.textContent, /Automático/);
+  nodes.jsonImpText.value = '{no json'; nodes.jsonImpText.fire('input');
+  await wait(320);
+  assert.equal(nodes.jsonImpSumCount.textContent, 'JSON no válido');
+  nodes.jsonImpClear.fire('click');
+  assert.equal(nodes.jsonImpActionZone.hidden, true);
+});
+
+test('zona común: el destino elegido se muestra en el resumen y viaja en el envío', async () => {
+  const f = fakeServer();
+  const { nodes } = makeClient(f.fn);
+  nodes.jsonImpTargetCat.fire('focusin');
+  await wait(60);
+  nodes.jsonImpTargetCat.value = 'c1';
+  nodes.jsonImpTargetCat.fire('change');
+  nodes.jsonImpTargetSub.value = 's1';
+  paste(nodes, [amz(1)]);
+  nodes.jsonImpTargetSub.fire('change');
+  assert.match(nodes.jsonImpSumTarget.textContent, /Informatica › Portatiles/);
+  nodes.jsonImpSimulate.fire('click');
+  await wait(100);
+  assert.deepEqual(f.log.imports[0].target, { categoryId: 'c1', subcategoryId: 's1' });
+});
+
+test('el método ASIN / URL individual alimenta el MISMO resumen y botones, reutilizando los datos ya cargados', async () => {
+  const f = fakeServer({ extra: (u) => (u.startsWith('/api/scrape') ? resp({ asin: 'B01EXDG2MO', title: 'Producto ASIN', url: 'https://www.amazon.es/dp/B01EXDG2MO', price: 9, currency: 'EUR', kind: 'new', externalId: 'asin1' }) : null) });
+  const { nodes, calls } = makeClient(f.fn);
+  nodes.jsonImpAsin.value = 'B01EXDG2MO';
+  nodes.jsonImpFetch.fire('click');
+  await wait(100);
+  assert.equal(nodes.jsonImpActionZone.hidden, false);
+  assert.equal(nodes.jsonImpSumCount.textContent, '1');
+  assert.match(nodes.jsonImpSumSource.textContent, /ASIN o URL individual/);
+  const scrapeCalls = calls.filter((c) => String(c[0]).startsWith('/api/scrape')).length;
+  nodes.jsonImpImport.fire('click');
+  await wait(100);
+  assert.equal(f.log.imports.length, 1);
+  assert.equal(calls.filter((c) => String(c[0]).startsWith('/api/scrape')).length, scrapeCalls, 'importar no vuelve a llamar a ScraperAPI');
+});
+
+test('«Simular importación» nunca guarda y no enriquece; «Importar al catálogo» guarda sin IA y sin llamar a Apify/ScraperAPI', async () => {
+  const f = fakeServer();
+  const { nodes, calls } = makeClient(f.fn);
+  paste(nodes, [amz(1), amz(2)]);
+  nodes.jsonImpSimulate.fire('click');
+  await wait(100);
+  assert.deepEqual(f.log.imports.map((b) => b.dryRun), [true]);
+  assert.equal(f.log.enrich.length, 0);
+  assert.match(nodes.jsonImpAlert.textContent, /NO se ha guardado nada/);
+  nodes.jsonImpImport.fire('click');
+  await wait(100);
+  assert.deepEqual(f.log.imports.map((b) => b.dryRun), [true, false]);
+  assert.equal(f.log.enrich.length, 0, 'importar sin IA nunca llama al enriquecimiento');
+  assert.match(nodes.jsonImpAlert.textContent, /sin IA/);
+  assert.equal(calls.some((c) => /apify|scrape|category-extract/i.test(String(c[0]))), false);
+});
+
+test('doble clic / pulsar varios botones a la vez: un solo envío (bloqueo mientras corre)', async () => {
+  const f = fakeServer();
+  const { nodes } = makeClient(f.fn);
+  paste(nodes, [amz(1)]);
+  nodes.jsonImpImport.fire('click');
+  nodes.jsonImpImport.fire('click');
+  nodes.jsonImpImportAi.fire('click');
+  nodes.jsonImpSimulate.fire('click');
+  await wait(150);
+  assert.equal(f.log.imports.length, 1, JSON.stringify(f.log.imports.map((b) => b.dryRun)));
+  assert.equal(f.log.imports[0].dryRun, false);
+});
+
+test('«Importar y enriquecer con IA»: vista previa gratuita, confirmación con recuento y créditos, y solo enriquece las fichas NUEVAS', async () => {
+  const f = fakeServer();
+  const { nodes } = makeClient(f.fn);
+  paste(nodes, [amz(1), amz(2, 'existing'), temuRec(3)]);
+  nodes.jsonImpImportAi.fire('click');
+  await wait(120);
+  assert.deepEqual(f.log.imports.map((b) => b.dryRun), [true], 'la vista previa es una simulación: no guarda');
+  assert.equal(f.log.enrich.length, 0, 'sin confirmar no se gasta ningún crédito');
+  assert.equal(nodes.jsonImpAiConfirm.hidden, false);
+  assert.match(nodes.jsonImpAiConfirmText.textContent, /2 ficha\(s\) NUEVA/);
+  assert.match(nodes.jsonImpAiConfirmText.textContent, /CONSUME CRÉDITOS DE IA/);
+  assert.match(nodes.jsonImpAiConfirmText.textContent, /existentes no se enriquecen/);
+  nodes.jsonImpAiConfirmNo.fire('click');
+  assert.equal(nodes.jsonImpAiConfirm.hidden, true);
+  assert.equal(f.log.imports.length, 1, 'cancelar no importa ni enriquece');
+  nodes.jsonImpImportAi.fire('click');
+  await wait(120);
+  nodes.jsonImpAiConfirmGo.fire('click');
+  await wait(250);
+  assert.deepEqual(f.log.imports.map((b) => b.dryRun), [true, true, false]);
+  assert.equal(f.log.enrich.length, 1);
+  assert.deepEqual([...f.log.enrich[0].ids].sort(), ['p-a1', 'p-t3'], 'la ficha existente (actualizada) no se enriquece');
+  assert.equal(f.log.enrich[0].forceImage, false);
+  assert.equal(nodes.jsonImpEnrich.hidden, false);
+  assert.equal(nodes.jsonImpEnrichRetry.hidden, true, 'sin pendientes no hay reintento');
+});
+
+test('sin fichas nuevas, «Importar y enriquecer con IA» no gasta créditos ni importa; lo explica', async () => {
+  const f = fakeServer();
+  const { nodes } = makeClient(f.fn);
+  paste(nodes, [amz(1, 'existing'), amz(2, 'existing')]);
+  nodes.jsonImpImportAi.fire('click');
+  await wait(120);
+  assert.equal(nodes.jsonImpAiConfirm.hidden, true);
+  assert.match(nodes.jsonImpAlert.textContent, /No hay fichas nuevas que enriquecer/);
+  assert.equal(f.log.enrich.length, 0);
+  assert.deepEqual(f.log.imports.map((b) => b.dryRun), [true]);
+});
+
+test('si la IA falla: los productos importados se conservan, el enriquecimiento va por lotes y se reintenta SOLO lo pendiente', async () => {
+  const failing = new Set(['p-a6', 'p-a7']);
+  const f = fakeServer({ enrichFail: (id) => failing.has(id), enrichLocal: (id) => id === 'p-a2' });
+  const { nodes, store } = makeClient(f.fn);
+  paste(nodes, [1, 2, 3, 4, 5, 6, 7].map((n) => amz(n)));
+  nodes.jsonImpImportAi.fire('click');
+  await wait(120);
+  nodes.jsonImpAiConfirmGo.fire('click');
+  await wait(350);
+  assert.equal(f.log.imports.filter((b) => b.dryRun === false).length, 1, 'se importó una sola vez');
+  assert.deepEqual(f.log.enrich.map((b) => b.ids.length), [5, 2], 'lotes de 5');
+  assert.equal(nodes.jsonImpEnrichRetry.hidden, false);
+  assert.match(nodes.jsonImpEnrichRetry.textContent, /\(3\)/);
+  assert.deepEqual(JSON.parse(store.getItem('jsonImpEnrichPending')).sort(), ['p-a2', 'p-a6', 'p-a7']);
+  assert.match(nodes.jsonImpAlert.textContent, /3 ficha\(s\) pendiente\(s\)/);
+  const importsBefore = f.log.imports.length;
+  failing.clear();
+  nodes.jsonImpEnrichRetry.fire('click');
+  assert.equal(nodes.jsonImpAiConfirm.hidden, false);
+  assert.match(nodes.jsonImpAiConfirmText.textContent, /3 ficha\(s\) pendiente/);
+  assert.match(nodes.jsonImpAiConfirmText.textContent, /CONSUME CRÉDITOS/);
+  nodes.jsonImpAiConfirmGo.fire('click');
+  await wait(250);
+  assert.equal(f.log.imports.length, importsBefore, 'el reintento no importa nada');
+  assert.deepEqual([...f.log.enrich.at(-1).ids].sort(), ['p-a2', 'p-a6', 'p-a7']);
+  assert.match(nodes.jsonImpEnrichRetry.textContent, /\(1\)/, 'p-a2 sigue con plantilla local: queda pendiente');
+});
+
+test('el botón antiguo de Amazon y la casilla «Guardar en el catálogo» ya no existen en el panel', () => {
+  assert.ok(!/id="jsonImpAmazonIa"|id="jsonImpSave"|id="jsonImpRun"/.test(source));
+  assert.ok(!/Importar registros válidos|Importar producto Amazon con ficha IA/.test(source));
+});

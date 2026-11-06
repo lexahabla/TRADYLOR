@@ -92,6 +92,10 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `api/redirect.ts` - Salida registrada (302) al enlace de afiliado del checkout
   - `api/health.ts` - Healthcheck público para Docker / Easy Panel (sin auth)
   - `api/admin/add-product.ts` - Alta/actualización de producto con IA (texto + imagen)
+  - Panel de importación JSON (`upayp1b4.astro`, sección 2): TODOS los métodos de carga (ASIN/URL individual, categoría Amazon/Temu, JSON pegado o archivo)
+    alimentan una zona común con «Simular importación» (nunca guarda), «Importar al catálogo» (sin IA) e «Importar y enriquecer con IA»
+    (vista previa gratuita + confirmación de créditos; enriquece con `/api/admin/enrich-bulk` solo las fichas NUEVAS, en lotes de 5, con
+    reintento de las pendientes).
   - `api/admin/json-import/index.ts` - Importación JSON por bloques; admite `target:{categoryId,subcategoryId}` (destino de las fichas NUEVAS, validado contra categories.json; las existentes no se tocan)
   - `api/admin/pipeline/index.ts` - Métricas de auditoría y reproceso del catálogo
     (síncrono o en segundo plano con `background:true`; `mode:'cancel'` lo detiene)
@@ -171,8 +175,10 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   (Apify, actor `junglee/Amazon-crawler`; sólo servidor, nunca en el navegador ni en logs). Opcionales:
   `APIFY_MAX_ITEMS` (tope de productos por extracción, 50 por defecto, máx. 100), `APIFY_RUN_TIMEOUT_SECS`
   (900), `APIFY_MAX_RUNS_PER_DAY` (20), `APIFY_MAX_COST_USD` (tope de gasto por ejecución, 2),
-  `APIFY_PROXY_COUNTRY` y `APIFY_LANGUAGE` (sólo si se definen se envían al actor). El límite de productos
-  viaja a Apify (`maxItemsPerStartUrl`); no se envían `countryCode`/`zipCode` (cobran 0,06 USD por resultado).
+  `APIFY_LANGUAGE` (idioma de Amazon; por defecto `es`, valor del enum del actor admitido por amazon.es; no altera dominio, mercado ni moneda EUR) y
+  `APIFY_PROXY_COUNTRY` (sólo si se define se envía). El límite de productos
+  viaja a Apify (`maxItemsPerStartUrl`); la fecha de captura de lo extraído es el FIN de la ejecución (aproximación: no es la hora exacta en que
+  se observó cada producto); no se envían `countryCode`/`zipCode` (cobran 0,06 USD por resultado).
   Temu (mismo bloque, selector «Origen»): actor `hypebridge/temu-scraper` (id 2CKn7F7pA4eH2mVRm; `APIFY_TEMU_ACTOR` lo
   sobreescribe) con el mismo `APIFY_TOKEN`. Admite URL de producto (…-g-<id>.html) y de categoría (…-o3-<id>.html) CON
   prefijo de mercado /es/ (sin él el actor responde con EE. UU. en USD; se rechaza antes de gastar); rechaza

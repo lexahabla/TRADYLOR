@@ -111,6 +111,11 @@ test('la entrada del actor usa SÓLO parámetros de su esquema real y TRANSMITE 
   assert.equal(input.maxOffers, 0);
   assert.equal(input.scrapeSellers, true);
   assert.equal('countryCode' in input || 'zipCode' in input, false, 'deliveryLocation cobra 0,06 USD por resultado');
+  // Idioma: «es» (valor del enum del actor, admitido por amazon.es) por defecto; no se toca ni el dominio ni el mercado (sin proxyCountry/countryCode)
+  assert.equal(input.language, 'es');
+  assert.equal('proxyCountry' in input, false, 'el mercado lo decide el dominio (amazon.es → EUR)');
+  assert.ok(['cs', 'da', 'de', 'en', 'es', 'fr', 'nl', 'pl', 'pt', 'sv', 'tr'].includes(input.language), 'valor del enum real del actor');
+  assert.ok(input.categoryOrProductUrls[0].url.includes('amazon.es'));
   assert.equal(lib.buildActorInput(CAT_URL, 1).maxItemsPerStartUrl, 1);
   assert.equal(lib.buildActorInput(CAT_URL, 50).maxItemsPerStartUrl, 50);
   process.env.APIFY_PROXY_COUNTRY = 'es'; process.env.APIFY_LANGUAGE = 'es';
