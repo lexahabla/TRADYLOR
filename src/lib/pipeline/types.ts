@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - PIPELINE DE AUTOMATIZACIÓN DE PRODUCTOS (tipos)
+ * TREIDILOR - PIPELINE DE AUTOMATIZACIÓN DE PRODUCTOS (tipos)
  * ==============================================================================
  * Tipos compartidos del pipeline de 4 etapas (ingest → audit → categorize →
  * publish). Sólo añaden campos OPCIONALES al modelo canónico `Product`, por lo

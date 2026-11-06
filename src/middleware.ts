@@ -1,5 +1,5 @@
 /**
- * TRADYLOR — Middleware global de Astro.
+ * TREIDILOR — Middleware global de Astro.
  *
  * Intercepta las fichas de producto (/producto/<id> y /productos/<id>) y
  * registra la visita en la analítica REAL de segundo plano. El registro es

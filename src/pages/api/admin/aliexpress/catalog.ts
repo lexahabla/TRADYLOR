@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - API ADMIN: CATÁLOGO ALIEXPRESS (CACHÉ)
+ * TREIDILOR - API ADMIN: CATÁLOGO ALIEXPRESS (CACHÉ)
  * ==============================================================================
  * GET  /api/admin/aliexpress/catalog
  *   -> { success, connected, syncedAt, stale, count, products }

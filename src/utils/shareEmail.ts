@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — TARJETA HTML DEL CORREO "COMPARTIR POR EMAIL"
+ * TREIDILOR — TARJETA HTML DEL CORREO "COMPARTIR POR EMAIL"
  * ==============================================================================
  * Fuente única del diseño de la tarjeta: barra azul superior, mensaje, producto
  * (imagen + título + categoría + botón) y pie. /share/[id] la usa para la vista
@@ -22,7 +22,7 @@ export interface ShareEmailLabels {
   cta: string;
   /** Prefijo del pie: "Enviado desde". */
   footer: string;
-  /** Lema que sigue a "Tradylor.com ·" en el pie. */
+  /** Lema que sigue a "Treidilor.com ·" en el pie. */
   tagline: string;
 }
 
@@ -108,7 +108,7 @@ export function buildShareEmailHtml(input: ShareEmailInput): string {
     `</td></tr>`,
 
     // Pie
-    `<tr><td style="padding:14px 28px;background-color:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;font-family:${FONT};font-size:12px;line-height:1.4;color:#9ca3af;">${escapeHtml(labels.footer)} <strong>Tradylor.com</strong> · ${escapeHtml(labels.tagline)}</td></tr>`,
+    `<tr><td style="padding:14px 28px;background-color:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;font-family:${FONT};font-size:12px;line-height:1.4;color:#9ca3af;">${escapeHtml(labels.footer)} <strong>Treidilor.com</strong> · ${escapeHtml(labels.tagline)}</td></tr>`,
 
     `</table></div>`,
   ].join('');
@@ -144,5 +144,5 @@ export function buildShareEmailDocument(input: ShareEmailInput): string {
 /** Versión en texto plano del correo (para clientes sin HTML; también la valoran los filtros antispam). */
 export function buildShareEmailText(input: Pick<ShareEmailInput, 'message' | 'title' | 'ctaUrl' | 'lang'>): string {
   const labels = SHARE_EMAIL_LABELS[input.lang] ?? SHARE_EMAIL_LABELS.es;
-  return `${input.message}\n\n${input.title}\n${labels.cta}: ${input.ctaUrl}\n\n— ${labels.footer} Tradylor.com · ${labels.tagline}`;
+  return `${input.message}\n\n${input.title}\n${labels.cta}: ${input.ctaUrl}\n\n— ${labels.footer} Treidilor.com · ${labels.tagline}`;
 }

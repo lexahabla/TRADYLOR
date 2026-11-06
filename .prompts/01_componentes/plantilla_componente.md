@@ -2,7 +2,7 @@
 # Elementos visuales de la web (tarjetas de producto, botones, menús, etc)
 
 ## Contexto
-- **Proyecto:** Tradylor
+- **Proyecto:** Treidilor
 - **Reglas del sistema:** `.prompts/_REGLAS_SISTEMA.md`
 - **Archivo a crear/editar:** `src/components/...`
 

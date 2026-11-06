@@ -5,7 +5,7 @@ import { dataFile } from './paths';
 
 /**
  * ==============================================================================
- * TRADYLOR — LEADS DE MARKETING (marketing_leads.json)
+ * TREIDILOR — LEADS DE MARKETING (marketing_leads.json)
  * ==============================================================================
  * Equivalente a la tabla `marketing_leads`: cada registro es un contacto al
  * que se le puede hacer campañas (segmentación por perfil, categorías,

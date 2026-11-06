@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — REGIÓN DEL VISITANTE → IDIOMAS COOFICIALES (compartir por email)
+ * TREIDILOR — REGIÓN DEL VISITANTE → IDIOMAS COOFICIALES (compartir por email)
  * ==============================================================================
  * Sólo servidor. Decide qué idiomas regionales (catalán, euskera, gallego) se
  * ofrecen en el selector de /share/[id] y en el panel de compartir:

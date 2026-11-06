@@ -1,13 +1,13 @@
 # Despliegue en producción — Easy Panel (Hostinger)
 
-Tradylor corre como **SSR de Astro (adaptador Node standalone)** dentro de un contenedor
+Treidilor corre como **SSR de Astro (adaptador Node standalone)** dentro de un contenedor
 Docker. En Easy Panel la app se sirve detrás de su proxy (HTTPS con Let's Encrypt) y
 escucha en el puerto **4321**.
 
 ## 1. Crear la aplicación en Easy Panel
 
 1. Easy Panel → **Create App** → **App from GitHub** (o *Git repository*).
-2. Repositorio: `https://github.com/lexahabla/TRADYLOR.git`, rama `main`.
+2. Repositorio: `https://github.com/lexahabla/TREIDILOR.git`, rama `main`.
 3. **Build pack**: `Dockerfile` (recomendado). Si se elige Nixpacks, usa `nixpacks.toml`
    (mismo build y mismo `start`), pero sin volumen configurado los datos no persisten.
 4. **Puerto / port detection**: `4321`.

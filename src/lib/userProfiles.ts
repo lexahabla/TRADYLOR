@@ -4,7 +4,7 @@ import { dataFile } from './paths';
 
 /**
  * ==============================================================================
- * TRADYLOR — PERFILES DE COMPRADOR (user_profiles.json)
+ * TREIDILOR — PERFILES DE COMPRADOR (user_profiles.json)
  * ==============================================================================
  * Capa de datos equivalente a la tabla `user_profiles`: una ficha por usuario
  * de Mi Radar con sus preferencias comerciales (categorías, presupuesto,

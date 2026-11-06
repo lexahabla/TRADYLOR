@@ -2,7 +2,7 @@ import { readProductsFromFile, type Product } from './productStore';
 
 /**
  * ==============================================================================
- * TRADYLOR — SUGERENCIAS INTELIGENTES DE SECCIONES (calendario comercial)
+ * TREIDILOR — SUGERENCIAS INTELIGENTES DE SECCIONES (calendario comercial)
  * ==============================================================================
  * Motor 100% automático y determinista (sin APIs externas ni claves nuevas):
  * según la fecha actual, propone secciones listas para publicar con sus

@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - ADAPTADOR UNIVERSAL DE CAPTURA DE COMERCIANTES
+ * TREIDILOR - ADAPTADOR UNIVERSAL DE CAPTURA DE COMERCIANTES
  * ==============================================================================
  * Extrae el 100% de datos disponibles (imágenes, atributos, specs, galería completa)
  * de cualquier red de afiliación o página de producto, normalizando a formato unificado.

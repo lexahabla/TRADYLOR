@@ -1,5 +1,5 @@
 /**
- * TRADYLOR — Endpoint de analítica (beacons de cliente).
+ * TREIDILOR — Endpoint de analítica (beacons de cliente).
  * Acepta POST con acciones del usuario (visitas, duración, compras, clics de
  * contacto, añadidos al carrito, salidas a tienda...) y las registra en la
  * cola de src/lib/analytics.ts, que persiste en segundo plano sin bloquear.

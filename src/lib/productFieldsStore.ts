@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — CAMPOS VISIBLES EN LA FICHA DE PRODUCTO
+ * TREIDILOR — CAMPOS VISIBLES EN LA FICHA DE PRODUCTO
  * ==============================================================================
  * Fuente única de verdad de qué campos del producto se pintan en la ficha
  * pública (`/producto/[slug]`) y permite al admin:
@@ -60,7 +60,7 @@ const MAX_CUSTOM_FIELDS = 30;
  * monetización, así que no se ofrecen como «ocultables».
  */
 export const BASE_TOGGLEABLE_FIELDS: BaseFieldDef[] = [
-  { key: 'verdict', label: 'Veredicto editorial', hint: 'Bloque "Veredicto Tradylor"' },
+  { key: 'verdict', label: 'Veredicto editorial', hint: 'Bloque "Veredicto Treidilor"' },
   { key: 'techSheet', label: 'Ficha técnica (texto libre)', hint: 'Párrafo largo en la sección "Ficha técnica"' },
   { key: 'specs', label: 'Especificaciones (tabla clave/valor)', hint: 'Tabla de datos objetivos de la sección "Ficha técnica"' },
   { key: 'brand', label: 'Marca', hint: 'Fila "Marca" bajo el comerciante' },

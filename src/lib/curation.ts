@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — CURATION ENGINE (Backend)
+ * TREIDILOR — CURATION ENGINE (Backend)
  * ==============================================================================
  * Módulo puro (sin I/O de red) con la lógica de curación avanzada del catálogo:
  *  - Detección de duplicados por jerarquía (sourceId → URL canónica → título).

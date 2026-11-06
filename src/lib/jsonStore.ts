@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - LECTURA / ESCRITURA SEGURA DE FICHEROS JSON
+ * TREIDILOR - LECTURA / ESCRITURA SEGURA DE FICHEROS JSON
  * ==============================================================================
  * Centraliza los dos fallos que ya han_costado catálogo en producción:
  *

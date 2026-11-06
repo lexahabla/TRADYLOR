@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - TIPOS DEL MÓDULO MULTI-CATÁLOGO DE AFILIACIÓN
+ * TREIDILOR - TIPOS DEL MÓDULO MULTI-CATÁLOGO DE AFILIACIÓN
  * ==============================================================================
  */
 

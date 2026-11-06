@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — FUSIÓN SEGURA EN REIMPORTACIÓN (funciones puras)
+ * TREIDILOR — FUSIÓN SEGURA EN REIMPORTACIÓN (funciones puras)
  * ==============================================================================
  * Al reimportar un producto que ya existe (API, URL o JSON) NO se sustituye el
  * registro: se fusiona con precedencia por campo.

@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - ESQUEMA DE BASE DE DATOS INCREMENTAL (SIN DESTRUIR)
+ * TREIDILOR - ESQUEMA DE BASE DE DATOS INCREMENTAL (SIN DESTRUIR)
  * ==============================================================================
  * Tipos y helpers para las NUEVAS tablas y columnas que se añaden al catálogo.
  * Mantiene compatibilidad total con products.json actual.

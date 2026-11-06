@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — CATALOG DIVERSITY & ALTERNATION ENGINE
+ * TREIDILOR — CATALOG DIVERSITY & ALTERNATION ENGINE
  * ==============================================================================
  * Regla de Alternancia y Diversidad:
  * 1. Al renderizar la lista u ordenación, el sistema debe alternar los tipos de

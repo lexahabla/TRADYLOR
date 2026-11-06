@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - FILTROS Y ORDENACIÓN DEL CATÁLOGO ALIEXPRESS (PANEL ADMIN)
+ * TREIDILOR - FILTROS Y ORDENACIÓN DEL CATÁLOGO ALIEXPRESS (PANEL ADMIN)
  * ==============================================================================
  * Módulo tipado del bloque `#aliFilters` («2. Catálogo AliExpress (caché)»).
  *
@@ -61,7 +61,7 @@ declare global {
 
 /* ────────────────────────────── TIPOS ────────────────────────────────────── */
 
-/** Estado de un producto del catálogo AliExpress dentro de Tradylor. */
+/** Estado de un producto del catálogo AliExpress dentro de Treidilor. */
 export type AliImportState = 'PENDING' | 'IMPORTED' | 'DISCARDED';
 
 /** Filtro de estado: todos o un estado concreto. */
@@ -108,7 +108,7 @@ export interface ProductFilterParams {
   catL1?: string;
   /** Subcategoría nivel 2 (`categoria_l2`). Depende de `catL1` (cascada). */
   catL2?: string;
-  /** Estado de importación en Tradylor. Por defecto `ALL` (oculta descartados). */
+  /** Estado de importación en Treidilor. Por defecto `ALL` (oculta descartados). */
   estado?: AliEstadoFilter;
   /** Tienda / merchant (`extra.Tienda`). */
   shop?: string;

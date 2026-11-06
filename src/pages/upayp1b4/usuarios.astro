@@ -20,7 +20,7 @@ const isMaster = Boolean(sessionUser.master);
 const formatDate = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' });
 ---
 
-<Layout title="Usuarios | Admin Tradylor" description="Crea y gestiona los usuarios del backend de Tradylor.">
+<Layout title="Usuarios | Admin Treidilor" description="Crea y gestiona los usuarios del backend de Treidilor.">
   <Fragment slot="header-end">
     <AdminUserMenu user={sessionUser} active="usuarios" />
   </Fragment>
@@ -29,7 +29,7 @@ const formatDate = (iso: string) => new Date(iso).toLocaleDateString('es-ES', { 
       crumbs={[{ label: 'Panel de control', href: '/upayp1b4' }, { label: 'Administración de usuarios' }]}
       headingLevel={1}
       title="Usuarios del panel"
-      subtitle="Cuenta las personas con acceso a Tradylor Admin. El rol decide qué pueden ver: los usuarios comunes sólo llegan a su perfil."
+      subtitle="Cuenta las personas con acceso a Treidilor Admin. El rol decide qué pueden ver: los usuarios comunes sólo llegan a su perfil."
     />
 
     <AdminNav context="usuario" active="usuarios" user={sessionUser} />

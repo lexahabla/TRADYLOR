@@ -67,7 +67,7 @@ async function callOpenCode(prompt: string, catalogContext: string): Promise<str
   }
 
   const systemPrompt = [
-    'Eres el motor de curación OpenCode integrado en Tradylor, un portal de afiliación de productos.',
+    'Eres el motor de curación OpenCode integrado en Treidilor, un portal de afiliación de productos.',
     'Recibes un prompt en lenguaje natural del administrador y el contexto actual del catálogo.',
     'Debes responder ÚNICAMENTE con un JSON válido con esta estructura:',
     '{',

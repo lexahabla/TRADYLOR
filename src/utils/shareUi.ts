@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — PANEL DE COMPARTIR (inyectado en cualquier página)
+ * TREIDILOR — PANEL DE COMPARTIR (inyectado en cualquier página)
  * ==============================================================================
  * Modal reutilizable que se monta una sola vez en <body> y se abre desde el
  * drawer del header o desde las tarjetas de Mi Radar. Todo el markup/estilos

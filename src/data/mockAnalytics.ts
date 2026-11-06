@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — DATOS MOCK DEL MÓDULO TRÁFICO Y VENTAS
+ * TREIDILOR — DATOS MOCK DEL MÓDULO TRÁFICO Y VENTAS
  * ==============================================================================
  * Datos de prueba realistas que alimentan el dashboard mientras se conecta la
  * fuente real (GA4 / Search Console / tracker propio). Toda la presentación

@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — GLOSARIO DE MÉTRICAS (MÓDULO TRÁFICO Y VENTAS)
+ * TREIDILOR — GLOSARIO DE MÉTRICAS (MÓDULO TRÁFICO Y VENTAS)
  * ==============================================================================
  * Fuente única de verdad para la Guía del módulo y para los tooltips (`?`)
  * del dashboard. Cada métrica define:
@@ -28,7 +28,7 @@ export interface CategoriaGlosario {
 }
 
 export const categoriasGlosario: CategoriaGlosario[] = [
-  { id: 'trafico', label: 'Tráfico', descripcion: 'Quién visita Tradylor, cuánto se queda y de dónde llega.' },
+  { id: 'trafico', label: 'Tráfico', descripcion: 'Quién visita Treidilor, cuánto se queda y de dónde llega.' },
   { id: 'seo', label: 'SEO', descripcion: 'Visibilidad en buscadores: impresiones, clics y posiciones.' },
   { id: 'ventas', label: 'Ventas & Monetización', descripcion: 'Conversión, ingresos y valor de cada visitante.' },
   { id: 'producto', label: 'Métricas de Producto', descripcion: 'Rendimiento de cada ficha y detección de fricción de venta.' },
@@ -43,7 +43,7 @@ export const glosarioMetricas: MetricaDefinicion[] = [
     nombre: 'Sesiones / Visitas totales',
     categoria: 'trafico',
     definicionCorta: 'Número total de visitas a la web en un periodo. Cada sesión agrupa toda la navegación de un mismo usuario seguido.',
-    definicionLarga: 'Una sesión agrupa todas las páginas que una persona visita seguidas hasta que se queda inactivo (30 min por defecto) o cierra el navegador. Es el indicador bruto de cuánta gente llega a Tradylor: sirve para medir el impacto de campañas, publicaciones y cambios de posicionamiento. Compara siempre periodos equivalentes (mes a mes) para no confundir estacionalidad con crecimiento real.',
+    definicionLarga: 'Una sesión agrupa todas las páginas que una persona visita seguidas hasta que se queda inactivo (30 min por defecto) o cierra el navegador. Es el indicador bruto de cuánta gente llega a Treidilor: sirve para medir el impacto de campañas, publicaciones y cambios de posicionamiento. Compara siempre periodos equivalentes (mes a mes) para no confundir estacionalidad con crecimiento real.',
     consejoIa: 'Si las sesiones suben pero las ventas no, el problema no es de tráfico: revisa la ficha del producto o el precio frente a la competencia.',
   },
   {
@@ -211,7 +211,7 @@ export const glosarioMetricas: MetricaDefinicion[] = [
     nombre: 'Google Analytics 4',
     categoria: 'herramientas',
     definicionCorta: 'Plataforma gratuita de Google que mide tráfico, comportamiento y eventos de la web con modelo por eventos.',
-    definicionLarga: 'GA4 es la fuente canónica de sesiones, usuarios, páginas vistas y eventos personalizados (como los del tracker propio de Tradylor). trabaja con un modelo de eventos en lugar de sesiones clásicas, lo que permite medir interacciones concretas: clic en producto, añadido al carrito o salida a comercio. Se configura con una ID de medición y, para envíos personalizados, con la API secreta.',
+    definicionLarga: 'GA4 es la fuente canónica de sesiones, usuarios, páginas vistas y eventos personalizados (como los del tracker propio de Treidilor). trabaja con un modelo de eventos en lugar de sesiones clásicas, lo que permite medir interacciones concretas: clic en producto, añadido al carrito o salida a comercio. Se configura con una ID de medición y, para envíos personalizados, con la API secreta.',
     consejoIa: 'Configura eventos personalizados de salida a comercio: sin ellos sólo mides clics, no ingresos.',
   },
   {

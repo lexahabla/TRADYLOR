@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - API PÚBLICA v1: FEED DEL CATÁLOGO (para n8n y automatizaciones)
+ * TREIDILOR - API PÚBLICA v1: FEED DEL CATÁLOGO (para n8n y automatizaciones)
  * ==============================================================================
  * GET /api/v1/products?category=...&minPrice=...&maxPrice=...&limit=...&page=...
  *

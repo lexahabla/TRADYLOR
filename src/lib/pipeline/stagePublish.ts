@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - PIPELINE · ETAPA 4: PUBLICACIÓN "LISTO PARA CATÁLOGO"
+ * TREIDILOR - PIPELINE · ETAPA 4: PUBLICACIÓN "LISTO PARA CATÁLOGO"
  * ==============================================================================
  * Persiste el producto mediante las funciones EXISTENTES:
  *   1) `upsertCatalogProduct()` (contrato n8n, tombstones, buyNowUrl Amazon).

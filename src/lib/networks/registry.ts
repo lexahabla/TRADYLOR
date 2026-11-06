@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - REGISTRO DE REDES DE AFILIACIÓN
+ * TREIDILOR - REGISTRO DE REDES DE AFILIACIÓN
  * ==============================================================================
  * Definición central de todas las redes soportadas. Para añadir una red nueva:
  *   1. Añade su definición aquí (id, campos de credenciales, documentación).

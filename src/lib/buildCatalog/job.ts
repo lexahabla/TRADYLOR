@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * TRADYLOR - BUILD-CATALOG · EJECUCIÓN EN SEGUNDO PLANO (jobs)
+ * TREIDILOR - BUILD-CATALOG · EJECUCIÓN EN SEGUNDO PLANO (jobs)
  * ============================================================================
  * Construir el catálogo multi-comerciante (ingesta × redes × keywords,
  * dedupe, categorización, enriquecimiento IA por grupo) es una operación LENTA

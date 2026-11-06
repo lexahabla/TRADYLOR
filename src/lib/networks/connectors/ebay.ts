@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - CONECTOR eBAY PARTNER NETWORK
+ * TREIDILOR - CONECTOR eBAY PARTNER NETWORK
  * ==============================================================================
  * Documentación oficial: https://developer.ebay.com/api-docs/buy/browse/resources/item_summary/methods/search
  *

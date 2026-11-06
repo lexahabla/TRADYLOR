@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — PERFILADOR STORE (cliente, CRUD de Perfiles de Comprador)
+ * TREIDILOR — PERFILADOR STORE (cliente, CRUD de Perfiles de Comprador)
  * ==============================================================================
  * Dominio propio del Perfilador (`SmartMatcherWizard`): no es Mi Radar. Este
  * fichero solo reutiliza el motor de almacenamiento/sincronización de

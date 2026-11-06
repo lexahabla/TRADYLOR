@@ -61,7 +61,7 @@ export const POST: APIRoute = async ({ request }) => {
     url.searchParams.set('q', text);
 
     const res = await fetch(url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Tradylor/1.0)', Accept: 'application/json' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Treidilor/1.0)', Accept: 'application/json' },
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return json({ ok: false, error: 'translate_unavailable' }, 502);

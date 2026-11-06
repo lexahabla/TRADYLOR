@@ -62,7 +62,7 @@ export const POST: APIRoute = async ({ request }) => {
       headers['x-goog-api-key'] = candidateKey;
     } else {
       headers.Authorization = `Bearer ${candidateKey}`;
-      if (provider === 'openrouter') headers['HTTP-Title'] = 'Tradylor Admin';
+      if (provider === 'openrouter') headers['HTTP-Title'] = 'Treidilor Admin';
     }
     const res = await fetchWithTimeout(info.modelsUrl, { method: 'GET', headers });
     if (!res.ok) {

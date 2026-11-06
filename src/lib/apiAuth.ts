@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - AUTENTICACIÓN DE LA API PÚBLICA v1 (n8n / automatizaciones)
+ * TREIDILOR - AUTENTICACIÓN DE LA API PÚBLICA v1 (n8n / automatizaciones)
  * ==============================================================================
  * Token estático configurado en .env:  TRADYLOR_API_TOKEN="tu-token-largo"
  * Uso desde el cliente:                 Authorization: Bearer <token>

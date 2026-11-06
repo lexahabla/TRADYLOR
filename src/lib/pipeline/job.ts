@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - PIPELINE · EJECUCIÓN EN SEGUNDO PLANO (jobs)
+ * TREIDILOR - PIPELINE · EJECUCIÓN EN SEGUNDO PLANO (jobs)
  * ==============================================================================
  * Reprocesar TODO el catálogo con la IA de texto es una operación LENTA: 262
  * productos × 1 llamada al proveedor ≈ 30-60 minutos. Hacerlo dentro de una

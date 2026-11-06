@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — HELPERS DE AMAZON
+ * TREIDILOR — HELPERS DE AMAZON
  * ==============================================================================
  * Utilidades para construir enlaces de salida hacia Amazon España a partir de
  * un ASIN (cesta de compra con el tag de afiliado asociado).

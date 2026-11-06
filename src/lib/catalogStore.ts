@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - ESCRITURA COMPARTIDA DEL CATÁLOGO (products.json)
+ * TREIDILOR - ESCRITURA COMPARTIDA DEL CATÁLOGO (products.json)
  * ==============================================================================
  * Lógica de persistencia reutilizada por:
  *   - El panel admin (POST /api/products/add)

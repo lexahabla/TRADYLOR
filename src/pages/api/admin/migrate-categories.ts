@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - RECLASIFICACIÓN DE PRODUCTOS POR CATEGORÍAS (segura e idempotente)
+ * TREIDILOR - RECLASIFICACIÓN DE PRODUCTOS POR CATEGORÍAS (segura e idempotente)
  * ==============================================================================
  * POST /api/admin/migrate-categories
  *

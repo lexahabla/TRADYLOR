@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — REPARACIÓN DE DATOS ANTIGUOS (simulación + reversión, funciones puras)
+ * TREIDILOR — REPARACIÓN DE DATOS ANTIGUOS (simulación + reversión, funciones puras)
  * ==============================================================================
  * Detecta registros afectados por los defectos corregidos en el código y
  * propone parches. NADA se escribe aquí: `planRepairs` sólo describe;

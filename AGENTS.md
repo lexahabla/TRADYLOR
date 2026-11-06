@@ -2,7 +2,7 @@
 
 
 
-# Tradylor - Instrucciones para agentes de IA
+# Treidilor - Instrucciones para agentes de IA
 
 ## Flujo de trabajo (obligatorio, cualquier modelo)
 
@@ -47,7 +47,7 @@ al abrir el proyecto, y el agente debe seguirlas en cada sesión.
 
 ## Qué es este proyecto
 
-Tradylor es un portal de recomendación, curación y comparativas de productos de alta
+Treidilor es un portal de recomendación, curación y comparativas de productos de alta
 conversión, orientado a marketing de afiliación. Genera recomendaciones de productos
 usando datos de múltiples redes de afiliados (Amazon, AliExpress, eBay, Awin, CJ,
 Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.

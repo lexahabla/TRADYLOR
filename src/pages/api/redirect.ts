@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — ENDPOINT DE SALIDA / TRANSICIÓN DE COMPRA DELEGADA
+ * TREIDILOR — ENDPOINT DE SALIDA / TRANSICIÓN DE COMPRA DELEGADA
  * ==============================================================================
  *
  * GET /api/redirect?id=<slug|id>&src=<origen>

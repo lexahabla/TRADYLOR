@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - API PÚBLICA v1: CONSTRUCCIÓN AUTOMÁTICA DEL CATÁLOGO MULTI-COMERCIANTE
+ * TREIDILOR - API PÚBLICA v1: CONSTRUCCIÓN AUTOMÁTICA DEL CATÁLOGO MULTI-COMERCIANTE
  * ==============================================================================
  * POST /api/v1/products/build-catalog
  *

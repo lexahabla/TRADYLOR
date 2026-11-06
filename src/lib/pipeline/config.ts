@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - PIPELINE DE AUTOMATIZACIÓN DE PRODUCTOS (configuración)
+ * TREIDILOR - PIPELINE DE AUTOMATIZACIÓN DE PRODUCTOS (configuración)
  * ==============================================================================
  * Umbrales auditables (override por variables de entorno), lista blanca de
  * marketplaces de confianza y mapa de keywords → subcategoría para inferir la

@@ -1,4 +1,4 @@
-# API Pública v1 — Tradylor (automatización n8n)
+# API Pública v1 — Treidilor (automatización n8n)
 
 Base URL: `https://treidilor.com` (o `http://localhost:4321` en desarrollo)
 
@@ -27,7 +27,7 @@ Respuestas de error de autenticación:
 
 ## 1. GET /api/v1/products — Feed del catálogo
 
-Devuelve el catálogo activo de Tradylor (productos guardados + estáticos),
+Devuelve el catálogo activo de Treidilor (productos guardados + estáticos),
 listo para que n8n evalúe rentabilidad y decida qué promocionar o retirar.
 
 ### Query params (opcionales)

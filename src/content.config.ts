@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 /**
  * ==============================================================================
- * TRADYLOR — PRODUCT SCHEMA (Zod + Content Collections)
+ * TREIDILOR — PRODUCT SCHEMA (Zod + Content Collections)
  * ==============================================================================
  *
  * Schema Zod para la colección "products". Define todos los campos necesarios

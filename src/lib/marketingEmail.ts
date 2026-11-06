@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — EMAIL DE MARKETING (CARRITO ABANDONADO + CUMPLEAÑOS)
+ * TREIDILOR — EMAIL DE MARKETING (CARRITO ABANDONADO + CUMPLEAÑOS)
  * ==============================================================================
  * - Config del panel de Marketing (plataforma + triggers) en
  *   marketing-email-config.json (volumen de datos, fuera de git).
@@ -163,7 +163,7 @@ const formatDate = (iso: string): string => {
 function shell(title: string, greeting: string, body: string, buttons: string, footer: string): string {
   return `
     <div style="max-width:560px;margin:0 auto;font-family:Inter,Arial,sans-serif;background:#0d1422;color:#f3f4f6;padding:2rem;border-radius:16px">
-      <p style="margin:0 0 .35rem;font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#60a5fa">Tradylor · Marketing</p>
+      <p style="margin:0 0 .35rem;font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#60a5fa">Treidilor · Marketing</p>
       <h1 style="font-size:1.35rem;margin:0 0 .75rem;line-height:1.3">${title}</h1>
       <p style="color:#9ca3af;font-size:.9rem;line-height:1.6;margin:0 0 1.25rem">${greeting}</p>
       ${body}
@@ -200,7 +200,7 @@ export function buildCartRecoveryHtml(name: string, exits: PendingExit[]): strin
           </div>
           <div style="margin-left:auto;flex:0 0 auto;display:flex;flex-direction:column;gap:.4rem;align-items:stretch">
             <a href="${merchantUrl}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;font-weight:700;padding:.5rem .9rem;border-radius:10px;font-size:.78rem;text-align:center">Ir al carrito de la tienda</a>
-            <a href="${productUrl}" style="display:inline-block;background:rgba(255,255,255,.06);color:#e5e7eb;text-decoration:none;font-weight:700;padding:.5rem .9rem;border-radius:10px;font-size:.78rem;border:1px solid rgba(255,255,255,.14);text-align:center">Ver en Tradylor</a>
+            <a href="${productUrl}" style="display:inline-block;background:rgba(255,255,255,.06);color:#e5e7eb;text-decoration:none;font-weight:700;padding:.5rem .9rem;border-radius:10px;font-size:.78rem;border:1px solid rgba(255,255,255,.14);text-align:center">Ver en Treidilor</a>
           </div>
         </div>`;
     })
@@ -208,10 +208,10 @@ export function buildCartRecoveryHtml(name: string, exits: PendingExit[]): strin
 
   return shell(
     '🛒 Te esperamos: productos en tu carrito',
-    `Hola ${escapeHtml(name || 'de nuevo')}, tienes <strong style="color:#f3f4f6">${exits.length}</strong> producto${exits.length === 1 ? '' : 's'} sin terminar de comprar en Tradylor. Si sigues interesado, puedes retomarlo desde tu radar en cualquier momento:`,
+    `Hola ${escapeHtml(name || 'de nuevo')}, tienes <strong style="color:#f3f4f6">${exits.length}</strong> producto${exits.length === 1 ? '' : 's'} sin terminar de comprar en Treidilor. Si sigues interesado, puedes retomarlo desde tu radar en cualquier momento:`,
     rows,
     `<a href="${origin}/mi-radar" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;font-weight:700;padding:.8rem 1.35rem;border-radius:11px;font-size:.88rem">Abrir Mi Radar</a>`,
-    'Este aviso se envía automáticamente desde Tradylor mientras el producto siga pendiente en tu carrito.',
+    'Este aviso se envía automáticamente desde Treidilor mientras el producto siga pendiente en tu carrito.',
   );
 }
 
@@ -220,7 +220,7 @@ export function buildBirthdayHtml(name: string): string {
   const origin = siteOrigin();
   return shell(
     '🎂 ¡Feliz cumpleaños!',
-    `Hola ${escapeHtml(name || 'de nuevo')}, todo el equipo de Tradylor te desea un día estupendo. De regalo, te dejamos tu radar con las ofertas y novedades de tus categorías favoritas, listas cuando quieras.`,
+    `Hola ${escapeHtml(name || 'de nuevo')}, todo el equipo de Treidilor te desea un día estupendo. De regalo, te dejamos tu radar con las ofertas y novedades de tus categorías favoritas, listas cuando quieras.`,
     '',
     `<a href="${origin}/mi-radar" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;font-weight:700;padding:.8rem 1.35rem;border-radius:11px;font-size:.88rem;margin-right:.5rem">Ver Mi Radar</a><a href="${origin}/catalogo" style="display:inline-block;background:rgba(255,255,255,.06);color:#e5e7eb;text-decoration:none;font-weight:700;padding:.8rem 1.35rem;border-radius:11px;font-size:.88rem;border:1px solid rgba(255,255,255,.14)">Explorar catálogo</a>`,
     'Si no deseas recibir estos mensajes, puedes desactivarlos desde tu perfil de Mi Radar.',
@@ -245,7 +245,7 @@ export async function sendCartRecoveryEmail(user: PublicRadarUser, exits: Pendin
   const name = user.name || user.email.split('@')[0] || '';
   const html = buildCartRecoveryHtml(name, exits);
   const subject = `🛒 ${exits.length === 1 ? 'Tu producto' : 'Tus productos'} te esperan en el carrito`;
-  const text = `Tienes ${exits.length} producto(s) sin comprar en Tradylor: ${exits.map((e) => e.title).join(' · ')}`;
+  const text = `Tienes ${exits.length} producto(s) sin comprar en Treidilor: ${exits.map((e) => e.title).join(' · ')}`;
   const ok = await deliver(user, subject, html, text, 'cart-recovery');
   if (ok) {
     markCartReminderSent(user.id);
@@ -259,8 +259,8 @@ export async function sendBirthdayEmail(user: PublicRadarUser, year: number): Pr
   if (!user.email) return false;
   const name = user.name || user.email.split('@')[0] || '';
   const html = buildBirthdayHtml(name);
-  const subject = '🎂 ¡Feliz cumpleaños desde Tradylor!';
-  const ok = await deliver(user, subject, html, '¡Feliz cumpleaños! Te deseamos un día estupendo desde Tradylor.', 'birthday');
+  const subject = '🎂 ¡Feliz cumpleaños desde Treidilor!';
+  const ok = await deliver(user, subject, html, '¡Feliz cumpleaños! Te deseamos un día estupendo desde Treidilor.', 'birthday');
   if (ok) {
     markBirthdayGreetingSent(user.id, year);
     console.log(`[MarketingEmail] Cumpleaños enviado → ${user.email} (${year})`);

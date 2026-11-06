@@ -2,7 +2,7 @@ import { effectiveKey, maskKey, hasKeyFor, type AiProviderId } from './aiKeysSto
 
 /**
  * ==============================================================================
- * TRADYLOR - REGISTRO DE PROVEEDORES DE IA
+ * TREIDILOR - REGISTRO DE PROVEEDORES DE IA
  * ==============================================================================
  * Catálogo único de proveedores soportados por el panel (Transparencia ›
  * Conectividad de IA y la consola de chat): opencode (CLI local), OpenAI,
@@ -230,7 +230,7 @@ export async function testProvider(provider: AiProviderId): Promise<ProviderStat
       headers['x-goog-api-key'] = key;
     }
     if (provider === 'openrouter') {
-      headers['HTTP-Title'] = 'Tradylor Admin';
+      headers['HTTP-Title'] = 'Treidilor Admin';
     }
     const res = await fetchWithTimeout(info.modelsUrl, { method: 'GET', headers });
     if (!res.ok) {

@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — COMPARTIR DESDE MI RADAR (marketing indirecto)
+ * TREIDILOR — COMPARTIR DESDE MI RADAR (marketing indirecto)
  * ==============================================================================
  * Plantillas de texto + envío a cada red. Todo lo que sale de aquí apunta a la
  * ficha individual del producto: https://treidilor.com/producto/<slug>.
@@ -109,13 +109,13 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
       'Por si te sirve, estuve usando esta web para buscar y comparar precios de esto y me ha parecido un hallazgo. Calidad-precio está de lujo! {url}',
     ],
     threads: [
-      'Si alguien anda buscando {categoria}, en Tradylor.com lo han puesto como la opción top tras comparar especificaciones y precio. Aquí tenéis la ficha con el seguimiento de precio activo: {url}',
+      'Si alguien anda buscando {categoria}, en Treidilor.com lo han puesto como la opción top tras comparar especificaciones y precio. Aquí tenéis la ficha con el seguimiento de precio activo: {url}',
     ],
     x: [
       'Descubrí esta web para comparar precios y la verdad que te saca muy bien las opciones calidad-precio reales.\n\nDejo por aquí el análisis de este modelo por si a alguien le sirve 👇\n{url}\n\n#Chollos #Ofertas #Tecnologia',
     ],
     reddit: [
-      'Buenas! Estuve un buen rato buscando y comparando precios para renovar/comprar {titulo}. Usé un buscador nuevo que encontré (Tradylor) para ver gráficas e historial y por especificaciones/precio parece de lo mejorcito en este rango.\n\nOs dejo la ficha por si queréis echarle un ojo o si alguien lo tiene y me confirma qué tal sale: {url}',
+      'Buenas! Estuve un buen rato buscando y comparando precios para renovar/comprar {titulo}. Usé un buscador nuevo que encontré (Treidilor) para ver gráficas e historial y por especificaciones/precio parece de lo mejorcito en este rango.\n\nOs dejo la ficha por si queréis echarle un ojo o si alguien lo tiene y me confirma qué tal sale: {url}',
     ],
     redditTitle: '¿Qué opináis de esta opción calidad-precio para {categoria}?',
     facebook: [
@@ -123,7 +123,7 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
     ],
     visual: [
       'La mejor opción calidad-precio en {categoria}, con el histórico de precio verificado. Ficha completa → {url}',
-      'Comparé specs y precio de todo lo que hay en {categoria} y esto se quedó solo. Ficha en Tradylor → {url}',
+      'Comparé specs y precio de todo lo que hay en {categoria} y esto se quedó solo. Ficha en Treidilor → {url}',
       '{categoria}: análisis, pros/contras y gráfica de precio al día. Todo aquí → {url}',
     ],
     copy: 'Copiar enlace',
@@ -142,11 +142,11 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
       "Per si et serveix, estava fent servir aquesta web per buscar i comparar preus d'això i m'ha semblat un bon troballa. Qualitat-preu està de luxe! {url}",
     ],
     threads: [
-      "Si algú busca {categoria}, a Tradylor.com l'han posat com a opció top després de comparar especificacions i preu. Aquí teniu la fitxa amb el seguiment de preu actiu: {url}",
+      "Si algú busca {categoria}, a Treidilor.com l'han posat com a opció top després de comparar especificacions i preu. Aquí teniu la fitxa amb el seguiment de preu actiu: {url}",
     ],
     visual: [
       "La millor opció qualitat-preu en {categoria}, amb l'historial de preu verificat. Fitxa completa → {url}",
-      'Vaig comparar specs i preu de tot el que hi ha a {categoria}, i això es va quedar sol. Fitxa a Tradylor → {url}',
+      'Vaig comparar specs i preu de tot el que hi ha a {categoria}, i això es va quedar sol. Fitxa a Treidilor → {url}',
       '{categoria}: anàlisi, pros/contres i gràfic de preu al dia. Tot aquí → {url}',
     ],
     copy: "Copia l'enllaç",
@@ -165,11 +165,11 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
       'Bali bada, web hau erabiltzen ari nintzen hau bilatzeko eta prezioak konparatzeko, eta aurkikuntza ona iruditu zait. Kalitate-prezioa primerakoa da! {url}',
     ],
     threads: [
-      'Norbait {categoria} bilatzen ari bada, Tradylor.com-en ipini dute aukera onena, zehaztapenak eta prezioa konparatu ondoren. Hemen duzu prezio-jarraipen aktiboarekin: {url}',
+      'Norbait {categoria} bilatzen ari bada, Treidilor.com-en ipini dute aukera onena, zehaztapenak eta prezioa konparatu ondoren. Hemen duzu prezio-jarraipen aktiboarekin: {url}',
     ],
     visual: [
       '{categoria}-ren kalitate-preziorik onena, egiaztatutako prezio-historialarekin. Fitxa osoa → {url}',
-      '{categoria}-ko zehaztapen eta prezioak konparatu nituen, eta hau bakarrik geratu zen. Tradylor-en fitxa → {url}',
+      '{categoria}-ko zehaztapen eta prezioak konparatu nituen, eta hau bakarrik geratu zen. Treidilor-en fitxa → {url}',
       '{categoria}: azterketa, ondo/txarto eta eguneratutako prezio-grafikoa. Hemen dago → {url}',
     ],
     copy: 'Kopiatu esteka',
@@ -188,11 +188,11 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
       'Por se che sirva, estaba a usar esta web para buscar e comparar prezos disto e pareceume un achado. Calidade-prezo está de luxo! {url}',
     ],
     threads: [
-      'Se alguén busca {categoria}, en Tradylor.com puxérona como a opción top despois de comparar especificacións e prezo. Aquí tedes a ficha co seguimento de prezo activo: {url}',
+      'Se alguén busca {categoria}, en Treidilor.com puxérona como a opción top despois de comparar especificacións e prezo. Aquí tedes a ficha co seguimento de prezo activo: {url}',
     ],
     visual: [
       'A mellor opción calidade-prezo en {categoria}, co historial de prezo verificado. Ficha completa → {url}',
-      'Comparei especificacións e prezos de todo o que hai en {categoria} e isto quedou só. Ficha en Tradylor → {url}',
+      'Comparei especificacións e prezos de todo o que hai en {categoria} e isto quedou só. Ficha en Treidilor → {url}',
       '{categoria}: análise, pros/contras e gráfico de prezo ao día. Todo aquí → {url}',
     ],
     copy: 'Copiar ligazón',
@@ -211,11 +211,11 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
       "In case it's useful, I was using this website to search and compare prices for this and I think it's a great find. Value for money is great! {url}",
     ],
     threads: [
-      "If anyone is looking for {categoria}, Tradylor.com has it as the top pick after comparing specs and price. Here's the sheet with price tracking live: {url}",
+      "If anyone is looking for {categoria}, Treidilor.com has it as the top pick after comparing specs and price. Here's the sheet with price tracking live: {url}",
     ],
     visual: [
       'Best value for money in {categoria}, with verified price history. Full sheet → {url}',
-      "I compared specs and prices across {categoria} and this one stood alone. Tradylor sheet → {url}",
+      "I compared specs and prices across {categoria} and this one stood alone. Treidilor sheet → {url}",
       '{categoria}: analysis, pros/cons and an up-to-date price chart. All here → {url}',
     ],
     copy: 'Copy link',
@@ -234,11 +234,11 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
       "Au cas où ça pourrait t'être utile, j'utilisais ce site pour chercher et comparer les prix de ça et j'ai trouvé ça une bonne affaire. Rapport qualité-prix excellent ! {url}",
     ],
     threads: [
-      "Si quelqu'un cherche {categoria}, Tradylor.com le place en tête après avoir comparé specs et prix. Voici la fiche avec le suivi de prix actif : {url}",
+      "Si quelqu'un cherche {categoria}, Treidilor.com le place en tête après avoir comparé specs et prix. Voici la fiche avec le suivi de prix actif : {url}",
     ],
     visual: [
       'Le meilleur rapport qualité-prix en {categoria}, avec l’historique des prix vérifié. Fiche complète → {url}',
-      "J'ai comparé specs et prix dans {categoria} et celui-ci est sorti du lot. Fiche Tradylor → {url}",
+      "J'ai comparé specs et prix dans {categoria} et celui-ci est sorti du lot. Fiche Treidilor → {url}",
       "{categoria} : analyse, points forts/faibles et graphique des prix à jour. Tout ici → {url}",
     ],
     copy: 'Copier le lien',
@@ -257,11 +257,11 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
       'Falls es dir nützt: Ich habe diese Website genutzt, um die Preise dafür zu suchen und zu vergleichen, und fand es einen tollen Fund. Preis-Leistung ist top! {url}',
     ],
     threads: [
-      'Falls jemand {categoria} sucht: Auf Tradylor.com ist es nach Vergleich von Specs und Preis die Top-Empfehlung. Hier das Blatt mit aktivem Preis-Tracking: {url}',
+      'Falls jemand {categoria} sucht: Auf Treidilor.com ist es nach Vergleich von Specs und Preis die Top-Empfehlung. Hier das Blatt mit aktivem Preis-Tracking: {url}',
     ],
     visual: [
       'Bestes Preis-Leistungs-Verhältnis bei {categoria}, mit geprüftem Preisverlauf. Vollständiges Datenblatt → {url}',
-      'Ich habe Specs und Preise bei {categoria} verglichen – das hier war die eindeutige Wahl. Tradylor-Datenblatt → {url}',
+      'Ich habe Specs und Preise bei {categoria} verglichen – das hier war die eindeutige Wahl. Treidilor-Datenblatt → {url}',
       '{categoria}: Analyse, Vor-/Nachteile und aktueller Preischart. Alles hier → {url}',
     ],
     copy: 'Link kopieren',
@@ -280,11 +280,11 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
       'Por acaso te sirva, estava a usar este site para procurar e comparar preços disto e pareceu-me um achado. A relação qualidade-preço está ótima! {url}',
     ],
     threads: [
-      'Se alguém procura {categoria}, no Tradylor.com ficou como a melhor opção depois de comparar especificações e preço. Aqui fica a ficha com o acompanhamento de preço ativo: {url}',
+      'Se alguém procura {categoria}, no Treidilor.com ficou como a melhor opção depois de comparar especificações e preço. Aqui fica a ficha com o acompanhamento de preço ativo: {url}',
     ],
     visual: [
       'A melhor relação qualidade-preço em {categoria}, com histórico de preços verificado. Ficha completa → {url}',
-      'Comparei especificações e preços em {categoria} e este destacou-se. Ficha no Tradylor → {url}',
+      'Comparei especificações e preços em {categoria} e este destacou-se. Ficha no Treidilor → {url}',
       '{categoria}: análise, prós/contras e gráfico de preços atualizado. Tudo aqui → {url}',
     ],
     copy: 'Copiar link',
@@ -303,11 +303,11 @@ const LANG_PACKS: Record<ShareLangCode, LangPack> = {
       "Nel caso ti serva, stavo usando questo sito per cercare e confrontare i prezzi di questo e mi è sembrato una bella scoperta. Il rapporto qualità-prezzo è perfetto! {url}",
     ],
     threads: [
-      'Se qualcuno sta cercando {categoria}, su Tradylor.com è la scelta top dopo aver confrontato specifiche e prezzo. Ecco la scheda con il tracking del prezzo attivo: {url}',
+      'Se qualcuno sta cercando {categoria}, su Treidilor.com è la scelta top dopo aver confrontato specifiche e prezzo. Ecco la scheda con il tracking del prezzo attivo: {url}',
     ],
     visual: [
       'Il miglior rapporto qualità-prezzo in {categoria}, con storico prezzi verificato. Scheda completa → {url}',
-      "Ho confrontato specifiche e prezzi in {categoria} e questo è emerso da solo. Scheda Tradylor → {url}",
+      "Ho confrontato specifiche e prezzi in {categoria} e questo è emerso da solo. Scheda Treidilor → {url}",
       '{categoria}: analisi, pro/contro e grafico prezzi aggiornato. Tutto qui → {url}',
     ],
     copy: 'Copia link',
@@ -620,7 +620,7 @@ async function fetchShareCard(productId: string): Promise<ShareCardInfo | null> 
  */
 export function buildShareCardHtml(card: ShareCardInfo, ctaLabel: string): string {
   const title = escapeHtml(card.title);
-  const category = escapeHtml((card.category ?? '').trim() || 'Tradylor');
+  const category = escapeHtml((card.category ?? '').trim() || 'Treidilor');
   const image = escapeHtml(card.image);
   const url = escapeHtml(card.url);
   const cta = escapeHtml(ctaLabel);
@@ -674,10 +674,10 @@ export async function shareTo(channel: ShareChannel, input: ShareInput): Promise
   const text = buildShareText(channel, input, link, lang);
   const title =
     input.title ||
-    ({ ca: 'Un producte a Tradylor', eu: 'Produktu bat Tradylor-en', gl: 'Un produto en Tradylor' } as Partial<
+    ({ ca: 'Un producte a Treidilor', eu: 'Produktu bat Treidilor-en', gl: 'Un produto en Treidilor' } as Partial<
       Record<ShareLangCode, string>
     >)[lang] ||
-    'Un producto en Tradylor';
+    'Un producto en Treidilor';
   const name = shareLabel(channel, lang);
 
   switch (channel) {

@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - CONECTOR GENÉRICO
+ * TREIDILOR - CONECTOR GENÉRICO
  * ==============================================================================
  * Conector de arranque para el resto de redes registradas (AliExpress, CJ,
  * Admitad, Tradedoubler, Kwanko, Etsy, Webgains, Partnerize, Rakuten...).

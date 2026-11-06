@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - ALMACÉN DE REDES DE AFILIACIÓN PERSONALIZADAS
+ * TREIDILOR - ALMACÉN DE REDES DE AFILIACIÓN PERSONALIZADAS
  * ==============================================================================
  * Persistencia en src/data/networks.json con esta forma:
  *   {

@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - API ADMIN: GESTIÓN DE CREDENCIALES POR RED
+ * TREIDILOR - API ADMIN: GESTIÓN DE CREDENCIALES POR RED
  * ==============================================================================
  * POST /api/admin/networks
  *   { action: 'save',     networkId, values: { accessKey, ... } } → guarda

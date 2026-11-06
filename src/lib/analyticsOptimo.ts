@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — GENERADOR DE MÉTRICA ÓPTIMA (DATOS FICTICIOS)
+ * TREIDILOR — GENERADOR DE MÉTRICA ÓPTIMA (DATOS FICTICIOS)
  * ==============================================================================
  * Produce un PeriodoDashboard completo y determinista para cualquier rango de
  * fechas, representando el tráfico que tendría un portal de afiliación de

@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — DETECCIÓN DE COMERCIO DESDE UNA URL
+ * TREIDILOR — DETECCIÓN DE COMERCIO DESDE UNA URL
  * ==============================================================================
  * Heurística compartida (mapea el dominio de un enlace a un nombre de
  * comercio legible). Antes vivía duplicada dentro de `/api/products/add.ts` y

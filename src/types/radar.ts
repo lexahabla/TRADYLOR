@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — TIPOS "MI RADAR" (compartidos cliente/servidor)
+ * TREIDILOR — TIPOS "MI RADAR" (compartidos cliente/servidor)
  * ==============================================================================
  * Sin imports de Node: este módulo se importa desde scripts de navegador
  * (utils/radarStore.ts, utils/auth.ts) y desde el backend (lib/radarAuth.ts,

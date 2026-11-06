@@ -1,10 +1,10 @@
 ﻿/**
  * ==============================================================================
- * TRADYLOR - ESTRATEGIA DE CONTENIDO Y AFILIACIÃ“N
+ * TREIDILOR - ESTRATEGIA DE CONTENIDO Y AFILIACIÃ“N
  * ==============================================================================
  *
  * 1. PROPÃ“SITO DEL PORTAL:
- *    Tradylor actÃºa como un motor de curaciÃ³n y recomendaciÃ³n imparcial de productos
+ *    Treidilor actÃºa como un motor de curaciÃ³n y recomendaciÃ³n imparcial de productos
  *    de alta conversiÃ³n. Filtramos el ruido publicitario del mercado mediante
  *    evaluaciones tÃ©cnicas, anÃ¡lisis de valor por euro y comparativas directas.
  *    Monetizamos a travÃ©s de enlaces de afiliaciÃ³n regulados (Amazon Associates,

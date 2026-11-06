@@ -1,4 +1,4 @@
-# Reglas de Desarrollo y Arquitectura - Tradylor
+# Reglas de Desarrollo y Arquitectura - Treidilor
 
 ## Stack Tecnológico
 - **Framework:** Astro (componentes `.astro`)

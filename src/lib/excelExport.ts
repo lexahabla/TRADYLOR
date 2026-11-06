@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — EXPORTACIÓN DE ANALÍTICA A EXCEL (XLSX)
+ * TREIDILOR — EXPORTACIÓN DE ANALÍTICA A EXCEL (XLSX)
  * ==============================================================================
  * Genera un libro estilado (exceljs) con la paleta del panel:
  *
@@ -139,7 +139,7 @@ function hojaResumen(wb: ExcelJS.Workbook, meses: MesAnalitica[]): void {
     views: [{ state: 'frozen', ySplit: 4 }],
     properties: { tabColor: { argb: PALETA.accent } },
   });
-  let fila = escribirTitulo(ws, 'TRADYLOR · Analítica mensual', 13, 1);
+  let fila = escribirTitulo(ws, 'TREIDILOR · Analítica mensual', 13, 1);
   ws.mergeCells(fila, 1, fila, 13);
   const sub = ws.getCell(fila, 1);
   sub.value = `Exportado el ${new Date().toLocaleDateString('es-ES', { dateStyle: 'long' })} · ${meses.length} mes(es) incluido(s)`;
@@ -339,7 +339,7 @@ function hojaMes(wb: ExcelJS.Workbook, mes: MesAnalitica): void {
 /** Genera el libro XLSX completo para los meses seleccionados. */
 export async function buildAnalyticsWorkbook(meses: MesAnalitica[]): Promise<Uint8Array> {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'Tradylor Admin';
+  workbook.creator = 'Treidilor Admin';
   workbook.created = new Date();
 
   const ordenados = [...meses].sort((a, b) => a.month.localeCompare(b.month));

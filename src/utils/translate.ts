@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — IDIOMAS DEL TRADUCTOR DE GOOGLE
+ * TREIDILOR — IDIOMAS DEL TRADUCTOR DE GOOGLE
  * ==============================================================================
  * Listado de idiomas del traductor de Google (códigos gtx aceptados por
  * https://translate.googleapis.com/translate_a/single?client=gtx). Se usa en

@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - CONECTOR ALIEXPRESS AFFILIATE API
+ * TREIDILOR - CONECTOR ALIEXPRESS AFFILIATE API
  * ==============================================================================
  * Open Platform (TOP):
  *   - aliexpress.affiliate.product.query   búsqueda de productos

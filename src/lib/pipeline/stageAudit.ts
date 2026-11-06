@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - PIPELINE · ETAPA 2: AUDITORÍA "TEST & PROOF"
+ * TREIDILOR - PIPELINE · ETAPA 2: AUDITORÍA "TEST & PROOF"
  * ==============================================================================
  * Score 0-100 con 3 bloques (pesos y umbrales en config.ts, overridables por env):
  *   - Procedencia del vendedor (0-50): marketplace/red de confianza o marca de

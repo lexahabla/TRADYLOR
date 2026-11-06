@@ -4,7 +4,7 @@ import { addSkill, listSkills, removeSkill, type AiPersonaId } from '../../../li
 
 /**
  * ==============================================================================
- * TRADYLOR — DESARROLLO IA · Skills de entrenamiento
+ * TREIDILOR — DESARROLLO IA · Skills de entrenamiento
  * ==============================================================================
  * GET    /api/admin/ai-skills                 → lista (¿persona=dependiente|admin?)
  * POST   /api/admin/ai-skills { persona, text }  → crea

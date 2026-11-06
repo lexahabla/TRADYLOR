@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - PIPELINE DE AUTOMATIZACIÓN DE PRODUCTOS (orquestador)
+ * TREIDILOR - PIPELINE DE AUTOMATIZACIÓN DE PRODUCTOS (orquestador)
  * ==============================================================================
  * Encadena las 4 etapas en orden: ingest → audit → categorize → publish, con
  * parada temprana (un duplicado no sigue) y resultado agregado por producto.

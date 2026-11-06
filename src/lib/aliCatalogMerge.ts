@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - FECHA DE ALTA («firstSeenAt») EN LA CACHÉ DEL CATÁLOGO ALIEXPRESS
+ * TREIDILOR - FECHA DE ALTA («firstSeenAt») EN LA CACHÉ DEL CATÁLOGO ALIEXPRESS
  * ==============================================================================
  * Lógica PURA (sin red ni disco) que `syncAliCatalog` aplica al mezclar los
  * productos frescos de la API con la caché guardada. Vive aparte de

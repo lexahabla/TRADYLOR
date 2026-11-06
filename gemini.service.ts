@@ -1,21 +1,21 @@
 import { GoogleGenAI } from '@google/genai';
 
 /**
- * SKILLS & CONTEXTO DEL PROYECTO TRADYLOR
+ * SKILLS & CONTEXTO DEL PROYECTO TREIDILOR
  * Unifica la arquitectura del backend, la lógica de negocio y las automatizaciones.
  */
 const TRADYLOR_SKILLS_INSTRUCTION = `
-# SYSTEM INSTRUCTION: TRADYLOR BACKEND EXPERT & THOUGHT PARTNER
+# SYSTEM INSTRUCTION: TREIDILOR BACKEND EXPERT & THOUGHT PARTNER
 
 ## 1. Identidad y Rol
-Eres el Arquitecto Backend Senior, Co-Pensador y Asistente Técnico de Tradylor.com (plataforma e-commerce de afiliación con curación automatizada, enriquecimiento vía IA y feeds multirred).
+Eres el Arquitecto Backend Senior, Co-Pensador y Asistente Técnico de Treidilor.com (plataforma e-commerce de afiliación con curación automatizada, enriquecimiento vía IA y feeds multirred).
 Debes debatir de forma crítica, aportar criterio técnico riguroso y fundamentar tus opiniones en datos contrastados en la web.
 
 ## 2. Herramientas y Razonamiento en Tiempo Real
 - Dispones de la herramienta de Búsqueda de Google (Google Search) integrada.
 - Utilízala autónomamente cuando necesites verificar especificaciones reales de hardware, lanzamientos, precios de mercado o benchmarking para fundamentar tus respuestas.
 
-## 3. Dominio del Ecosistema Tradylor
+## 3. Dominio del Ecosistema Treidilor
 - **Herramientas:**
   - Radar: Seguimiento de precios, stock y alertas.
   - Perfilador: Clasificador estricto de productos/usuarios en 6 perfiles únicos.
@@ -96,7 +96,7 @@ export class GeminiService {
      */
     async classifyProduct(productData: string) {
         const classificationPrompt = `
-    Analiza el siguiente producto o texto y clasifícalo estrictamente en uno de los 6 perfiles de Tradylor:
+    Analiza el siguiente producto o texto y clasifícalo estrictamente en uno de los 6 perfiles de Treidilor:
     [Work, Study/Multimedia, Streaming, Gaming, Audio, Automation/Domotics]
 
     Datos del producto:
@@ -133,7 +133,7 @@ export class GeminiService {
      */
     async enrichProductData(rawScrapedData: object) {
         const enrichmentPrompt = `
-    Procesa los siguientes datos crudos del comerciante y genera el objeto de enriquecimiento editorial para Tradylor:
+    Procesa los siguientes datos crudos del comerciante y genera el objeto de enriquecimiento editorial para Treidilor:
 
     Datos del comerciante:
     ${JSON.stringify(rawScrapedData, null, 2)}
@@ -141,7 +141,7 @@ export class GeminiService {
     Devuelve un JSON con:
     - title: Título optimizado y limpio
     - conciseDescription: Descripción técnica concisa
-    - editorialVerdict: Veredicto editorial de Tradylor
+    - editorialVerdict: Veredicto editorial de Treidilor
     - pros: Array de 3 a 5 puntos fuertes
     - contras: Array de 1 a 3 puntos a considerar
     - badge: Etiqueta destacada (ej: Chollo, Mínimo Histórico, Top Elección, etc.)

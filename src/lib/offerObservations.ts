@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — OBSERVACIONES DE OFERTA Y SEÑAL PÚBLICA DE BAJADA (puro)
+ * TREIDILOR — OBSERVACIONES DE OFERTA Y SEÑAL PÚBLICA DE BAJADA (puro)
  * ==============================================================================
  * Una OBSERVACIÓN es una lectura verificada de una fuente para una oferta y un
  * contexto concreto (moneda, destino, vendedor, variante, estado, cantidad).

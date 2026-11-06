@@ -7,7 +7,7 @@ import { chatCompleteGrounded, isGroundingAvailable } from '../../lib/geminiGrou
 
 /**
  * ==============================================================================
- * TRADYLOR — ASISTENTE IA (Dependiente IA, chat flotante)
+ * TREIDILOR — ASISTENTE IA (Dependiente IA, chat flotante)
  * ==============================================================================
  * POST /api/asistente-ia  { mensajeUsuario, contextoProducto? }
  *

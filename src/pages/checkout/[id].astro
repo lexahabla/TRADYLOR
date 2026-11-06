@@ -1,7 +1,7 @@
 ---
 /**
  * ==============================================================================
- * TRADYLOR — PANTALLA PUENTE DE CONFIRMACIÓN (COMPRA DELEGADA)
+ * TREIDILOR — PANTALLA PUENTE DE CONFIRMACIÓN (COMPRA DELEGADA)
  * ==============================================================================
  *
  * Ruta dinámica SSR: /checkout/[id]  (acepta slug o id legado)
@@ -10,7 +10,7 @@
  *  /producto/[slug] → (CTA "Tramitar pedido") → /checkout/[id]
  *                     → (CTA "Proceder al pago seguro") → /api/redirect → 302 → Tienda
  *
- * Esta pantalla es 100% nativa de Tradylor: resume el artículo, el plazo, el
+ * Esta pantalla es 100% nativa de Treidilor: resume el artículo, el plazo, el
  * distribuidor oficial y los sellos de confianza. El enlace de afiliado jamás
  * se expone aquí; sólo se revela en servidor dentro de /api/redirect.
  * ==============================================================================
@@ -86,7 +86,7 @@ const isSoldOut = stockStatus === 'Agotado';
 ---
 
 <Layout
-  title={`Confirmación de pedido — ${shortTitle} | Tradylor`}
+  title={`Confirmación de pedido — ${shortTitle} | Treidilor`}
   description={`Resumen de tu pedido de ${shortTitle}. El pago, el envío y la garantía los gestiona ${provider} desde su pasarela oficial.`}
   image={product.image}
   type="product"
@@ -324,7 +324,7 @@ const isSoldOut = stockStatus === 'Agotado';
               <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
             <p>
-              <strong>Aviso de afiliación:</strong> Tradylor puede recibir una
+              <strong>Aviso de afiliación:</strong> Treidilor puede recibir una
               comisión por este enlace, sin ningún coste adicional para ti. Tus
               datos de pago nunca se gestionan en nuestros servidores.
             </p>

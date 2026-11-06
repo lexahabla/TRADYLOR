@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — CALENDARIO COMERCIAL (MÓDULO DE MARKETING)
+ * TREIDILOR — CALENDARIO COMERCIAL (MÓDULO DE MARKETING)
  * ==============================================================================
  * Fechas clave del año (Black Friday, Cyber Monday, Singles' Day, Navidad…) con:
  *   - la antelación de aviso (3-4 semanas antes),

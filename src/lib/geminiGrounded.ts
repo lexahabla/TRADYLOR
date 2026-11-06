@@ -1,9 +1,9 @@
 /**
  * ==============================================================================
- * TRADYLOR — GEMINI GROUNDED SERVICE (Google Search / Web Grounding)
+ * TREIDILOR — GEMINI GROUNDED SERVICE (Google Search / Web Grounding)
  * ==============================================================================
  * Capa de servicio dedicada (SDK oficial `@google/genai`) que da a los DOS
- * asistentes de IA de Tradylor —la Consola IA del backend (panel admin) y el
+ * asistentes de IA de Treidilor —la Consola IA del backend (panel admin) y el
  * Asesor IA / Dependiente IA de cara al usuario (widget flotante + Centro de
  * Herramientas)— la capacidad de fundamentar sus respuestas con búsquedas web
  * EN TIEMPO REAL (`googleSearch`), para poder debatir con criterio sobre
@@ -53,16 +53,16 @@ export interface GroundedChatResult {
 }
 
 /**
- * Contexto técnico completo de Tradylor. Se antepone a la personalidad de
+ * Contexto técnico completo de Treidilor. Se antepone a la personalidad de
  * cada asistente (lib/aiPersonas.ts `adminIaSystemPrompt`/`asesorIaSystemPrompt`,
  * que siguen mandando en el tono y las reglas de cada uno) para que, además de
  * su rol, el modelo conozca la arquitectura REAL del proyecto y pueda
  * debatir con criterio en vez de responder en abstracto.
  */
 export const TRADYLOR_GROUNDED_CONTEXT = `
-# CONTEXTO TÉCNICO DE TRADYLOR (lectura obligatoria antes de responder)
+# CONTEXTO TÉCNICO DE TREIDILOR (lectura obligatoria antes de responder)
 
-Tradylor.com es un portal de recomendación, curación y comparativas de productos de
+Treidilor.com es un portal de recomendación, curación y comparativas de productos de
 alta conversión orientado a marketing de afiliación (Astro 4.x SSR sobre Node,
 Docker/EasyPanel, despliegue automático al hacer push a main).
 
@@ -81,7 +81,7 @@ Docker/EasyPanel, despliegue automático al hacer push a main).
   recomendar productos que existan de verdad en el catálogo (por su slug exacto),
   nunca inventar productos, precios ni tiendas.
 
-## Panel de administración («/upayp1b4», lo gestiona el equipo de Tradylor)
+## Panel de administración («/upayp1b4», lo gestiona el equipo de Treidilor)
 1. **Extracción & Alta de Producto**: pega una URL y se scrapea OpenGraph/JSON-LD/HTML
    (título, precio, marca, specs, envío...); con el botón "Enriquecer con IA" se genera
    título sintetizado, descripción, ficha técnica, pros/contras, veredicto y una imagen

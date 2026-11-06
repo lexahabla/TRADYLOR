@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * ==============================================================================
- * TRADYLOR - RESET DE LA CONTRASEÑA DEL ADMINISTRADOR (cuenta master)
+ * TREIDILOR - RESET DE LA CONTRASEÑA DEL ADMINISTRADOR (cuenta master)
  * ==============================================================================
  *
  * Útil cuando el panel (/upayp1b4) deja de aceptar la contraseña: la cuenta

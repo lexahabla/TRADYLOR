@@ -8,7 +8,7 @@ import { DEFAULT_MAX_AGE_HOURS, freshnessOf } from './offerObservations';
 
 /**
  * ==============================================================================
- * TRADYLOR — ALERTAS DE BAJADA DE PRECIO (Mi Radar)
+ * TREIDILOR — ALERTAS DE BAJADA DE PRECIO (Mi Radar)
  * ==============================================================================
  * Worker in-process (setInterval + unref, igual que reminders.ts): no hay cron
  * externo. Cada 6 h recorre los productos vigilados de todos los radares,
@@ -146,7 +146,7 @@ function buildAlertEmail(input: {
 
   const html = `
     <div style="max-width:560px;margin:0 auto;font-family:Inter,Arial,sans-serif;background:#0d1422;color:#f3f4f6;padding:2rem;border-radius:16px">
-      <p style="margin:0 0 .35rem;font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#60a5fa">Mi Radar · Tradylor</p>
+      <p style="margin:0 0 .35rem;font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#60a5fa">Mi Radar · Treidilor</p>
       <h1 style="font-size:1.35rem;margin:0 0 .75rem;line-height:1.3">${headline}</h1>
       <p style="color:#9ca3af;font-size:.9rem;line-height:1.6;margin:0 0 1.25rem">
         Hola ${escapeHtml(input.name || 'de nuevo')}, este producto de tu Radar acaba de cambiar:

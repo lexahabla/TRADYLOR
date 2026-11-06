@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — AGREGADOS MENSUALES DE ANALITICA
+ * TREIDILOR — AGREGADOS MENSUALES DE ANALITICA
  * ==============================================================================
  * Agrupa los eventos de analytics.ts por mes calendario (YYYY-MM) y los
  * persiste en analytics-months.json para que los meses cerrados se conserven

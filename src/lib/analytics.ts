@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — ANALITICA REAL
+ * TREIDILOR — ANALITICA REAL
  * ==============================================================================
  * Registro y persistencia de visitas y eventos de interacción con contexto de
  * sesión (sessionId / visitorId / referrer / duración), con escritura en

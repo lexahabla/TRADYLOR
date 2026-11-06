@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — PRODUCT VALIDATION (Zod Runtime)
+ * TREIDILOR — PRODUCT VALIDATION (Zod Runtime)
  * ==============================================================================
  *
  * Validates raw product data from JSON/TS against the Zod schema.

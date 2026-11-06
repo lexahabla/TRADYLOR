@@ -9,7 +9,7 @@ const rl = readline.createInterface({
     output: process.stdout
 });
 
-console.log('--- Chat interactiu amb Gemini (Tradylor) ---');
+console.log('--- Chat interactiu amb Gemini (Treidilor) ---');
 console.log('Escriu la teva consulta o passa-li codi. Escriu "sortir" per tancar.\n');
 
 async function xat() {

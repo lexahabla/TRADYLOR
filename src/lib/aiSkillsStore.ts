@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — SKILLS DE ENTRENAMIENTO IA («Desarrollo IA»)
+ * TREIDILOR — SKILLS DE ENTRENAMIENTO IA («Desarrollo IA»)
  * ==============================================================================
  * Persiste en `ai-skills.json` (DATA_DIR) las instrucciones que el admin
  * enseña a cada una de las dos personalidades de IA:

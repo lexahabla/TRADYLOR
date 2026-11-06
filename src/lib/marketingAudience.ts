@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — AUDIENCIA DE MARKETING (USUARIOS DE MI RADAR)
+ * TREIDILOR — AUDIENCIA DE MARKETING (USUARIOS DE MI RADAR)
  * ==============================================================================
  * Combina tres fuentes para la ficha de Usuario 360 del panel de Marketing:
  *

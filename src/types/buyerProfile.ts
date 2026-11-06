@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — PERFIL DE COMPRADOR (Perfilador: tipos compartidos cliente/servidor)
+ * TREIDILOR — PERFIL DE COMPRADOR (Perfilador: tipos compartidos cliente/servidor)
  * ==============================================================================
  * Dominio propio del Perfilador (`SmartMatcherWizard`): uso + presupuesto +
  * prioridad → un perfil guardado con nombre y color generados automáticamente.

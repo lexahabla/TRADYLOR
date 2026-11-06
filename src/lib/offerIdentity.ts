@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — IDENTIDAD DE OFERTA, PRODUCTO Y MARCA (funciones puras)
+ * TREIDILOR — IDENTIDAD DE OFERTA, PRODUCTO Y MARCA (funciones puras)
  * ==============================================================================
  * Reglas únicas para reconocer «la misma oferta» llegue por API, URL o JSON:
  *

@@ -34,7 +34,7 @@ const parseBody = async (request: Request): Promise<{
  * POST /api/admin/amazon/import-json
  *
  * Importa un producto de Amazon a partir de un JSON crudo de ScraperAPI que el
- * cliente ya obtuvo externamente (evita que el servidor de Tradylor llame a
+ * cliente ya obtuvo externamente (evita que el servidor de Treidilor llame a
  * ScraperAPI y se saltee bloqueos IP / anti-bot de Amazon).
  *
  * Autenticación: sesión de admin (cookie tradylor_admin_session) O Bearer token

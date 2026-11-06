@@ -152,8 +152,8 @@ const pagerPages = (totalPages: number, currentPage: number) => {
 const initialDiversified = initialProducts;
 const initialPageProducts = initialDiversified.slice(0, PRODUCTS_PER_PAGE);
 
-const pageTitle = "Panel de Administración | Tradylor";
-const pageDescription = "Gestión, scraping de metadatos y alta de productos con enlaces de afiliación en Tradylor.";
+const pageTitle = "Panel de Administración | Treidilor";
+const pageDescription = "Gestión, scraping de metadatos y alta de productos con enlaces de afiliación en Treidilor.";
 
 // El módulo "Tráfico y ventas" se muestra como una sección más del panel
 const requestedSection = Astro.url.searchParams.get('section') || 'products';
@@ -171,7 +171,7 @@ const headerConfig = {
   analytics: { pill: 'Actividad de la tienda', titulo: 'Tráfico y Ventas', subtitulo: 'Resumen global, ranking por producto y recomendaciones de IA. Pasa el cursor sobre el ? de cada métrica para ver su definición.' },
   marketing: { pill: 'Crecimiento y distribución', titulo: 'Marketing', subtitulo: 'Prepara conexiones con analítica, redes sociales, email y automatizaciones. Las credenciales se leen desde el entorno del servidor.' },
   transparency: { pill: 'Calidad y trazabilidad', titulo: 'Transparencia y Pipeline', subtitulo: 'El pipeline de 4 etapas (ingesta → auditoría → categorización → publicación) evalúa cada producto del catálogo. Estas mismas métricas alimentan el panel de transparencia de la web pública.' },
-  'desarrollo-ia': { pill: 'Entrenamiento y conectividad', titulo: 'Desarrollo IA', subtitulo: 'Entrena y alimenta a las dos personalidades de IA de Tradylor, gestiona sus claves y comprueba la conexión con los proveedores.' },
+  'desarrollo-ia': { pill: 'Entrenamiento y conectividad', titulo: 'Desarrollo IA', subtitulo: 'Entrena y alimenta a las dos personalidades de IA de Treidilor, gestiona sus claves y comprueba la conexión con los proveedores.' },
 };
 const h = headerConfig[initialSection] || headerConfig.products;
 ---
@@ -286,7 +286,7 @@ const h = headerConfig[initialSection] || headerConfig.products;
 
           <div class="form-row">
             <div class="form-group full-width">
-              <label for="prodVerdict" class="field-label">Veredicto Editorial de Tradylor</label>
+              <label for="prodVerdict" class="field-label">Veredicto Editorial de Treidilor</label>
               <textarea id="prodVerdict" rows="2"></textarea>
             </div>
           </div>
@@ -1122,7 +1122,7 @@ const h = headerConfig[initialSection] || headerConfig.products;
             </div>
             <div class="filter-field ali-f-state">
               <label for="aliFState">En catálogo</label>
-              <select id="aliFState" title="Filtra por si el producto ya está añadido al catálogo de Tradylor o no">
+              <select id="aliFState" title="Filtra por si el producto ya está añadido al catálogo de Treidilor o no">
                 <option value="ALL">Todos</option>
                 <option value="PENDING">No añadidos</option>
                 <option value="IMPORTED">Añadidos al catálogo</option>
@@ -1783,7 +1783,7 @@ const h = headerConfig[initialSection] || headerConfig.products;
     <div class="admin-modal-dialog" role="dialog" aria-modal="true" aria-labelledby="bulkDeleteTitle">
       <button type="button" class="admin-modal-close" data-admin-modal-close aria-label="Cerrar">×</button>
       <h3 id="bulkDeleteTitle" class="admin-modal-title">🗑️ Eliminar productos del catálogo</h3>
-      <p class="admin-modal-text">¿Estás seguro de eliminar <strong id="bulkDeleteCount">0</strong> productos seleccionados de Tradylor?</p>
+      <p class="admin-modal-text">¿Estás seguro de eliminar <strong id="bulkDeleteCount">0</strong> productos seleccionados de Treidilor?</p>
       <p class="admin-modal-warning">⚠️ Esta acción retira los productos de products.json y deja un tombstone para que no reaparezcan en la web pública. No se puede deshacer desde el panel.</p>
       <div class="admin-modal-actions">
         <button type="button" class="btn-secondary" data-admin-modal-close>Cancelar</button>
@@ -1938,7 +1938,7 @@ const h = headerConfig[initialSection] || headerConfig.products;
         <div class="admin-login-mark"><span class="status-indicator"></span><span>TREIDILOR / ADMIN</span></div>
         <p class="admin-login-kicker">Área privada de gestión</p>
         <h2 id="admin-login-title" class="admin-login-title">Administración</h2>
-        <p class="admin-login-description">Gestiona el catálogo, analiza enlaces y publica recomendaciones desde el centro de curación de Tradylor.</p>
+        <p class="admin-login-description">Gestiona el catálogo, analiza enlaces y publica recomendaciones desde el centro de curación de Treidilor.</p>
         {loginError && <p class="admin-login-error" role="alert">{loginError}</p>}
         <form method="post" class="admin-login-form" id="adminLoginForm">
           <label class="login-field"><span>Usuario</span><input name="username" type="text" autocomplete="username" required autofocus /></label>
@@ -4033,7 +4033,7 @@ function renderTableRows(products, resetPage = true) {
       const allCats = (typeof categoriesCache !== 'undefined' && Array.isArray(categoriesCache)) ? categoriesCache : [];
 
       const filtered = currentProducts.filter((product) => {
-        // Filtro de categoría (taxonomía propia de Tradylor: categoriesCache).
+        // Filtro de categoría (taxonomía propia de Treidilor: categoriesCache).
         if (cat) {
           const root = allCats.find((c) => !c.parentId && (c.name === cat || c.id === cat));
           const productCat = String(product.category || '');
@@ -6255,13 +6255,13 @@ function renderTableRows(products, resetPage = true) {
         }
         if (btn) {
           btn.disabled = false;
-          btn.textContent = 'Importar a Tradylor';
+          btn.textContent = 'Importar a Treidilor';
         }
         return { ok: false, message: data.message || 'No se pudo guardar el producto.' };
       } catch {
         if (btn) {
           btn.disabled = false;
-          btn.textContent = 'Importar a Tradylor';
+          btn.textContent = 'Importar a Treidilor';
         }
         return { ok: false, message: 'Fallo de red al importar.' };
       }
@@ -6356,7 +6356,7 @@ function renderTableRows(products, resetPage = true) {
 
     /**
      * Botón «Añadir» de la tabla de productos de afiliados.
-     * Guarda directamente en el catálogo de Tradylor (IA de texto + persistencia)
+     * Guarda directamente en el catálogo de Treidilor (IA de texto + persistencia)
      * y sólo muestra un letrero sobre el botón: NO cambia de sección ni carga
      * el formulario de edición. Si hay categoría elegida en la barra de
      * acciones, el producto aterriza directamente en ella.
@@ -6604,7 +6604,7 @@ function renderTableRows(products, resetPage = true) {
      * Estado de importación de cada producto del catálogo AliExpress.
      *  - DISCARDED: ocultado con la ✕ de la tabla (se conserva en la caché para
      *    poder recuperarlo con el filtro «Descartados»).
-     *  - IMPORTED: su URL de afiliado o su título ya está en el catálogo Tradylor.
+     *  - IMPORTED: su URL de afiliado o su título ya está en el catálogo Treidilor.
      *  - PENDING:  el resto.
      */
     function aliNormKey(value) {
@@ -6658,7 +6658,7 @@ function renderTableRows(products, resetPage = true) {
      * Estado de importación de cada producto del catálogo de afiliados.
      *  - DISCARDED: ocultado con la ✕ de la tabla (se conserva en la caché para
      *    poder recuperarlo con el filtro «Descartados»).
-     *  - IMPORTED: ya existe en el catálogo Tradylor.
+     *  - IMPORTED: ya existe en el catálogo Treidilor.
      *  - PENDING:  el resto.
      *
      * El «ya existe» NO depende sólo de la URL: las filas importadas antes de
@@ -7067,7 +7067,7 @@ function renderTableRows(products, resetPage = true) {
     }
 
     /**
-     * Refresca `currentProducts` (el catálogo REAL de Tradylor) desde el
+     * Refresca `currentProducts` (el catálogo REAL de Treidilor) desde el
      * servidor antes de calcular qué productos de Importar ya están
      * "Añadido". Sin esto, si el catálogo se vació desde la pestaña
      * «Catálogo» (u otra pestaña/sesión) la comparación podía usar una copia
@@ -8908,7 +8908,7 @@ function renderTableRows(products, resetPage = true) {
         title.textContent = h.titulo;
         subtitle.textContent = h.subtitulo;
         subtitle.title = h.subtitulo;
-        document.title = h.titulo + ' | Panel de Administración | Tradylor';
+        document.title = h.titulo + ' | Panel de Administración | Treidilor';
       });
     })();
 
@@ -11661,7 +11661,7 @@ function renderTableRows(products, resetPage = true) {
   @media (max-width: 760px) { .admin-login-page { min-height: auto; padding-top: 2rem; grid-template-columns: 1fr; gap: 2.5rem; } .admin-login-aside { display: none; } }
 
   /* ==========================================================================
-     ADMIN PANEL - ESTILOS PREMIUM (SISTEMA DE DISEÑO TRADYLOR)
+     ADMIN PANEL - ESTILOS PREMIUM (SISTEMA DE DISEÑO TREIDILOR)
      ========================================================================== */
   .admin-wrapper {
     max-width: var(--max-width);

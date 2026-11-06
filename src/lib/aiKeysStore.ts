@@ -4,7 +4,7 @@ import { dataFile } from './paths';
 
 /**
  * ==============================================================================
- * TRADYLOR - ALMACÉN DE API KEYS DE IA (PANEL DE ADMINISTRACIÓN)
+ * TREIDILOR - ALMACÉN DE API KEYS DE IA (PANEL DE ADMINISTRACIÓN)
  * ==============================================================================
  * Persiste las claves introducidas desde el panel (Transparencia › Conectividad
  * de IA) en `DATA_DIR/ai-keys.json` (volumen en producción; NUNCA se sube a

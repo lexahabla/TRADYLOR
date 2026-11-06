@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - API ADMIN: PIPELINE DE AUTOMATIZACIÓN
+ * TREIDILOR - API ADMIN: PIPELINE DE AUTOMATIZACIÓN
  * ==============================================================================
  * GET  /api/admin/pipeline
  *   -> Métricas de transparencia derivadas de products.json + pipeline-metrics.json

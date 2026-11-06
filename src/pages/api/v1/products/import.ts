@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - API PÚBLICA v1: IMPORTACIÓN DESATENDIDA (n8n)
+ * TREIDILOR - API PÚBLICA v1: IMPORTACIÓN DESATENDIDA (n8n)
  * ==============================================================================
  * POST /api/v1/products/import
  *   { "title": "...", "affiliateUrl": "...", "price": 99.99, ... }

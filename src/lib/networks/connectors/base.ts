@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - CONECTOR BASE
+ * TREIDILOR - CONECTOR BASE
  * ==============================================================================
  * Contrato que cumple cada conector de red. Los conectores reales llaman a las
  * APIs oficiales (PA-API 5.0, Browse API, Awin Publisher API...); cuando la red

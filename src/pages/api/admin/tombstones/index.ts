@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - API ADMIN: TOMBSTONES DEL CATÁLOGO
+ * TREIDILOR - API ADMIN: TOMBSTONES DEL CATÁLOGO
  * ==============================================================================
  * GET    /api/admin/tombstones
  *   -> { count, ids }   Tombstones actuales (ids que el build/import no pueden

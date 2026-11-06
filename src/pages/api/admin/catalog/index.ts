@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - API ADMIN: CATÁLOGO UNIFICADO MULTI-RED
+ * TREIDILOR - API ADMIN: CATÁLOGO UNIFICADO MULTI-RED
  * ==============================================================================
  * GET  /api/admin/catalog
  *   -> { success, connected, syncedAt, stale, count, products, networks }

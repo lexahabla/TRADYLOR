@@ -15,7 +15,7 @@ const sessionUser = getSessionUser(Astro.request);
 const user = sessionUser ? toPublicUser(sessionUser) : null;
 ---
 
-<Layout title="Amazon (JSON) · Catálogo · Tradylor Admin" description="Importa productos de Amazon desde un JSON crudo de ScraperAPI al catálogo.">
+<Layout title="Amazon (JSON) · Catálogo · Treidilor Admin" description="Importa productos de Amazon desde un JSON crudo de ScraperAPI al catálogo.">
   <Fragment slot="header-end">
     {user && <AdminUserMenu user={user} active="amazon-import" />}
   </Fragment>

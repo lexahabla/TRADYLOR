@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - ALMACÉN SEGURO DE CREDENCIALES POR RED
+ * TREIDILOR - ALMACÉN SEGURO DE CREDENCIALES POR RED
  * ==============================================================================
  * Persistencia en src/data/credentials.json con esta forma:
  *   {

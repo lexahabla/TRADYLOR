@@ -6,7 +6,7 @@ import type { Reminder } from '../types/radar';
 
 /**
  * ==============================================================================
- * TRADYLOR — AVISOS DIFERIDOS DE MI RADAR
+ * TREIDILOR — AVISOS DIFERIDOS DE MI RADAR
  * ==============================================================================
  * El usuario crea un aviso sobre un producto de su radar con fecha y hora;
  * este dispatcher envía el correo cuando toca. Corre dentro del proceso SSR
@@ -49,7 +49,7 @@ function formatWhen(remindAt: number): string {
   }
 }
 
-/** Plantilla del correo (tema Tradylor, mismo tono que el de verificación). */
+/** Plantilla del correo (tema Treidilor, mismo tono que el de verificación). */
 export function buildReminderHtml(
   reminder: Reminder,
   name: string,
@@ -66,7 +66,7 @@ export function buildReminderHtml(
 
   return `
     <div style="max-width:560px;margin:0 auto;font-family:Inter,Arial,sans-serif;background:#0d1422;color:#f3f4f6;padding:2rem;border-radius:16px">
-      <p style="margin:0 0 .35rem;font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#60a5fa">Mi Radar · Tradylor</p>
+      <p style="margin:0 0 .35rem;font-size:.72rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#60a5fa">Mi Radar · Treidilor</p>
       <h1 style="font-size:1.35rem;margin:0 0 .75rem;line-height:1.3">⏰ Llegó la hora de tu aviso de compra</h1>
       <p style="color:#9ca3af;font-size:.9rem;line-height:1.6;margin:0 0 1.25rem">
         Hola ${escapeHtml(name || 'de nuevo')}, pediste que te recordáramos este producto el
@@ -95,7 +95,7 @@ export function buildReminderHtml(
       </p>
 
       <p style="color:#6b7280;font-size:.72rem;margin:1.5rem 0 0;line-height:1.5">
-        Este aviso lo creaste tú en Mi Radar (Tradylor). Para eliminarlo entra en tu panel y cancela el aviso.
+        Este aviso lo creaste tú en Mi Radar (Treidilor). Para eliminarlo entra en tu panel y cancela el aviso.
       </p>
     </div>
   `;

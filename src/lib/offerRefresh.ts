@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — SERVICIO ÚNICO DE ACTUALIZACIÓN DE OFERTAS
+ * TREIDILOR — SERVICIO ÚNICO DE ACTUALIZACIÓN DE OFERTAS
  * ==============================================================================
  * Un solo servicio para ofertas importadas por API, URL/ASIN o JSON, usado por
  * el botón manual del panel (`/api/admin/offers/refresh`) y por el programador

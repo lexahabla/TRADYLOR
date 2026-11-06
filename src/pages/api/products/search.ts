@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - ENDPOINT SSR: BÚSQUEDA UNIFICADA MULTI-RED (ejemplo para eBay)
+ * TREIDILOR - ENDPOINT SSR: BÚSQUEDA UNIFICADA MULTI-RED (ejemplo para eBay)
  * ==============================================================================
  * GET /api/products/search?q=&networks=ebay&limit=&category=&sortBy=&page=
  *

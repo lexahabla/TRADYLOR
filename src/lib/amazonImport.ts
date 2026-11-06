@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * TRADYLOR — PIPELINE DE INGESTIÓN DE PRODUCTOS AMAZON
+ * TREIDILOR — PIPELINE DE INGESTIÓN DE PRODUCTOS AMAZON
  * ============================================================================
  *
  * Pipeline completo de ingestión, normalización inteligente y persistencia
@@ -828,7 +828,7 @@ export async function importAmazonProduct(
 
 /**
  * Ejecuta el pipeline de Amazon a partir de un JSON crudo de ScraperAPI que
- * el cliente ya obtuvo externamente (evita que el servidor de Tradylor tenga
+ * el cliente ya obtuvo externamente (evita que el servidor de Treidilor tenga
  * que llamar a ScraperAPI y así se saltea bloqueos IP / anti-bot de Amazon).
  *
  * Pasos:

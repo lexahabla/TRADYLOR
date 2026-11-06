@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * TRADYLOR — CAMPOS CAPTURABLES DE REDES DE AFILIACIÓN
+ * TREIDILOR — CAMPOS CAPTURABLES DE REDES DE AFILIACIÓN
  * ============================================================================
  * Permite al admin elegir qué campos `extra` de cada red de afiliación
  * (AliExpress, eBay, Amazon…) se capturan al sincronizar el catálogo.

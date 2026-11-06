@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - PIPELINE · ETAPA 3: CATEGORIZACIÓN ON-THE-FLY + ENRIQUECIMIENTO
+ * TREIDILOR - PIPELINE · ETAPA 3: CATEGORIZACIÓN ON-THE-FLY + ENRIQUECIMIENTO
  * ==============================================================================
  * - Autasocia categoría raíz + subcategoría (creándola si no existe, con un
  *   helper nuevo e idempotente; NO se modifica categories.ts).

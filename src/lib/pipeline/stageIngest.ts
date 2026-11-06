@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - PIPELINE · ETAPA 1: INGESTA, LIMPIEZA Y DUPLICADOS
+ * TREIDILOR - PIPELINE · ETAPA 1: INGESTA, LIMPIEZA Y DUPLICADOS
  * ==============================================================================
  * Normaliza el contrato de n8n al modelo interno, valida los campos obligatorios
  * y aplica la detección jerárquica de duplicados reutilizando (sin modificar):

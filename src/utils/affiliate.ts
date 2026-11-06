@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — HELPERS MULTIMRED DE ENLACES DE AFILIADO
+ * TREIDILOR — HELPERS MULTIMRED DE ENLACES DE AFILIADO
  * ==============================================================================
  * getAffiliateUrl(network, payload) normaliza la URL de salida para cada red
  * soportada, aplicando los parámetros de tracking correspondientes:
@@ -10,7 +10,7 @@
  *                (ver src/utils/amazon.ts).
  *   - aliexpress, awin, impact, ebay: el payload es ya un enlace de la red;
  *                se devuelve tal cual, añadiendo los parámetros utm propios
- *                de Tradylor si no los trae (no altera el tracking propio de
+ *                de Treidilor si no los trae (no altera el tracking propio de
  *                la red, que viaja en otros parámetros).
  *
  * Este helper es la fuente única de verdad para los componentes de salida
@@ -58,7 +58,7 @@ function parseHttpUrl(value: string): URL | null {
 }
 
 /**
- * Añade los parámetros utm de Tradylor a un enlace de red (sin pisar utm
+ * Añade los parámetros utm de Treidilor a un enlace de red (sin pisar utm
  * existentes ni tocar los parámetros propios de la red de afiliación).
  */
 function withTrackingParams(rawUrl: string, network: AffiliateNetwork): string {

@@ -1,7 +1,7 @@
 ---
 /**
  * ==============================================================================
- * TRADYLOR — FICHA DE PRODUCTO (ANÁLISIS TÉCNICO NEUTRAL)
+ * TREIDILOR — FICHA DE PRODUCTO (ANÁLISIS TÉCNICO NEUTRAL)
  * ==============================================================================
  *
  * Ruta dinámica SSR: /producto/[slug]
@@ -203,12 +203,12 @@ const productSchema = {
 ---
 
 <Layout
-  title={`${product.title} — Análisis y Mejor Precio | Tradylor`}
+  title={`${product.title} — Análisis y Mejor Precio | Treidilor`}
   description={product.description}
   image={product.image}
   imageAlt={product.title}
   type="product"
-  ogTitle={`${product.title} | Tradylor`}
+  ogTitle={`${product.title} | Treidilor`}
   ogDescription="Historial de precios y análisis de la mejor opción calidad-precio."
 >
   <!-- Schema.org Product estructurado -->
@@ -360,13 +360,13 @@ const productSchema = {
         <!-- Título H1 del producto -->
         <h1 class="product-title-h1">{displayTitle}</h1>
 
-        <!-- Sello editorial: recomendación de Tradylor tras comparar la categoría -->
+        <!-- Sello editorial: recomendación de Treidilor tras comparar la categoría -->
         <div class="selection-seal" role="note">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             <polyline points="9 12 11 14 15 10" />
           </svg>
-          <span><strong>Selección Tradylor</strong> · Mejor opción comparada</span>
+          <span><strong>Selección Treidilor</strong> · Mejor opción comparada</span>
         </div>
 
         <!-- Descripción editorial -->
@@ -527,7 +527,7 @@ const productSchema = {
           </a>
         </div>
 
-        <!-- CTA terciario: análisis cruzado dentro de Tradylor -->
+        <!-- CTA terciario: análisis cruzado dentro de Treidilor -->
         {alternativesCount > 0 ? (
           <a href="#comparativa" class="cta-secondary-btn" id={`compare-cta-${product.id}`}>
             Comparar con alternativas ({alternativesCount}) →
@@ -693,7 +693,7 @@ const productSchema = {
         <span class="specs-tag delegated-tag">Compra delegada</span>
         <h2 class="specs-title" id="delegated-title">Tú eliges. El distribuidor oficial cobra y envía.</h2>
         <p class="specs-subtitle">
-          Tradylor gestiona la selección y el análisis; el pago, la logística y la
+          Treidilor gestiona la selección y el análisis; el pago, la logística y la
           garantía los administrará {fulfillmentProvider}.
         </p>
       </div>
@@ -845,7 +845,7 @@ const productSchema = {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </svg>
-              Veredicto Tradylor
+              Veredicto Treidilor
             </h2>
             <p class="verdict-text">{product.verdict}</p>
             <!-- CTA secundario: lleva a la comparativa de la categoría -->
@@ -1052,7 +1052,7 @@ const productSchema = {
           {hasNewSchema && affiliate!.alternativeStore && (
             <> También disponible en {affiliate!.alternativeStore}.</>
           )}
-          Si realizas una compra a través de nuestros enlaces, Tradylor puede recibir una pequeña comisión
+          Si realizas una compra a través de nuestros enlaces, Treidilor puede recibir una pequeña comisión
           sin ningún coste adicional para ti. Nuestros análisis son siempre independientes e imparciales.
         </p>
       </div>

@@ -2,7 +2,7 @@
 # Lógica de datos de los Productos
 
 ## Contexto
-- **Proyecto:** Tradylor
+- **Proyecto:** Treidilor
 - **Reglas del sistema:** `.prompts/_REGLAS_SISTEMA.md`
 - **Archivo/Módulo afectado:** `src/lib/...` o `src/pages/api/...`
 

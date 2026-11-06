@@ -7,7 +7,7 @@ import { radarEmailChanges } from './rateLimit';
 
 /**
  * ==============================================================================
- * TRADYLOR — AUTH DE USUARIOS FINALES (Mi Radar)
+ * TREIDILOR — AUTH DE USUARIOS FINALES (Mi Radar)
  * ==============================================================================
  * Cuentas públicas de la zona "Mi Radar" (email+contraseña o Google), separadas
  * del users.json del backend admin: aquí no hay roles ni jerarquía, sólo el
@@ -743,7 +743,7 @@ export async function requestMagicLogin(email: string, origin: string): Promise<
     <div style="max-width:560px;margin:0 auto;font-family:Inter,Arial,sans-serif;background:#0d1422;color:#f3f4f6;padding:2rem;border-radius:16px">
       <h1 style="font-size:1.4rem;margin:0 0 .5rem">Entra en Mi Radar, ${name}</h1>
       <p style="color:#9ca3af;font-size:.9rem;line-height:1.6;margin:0 0 1.25rem">
-        Pulsa el botón siguiente para iniciar sesión en <strong>Tradylor</strong> sin contraseña.
+        Pulsa el botón siguiente para iniciar sesión en <strong>Treidilor</strong> sin contraseña.
         El enlace es de un solo uso y caduca en 15 minutos:
       </p>
       <a href="${magicUrl}" style="display:inline-block;background:#3b82f6;color:#fff;text-decoration:none;font-weight:700;padding:.85rem 1.5rem;border-radius:11px;font-size:.9rem">
@@ -1027,8 +1027,8 @@ export async function requestRadarEmailChange(
       </p>
     </div>
   `;
-  const text = `Confirma tu nuevo email en Tradylor: ${confirmUrl}\n\nSi no lo has pedido tú, ignora este mensaje.`;
-  const sent = await sendGenericMailSmtp({ to: email, subject: 'Confirma tu nuevo email en Tradylor', html, text });
+  const text = `Confirma tu nuevo email en Treidilor: ${confirmUrl}\n\nSi no lo has pedido tú, ignora este mensaje.`;
+  const sent = await sendGenericMailSmtp({ to: email, subject: 'Confirma tu nuevo email en Treidilor', html, text });
 
   const isProd = (process.env.NODE_ENV ?? '') === 'production';
   if (!sent && isProd) {

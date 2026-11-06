@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - PIPELINE DE AUTOMATIZACIÓN DE PRODUCTOS (métricas)
+ * TREIDILOR - PIPELINE DE AUTOMATIZACIÓN DE PRODUCTOS (métricas)
  * ==============================================================================
  * Contadores de ejecución del pipeline persistidos en `pipeline-metrics.json`
  * dentro del DATA_DIR (volumen en prod). Escritura atómica (tmp + rename) para

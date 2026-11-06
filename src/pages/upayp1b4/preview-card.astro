@@ -1,7 +1,7 @@
 ---
 /**
  * ==============================================================================
- * TRADYLOR — PREVIEW DE PRODUCT CARD (admin)
+ * TREIDILOR — PREVIEW DE PRODUCT CARD (admin)
  * ==============================================================================
  * Página ligera (SSR, requiere sesión admin) que renderiza el MISMO componente
  * <ProductCard /> del frontend público para el producto indicado (?id=).
@@ -39,7 +39,7 @@ Astro.response.headers.set('Cache-Control', 'no-store');
 
 <Layout title={`Preview: ${product.title}`} description="Vista previa de la tarjeta pública del producto.">
   <main class="preview-card-shell">
-    <p class="preview-card-note">Vista previa con la estética exacta de la web pública de Tradylor.</p>
+    <p class="preview-card-note">Vista previa con la estética exacta de la web pública de Treidilor.</p>
     <div class="preview-card-stage">
       <ProductCard product={product} />
     </div>

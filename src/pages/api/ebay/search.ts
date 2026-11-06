@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - ENDPOINT SSR: BÚSQUEDA DIRECTA EBAY (ejemplo standalone)
+ * TREIDILOR - ENDPOINT SSR: BÚSQUEDA DIRECTA EBAY (ejemplo standalone)
  * ==============================================================================
  * GET /api/ebay/search?q=&category=&limit=&sortBy=&page=
  *

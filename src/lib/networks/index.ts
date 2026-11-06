@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - MOTOR DE BÚSQUEDA UNIFICADO MULTI-RED
+ * TREIDILOR - MOTOR DE BÚSQUEDA UNIFICADO MULTI-RED
  * ==============================================================================
  * Punto de entrada del módulo:
  *   - getConnector(id): resuelve el conector de cada red.

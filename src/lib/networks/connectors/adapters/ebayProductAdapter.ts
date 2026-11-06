@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - ADAPTADOR EBAY BROWSE API → UNIFIEDPRODUCT
+ * TREIDILOR - ADAPTADOR EBAY BROWSE API → UNIFIEDPRODUCT
  * ==============================================================================
  * Normaliza la respuesta de eBay Browse API (/buy/browse/v1/item_summary/search)
  * al contrato canónico CanonicalAffiliateProduct (y de ahí a UnifiedProduct

@@ -8,7 +8,7 @@ import { chatCompleteGrounded, isGroundingAvailable } from '../../../lib/geminiG
 
 /**
  * ==============================================================================
- * TRADYLOR — ASESOR IA (Centro de Herramientas)
+ * TREIDILOR — ASESOR IA (Centro de Herramientas)
  * ==============================================================================
  * POST /api/radar/ai-assistant  { messages: [{role, content}] }
  *

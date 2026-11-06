@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - GESTIÓN DINÁMICA DE CATEGORÍAS (Backend)
+ * TREIDILOR - GESTIÓN DINÁMICA DE CATEGORÍAS (Backend)
  * ==============================================================================
  * Fuente de verdad: src/data/categories.json con esquema rico:
  *   { id, name, slug, icon, keywords[] }

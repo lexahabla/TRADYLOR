@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — INTELIGENCIA DE MARKETING (MÓDULO DE MARKETING)
+ * TREIDILOR — INTELIGENCIA DE MARKETING (MÓDULO DE MARKETING)
  * ==============================================================================
  * Calcula, a partir de datos REALES del proyecto, lo que muestran las cuatro
  * secciones del módulo:

@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — FILTROS DEL CATÁLOGO: ATRIBUTOS NORMALIZADOS, OFERTAS Y FACETAS
+ * TREIDILOR — FILTROS DEL CATÁLOGO: ATRIBUTOS NORMALIZADOS, OFERTAS Y FACETAS
  * ==============================================================================
  * Una sola regla para API, JSON individual y JSON masivo: los filtros se
  * calculan SIEMPRE a partir de los productos publicados (`getCatalogProducts`),

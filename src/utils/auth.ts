@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — AUTH DE CLIENTE (Mi Radar)
+ * TREIDILOR — AUTH DE CLIENTE (Mi Radar)
  * ==============================================================================
  * Wrappers fetch de /api/radar/auth/* + estado de sesión cacheado en módulo.
  * Tras login/registro exitosos ejecuta syncLocalToCloud() (migración

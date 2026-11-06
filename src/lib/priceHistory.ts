@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — HISTÓRICO DE PRECIO (captura progresiva)
+ * TREIDILOR — HISTÓRICO DE PRECIO (captura progresiva)
  * ==============================================================================
  * Cada visita a una ficha de producto deja 1 punto por día en
  * `priceHistory` de products.json: { date: 'YYYY-MM-DD', price }.

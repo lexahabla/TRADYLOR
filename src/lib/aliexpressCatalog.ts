@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - CACHÉ DEL CATÁLOGO ALIEXPRESS (aliexpress-catalog.json)
+ * TREIDILOR - CACHÉ DEL CATÁLOGO ALIEXPRESS (aliexpress-catalog.json)
  * ==============================================================================
  * El panel de Afiliados no debe llamar a la TOP API en cada carga: guarda el
  * catálogo en el volumen (DATA_DIR) y sólo lo refresca con el botón

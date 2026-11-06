@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - CONECTOR AMAZON ASSOCIATES (PA-API 5.0)
+ * TREIDILOR - CONECTOR AMAZON ASSOCIATES (PA-API 5.0)
  * ==============================================================================
  * Documentación oficial: https://webservices.amazon.com/paapi5/documentation/
  *

@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — RESOLUCIÓN DE DATOS DE ENVÍO
+ * TREIDILOR — RESOLUCIÓN DE DATOS DE ENVÍO
  * ==============================================================================
  * Los campos shippingDays/shippingInfo/freeShipping se guardan en products.json
  * al importar desde el panel, pero los productos importados antes de existir

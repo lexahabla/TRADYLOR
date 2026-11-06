@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - ADAPTADOR AMAZON PA-API 5.0 → CANONICALAFFILIATEPRODUCT
+ * TREIDILOR - ADAPTADOR AMAZON PA-API 5.0 → CANONICALAFFILIATEPRODUCT
  * ==============================================================================
  * Parsea la respuesta de SearchItems (POST /paapi5/searchitems) al contrato
  * canónico del pipeline: imágenes variantes, valoraciones (CustomerReviews),

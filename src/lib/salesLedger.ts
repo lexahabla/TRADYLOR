@@ -1,9 +1,9 @@
 /**
  * ==============================================================================
- * TRADYLOR — LIBRO DE VENTAS REAL (bloque "Control de Ventas, Comisiones e Ingresos")
+ * TREIDILOR — LIBRO DE VENTAS REAL (bloque "Control de Ventas, Comisiones e Ingresos")
  * ==============================================================================
  * Sustituye los datos de ejemplo (antiguo `data/mockVentas.ts`, hoy retirado)
- * por el único dato de venta que Tradylor puede dar por 100% real sin
+ * por el único dato de venta que Treidilor puede dar por 100% real sin
  * checkout propio ni webhooks de conversión de las redes de afiliados: la
  * confirmación "Sí, compré" del Return Flow de Mi Radar
  * (`radarStore.ts` → `resolveExit()` → `trackEvent({type:'purchase'})`).

@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - PIPELINE MASIVO DE INGESTA, ENRIQUECIMIENTO Y AUTO-CURACIÓN
+ * TREIDILOR - PIPELINE MASIVO DE INGESTA, ENRIQUECIMIENTO Y AUTO-CURACIÓN
  * ==============================================================================
  * Orquesta el flujo completo:
  *  1. INGESTA RAW: Captura payloads completos via AffiliateAdapter → raw_affiliate_products

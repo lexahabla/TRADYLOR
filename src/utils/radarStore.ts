@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — RADAR STORE (cliente, Offline-First)
+ * TREIDILOR — RADAR STORE (cliente, Offline-First)
  * ==============================================================================
  * Fuente de verdad local: LocalStorage (`tradylor-radar-v1`). Si el usuario
  * tiene sesión, cada mutación se refleja también en la nube vía POST /api/radar

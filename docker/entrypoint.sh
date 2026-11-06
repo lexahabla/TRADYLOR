@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# TRADYLOR - Punto de entrada del contenedor de producción
+# TREIDILOR - Punto de entrada del contenedor de producción
 #  1) Prepara el directorio persistente (volumen) y siembra los JSON de la imagen.
 #  2) Copia las imágenes generadas con IA al build servible (dist/client).
 #  3) Ajusta permisos y arranca el SSR como usuario no privilegiado (node).
@@ -47,9 +47,9 @@ chown -R node:node "$DATA_DIR" "$CLIENT_IMAGES_DIR" 2>/dev/null || true
 # poder commitear y pushear desde la consola. El working tree de la imagen es
 # efímero: lo que no se haga `git push` se pierde en el siguiente redeploy.
 if [ -n "${GITHUB_PAT:-}" ]; then
-  GIT_REMOTE="https://x-access-token:${GITHUB_PAT}@github.com/lexahabla/TRADYLOR.git"
+  GIT_REMOTE="https://x-access-token:${GITHUB_PAT}@github.com/lexahabla/TREIDILOR.git"
 else
-  GIT_REMOTE="https://github.com/lexahabla/TRADYLOR.git"
+  GIT_REMOTE="https://github.com/lexahabla/TREIDILOR.git"
 fi
 
 if [ ! -d /app/.git ] && command -v git >/dev/null 2>&1; then

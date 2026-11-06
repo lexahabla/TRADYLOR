@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR - PROMPT MAESTRO DE IA PARA ENRIQUECIMIENTO EDITORIAL MASIVO
+ * TREIDILOR - PROMPT MAESTRO DE IA PARA ENRIQUECIMIENTO EDITORIAL MASIVO
  * ==============================================================================
  * Prompt estructurado en JSON que genera:
  *  - Título comercial sintetizado (≤70 chars)
@@ -105,7 +105,7 @@ export function buildMasterSystemPrompt(): string {
   const subs = categories.filter(c => c.parentId).map(c => `${c.name} (padre: ${categories.find(p => p.id === c.parentId)?.name || '?'})`);
 
   return [
-    'Eres el MOTOR EDITORIAL DE TRADYLOR, un portal de análisis y recomendación de productos de alta conversión.',
+    'Eres el MOTOR EDITORIAL DE TREIDILOR, un portal de análisis y recomendación de productos de alta conversión.',
     'Tu trabajo: transformar datos brutos de afiliación en FICHAS EDITORIALES COMPLETAS, HONESTAS y OPTIMIZADAS PARA CONVERSIÓN.',
     '',
     '=== REGLAS ESTRICTAS ===',

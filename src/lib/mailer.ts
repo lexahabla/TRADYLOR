@@ -18,7 +18,7 @@ export function getSmtpConfig(): SmtpConfig | null {
   const host = (process.env.SMTP_HOST ?? import.meta.env.SMTP_HOST ?? '').trim();
   const user = (process.env.SMTP_USER ?? import.meta.env.SMTP_USER ?? '').trim();
   const pass = (process.env.SMTP_PASS ?? import.meta.env.SMTP_PASS ?? '').trim();
-  const from = (process.env.SMTP_FROM ?? import.meta.env.SMTP_FROM ?? 'Tradylor <no-reply@treidilor.com>').trim();
+  const from = (process.env.SMTP_FROM ?? import.meta.env.SMTP_FROM ?? 'Treidilor <no-reply@treidilor.com>').trim();
   const port = Number(process.env.SMTP_PORT ?? import.meta.env.SMTP_PORT ?? 587);
   if (!host || !user || !pass) return null;
   return { host, port, user, pass, from };
@@ -37,7 +37,7 @@ export async function sendVerificationEmailSmtp(payload: EmailPayload): Promise<
 
   const html = `
     <div style="max-width:560px;margin:0 auto;font-family:Inter,Arial,sans-serif;background:#0d1422;color:#f3f4f6;padding:2rem;border-radius:16px">
-      <h1 style="font-size:1.4rem;margin:0 0 .5rem">Bienvenido a Tradylor, ${payload.name.replace(/[<>&"]/g, "")}</h1>
+      <h1 style="font-size:1.4rem;margin:0 0 .5rem">Bienvenido a Treidilor, ${payload.name.replace(/[<>&"]/g, "")}</h1>
       <p style="color:#9ca3af;font-size:.9rem;line-height:1.6;margin:0 0 1.25rem">
         Gracias por crear tu cuenta de <strong>Mi Radar</strong>. Con ella puedes guardar productos,
         organizar listas de compra y retomar salidas desde cualquier dispositivo.
@@ -49,7 +49,7 @@ export async function sendVerificationEmailSmtp(payload: EmailPayload): Promise<
         Activar mi cuenta
       </a>
       <p style="color:#6b7280;font-size:.75rem;margin-top:1.5rem">
-        Si no te registraste en Tradylor, ignora este email.
+        Si no te registraste en Treidilor, ignora este email.
       </p>
     </div>
   `;
@@ -58,7 +58,7 @@ export async function sendVerificationEmailSmtp(payload: EmailPayload): Promise<
     await transporter.sendMail({
       from: config.from,
       to: payload.to,
-      subject: 'Activa tu cuenta de Mi Radar en Tradylor',
+      subject: 'Activa tu cuenta de Mi Radar en Treidilor',
       html,
     });
     return true;

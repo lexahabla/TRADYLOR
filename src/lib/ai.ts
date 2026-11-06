@@ -207,7 +207,7 @@ function openAiCompat(provider: TextProvider, forcedModel?: string): OpenAiCompa
       model: forcedModel || env('OPENROUTER_MODEL') || 'deepseek/deepseek-chat-v3-0324:free',
       label: 'OpenRouter',
       jsonMode: false,
-      extraHeaders: { 'HTTP-Title': 'Tradylor' },
+      extraHeaders: { 'HTTP-Title': 'Treidilor' },
     };
   }
   return {
@@ -496,7 +496,7 @@ function parseLooseJson(raw: string): any {
 }
 
 const TEXT_SYSTEM_PROMPT = [
-  'Eres el equipo editorial de Tradylor, un portal de análisis y recomendación de productos de alta conversión.',
+  'Eres el equipo editorial de Treidilor, un portal de análisis y recomendación de productos de alta conversión.',
   'Tu trabajo es preparar una ficha de producto honesta y neutral en el tono (estilo redacción técnica, no publicitaria), pero pensada para VENDER: la tienda vive de que el lector decida comprar.',
   'Reglas estrictas:',
   '- Nunca inventes especificaciones ni números de ventas que no puedas deducir del texto de entrada. Si recibes "Especificaciones ya extraídas de la página del comercio (eBay/AliExpress/Amazon/etc.)", esas son la fuente de verdad de la ficha técnica: tu trabajo es ordenarlas y redactarlas, no inventar otras ni contradecirlas (solo puedes añadir muy pocas adicionales si son evidentes por el contexto).',
@@ -1091,7 +1091,7 @@ export function synthesizeTitleLocally(title: string): string {
 }
 
 const TITLE_SYSTEM_PROMPT = [
-  'Eres el equipo editorial de Tradylor, un portal de análisis y recomendación de productos.',
+  'Eres el equipo editorial de Treidilor, un portal de análisis y recomendación de productos.',
   'Sintetiza y optimiza el título del producto para tarjetas y tablas de productos.',
   'Reglas estrictas:',
   `- Máximo ${MAX_TITLE_LENGTH} caracteres (entre 35 y 70 caracteres).`,

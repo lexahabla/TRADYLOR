@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TRADYLOR — LIBRO DE VENTAS: NÚCLEO PURO (seguro para cliente Y servidor)
+ * TREIDILOR — LIBRO DE VENTAS: NÚCLEO PURO (seguro para cliente Y servidor)
  * ==============================================================================
  * Tipos y funciones puras del bloque "Control de Ventas, Comisiones e
  * Ingresos", sin ninguna dependencia de Node (fs, analytics, catálogo...).
@@ -22,7 +22,7 @@ export interface RegistroVenta {
   productoNombre: string;
   /** Importe bruto de la venta, antes de comisión. */
   montoTotalBruto: number;
-  /** Comisión neta estimada para Tradylor por esta venta. */
+  /** Comisión neta estimada para Treidilor por esta venta. */
   comisionNeta: number;
   tipo: TipoVenta;
   /** Red / proveedor de afiliado real del producto (Amazon, Awin, eBay...). */

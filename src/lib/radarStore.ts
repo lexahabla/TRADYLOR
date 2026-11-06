@@ -27,7 +27,7 @@ const AI_CHAT_MESSAGES_MAX = 40;
 
 /**
  * ==============================================================================
- * TRADYLOR — STORE DE DATOS "MI RADAR" (nube)
+ * TREIDILOR — STORE DE DATOS "MI RADAR" (nube)
  * ==============================================================================
  * radar-data.json en el directorio de datos (volumen en producción). Un objeto
  * por usuario (clave = id de radarAuth). El cliente mantiene siempre su copia
@@ -791,7 +791,7 @@ export function resolveExit(userId: string, productId: string, status: 'purchase
   writeAll(all);
 
   // El propio usuario confirmando "sí, compré" es la única señal de venta
-  // 100% real de la que dispone Tradylor (Compra Delegada: no hay checkout
+  // 100% real de la que dispone Treidilor (Compra Delegada: no hay checkout
   // propio ni webhook de las redes de afiliados). Se alimenta aquí el
   // tracker de analítica para que "Tráfico y Ventas" dependa de confirmaciones
   // reales y no de datos de ejemplo. Idempotente: sólo cuenta la primera vez

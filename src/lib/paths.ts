@@ -2,7 +2,7 @@ import path from 'node:path';
 
 /**
  * ==============================================================================
- * TRADYLOR - RUTAS DE FICHEROS PERSISTENTES
+ * TREIDILOR - RUTAS DE FICHEROS PERSISTENTES
  * ==============================================================================
  * Único punto de verdad para localizar los JSON del catálogo y las imágenes
  * generadas. En local mantiene el comportamiento histórico (src/data y

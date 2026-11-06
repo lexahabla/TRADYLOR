@@ -5,7 +5,7 @@ import { AVATARS_DIR, dataFile } from './paths';
 
 /**
  * ==============================================================================
- * TRADYLOR - STORE DE USUARIOS DEL BACKEND
+ * TREIDILOR - STORE DE USUARIOS DEL BACKEND
  * ==============================================================================
  * users.json en el directorio de datos (volumen en producción). Contraseñas con
  * scrypt + salt (node:crypto). Tres niveles:

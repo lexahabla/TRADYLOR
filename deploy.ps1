@@ -1,4 +1,4 @@
-Write-Host "🚀 Iniciando despliegue de Tradylor..." -ForegroundColor Cyan
+Write-Host "🚀 Iniciando despliegue de Treidilor..." -ForegroundColor Cyan
 
 # 1. Estado de los archivos
 git status

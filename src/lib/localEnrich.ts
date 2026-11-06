@@ -172,7 +172,7 @@ function buildPros(input: LocalEnrichInput): string[] {
   pros.push(`Relación calidad-precio competitiva dentro de los productos ${tone}.`);
   if (input.merchant) pros.push(`Vendido y gestionado por ${input.merchant}.`);
   pros.push('Disponible en compra con envío gestionado por el comercio asociado.');
-  pros.push('Ficha revisada y verificada antes de su publicación en Tradylor.');
+  pros.push('Ficha revisada y verificada antes de su publicación en Treidilor.');
   return pros.slice(0, 5);
 }
 

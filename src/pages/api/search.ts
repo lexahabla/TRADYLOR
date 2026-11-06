@@ -54,7 +54,7 @@ interface SearchHit {
   reviewsCount: number | null;
   category: string;
   merchant: string;
-  /** Enlace Tradylor de la ficha. */
+  /** Enlace Treidilor de la ficha. */
   url: string;
   /** Enlace de salida (checkout → afiliado). */
   buyUrl: string;
