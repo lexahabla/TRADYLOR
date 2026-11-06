@@ -21,3 +21,20 @@ export async function resolve(specifier, context, nextResolve) {
   }
   return nextResolve(specifier, context);
 }
+
+/**
+ * `import.meta.env` no existe fuera de Vite/Astro: sin esto, cualquier módulo de
+ * `src/` que lo lea (p. ej. `lib/ai.ts`, `lib/apiAuth.ts`) falla al importarse o
+ * ejecutarse en las pruebas. Se sustituye por un objeto vacío (las pruebas fijan
+ * las variables que necesiten en `process.env`, como en producción).
+ */
+export async function load(url, context, nextLoad) {
+  const result = await nextLoad(url, context);
+  if (url.includes('/src/') && url.endsWith('.ts') && result.source) {
+    const text = result.source.toString();
+    if (text.includes('import.meta.env')) {
+      return { ...result, source: text.replace(/import\.meta\.env/g, '(globalThis.__IMPORT_META_ENV__ ??= {})') };
+    }
+  }
+  return result;
+}

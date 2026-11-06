@@ -13,7 +13,7 @@
  */
 
 import { upsertCatalogProduct } from '../catalogStore';
-import { upsertProduct, type Product } from '../productStore';
+import { readProductsFromFile, threeWayMerge, upsertProduct, type Product } from '../productStore';
 import type { PipelineFields, PipelineProduct, StageResult } from './types';
 
 /** Extrae sólo los campos nuevos del pipeline para la segunda escritura. */
@@ -30,7 +30,12 @@ function extractPipelineFields(product: PipelineProduct): PipelineFields {
 }
 
 /** Ejecuta la Etapa 4 (publicación/persistencia en products.json). */
-export function runStagePublish(product: PipelineProduct): StageResult {
+export function runStagePublish(product: PipelineProduct, base?: Product): StageResult {
+  // Toda la publicación es SÍNCRONA (sin `await`): lo leído aquí no puede cambiar
+  // hasta que se escribe. `base` es la ficha como estaba cuando el pipeline la leyó
+  // (antes de la IA); sólo se aplican los campos que el pipeline cambió respecto de
+  // ella, y el resto conserva el valor ACTUAL (ofertas, precios, ediciones ajenas).
+  const freshBefore = base ? readProductsFromFile().find((p) => p.id === product.id) : undefined;
   const saved = upsertCatalogProduct(product as any);
   if (!saved.ok || !saved.product) {
     return { ok: false, stage: 'publish', message: saved.message || 'No se pudo persistir el producto.' };
@@ -40,7 +45,8 @@ export function runStagePublish(product: PipelineProduct): StageResult {
   // contrato n8n y blanquea los de curación/pipeline, así que se re-escribe el
   // producto completo (con `product` en último lugar gana sobre `saved.product`).
   const fields = extractPipelineFields(product);
-  const persisted = { ...(saved.product as any), ...fields, ...product } as Product;
+  const ours = { ...(saved.product as any), ...fields, ...product } as Product;
+  const persisted = freshBefore && base ? threeWayMerge(base, ours, freshBefore) : ours;
   upsertProduct(persisted);
 
   return {

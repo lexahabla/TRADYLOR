@@ -16,7 +16,8 @@ import {
   writeProductsToFile,
   type Product,
 } from './productStore';
-import { addDeletedId, clearDeletedIds } from './deletedProducts';
+import { clearDeletedIds } from './deletedProducts';
+import { recordProductDeletion } from './deletedIdentity';
 import { getProductNetwork } from './productNetwork';
 
 // ─── Parámetros de tracking/afiliación que se ignoran al comparar URLs ───────
@@ -367,10 +368,12 @@ export function bulkDeleteProducts(ids: string[]): { deleted: string[]; missing:
   const existing = new Set(products.map((p) => p.id));
   const missing = [...wanted].filter((id) => !existing.has(id));
   const remaining = products.filter((p) => !wanted.has(p.id));
-  const deleted = products.filter((p) => wanted.has(p.id)).map((p) => p.id);
+  const removedProducts = products.filter((p) => wanted.has(p.id));
+  const deleted = removedProducts.map((p) => p.id);
   if (deleted.length) {
     writeProductsToFile(remaining);
-    for (const id of deleted) addDeletedId(id);
+    // Tombstone por id + identidad de cada ficha eliminada.
+    for (const product of removedProducts) recordProductDeletion(product);
   }
   return { deleted, missing };
 }

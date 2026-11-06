@@ -62,7 +62,7 @@ interface CurrentPrice {
 }
 
 /** Precio actual: catálogo interno → caché de AliExpress → null. */
-function resolveCurrentPrice(product: SavedProduct): CurrentPrice | null {
+export function resolveCurrentPrice(product: SavedProduct): CurrentPrice | null {
   const catalog = findCatalogProduct(product.id);
   if (catalog && typeof catalog.price === 'number' && Number.isFinite(catalog.price)) {
     // Las alertas son en EUR: no se compara contra otra moneda.
@@ -71,6 +71,11 @@ function resolveCurrentPrice(product: SavedProduct): CurrentPrice | null {
     // es vigente NO dispara avisos (se espera a una nueva verificación).
     const verifiedAt = (catalog.extra as Record<string, any> | undefined)?.refresh?.lastVerifiedAt;
     if (verifiedAt && freshnessOf(verifiedAt, DEFAULT_MAX_AGE_HOURS) === 'stale') return null;
+    // Un precio recibido o cambiado por JSON (`extra.priceReading`) no está verificado: sólo se anuncia si el servicio
+    // de actualización lo verificó DESPUÉS de recibirlo. Vale para fichas nuevas y para existentes (también de API):
+    // se decide por el dato, no por el canal con el que se creó la ficha.
+    const reading = (catalog.extra as Record<string, any> | undefined)?.priceReading;
+    if (reading?.receivedAt && !(verifiedAt && Date.parse(verifiedAt) >= Date.parse(reading.receivedAt))) return null;
     const stock = catalog.pricing?.stockStatus;
     return {
       price: catalog.price,

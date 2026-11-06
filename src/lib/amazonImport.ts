@@ -37,6 +37,7 @@ import { enrichProductLocally, type LocalEnrichInput } from './localEnrich';
 import { computeBadge } from './curation';
 import { brandIsMerchant, normalizeBrand, sameSourceId } from './offerIdentity';
 import { mergeReimport } from './reimportMerge';
+import { matchDeletedProduct } from './deletedIdentity';
 import type { Product as FlatProduct, Product as AdminProduct } from './productStore';
 
 const DATA_FILE_PATH = dataFile('products.json');
@@ -676,6 +677,17 @@ export function upsertAmazonProductByAsin(
   });
 
   const updated = existingIndex >= 0;
+  if (!updated) {
+    const deletedHit = matchDeletedProduct({
+      id: String(product.id ?? ''),
+      platform: 'amazon',
+      sourceId: asin,
+      urls: [product.affiliateUrl, product.buyNowUrl],
+    }, { includeGtin: false });
+    if (deletedHit) {
+      throw new Error(`Producto eliminado anteriormente (por ${deletedHit.by}). Recupéralo desde el panel admin.`);
+    }
+  }
   if (updated) {
     // Fusión con precedencia por campo (lib/reimportMerge.ts): conserva
     // histórico de precio, slug, variantes, curación, campos bloqueados por

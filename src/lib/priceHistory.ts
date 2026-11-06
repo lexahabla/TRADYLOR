@@ -6,14 +6,18 @@
  * `priceHistory` de products.json: { date: 'YYYY-MM-DD', price }.
  *
  * - La escritura NO es síncrona en el request: la cola se persiste con un
- *   debounce de 3 s y de forma atómica (tmp + rename), igual que analytics.ts.
+ *   debounce de 3 s. El volcado usa `updateCatalog` (lectura → cambio → escritura
+ *   SÍNCRONOS sobre el catálogo ACTUAL, escritura atómica): sólo se tocan los
+ *   puntos de `priceHistory`; fichas, ofertas, precios y ediciones que otros
+ *   procesos hayan escrito mientras tanto se conservan. (Antes escribía con
+ *   `await` una copia leída antes: pisaba escrituras concurrentes, resucitaba
+ *   fichas eliminadas y compartía el fichero temporal del catálogo con el resto de escritores.)
  * - Sólo se tocan productos que ya existen en products.json (los curados
  *   estáticos no tienen entrada en el fichero y no se crean aquí).
  * ==============================================================================
  */
 
-import fsp from 'node:fs/promises';
-import { readProductsFromFile, DATA_FILE_PATH, type Product } from './productStore';
+import { readProductsFromFile, updateCatalog } from './productStore';
 
 export interface PricePoint {
   date: string;
@@ -72,34 +76,31 @@ export function recordPricePoint(productId: string, price: number): boolean {
   return true;
 }
 
-/** Persiste la cola en products.json (exportado para tests / shutdown). */
+/**
+ * Persiste la cola en products.json (exportado para tests / shutdown). Toda la operación es SÍNCRONA dentro de
+ * `updateCatalog`: lee el catálogo actual, funde cada punto en el `priceHistory` ACTUAL de su ficha y escribe una
+ * sola vez. Si una ficha ya no existe (se eliminó) su punto se descarta; no se recrea nada.
+ */
 export async function flushPriceHistory(): Promise<void> {
   if (queue.size === 0 || flushing) return;
   flushing = true;
   const pending = queue;
   queue = new Map();
   try {
-    const products = readProductsFromFile();
-    let changed = false;
-
-    for (const [productId, point] of pending) {
-      const index = products.findIndex((p) => p.id === productId);
-      if (index < 0) continue;
-      const product: Product = products[index];
-      const next = mergePoint(product.priceHistory, point);
-      if (JSON.stringify(next) !== JSON.stringify(product.priceHistory ?? [])) {
-        products[index] = { ...product, priceHistory: next };
-        changed = true;
+    updateCatalog<void>((products) => {
+      let changed = false;
+      for (const [productId, point] of pending) {
+        const index = products.findIndex((p) => p.id === productId);
+        if (index < 0) continue;
+        const product = products[index];
+        const next = mergePoint(product.priceHistory, point);
+        if (JSON.stringify(next) !== JSON.stringify(product.priceHistory ?? [])) {
+          products[index] = { ...product, priceHistory: next };
+          changed = true;
+        }
       }
-    }
-
-    if (!changed) return;
-
-    // Escritura atómica: tmp + rename (nunca un products.json a medias).
-    const snapshot = JSON.stringify(products, null, 2);
-    const tmpPath = `${DATA_FILE_PATH}.tmp`;
-    await fsp.writeFile(tmpPath, snapshot, 'utf-8');
-    await fsp.rename(tmpPath, DATA_FILE_PATH);
+      return { changed, result: undefined };
+    });
   } catch (error) {
     console.warn('[PriceHistory] No se pudo persistir el histórico:', error);
     // Devuelve los puntos a la cola para reintentar en el próximo flush.

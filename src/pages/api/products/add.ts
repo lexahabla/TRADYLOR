@@ -7,9 +7,11 @@ import {
   slugify,
   findDuplicateProduct,
   normalizeProductKey,
+  commitOwnChanges,
   type Product,
 } from '../../../lib/productStore';
-import { addDeletedId, removeDeletedId } from '../../../lib/deletedProducts';
+import { deletionBlockMessage, matchDeletedProduct, recordProductDeletion } from '../../../lib/deletedIdentity';
+import { conflictsMessage, resolveFormEdit, type FormConflict } from '../../../lib/formConflicts';
 import { enrichProductsForAdmin, autoLinkAlternatives, computeBadge } from '../../../lib/curation';
 import { extractProductPageFields, hasTextCredentials, type ProductPageAiFields } from '../../../lib/ai';
 
@@ -1196,6 +1198,7 @@ export const POST: APIRoute = async ({ request }) => {
       }
 
       const currentProducts = readProductsFromFile();
+      const removedProduct = currentProducts.find((p) => p.id === targetId);
       const updatedProducts = currentProducts.filter((p) => p.id !== targetId);
 
       if (updatedProducts.length === currentProducts.length) {
@@ -1213,9 +1216,10 @@ export const POST: APIRoute = async ({ request }) => {
         );
       }
 
-      // Tombstone: evita que el producto reaparezca vía el catálogo curado
-      // (src/data/products.ts) o por cualquier re-sync posterior.
-      addDeletedId(targetId);
+      // Tombstone por id (catálogo curado de src/data/products.ts) + IDENTIDAD de la
+      // ficha (ofertas, ids externos, URLs, GTIN): evita que el mismo producto
+      // reaparezca con otro id por la API, el JSON o cualquier re-sync posterior.
+      if (removedProduct) recordProductDeletion(removedProduct);
 
       return new Response(
         JSON.stringify({ success: true, message: 'Producto eliminado correctamente', id: targetId }),
@@ -1342,10 +1346,14 @@ export const POST: APIRoute = async ({ request }) => {
       // Solo usamos fallback por URL/ASIN/sourceId para altas nuevas (sin id).
       let productId = String(dataToSave.id || '').trim();
       if (!productId || !currentProducts.some((p) => p.id === productId)) {
+        // Un identificador vacío o ausente NUNCA produce coincidencia (antes
+        // `undefined === undefined` sobrescribía la primera ficha sin ASIN).
+        const wantedAsin = String(dataToSave.asin ?? '').trim();
+        const wantedSourceId = String(dataToSave.sourceId ?? '').trim();
         productId =
           currentProducts.find((p) => p.affiliateUrl === dataToSave.affiliateUrl)?.id ||
-          currentProducts.find((p) => p.asin === dataToSave.asin)?.id ||
-          currentProducts.find((p) => p.sourceId === dataToSave.sourceId)?.id ||
+          (wantedAsin ? currentProducts.find((p) => String(p.asin ?? '').trim() === wantedAsin)?.id : undefined) ||
+          (wantedSourceId ? currentProducts.find((p) => String(p.sourceId ?? '').trim() === wantedSourceId)?.id : undefined) ||
           slugify(dataToSave.title);
       }
       const existingProduct = currentProducts.find((p) => p.id === productId);
@@ -1405,6 +1413,25 @@ export const POST: APIRoute = async ({ request }) => {
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         );
+      }
+
+      // Memoria de eliminados: un ALTA (la ficha no existe) que coincide con algo eliminado (mismo id o
+      // identidad fiable: id externo, URL de producto…) NO se crea. Esto cubre las importaciones del panel
+      // (AliExpress, eBay y demás redes) y las altas manuales: olvidar una eliminación requiere una acción
+      // explícita de restauración (ver deletionBlockMessage). Antes se "revivía" al guardar.
+      if (!existingProduct) {
+        const deletedHit = matchDeletedProduct({
+          id: productId,
+          platform: (dataToSave as { network?: string }).network,
+          sourceId: String(dataToSave.sourceId ?? '').trim() || undefined,
+          urls: [dataToSave.affiliateUrl, dataToSave.buyNowUrl, (dataToSave as { url?: string }).url],
+        }, { includeGtin: false });
+        if (deletedHit) {
+          return new Response(
+            JSON.stringify({ success: false, deleted: true, blockedBy: deletedHit.by, restorable: false, message: deletionBlockMessage(deletedHit) }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
       }
 
       // Complemento best-effort desde la propia página del producto: rellena
@@ -1584,9 +1611,9 @@ export const POST: APIRoute = async ({ request }) => {
       // Si ya existe un producto con el mismo ID, se actualiza; si no, se añade al principio.
       // Al actualizar se conservan los campos de curación que el formulario no
       // edita (IDs jerárquicos, historial de precio, score, alternativas...).
-      const existingIndex = currentProducts.findIndex((p) => p.id === productId);
+      const existedBefore = Boolean(existingProduct);
       let productToSave: Product = newProduct;
-      if (existingIndex >= 0 && existingProduct) {
+      if (existedBefore && existingProduct) {
         // Re-importación con keepUncategorized: se respeta la categoría vacía
         // enviada desde la importación de JSON (no se rellena ni se conserva
         // una categoría previa; el producto queda sin categoría para asignarla
@@ -1614,12 +1641,50 @@ export const POST: APIRoute = async ({ request }) => {
           ai_enriched: existingProduct.ai_enriched,
           ai_error: existingProduct.ai_error, sourceDescription: existingProduct.sourceDescription,
         };
-        currentProducts[existingIndex] = productToSave;
-      } else {
-        currentProducts.unshift(productToSave);
       }
 
-      const saved = writeProductsToFile(currentProducts);
+      // Escritura PROTEGIDA: durante el complemento desde la página (red/IA) otros
+      // procesos pueden haber cambiado el catálogo. Se relee y se aplican sólo los
+      // campos que esta operación cambió respecto de lo que leyó (`existingProduct`).
+      let saved = true;
+      let formConflicts: FormConflict[] = [];
+      try {
+        // Segunda comprobación, justo antes de escribir (sin await entre ella y el guardado): durante el
+        // complemento desde la página otro proceso pudo eliminar la ficha o su identidad.
+        if (!existingProduct) {
+          const lateHit = matchDeletedProduct({
+            id: productId,
+            platform: (dataToSave as { network?: string }).network,
+            sourceId: String(dataToSave.sourceId ?? '').trim() || undefined,
+            urls: [dataToSave.affiliateUrl, dataToSave.buyNowUrl, (dataToSave as { url?: string }).url],
+          }, { includeGtin: false });
+          if (lateHit) {
+            return new Response(
+              JSON.stringify({ success: false, deleted: true, blockedBy: lateHit.by, restorable: false, message: deletionBlockMessage(lateHit) }),
+              { status: 200, headers: { 'Content-Type': 'application/json' } }
+            );
+          }
+        }
+        // Formulario abierto ANTES de un cambio ajeno: sólo se aplican los campos que el usuario EDITÓ; los
+        // reenviados sin tocar conservan el valor ACTUAL, y si otro proceso cambió el mismo campo se avisa en
+        // lugar de sobrescribirlo (ver lib/formConflicts.ts). Sin `editedFields` rige el comportamiento anterior.
+        if (existingProduct && Array.isArray((body as { editedFields?: unknown }).editedFields)) {
+          const currentNow = readProductsFromFile().find((p) => p.id === productId);
+          const resolved = resolveFormEdit({ editedFields: (body as { editedFields?: unknown }).editedFields, baseline: (body as { baseline?: unknown }).baseline, submitted: productToSave, current: currentNow });
+          productToSave = resolved.values;
+          formConflicts = resolved.conflicts;
+        }
+        const committed = commitOwnChanges({ id: productId, base: existingProduct, ours: productToSave });
+        if (committed.skipped) {
+          return new Response(
+            JSON.stringify({ success: false, deleted: true, message: 'La ficha se eliminó mientras se guardaba: no se ha vuelto a crear.' }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } }
+          );
+        }
+        productToSave = committed.product;
+      } catch {
+        saved = false;
+      }
       if (!saved) {
         return new Response(
           JSON.stringify({ success: false, message: 'Error de escritura en el servidor de archivos' }),
@@ -1627,8 +1692,7 @@ export const POST: APIRoute = async ({ request }) => {
         );
       }
 
-      // Si el producto había sido borrado previamente, se revive (quito el tombstone).
-      removeDeletedId(productId);
+      // (Ya NO se quita el tombstone al guardar: restaurar un producto eliminado es una acción explícita.)
 
       // Vinculación automática de alternativas: sólo aplica si el producto
       // todavía no tiene ninguna a mano (nunca pisa la curación manual).
@@ -1641,7 +1705,8 @@ export const POST: APIRoute = async ({ request }) => {
       return new Response(
         JSON.stringify({
           success: true,
-          message: existingIndex >= 0 ? 'Producto actualizado con éxito' : 'Producto guardado con éxito',
+          message: formConflicts.length ? conflictsMessage(formConflicts) : existedBefore ? 'Producto actualizado con éxito' : 'Producto guardado con éxito',
+          conflicts: formConflicts,
           product: productToSave,
           notes: complementNotes,
         }),
@@ -1841,6 +1906,10 @@ export const POST: APIRoute = async ({ request }) => {
 // 3. DELETE: Soporte HTTP DELETE nativo (/api/products/add?id=xyz)
 // ==============================================================================
 export const DELETE: APIRoute = async ({ request, url }) => {
+  // Antes este endpoint no exigía sesión: cualquiera podía borrar productos.
+  const unauthorizedResponse = requireAdminAuth(request);
+  if (unauthorizedResponse) return unauthorizedResponse;
+
   try {
     let targetId = url.searchParams.get('id');
 
@@ -1861,6 +1930,7 @@ export const DELETE: APIRoute = async ({ request, url }) => {
     }
 
     const currentProducts = readProductsFromFile();
+    const removedProduct = currentProducts.find((p) => p.id === targetId);
     const filtered = currentProducts.filter((p) => p.id !== targetId);
 
     if (filtered.length === currentProducts.length) {
@@ -1871,6 +1941,8 @@ export const DELETE: APIRoute = async ({ request, url }) => {
     }
 
     writeProductsToFile(filtered);
+    // Registrar la eliminación (antes esta vía no dejaba tombstone ni identidad).
+    if (removedProduct) recordProductDeletion(removedProduct);
 
     return new Response(
       JSON.stringify({ success: true, message: 'Producto eliminado correctamente', id: targetId }),

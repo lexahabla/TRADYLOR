@@ -24,7 +24,8 @@ import type { APIRoute } from 'astro';
 import { unifiedSearch, getConnector } from '../../../../lib/networks';
 import { getConnectedNetworkIds } from '../../../../lib/networks/credentials';
 import { getCategories, suggestCategoryStrict, slugifyCategory } from '../../../../lib/categories';
-import { readProductsFromFile, writeProductsToFile, slugify, type Product } from '../../../../lib/productStore';
+import { readProductsFromFile, writeProductsToFile, slugify, updateCatalog, threeWayMerge, type Product } from '../../../../lib/productStore';
+import { matchDeletedProduct } from '../../../../lib/deletedIdentity';
 import { isValidApiToken, unauthorizedApiResponse } from '../../../../lib/apiAuth';
 import { canonicalToUnified } from '../../../../lib/networks/connectors/base';
 import type { NetworkConnector } from '../../../../lib/networks/connectors/base';
@@ -689,6 +690,13 @@ async function buildSingleProduct(
   const baseId = existingIndex >= 0 ? existingProducts[existingIndex].id : generateProductId(canonical.title, existingIds);
   existingIds.add(baseId);
   if (deletedIds.has(baseId)) return { status: 'skip' };
+  // Una ficha NUEVA no resucita un producto eliminado con otro id (identidad fiable).
+  if (existingIndex === -1 && matchDeletedProduct({
+    id: baseId,
+    platform: canonical.network,
+    sourceId,
+    urls: [affiliateUrl, canonical.directUrl],
+  }, { includeGtin: false })) return { status: 'skip' };
   const duplicateHit = findIngestDuplicate(existingProducts, {
     ...canonical, id: baseId, sourceId,
     category: group.category || 'Tecnología', merchant: merchantName, affiliateUrl,
@@ -830,6 +838,9 @@ export async function buildAndUpsertProducts(
   opts?: { onProgress?: (p: { processed: number; total: number; upserted: number; updated: number; current: string | null }) => void; concurrency?: number }
 ): Promise<{ upserted: number; updated: number; wouldUpsert: number; wouldUpdate: number; aiEnrichedText: number; aiEnrichedImages: number }> {
   const existingProducts = readProductsFromFile();
+  // Instantánea de lo que esta construcción LEE: sirve de base para escribir al final
+  // sólo lo que ELLA cambia (la construcción espera a la IA durante minutos).
+  const baseById = new Map(existingProducts.map((p) => [p.id, structuredClone(p)]));
   const existingIds = new Set(existingProducts.map((p) => p.id));
   const deletedIds = new Set(readDeletedIds());
 
@@ -884,12 +895,26 @@ export async function buildAndUpsertProducts(
   }
 
   if (!dryRun) {
-    // Escritura atómica tmp+rename (patrón de metrics.ts)
-    const DATA_FILE = path.join(DATA_DIR, 'products.json');
-    const tmpFile = `${DATA_FILE}.tmp`;
-    fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
-    fs.writeFileSync(tmpFile, JSON.stringify(existingProducts, null, 2), 'utf-8');
-    fs.renameSync(tmpFile, DATA_FILE);
+    // Escritura PROTEGIDA (atómica y síncrona): se relee el catálogo ACTUAL y se
+    // aplican sólo las fichas que esta construcción creó o cambió, y sólo sus campos
+    // cambiados. Antes se escribía el array leído al principio, pisando fichas nuevas,
+    // ofertas, precios y ediciones hechos mientras tanto.
+    updateCatalog<void>((current) => {
+      const created: Product[] = [];
+      for (const mine of existingProducts) {
+        const base = baseById.get(mine.id);
+        if (base && JSON.stringify(base) === JSON.stringify(mine)) continue; // no tocada
+        const at = current.findIndex((p) => p.id === mine.id);
+        if (at >= 0) current[at] = threeWayMerge(base, mine, current[at]);
+        else if (!base) {
+          // Ficha nueva: no se crea si mientras tanto se eliminó algo equivalente (id o identidad fiable).
+          const m = mine as Product & { network?: string; sourceId?: string; affiliateUrl?: string; buyNowUrl?: string };
+          if (!matchDeletedProduct({ id: m.id, platform: m.network, sourceId: m.sourceId, urls: [m.affiliateUrl, m.buyNowUrl] }, { includeGtin: false })) created.push(mine);
+        } // si existía y fue borrada entretanto, no se resucita
+      }
+      current.unshift(...created);
+      return { changed: true, result: undefined };
+    });
   }
 
   return { upserted, updated, wouldUpsert, wouldUpdate, aiEnrichedText: aiEnrichedTextCount, aiEnrichedImages: aiEnrichedImagesCount };

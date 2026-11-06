@@ -16,7 +16,7 @@ import {
 import { enrichProductLocally, type LocalEnrichInput } from '../../../lib/localEnrich';
 import {
   readProductsFromFile,
-  upsertProduct,
+  commitOwnChanges,
   writeProductsToFile,
   slugify,
   type Product,
@@ -300,6 +300,9 @@ export const POST: APIRoute = async ({ request }) => {
   let cursor = 0;
   async function processOne(index: number): Promise<void> {
     const product = targets[index];
+    // Instantánea de lo que esta operación LEE: sirve de base para saber qué campos
+    // cambia el enriquecimiento (el resto se conserva tal y como esté en disco).
+    const baseSnapshot = structuredClone(product);
     try {
       const { product: updated, textStatus, imageStatus, warnings } = await enrichSingleText(product, forceImage);
 
@@ -315,7 +318,26 @@ export const POST: APIRoute = async ({ request }) => {
       // el enriquecimiento "se perdía" en productos que entraban en el
       // auto-link, que es el caso más común en un enriquecimiento masivo).
       if (!dryRun) {
-        upsertProduct(updated);
+        // Escritura PROTEGIDA: el enriquecimiento espera red/IA; mientras tanto otros
+        // procesos pueden haber vinculado ofertas, cambiado precios o editado la ficha.
+        // Se relee la ficha actual y se aplican SÓLO los campos que el enriquecimiento
+        // cambió respecto de lo que leyó (misma lógica de enriquecimiento, sin tocarla).
+        const committed = commitOwnChanges({
+          id: updated.id,
+          base: baseSnapshot,
+          ours: updated,
+          // El enriquecimiento deriva precios (p. ej. «.99») de lo que LEYÓ; si otro proceso
+          // (importación, refresco) cambió el precio entretanto, gana el valor actual.
+          protectIfChanged: ['price', 'originalPrice', 'currency', 'inStock', 'lastPriceSync', 'priceHistory'],
+        });
+        if (committed.skipped) {
+          // La ficha se eliminó mientras se enriquecía (red/IA): no se recrea.
+          warnings.push('La ficha se eliminó durante el enriquecimiento: no se ha vuelto a crear.');
+          failed += 1;
+          resultsByIndex[index] = { id: updated.id, title: updated.title, ok: false, textStatus, imageStatus, warnings };
+          return;
+        }
+        Object.assign(updated, committed.product);
 
         // Auto-vincular alternativas (económicas + competidor directo) si no las tiene.
         const stored = roleIdsOf(updated);

@@ -87,6 +87,8 @@ export interface StageResult {
   /** Motivo del fallo del enriquecimiento con IA (si lo hubo). */
   ai_error?: string;
   product?: PipelineProduct;
+  /** Ficha existente tal y como estaba al LEER (base de la escritura protegida en la publicación). */
+  base?: Product;
 }
 
 /** Trazabilidad de la ejecución del pipeline en cada producto. */

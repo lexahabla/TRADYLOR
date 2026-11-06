@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import { dataFile } from './paths';
-import { writeJsonArrayFile } from './jsonStore';
+import { readJsonArrayFile, writeJsonArrayFile } from './jsonStore';
 
 /**
  * Lista de IDs de productos eliminados desde el panel admin.
@@ -44,6 +44,8 @@ export function addDeletedId(id: string): void {
 }
 
 export function removeDeletedId(id: string): void {
+  // Recuperar una ficha por una acción explícita también olvida su identidad.
+  forgetDeletedIdentity(id);
   const ids = readDeletedIds();
   const next = ids.filter((x) => x !== id);
   if (next.length === ids.length) return;
@@ -58,9 +60,79 @@ export function removeDeletedId(id: string): void {
  * Devuelve cuántos tombstones se han quitado.
  */
 export function clearDeletedIds(): number {
+  // «Deshacer» el vaciado también limpia la memoria de identidades y ofertas.
+  writeJsonArrayFile(DELETED_IDENTITIES_FILE(), []);
+  writeJsonArrayFile(DELETED_OFFERS_FILE(), []);
   const ids = readDeletedIds();
   const removable = ids.filter((id) => !BUILTIN_DELETED.includes(id));
   if (!removable.length) return 0;
   writeJsonArrayFile(DELETED_FILE, BUILTIN_DELETED.slice());
   return removable.length;
+}
+
+/* ───────────────────── Memoria de eliminados por identidad ─────────────────────
+ * El tombstone por id no basta: el mismo producto vuelve con OTRO id (API, JSON,
+ * otro canal). Aquí se guarda, al eliminar una FICHA COMPLETA, su identidad
+ * (claves de oferta, ids externos, URLs canónicas, GTIN y variante) y, aparte,
+ * las OFERTAS eliminadas por separado. Sólo almacenamiento: la lógica de
+ * coincidencia está en deletedIdentity.ts.
+ * ─────────────────────────────────────────────────────────────────────────── */
+
+export interface DeletedIdentity {
+  offerKeys: string[];
+  sourceIds: string[];
+  urls: string[];
+  gtins: string[];
+  platforms: string[];
+  variant: { condition?: string; color?: string; size?: string; capacity?: string; pack?: string };
+}
+
+export interface DeletedIdentityRecord {
+  id: string;
+  deletedAt: string;
+  identity: DeletedIdentity;
+  /** De dónde sale la identidad: la ficha al borrar o una copia de seguridad antigua. */
+  source: 'deletion' | 'backup';
+}
+
+export interface DeletedOfferRecord {
+  offerKey: string;
+  productId?: string;
+  url?: string;
+  deletedAt: string;
+}
+
+export const DELETED_IDENTITIES_FILE = () => dataFile('deleted-identities.json');
+export const DELETED_OFFERS_FILE = () => dataFile('deleted-offers.json');
+
+export function readDeletedIdentities(): DeletedIdentityRecord[] {
+  return readJsonArrayFile<DeletedIdentityRecord>(DELETED_IDENTITIES_FILE());
+}
+
+export function addDeletedIdentity(record: DeletedIdentityRecord): void {
+  const list = readDeletedIdentities().filter((r) => r.id !== record.id);
+  list.push(record);
+  writeJsonArrayFile(DELETED_IDENTITIES_FILE(), list);
+}
+
+export function forgetDeletedIdentity(id: string): void {
+  const list = readDeletedIdentities();
+  const next = list.filter((r) => r.id !== id);
+  if (next.length !== list.length) writeJsonArrayFile(DELETED_IDENTITIES_FILE(), next);
+}
+
+export function readDeletedOffers(): DeletedOfferRecord[] {
+  return readJsonArrayFile<DeletedOfferRecord>(DELETED_OFFERS_FILE());
+}
+
+export function addDeletedOffer(record: DeletedOfferRecord): void {
+  const list = readDeletedOffers().filter((r) => r.offerKey !== record.offerKey);
+  list.push(record);
+  writeJsonArrayFile(DELETED_OFFERS_FILE(), list);
+}
+
+export function forgetDeletedOffer(offerKey: string): void {
+  const list = readDeletedOffers();
+  const next = list.filter((r) => r.offerKey !== offerKey);
+  if (next.length !== list.length) writeJsonArrayFile(DELETED_OFFERS_FILE(), next);
 }

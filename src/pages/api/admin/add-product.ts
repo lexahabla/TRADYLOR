@@ -19,6 +19,8 @@ import { enrichProductLocally } from '../../../lib/localEnrich';
 import { diffEditorialFields, lockFields } from '../../../lib/reimportMerge';
 import { brandIsMerchant } from '../../../lib/offerIdentity';
 import { findDuplicateProduct, readProductsFromFile, slugify, upsertProduct, writeProductsToFile, type Product } from '../../../lib/productStore';
+import { deletionBlockMessage, matchDeletedProduct } from '../../../lib/deletedIdentity';
+import { conflictsMessage, FORM_EDIT_FIELDS, resolveFormEdit, type FormConflict } from '../../../lib/formConflicts';
 import { autoLinkAlternatives, computeBadge, computeConversionScore } from '../../../lib/curation';
 import { extractAsinFromUrl, getAmazonAddToCartUrl } from '../../../utils/amazon';
 import { complementProductFromPage } from '../products/add';
@@ -122,6 +124,24 @@ export const POST: APIRoute = async ({ request }) => {
     // afiliado/tienda o mismo título normalizados) NO se vuelve a dar de
     // alta ni se gastan llamadas de IA. El id propio nunca cuenta.
     // ------------------------------------------------------------------
+    const deletedCandidate = () => ({
+      id: String(body?.id ?? '').trim() || slugify(title),
+      platform: body?.network ? String(body.network) : undefined,
+      sourceId: body?.sourceId ? String(body.sourceId) : undefined,
+      urls: [body?.affiliateUrl, body?.url, body?.buyNowUrl] as Array<string | undefined>,
+    });
+    const blockedResponse = (hit: NonNullable<ReturnType<typeof matchDeletedProduct>>) =>
+      jsonResponse({ success: false, saved: false, deleted: true, blockedBy: hit.by, restorable: false, message: deletionBlockMessage(hit) }, 200);
+    if (options.save) {
+      // Memoria de eliminados: un ALTA que coincide con algo eliminado no se crea (ni se gasta IA). Restaurar
+      // requiere una acción explícita (ver deletionBlockMessage).
+      const alreadyThere = readProductsFromFile().some((item) => item.id === deletedCandidate().id);
+      if (!alreadyThere) {
+        const earlyHit = matchDeletedProduct(deletedCandidate(), { includeGtin: false });
+        if (earlyHit) return blockedResponse(earlyHit);
+      }
+    }
+
     if (options.save) {
       const requestedId = String(body?.id ?? '').trim();
       const duplicate = findDuplicateProduct(readProductsFromFile(), {
@@ -416,8 +436,14 @@ export const POST: APIRoute = async ({ request }) => {
     // PASO 3 — Persistencia
     // ------------------------------------------------------------------
     let saved = false;
+    let formConflicts: FormConflict[] = [];
     if (options.save) {
       const existing = readProductsFromFile().find((item) => item.id === base.id);
+      if (!existing) {
+        // Justo antes de escribir: la ficha pudo eliminarse (o su identidad) durante la IA/red.
+        const lateHit = matchDeletedProduct({ ...deletedCandidate(), id: base.id }, { includeGtin: false });
+        if (lateHit) return blockedResponse(lateHit);
+      }
       if (existing) {
         // Curación: el upsert conserva los campos de catálogo jerárquico y
         // cross-matching que el formulario de enriquecimiento no conoce.
@@ -488,6 +514,16 @@ export const POST: APIRoute = async ({ request }) => {
           }
         }
       }
+      // Formulario abierto ANTES de un cambio ajeno: sólo se aplican los campos EDITADOS; los reenviados sin tocar
+      // conservan el valor ACTUAL y un campo cambiado por ambos NO se sobrescribe en silencio (lib/formConflicts.ts).
+      if (existing && Array.isArray(body?.editedFields)) {
+        const resolved = resolveFormEdit({ editedFields: body.editedFields, baseline: body?.baseline, submitted: base, current: existing });
+        for (const field of FORM_EDIT_FIELDS) {
+          if (field in resolved.values) (base as any)[field] = (resolved.values as any)[field];
+          else delete (base as any)[field];
+        }
+        formConflicts = resolved.conflicts;
+      }
       // sourceId del payload (ID externo: ASIN / Item ID de AliExpress) gana
       // sobre el heredado: los productos importados antes de persistirlo ya
       // no se pierden en el filtro «En catálogo ».
@@ -518,9 +554,12 @@ export const POST: APIRoute = async ({ request }) => {
       {
         success: true,
         saved,
-        message: saved
-          ? 'Producto creado/actualizado con IA (texto + imagen).'
-          : 'Vista previa generada con IA; revisa y guarda desde el formulario.',
+        message: formConflicts.length
+          ? conflictsMessage(formConflicts)
+          : saved
+            ? 'Producto creado/actualizado con IA (texto + imagen).'
+            : 'Vista previa generada con IA; revisa y guarda desde el formulario.',
+        conflicts: formConflicts,
         product: base,
         enrichment: { text: textStatus, image: imageStatus, warnings },
       },

@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../../lib/adminAuth';
-import { readProductsFromFile, writeProductsToFile, type Product } from '../../../../lib/productStore';
+import { readProductsFromFile, commitOwnChanges, updateCatalog, type Product } from '../../../../lib/productStore';
+import { recordProductDeletion } from '../../../../lib/deletedIdentity';
 import { getCategories, suggestCategory } from '../../../../lib/categories';
 import { enrichProductText, enforceMoreProsThanCons, hasTextCredentials, textProvider } from '../../../../lib/ai';
 import { buildRealisticPricing } from '../../../../lib/ai';
@@ -259,6 +260,22 @@ async function executeActions(actions: OpenCodeAction[], products: Product[], pr
   let applied = 0;
   let reload = false;
 
+  // Instantánea de lo que esta operación LEE. Las acciones editan `products` en
+  // memoria (y `enrich_products` espera a la IA); en vez de reescribir el array
+  // entero (pisaría lo que otros procesos hayan cambiado entretanto), se guardan
+  // SÓLO las fichas que esta operación modificó, y sólo sus campos cambiados,
+  // sobre el estado actual del disco.
+  const baseById = new Map(products.map((p) => [p.id, structuredClone(p)]));
+  const persistChanges = (): void => {
+    for (const product of products) {
+      const base = baseById.get(product.id);
+      if (!base || JSON.stringify(base) === JSON.stringify(product)) continue;
+      const committed = commitOwnChanges({ id: product.id, base, ours: product });
+      if (committed.skipped) warnings.push(`${product.id}: se eliminó durante la ejecución; no se ha vuelto a crear.`);
+      baseById.set(product.id, structuredClone(product));
+    }
+  };
+
   for (const action of actions) {
     try {
       switch (action.type) {
@@ -279,7 +296,7 @@ async function executeActions(actions: OpenCodeAction[], products: Product[], pr
             }
           }
           if (changed > 0) {
-            writeProductsToFile(products);
+            persistChanges();
             applied += changed;
             reload = true;
             warnings.push(`reorganize_categories: ${changed} producto(s) recategorizado(s)`);
@@ -303,7 +320,7 @@ async function executeActions(actions: OpenCodeAction[], products: Product[], pr
             }
           }
           if (priceAction === 'adjust' && flagged > 0) {
-            writeProductsToFile(products);
+            persistChanges();
             reload = true;
           }
           applied += flagged;
@@ -389,7 +406,7 @@ async function executeActions(actions: OpenCodeAction[], products: Product[], pr
             }
           }
           if (enriched > 0) {
-            writeProductsToFile(products);
+            persistChanges();
             reload = true;
           }
           applied += enriched;
@@ -415,7 +432,7 @@ async function executeActions(actions: OpenCodeAction[], products: Product[], pr
             }
           }
           if (normalized > 0) {
-            writeProductsToFile(products);
+            persistChanges();
             reload = true;
           }
           applied += normalized;
@@ -438,7 +455,7 @@ async function executeActions(actions: OpenCodeAction[], products: Product[], pr
             }
           }
           if (assigned > 0) {
-            writeProductsToFile(products);
+            persistChanges();
             reload = true;
           }
           applied += assigned;
@@ -452,13 +469,21 @@ async function executeActions(actions: OpenCodeAction[], products: Product[], pr
             warnings.push('bulk_delete: requiere confirm=true para ejecutarse');
             break;
           }
-          const before = products.length;
           const toDelete = new Set(deleteIds.length ? deleteIds : productIds);
-          const remaining = products.filter((p) => !toDelete.has(p.id));
-          writeProductsToFile(remaining);
+          // Borrado sobre el catálogo ACTUAL y con tombstone + identidad (antes no
+          // dejaba ningún rastro, así que los productos podían volver).
+          const { result: removed } = updateCatalog<Product[]>((current) => {
+            const gone = current.filter((p) => toDelete.has(p.id));
+            if (!gone.length) return { changed: false, result: [] };
+            const keep = current.filter((p) => !toDelete.has(p.id));
+            current.splice(0, current.length, ...keep);
+            return { changed: true, result: gone };
+          });
+          for (const product of removed) recordProductDeletion(product);
+          for (let i = products.length - 1; i >= 0; i--) if (toDelete.has(products[i].id)) products.splice(i, 1);
           reload = true;
-          applied += before - remaining.length;
-          warnings.push(`bulk_delete: ${before - remaining.length} producto(s) eliminado(s)`);
+          applied += removed.length;
+          warnings.push(`bulk_delete: ${removed.length} producto(s) eliminado(s)`);
           break;
         }
 
@@ -542,7 +567,9 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
 
-    const result = await executeActions(actions, allProducts, targetIds);
+    // La llamada al LLM puede tardar minutos: se vuelve a leer el catálogo para que las
+    // acciones partan de su estado ACTUAL (y no de la copia anterior a la espera).
+    const result = await executeActions(actions, readProductsFromFile(), targetIds);
 
     return jsonResponse(
       {

@@ -63,6 +63,7 @@ export async function runProductPipeline(
   }
   incrementMetric('productsProcessed');
   let product = ingest.product!;
+  const ingestBase = ingest.base;
 
   // ── Etapa 2: auditoría "Test & Proof" ───────────────────────────────────
   const audit = runStageAudit(product, config);
@@ -110,7 +111,7 @@ export async function runProductPipeline(
   }
 
   // ── Etapa 4: publicación "Listo para Catálogo" ──────────────────────────
-  const publish = runStagePublish(product);
+  const publish = runStagePublish(product, ingestBase);
   if (!publish.ok) {
     return {
       ...publish,

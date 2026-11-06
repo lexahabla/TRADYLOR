@@ -15,7 +15,7 @@
 import { fromN8nContract, slugifyProduct } from '../catalogStore';
 import { cleanGeneratedDescription } from '../localEnrich';
 import { findAffiliateDescription } from '../affiliateCatalog';
-import { readDeletedIds } from '../deletedProducts';
+import { matchDeletedProduct } from '../deletedIdentity';
 import { readProductsFromFile, type Product } from '../productStore';
 import { canonicalProductUrl, cleanTitleKey, extractSourceId } from '../curation';
 import { sameSourceId } from '../offerIdentity';
@@ -129,8 +129,19 @@ export function runStageIngest(
     cons: [],
   };
 
-  // Tombstone: el administrador lo borró; no se revive por un import.
-  if (readDeletedIds().includes(candidateId)) {
+  // Tombstone: el administrador lo borró; no se revive por un import. Se comprueba
+  // el id Y la identidad fiable de la ficha eliminada (id externo, URL canónica…),
+  // para que el mismo producto no vuelva con otro id. Si la ficha ya existe (se
+  // recuperó a propósito) no se bloquea.
+  const deletedHit = existing
+    ? null
+    : matchDeletedProduct({
+        id: candidateId,
+        platform: data.network ? String(data.network) : undefined,
+        sourceId: candidate.sourceId || extractSourceId(candidate),
+        urls: [affiliateUrl, candidate.buyNowUrl],
+      }, { includeGtin: false });
+  if (deletedHit) {
     return {
       ok: false,
       stage: 'ingest',
@@ -222,7 +233,7 @@ export function runStageIngest(
     }
   }
 
-  return { ok: true, stage: 'ingest', product };
+  return { ok: true, stage: 'ingest', product, base: existing ? structuredClone(existing) : undefined };
 }
 
 /** Claves de `extra` que sólo gestiona el servicio de actualización. */

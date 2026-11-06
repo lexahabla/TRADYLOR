@@ -1,6 +1,7 @@
 import { dataFile } from './paths';
 import { readJsonArrayFile, writeJsonArrayFile } from './jsonStore';
 import { sameSourceId } from './offerIdentity';
+import { mergeReimport } from './reimportMerge';
 
 // Interfaz del producto (compartida por el panel admin y los endpoints de alta)
 export interface Product {
@@ -255,4 +256,153 @@ export function findDuplicateProduct(
       return true;
     return Boolean(titleKey) && titleKey === normalizeProductKey(item.title);
   });
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+ * ACTUALIZACIÓN PROTEGIDA DEL CATÁLOGO (lectura → cambio → escritura)
+ * ────────────────────────────────────────────────────────────────────────────
+ * Problema que resuelve: varios procesos leen el catálogo, esperan red o IA y
+ * después escriben el array/ficha que leyeron al principio, pisando lo que otras
+ * escrituras hicieron mientras tanto (fichas nuevas, ofertas, precios, ediciones).
+ *
+ * Garantía: `updateCatalog` y `commitOwnChanges` hacen leer → aplicar → escribir
+ * dentro de UNA SOLA función síncrona, sin `await` en medio. JavaScript ejecuta
+ * una función síncrona hasta el final sin ceder el turno, y `fs.*Sync` bloquea
+ * el hilo; por eso ninguna otra petición, tarea programada ni escritor del mismo
+ * proceso puede intercalar su lectura o escritura entre las nuestras. La
+ * escritura sigue siendo atómica (temporal + rename).
+ * Límite declarado: la garantía es por PROCESO. Treidilor se despliega como un
+ * único proceso Node con un volumen; con varias réplicas escribiendo el mismo
+ * fichero haría falta un bloqueo de fichero o una base de datos.
+ *
+ * Qué se escribe: sólo los campos que la operación pretendía cambiar (los que
+ * difieren entre la ficha `base` que leyó y la ficha `ours` que construyó). El
+ * resto de la ficha es el valor ACTUAL del disco (`theirs`).
+ * ──────────────────────────────────────────────────────────────────────────── */
+
+const stableJson = (value: unknown): string => {
+  const norm = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(norm);
+    if (v && typeof v === 'object') {
+      return Object.fromEntries(
+        Object.keys(v as Record<string, unknown>)
+          .sort()
+          .filter((k) => (v as Record<string, unknown>)[k] !== undefined)
+          .map((k) => [k, norm((v as Record<string, unknown>)[k])]),
+      );
+    }
+    return v;
+  };
+  return JSON.stringify(norm(value));
+};
+const sameValue = (a: unknown, b: unknown): boolean => stableJson(a) === stableJson(b);
+
+type AnyRecord = Record<string, unknown>;
+
+/**
+ * Fusión a tres bandas: aplica sobre `theirs` (estado actual) SÓLO lo que `ours`
+ * cambió respecto de `base` (lo que la operación leyó). `extra` se fusiona clave
+ * a clave para no perder ofertas, observaciones ni campos de otros procesos.
+ */
+export function threeWayMerge<T extends object>(
+  base: T | undefined,
+  ours: T,
+  theirs: T,
+  /**
+   * Campos que pertenecen a OTRA fuente (p. ej. el precio, que lo fijan la importación o el
+   * refresco de ofertas): si han cambiado en el disco desde que se leyeron, gana el valor del
+   * disco aunque esta operación haya derivado uno nuevo a partir de la lectura antigua.
+   */
+  protectIfChanged: readonly string[] = [],
+): T {
+  const b = (base ?? {}) as AnyRecord;
+  const o = ours as unknown as AnyRecord;
+  const t = theirs as unknown as AnyRecord;
+  const result: AnyRecord = { ...t };
+  const keys = new Set([...Object.keys(b), ...Object.keys(o)]);
+  for (const key of keys) {
+    if (sameValue(b[key], o[key])) continue; // la operación no tocó este campo
+    if (base && protectIfChanged.includes(key) && !sameValue(b[key], t[key])) continue; // otro proceso lo cambió
+    if (key === 'extra') {
+      const be = (b.extra ?? {}) as AnyRecord;
+      const oe = (o.extra ?? {}) as AnyRecord;
+      const merged: AnyRecord = { ...((result.extra ?? {}) as AnyRecord) };
+      for (const ek of new Set([...Object.keys(be), ...Object.keys(oe)])) {
+        if (sameValue(be[ek], oe[ek])) continue;
+        if (oe[ek] === undefined) delete merged[ek];
+        else merged[ek] = oe[ek];
+      }
+      if (Object.keys(merged).length) result.extra = merged;
+      else delete result.extra;
+      continue;
+    }
+    if (o[key] === undefined) delete result[key];
+    else result[key] = o[key];
+  }
+  return result as T;
+}
+
+/**
+ * Lee el catálogo ACTUAL, aplica `mutate` sobre él y lo escribe una sola vez, todo
+ * de forma síncrona (ver garantía arriba). `mutate` edita el array en sitio y
+ * devuelve `{ changed, result }`; si `changed` es false no se escribe.
+ */
+export function updateCatalog<T>(
+  mutate: (products: Product[]) => { changed: boolean; result: T },
+): { result: T; written: boolean } {
+  const products = readProductsFromFile();
+  const outcome = mutate(products);
+  if (!outcome.changed) return { result: outcome.result, written: false };
+  if (!writeProductsToFile(products)) throw new Error('No se pudo escribir products.json');
+  return { result: outcome.result, written: true };
+}
+
+/**
+ * Guarda los cambios propios de UNA operación sobre la ficha `id`: relee la ficha
+ * actual y le aplica sólo lo que `ours` cambió respecto de `base`. Si la ficha no
+ * existe: si la operación partía de una ficha existente (`base`) se omite (se eliminó mientras esperaba);
+ * si era un alta (sin `base`) se inserta `ours` al principio.
+ */
+export function commitOwnChanges(args: {
+  id: string;
+  base?: Product;
+  ours: Product;
+  /** Ver `threeWayMerge`. */
+  protectIfChanged?: readonly string[];
+}): { product: Product; updated: boolean; skipped?: 'eliminada_durante_la_operacion' } {
+  const { result } = updateCatalog<{ product: Product; updated: boolean; skipped?: 'eliminada_durante_la_operacion' }>((products) => {
+    const index = products.findIndex((p) => p.id === args.id);
+    if (index < 0) {
+      // La operación ACTUALIZABA una ficha que existía al leer (`base`) y ya no está: se eliminó mientras
+      // esperaba (red/IA). No se recrea. Sólo se inserta si era un alta (sin `base`).
+      if (args.base) return { changed: false, result: { product: args.ours, updated: false, skipped: 'eliminada_durante_la_operacion' } };
+      products.unshift(args.ours);
+      return { changed: true, result: { product: args.ours, updated: false } };
+    }
+    const merged = threeWayMerge(args.base, args.ours, products[index], args.protectIfChanged);
+    products[index] = merged;
+    return { changed: true, result: { product: merged, updated: true } };
+  });
+  return result;
+}
+
+/**
+ * Alta o actualización FUSIONADA de una ficha construida desde cero (p. ej. por la
+ * auto-curación): si ya existe se fusiona con `mergeReimport` (conserva
+ * `extra` —ofertas, observaciones, campos bloqueados—, curación, slug, histórico y
+ * lo enriquecido) en vez de sustituir el registro entero; todo en una sola sección
+ * síncrona sobre el catálogo ACTUAL.
+ */
+export function upsertMergedProduct(product: Product): { product: Product; updated: boolean } {
+  const { result } = updateCatalog<{ product: Product; updated: boolean }>((products) => {
+    const index = products.findIndex((item) => item.id === product.id);
+    if (index < 0) {
+      products.unshift(product);
+      return { changed: true, result: { product, updated: false } };
+    }
+    const merged = mergeReimport(products[index] as unknown as Record<string, unknown>, product as unknown as Record<string, unknown>) as unknown as Product;
+    products[index] = merged;
+    return { changed: true, result: { product: merged, updated: true } };
+  });
+  return result;
 }

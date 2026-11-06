@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import { requireAdminAuth } from '../../../lib/adminAuth';
 import { AI_PROVIDER_IDS, effectiveKey, type AiProviderId } from '../../../lib/aiKeysStore';
 import { testOpencodeCli } from '../../../lib/aiProviders';
+import { isOpencodeConsoleEnabled, OPENCODE_CONSOLE_DISABLED_MESSAGE } from '../../../lib/aiConsoleGuard';
 import { chatComplete, textProvider, type ChatMessage, type TextProvider } from '../../../lib/ai';
 import { adminIaSystemPrompt, withSkills } from '../../../lib/aiPersonas';
 import { getSkillsForPersona } from '../../../lib/aiSkillsStore';
@@ -32,13 +33,17 @@ export const GET: APIRoute = async ({ request }) => {
     id,
     configured: Boolean(effectiveKey(id as AiProviderId)),
   }));
-  const opencode = await testOpencodeCli();
+  // Con la ejecución de opencode desactivada por el servidor no se ofrece ni se sondea el CLI.
+  const opencodeAllowed = isOpencodeConsoleEnabled();
+  const opencode = opencodeAllowed
+    ? await testOpencodeCli()
+    : { status: 'disabled', detail: OPENCODE_CONSOLE_DISABLED_MESSAGE };
 
   return json({
     success: true,
     defaultProvider: textProvider(),
     providers,
-    opencode: { available: opencode.status === 'connected', detail: opencode.detail },
+    opencode: { available: opencodeAllowed && opencode.status === 'connected', enabled: opencodeAllowed, detail: opencode.detail },
   });
 };
 
@@ -48,6 +53,11 @@ export const GET: APIRoute = async ({ request }) => {
  */
 function runOpencode(prompt: string, model?: string): Promise<{ ok: boolean; output: string }> {
   return new Promise((resolve) => {
+    // Defensa en profundidad: aunque algo llame a esta función, el servidor no lanza opencode si está desactivado.
+    if (!isOpencodeConsoleEnabled()) {
+      resolve({ ok: false, output: OPENCODE_CONSOLE_DISABLED_MESSAGE });
+      return;
+    }
     const args = ['run'];
     if (model) args.push('-m', model);
     args.push(prompt);
@@ -99,6 +109,9 @@ export const POST: APIRoute = async ({ request }) => {
   const model = String(body.model || '').trim() || undefined;
 
   if (mode === 'opencode') {
+    if (!isOpencodeConsoleEnabled()) {
+      return json({ success: false, disabled: true, mode: 'opencode', message: OPENCODE_CONSOLE_DISABLED_MESSAGE }, 403);
+    }
     const prompt = String(body.prompt || '').trim();
     if (!prompt) {
       return json({ success: false, message: 'Escribe un prompt para opencode.' }, 400);

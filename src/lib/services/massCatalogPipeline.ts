@@ -37,7 +37,8 @@ import { enrichProductText, hasTextCredentials, mergeWithMinimum, textProvider, 
 import { enrichProductLocally } from '../localEnrich';
 import { getCategories, createCategory, getCategoryById, type Category } from '../categories';
 import { suggestCategory } from '../categories';
-import { readProductsFromFile, upsertProduct, writeProductsToFile, type Product } from '../productStore';
+import { readProductsFromFile, upsertMergedProduct, writeProductsToFile, type Product } from '../productStore';
+import { matchDeletedProduct } from '../deletedIdentity';
 import { autoLinkAlternatives, computeConversionScore, extractNormalizedTags } from '../curation';
 import { slugify } from '../productStore';
 import { env } from '../ai';
@@ -264,9 +265,20 @@ export class MassCatalogPipeline {
       const isNew = !existingProduct;
       const isUpdated = !!existingProduct;
 
-      // 5. PERSISTENCIA (upsert en products.json)
+      // Eliminados: no se resucita por identidad fiable (id, id externo, URL…).
+      if (!existingProduct) {
+        const deletedHit = matchDeletedProduct({
+          id: enrichedProduct.id,
+          platform: enrichedProduct.network,
+          sourceId: enrichedProduct.sourceId,
+          urls: [enrichedProduct.affiliateUrl, enrichedProduct.buyNowUrl],
+        }, { includeGtin: false });
+        if (deletedHit) throw new Error(`Producto eliminado anteriormente (por ${deletedHit.by}): no se vuelve a crear.`);
+      }
+
+      // 5. PERSISTENCIA (alta, o fusión con la ficha existente: conserva ofertas y ediciones)
       if (!this.config.dryRun) {
-        const savedProduct = upsertProduct(enrichedProduct);
+        const savedProduct = upsertMergedProduct(enrichedProduct);
         enrichedProduct.id = savedProduct.product.id;
       }
 
@@ -901,8 +913,18 @@ export async function processAdaptedProductsBatch(
       const isNew = !existing;
       const isUpdated = !!existing;
 
+      if (!existing) {
+        const deletedHit = matchDeletedProduct({
+          id: finalProduct.id,
+          platform: finalProduct.network,
+          sourceId: finalProduct.sourceId,
+          urls: [finalProduct.affiliateUrl, finalProduct.buyNowUrl],
+        }, { includeGtin: false });
+        if (deletedHit) throw new Error(`Producto eliminado anteriormente (por ${deletedHit.by}): no se vuelve a crear.`);
+      }
+
       if (!options.dryRun) {
-        upsertProduct(finalProduct);
+        upsertMergedProduct(finalProduct);
       }
 
       // Alternativas
