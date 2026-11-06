@@ -4,7 +4,7 @@
  * ==============================================================================
  * GET  /api/admin/category-extract            → configuración, límites y extracción activa/última (para retomar tras recargar)
  * GET  /api/admin/category-extract?id=<id>    → estado (consulta a Apify sin esperar); al terminar incluye `records`
- * POST /api/admin/category-extract            { url, limit }          → inicia (idempotente si ya hay una igual en curso)
+ * POST /api/admin/category-extract            { source:"amazon"|"temu", url, limit } → inicia (idempotente si ya hay una igual en curso)
  * POST /api/admin/category-extract            { action:"cancel", id } → aborta la ejecución en Apify
  *
  * Obtener datos NO escribe en el catálogo: devuelve registros adaptados al modelo del importador JSON que la interfaz
@@ -54,6 +54,7 @@ export const GET: APIRoute = async ({ request, url }) => {
       configured: c.configured,
       defaultLimit: c.defaultLimit,
       maxLimit: c.maxLimit,
+      sources: { amazon: { configured: c.configured }, temu: { configured: c.configured, actor: 'hypebridge/temu-scraper' } },
       active: activeJob() ?? null,
       latest: latestJob() ?? null,
     });
@@ -79,7 +80,7 @@ export const POST: APIRoute = async ({ request }) => {
       const job = await cancelExtraction(id);
       return json({ success: true, job });
     }
-    const { job, reused } = await startExtraction(body.url, body.limit);
+    const { job, reused } = await startExtraction(body.url, body.limit, body.source);
     return json({ success: true, job, reused }, reused ? 200 : 201);
   } catch (error) {
     return failure(error);

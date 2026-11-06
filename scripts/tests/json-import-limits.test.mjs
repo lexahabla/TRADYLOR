@@ -92,7 +92,7 @@ function makeClient(fetchImpl) {
     };
     return (nodes[id] = node);
   };
-  const ids = ['jsonImpAsin', 'jsonImpFetch', 'jsonImpAsinHint', 'jsonImpText', 'jsonImpFile', 'jsonImpFileInfo', 'jsonImpPlatform', 'jsonImpCurrency', 'jsonImpSave', 'jsonImpRun', 'jsonImpAmazonIa', 'jsonImpCancel', 'jsonImpClear', 'jsonImpAlert', 'jsonImpProgress', 'jsonImpBarFill', 'jsonImpProgressText', 'jsonImpReport', 'jsonImpReportTitle', 'jsonImpCounters', 'jsonImpDetails', 'jsonImpDownload', 'jsonImpCatBlock', 'jsonImpCatUrl', 'jsonImpCatLimit', 'jsonImpCatRun', 'jsonImpCatCancel', 'jsonImpCatLoad', 'jsonImpCatStatus', 'jsonImpTargetCat', 'jsonImpTargetSub', 'jsonImpTargetHint'];
+  const ids = ['jsonImpAsin', 'jsonImpFetch', 'jsonImpAsinHint', 'jsonImpText', 'jsonImpFile', 'jsonImpFileInfo', 'jsonImpPlatform', 'jsonImpCurrency', 'jsonImpSave', 'jsonImpRun', 'jsonImpAmazonIa', 'jsonImpCancel', 'jsonImpClear', 'jsonImpAlert', 'jsonImpProgress', 'jsonImpBarFill', 'jsonImpProgressText', 'jsonImpReport', 'jsonImpReportTitle', 'jsonImpCounters', 'jsonImpDetails', 'jsonImpDownload', 'jsonImpCatBlock', 'jsonImpCatUrl', 'jsonImpCatLimit', 'jsonImpCatRun', 'jsonImpCatCancel', 'jsonImpCatLoad', 'jsonImpCatStatus', 'jsonImpTargetCat', 'jsonImpTargetSub', 'jsonImpTargetHint', 'jsonImpSource', 'jsonImpCatLabelText', 'jsonImpCatLabelHint'];
   ids.forEach(el);
   nodes.jsonImpSave.checked = true;
   const sandbox = {

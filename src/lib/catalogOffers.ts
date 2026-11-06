@@ -68,13 +68,20 @@ export function implicitOffer(p: P): StoredOffer | null {
   const externalId = extractSourceId(p as never) || undefined;
   const url = String(p.affiliateUrl || p.buyNowUrl || '');
   const canonicalUrl = canonicalProductUrl(url);
-  const offerKey = computeOfferKey({ platform, externalId, canonicalUrl });
+  // Vendedor de la oferta principal cuando NO es la propia plataforma (p. ej. una tienda de Temu): lo guarda la importación
+  // JSON en `extra.offerSeller`. Sin él, reimportar el mismo anuncio con su vendedor lo trataría como otra oferta.
+  const seller = ((p.extra as Record<string, unknown> | undefined)?.offerSeller ?? {}) as { id?: string; name?: string };
+  const sellerId = seller.id ? String(seller.id) : undefined;
+  const sellerName = seller.name ? String(seller.name) : undefined;
+  const offerKey = computeOfferKey({ platform, externalId, canonicalUrl, sellerId, sellerName });
   if (!platform || !offerKey || !(Number(p.price) > 0)) return null;
   return {
     offerId: shortHash(offerKey, 10),
     offerKey,
     platform,
     externalId,
+    sellerId,
+    sellerName,
     url,
     canonicalUrl,
     price: Number(p.price),

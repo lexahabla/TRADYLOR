@@ -29,6 +29,7 @@ import crypto from 'node:crypto';
 import { DATA_DIR, dataFile } from '../paths';
 import { readJsonArrayFile, writeJsonArrayFile } from '../jsonStore';
 import { adaptApifyAmazonItem, isApifyAmazonItem } from '../jsonImport/apifyAmazon';
+import { adaptApifyTemuItem, isApifyTemuItem } from '../jsonImport/apifyTemu';
 import { resolveCatalogCategory } from '../jsonImport/categoryResolver';
 
 /**
@@ -44,10 +45,16 @@ const PRICE_PER_PRODUCT_USD = 0.005 + 0.0025; // resultado + vendedor (nivel FRE
 const ACTIVE = new Set<JobStatus>(['starting', 'running', 'aborting']);
 const TERMINAL = new Set<JobStatus>(['succeeded', 'failed', 'aborted', 'timed_out']);
 
+export type ExtractionSource = 'amazon' | 'temu';
+export type UrlKind = 'category' | 'product';
+
 export type JobStatus = 'starting' | 'running' | 'aborting' | 'succeeded' | 'failed' | 'aborted' | 'timed_out';
 
 export interface ExtractionJob {
   id: string;
+  /** Origen de la extracción (los trabajos antiguos no lo traen: son de Amazon). */
+  source?: ExtractionSource;
+  urlKind?: UrlKind;
   url: string;
   limit: number;
   status: JobStatus;
@@ -100,6 +107,7 @@ export function extractionConfig() {
   return {
     configured: Boolean((process.env.APIFY_TOKEN ?? '').trim()),
     actor: (process.env.APIFY_AMAZON_ACTOR ?? 'junglee~amazon-crawler').trim().replace('/', '~'),
+    temuActor: (process.env.APIFY_TEMU_ACTOR ?? 'hypebridge~temu-scraper').trim().replace('/', '~'),
     defaultLimit: Math.min(DEFAULT_LIMIT, maxLimit),
     maxLimit,
     timeoutSecs: int(process.env.APIFY_RUN_TIMEOUT_SECS, 900, 60, 3600),
@@ -161,6 +169,65 @@ export function buildActorInput(url: string, limit: number): Record<string, unkn
 
 export function maxChargeFor(limit: number, cap = extractionConfig().maxCostUsd): number {
   return Math.min(cap, Math.max(0.05, Math.round(limit * PRICE_PER_PRODUCT_USD * 2 * 1000) / 1000));
+}
+
+/* ───────────────────────── Temu (actor hypebridge/temu-scraper) ───────────────────────── */
+
+const TEMU_HOST = /^([a-z0-9-]+\.)*temu\.com$/i;
+/** Superficies que el actor NO admite (documentado en su README): se rechazan antes de lanzar nada. */
+const TEMU_UNSUPPORTED: Array<[RegExp, string]> = [
+  [/search_result\.html|[?&](search_key|query)=/i, 'Las búsquedas de Temu no están admitidas por el extractor. Usa la URL de una categoría o de un producto.'],
+  [/mall\.html|[?&]mall_id=/i, 'Las páginas de tienda/comerciante de Temu no están admitidas por el extractor.'],
+];
+/** Colecciones y canales (sólo se evalúan si la URL no es de producto ni de categoría: un título de producto puede contener «flash»). */
+const TEMU_CHANNEL = /channel|best-?sellers?|lightning|flash-?deal|deals?\.html|local-?warehouse|1-day|collection|\/(us\/)?(bestsellers|lightning-deals)/i;
+const TEMU_CHANNEL_MSG = 'Las colecciones y canales de Temu (más vendidos, ofertas relámpago, almacén local…) no están admitidos por el extractor. Usa la URL de una categoría o de un producto.';
+
+/** URL de PRODUCTO o CATEGORÍA de Temu. Devuelve la URL normalizada y su tipo, o lanza ExtractionError con el motivo. */
+export function validateTemuUrl(raw: unknown): { url: string; kind: UrlKind } {
+  const textValue = typeof raw === 'string' ? raw.trim() : '';
+  if (!textValue) throw new ExtractionError('Indica la URL de un producto o de una categoría de Temu.');
+  if (textValue.length > 2000) throw new ExtractionError('La URL es demasiado larga (máx. 2.000 caracteres).');
+  let url: URL;
+  try { url = new URL(textValue); } catch { throw new ExtractionError('La URL no es válida. Debe empezar por https://www.temu.com/…'); }
+  if (url.protocol !== 'https:') throw new ExtractionError('Sólo se admiten URL https.');
+  if (url.username || url.password) throw new ExtractionError('La URL no puede incluir credenciales.');
+  if (!TEMU_HOST.test(url.hostname)) throw new ExtractionError('Sólo se admiten URL de Temu (www.temu.com).');
+  const full = url.pathname + url.search;
+  for (const [re, message] of TEMU_UNSUPPORTED) if (re.test(full)) throw new ExtractionError(message);
+  const path = url.pathname.toLowerCase();
+  if (path === '/' || /^\/[a-z]{2}(-[a-z]{2})?\/?$/.test(path)) {
+    throw new ExtractionError('La portada de Temu no está admitida aquí (es un flujo de recomendaciones, no una categoría). Usa la URL de una categoría o de un producto.');
+  }
+  url.hash = '';
+  if (/(^|[-/])g-\d{6,20}\.html$/.test(path) || /[?&]goods_id=\d{6,20}/.test(url.search)) return { url: url.toString(), kind: 'product' };
+  if (/(^|[-/])o\d+-\d+\.html$/.test(path)) return { url: url.toString(), kind: 'category' };
+  if (TEMU_CHANNEL.test(full)) throw new ExtractionError(TEMU_CHANNEL_MSG);
+  throw new ExtractionError('Tipo de URL de Temu no admitido. Solo se admiten productos (…-g-<id>.html) y categorías (…-o3-<id>.html).');
+}
+
+/**
+ * Entrada del actor de Temu (esquema real: startUrls, maxItems, getProductDetails, extractReviews). El límite viaja como
+ * `maxItems` (no se recorta después). `getProductDetails: true` abre la ficha de cada producto (variantes, atributos e
+ * imágenes completas; coste adicional). Las opiniones no se piden: no se usan.
+ */
+export function buildTemuInput(url: string, limit: number): Record<string, unknown> {
+  return { startUrls: [{ url }], maxItems: limit, getProductDetails: process.env.APIFY_TEMU_GET_DETAILS !== 'false', extractReviews: false };
+}
+
+// Precio por evento (nivel FREE, el más caro): arranque 0,03 USD por GB de memoria, listado 0,006 y detalle 0,016 por producto.
+const TEMU_START_USD = 0.03;
+const TEMU_PER_PRODUCT_USD = 0.006 + 0.016;
+/** El actor declara 4 GB por defecto (4 eventos de arranque); se pide el mínimo que declara (1 GB) para pagar 1. */
+export const TEMU_MEMORY_MB = 1024;
+
+export function maxTemuChargeFor(limit: number, cap = extractionConfig().maxCostUsd): number {
+  return Math.min(cap, Math.max(0.1, Math.round((TEMU_START_USD + limit * TEMU_PER_PRODUCT_USD) * 1.5 * 1000) / 1000));
+}
+
+/** Estimación del coste máximo en USD (arranque + listado + detalle por producto). */
+export function estimateTemuCost(limit: number): number {
+  return Math.round((TEMU_START_USD + limit * TEMU_PER_PRODUCT_USD) * 1000) / 1000;
 }
 
 /* ───────────────────────── Cliente de Apify ───────────────────────── */
@@ -261,12 +328,24 @@ const todayKey = () => new Date().toISOString().slice(0, 10);
  * Inicia una extracción. Idempotente: si ya hay una en curso para la MISMA URL y límite devuelve esa (doble clic,
  * recarga, reintento); si hay otra distinta se rechaza (409). No hay reintentos automáticos: cada ejecución cuesta.
  */
-export async function startExtraction(rawUrl: unknown, rawLimit: unknown): Promise<{ job: ExtractionJob; reused: boolean }> {
+export async function startExtraction(rawUrl: unknown, rawLimit: unknown, rawSource: unknown = 'amazon'): Promise<{ job: ExtractionJob; reused: boolean }> {
   const config = extractionConfig();
+  if (rawSource !== undefined && rawSource !== 'amazon' && rawSource !== 'temu') throw new ExtractionError('Origen no válido: usa Amazon o Temu.');
+  const source: ExtractionSource = rawSource === 'temu' ? 'temu' : 'amazon';
   if (!config.configured) throw new ExtractionError('La extracción de categorías no está configurada: falta APIFY_TOKEN en el servidor.', 503);
-  const url = validateCategoryUrl(rawUrl);
-  const limit = validateLimit(rawLimit ?? config.defaultLimit, config.maxLimit);
-  const maxCostUsd = maxChargeFor(limit, config.maxCostUsd);
+  let url: string;
+  let urlKind: UrlKind = 'category';
+  if (source === 'temu') {
+    const checked = validateTemuUrl(rawUrl);
+    url = checked.url;
+    urlKind = checked.kind;
+  } else {
+    url = validateCategoryUrl(rawUrl);
+  }
+  // Una URL de producto de Temu devuelve UN producto: el límite efectivo es 1 (se valida igualmente lo que llegó).
+  const requested = validateLimit(rawLimit ?? config.defaultLimit, config.maxLimit);
+  const limit = source === 'temu' && urlKind === 'product' ? 1 : requested;
+  const maxCostUsd = source === 'temu' ? maxTemuChargeFor(limit, config.maxCostUsd) : maxChargeFor(limit, config.maxCostUsd);
 
   // Reserva SÍNCRONA antes de llamar a Apify: una segunda petición simultánea ve la ejecución «starting».
   const reservation = updateJobs((jobs) => {
@@ -275,21 +354,22 @@ export async function startExtraction(rawUrl: unknown, rawLimit: unknown): Promi
     const today = jobs.filter((j) => j.createdAt.slice(0, 10) === todayKey()).length;
     if (today >= config.maxRunsPerDay) return { kind: 'quota' as const };
     const now = new Date().toISOString();
-    const job: ExtractionJob = { id: crypto.randomUUID(), url, limit, status: 'starting', createdAt: now, updatedAt: now, maxCostUsd };
+    const job: ExtractionJob = { id: crypto.randomUUID(), source, urlKind, url, limit, status: 'starting', createdAt: now, updatedAt: now, maxCostUsd };
     jobs.push(job);
     return { kind: 'new' as const, job: { ...job } };
   });
 
   if (reservation.kind === 'quota') throw new ExtractionError(`Se alcanzó el máximo de ${config.maxRunsPerDay} extracciones al día.`, 429);
   if (reservation.kind === 'active') {
-    if (reservation.job.url === url && reservation.job.limit === limit) return { job: reservation.job, reused: true };
+    if (reservation.job.url === url && reservation.job.limit === limit && (reservation.job.source ?? 'amazon') === source) return { job: reservation.job, reused: true };
     throw new ExtractionError('Ya hay una extracción en curso. Espera a que termine o cancélala antes de lanzar otra.', 409, reservation.job);
   }
 
   const job = reservation.job;
   try {
-    const query = `?timeout=${config.timeoutSecs}&maxTotalChargeUsd=${maxCostUsd}`;
-    const data = await apify(`/actors/${encodeURIComponent(config.actor)}/runs${query}`, { method: 'POST', body: buildActorInput(url, limit) });
+    const temu = source === 'temu';
+    const query = `?timeout=${config.timeoutSecs}&maxTotalChargeUsd=${maxCostUsd}${temu ? `&memory=${TEMU_MEMORY_MB}` : ''}`;
+    const data = await apify(`/actors/${encodeURIComponent(temu ? config.temuActor : config.actor)}/runs${query}`, { method: 'POST', body: temu ? buildTemuInput(url, limit) : buildActorInput(url, limit) });
     const run = data?.data ?? {};
     if (!run.id) throw new ExtractionError('Apify no devolvió el identificador de la ejecución.', 502);
     const patched = patchJob(job.id, { runId: String(run.id), datasetId: run.defaultDatasetId ? String(run.defaultDatasetId) : undefined, status: 'running' });
@@ -368,7 +448,11 @@ async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefi
     items = items.slice(0, job.limit);
   }
   const capturedAt = job.finishedAt;
-  const records = items.map((item) => (isApifyAmazonItem(item) ? adaptApifyAmazonItem(item, { capturedAt, runId: job.runId, resolveCategory: resolveCatalogCategory }) : item));
+  const ctx = { capturedAt, runId: job.runId, resolveCategory: resolveCatalogCategory };
+  const temu = job.source === 'temu';
+  const records = items.map((item) => (temu ? (isApifyTemuItem(item) ? adaptApifyTemuItem(item, ctx) : item) : isApifyAmazonItem(item) ? adaptApifyAmazonItem(item, ctx) : item));
+  // Un resultado vacío NO prueba que la categoría esté vacía (el actor avisa de que Temu a veces no la sirve).
+  if (temu && !items.length && job.status === 'succeeded') warnings.push('sin_resultados_no_prueba_que_la_categoria_este_vacia');
   const metas = records.map((r) => ((r as any)?.__import ?? { errors: [], review: [] }) as { errors: string[]; review: string[] });
   const partial = job.status !== 'succeeded' || items.length < job.limit;
   const summary: ResultSummary = {

@@ -43,6 +43,8 @@ scripts/tests/facets.test.mjs
 scripts/tests/form-conflicts.test.mjs
 scripts/tests/identity.test.mjs
 scripts/tests/import-target.test.mjs
+scripts/tests/temu-extract.test.mjs
+scripts/tests/fixtures/temu-sample.synthetic.json
 scripts/tests/json-import-limits.test.mjs
 scripts/tests/json-import.test.mjs
 scripts/tests/offer-conflicts.test.mjs
@@ -131,6 +133,7 @@ src/lib/geminiGrounded.ts
 src/lib/imageQuality.ts
 src/lib/jsonImport/engine.ts
 src/lib/jsonImport/apifyAmazon.ts
+src/lib/jsonImport/apifyTemu.ts
 src/lib/jsonImport/categoryResolver.ts
 src/lib/jsonImport/normalize.ts
 src/lib/jsonImport/service.ts

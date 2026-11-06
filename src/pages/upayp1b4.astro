@@ -1055,7 +1055,14 @@ const h = headerConfig[initialSection] || headerConfig.products;
       </div>
 
       <div class="jsonimp-block" id="jsonImpCatBlock">
-        <label class="field-label" for="jsonImpCatUrl">URL de categoría de Amazon <span class="label-hint">(opcional · extrae varios productos con Apify; no guarda nada en el catálogo)</span></label>
+        <div class="jsonimp-cat-source">
+          <label class="field-label" for="jsonImpSource">Origen de la extracción</label>
+          <select id="jsonImpSource" class="jsonimp-input" aria-describedby="jsonImpCatStatus">
+            <option value="amazon">Amazon (categoría)</option>
+            <option value="temu">Temu (producto o categoría)</option>
+          </select>
+        </div>
+        <label class="field-label" for="jsonImpCatUrl"><span id="jsonImpCatLabelText">URL de categoría de Amazon</span> <span class="label-hint" id="jsonImpCatLabelHint">(opcional · extrae varios productos con Apify; no guarda nada en el catálogo)</span></label>
         <div class="jsonimp-row jsonimp-row-wrap jsonimp-cat-row">
           <input id="jsonImpCatUrl" type="url" class="jsonimp-input jsonimp-cat-url" placeholder="https://www.amazon.es/gp/browse.html?node=938008031" autocomplete="off" spellcheck="false" aria-describedby="jsonImpCatStatus" />
           <div class="jsonimp-cat-limit">
@@ -10866,6 +10873,9 @@ function renderTableRows(products, resetPage = true) {
     var catCancel = $('jsonImpCatCancel');
     var catLoad = $('jsonImpCatLoad');
     var catStatus = $('jsonImpCatStatus');
+    var srcSel = $('jsonImpSource');
+    var catLabelText = $('jsonImpCatLabelText');
+    var catLabelHint = $('jsonImpCatLabelHint');
     var targetCat = $('jsonImpTargetCat');
     var targetSub = $('jsonImpTargetSub');
     var targetHint = $('jsonImpTargetHint');
@@ -11189,6 +11199,15 @@ function renderTableRows(products, resetPage = true) {
       if (code.indexOf('contradiccion_') === 0) return 'Datos contradictorios en la fuente (no se ha elegido ninguno): ' + code.slice(14);
       if (code.indexOf('apify_error: ') === 0) return 'Error del actor de Apify: ' + code.slice(13);
       if (code === 'asin_invalido') return 'ASIN ausente o no válido';
+      if (code === 'goods_id_invalido') return 'Identificador de producto de Temu ausente o no válido';
+      if (code === 'moneda_ausente_no_se_asume') return 'La fuente no indica la moneda (no se asume ninguna)';
+      if (code.indexOf('moneda_no_euro:') === 0) return 'Moneda distinta de EUR (' + code.slice(15) + '): no es el mercado español; no se convierte ni se importa sola';
+      if (code.indexOf('mercado_distinto_de_espana:') === 0) return 'La URL de origen es de otro mercado (' + code.slice(27) + '), no del español';
+      if (code === 'precio_desde') return 'El precio es un «desde»: no es un precio final garantizado';
+      if (code.indexOf('precio_varia_segun_variante:') === 0) return 'El precio varía según la variante (' + code.slice(28) + '): no hay un precio único';
+      if (code.indexOf('precio_distinto_en_variante:') === 0) return 'El precio del producto y el de su variante no coinciden (' + code.slice(28) + ')';
+      if (code === 'precio_promocional_temporal') return 'Precio de oferta relámpago (temporal): no es un precio final garantizado';
+      if (code === 'descuento_condicionado') return 'Descuento con cupón, código o condición: no es un precio final garantizado';
       return code;
     }
 
@@ -11312,8 +11331,33 @@ function renderTableRows(products, resetPage = true) {
         return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
       });
     }
+    // Origen de la extracción: Amazon (junglee/Amazon-crawler) o Temu (hypebridge/temu-scraper).
+    var SOURCES = {
+      amazon: {
+        label: 'URL de categoría de Amazon',
+        hint: '(opcional · extrae varios productos con Apify; no guarda nada en el catálogo)',
+        placeholder: 'https://www.amazon.es/gp/browse.html?node=938008031',
+        idle: 'Pega la URL de una categoría, búsqueda o lista de más vendidos de Amazon. Obtener los productos no los guarda: después puedes simularlos o pulsar «Importar registros válidos».'
+      },
+      temu: {
+        label: 'URL de producto o de categoría de Temu',
+        hint: '(opcional · extrae con Apify (hypebridge/temu-scraper); no guarda nada en el catálogo)',
+        placeholder: 'https://www.temu.com/category-o3-248.html',
+        idle: 'Pega la URL de un producto (…-g-<id>.html) o de una categoría (…-o3-<id>.html) de Temu. No se admiten búsquedas, colecciones, ofertas relámpago ni tiendas. Con una URL de producto se extrae solo ese producto. Una categoría puede devolver menos productos de los pedidos, o ninguno: eso no prueba que esté vacía. Coste aproximado: 0,03 USD de arranque + 0,022 USD por producto. Obtener los productos no los guarda: después puedes simularlos o pulsar «Importar registros válidos».'
+      }
+    };
+    function setSourceUi() {
+      var cfg = SOURCES[srcSel.value] || SOURCES.amazon;
+      catLabelText.textContent = cfg.label;
+      catLabelHint.textContent = cfg.hint;
+      catUrl.placeholder = cfg.placeholder;
+      if (!catBusy && !catJobId) setCatStatus(cfg.idle, 'info');
+    }
+    srcSel.addEventListener('change', setSourceUi);
+
     function setCatBusy(on) {
       catBusy = on;
+      srcSel.disabled = on;
       catUrl.disabled = on;
       catLimit.disabled = on;
       catRun.disabled = on || (catInitDone && !catConfigured);
@@ -11348,7 +11392,7 @@ function renderTableRows(products, resetPage = true) {
       catLoad.hidden = true;
       var s = job.summary || {};
       var parts = [records.length + ' producto(s) obtenido(s)'];
-      if (s.withReview) parts.push(s.withReview + ' con datos contradictorios (irán a revisión)');
+      if (s.withReview) parts.push(s.withReview + ' con motivos de revisión (datos contradictorios, precio dudoso, moneda…; irán a revisión)');
       if (s.actorErrors) parts.push(s.actorErrors + ' con error del actor (se rechazarán)');
       var head = s.partial ? 'Resultado parcial (' + records.length + ' de máx. ' + job.limit + '): ' : 'Extracción completada: ';
       showMsg('ok', head + parts.join(' · ') + costText(job) + '. NO se ha guardado nada: marca o desmarca «Guardar en el catálogo» y pulsa «Importar registros válidos» (con la casilla desmarcada solo simula).');
@@ -11377,8 +11421,13 @@ function renderTableRows(products, resetPage = true) {
         if (announceDone) fillFromRecords(records, job);
         else { catLoad.hidden = false; setCatStatus('Hay una extracción terminada con ' + records.length + ' producto(s). Pulsa «Cargar la última extracción» para ponerla en el cuadro JSON.', 'info'); }
       } else if (job.status === 'succeeded') {
-        setCatStatus('La extracción terminó sin productos. Comprueba la URL de la categoría.', 'error');
-        showMsg('error', 'La extracción terminó sin productos. Comprueba que la URL sea una categoría o búsqueda de Amazon con resultados.');
+        if (srcSel.value === 'temu') {
+          setCatStatus('La extracción terminó sin productos. Esto NO prueba que la categoría esté vacía: Temu no siempre la sirve bajo demanda.', 'error');
+          showMsg('error', 'Temu no devolvió productos para esa URL. No significa que la categoría esté vacía: prueba más tarde u otra categoría. Se ha cobrado, como mucho, el arranque del actor.');
+        } else {
+          setCatStatus('La extracción terminó sin productos. Comprueba la URL de la categoría.', 'error');
+          showMsg('error', 'La extracción terminó sin productos. Comprueba que la URL sea una categoría o búsqueda de Amazon con resultados.');
+        }
       } else {
         var why = job.error || (job.status === 'aborted' ? 'La extracción se canceló' + (records ? '' : ' antes de obtener productos') + '.' : 'La extracción no terminó correctamente.');
         setCatStatus(why, 'error');
@@ -11413,14 +11462,16 @@ function renderTableRows(products, resetPage = true) {
       var url = catUrl.value.trim();
       var limitRaw = catLimit.value.trim();
       var limit = Number(limitRaw);
-      if (!url) { setCatStatus('Escribe la URL de la categoría de Amazon.', 'error'); catUrl.focus(); return; }
+      var source = srcSel.value === 'temu' ? 'temu' : 'amazon';
+      if (!url) { setCatStatus(source === 'temu' ? 'Escribe la URL de un producto o de una categoría de Temu.' : 'Escribe la URL de la categoría de Amazon.', 'error'); catUrl.focus(); return; }
       if (!/^https:\/\//i.test(url)) { setCatStatus('La URL debe empezar por https://', 'error'); catUrl.focus(); return; }
+      if (source === 'temu' && !/^https:\/\/(\w[\w-]*\.)*temu\.com\//i.test(url)) { setCatStatus('Solo se admiten URL de Temu (https://www.temu.com/…).', 'error'); catUrl.focus(); return; }
       if (!limitRaw || !/^\d+$/.test(limitRaw) || limit < 1) { setCatStatus('El máximo de productos debe ser un entero de 1 en adelante.', 'error'); catLimit.focus(); return; }
       if (limit > catMax) { setCatStatus('El máximo permitido por el servidor es ' + catMax + ' productos.', 'error'); catLimit.focus(); return; }
       setCatBusy(true);
       catStartedAt = Date.now();
       setCatStatus('Enviando la extracción a Apify (máx. ' + limit + ' productos)…', 'info');
-      catApi('POST', '', { url: url, limit: limit }).then(function (res) {
+      catApi('POST', '', { source: source, url: url, limit: limit }).then(function (res) {
         if (res.data && res.data.success) {
           if (res.data.reused) setCatStatus('Ya había una extracción igual en curso: continúo con ella (no se lanza otra).', 'info');
           handleJob({ job: res.data.job }, true);
@@ -11429,7 +11480,7 @@ function renderTableRows(products, resetPage = true) {
         var job = res.data && res.data.job;
         if (res.status === 409 && job) {
           // Otra extracción distinta sigue activa: se retoma su seguimiento.
-          catUrl.value = job.url; catLimit.value = String(job.limit);
+          srcSel.value = job.source || 'amazon'; catUrl.value = job.url; catLimit.value = String(job.limit);
           setCatStatus((res.data.message || 'Ya hay una extracción en curso.') + ' Retomo el seguimiento de la que está activa.', 'info');
           handleJob({ job: job }, true);
           return;
@@ -11484,6 +11535,7 @@ function renderTableRows(products, resetPage = true) {
       }
       catRun.disabled = false;
       if (d.active) {
+        srcSel.value = d.active.source || 'amazon'; setSourceUi();
         catUrl.value = d.active.url; catLimit.value = String(d.active.limit);
         catStartedAt = Date.now();
         setCatStatus('Hay una extracción en curso; retomo su seguimiento…', 'info');
@@ -11560,6 +11612,9 @@ function renderTableRows(products, resetPage = true) {
   .jsonimp-row .btn-sm { min-height: 44px; white-space: nowrap; }
   .jsonimp-hint-error { color: #fca5a5; }
   .jsonimp-cat-row { align-items: flex-end; }
+  .jsonimp-cat-source { display: flex; flex-direction: column; gap: .25rem; max-width: 22rem; margin-bottom: .5rem; }
+  .jsonimp-cat-source .field-label { margin: 0; }
+  .jsonimp-cat-source .jsonimp-input { min-height: 44px; width: 100%; }
   .jsonimp-cat-url { flex: 1 1 320px; width: auto; min-width: 0; }
   .jsonimp-cat-limit { display: flex; flex-direction: column; gap: .25rem; flex: 0 0 9rem; }
   .jsonimp-cat-limit .field-label { margin: 0; }

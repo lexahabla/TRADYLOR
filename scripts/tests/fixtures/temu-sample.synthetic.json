@@ -1,0 +1,76 @@
+[
+  {
+    "goodsId": "601099513224343",
+    "title": "Auriculares Bluetooth 5.3 con estuche de carga, 36 h de autonomía",
+    "price": 12.49, "priceText": "12,49 €", "marketPrice": 35.99, "marketPriceText": "35,99 €", "currency": "EUR",
+    "discountPercentage": 65, "savingsAmount": 23.5,
+    "imageUrl": "https://img.kwcdn.com/product/fancy/a1.jpg",
+    "galleryImages": ["https://img.kwcdn.com/product/fancy/a1.jpg", "https://img.kwcdn.com/product/fancy/a2.jpg"],
+    "rating": 4.8, "reviewCount": 401, "inStock": true,
+    "mallId": "634418218148716", "mallName": "Global Tech Official Store",
+    "skus": [
+      { "skuId": "1", "specText": "Color: Negro", "price": 12.49, "inStock": true, "imageUrl": "https://img.kwcdn.com/product/fancy/sku_negro.jpg" },
+      { "skuId": "2", "specText": "Color: Blanco", "price": 12.49, "inStock": true, "imageUrl": "https://img.kwcdn.com/product/fancy/sku_blanco.jpg" }
+    ],
+    "specifications": { "Material": "ABS", "Versión Bluetooth": "5.3", "Brand": "Zonic" },
+    "description": "Auriculares inalámbricos con estuche de carga.",
+    "categoryPath": "Electrónica > Audio > Auriculares", "shippingFeeText": "Envío gratis", "estimatedDelivery": "5-8 días laborables",
+    "productUrl": "https://www.temu.com/-g-601099513224343.html", "sourcePageType": "pdp", "sourceUrl": "https://www.temu.com/es/-g-601099513224343.html",
+    "extractedAt": "2026-11-06T10:00:00.000Z"
+  },
+  {
+    "goodsId": "603014127574739",
+    "title": "Lámpara LED de escritorio regulable",
+    "price": 9.99, "priceText": "Desde 9,99 €", "currency": "EUR",
+    "imageUrl": "https://img.kwcdn.com/product/fancy/b1.jpg", "rating": 4.5, "reviewCount": 88,
+    "salesTip": "1K+ vendidos", "productUrl": "https://www.temu.com/-g-603014127574739.html", "sourcePageType": "category",
+    "sourceUrl": "https://www.temu.com/category-o3-248.html", "extractedAt": "2026-11-06T10:00:00.000Z"
+  },
+  {
+    "goodsId": "604000000000001",
+    "title": "Funda de móvil transparente",
+    "price": 3.5, "priceText": "3,50 €", "currency": "EUR", "imageUrl": "https://img.kwcdn.com/product/fancy/c1.jpg",
+    "skus": [
+      { "skuId": "1", "specText": "Modelo: A", "price": 3.5 },
+      { "skuId": "2", "specText": "Modelo: B", "price": 5.9 }
+    ],
+    "specifications": { "Material": "TPU" }, "productUrl": "https://www.temu.com/-g-604000000000001.html", "sourcePageType": "pdp",
+    "sourceUrl": "https://www.temu.com/es/-g-604000000000001.html", "extractedAt": "2026-11-06T10:00:00.000Z"
+  },
+  {
+    "goodsId": "605000000000002",
+    "title": "Altavoz portátil resistente al agua",
+    "price": 7.2, "priceText": "7,20 €", "currency": "USD", "imageUrl": "https://img.kwcdn.com/product/fancy/d1.jpg",
+    "specifications": { "Material": "Silicona" }, "productUrl": "https://www.temu.com/-g-605000000000002.html", "sourcePageType": "pdp",
+    "extractedAt": "2026-11-06T10:00:00.000Z"
+  },
+  {
+    "goodsId": "606000000000003",
+    "title": "Cargador rápido USB-C 30 W",
+    "price": 4.99, "priceText": "4,99 €", "marketPrice": 14.99, "currency": "EUR", "imageUrl": "https://img.kwcdn.com/product/fancy/e1.jpg",
+    "dealInfo": { "isFlashSale": true, "discountPercent": 66, "dealEndTime": "2026-11-07T23:59:59Z" },
+    "specifications": { "Potencia": "30 W" }, "productUrl": "https://www.temu.com/-g-606000000000003.html", "sourcePageType": "pdp",
+    "extractedAt": "2026-11-06T10:00:00.000Z"
+  },
+  {
+    "goodsId": "607000000000004",
+    "title": "Soporte de móvil para coche",
+    "price": 2.99, "priceText": "2,99 €", "currency": "EUR", "discountText": "-40% con código NUEVO10",
+    "imageUrl": "https://img.kwcdn.com/product/fancy/f1.jpg", "shippingFeeText": "Envío gratis en pedidos superiores a 20 €",
+    "specifications": { "Material": "ABS" }, "productUrl": "https://www.temu.com/-g-607000000000004.html", "sourcePageType": "pdp",
+    "sourceUrl": "https://www.temu.com/es/-g-607000000000004.html", "extractedAt": "2026-11-06T10:00:00.000Z"
+  },
+  {
+    "goodsId": "608000000000005",
+    "title": "Estuche * para auriculares",
+    "price": 6.1, "currency": "EUR", "imageUrl": "https://img.kwcdn.com/product/fancy/g1.jpg", "enrichError": true,
+    "productUrl": "https://www.temu.com/-g-608000000000005.html", "sourcePageType": "category", "extractedAt": "2026-11-06T10:00:00.000Z"
+  },
+  {
+    "goodsId": "609000000000006",
+    "title": "Mochila impermeable",
+    "price": 11.0, "priceText": "11,00 €", "currency": "EUR", "imageUrl": "https://img.kwcdn.com/product/fancy/h1.jpg",
+    "specifications": { "Material": "Nylon" }, "productUrl": "https://www.temu.com/-g-609000000000006.html", "sourcePageType": "pdp",
+    "sourceUrl": "https://www.temu.com/us/-g-609000000000006.html", "extractedAt": "2026-11-06T10:00:00.000Z"
+  }
+]

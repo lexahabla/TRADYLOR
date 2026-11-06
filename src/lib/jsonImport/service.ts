@@ -26,6 +26,7 @@ import { invalidateCatalogCache } from '../catalog';
 import { runImport } from './engine';
 import type { ImportDefaults, ImportTarget, Outcome, RecordResult } from './types';
 import { adaptApifyAmazonItem, isApifyAmazonItem } from './apifyAmazon';
+import { adaptApifyTemuItem, isApifyTemuItem } from './apifyTemu';
 import { resolveCatalogCategory } from './categoryResolver';
 
 const KEEP_BACKUPS = 5;
@@ -84,7 +85,13 @@ export function processChunk(input: {
   const catalog = readProductsFromFile();
   const snapshot = loadDeletedSnapshot();
   // Elementos crudos del actor de Amazon de Apify (pegados o subidos): se adaptan al modelo antes de importar.
-  const records = input.records.map((r) => (isApifyAmazonItem(r) ? adaptApifyAmazonItem(r, { resolveCategory: resolveCatalogCategory }) : r));
+  const records = input.records.map((r) =>
+    isApifyAmazonItem(r)
+      ? adaptApifyAmazonItem(r, { resolveCategory: resolveCatalogCategory })
+      : isApifyTemuItem(r)
+        ? adaptApifyTemuItem(r, { resolveCategory: resolveCatalogCategory })
+        : r,
+  );
   const out = runImport(catalog, records, input.defaults, {
     batchId: input.batchId,
     nowIso,
