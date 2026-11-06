@@ -46,10 +46,13 @@ chown -R node:node "$DATA_DIR" "$CLIENT_IMAGES_DIR" 2>/dev/null || true
 # Si falta, se recrea el repo desde el remoto (repo privado: usa GITHUB_PAT) para
 # poder commitear y pushear desde la consola. El working tree de la imagen es
 # efímero: lo que no se haga `git push` se pierde en el siguiente redeploy.
+# OJO: el nombre REAL del repositorio en GitHub sigue siendo «TRADYLOR» (la marca y el dominio pasaron a Treidilor, el
+# repositorio no se ha renombrado). Con otro nombre el `git fetch` falla, no se recrea /app/.git y /api/health devuelve
+# `commit: null` (además de romper el desarrollo remoto). Si algún día se renombra el repositorio, cambiar aquí.
 if [ -n "${GITHUB_PAT:-}" ]; then
-  GIT_REMOTE="https://x-access-token:${GITHUB_PAT}@github.com/lexahabla/TREIDILOR.git"
+  GIT_REMOTE="https://x-access-token:${GITHUB_PAT}@github.com/lexahabla/TRADYLOR.git"
 else
-  GIT_REMOTE="https://github.com/lexahabla/TREIDILOR.git"
+  GIT_REMOTE="https://github.com/lexahabla/TRADYLOR.git"
 fi
 
 if [ ! -d /app/.git ] && command -v git >/dev/null 2>&1; then

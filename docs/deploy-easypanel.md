@@ -7,7 +7,7 @@ escucha en el puerto **4321**.
 ## 1. Crear la aplicación en Easy Panel
 
 1. Easy Panel → **Create App** → **App from GitHub** (o *Git repository*).
-2. Repositorio: `https://github.com/lexahabla/TREIDILOR.git`, rama `main`.
+2. Repositorio: `https://github.com/lexahabla/TRADYLOR.git` (el nombre del repositorio en GitHub no cambió con la marca), rama `main`.
 3. **Build pack**: `Dockerfile` (recomendado). Si se elige Nixpacks, usa `nixpacks.toml`
    (mismo build y mismo `start`), pero sin volumen configurado los datos no persisten.
 4. **Puerto / port detection**: `4321`.

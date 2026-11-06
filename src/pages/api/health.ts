@@ -6,31 +6,27 @@ import { DATA_DIR } from '../../lib/paths';
 export const prerender = false;
 
 /**
- * Commit corto del despliegue, leyendo .git directamente (sin invocar git:
- * en el contenedor el volumen/propiedad puede bloquear el binario).
+ * Identificación del despliegue = datos estampados en el BUILD (BUILD_INFO.json, generado por el Dockerfile con
+ * scripts/source-fingerprint.mjs a partir del código que entró en la imagen):
+ *  - sourceHash: huella del código real de la imagen (se compara con `node scripts/source-fingerprint.mjs --git <commit>`).
+ *  - commit: sólo si la plataforma de build pasó ARG GIT_COMMIT; si no, null.
+ * Deliberadamente NO se lee .git ni se consulta el remoto: el entrypoint recrea /app/.git con el main de ARRANQUE, que
+ * puede no ser el commit del que se construyó la imagen.
  */
-let cachedCommit: string | null | undefined;
-function buildCommit(): string | null {
-  if (cachedCommit !== undefined) return cachedCommit;
+interface BuildInfo { commit: string | null; sourceHash: string | null; builtAt: string | null }
+let cachedBuild: BuildInfo | undefined;
+function buildInfo(): BuildInfo {
+  if (cachedBuild) return cachedBuild;
+  const empty: BuildInfo = { commit: null, sourceHash: null, builtAt: null };
   try {
-    const gitDir = path.join(process.cwd(), '.git');
-    const head = fs.readFileSync(path.join(gitDir, 'HEAD'), 'utf-8').trim();
-    if (!head.startsWith('ref:')) {
-      cachedCommit = head.slice(0, 7);
-      return cachedCommit;
-    }
-    const ref = head.slice(4).trim();
-    try {
-      cachedCommit = fs.readFileSync(path.join(gitDir, ref), 'utf-8').trim().slice(0, 7);
-    } catch {
-      const packed = fs.readFileSync(path.join(gitDir, 'packed-refs'), 'utf-8');
-      const line = packed.split('\n').find((row) => row.endsWith(` ${ref}`));
-      cachedCommit = line ? line.split(' ')[0].slice(0, 7) : null;
-    }
+    const raw = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'BUILD_INFO.json'), 'utf-8')) as Partial<BuildInfo>;
+    const hash = typeof raw.sourceHash === 'string' && /^[0-9a-f]{64}$/.test(raw.sourceHash) ? raw.sourceHash : null;
+    const commit = typeof raw.commit === 'string' && /^[0-9a-f]{7,40}$/.test(raw.commit) ? raw.commit : null;
+    cachedBuild = { commit, sourceHash: hash, builtAt: typeof raw.builtAt === 'string' ? raw.builtAt : null };
   } catch {
-    cachedCommit = null;
+    cachedBuild = empty;
   }
-  return cachedCommit;
+  return cachedBuild;
 }
 
 /** Instante de arranque del proceso SSR (cambia en cada deploy). */
@@ -70,7 +66,9 @@ export const GET: APIRoute = () => {
     JSON.stringify({
       status: 'ok',
       service: 'tradylor-web',
-      commit: buildCommit(),
+      commit: buildInfo().commit,
+      sourceHash: buildInfo().sourceHash,
+      builtAt: buildInfo().builtAt,
       startedAt,
       uptimeSeconds: Math.round(process.uptime()),
       timestamp: new Date().toISOString(),

@@ -31,7 +31,11 @@ RUN npm ci && npm cache clean --force
 # dist/server/client (inexistente) → todos los estáticos 404. El symlink
 # repara la resolución (favicon, CSS de _astro, imágenes de producto...).
 COPY . .
-RUN npm run build \
+# Identificación del despliegue: huella del código REAL que entra en la imagen (+ el commit si la plataforma de build lo
+# pasa como ARG GIT_COMMIT). Se calcula aquí, tras COPY, sin depender de .git ni del main remoto. /api/health la muestra.
+ARG GIT_COMMIT=""
+RUN node scripts/source-fingerprint.mjs /app --write /app/BUILD_INFO.json --commit "$GIT_COMMIT" \
+ && npm run build \
  && cp -r src/data /app/seed \
  && ln -sfn ../client dist/server/client
 

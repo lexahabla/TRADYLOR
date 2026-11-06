@@ -30,10 +30,26 @@ al abrir el proyecto, y el agente debe seguirlas en cada sesión.
 
 3. El push a `main` **despliega automáticamente** en https://treidilor.com
    (webhook de GitHub → Easy Panel → build Docker, ~2-3 minutos). No hace falta
-   tocar ningún panel. Para confirmar que el deploy terminó:
-   `curl https://treidilor.com/api/health` debe devolver `"status":"ok"` **y el
-   campo `commit` igual al hash recién pusheado** (si no coincide, el build
-   anterior sigue vivo: esperar y volver a consultar).
+   tocar ningún panel. Para confirmar que el deploy terminó y **qué código
+   contiene**:
+   1. Calcular la huella esperada del commit pusheado:
+      `node scripts/source-fingerprint.mjs --git <hash>` (campo `sourceHash`).
+   2. `curl https://treidilor.com/api/health` debe devolver `"status":"ok"` **y un
+      `sourceHash` igual al calculado**. Si es distinto o `null`, el despliegue
+      NO contiene ese código (el build anterior sigue vivo o falló): esperar,
+      volver a consultar y, si persiste, informar al usuario.
+   - `sourceHash` lo estampa el `Dockerfile` en el build (`/app/BUILD_INFO.json`),
+     calculado sobre los ficheros que entraron en la imagen. **Cubre**: `src/`,
+     `public/` (sin `public/images/products`), `docker/`, `scripts/`,
+     `package.json`, `package-lock.json`, `astro.config.mjs`,
+     `tailwind.config.mjs`, `postcss.config.mjs` y `tsconfig.json`. **No cubre**:
+     `Dockerfile`, `AGENTS.md`, `docs/`, `INFORMES/`, los archivos
+     `estructura*.txt`, las variables de entorno ni la imagen base: un commit que
+     sólo toque esos archivos no cambia el `sourceHash`.
+   - `commit` es sólo referencia: aparece si la plataforma de build pasa
+     `ARG GIT_COMMIT`; si no, es `null` y no es un fallo. `/api/health` ya no lee
+     `.git` (el entrypoint lo recrea con el `main` del arranque, que no identifica
+     la imagen).
 4. **Los datos NO van en git**: productos, categorías, analytics,
    `credentials.json` e imágenes IA viven en el **volumen** del servidor
    (`/app/data`). Es normal que falten ficheros en `src/data/` o en
