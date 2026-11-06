@@ -1007,6 +1007,20 @@ const h = headerConfig[initialSection] || headerConfig.products;
           <div id="networkList" class="network-list">
             <div class="loading-panel">Cargando redes...</div>
           </div>
+          <div id="removedNetworks" class="removed-networks"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- 2. Catálogo de Afiliados (sección propia, plegable) -->
+    <section data-admin-view="affiliates" class:list={['admin-card', 'affiliates-catalog-section', 'products-list-card', 'hidden-section', { 'is-visible': initialSection === 'affiliates' }]}>
+          <div class="list-header-row">
+            <div>
+              <h2 class="card-title">2. Catálogo de Afiliados</h2>
+              <p class="card-desc">Tabla amplia de todos los productos sincronizados con las redes conectadas (AliExpress, eBay…), guardados en el servidor. Usa «Sincronizar» para refrescarlo contra las APIs; se avisa si la caché supera las 6 horas.</p>
+            </div>
+          </div>
 
           <div id="aliCatalogStatus" class="status-alert" hidden style="margin-bottom: 16px">
             <div class="alert-icon" id="aliCatalogStatusIcon">ℹ️</div>
@@ -1039,12 +1053,6 @@ const h = headerConfig[initialSection] || headerConfig.products;
             <span id="aliCatalogMetaTop" class="ali-catalog-meta">Cargando…</span>
           </div>
 
-          <div class="list-header-row">
-            <div>
-              <h2 class="card-title">2. Catálogo de Afiliados</h2>
-              <p class="card-desc">Tabla amplia de todos los productos sincronizados con las redes conectadas (AliExpress, eBay…), guardados en el servidor. Usa «Sincronizar» para refrescarlo contra las APIs; se avisa si la caché supera las 6 horas.</p>
-            </div>
-          </div>
           <div id="searchStatus" class="status-alert" hidden>
             <div class="alert-icon">ℹ️</div>
             <div class="alert-content">
@@ -1052,10 +1060,6 @@ const h = headerConfig[initialSection] || headerConfig.products;
               <p id="searchStatusText">Mensaje...</p>
             </div>
           </div>
-          <div id="removedNetworks" class="removed-networks"></div>
-        </div>
-
-      </div>
 
       <!-- 3. Catálogo AliExpress desde la caché del volumen (sin llamadas API en cada carga) -->
       <div id="aliCatalogCard">
@@ -10635,7 +10639,7 @@ function renderTableRows(products, resetPage = true) {
       '[data-admin-view="products"].products-list-card > .list-header-row',
       '[data-admin-view="products"] .sections-admin > .list-header-row',
       '#networksCard > .card-header',
-      '[data-admin-view="affiliates"] .affiliates-layout .list-header-row'
+      '[data-admin-view="affiliates"].affiliates-catalog-section > .list-header-row'
     ];
     function setFolded(header, folded) {
       header.setAttribute('aria-expanded', String(!folded));
