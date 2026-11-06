@@ -92,7 +92,7 @@ function makeClient(fetchImpl) {
     };
     return (nodes[id] = node);
   };
-  const ids = ['jsonImpAsin', 'jsonImpFetch', 'jsonImpAsinHint', 'jsonImpText', 'jsonImpFile', 'jsonImpFileInfo', 'jsonImpPlatform', 'jsonImpCurrency', 'jsonImpSave', 'jsonImpRun', 'jsonImpAmazonIa', 'jsonImpCancel', 'jsonImpClear', 'jsonImpAlert', 'jsonImpProgress', 'jsonImpBarFill', 'jsonImpProgressText', 'jsonImpReport', 'jsonImpReportTitle', 'jsonImpCounters', 'jsonImpDetails', 'jsonImpDownload'];
+  const ids = ['jsonImpAsin', 'jsonImpFetch', 'jsonImpAsinHint', 'jsonImpText', 'jsonImpFile', 'jsonImpFileInfo', 'jsonImpPlatform', 'jsonImpCurrency', 'jsonImpSave', 'jsonImpRun', 'jsonImpAmazonIa', 'jsonImpCancel', 'jsonImpClear', 'jsonImpAlert', 'jsonImpProgress', 'jsonImpBarFill', 'jsonImpProgressText', 'jsonImpReport', 'jsonImpReportTitle', 'jsonImpCounters', 'jsonImpDetails', 'jsonImpDownload', 'jsonImpCatBlock', 'jsonImpCatUrl', 'jsonImpCatLimit', 'jsonImpCatRun', 'jsonImpCatCancel', 'jsonImpCatLoad', 'jsonImpCatStatus'];
   ids.forEach(el);
   nodes.jsonImpSave.checked = true;
   const sandbox = {
@@ -100,6 +100,9 @@ function makeClient(fetchImpl) {
     fetch: (...a) => { calls.push(a); return fetchImpl ? fetchImpl(...a) : Promise.resolve({ ok: true, status: 200, json: async () => ({ success: true, results: [] }) }); },
     setTimeout, Promise, JSON, Math, Date, String, Array, Object, Boolean, Blob: class {}, URL: { createObjectURL: () => 'blob:', revokeObjectURL() {} },
     FileReader: class {}, BroadcastChannel: class { postMessage() {} close() {} },
+    // «URL de categoría»: el estado se carga de forma perezosa (al aparecer el bloque o usarlo), nunca al cargar la página.
+    window: { IntersectionObserver: class {}, confirm: () => true },
+    IntersectionObserver: class { observe() {} disconnect() {} },
   };
   vm.createContext(sandbox);
   vm.runInContext(clientScript, sandbox);
@@ -166,4 +169,16 @@ test('cliente: un error del servidor en mitad del lote se explica y permite rean
   assert.match(nodes.jsonImpAlert.textContent, /vuelve a pulsar «Importar»/);
   assert.equal(nodes.jsonImpRun.disabled, false, 'los controles quedan activos para reanudar');
   assert.equal(nodes.jsonImpText.value.length > 0, true, 'el JSON pegado se conserva');
+});
+
+test('cliente: «URL de categoría» no hace ninguna petición al cargar la página; el estado se pide al usarlo y sólo una vez', async () => {
+  const { nodes, calls } = makeClient(async () => ({ ok: true, status: 200, json: async () => ({ success: true, configured: true, defaultLimit: 10, maxLimit: 50, active: null, latest: null }) }));
+  assert.equal(calls.length, 0, 'al cargar no se llama a /api');
+  assert.equal(nodes.jsonImpCatLimit.value, '', 'el valor inicial (10) lo pone el HTML, no el script');
+  nodes.jsonImpCatBlock.fire('focusin');
+  nodes.jsonImpCatBlock.fire('pointerdown');
+  await new Promise((r) => setTimeout(r, 5));
+  assert.equal(calls.length, 1);
+  assert.match(String(calls[0][0]), /\/api\/admin\/category-extract$/);
+  assert.equal(nodes.jsonImpCatLimit.max, '50');
 });

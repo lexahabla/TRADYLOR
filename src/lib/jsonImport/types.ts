@@ -100,6 +100,8 @@ export interface CanonicalRecord {
   variant: VariantAttributes;
   offer: Omit<StoredOffer, 'offerId' | 'offerKey' | 'receivedAt' | 'verifiedAt' | 'source' | 'status' | 'implicit'>;
   warnings: string[];
+  /** Motivos por los que el registro NO debe aplicarse solo (p. ej. contradicciones de datos): va a revisión. */
+  reviewReasons?: string[];
 }
 
 export type Outcome = 'created' | 'linked' | 'updated' | 'unchanged' | 'review' | 'rejected' | 'error';

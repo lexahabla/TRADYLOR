@@ -13,6 +13,7 @@
 import { canonicalProductUrl } from '../curation';
 import { extractAsinFromUrl } from '../../utils/amazon';
 import type { CanonicalRecord, Condition, ImportDefaults, OfferShipping, Availability } from './types';
+import { readImportMeta } from './apifyAmazon';
 
 type Any = Record<string, unknown>;
 
@@ -270,6 +271,10 @@ export function normalizeRecord(rawInput: unknown, index: number, defaults: Impo
   const warnings: string[] = [];
   const raw = asObject(rawInput);
   if (!Object.keys(raw).length) return { errors: ['registro_vacio'] };
+  // Avisos / motivos de revisión / errores que dejó un adaptador de origen (p. ej. Apify Amazon) en `__import`.
+  const imported = readImportMeta(raw);
+  warnings.push(...imported.warnings);
+  errors.push(...imported.errors);
 
   // Origen de cada bloque: anidado (product/variant/offer) o plano.
   const p = asObject(raw.product);
@@ -392,6 +397,7 @@ export function normalizeRecord(rawInput: unknown, index: number, defaults: Impo
       capturedAtInferred: captured ? undefined : true,
     },
     warnings,
+    reviewReasons: imported.review.length ? imported.review : undefined,
   };
   return { record, errors: [] };
 }

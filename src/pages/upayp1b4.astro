@@ -1054,6 +1054,21 @@ const h = headerConfig[initialSection] || headerConfig.products;
         <p id="jsonImpAsinHint" class="label-hint" role="status" aria-live="polite">Puedes pegar el ASIN o la URL completa del producto.</p>
       </div>
 
+      <div class="jsonimp-block" id="jsonImpCatBlock">
+        <label class="field-label" for="jsonImpCatUrl">URL de categoría de Amazon <span class="label-hint">(opcional · extrae varios productos con Apify; no guarda nada en el catálogo)</span></label>
+        <div class="jsonimp-row jsonimp-row-wrap jsonimp-cat-row">
+          <input id="jsonImpCatUrl" type="url" class="jsonimp-input jsonimp-cat-url" placeholder="https://www.amazon.es/gp/browse.html?node=938008031" autocomplete="off" spellcheck="false" aria-describedby="jsonImpCatStatus" />
+          <div class="jsonimp-cat-limit">
+            <label class="field-label" for="jsonImpCatLimit">Máx. productos</label>
+            <input id="jsonImpCatLimit" type="number" class="jsonimp-input" value="10" min="1" max="50" step="1" inputmode="numeric" aria-describedby="jsonImpCatStatus" />
+          </div>
+          <button type="button" id="jsonImpCatRun" class="btn-primary btn-sm" title="Lanza la extracción en Apify (el actor cobra por producto obtenido; el límite se envía a Apify)">Extraer categoría</button>
+          <button type="button" id="jsonImpCatCancel" class="btn-secondary btn-sm" hidden title="Detiene la ejecución en Apify; se conservan los productos ya extraídos">Cancelar extracción</button>
+          <button type="button" id="jsonImpCatLoad" class="btn-secondary btn-sm" hidden>Cargar la última extracción</button>
+        </div>
+        <p id="jsonImpCatStatus" class="label-hint" role="status" aria-live="polite">Pega la URL de una categoría, búsqueda o lista de más vendidos de Amazon. Obtener los productos no los guarda: después puedes simularlos o pulsar «Importar registros válidos».</p>
+      </div>
+
       <div class="jsonimp-block">
         <label class="field-label" for="jsonImpText">JSON a importar <span class="label-hint">(array de productos, <code>&#123;"products":[…]&#125;</code> o un solo producto)</span></label>
         <textarea id="jsonImpText" class="jsonimp-textarea" rows="10" spellcheck="false" placeholder='[{"title":"…","platform":"amazon","asin":"B0…","url":"https://…","price":29.99,"currency":"EUR","image":"https://…"}]'></textarea>
@@ -10834,6 +10849,12 @@ function renderTableRows(products, resetPage = true) {
     var countersBox = $('jsonImpCounters');
     var detailsBox = $('jsonImpDetails');
     var downloadBtn = $('jsonImpDownload');
+    var catUrl = $('jsonImpCatUrl');
+    var catLimit = $('jsonImpCatLimit');
+    var catRun = $('jsonImpCatRun');
+    var catCancel = $('jsonImpCatCancel');
+    var catLoad = $('jsonImpCatLoad');
+    var catStatus = $('jsonImpCatStatus');
     if (!asinInput || !runBtn || !textArea) return;
 
     var MAX_CHARS = 10000000;
@@ -11029,7 +11050,15 @@ function renderTableRows(products, resetPage = true) {
       var offset = 0;
       function next() {
         if (cancelled || offset >= total) return Promise.resolve();
-        var slice = parsed.records.slice(offset, offset + CHUNK);
+        var slice = [];
+        var sliceChars = 0;
+        while (offset + slice.length < total && slice.length < CHUNK) {
+          var rec = parsed.records[offset + slice.length];
+          var recChars = JSON.stringify(rec).length;
+          if (slice.length && sliceChars + recChars > 1500000) break;
+          slice.push(rec);
+          sliceChars += recChars;
+        }
         return postChunk({ batchId: batchId, records: slice, defaults: defaults, dryRun: dryRun, indexOffset: offset }, 0).then(function (data) {
           for (var i = 0; i < data.results.length; i++) results.push(data.results[i]);
           offset += slice.length;
@@ -11090,6 +11119,9 @@ function renderTableRows(products, resetPage = true) {
     function reasonText(code) {
       if (REASONS[code]) return REASONS[code];
       if (code.indexOf('campo_bloqueado_') === 0) return 'Campo bloqueado por edición manual: ' + code.slice(16);
+      if (code.indexOf('contradiccion_') === 0) return 'Datos contradictorios en la fuente (no se ha elegido ninguno): ' + code.slice(14);
+      if (code.indexOf('apify_error: ') === 0) return 'Error del actor de Apify: ' + code.slice(13);
+      if (code === 'asin_invalido') return 'ASIN ausente o no válido';
       return code;
     }
 
@@ -11180,6 +11212,224 @@ function renderTableRows(products, resetPage = true) {
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
     });
 
+    // ── Extracción de una categoría de Amazon (Apify, ejecución asíncrona) ──
+    var CAT_API = '/api/admin/category-extract';
+    var catMax = 50;
+    var catConfigured = false;
+    var catJobId = null;
+    var catTimer = null;
+    var catBusy = false;
+    var catFailures = 0;
+    var catInitDone = false;
+    var catStartedAt = 0;
+    var CAT_STATUS_DEFAULT = catStatus ? catStatus.textContent : '';
+
+    function setCatStatus(text, kind) {
+      catStatus.textContent = text;
+      catStatus.classList.toggle('jsonimp-hint-error', kind === 'error');
+    }
+    function catApi(method, query, body) {
+      return fetch(CAT_API + (query || ''), {
+        method: method, credentials: 'same-origin',
+        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        body: body ? JSON.stringify(body) : undefined
+      }).then(function (res) {
+        return res.json().catch(function () { return {}; }).then(function (data) { return { ok: res.ok, status: res.status, data: data }; });
+      });
+    }
+    function setCatBusy(on) {
+      catBusy = on;
+      catUrl.disabled = on;
+      catLimit.disabled = on;
+      catRun.disabled = on || (catInitDone && !catConfigured);
+      catCancel.hidden = !on;
+      if (!running) { runBtn.disabled = on; fetchBtn.disabled = on; iaBtn.disabled = on; }
+    }
+    function costText(job) {
+      return typeof job.costUsd === 'number' ? ' · coste Apify: ' + job.costUsd.toFixed(3) + ' USD' : '';
+    }
+    function describeJob(job) {
+      var known = typeof job.itemsSoFar === 'number';
+      var n = known ? job.itemsSoFar : 0;
+      var limit = job.limit;
+      if (job.status === 'starting') return 'Iniciando la extracción en Apify…';
+      if (job.status === 'running') return 'Extrayendo en Apify… ' + (known ? n + ' de máx. ' + limit + ' productos' : 'hasta ' + limit + ' productos (consultando el progreso)') + costText(job) + '. Puedes cancelar sin perder lo ya extraído.';
+      if (job.status === 'aborting') return 'Cancelando: la ejecución se está deteniendo en Apify; se conservarán los productos ya extraídos…';
+      return '';
+    }
+    function stopPolling() { if (catTimer) { clearTimeout(catTimer); catTimer = null; } }
+
+    function fillFromRecords(records, job) {
+      var current = textArea.value.trim();
+      if (current && !window.confirm('El cuadro «JSON a importar» ya tiene contenido. ¿Sustituirlo por los ' + records.length + ' productos extraídos?')) {
+        setCatStatus('Extracción terminada, pero no se ha sustituido el contenido del cuadro JSON. Vuelve a pulsar «Cargar la última extracción» cuando quieras.', 'info');
+        catLoad.hidden = false;
+        return;
+      }
+      textArea.value = JSON.stringify(records, null, 2);
+      fileText = '';
+      fileInput.value = '';
+      fileInfo.textContent = DEFAULT_FILE_INFO;
+      catLoad.hidden = true;
+      var s = job.summary || {};
+      var parts = [records.length + ' producto(s) obtenido(s)'];
+      if (s.withReview) parts.push(s.withReview + ' con datos contradictorios (irán a revisión)');
+      if (s.actorErrors) parts.push(s.actorErrors + ' con error del actor (se rechazarán)');
+      var head = s.partial ? 'Resultado parcial (' + records.length + ' de máx. ' + job.limit + '): ' : 'Extracción completada: ';
+      showMsg('ok', head + parts.join(' · ') + costText(job) + '. NO se ha guardado nada: marca o desmarca «Guardar en el catálogo» y pulsa «Importar registros válidos» (con la casilla desmarcada solo simula).');
+      setCatStatus('Última extracción: ' + parts.join(' · ') + costText(job) + '.', 'info');
+    }
+
+    function handleJob(data, announceDone) {
+      var job = data.job;
+      catJobId = job.id;
+      catFailures = 0;
+      if (job.status === 'starting' || job.status === 'running' || job.status === 'aborting') {
+        setCatBusy(true);
+        setCatStatus(describeJob(job), 'info');
+        if (Date.now() - catStartedAt > 40 * 60 * 1000) {
+          setCatBusy(false);
+          setCatStatus('Se dejó de consultar la extracción por superar 40 minutos. Puedes recargar la página: se retomará si sigue activa.', 'error');
+          return;
+        }
+        catTimer = setTimeout(poll, 3000);
+        return;
+      }
+      setCatBusy(false);
+      stopPolling();
+      var records = data.records;
+      if (records && records.length) {
+        if (announceDone) fillFromRecords(records, job);
+        else { catLoad.hidden = false; setCatStatus('Hay una extracción terminada con ' + records.length + ' producto(s). Pulsa «Cargar la última extracción» para ponerla en el cuadro JSON.', 'info'); }
+      } else if (job.status === 'succeeded') {
+        setCatStatus('La extracción terminó sin productos. Comprueba la URL de la categoría.', 'error');
+        showMsg('error', 'La extracción terminó sin productos. Comprueba que la URL sea una categoría o búsqueda de Amazon con resultados.');
+      } else {
+        var why = job.error || (job.status === 'aborted' ? 'La extracción se canceló' + (records ? '' : ' antes de obtener productos') + '.' : 'La extracción no terminó correctamente.');
+        setCatStatus(why, 'error');
+        showMsg('error', why);
+      }
+    }
+
+    function poll() {
+      if (!catJobId) return;
+      catApi('GET', '?id=' + encodeURIComponent(catJobId)).then(function (res) {
+        if (!res.ok || !res.data.success) {
+          catFailures += 1;
+          if (res.status === 404 || catFailures >= 5) {
+            setCatBusy(false);
+            setCatStatus((res.data && res.data.message) || 'No se pudo consultar la extracción. Recarga la página para retomarla.', 'error');
+            return;
+          }
+          catTimer = setTimeout(poll, 5000);
+          return;
+        }
+        handleJob(res.data, true);
+      }, function () {
+        catFailures += 1;
+        if (catFailures >= 5) { setCatBusy(false); setCatStatus('Sin conexión con el servidor. Recarga la página para retomar la extracción.', 'error'); return; }
+        catTimer = setTimeout(poll, 5000);
+      });
+    }
+
+    catRun.addEventListener('click', function () {
+      if (catBusy || running) return;
+      hideMsg();
+      var url = catUrl.value.trim();
+      var limitRaw = catLimit.value.trim();
+      var limit = Number(limitRaw);
+      if (!url) { setCatStatus('Escribe la URL de la categoría de Amazon.', 'error'); catUrl.focus(); return; }
+      if (!/^https:\/\//i.test(url)) { setCatStatus('La URL debe empezar por https://', 'error'); catUrl.focus(); return; }
+      if (!limitRaw || !/^\d+$/.test(limitRaw) || limit < 1) { setCatStatus('El máximo de productos debe ser un entero de 1 en adelante.', 'error'); catLimit.focus(); return; }
+      if (limit > catMax) { setCatStatus('El máximo permitido por el servidor es ' + catMax + ' productos.', 'error'); catLimit.focus(); return; }
+      setCatBusy(true);
+      catStartedAt = Date.now();
+      setCatStatus('Enviando la extracción a Apify (máx. ' + limit + ' productos)…', 'info');
+      catApi('POST', '', { url: url, limit: limit }).then(function (res) {
+        if (res.data && res.data.success) {
+          if (res.data.reused) setCatStatus('Ya había una extracción igual en curso: continúo con ella (no se lanza otra).', 'info');
+          handleJob({ job: res.data.job }, true);
+          return;
+        }
+        var job = res.data && res.data.job;
+        if (res.status === 409 && job) {
+          // Otra extracción distinta sigue activa: se retoma su seguimiento.
+          catUrl.value = job.url; catLimit.value = String(job.limit);
+          setCatStatus((res.data.message || 'Ya hay una extracción en curso.') + ' Retomo el seguimiento de la que está activa.', 'info');
+          handleJob({ job: job }, true);
+          return;
+        }
+        setCatBusy(false);
+        var msg = (res.data && res.data.message) || ('Error ' + res.status + ' al iniciar la extracción.');
+        setCatStatus(msg, 'error');
+        showMsg('error', msg);
+      }, function () {
+        setCatBusy(false);
+        setCatStatus('No se pudo contactar con el servidor. Comprueba si la extracción se creó antes de reintentar (recarga la página).', 'error');
+      });
+    });
+
+    catCancel.addEventListener('click', function () {
+      if (!catJobId) return;
+      catCancel.disabled = true;
+      setCatStatus('Cancelando…', 'info');
+      catApi('POST', '', { action: 'cancel', id: catJobId }).then(function (res) {
+        catCancel.disabled = false;
+        if (res.data && res.data.success) { stopPolling(); handleJob({ job: res.data.job }, true); }
+        else setCatStatus((res.data && res.data.message) || 'No se pudo cancelar la extracción.', 'error');
+      }, function () { catCancel.disabled = false; setCatStatus('No se pudo contactar con el servidor para cancelar.', 'error'); });
+    });
+
+    catLoad.addEventListener('click', function () {
+      if (!catJobId || catBusy) return;
+      catApi('GET', '?id=' + encodeURIComponent(catJobId)).then(function (res) {
+        if (res.data && res.data.success && res.data.records && res.data.records.length) fillFromRecords(res.data.records, res.data.job);
+        else setCatStatus('No hay resultados guardados de esa extracción.', 'error');
+      });
+    });
+
+    catUrl.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); catRun.click(); } });
+
+    // Estado inicial: configuración, límites y extracción activa (si se recargó la página, se retoma sin lanzar otra).
+    // Carga perezosa: no hace ninguna petición /api al abrir la página; sólo cuando el bloque aparece en pantalla o se usa.
+    function initCategory() {
+      if (catInitDone) return;
+      catInitDone = true;
+      catApi('GET', '').then(function (res) {
+      var d = res.data || {};
+      if (!res.ok || !d.success) { catRun.disabled = false; return; }
+      catMax = d.maxLimit || catMax;
+      catLimit.max = String(catMax);
+      catConfigured = Boolean(d.configured);
+      if (!catConfigured) {
+        catRun.disabled = true;
+        setCatStatus('La extracción de categorías no está configurada: falta la variable APIFY_TOKEN en el servidor (Easy Panel → Environment).', 'error');
+        return;
+      }
+      catRun.disabled = false;
+      if (d.active) {
+        catUrl.value = d.active.url; catLimit.value = String(d.active.limit);
+        catStartedAt = Date.now();
+        setCatStatus('Hay una extracción en curso; retomo su seguimiento…', 'info');
+        handleJob({ job: d.active }, true);
+      } else if (d.latest && d.latest.resultReady) {
+        catJobId = d.latest.id;
+        catLoad.hidden = false;
+        setCatStatus('Última extracción disponible (' + (d.latest.summary ? d.latest.summary.fetched : 0) + ' producto(s)). Pulsa «Cargar la última extracción» para ponerla en el cuadro JSON.', 'info');
+      }
+      }, function () { catRun.disabled = false; });
+    }
+    var catBlock = $('jsonImpCatBlock');
+    ['focusin', 'pointerdown'].forEach(function (evt) { catBlock.addEventListener(evt, initCategory, { once: true }); });
+    if ('IntersectionObserver' in window) {
+      var catObserver = new IntersectionObserver(function (entries) {
+        if (entries.some(function (e) { return e.isIntersecting; })) { catObserver.disconnect(); initCategory(); }
+      });
+      catObserver.observe(catBlock);
+    } else {
+      initCategory();
+    }
+
     // ── Flujo Amazon anterior (producto único por ASIN con ficha IA) ────
     iaBtn.addEventListener('click', function () {
       if (running) return;
@@ -11233,6 +11483,13 @@ function renderTableRows(products, resetPage = true) {
   .jsonimp-actions button { min-height: 44px; }
   .jsonimp-row .btn-sm { min-height: 44px; white-space: nowrap; }
   .jsonimp-hint-error { color: #fca5a5; }
+  .jsonimp-cat-row { align-items: flex-end; }
+  .jsonimp-cat-url { flex: 1 1 320px; width: auto; min-width: 0; }
+  .jsonimp-cat-limit { display: flex; flex-direction: column; gap: .25rem; flex: 0 0 9rem; }
+  .jsonimp-cat-limit .field-label { margin: 0; }
+  .jsonimp-cat-row .jsonimp-input { min-height: 44px; }
+  /* En móvil .jsonimp-row pasa a columna: los flex-basis horizontales no deben convertirse en alturas. */
+  @media (max-width: 640px) { .jsonimp-cat-row .jsonimp-cat-url, .jsonimp-cat-row .jsonimp-cat-limit { flex: 0 0 auto; width: 100%; } .jsonimp-cat-row .btn-sm { flex: 0 0 auto; } }
   .jsonimp-msg { padding: .8rem 1rem; border-radius: var(--border-radius-sm); border: 1px solid transparent; font-size: .85rem; margin-bottom: 1rem; }
   .jsonimp-msg[hidden], .jsonimp-progress[hidden], .jsonimp-report[hidden] { display: none; }
   .jsonimp-msg.is-ok { color: #a7f3d0; background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }

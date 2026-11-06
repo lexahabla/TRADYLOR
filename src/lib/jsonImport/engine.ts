@@ -513,6 +513,11 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
       const rec = norm.record;
       const base = { title: rec.product.title, warnings: rec.warnings };
       const offerKey = computeOfferKey(rec.offer);
+      // Datos contradictorios en la propia fuente (título ≠ atributos…): no se aplica nada; se conserva para revisión.
+      if (rec.reviewReasons?.length) {
+        results.push(result(gi, 'review', { ...base, offerKey, reasons: rec.reviewReasons, record: rec }));
+        return;
+      }
       const res = resolve(index, rec);
 
       if (res.kind === 'review') {

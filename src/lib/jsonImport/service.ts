@@ -25,6 +25,8 @@ import { loadDeletedSnapshot, matchDeletedOffer, matchDeletedProduct } from '../
 import { invalidateCatalogCache } from '../catalog';
 import { runImport } from './engine';
 import type { ImportDefaults, Outcome, RecordResult } from './types';
+import { adaptApifyAmazonItem, isApifyAmazonItem } from './apifyAmazon';
+import { resolveCatalogCategory } from './categoryResolver';
 
 const KEEP_BACKUPS = 5;
 const KEEP_REPORTS = 20;
@@ -79,7 +81,9 @@ export function processChunk(input: {
   // ── Sección crítica síncrona: leer → aplicar → escribir una sola vez. ──
   const catalog = readProductsFromFile();
   const snapshot = loadDeletedSnapshot();
-  const out = runImport(catalog, input.records, input.defaults, {
+  // Elementos crudos del actor de Amazon de Apify (pegados o subidos): se adaptan al modelo antes de importar.
+  const records = input.records.map((r) => (isApifyAmazonItem(r) ? adaptApifyAmazonItem(r, { resolveCategory: resolveCatalogCategory }) : r));
+  const out = runImport(catalog, records, input.defaults, {
     batchId: input.batchId,
     nowIso,
     deletedIds: new Set(snapshot.ids),

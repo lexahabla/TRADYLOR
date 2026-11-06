@@ -166,6 +166,12 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   SIEMPRE explícita (sin ella ScraperAPI deduce el dominio de `country_code` y un valor
   distinto de `es` consulta amazon.com → 404 «Page Not Found»); `SCRAPER_API_COUNTRY_CODE`
   se alinea con ese dominio (ver `src/lib/scraperMarket.ts`).
+  Extracción de una categoría de Amazon (Importar › JSON › «URL de categoría»): `APIFY_TOKEN`
+  (Apify, actor `junglee/Amazon-crawler`; sólo servidor, nunca en el navegador ni en logs). Opcionales:
+  `APIFY_MAX_ITEMS` (tope de productos por extracción, 50 por defecto, máx. 100), `APIFY_RUN_TIMEOUT_SECS`
+  (900), `APIFY_MAX_RUNS_PER_DAY` (20), `APIFY_MAX_COST_USD` (tope de gasto por ejecución, 2),
+  `APIFY_PROXY_COUNTRY` y `APIFY_LANGUAGE` (sólo si se definen se envían al actor). El límite de productos
+  viaja a Apify (`maxItemsPerStartUrl`); no se envían `countryCode`/`zipCode` (cobran 0,06 USD por resultado).
   `EBAY_COMMISSION_RATE` (opcional): % base de comisión EPN que usa el catálogo de
   eBay para la columna "Comisión %" (4-6%; por defecto 5).
 - **Desarrollo remoto (opcional)**: `GITHUB_PAT` (push a GitHub desde el contenedor),
