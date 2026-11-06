@@ -363,3 +363,20 @@ test('reimportar el mismo producto de Temu no duplica su oferta; otro vendedor d
   assert.equal(readCatalog(dir).length, 1);
   assert.equal(getOffers(readCatalog(dir)[0]).length, 2, 'las ofertas de vendedores distintos se conservan por separado');
 });
+
+test('lectura de elementos crudos (?raw=1): sólo lectura, requiere autenticación y no expone el token', async () => {
+  resetJobs();
+  const f = fakeApify({ runStatus: 'SUCCEEDED', items: SAMPLE, itemCount: SAMPLE.length });
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 5 }));
+    const posts = runPosts(f).length;
+    const res = await route.GET({ request: apiRequest('/api/admin/category-extract?id=' + started.job.id + '&raw=1', { method: 'GET', token: true }), url: new URL('http://localhost/api/admin/category-extract?id=' + started.job.id + '&raw=1') });
+    const body = await jsonOf(res);
+    assert.equal(body.items.length, 5, 'limitado al tamaño de la extracción');
+    assert.equal(body.items[0].goodsId, SAMPLE[0].goodsId, 'sin adaptar');
+    assert.equal(runPosts(f).length, posts, 'leer no lanza ejecuciones');
+    assert.doesNotMatch(JSON.stringify(body), new RegExp(TOKEN));
+    const anon = await route.GET({ request: apiRequest('/api/admin/category-extract?id=' + started.job.id + '&raw=1', { method: 'GET' }), url: new URL('http://localhost/api/admin/category-extract?id=' + started.job.id + '&raw=1') });
+    assert.equal(anon.status, 401);
+  } finally { f.restore(); }
+});

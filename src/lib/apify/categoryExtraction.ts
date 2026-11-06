@@ -467,6 +467,18 @@ async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefi
   return patchJob(job.id, { resultReady: true, itemsSoFar: items.length, summary });
 }
 
+/**
+ * Elementos CRUDOS del dataset de Apify de una extracción (sin adaptar), para diagnóstico y para conservar muestras reales.
+ * Es una lectura (no lanza ni cobra ejecuciones) y está limitada al tamaño de la extracción; el dataset sólo existe en Apify
+ * durante su periodo de retención.
+ */
+export async function readRawItems(id: string): Promise<unknown[] | undefined> {
+  const job = getJob(id);
+  if (!job?.datasetId) return undefined;
+  const data = await apify(`/datasets/${encodeURIComponent(job.datasetId)}/items?format=json&limit=${job.limit + 1}`);
+  return Array.isArray(data) ? data.slice(0, job.limit) : [];
+}
+
 /** Cancela: aborta la ejecución EN APIFY (deja de generar y de cobrar) y conserva los resultados parciales. */
 export async function cancelExtraction(id: string): Promise<ExtractionJob> {
   const job = getJob(id);
