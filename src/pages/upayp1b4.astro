@@ -10627,10 +10627,73 @@ function renderTableRows(products, resetPage = true) {
     runWhenIdle(loadNetworkFields, 3500);
   });
 </script>
+<script is:inline>
+  // Plegado de bloques de Catálogo e Importar: pulsar la cabecera (o su flecha)
+  // oculta/muestra todo lo que cuelga de ella. JavaScript puro (is:inline).
+  (function () {
+    var HEADERS = [
+      '[data-admin-view="products"].products-list-card > .list-header-row',
+      '[data-admin-view="products"] .sections-admin > .list-header-row',
+      '#networksCard > .card-header',
+      '[data-admin-view="affiliates"] .affiliates-layout .list-header-row'
+    ];
+    function setFolded(header, folded) {
+      header.setAttribute('aria-expanded', String(!folded));
+      header.classList.toggle('sec-fold-closed', folded);
+      var el = header.nextElementSibling;
+      while (el) {
+        if (folded) el.setAttribute('data-fold-hidden', '');
+        else el.removeAttribute('data-fold-hidden');
+        el = el.nextElementSibling;
+      }
+    }
+    function init(header) {
+      if (header.getAttribute('data-fold-ready')) return;
+      header.setAttribute('data-fold-ready', '1');
+      header.classList.add('sec-fold-header');
+      header.setAttribute('role', 'button');
+      header.setAttribute('tabindex', '0');
+      var chev = document.createElement('span');
+      chev.className = 'sec-fold-chevron';
+      chev.setAttribute('aria-hidden', 'true');
+      chev.textContent = '▾';
+      header.appendChild(chev);
+      var title = header.querySelector('.card-title');
+      header.setAttribute('aria-label', 'Plegar o desplegar: ' + (title ? title.textContent.trim() : 'sección'));
+      setFolded(header, false);
+      function toggle() { setFolded(header, !header.classList.contains('sec-fold-closed')); }
+      header.addEventListener('click', function (e) {
+        if (e.target.closest('button, a, input, select, textarea, label')) return;
+        toggle();
+      });
+      header.addEventListener('keydown', function (e) {
+        if (e.target !== header) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+      });
+    }
+    function run() {
+      HEADERS.forEach(function (sel) {
+        document.querySelectorAll(sel).forEach(init);
+      });
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+    else run();
+  })();
+</script>
   </>
 )}
 
 <style>
+  /* Plegado de bloques (Catálogo / Importar) */
+  :global([data-fold-hidden]) { display: none !important; }
+  :global(.sec-fold-header) { cursor: pointer; align-items: center; }
+  :global(.sec-fold-header:focus-visible) { outline: 2px solid #60a5fa; outline-offset: 3px; border-radius: 8px; }
+  :global(.sec-fold-chevron) {
+    margin-left: auto; flex-shrink: 0; width: 44px; height: 44px; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 1.1rem; color: #9ca3af;
+    transition: transform .2s ease;
+  }
+  :global(.sec-fold-header.sec-fold-closed .sec-fold-chevron) { transform: rotate(-90deg); }
   /* --color-bg-main: fondo de inputs/selects de este panel (precio, login,
      credenciales de red, etc.). Se usaba en decenas de reglas de este archivo
      pero nunca se había declarado, así que el navegador lo trataba como
