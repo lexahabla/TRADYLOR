@@ -1069,10 +1069,6 @@ const h = headerConfig[initialSection] || headerConfig.products;
              en categorías/subcategorías existentes. -->
         <div id="aliImportActions" class="ali-import-actions">
           <div id="aliImportTools" class="ali-import-tools">
-            <button type="button" data-keep-visible id="btnBuildCatalog" class="btn-ai btn-sm" title="Construye el catálogo multi-comerciante real desde los datos de las redes conectadas (guarda los resultados en segundo plano).">
-              <span class="btn-text">🏗️ Construir Catálogo</span>
-              <div class="btn-spinner" hidden></div>
-            </button>
             <span class="ali-import-title">Añadir al catálogo</span>
             <br />
             <select id="aliCatAssign" class="sel-cat-assign" aria-label="Categoría destino" title="Categoría raíz donde añadir los productos marcados de la tabla">
@@ -1082,6 +1078,10 @@ const h = headerConfig[initialSection] || headerConfig.products;
               <option value="">Subcategoría destino…</option>
             </select>
             <button type="button" class="btn-success btn-sm" id="btnAliImportCat" title="Añade los productos marcados a la categoría elegida y los enriquece con IA (ficha completa: especificaciones, pros/contras y veredicto), igual que el botón «Enriquecer»">📥 Añadir a categoría</button>
+            <button type="button" data-keep-visible id="btnBuildCatalog" class="btn-ai btn-sm" title="Construye el catálogo multi-comerciante real desde los datos de las redes conectadas (guarda los resultados en segundo plano).">
+              <span class="btn-text">🏗️ Construir Catálogo</span>
+              <div class="btn-spinner" hidden></div>
+            </button>
 
           </div>
           <div id="aliCatalogDanger" class="ali-catalog-danger" hidden>
@@ -11536,7 +11536,7 @@ function renderTableRows(products, resetPage = true) {
   .ali-f-sync-row .ali-catalog-meta { font-size: .74rem; color: var(--color-text-dim); }
   /* Acceso rápido (Probar Conexión + Sincronizar Redes + meta), justo debajo
      de #aliCatalogStatus: misma fila, alineados a la derecha. */
-  .ali-quick-sync { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; flex-wrap: wrap; margin: .6rem 0; }
+  .ali-quick-sync { display: flex; align-items: center; justify-content: flex-end; gap: .6rem; flex-wrap: wrap; margin: 1.2rem 0 .6rem; }
   .ali-quick-sync .filter-field { min-width: auto; flex: 0 0 auto; margin: 0; }
   .ali-quick-sync .filter-field label { font-size: .65rem; margin-bottom: .1rem; }
   .ali-quick-sync .filter-field select { font-size: .72rem; padding: .32rem .5rem; min-width: 130px; max-width: 190px; }
