@@ -11,6 +11,7 @@ deploy.ps1
 docker/entrypoint.sh
 docs/api-v1.md
 docs/deploy-easypanel.md
+docs/temu-actor-mercado-es.md
 estructura.txt
 estructura_limpia.txt
 gemini.service.ts
@@ -48,6 +49,7 @@ scripts/tests/import-target.test.mjs
 scripts/tests/temu-extract.test.mjs
 scripts/tests/fixtures/temu-sample.synthetic.json
 scripts/tests/fixtures/temu-real-sample-es.json
+scripts/tests/fixtures/temu-real-sample-es-pdp-1893.json
 scripts/tests/fixtures/temu-real-sample-us-category-1893.json
 scripts/tests/fixtures/amazon-real-sample-es.json
 scripts/tests/fixtures/temu-real-sample-us.json

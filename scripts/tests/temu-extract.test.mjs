@@ -511,3 +511,27 @@ test('el resumen de la extracción informa de las monedas devueltas y detecta qu
     assert.equal(out.job.summary.marketMismatch, false);
   } finally { f.restore(); }
 });
+
+/* ───────────── Producto de la categoría 1893 por su URL individual española (ejecución real, 7-nov-2026) ───────────── */
+
+test('URL individual /es/ de un producto de la categoría 1893: mismo goodsId que el lote USD, ahora en EUR y mercado español → se importa; el lote USD sigue bloqueado', () => {
+  const pdp = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'temu-real-sample-es-pdp-1893.json'), 'utf8'));
+  assert.equal(pdp.length, 1);
+  const usdTwin = REAL_1893.find((o) => o.goodsId === pdp[0].goodsId);
+  assert.ok(usdTwin, 'el producto existe en el lote USD de la misma categoría');
+  assert.equal(usdTwin.currency, 'USD');
+  assert.equal(pdp[0].currency, 'EUR');
+  assert.equal(pdp[0].sourcePageType, 'pdp');
+  assert.match(pdp[0].sourceUrl, /^https:\/\/www\.temu\.com\/es\/-g-\d+\.html$/);
+  const a = temu.adaptApifyTemuItem(pdp[0], { resolveCategory: () => ({}) });
+  assert.deepEqual(a.__import.review, [], JSON.stringify(a.__import));
+  assert.deepEqual(a.__import.errors, []);
+  assert.equal(a.offer.currency, 'EUR');
+  assert.equal(a.offer.price, pdp[0].price);
+  // el gemelo USD sigue yendo a revisión: no se convierte ni se reetiqueta
+  assert.ok(temu.adaptApifyTemuItem(usdTwin).__import.review.includes('moneda_no_euro:USD'));
+  writeCatalog(dir, []);
+  const out = run(pdp, { target: { category: 'Hogar', categoryId: 'c-hogar' } });
+  assert.deepEqual(out.results.map((r) => r.outcome), ['created']);
+  assert.equal(readCatalog(dir)[0].currency, 'EUR');
+});
