@@ -265,6 +265,15 @@ export function validateTemuUrl(raw: unknown): { url: string; kind: UrlKind } {
   if (kind) {
     // Sin prefijo de mercado el actor usa el de EE. UU. y devuelve USD (verificado en una ejecución real): se rechaza ANTES de gastar.
     if (!/^\/es(-[a-z]{2})?\//.test(path)) {
+      if (kind === 'product') {
+        // La ficha individual SÍ respeta /es/ (verificado con ejecuciones reales) y el goodsId es el mismo en todos los mercados:
+        // una URL de producto sin mercado se normaliza a la ficha española. Otro mercado explícito (/us/, /de-en/…) se rechaza.
+        if (/^\/[a-z]{2}(-[a-z]{2})?\//.test(path)) {
+          throw new ExtractionError('La URL del producto es de otro mercado de Temu. Usa la URL española (/es/…) o pega la URL sin mercado: se pedirá la ficha española.');
+        }
+        const id = (path.match(/g-(\d{6,20})\.html$/) ?? url.search.match(/goods_id=(\d{6,20})/))?.[1];
+        if (id) return { url: temuEsProductUrl(id), kind };
+      }
       throw new ExtractionError('La URL de Temu no indica el mercado español: el actor usaría el de EE. UU. y devolvería precios en USD. Usa la URL con /es/, por ejemplo https://www.temu.com/es/category-o3-248.html (ábrela desde Temu España).');
     }
     return { url: url.toString(), kind };

@@ -22,7 +22,7 @@ function makeClient(fetchImpl) {
       classList: { toggle() {}, add() {} },
       addEventListener: (t, f) => { (listeners[t] ||= []).push(f); },
       fire: (t) => (listeners[t] || []).forEach((f) => f({ target: node, key: '', preventDefault() {} })),
-      appendChild: (c) => { node.children.push(c); return c; }, querySelector: () => ({ setAttribute() {} }), setAttribute() {}, focus() {}, remove() {}, click() {},
+      appendChild: (c) => { node.children.push(c); return c; }, querySelector: () => ({ setAttribute() {} }), setAttribute() {}, focus() {}, remove() {}, click: () => node.fire('click'),
     };
     return (nodes[id] = node);
   };
@@ -396,4 +396,58 @@ test('la comprobación automática con «solo nuevos» muestra los existentes co
   const text = nodes.jsonImpSumStatus.textContent;
   assert.ok(text.includes('0 nuevo(s)'), text);
   assert.ok(text.includes('1 ya existe(n) en el catálogo → OMITIDOS (no se vuelven a incluir ni se actualizan)'), text);
+});
+
+/* ───────────── Producto individual de Temu por URL (reutiliza la extracción) ───────────── */
+
+function extractServer(job, records) {
+  const log = { posts: [] };
+  const f = fakeServer({
+    extra: (u, init) => {
+      if (!u.startsWith('/api/admin/category-extract')) return null;
+      if (init && init.method === 'POST') { log.posts.push(JSON.parse(init.body)); return resp({ success: true, job: { ...job, status: 'running' } }, 201); }
+      if (u.includes('?id=')) return resp({ success: true, job: { ...job, status: 'succeeded', resultReady: true, summary: { fetched: records.length, withReview: 0, actorErrors: 0, partial: false, currencies: { EUR: records.length }, marketMismatch: false } }, records });
+      return resp({ success: true, configured: true, defaultLimit: 10, maxLimit: 50, active: null, latest: null });
+    },
+  });
+  return { f, log };
+}
+const temuJob = { id: '11111111-1111-4111-8111-111111111111', source: 'temu', urlKind: 'product', url: 'https://www.temu.com/es/-g-601101683713758.html', limit: 1, createdAt: '2026-11-07T10:00:00.000Z' };
+const temuProductRecord = { product: { title: 'Colchoneta térmica', images: ['https://img.kwcdn.com/a.jpg'] }, variant: {}, offer: { platform: 'temu', externalId: '601101683713758', url: 'https://www.temu.com/es/-g-601101683713758.html', price: 52.06, currency: 'EUR', availability: false }, __import: { warnings: [], review: [], errors: [] } };
+
+test('Temu producto individual: valida la URL en el cliente (otros dominios, categorías, otros mercados) sin tocar el servidor', async () => {
+  const { f, log } = extractServer(temuJob, [temuProductRecord]);
+  const { nodes } = makeClient(f.fn);
+  const cases = [
+    ['', 'Pega la URL de un producto de Temu'],
+    ['http://www.temu.com/-g-601101683713758.html', 'https://'],
+    ['https://www.amazon.es/dp/B01EXDG2MO', 'Solo se admiten URL de Temu'],
+    ['https://www.temu.com/es/category-o3-248.html', 'Esa URL no es la de un producto'],
+    ['https://www.temu.com/us/-g-601101683713758.html', 'otro mercado de Temu'],
+  ];
+  for (const [url, expected] of cases) {
+    nodes.jsonImpTemuUrl.value = url;
+    nodes.jsonImpTemuFetch.fire('click');
+    assert.ok(nodes.jsonImpTemuHint.textContent.includes(expected), url + ' → ' + nodes.jsonImpTemuHint.textContent);
+  }
+  assert.equal(log.posts.length, 0, 'ninguna petición inválida llegó al servidor');
+});
+
+test('Temu producto individual: una URL sin mercado se envía como ficha española (límite 1), el estado se ve en su bloque y el resultado alimenta la zona común con comprobación automática', async () => {
+  const { f, log } = extractServer(temuJob, [temuProductRecord]);
+  const { nodes } = makeClient(f.fn);
+  nodes.jsonImpTemuUrl.value = 'https://www.temu.com/heated-mattress-pad-g-601101683713758.html?_x_sessn_id=abc';
+  nodes.jsonImpTemuFetch.fire('click');
+  await wait(120);
+  assert.deepEqual(log.posts, [{ source: 'temu', url: 'https://www.temu.com/es/-g-601101683713758.html', limit: 1 }]);
+  assert.equal(nodes.jsonImpSource.value, 'temu');
+  assert.ok(nodes.jsonImpTemuHint.textContent.length > 0, 'el estado se refleja en el bloque individual');
+  await wait(3500); // consulta de estado (3 s)
+  assert.equal(nodes.jsonImpActionZone.hidden, false);
+  assert.equal(nodes.jsonImpSumCount.textContent, '1');
+  assert.ok(nodes.jsonImpSumSource.textContent.includes('URL de producto de Temu'), nodes.jsonImpSumSource.textContent);
+  assert.equal(nodes.jsonImpSumCurrency.textContent, 'EUR (1)');
+  assert.equal(f.log.imports.length, 1, 'comprobación automática (simulación) frente al catálogo');
+  assert.equal(f.log.imports[0].dryRun, true);
+  assert.ok(nodes.jsonImpSumStatus.textContent.includes('1 agotado(s)/sin stock'), nodes.jsonImpSumStatus.textContent);
 });

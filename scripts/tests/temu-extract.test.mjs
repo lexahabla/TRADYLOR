@@ -48,7 +48,7 @@ test('URL de Temu: admite producto y categoría; rechaza búsquedas, tiendas, co
     ['https://www.temu.com/search_result.html?search_key=auriculares', /búsquedas/], ['https://www.temu.com/es/algo?query=auriculares', /búsquedas/],
     ['https://www.temu.com/mall.html?mall_id=634418218148716', /tienda/], ['https://www.temu.com/', /portada/], ['https://www.temu.com/es', /portada/],
     ['https://www.temu.com/us/bestsellers.html', /colecciones y canales/], ['https://www.temu.com/channel/lightning-deals.html', /colecciones y canales/],
-    ['https://www.temu.com/category-o3-248.html', /no indica el mercado español/], ['https://www.temu.com/-g-601099513224343.html', /no indica el mercado español/],
+    ['https://www.temu.com/category-o3-248.html', /no indica el mercado español/], ['https://www.temu.com/us/-g-601099513224343.html', /otro mercado de Temu/], ['https://www.temu.com/de-en/-g-601099513224343.html', /otro mercado de Temu/],
     ['https://www.temu.com/us/category-o3-248.html', /no indica el mercado español/], ['https://www.temu.com/de-en/category-o3-248.html', /no indica el mercado español/],
     ['https://www.temu.com/politica-de-privacidad.html', /Tipo de URL de Temu no admitido/], ['https://www.temu.com/' + 'a'.repeat(2100), /demasiado larga/],
   ];
@@ -938,4 +938,34 @@ test('el resumen del panel muestra la cuenta hasta los N solicitados y los motiv
   const panel = fs.readFileSync(path.join('d:/AXEL/WEBS/TRADYLOR/tradylor_web', 'src/pages/upayp1b4.astro'), 'utf8');
   assert.ok(panel.includes("'Solicitados ' + job.limit + ' → la categoría listó '"));
   assert.ok(panel.includes("'Diferencia hasta ' + job.limit + ': '"));
+});
+
+/* ───────────── Producto individual de Temu por URL ───────────── */
+
+test('URL de producto de Temu SIN mercado: se normaliza a la ficha española /es/-g-<id>.html (el goodsId es el mismo); la de categoría sin mercado se sigue rechazando', () => {
+  const id = '601101683713758';
+  const want = 'https://www.temu.com/es/-g-' + id + '.html';
+  assert.deepEqual(lib.validateTemuUrl('https://www.temu.com/-g-' + id + '.html'), { url: want, kind: 'product' });
+  assert.deepEqual(lib.validateTemuUrl('https://www.temu.com/heated-mattress-pad-for-camping-g-' + id + '.html?_x_sessn_id=abc&refer_page_sn=1'), { url: want, kind: 'product' }, 'con slug y parámetros de seguimiento');
+  assert.deepEqual(lib.validateTemuUrl('https://temu.com/goods.html?goods_id=' + id), { url: want, kind: 'product' }, 'forma goods_id');
+  // con /es/ se respeta tal cual (limpia)
+  assert.equal(lib.validateTemuUrl('https://www.temu.com/es/colchoneta-g-' + id + '.html?x=1').url, 'https://www.temu.com/es/colchoneta-g-' + id + '.html');
+  // el eslug que contiene letras como un código de país NO se confunde con un mercado
+  assert.equal(lib.validateTemuUrl('https://www.temu.com/us-style-heater-g-' + id + '.html').url, want);
+  assert.throws(() => lib.validateTemuUrl('https://www.temu.com/category-o3-248.html'), /no indica el mercado español/);
+});
+
+test('producto individual de Temu: una ejecución con límite 1, URL española normalizada y sin guardar nada', async () => {
+  resetJobs();
+  const f = fakeApify();
+  try {
+    const out = await jsonOf(await post({ source: 'temu', url: 'https://www.temu.com/heated-mattress-pad-g-601101683713758.html?_x_sessn_id=abc', limit: 10 }));
+    assert.equal(out.job.urlKind, 'product');
+    assert.equal(out.job.limit, 1);
+    assert.equal(out.job.twoPhase, undefined, 'un producto no usa las dos fases');
+    assert.equal(out.job.runsReserved, 1);
+    assert.deepEqual(JSON.parse(runPosts(f)[0].body).startUrls, [{ url: 'https://www.temu.com/es/-g-601101683713758.html' }]);
+    assert.equal(JSON.parse(runPosts(f)[0].body).maxItems, 1);
+    assert.equal(JSON.parse(runPosts(f)[0].body).getProductDetails, true);
+  } finally { f.restore(); }
 });

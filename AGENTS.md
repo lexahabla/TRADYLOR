@@ -189,6 +189,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   prefijo de mercado /es/ (sin él el actor responde con EE. UU. en USD; se rechaza antes de gastar); rechaza
   búsquedas, colecciones, ofertas relámpago, tiendas y portada. El límite viaja como `maxItems`; `getProductDetails` va activado
   (`APIFY_TEMU_GET_DETAILS=false` lo desactiva) y se pide 1 GB de memoria (arranque 0,03 USD + 0,016 USD por producto; medido: 10 productos = 0,19 USD).
+  Producto individual de Temu: bloque propio «URL de producto de Temu» en el panel (reutiliza la extracción; una ejecución, límite 1); una URL de producto SIN
+  mercado se normaliza a la ficha española `/es/-g-<id>.html` (el goodsId es el mismo en todos los mercados); otro mercado explícito (/us/…) se rechaza.
   La URL se envía limpia (sin parámetros de seguimiento). OJO: `/es/` no garantiza el mercado español: hay categorías (p. ej. o3-1893)
   que el actor sirve siempre en USD y canoniza sin `/es/` (medido con ejecuciones reales); el panel muestra la moneda devuelta ANTES de importar.
   Categorías de Temu = DOS FASES (ver docs/temu-actor-mercado-es.md): 1) descubrir ids (sin detalle, sólo ids) y 2) fichas españolas
