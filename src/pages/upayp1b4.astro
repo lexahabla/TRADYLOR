@@ -1055,12 +1055,12 @@ const h = headerConfig[initialSection] || headerConfig.products;
       </div>
 
       <div class="jsonimp-block" id="jsonImpTemuBlock">
-        <label class="field-label" for="jsonImpTemuUrl">URL de producto de Temu <span class="label-hint">(opcional · un producto individual con Apify; no guarda nada en el catálogo)</span></label>
+        <label class="field-label" for="jsonImpTemuUrl">URL de producto o enlace corto de afiliado de Temu <span class="label-hint">(opcional · un producto individual con Apify; no guarda nada en el catálogo)</span></label>
         <div class="jsonimp-row">
-          <input id="jsonImpTemuUrl" type="url" class="jsonimp-input" placeholder="https://www.temu.com/es/…-g-601101683713758.html" autocomplete="off" spellcheck="false" aria-describedby="jsonImpTemuHint" />
+          <input id="jsonImpTemuUrl" type="url" class="jsonimp-input" placeholder="https://temu.to/k/… o https://www.temu.com/es/…-g-601101683713758.html" autocomplete="off" spellcheck="false" aria-describedby="jsonImpTemuHint" />
           <button type="button" id="jsonImpTemuFetch" class="btn-primary btn-sm" title="Extrae la ficha española de ese producto con Apify (≈ 0,046 USD por producto, medido)">Obtener producto de Temu</button>
         </div>
-        <p id="jsonImpTemuHint" class="label-hint" role="status" aria-live="polite">Pega la URL del producto (…-g-&lt;id&gt;.html). Se pide la ficha española (/es/, EUR): si la URL no indica el mercado, se añade. Coste medido ≈ 0,046 USD por producto. Para cancelar usa «Cancelar extracción» del bloque de categorías.</p>
+        <p id="jsonImpTemuHint" class="label-hint" role="status" aria-live="polite">Pega la URL del producto (…-g-&lt;id&gt;.html) o tu enlace corto de afiliado (temu.to/…): se reconoce el producto y el enlace se conserva como enlace de afiliado. Se pide la ficha española (/es/, EUR): si la URL no indica el mercado, se añade. Coste medido ≈ 0,046 USD por producto. Para cancelar usa «Cancelar extracción» del bloque de categorías.</p>
       </div>
 
       <div class="jsonimp-block" id="jsonImpCatBlock">
@@ -10941,6 +10941,7 @@ function renderTableRows(products, resetPage = true) {
     var temuFetch = $('jsonImpTemuFetch');
     var temuHint = $('jsonImpTemuHint');
     var temuDriven = false;
+    var temuNote = '';
     var temuViaBlock = false;
     var catLabelText = $('jsonImpCatLabelText');
     var catLabelHint = $('jsonImpCatLabelHint');
@@ -11763,7 +11764,7 @@ function renderTableRows(products, resetPage = true) {
     function setCatStatus(text, kind) {
       catStatus.textContent = text;
       catStatus.classList.toggle('jsonimp-hint-error', kind === 'error');
-      if (temuDriven) { temuHint.textContent = text; temuHint.classList.toggle('jsonimp-hint-error', kind === 'error'); }
+      if (temuDriven) { temuHint.textContent = (temuNote ? temuNote + ' ' : '') + text; temuHint.classList.toggle('jsonimp-hint-error', kind === 'error'); }
     }
     function catApi(method, query, body) {
       return fetch(CAT_API + (query || ''), {
@@ -11845,7 +11846,7 @@ function renderTableRows(products, resetPage = true) {
       fileText = '';
       fileInput.value = '';
       fileInfo.textContent = DEFAULT_FILE_INFO;
-      loadMethod = (job.urlKind === 'product' ? 'URL de producto de ' : 'URL de categoría de ') + (srcSel.value === 'temu' ? 'Temu' : 'Amazon');
+      loadMethod = (job.urlKind === 'product' ? (job.affiliateUrl ? 'enlace corto de afiliado de ' : 'URL de producto de ') : 'URL de categoría de ') + (srcSel.value === 'temu' ? 'Temu' : 'Amazon');
       refreshSummary();
       var jobPhases = job.summary && job.summary.phases;
       autoPreview(jobPhases && jobPhases.unavailable ? jobPhases.unavailable + ' sin ficha en España (no disponibles en origen)' : '');
@@ -11865,9 +11866,9 @@ function renderTableRows(products, resetPage = true) {
       var head = s.partial ? 'Resultado parcial (' + records.length + ' de máx. ' + job.limit + '): ' : 'Extracción completada: ';
       var curInfo = currencyInfo(records);
       var mismatch = s.marketMismatch === true;
-      var phaseNote = '';
+      var phaseNote = job.affiliateUrl ? ' Enlace de afiliado reconocido: se guardará como enlace de afiliado (separado del de origen).' : '';
       if (ph) {
-        phaseNote = ' Método de dos fases: las fichas son españolas, pero los productos se descubrieron en otro mercado, así que la selección y el orden pueden no coincidir con la categoría española.';
+        phaseNote += ' Método de dos fases: las fichas son españolas, pero los productos se descubrieron en otro mercado, así que la selección y el orden pueden no coincidir con la categoría española.';
         // Cuenta hasta lo solicitado: solicitados → listados por la categoría → ids únicos → fichas de España.
         var dsc = job.discovery || {};
         var rows = typeof dsc.fetched === 'number' ? dsc.fetched : ph.discovered;
@@ -11960,8 +11961,9 @@ function renderTableRows(products, resetPage = true) {
       var source = srcSel.value === 'temu' ? 'temu' : 'amazon';
       if (!url) { setCatStatus(source === 'temu' ? 'Escribe la URL de un producto o de una categoría de Temu.' : 'Escribe la URL de la categoría de Amazon.', 'error'); catUrl.focus(); return; }
       if (!/^https:\/\//i.test(url)) { setCatStatus('La URL debe empezar por https://', 'error'); catUrl.focus(); return; }
-      if (source === 'temu' && !/^https:\/\/(\w[\w-]*\.)*temu\.com\//i.test(url)) { setCatStatus('Solo se admiten URL de Temu (https://www.temu.com/…).', 'error'); catUrl.focus(); return; }
-      if (source === 'temu' && !/^https:\/\/[^/]+\/es(-[a-z]{2})?\//i.test(url)) { setCatStatus('La URL de Temu debe indicar el mercado español (https://www.temu.com/es/…): sin él se obtendrían precios en USD.', 'error'); catUrl.focus(); return; }
+      var shortTemu = source === 'temu' && /^https:\/\/(temu\.to|share\.temu\.com)\/./i.test(url);
+      if (source === 'temu' && !shortTemu && !/^https:\/\/(\w[\w-]*\.)*temu\.com\//i.test(url)) { setCatStatus('Solo se admiten URL de Temu (https://www.temu.com/…) o enlaces cortos de afiliado (https://temu.to/…).', 'error'); catUrl.focus(); return; }
+      if (source === 'temu' && !shortTemu && !/^https:\/\/[^/]+\/es(-[a-z]{2})?\//i.test(url)) { setCatStatus('La URL de Temu debe indicar el mercado español (https://www.temu.com/es/…): sin él se obtendrían precios en USD.', 'error'); catUrl.focus(); return; }
       if (!limitRaw || !/^\d+$/.test(limitRaw) || limit < 1) { setCatStatus('El máximo de productos debe ser un entero de 1 en adelante.', 'error'); catLimit.focus(); return; }
       if (limit > catMax) { setCatStatus('El máximo permitido por el servidor es ' + catMax + ' productos.', 'error'); catLimit.focus(); return; }
       setCatBusy(true);
@@ -11969,6 +11971,9 @@ function renderTableRows(products, resetPage = true) {
       setCatStatus('Enviando la extracción a Apify (máx. ' + limit + ' productos)…', 'info');
       catApi('POST', '', { source: source, url: url, limit: limit }).then(function (res) {
         if (res.data && res.data.success) {
+          if (res.data.job && res.data.job.affiliateUrl) {
+            temuNote = '✔ Enlace de afiliado reconocido (' + String(res.data.job.affiliateUrl).replace(/^https:\/\//, '') + ') → producto ' + res.data.job.affiliateGoodsId + ' · se guardará como enlace de afiliado, separado del enlace de origen.';
+          }
           if (res.data.reused) setCatStatus('Ya había una extracción igual en curso: continúo con ella (no se lanza otra).', 'info');
           handleJob({ job: res.data.job }, true);
           return;
@@ -12015,7 +12020,9 @@ function renderTableRows(products, resetPage = true) {
       var t = String(raw || '').trim();
       if (!t) return { error: 'Pega la URL de un producto de Temu.' };
       if (!/^https:\/\//i.test(t)) return { error: 'La URL debe empezar por https://' };
-      if (!/^https:\/\/(\w[\w-]*\.)*temu\.com\//i.test(t)) return { error: 'Solo se admiten URL de Temu (https://www.temu.com/…).' };
+      if (!/^https:\/\/(\w[\w-]*\.)*temu\.(com|to)\//i.test(t)) return { error: 'Solo se admiten URL de Temu (https://www.temu.com/…) o enlaces cortos de afiliado (https://temu.to/…).' };
+      var sh = t.match(/^https:\/\/(temu\.to|share\.temu\.com)\/(.+)/i);
+      if (sh) return { url: t, short: true };
       var m = t.match(/g-(\d{6,20})\.html/) || t.match(/goods_id=(\d{6,20})/);
       if (!m) return { error: 'Esa URL no es la de un producto de Temu (debe terminar en …-g-<id>.html). Para una categoría usa el bloque de categorías de abajo.' };
       if (/^https:\/\/[^/]+\/[a-z]{2}(-[a-z]{2})?\//i.test(t) && !/^https:\/\/[^/]+\/es(-[a-z]{2})?\//i.test(t)) return { error: 'La URL del producto es de otro mercado de Temu: usa la española (/es/…) o pégala sin mercado.' };
@@ -12026,7 +12033,8 @@ function renderTableRows(products, resetPage = true) {
       var r = temuProductUrl(temuUrl.value);
       temuHint.classList.toggle('jsonimp-hint-error', Boolean(r.error));
       if (r.error) { temuHint.textContent = r.error; temuUrl.focus(); return; }
-      temuHint.textContent = 'Producto ' + r.id + ': se pide la ficha española ' + r.url + ' …';
+      temuNote = '';
+      temuHint.textContent = r.short ? 'Enlace corto de afiliado de Temu: se reconoce en el servidor a qué producto apunta y se pide su ficha española…' : 'Producto ' + r.id + ': se pide la ficha española ' + r.url + ' …';
       srcSel.value = 'temu';
       setSourceUi();
       catUrl.value = r.url;

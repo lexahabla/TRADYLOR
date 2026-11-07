@@ -17,7 +17,7 @@
  *  - Las variantes (`skus`) no se importan como fichas (una ficha = una variante): se avisa de cuántas hay; no heredan el
  *    precio principal. Las imágenes propias de cada SKU no se mezclan con las del producto.
  *  - Envío: sólo «gratis» si el texto lo afirma sin condiciones; si no, queda desconocido (el texto se conserva).
- *  - Enlaces: `url` = enlace de ORIGEN (Temu). Nunca se rellena `affiliateUrl`: Apify no da enlace de afiliado.
+ *  - Enlaces: `url` = enlace de ORIGEN (Temu). `affiliateUrl` sólo se rellena con el enlace corto de afiliado que el usuario pegó (ctx.affiliateUrl); Apify no da enlace de afiliado.
  *  - Identidad: plataforma `temu` + `goodsId`. No se compara con Amazon por título ni imagen (lo decide el motor).
  *  - Categoría: sólo si UNA categoría raíz del catálogo encaja claramente; si no, vacía (revisión `sin_categoria`).
  * ==============================================================================
@@ -161,10 +161,18 @@ export function adaptApifyTemuItem(rawInput: unknown, ctx: AdaptContext = {}): A
   const reviews = Number(item.reviewCount);
   const capturedAt = text(item.extractedAt, 40) || ctx.capturedAt;
 
+  // Enlace de afiliado (el enlace corto que pegó el usuario): sólo si pertenece a ESTE producto; el de origen sigue siendo /es/-g-<id>.
+  const affiliateUrl = ctx.affiliateUrl && ctx.affiliateGoodsId === goodsId ? ctx.affiliateUrl : undefined;
+  if (affiliateUrl) {
+    meta.warnings = meta.warnings.filter((w) => w !== 'enlace_de_origen_sin_afiliar');
+    meta.warnings.push('enlace_de_afiliado_corto_de_temu');
+  }
+
   const offer: Any = {
     platform: 'temu',
     externalId: goodsId || undefined,
     url,
+    affiliateUrl,
     price,
     currency: currency || undefined,
     originalPrice,

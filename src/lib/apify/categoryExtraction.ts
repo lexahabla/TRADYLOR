@@ -33,6 +33,7 @@ import { readJsonArrayFile, writeJsonArrayFile } from '../jsonStore';
 import { adaptApifyAmazonItem, isApifyAmazonItem } from '../jsonImport/apifyAmazon';
 import { adaptApifyTemuItem, isApifyTemuItem } from '../jsonImport/apifyTemu';
 import { resolveCatalogCategory } from '../jsonImport/categoryResolver';
+import { cleanShortLink, isTemuShortLink, resolveTemuShortLink } from '../temuShortLink';
 
 /**
  * Base de la API de Apify. `APIFY_API_BASE` sólo se admite apuntando a la máquina local (pruebas con un Apify simulado);
@@ -89,6 +90,9 @@ export interface ExtractionJob {
   costSettled?: boolean;
   /** Fase 2: nº de URL /es/-g-<id> enviadas al actor en su única ejecución. */
   detailUrlsSent?: number;
+  /** Temu: enlace corto de AFILIADO que pegó el usuario (se guarda como enlace de afiliado; el de origen es `url`) y su producto. */
+  affiliateUrl?: string;
+  affiliateGoodsId?: string;
 }
 
 export interface DiscoveryInfo {
@@ -445,8 +449,21 @@ export async function startExtraction(rawUrl: unknown, rawLimit: unknown, rawSou
   if (!config.configured) throw new ExtractionError('La extracción de categorías no está configurada: falta APIFY_TOKEN en el servidor.', 503);
   let url: string;
   let urlKind: UrlKind = 'category';
+  let affiliateUrl: string | undefined;
+  let affiliateGoodsId: string | undefined;
   if (source === 'temu') {
-    const checked = validateTemuUrl(rawUrl);
+    let candidate = rawUrl;
+    // Enlace corto de afiliado de Temu (temu.to/…, share.temu.com/…): se resuelve al producto y se conserva como enlace de afiliado.
+    if (isTemuShortLink(rawUrl)) {
+      const resolved = await resolveTemuShortLink(String(rawUrl));
+      if (!resolved.ok) {
+        throw new ExtractionError(`No se pudo reconocer el enlace corto de Temu: ${resolved.message} Pega la URL completa del producto (…-g-<id>.html).`, 422);
+      }
+      affiliateUrl = cleanShortLink(String(rawUrl));
+      affiliateGoodsId = resolved.goodsId;
+      candidate = temuEsProductUrl(resolved.goodsId);
+    }
+    const checked = validateTemuUrl(candidate);
     url = checked.url;
     urlKind = checked.kind;
   } else {
@@ -480,6 +497,7 @@ export async function startExtraction(rawUrl: unknown, rawLimit: unknown, rawSou
     const job: ExtractionJob = {
       id: crypto.randomUUID(), source, urlKind, url, limit, status: 'starting', createdAt: now, updatedAt: now, maxCostUsd,
       runsReserved: needed, runsStarted: 0,
+      ...(affiliateUrl ? { affiliateUrl, affiliateGoodsId } : {}),
       ...(budgetUsd !== undefined ? { budgetUsd } : {}),
       ...(twoPhase ? { twoPhase: true, phase: prev ? ('detail_starting' as const) : ('discovery' as const) } : {}),
       ...(prev?.discovery ? { discovery: { ...prev.discovery, reused: true, reusedFromJob: prev.id, costUsd: 0 } } : {}),
@@ -843,7 +861,7 @@ async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefi
   // APROXIMACIÓN: el dataset de Amazon no trae la hora de observación de cada producto; se usa el fin de la ejecución,
   // que es posterior a la lectura real de cada página (puede diferir de ella en minutos). No es la hora exacta de captura.
   const capturedAt = job.finishedAt;
-  const ctx = { capturedAt, runId: job.runId, resolveCategory: resolveCatalogCategory };
+  const ctx = { capturedAt, runId: job.runId, resolveCategory: resolveCatalogCategory, affiliateUrl: job.affiliateUrl, affiliateGoodsId: job.affiliateGoodsId };
   const temu = job.source === 'temu';
   const records = items.map((item) => (temu ? (isApifyTemuItem(item) ? adaptApifyTemuItem(item, ctx) : item) : isApifyAmazonItem(item) ? adaptApifyAmazonItem(item, ctx) : item));
   // Un resultado vacío NO prueba que la categoría esté vacía (el actor avisa de que Temu a veces no la sirve).
@@ -912,6 +930,15 @@ export async function readDiagnostics(id: string): Promise<unknown | undefined> 
     out.push(info);
   }
   return out;
+}
+
+/** Prueba GRATUITA (sin Apify) de un enlace corto de Temu: a qué producto apunta y por qué saltos pasa. */
+export async function diagnoseShortLink(raw: unknown) {
+  if (!isTemuShortLink(raw)) return { ok: false as const, message: 'No es un enlace corto de Temu (temu.to/… o share.temu.com/…).' };
+  const r = await resolveTemuShortLink(String(raw));
+  return r.ok
+    ? { ok: true as const, goodsId: r.goodsId, productUrl: temuEsProductUrl(r.goodsId), affiliateUrl: cleanShortLink(String(raw)), chain: r.chain }
+    : { ok: false as const, code: r.code, message: r.message, chain: r.chain };
 }
 
 /** Cancela: aborta la ejecución EN APIFY (deja de generar y de cobrar) y conserva los resultados parciales. */

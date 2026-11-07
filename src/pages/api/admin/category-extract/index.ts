@@ -4,6 +4,7 @@
  * ==============================================================================
  * GET  /api/admin/category-extract            → configuración, límites y extracción activa/última (para retomar tras recargar)
  * GET  /api/admin/category-extract?id=<id>    → estado (consulta a Apify sin esperar); al terminar incluye `records`
+ * GET  /api/admin/category-extract?resolve=<enlace corto de Temu> → prueba GRATUITA: producto al que apunta (sin Apify)
  * GET  /api/admin/category-extract?id=<id>&diag=1 → diagnóstico de sólo lectura de las ejecuciones (SOURCE_SUMMARY del actor, uso y eventos cobrados)
  * GET  /api/admin/category-extract?id=<id>&raw=1 → elementos crudos del dataset de Apify (diagnóstico; solo lectura)
  * POST /api/admin/category-extract            { source:"amazon"|"temu", url, limit, budgetUsd? } → inicia (categorías de Temu: dos fases; `budgetUsd` = presupuesto máximo explícito de todo el trabajo) (idempotente si ya hay una igual en curso)
@@ -24,6 +25,7 @@ import {
   extractionConfig,
   getJob,
   latestJob,
+  diagnoseShortLink,
   readDiagnostics,
   readRawItems,
   refreshExtraction,
@@ -46,6 +48,11 @@ export const GET: APIRoute = async ({ request, url }) => {
   if (!authorized(request)) return unauthorizedApiResponse();
   const id = url.searchParams.get('id');
   try {
+    const resolve = url.searchParams.get('resolve');
+    if (resolve) {
+      const out = await diagnoseShortLink(resolve);
+      return json({ success: out.ok, ...out }, out.ok ? 200 : 422);
+    }
     if (id) {
       if (!/^[a-f0-9-]{36}$/i.test(id)) return json({ success: false, message: 'Identificador no válido.' }, 400);
       if (url.searchParams.get('diag') === '1') {

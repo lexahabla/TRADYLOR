@@ -451,3 +451,31 @@ test('Temu producto individual: una URL sin mercado se envía como ficha españo
   assert.equal(f.log.imports[0].dryRun, true);
   assert.ok(nodes.jsonImpSumStatus.textContent.includes('1 agotado(s)/sin stock'), nodes.jsonImpSumStatus.textContent);
 });
+
+test('Temu enlace corto de afiliado: el bloque lo acepta, lo envía TAL CUAL al servidor (límite 1) y muestra que reconoció el producto y el enlace de afiliado', async () => {
+  const shortJob = { ...temuJob, affiliateUrl: 'https://temu.to/k/gk2abc9xyz', affiliateGoodsId: '601101683713758' };
+  const rec = { ...temuProductRecord, offer: { ...temuProductRecord.offer, affiliateUrl: 'https://temu.to/k/gk2abc9xyz' } };
+  const { f, log } = extractServer(shortJob, [rec]);
+  const { nodes } = makeClient(f.fn);
+  nodes.jsonImpTemuUrl.value = 'https://temu.to/k/gk2abc9xyz';
+  nodes.jsonImpTemuFetch.fire('click');
+  await wait(150);
+  assert.deepEqual(log.posts, [{ source: 'temu', url: 'https://temu.to/k/gk2abc9xyz', limit: 1 }], 'el servidor resuelve el enlace: el cliente no toca la URL');
+  assert.ok(nodes.jsonImpTemuHint.textContent.includes('Enlace de afiliado reconocido (temu.to/k/gk2abc9xyz) → producto 601101683713758'), nodes.jsonImpTemuHint.textContent);
+  assert.ok(nodes.jsonImpTemuHint.textContent.includes('separado del enlace de origen'));
+  await wait(3500);
+  assert.ok(nodes.jsonImpSumSource.textContent.includes('enlace corto de afiliado de Temu'), nodes.jsonImpSumSource.textContent);
+  assert.equal(nodes.jsonImpSumCount.textContent, '1');
+  assert.ok(nodes.jsonImpAlert.textContent.includes('Enlace de afiliado reconocido: se guardará como enlace de afiliado'), nodes.jsonImpAlert.textContent);
+});
+
+test('Temu: un enlace corto de otro dominio parecido o con credenciales se rechaza en el cliente sin llamar al servidor', async () => {
+  const { f, log } = extractServer(temuJob, [temuProductRecord]);
+  const { nodes } = makeClient(f.fn);
+  for (const url of ['https://temu.to.evil.example/k/abc', 'https://evil.example/temu.to/k/abc', 'http://temu.to/k/abc']) {
+    nodes.jsonImpTemuUrl.value = url;
+    nodes.jsonImpTemuFetch.fire('click');
+    assert.ok(/Solo se admiten URL de Temu|https:\/\//.test(nodes.jsonImpTemuHint.textContent), url + ' → ' + nodes.jsonImpTemuHint.textContent);
+  }
+  assert.equal(log.posts.length, 0);
+});

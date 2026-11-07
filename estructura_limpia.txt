@@ -47,6 +47,7 @@ scripts/tests/import-actions.test.mjs
 scripts/tests/import-legacy.test.mjs
 scripts/tests/import-target.test.mjs
 scripts/tests/temu-extract.test.mjs
+scripts/tests/temu-shortlink.test.mjs
 scripts/tests/fixtures/temu-sample.synthetic.json
 scripts/tests/fixtures/temu-real-sample-es.json
 scripts/tests/fixtures/temu-real-sample-es-pdp-1893.json
@@ -112,6 +113,7 @@ src/lib/adminDashboard.ts
 src/lib/affiliateCatalog.ts
 src/lib/ai.ts
 src/lib/apify/categoryExtraction.ts
+src/lib/temuShortLink.ts
 src/lib/aiConsoleGuard.ts
 src/lib/aiKeysStore.ts
 src/lib/aiPersonas.ts

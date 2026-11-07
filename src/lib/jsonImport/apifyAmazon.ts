@@ -31,6 +31,9 @@ export interface AdaptContext {
   resolveCategory?: (text: string) => { name?: string; ambiguous?: boolean };
   /** Identificación de la ejecución de Apify (trazabilidad; no se guarda en el catálogo). */
   runId?: string;
+  /** Enlace de afiliado recibido del usuario (p. ej. el enlace corto de Temu) y el producto al que pertenece. */
+  affiliateUrl?: string;
+  affiliateGoodsId?: string;
 }
 
 export interface ImportMeta {
