@@ -76,6 +76,42 @@ export interface ExtractionJob {
   finishedAt?: string;
   /** Resumen del resultado (sin los registros). */
   summary?: ResultSummary;
+  /** Categorías de Temu en DOS FASES: 1) descubrir identificadores; 2) fichas españolas por /es/-g-<id>.html en una sola ejecución. */
+  twoPhase?: boolean;
+  phase?: 'discovery' | 'detail_starting' | 'detail';
+  /** Ejecuciones de Apify reservadas / realmente lanzadas por este trabajo (cuotas diarias). */
+  runsReserved?: number;
+  runsStarted?: number;
+  /** Presupuesto máximo explícito de TODO el trabajo (USD), si se indicó. */
+  budgetUsd?: number;
+  discovery?: DiscoveryInfo;
+}
+
+export interface DiscoveryInfo {
+  /** Identificadores únicos descubiertos (sólo ids: no se guarda ningún precio ni dato comercial de la fase 1). */
+  ids: string[];
+  fetched: number;
+  duplicatesRemoved: number;
+  invalidIds: number;
+  costUsd?: number;
+  runId?: string;
+  /** Descubrimiento reutilizado de un intento anterior (no se repitió ni se volvió a cobrar). */
+  reused?: boolean;
+  reusedFromJob?: string;
+}
+
+export interface PhasesSummary {
+  discovered: number;
+  duplicatesRemoved: number;
+  obtained: number;
+  /** Descubiertos pero sin ficha española devuelta por el actor. */
+  unavailable: number;
+  /** Fichas españolas devueltas como agotadas (se conservan como tales). */
+  outOfStock: number;
+  missing: Array<{ id: string; reason: string }>;
+  discoveryCostUsd?: number;
+  detailCostUsd?: number;
+  reusedDiscovery?: boolean;
 }
 
 export interface ResultSummary {
@@ -89,6 +125,8 @@ export interface ResultSummary {
   currencies?: Record<string, number>;
   /** Se pidió el mercado español (/es/) pero el actor respondió con otro (p. ej. USD de EE. UU.). */
   marketMismatch?: boolean;
+  /** Sólo en categorías de Temu por dos fases. */
+  phases?: PhasesSummary;
 }
 
 export class ExtractionError extends Error {
@@ -226,9 +264,13 @@ export function validateTemuUrl(raw: unknown): { url: string; kind: UrlKind } {
  * `maxItems` (no se recorta después). `getProductDetails: true` abre la ficha de cada producto (variantes, atributos e
  * imágenes completas; coste adicional). Las opiniones no se piden: no se usan.
  */
-export function buildTemuInput(url: string, limit: number): Record<string, unknown> {
-  return { startUrls: [{ url }], maxItems: limit, getProductDetails: process.env.APIFY_TEMU_GET_DETAILS !== 'false', extractReviews: false };
+export function buildTemuInput(url: string | string[], limit: number, getDetails?: boolean): Record<string, unknown> {
+  const urls = (Array.isArray(url) ? url : [url]).map((u) => ({ url: u }));
+  return { startUrls: urls, maxItems: limit, getProductDetails: getDetails ?? process.env.APIFY_TEMU_GET_DETAILS !== 'false', extractReviews: false };
 }
+
+/** URL individual española de un producto de Temu (el actor respeta /es/ en las fichas individuales). */
+export const temuEsProductUrl = (id: string): string => `https://www.temu.com/es/-g-${id}.html`;
 
 // Precio por evento (nivel FREE): arranque 0,03 USD por GB de memoria; 0,006 por producto de listado y 0,016 por producto con
 // detalle. MEDIDO en producción (7-nov-2026): 10 productos con detalle = 0,19 USD y 3 = 0,078 USD (0,03 + 0,016 × n): el evento
@@ -241,6 +283,24 @@ export const TEMU_MEMORY_MB = 1024;
 
 export function maxTemuChargeFor(limit: number, cap = extractionConfig().maxCostUsd): number {
   return Math.min(cap, Math.max(0.1, Math.round((TEMU_START_USD + limit * TEMU_PER_PRODUCT_USD) * 1.5 * 1000) / 1000));
+}
+
+/** Tope de la fase «Descubriendo productos» (sin detalle: arranque + listado por producto, con margen). */
+export function maxTemuDiscoveryChargeFor(limit: number, cap = extractionConfig().maxCostUsd): number {
+  return Math.min(cap, Math.max(0.05, Math.round((TEMU_START_USD + limit * 0.006) * 1.5 * 1000) / 1000));
+}
+
+/** Presupuesto máximo explícito del trabajo: entre 0,05 USD y el tope del servidor. */
+export function validateBudget(raw: unknown, cap = extractionConfig().maxCostUsd): number | undefined {
+  if (raw === undefined || raw === null || raw === '') return undefined;
+  const n = typeof raw === 'string' ? Number(raw) : raw;
+  if (typeof n !== 'number' || !Number.isFinite(n) || n < 0.05 || n > cap) throw new ExtractionError(`El presupuesto máximo debe estar entre 0,05 y ${cap} USD.`);
+  return Math.round(n * 1000) / 1000;
+}
+
+/** Estimación (NO medida) de las dos fases: descubrimiento sin detalle + fichas con detalle. */
+export function estimateTemuTwoPhaseEstimate(limit: number): number {
+  return Math.round((TEMU_START_USD + limit * 0.006 + TEMU_START_USD + limit * TEMU_MEASURED_PER_PRODUCT_USD) * 1000) / 1000;
 }
 
 /** Estimación del coste en USD con detalle activado (arranque + 0,016 por producto, medido). */
@@ -341,12 +401,21 @@ export function readResult(id: string): StoredResult | undefined {
 /* ───────────────────────── Operaciones ───────────────────────── */
 
 const todayKey = () => new Date().toISOString().slice(0, 10);
+const round4 = (n: number) => Math.round(n * 10000) / 10000;
+/** Ejecuciones de Apify que cuenta un trabajo en la cuota diaria (los trabajos antiguos sin el campo cuentan 1). */
+const runsCounted = (j: ExtractionJob): number =>
+  j.runsReserved === undefined && j.runsStarted === undefined ? 1 : ACTIVE.has(j.status) ? Math.max(j.runsReserved ?? 1, j.runsStarted ?? 0) : j.runsStarted ?? j.runsReserved ?? 1;
 
 /**
  * Inicia una extracción. Idempotente: si ya hay una en curso para la MISMA URL y límite devuelve esa (doble clic,
  * recarga, reintento); si hay otra distinta se rechaza (409). No hay reintentos automáticos: cada ejecución cuesta.
+ *
+ * Categorías de Temu → DOS FASES (el actor sirve algunas categorías en USD aunque la URL lleve /es/, pero respeta /es/ en las fichas
+ * individuales): 1) «Descubriendo productos» (sin detalle; sólo se guardan los ids) y 2) «Obteniendo fichas de España»: una única
+ * ejecución con una URL /es/-g-<id>.html por producto. Ambas fases cuentan en la cuota; un reintento tras un fallo de la fase 2
+ * reutiliza los ids ya descubiertos (no repite ni cobra la fase 1).
  */
-export async function startExtraction(rawUrl: unknown, rawLimit: unknown, rawSource: unknown = 'amazon'): Promise<{ job: ExtractionJob; reused: boolean }> {
+export async function startExtraction(rawUrl: unknown, rawLimit: unknown, rawSource: unknown = 'amazon', rawBudget?: unknown): Promise<{ job: ExtractionJob; reused: boolean }> {
   const config = extractionConfig();
   if (rawSource !== undefined && rawSource !== 'amazon' && rawSource !== 'temu') throw new ExtractionError('Origen no válido: usa Amazon o Temu.');
   const source: ExtractionSource = rawSource === 'temu' ? 'temu' : 'amazon';
@@ -363,21 +432,40 @@ export async function startExtraction(rawUrl: unknown, rawLimit: unknown, rawSou
   // Una URL de producto de Temu devuelve UN producto: el límite efectivo es 1 (se valida igualmente lo que llegó).
   const requested = validateLimit(rawLimit ?? config.defaultLimit, config.maxLimit);
   const limit = source === 'temu' && urlKind === 'product' ? 1 : requested;
-  const maxCostUsd = source === 'temu' ? maxTemuChargeFor(limit, config.maxCostUsd) : maxChargeFor(limit, config.maxCostUsd);
+  const twoPhase = source === 'temu' && urlKind === 'category';
+  const budgetUsd = validateBudget(rawBudget, config.maxCostUsd);
+  const maxCostUsd =
+    budgetUsd ??
+    (twoPhase
+      ? Math.min(config.maxCostUsd, round4(maxTemuDiscoveryChargeFor(limit, config.maxCostUsd) + maxTemuChargeFor(limit, config.maxCostUsd)))
+      : source === 'temu'
+        ? maxTemuChargeFor(limit, config.maxCostUsd)
+        : maxChargeFor(limit, config.maxCostUsd));
 
   // Reserva SÍNCRONA antes de llamar a Apify: una segunda petición simultánea ve la ejecución «starting».
   const reservation = updateJobs((jobs) => {
     const active = [...jobs].reverse().find((j) => ACTIVE.has(j.status));
     if (active) return { kind: 'active' as const, job: { ...active } };
-    const today = jobs.filter((j) => j.createdAt.slice(0, 10) === todayKey()).length;
-    if (today >= config.maxRunsPerDay) return { kind: 'quota' as const };
+    // Reintento tras un fallo/cancelación de la fase 2: los ids ya descubiertos se reutilizan (sin repetir la fase 1).
+    const prev = twoPhase
+      ? [...jobs].reverse().find((j) => j.twoPhase && j.source === 'temu' && j.url === url && j.limit === limit && j.discovery?.ids?.length && j.status !== 'succeeded' && !ACTIVE.has(j.status) && Date.now() - Date.parse(j.createdAt) < 86_400_000)
+      : undefined;
+    const needed = twoPhase ? (prev ? 1 : 2) : 1;
+    const today = jobs.filter((j) => j.createdAt.slice(0, 10) === todayKey()).reduce((n, j) => n + runsCounted(j), 0);
+    if (today + needed > config.maxRunsPerDay) return { kind: 'quota' as const, needed, today };
     const now = new Date().toISOString();
-    const job: ExtractionJob = { id: crypto.randomUUID(), source, urlKind, url, limit, status: 'starting', createdAt: now, updatedAt: now, maxCostUsd };
+    const job: ExtractionJob = {
+      id: crypto.randomUUID(), source, urlKind, url, limit, status: 'starting', createdAt: now, updatedAt: now, maxCostUsd,
+      runsReserved: needed, runsStarted: 0,
+      ...(budgetUsd !== undefined ? { budgetUsd } : {}),
+      ...(twoPhase ? { twoPhase: true, phase: prev ? ('detail_starting' as const) : ('discovery' as const) } : {}),
+      ...(prev?.discovery ? { discovery: { ...prev.discovery, reused: true, reusedFromJob: prev.id, costUsd: 0 } } : {}),
+    };
     jobs.push(job);
     return { kind: 'new' as const, job: { ...job } };
   });
 
-  if (reservation.kind === 'quota') throw new ExtractionError(`Se alcanzó el máximo de ${config.maxRunsPerDay} extracciones al día.`, 429);
+  if (reservation.kind === 'quota') throw new ExtractionError(`Se alcanzó el máximo de ${config.maxRunsPerDay} ejecuciones de Apify al día (esta extracción necesita ${reservation.needed}; hoy hay ${reservation.today}).`, 429);
   if (reservation.kind === 'active') {
     if (reservation.job.url === url && reservation.job.limit === limit && (reservation.job.source ?? 'amazon') === source) return { job: reservation.job, reused: true };
     throw new ExtractionError('Ya hay una extracción en curso. Espera a que termine o cancélala antes de lanzar otra.', 409, reservation.job);
@@ -385,21 +473,154 @@ export async function startExtraction(rawUrl: unknown, rawLimit: unknown, rawSou
 
   const job = reservation.job;
   try {
-    const temu = source === 'temu';
-    const query = `?timeout=${config.timeoutSecs}&maxTotalChargeUsd=${maxCostUsd}${temu ? `&memory=${TEMU_MEMORY_MB}` : ''}`;
-    const data = await apify(`/actors/${encodeURIComponent(temu ? config.temuActor : config.actor)}/runs${query}`, { method: 'POST', body: temu ? buildTemuInput(url, limit) : buildActorInput(url, limit) });
-    const run = data?.data ?? {};
-    if (!run.id) throw new ExtractionError('Apify no devolvió el identificador de la ejecución.', 502);
-    const patched = patchJob(job.id, { runId: String(run.id), datasetId: run.defaultDatasetId ? String(run.defaultDatasetId) : undefined, status: 'running' });
-    // Si se pidió cancelar mientras se creaba la ejecución, se aborta en cuanto existe.
-    if (patched?.cancelRequested) await cancelExtraction(job.id).catch(() => undefined);
+    if (twoPhase && job.phase === 'detail_starting') {
+      await startDetailRun(job.id); // descubrimiento reutilizado
+    } else if (twoPhase) {
+      let cap = maxTemuDiscoveryChargeFor(limit, config.maxCostUsd);
+      if (budgetUsd !== undefined) cap = Math.min(cap, budgetUsd);
+      const query = `?timeout=${config.timeoutSecs}&maxTotalChargeUsd=${cap}&memory=${TEMU_MEMORY_MB}`;
+      const data = await apify(`/actors/${encodeURIComponent(config.temuActor)}/runs${query}`, { method: 'POST', body: buildTemuInput(url, limit, false) });
+      const run = data?.data ?? {};
+      if (!run.id) throw new ExtractionError('Apify no devolvió el identificador de la ejecución.', 502);
+      const patched = patchJob(job.id, { runId: String(run.id), datasetId: run.defaultDatasetId ? String(run.defaultDatasetId) : undefined, status: 'running', phase: 'discovery', runsStarted: 1 });
+      if (patched?.cancelRequested) await cancelExtraction(job.id).catch(() => undefined);
+    } else {
+      const temu = source === 'temu';
+      const query = `?timeout=${config.timeoutSecs}&maxTotalChargeUsd=${maxCostUsd}${temu ? `&memory=${TEMU_MEMORY_MB}` : ''}`;
+      const data = await apify(`/actors/${encodeURIComponent(temu ? config.temuActor : config.actor)}/runs${query}`, { method: 'POST', body: temu ? buildTemuInput(url, limit) : buildActorInput(url, limit) });
+      const run = data?.data ?? {};
+      if (!run.id) throw new ExtractionError('Apify no devolvió el identificador de la ejecución.', 502);
+      const patched = patchJob(job.id, { runId: String(run.id), datasetId: run.defaultDatasetId ? String(run.defaultDatasetId) : undefined, status: 'running', runsStarted: 1 });
+      // Si se pidió cancelar mientras se creaba la ejecución, se aborta en cuanto existe.
+      if (patched?.cancelRequested) await cancelExtraction(job.id).catch(() => undefined);
+    }
     return { job: getJob(job.id) ?? job, reused: false };
   } catch (error) {
     const message = error instanceof ExtractionError ? error.message : 'No se pudo iniciar la extracción.';
     // Un fallo de red al crear PUEDE haber creado la ejecución: se avisa; no se reintenta solo (evita duplicarla).
     const network = error instanceof ExtractionError && error.status === 502 && /contactar/.test(error.message);
-    const failed = patchJob(job.id, { status: 'failed', finishedAt: new Date().toISOString(), error: network ? `${message} Si el fallo fue de red, comprueba en la consola de Apify que no se haya creado una ejecución.` : message });
+    const failed = patchJob(job.id, { status: 'failed', finishedAt: new Date().toISOString(), runsStarted: Math.max(1, getJob(job.id)?.runsStarted ?? 0), error: network ? `${message} Si el fallo fue de red, comprueba en la consola de Apify que no se haya creado una ejecución.` : message });
     throw new ExtractionError(failed?.error ?? message, error instanceof ExtractionError ? error.status : 500, failed);
+  }
+}
+
+/** Fase 2: UNA ejecución con una URL española /es/-g-<id>.html por producto descubierto (maxItems = nº de ids). */
+async function startDetailRun(jobId: string): Promise<ExtractionJob> {
+  const config = extractionConfig();
+  const job = getJob(jobId);
+  if (!job?.discovery?.ids.length) throw new ExtractionError('No hay identificadores descubiertos para obtener las fichas.', 500);
+  const ids = job.discovery.ids;
+  let cap = maxTemuChargeFor(ids.length, config.maxCostUsd);
+  if (job.budgetUsd !== undefined) cap = Math.min(cap, round4(job.budgetUsd - (job.discovery.costUsd ?? 0)));
+  if (cap < 0.05) throw new ExtractionError('El presupuesto indicado no alcanza para la fase «Obteniendo fichas de España».', 400);
+  const query = `?timeout=${config.timeoutSecs}&maxTotalChargeUsd=${cap}&memory=${TEMU_MEMORY_MB}`;
+  const data = await apify(`/actors/${encodeURIComponent(config.temuActor)}/runs${query}`, { method: 'POST', body: buildTemuInput(ids.map(temuEsProductUrl), ids.length, true) });
+  const run = data?.data ?? {};
+  if (!run.id) throw new ExtractionError('Apify no devolvió el identificador de la ejecución de fichas.', 502);
+  const patched = patchJob(jobId, { runId: String(run.id), datasetId: run.defaultDatasetId ? String(run.defaultDatasetId) : undefined, status: 'running', phase: 'detail', runsStarted: (getJob(jobId)?.runsStarted ?? 0) + 1, itemsSoFar: 0 });
+  if (patched?.cancelRequested) await cancelExtraction(jobId).catch(() => undefined);
+  return getJob(jobId) ?? job;
+}
+
+function phasesOf(job: ExtractionJob, obtained: number, outOfStock: number, missing: Array<{ id: string; reason: string }>): PhasesSummary {
+  const d = job.discovery;
+  return {
+    discovered: d?.ids.length ?? 0,
+    duplicatesRemoved: d?.duplicatesRemoved ?? 0,
+    obtained,
+    unavailable: missing.length,
+    outOfStock,
+    missing,
+    discoveryCostUsd: d?.costUsd,
+    detailCostUsd: typeof job.costUsd === 'number' ? round4(Math.max(0, job.costUsd - (d?.costUsd ?? 0))) : undefined,
+    ...(d?.reused ? { reusedDiscovery: true } : {}),
+  };
+}
+
+/** Termina el trabajo sin fichas (fase 1 vacía, fallida o cancelada): resultado vacío y explicado. */
+function finishEmpty(job: ExtractionJob, status: JobStatus, error: string | undefined, warnings: string[] = []): ExtractionJob {
+  const summary: ResultSummary = { fetched: 0, adapted: 0, actorErrors: 0, withReview: 0, partial: status !== 'succeeded', warnings, currencies: {}, marketMismatch: false, phases: phasesOf(job, 0, 0, []) };
+  saveResult(job.id, { records: [], summary });
+  return patchJob(job.id, { status, finishedAt: new Date().toISOString(), error, resultReady: true, itemsSoFar: 0, summary }) ?? job;
+}
+
+/** Fase 1 («Descubriendo productos») y transición a la fase 2. Seguro ante consultas simultáneas: sólo una arranca la fase 2. */
+async function advanceTwoPhase(job: ExtractionJob): Promise<ExtractionJob> {
+  const id = job.id;
+  if (job.phase === 'detail_starting') {
+    // Otra petición está lanzando la fase 2. Si se quedó colgada, se falla de forma explicada (los ids se conservan para reintentar).
+    if (!job.runId && Date.now() - Date.parse(job.updatedAt) > 120_000) {
+      return patchJob(id, { status: 'failed', finishedAt: new Date().toISOString(), error: 'No se pudo iniciar la fase «Obteniendo fichas de España». Los identificadores descubiertos se conservan: al reintentar no se repite el descubrimiento.' }) ?? job;
+    }
+    return job;
+  }
+  if (!job.runId) return job;
+  try {
+    const data = await apify(`/actor-runs/${encodeURIComponent(job.runId)}`);
+    const run = data?.data ?? {};
+    const status = STATUS_MAP[String(run.status)] ?? job.status;
+    const usage = typeof run.usageTotalUsd === 'number' ? round4(run.usageTotalUsd) : undefined;
+    if (ACTIVE.has(status)) {
+      let current = patchJob(id, { status, ...(usage !== undefined ? { costUsd: usage } : {}) }) ?? job;
+      if (current.datasetId) {
+        const meta = await apify(`/datasets/${encodeURIComponent(current.datasetId)}`).catch(() => undefined);
+        const count = meta?.data?.itemCount;
+        if (typeof count === 'number') current = patchJob(id, { itemsSoFar: count }) ?? current;
+      }
+      return current;
+    }
+    if (status !== 'succeeded') {
+      const why = status === 'timed_out' ? 'La fase «Descubriendo productos» superó el tiempo máximo y Apify la detuvo.' : status === 'aborted' ? 'Cancelado durante «Descubriendo productos»: no se obtuvieron fichas.' : 'La fase «Descubriendo productos» terminó con error en Apify.';
+      return finishEmpty({ ...job, costUsd: usage ?? job.costUsd }, status, why);
+    }
+    // Descubrimiento terminado: sólo se leen los identificadores (ni precios ni datos comerciales).
+    const items = await apify(`/datasets/${encodeURIComponent(job.datasetId as string)}/items?format=json&fields=goodsId&limit=${job.limit + 1}`);
+    let list = Array.isArray(items) ? items : [];
+    const warnings: string[] = [];
+    if (list.length > job.limit) {
+      warnings.push(`el_actor_devolvio_mas_de_${job.limit}_productos_en_el_descubrimiento:se_conservan_los_primeros_${job.limit}`);
+      list = list.slice(0, job.limit);
+    }
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    let duplicates = 0;
+    let invalid = 0;
+    for (const it of list) {
+      const gid = String((it as any)?.goodsId ?? '').trim();
+      if (!/^[0-9]{6,20}$/.test(gid)) { invalid += 1; continue; }
+      if (seen.has(gid)) { duplicates += 1; continue; }
+      seen.add(gid);
+      ids.push(gid);
+    }
+    const info: DiscoveryInfo = { ids, fetched: list.length, duplicatesRemoved: duplicates, invalidIds: invalid, costUsd: usage, runId: job.runId };
+    if (!ids.length) {
+      return finishEmpty({ ...job, discovery: info, costUsd: usage }, 'succeeded', undefined, [...warnings, 'sin_resultados_no_prueba_que_la_categoria_este_vacia']);
+    }
+    // Reclamo atómico de la fase 2 (una sola petición la lanza).
+    const claim = updateJobs((jobs) => {
+      const j = jobs.find((x) => x.id === id);
+      if (!j || j.phase !== 'discovery') return 'lost' as const;
+      j.discovery = info;
+      j.costUsd = usage;
+      j.updatedAt = new Date().toISOString();
+      if (j.cancelRequested) return 'cancelled' as const;
+      j.phase = 'detail_starting';
+      j.runId = undefined;
+      j.datasetId = undefined;
+      j.itemsSoFar = 0;
+      return 'ok' as const;
+    });
+    if (claim === 'lost') return getJob(id) ?? job;
+    if (claim === 'cancelled') return finishEmpty({ ...(getJob(id) ?? job), discovery: info, costUsd: usage }, 'aborted', 'Cancelado tras «Descubriendo productos»: no se obtuvieron fichas.', warnings);
+    try {
+      return await startDetailRun(id);
+    } catch (error) {
+      const message = error instanceof ExtractionError ? error.message : 'No se pudo iniciar la fase de fichas.';
+      return patchJob(id, { status: 'failed', finishedAt: new Date().toISOString(), runsStarted: Math.max(1, getJob(id)?.runsStarted ?? 0), error: `No se pudo iniciar «Obteniendo fichas de España»: ${message} Los identificadores descubiertos se conservan: al reintentar no se repite el descubrimiento.` }) ?? job;
+    }
+  } catch (error) {
+    // Un fallo puntual al consultar NO cambia el estado (se reintenta en la siguiente consulta).
+    return { ...job, error: error instanceof ExtractionError ? error.message : job.error };
   }
 }
 
@@ -414,13 +635,19 @@ const fetching = new Set<string>();
 export async function refreshExtraction(id: string): Promise<{ job: ExtractionJob; records?: unknown[] } | undefined> {
   let job = getJob(id);
   if (!job) return undefined;
+  if (job.twoPhase && ACTIVE.has(job.status) && (job.phase === 'discovery' || job.phase === 'detail_starting')) {
+    job = await advanceTwoPhase(job);
+    if (job.resultReady) return { job, records: readResult(id)?.records };
+    return { job };
+  }
   if (ACTIVE.has(job.status) && job.runId) {
     try {
       const data = await apify(`/actor-runs/${encodeURIComponent(job.runId)}`);
       const run = data?.data ?? {};
       const status = STATUS_MAP[String(run.status)] ?? job.status;
       const patch: Partial<ExtractionJob> = { status };
-      if (typeof run.usageTotalUsd === 'number') patch.costUsd = Math.round(run.usageTotalUsd * 10000) / 10000;
+      // En dos fases el coste del trabajo es el de la fase 1 más el de la ejecución actual.
+      if (typeof run.usageTotalUsd === 'number') patch.costUsd = round4(run.usageTotalUsd + (job.discovery?.costUsd ?? 0));
       if (run.defaultDatasetId) patch.datasetId = String(run.defaultDatasetId);
       if (TERMINAL.has(status)) patch.finishedAt = typeof run.finishedAt === 'string' ? run.finishedAt : new Date().toISOString();
       if (status === 'failed') patch.error = 'La ejecución de Apify terminó con error.' + (run.statusMessage ? ` ${String(run.statusMessage).replace(/[\r\n]+/g, ' ').slice(0, 160)}` : '');
@@ -461,7 +688,30 @@ async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefi
   } catch (error) {
     return patchJob(job.id, { error: error instanceof ExtractionError ? error.message : 'No se pudieron leer los resultados.' });
   }
-  if (items.length > job.limit) {
+  // Dos fases: sólo se aceptan las fichas de los ids descubiertos (sin repetidos); lo que no llegó se explica, no se sustituye.
+  const two = job.twoPhase === true && job.discovery !== undefined;
+  let missing: Array<{ id: string; reason: string }> = [];
+  if (two) {
+    const wanted = new Set(job.discovery!.ids);
+    const seenIds = new Set<string>();
+    const kept: unknown[] = [];
+    let repeated = 0;
+    let foreign = 0;
+    for (const it of items) {
+      const gid = String((it as any)?.goodsId ?? '');
+      if (!wanted.has(gid)) { foreign += 1; continue; }
+      if (seenIds.has(gid)) { repeated += 1; continue; }
+      seenIds.add(gid);
+      kept.push(it);
+    }
+    if (repeated) warnings.push(`fichas_repetidas_descartadas:${repeated}`);
+    if (foreign) warnings.push(`fichas_de_ids_no_solicitados_descartadas:${foreign}`);
+    items = kept;
+    const reason = job.status === 'succeeded'
+      ? 'El actor no devolvió la ficha española de este producto (no disponible en España, retirada o bloqueada)'
+      : 'La ejecución se interrumpió antes de obtener la ficha de este producto';
+    missing = job.discovery!.ids.filter((x) => !seenIds.has(x)).map((x) => ({ id: x, reason }));
+  } else if (items.length > job.limit) {
     warnings.push(`el_actor_devolvio_mas_de_${job.limit}_productos:se_conservan_los_primeros_${job.limit}`);
     items = items.slice(0, job.limit);
   }
@@ -472,9 +722,9 @@ async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefi
   const temu = job.source === 'temu';
   const records = items.map((item) => (temu ? (isApifyTemuItem(item) ? adaptApifyTemuItem(item, ctx) : item) : isApifyAmazonItem(item) ? adaptApifyAmazonItem(item, ctx) : item));
   // Un resultado vacío NO prueba que la categoría esté vacía (el actor avisa de que Temu a veces no la sirve).
-  if (temu && !items.length && job.status === 'succeeded') warnings.push('sin_resultados_no_prueba_que_la_categoria_este_vacia');
+  if (temu && !items.length && job.status === 'succeeded') warnings.push(two ? 'ninguna_ficha_espanola_obtenida_de_los_ids_descubiertos' : 'sin_resultados_no_prueba_que_la_categoria_este_vacia');
   const metas = records.map((r) => ((r as any)?.__import ?? { errors: [], review: [] }) as { errors: string[]; review: string[] });
-  const partial = job.status !== 'succeeded' || items.length < job.limit;
+  const partial = job.status !== 'succeeded' || (!two && items.length < job.limit);
   // Monedas realmente devueltas (nunca se convierten ni se etiquetan de nuevo) y coherencia del mercado pedido.
   const currencies: Record<string, number> = {};
   for (const r of records) {
@@ -493,6 +743,7 @@ async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefi
     withReview: metas.filter((m) => m.review.length).length,
     partial,
     warnings,
+    ...(two ? { phases: phasesOf(job, items.length, records.filter((r) => (r as any)?.offer?.availability === false).length, missing) } : {}),
   };
   saveResult(job.id, { records, summary });
   return patchJob(job.id, { resultReady: true, itemsSoFar: items.length, summary });
@@ -516,7 +767,7 @@ export async function cancelExtraction(id: string): Promise<ExtractionJob> {
   if (!job) throw new ExtractionError('No existe esa extracción.', 404);
   if (!ACTIVE.has(job.status)) return job;
   if (!job.runId) {
-    // Todavía se está creando la ejecución: se abortará en cuanto exista.
+    // Todavía se está creando la ejecución (o entre las dos fases): se abortará en cuanto exista y no se lanzará la fase 2.
     return patchJob(id, { cancelRequested: true }) ?? job;
   }
   await apify(`/actor-runs/${encodeURIComponent(job.runId)}/abort`, { method: 'POST' });

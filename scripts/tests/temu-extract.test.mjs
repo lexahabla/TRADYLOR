@@ -110,15 +110,18 @@ test('inicio de Temu: actor hypebridge~temu-scraper, maxItems=límite, memoria 1
     assert.equal(body.job.source, 'temu');
     assert.equal(body.job.urlKind, 'category');
     assert.equal(body.job.limit, 10);
+    assert.equal(body.job.twoPhase, true);
+    assert.equal(body.job.phase, 'discovery');
     const start = runPosts(f)[0];
     assert.match(start.path, /^\/v2\/actors\/hypebridge~temu-scraper\/runs$/);
     assert.match(start.search, /memory=1024/);
-    assert.match(start.search, /maxTotalChargeUsd=0\.375/);
+    assert.match(start.search, /maxTotalChargeUsd=0\.135/, 'tope de la fase 1: (0,03 + 10 × 0,006) × 1,5');
     assert.match(start.search, /timeout=900/);
     assert.doesNotMatch(start.search, new RegExp(TOKEN));
     assert.equal(start.headers.Authorization, `Bearer ${TOKEN}`);
     const sent = JSON.parse(start.body);
     assert.equal(sent.maxItems, 10, 'el límite de Treidilor viaja a Apify como maxItems');
+    assert.equal(sent.getProductDetails, false, 'la fase 1 sólo descubre identificadores: sin detalle');
     assert.deepEqual(sent.startUrls, [{ url: CAT }]);
     assert.doesNotMatch(JSON.stringify(body) + fs.readFileSync(jobsFile, 'utf8'), new RegExp(TOKEN));
   } finally { f.restore(); }
@@ -180,35 +183,6 @@ test('idempotencia entre orígenes: misma URL+límite+origen se reutiliza; otro 
     const cfg = await jsonOf(await get());
     assert.equal(cfg.active.source, 'temu', 'al recargar se recupera la ejecución de Temu');
     assert.equal(cfg.sources.temu.actor, 'hypebridge/temu-scraper');
-  } finally { f.restore(); }
-});
-
-test('resultado de Temu: adapta los productos, aplica el límite, informa de parcial y cancela de verdad en Apify', async () => {
-  resetJobs();
-  let f = fakeApify({ runStatus: 'SUCCEEDED', items: SAMPLE, itemCount: SAMPLE.length });
-  try {
-    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 3 }));
-    const out = await jsonOf(await get('?id=' + started.job.id));
-    assert.equal(out.job.status, 'succeeded');
-    assert.equal(out.records.length, 3, 'si el actor devuelve de más se conservan sólo los primeros 3');
-    assert.ok(out.job.summary.warnings.some((w) => /devolvio_mas_de_3/.test(w)));
-    assert.equal(out.records[0].offer.platform, 'temu');
-    assert.equal(out.job.costUsd, 0.25);
-    assert.equal(out.job.summary.withReview, 2, 'precio «desde» y precio variable por variante van a revisión');
-  } finally { f.restore(); }
-
-  resetJobs();
-  f = fakeApify({ runStatus: 'RUNNING', itemCount: 2 });
-  try {
-    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 10 }));
-    f.state.items = SAMPLE.slice(0, 2);
-    const res = await jsonOf(await post({ action: 'cancel', id: started.job.id }));
-    assert.equal(res.success, true);
-    f.state.runStatus = 'ABORTED'; // Apify confirma la cancelación
-    assert.ok(f.state.calls.some((c) => /actor-runs\/RUNT1\/abort$/.test(c.path)), 'cancelar llama a /abort de Apify');
-    const done = await jsonOf(await get('?id=' + started.job.id));
-    assert.equal(done.records.length, 2);
-    assert.equal(done.job.summary.partial, true);
   } finally { f.restore(); }
 });
 
@@ -490,28 +464,6 @@ test('la URL que se manda a Apify es la normalizada (comprobado en la petición)
   } finally { f.restore(); }
 });
 
-test('el resumen de la extracción informa de las monedas devueltas y detecta que se pidió /es/ pero el actor respondió con otro mercado (muestra real categoría 1893)', async () => {
-  resetJobs();
-  let f = fakeApify({ runStatus: 'SUCCEEDED', items: REAL_1893, itemCount: 10 });
-  try {
-    const started = await jsonOf(await post({ source: 'temu', url: 'https://www.temu.com/es/category-o3-1893.html', limit: 10 }));
-    const out = await jsonOf(await get('?id=' + started.job.id));
-    assert.deepEqual(out.job.summary.currencies, { USD: 10 });
-    assert.equal(out.job.summary.marketMismatch, true);
-    assert.ok(out.job.summary.warnings.includes('mercado_pedido_es_pero_el_actor_respondio_con_otro'));
-    assert.ok(out.records.every((r) => r.__import.review.includes('moneda_no_euro:USD')), 'la validación sigue activa: no se convierte ni se reetiqueta');
-    assert.ok(out.records.every((r) => r.offer.currency === 'USD'));
-  } finally { f.restore(); }
-  resetJobs();
-  f = fakeApify({ runStatus: 'SUCCEEDED', items: REAL_ES, itemCount: 3 });
-  try {
-    const started = await jsonOf(await post({ source: 'temu', url: 'https://www.temu.com/es/category-o3-248.html', limit: 3 }));
-    const out = await jsonOf(await get('?id=' + started.job.id));
-    assert.deepEqual(out.job.summary.currencies, { EUR: 3 });
-    assert.equal(out.job.summary.marketMismatch, false);
-  } finally { f.restore(); }
-});
-
 /* ───────────── Producto de la categoría 1893 por su URL individual española (ejecución real, 7-nov-2026) ───────────── */
 
 test('URL individual /es/ de un producto de la categoría 1893: mismo goodsId que el lote USD, ahora en EUR y mercado español → se importa; el lote USD sigue bloqueado', () => {
@@ -534,4 +486,270 @@ test('URL individual /es/ de un producto de la categoría 1893: mismo goodsId qu
   const out = run(pdp, { target: { category: 'Hogar', categoryId: 'c-hogar' } });
   assert.deepEqual(out.results.map((r) => r.outcome), ['created']);
   assert.equal(readCatalog(dir)[0].currency, 'EUR');
+});
+
+
+/* ───────────── Categorías de Temu en DOS FASES: descubrir ids → fichas españolas /es/-g-<id>.html en una sola ejecución ───────────── */
+
+/** Apify simulado con dos (o tres) ejecuciones: la 1.ª es el descubrimiento; las siguientes, fichas españolas. */
+function fakeTwoPhase(opts = {}) {
+  const st = { calls: [], runs: [], aborts: [], discovery: { status: 'RUNNING', items: [], usage: 0.09 }, detail: { status: 'RUNNING', items: [], usage: 0.19 }, ...opts };
+  const restore = mockFetch(async (url, init = {}) => {
+    const u = new URL(String(url));
+    const method = init.method ?? 'GET';
+    st.calls.push({ method, path: u.pathname, search: u.search });
+    const ok = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
+    if (u.hostname !== 'api.apify.com') throw new Error('petición inesperada: ' + u.hostname);
+    const phaseOf = (n) => (n === '1' ? st.discovery : st.detail);
+    if (method === 'POST' && /\/v2\/actors\/[^/]+\/runs$/.test(u.pathname)) {
+      st.runs.push({ path: u.pathname, search: u.search, body: JSON.parse(init.body) });
+      const n = st.runs.length;
+      return ok({ data: { id: 'RUNP' + n, defaultDatasetId: 'DSP' + n, status: 'READY' } }, 201);
+    }
+    let m = u.pathname.match(/\/v2\/actor-runs\/RUNP(\d+)\/abort$/);
+    if (method === 'POST' && m) { st.aborts.push(m[1]); return ok({ data: { status: 'ABORTING' } }); }
+    m = u.pathname.match(/\/v2\/actor-runs\/RUNP(\d+)$/);
+    if (method === 'GET' && m) { const p = phaseOf(m[1]); return ok({ data: { id: 'RUNP' + m[1], status: p.status, defaultDatasetId: 'DSP' + m[1], usageTotalUsd: p.usage, finishedAt: '2026-11-07T10:05:00.000Z' } }); }
+    m = u.pathname.match(/\/v2\/datasets\/DSP(\d+)$/);
+    if (method === 'GET' && m) return ok({ data: { itemCount: phaseOf(m[1]).items.length } });
+    m = u.pathname.match(/\/v2\/datasets\/DSP(\d+)\/items$/);
+    if (method === 'GET' && m) {
+      st.itemsQueries = [...(st.itemsQueries ?? []), u.search];
+      return ok(phaseOf(m[1]).items.slice(0, Number(u.searchParams.get('limit') || 100)));
+    }
+    return ok({}, 404);
+  });
+  return { st, restore };
+}
+const listing = (id, extra = {}) => ({ goodsId: String(id), title: 'PRECIO-USD-NO-GUARDAR', price: 9.99, currency: 'USD', sourcePageType: 'category', ...extra });
+const esItem = (id, over = {}) => ({ ...REAL_ES[0], goodsId: String(id), title: 'Ficha española ' + id, price: 20 + (Number(String(id).slice(-1)) || 0), skus: [{ skuId: id + '_a', price: 20 + (Number(String(id).slice(-1)) || 0), inStock: true }], priceText: '€20', currency: 'EUR', sourcePageType: 'pdp', sourceUrl: 'https://www.temu.com/es/-g-' + id + '.html', productUrl: 'https://www.temu.com/es/ficha-g-' + id + '.html', inStock: true, ...over });
+const IDS = ['601000000000001', '601000000000002', '601000000000003', '601000000000004', '601000000000005'];
+const jobOf = async (id) => (await jsonOf(await get('?id=' + id)));
+
+test('dos fases (1/2): «Descubriendo productos» sólo guarda ids, conserva el límite, elimina repetidos y NO guarda precios ni datos comerciales', async () => {
+  resetJobs();
+  const f = fakeTwoPhase();
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 5 }));
+    assert.equal(started.job.runsReserved, 2, 'las dos fases se reservan en la cuota');
+    f.st.discovery.status = 'SUCCEEDED';
+    f.st.discovery.items = [listing(IDS[0]), listing(IDS[1]), listing(IDS[1]), listing(IDS[2]), listing('abc'), listing(IDS[3]), listing(IDS[4]), listing('601000000000099')];
+    const out = await jobOf(started.job.id);
+    assert.equal(f.st.runs.length, 2, 'se lanzó la fase 2');
+    assert.deepEqual(out.job.discovery.ids, [IDS[0], IDS[1], IDS[2]], 'del tope de 5 filas leídas: sin repetidos y sin ids inválidos');
+    assert.equal(out.job.discovery.fetched, 5, 'sólo se leen limit filas (la 6.ª sólo detecta el exceso)');
+    assert.equal(out.job.discovery.duplicatesRemoved, 1);
+    assert.equal(out.job.discovery.invalidIds, 1);
+    assert.ok(out.job.discovery.ids.length <= 5, 'límite conservado');
+    assert.ok(f.st.itemsQueries[0].includes('fields=goodsId'), 'sólo se piden los identificadores');
+    assert.doesNotMatch(fs.readFileSync(jobsFile, 'utf8'), /PRECIO-USD-NO-GUARDAR|9\.99/, 'ningún precio ni título de la fase 1 se guarda');
+    // fase 2: UNA ejecución con una URL /es/-g-<id>.html por id y maxItems = nº de ids
+    const body = f.st.runs[1].body;
+    assert.deepEqual(body.startUrls.map((x) => x.url), out.job.discovery.ids.map((id) => 'https://www.temu.com/es/-g-' + id + '.html'));
+    assert.equal(body.maxItems, out.job.discovery.ids.length);
+    assert.equal(body.getProductDetails, true);
+    assert.match(f.st.runs[1].search, /memory=1024/);
+    assert.equal(out.job.phase, 'detail');
+    assert.equal(out.job.runsStarted, 2);
+  } finally { f.restore(); }
+});
+
+test('dos fases (2/2): fichas españolas con identidad, EUR, mercado /es/, agotados conservados, ausentes explicados y coste de ambas fases', async () => {
+  resetJobs();
+  const f = fakeTwoPhase();
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 5 }));
+    f.st.discovery.status = 'SUCCEEDED';
+    f.st.discovery.items = IDS.map((id) => listing(id));
+    await jobOf(started.job.id); // transición a la fase 2
+    f.st.detail.status = 'SUCCEEDED';
+    f.st.detail.items = [esItem(IDS[0]), esItem(IDS[1], { inStock: false }), esItem(IDS[3]), esItem(IDS[3]), esItem('609999999999999')];
+    const out = await jobOf(started.job.id);
+    assert.equal(out.job.status, 'succeeded');
+    const p = out.job.summary.phases;
+    assert.deepEqual({ discovered: p.discovered, obtained: p.obtained, unavailable: p.unavailable, outOfStock: p.outOfStock }, { discovered: 5, obtained: 3, unavailable: 2, outOfStock: 1 });
+    assert.deepEqual(p.missing.map((m) => m.id), [IDS[2], IDS[4]], 'ausentes explicados, sin sustituirlos');
+    assert.ok(p.missing.every((m) => /no devolvió la ficha española/.test(m.reason)));
+    assert.ok(out.job.summary.warnings.includes('fichas_repetidas_descartadas:1'));
+    assert.ok(out.job.summary.warnings.includes('fichas_de_ids_no_solicitados_descartadas:1'), 'un id no pedido no entra');
+    assert.deepEqual(out.records.map((r) => r.offer.externalId), [IDS[0], IDS[1], IDS[3]], 'identidad = ids descubiertos, en el orden de la categoría');
+    assert.ok(out.records.every((r) => r.offer.currency === 'EUR' && /\/es\//.test(r.offer.url)));
+    assert.equal(out.records[1].offer.availability, false, 'el agotado conserva su estado');
+    assert.ok(out.records.every((r) => r.__import.review.length === 0));
+    assert.deepEqual(out.job.summary.currencies, { EUR: 3 });
+    assert.equal(out.job.summary.marketMismatch, false);
+    assert.equal(out.job.costUsd, 0.28, 'coste del trabajo = fase 1 + fase 2 (reportado por Apify)');
+    assert.equal(p.discoveryCostUsd, 0.09);
+    assert.equal(p.detailCostUsd, 0.19);
+    assert.ok(!out.records.some((r) => /PRECIO-USD-NO-GUARDAR/.test(JSON.stringify(r))), 'ningún dato de la fase 1 entra en los registros');
+  } finally { f.restore(); }
+});
+
+test('dos fases: si la fase 2 devuelve USD no se convierte ni se reetiqueta: revisión y aviso de mercado', async () => {
+  resetJobs();
+  const f = fakeTwoPhase();
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 2 }));
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.items = IDS.slice(0, 2).map((id) => listing(id));
+    await jobOf(started.job.id);
+    f.st.detail.status = 'SUCCEEDED';
+    f.st.detail.items = IDS.slice(0, 2).map((id) => esItem(id, { currency: 'USD', priceText: '$20', sourceUrl: 'https://www.temu.com/category-o3-1893.html' }));
+    const out = await jobOf(started.job.id);
+    assert.ok(out.records.every((r) => r.offer.currency === 'USD' && r.__import.review.includes('moneda_no_euro:USD')));
+    assert.deepEqual(out.job.summary.currencies, { USD: 2 });
+    assert.equal(out.job.summary.marketMismatch, true);
+  } finally { f.restore(); }
+});
+
+test('dos fases: consultas simultáneas lanzan la fase 2 UNA sola vez', async () => {
+  resetJobs();
+  const f = fakeTwoPhase();
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 3 }));
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.items = IDS.slice(0, 3).map((id) => listing(id));
+    await Promise.all([1, 2, 3, 4, 5].map(() => jobOf(started.job.id)));
+    assert.equal(f.st.runs.length, 2, 'fase 1 + una sola fase 2');
+  } finally { f.restore(); }
+});
+
+test('dos fases: sin identificadores válidos no se lanza la fase 2 ni se gasta más; el resultado vacío se explica', async () => {
+  resetJobs();
+  const f = fakeTwoPhase();
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 3 }));
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.items = [];
+    const out = await jobOf(started.job.id);
+    assert.equal(f.st.runs.length, 1);
+    assert.equal(out.job.status, 'succeeded');
+    assert.equal(out.job.summary.phases.discovered, 0);
+    assert.ok(out.job.summary.warnings.includes('sin_resultados_no_prueba_que_la_categoria_este_vacia'));
+    assert.deepEqual(out.records, []);
+  } finally { f.restore(); }
+});
+
+test('cancelar el proceso completo: durante «Descubriendo productos» aborta y no lanza la fase 2; durante la fase 2 aborta y conserva lo obtenido', async () => {
+  resetJobs();
+  let f = fakeTwoPhase();
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 3 }));
+    const res = await jsonOf(await post({ action: 'cancel', id: started.job.id }));
+    assert.equal(res.success, true);
+    assert.deepEqual(f.st.aborts, ['1'], 'se aborta la ejecución de descubrimiento');
+    f.st.discovery.status = 'ABORTED';
+    const out = await jobOf(started.job.id);
+    assert.equal(out.job.status, 'aborted');
+    assert.equal(f.st.runs.length, 1, 'no se lanzó la fase 2');
+    assert.match(out.job.error, /Cancelado durante «Descubriendo productos»/);
+    assert.deepEqual(out.records, []);
+  } finally { f.restore(); }
+  resetJobs();
+  f = fakeTwoPhase();
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 3 }));
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.items = IDS.slice(0, 3).map((id) => listing(id));
+    await jobOf(started.job.id);
+    await post({ action: 'cancel', id: started.job.id });
+    assert.deepEqual(f.st.aborts, ['2'], 'se aborta la ejecución de fichas');
+    f.st.detail.status = 'ABORTED'; f.st.detail.items = [esItem(IDS[0])];
+    const out = await jobOf(started.job.id);
+    assert.equal(out.job.status, 'aborted');
+    assert.equal(out.records.length, 1);
+    assert.equal(out.job.summary.partial, true);
+    assert.equal(out.job.summary.phases.unavailable, 2);
+    assert.ok(out.job.summary.phases.missing.every((m) => /interrumpió/.test(m.reason)));
+  } finally { f.restore(); }
+});
+
+test('cancelar entre fases (mientras se descubre) no lanza la fase 2 aunque el descubrimiento termine', async () => {
+  resetJobs();
+  const f = fakeTwoPhase();
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 3 }));
+    await post({ action: 'cancel', id: started.job.id });
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.items = IDS.slice(0, 3).map((id) => listing(id));
+    const out = await jobOf(started.job.id);
+    assert.equal(f.st.runs.length, 1, 'cancelado: no se lanza la fase 2');
+    assert.equal(out.job.status, 'aborted');
+  } finally { f.restore(); }
+});
+
+test('reintentar tras un fallo de la fase 2 NO repite el descubrimiento y sólo cuenta 1 ejecución más en la cuota', async () => {
+  resetJobs();
+  process.env.APIFY_MAX_RUNS_PER_DAY = '3';
+  const f = fakeTwoPhase();
+  try {
+    const first = await jsonOf(await post({ source: 'temu', url: CAT, limit: 3 }));
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.items = IDS.slice(0, 3).map((id) => listing(id));
+    await jobOf(first.job.id);
+    f.st.detail.status = 'FAILED';
+    const failed = await jobOf(first.job.id);
+    assert.equal(failed.job.status, 'failed');
+    assert.equal(f.st.runs.length, 2);
+    // reintento: sólo la fase 2, con los mismos ids
+    f.st.detail.status = 'RUNNING';
+    const retry = await jsonOf(await post({ source: 'temu', url: CAT, limit: 3 }));
+    assert.equal(f.st.runs.length, 3, 'una sola ejecución nueva (la fase 2)');
+    assert.deepEqual(f.st.runs[2].body.startUrls, f.st.runs[1].body.startUrls);
+    assert.equal(f.st.runs[2].body.getProductDetails, true);
+    assert.equal(retry.job.discovery.reused, true);
+    assert.equal(retry.job.discovery.costUsd, 0, 'la fase 1 no se vuelve a cobrar');
+    assert.equal(retry.job.runsReserved, 1);
+    f.st.detail.status = 'SUCCEEDED'; f.st.detail.items = IDS.slice(0, 3).map((id) => esItem(id));
+    const done = await jobOf(retry.job.id);
+    assert.equal(done.job.status, 'succeeded');
+    assert.equal(done.job.summary.phases.reusedDiscovery, true);
+    assert.equal(done.records.length, 3);
+    // cuota: 2 (primer trabajo) + 1 (reintento) = 3 de 3 → otro trabajo de dos fases se rechaza, indicando lo que necesita
+    const blocked = await post({ source: 'temu', url: 'https://www.temu.com/es/category-o3-300.html', limit: 3 });
+    assert.equal(blocked.status, 429);
+    assert.match((await jsonOf(blocked)).message, /necesita 2; hoy hay 3/);
+    assert.equal(f.st.runs.length, 3, 'rechazado sin llamar a Apify');
+  } finally { f.restore(); delete process.env.APIFY_MAX_RUNS_PER_DAY; }
+});
+
+test('cuota: una categoría de dos fases reserva 2 ejecuciones; una ficha individual o Amazon, 1', async () => {
+  resetJobs();
+  process.env.APIFY_MAX_RUNS_PER_DAY = '3';
+  const f = fakeTwoPhase();
+  try {
+    const first = await jsonOf(await post({ source: 'temu', url: CAT, limit: 2 }));
+    assert.equal(first.job.runsReserved, 2);
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.items = IDS.slice(0, 2).map((id) => listing(id));
+    await jobOf(first.job.id);
+    f.st.detail.status = 'SUCCEEDED'; f.st.detail.items = IDS.slice(0, 2).map((id) => esItem(id));
+    await jobOf(first.job.id);
+    const product = await jsonOf(await post({ source: 'temu', url: PROD, limit: 1 }));
+    assert.equal(product.job.runsReserved, 1);
+    assert.equal(product.job.twoPhase, undefined, 'las URL de producto siguen en una sola fase');
+  } finally { f.restore(); delete process.env.APIFY_MAX_RUNS_PER_DAY; }
+});
+
+test('presupuesto máximo explícito: se valida, limita cada ejecución y el trabajo entero', async () => {
+  resetJobs();
+  const f = fakeTwoPhase();
+  try {
+    for (const bad of [0.01, 5, 'abc', -1]) assert.equal((await post({ source: 'temu', url: CAT, limit: 2, budgetUsd: bad })).status, 400, String(bad));
+    assert.equal(f.st.runs.length, 0, 'un presupuesto inválido no lanza nada');
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 2, budgetUsd: 0.2 }));
+    assert.equal(started.job.budgetUsd, 0.2);
+    assert.equal(started.job.maxCostUsd, 0.2);
+    assert.match(f.st.runs[0].search, /maxTotalChargeUsd=0\.0?\d+/);
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.items = IDS.slice(0, 2).map((id) => listing(id));
+    await jobOf(started.job.id);
+    const cap = Number(f.st.runs[1].search.match(/maxTotalChargeUsd=([0-9.]+)/)[1]);
+    assert.ok(cap <= 0.2 - 0.09 + 1e-9, 'la fase 2 sólo puede gastar lo que queda del presupuesto: ' + cap);
+    assert.ok(0.09 + cap <= 0.2 + 1e-9);
+  } finally { f.restore(); }
+});
+
+test('Amazon y las URL de producto de Temu no cambian: una sola ejecución', async () => {
+  resetJobs();
+  const f = fakeTwoPhase();
+  try {
+    const p = await jsonOf(await post({ source: 'temu', url: PROD, limit: 10 }));
+    assert.equal(p.job.twoPhase, undefined);
+    assert.equal(f.st.runs[0].body.maxItems, 1);
+    assert.equal(f.st.runs[0].body.getProductDetails, true);
+    assert.deepEqual(f.st.runs[0].body.startUrls, [{ url: PROD }]);
+  } finally { f.restore(); }
 });
