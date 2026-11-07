@@ -134,7 +134,7 @@ test('«Simular importación» nunca guarda y no enriquece; «Importar al catál
   await wait(100);
   assert.deepEqual(f.log.imports.map((b) => b.dryRun), [true, false]);
   assert.equal(f.log.enrich.length, 0, 'importar sin IA nunca llama al enriquecimiento');
-  assert.match(nodes.jsonImpAlert.textContent, /sin IA/);
+  assert.match(nodes.jsonImpAlert.textContent, /Sin IA/);
   assert.equal(calls.some((c) => /apify|scrape|category-extract/i.test(String(c[0]))), false);
 });
 
@@ -221,4 +221,75 @@ test('si la IA falla: los productos importados se conservan, el enriquecimiento 
 test('el botón antiguo de Amazon y la casilla «Guardar en el catálogo» ya no existen en el panel', () => {
   assert.ok(!/id="jsonImpAmazonIa"|id="jsonImpSave"|id="jsonImpRun"/.test(source));
   assert.ok(!/Importar registros válidos|Importar producto Amazon con ficha IA/.test(source));
+});
+
+/* ───────────── Moneda no EUR y «todo en revisión»: nunca un mensaje verde de éxito ───────────── */
+
+const usd = (n) => ({ ...temuRec(n), currency: 'USD' });
+/** Servidor que deja en revisión todo registro cuya moneda no sea EUR (como el motor real). */
+function reviewingServer() {
+  const f = fakeServer({ extra: (u, init) => {
+    if (!u.endsWith('/api/admin/json-import')) return null;
+    const body = JSON.parse(init.body);
+    f.log.imports.push(body);
+    return resp({ success: true, results: body.records.map((r, i) => (r.currency === 'EUR'
+      ? { index: body.indexOffset + i, outcome: 'created', productId: 'p-' + r.externalId, title: r.title, reasons: [], warnings: [], entities: { productsCreated: 1, offersCreated: 1, offersUpdated: 0 } }
+      : { index: body.indexOffset + i, outcome: 'review', title: r.title, reasons: ['moneda_no_euro:' + r.currency], warnings: [], entities: { productsCreated: 0, offersCreated: 0, offersUpdated: 0 } })) });
+  } });
+  return f;
+}
+
+test('la moneda de lo cargado se muestra ANTES de importar y avisa si no es EUR', async () => {
+  const { nodes } = makeClient(reviewingServer().fn);
+  paste(nodes, [usd(1), usd(2)]);
+  await wait(320);
+  assert.ok(nodes.jsonImpSumCurrency.textContent.includes('USD (2)'));
+  assert.match(nodes.jsonImpSumCurrency.textContent, /NO es EUR/);
+  assert.match(nodes.jsonImpSumCurrency.textContent, /no se convierte/);
+  paste(nodes, [temuRec(1), temuRec(2)]);
+  await wait(320);
+  assert.equal(nodes.jsonImpSumCurrency.textContent, 'EUR (2)');
+});
+
+test('todo en revisión (p. ej. 10 en USD): mensaje ROJO claro, sin «éxito», en simulación y en importación real', async () => {
+  const f = reviewingServer();
+  const { nodes } = makeClient(f.fn);
+  paste(nodes, [1, 2, 3].map(usd));
+  nodes.jsonImpSimulate.fire('click');
+  await wait(120);
+  assert.match(nodes.jsonImpAlert.className, /is-error/);
+  assert.match(nodes.jsonImpAlert.textContent, /NO se importaría ninguna ficha/);
+  assert.match(nodes.jsonImpAlert.textContent, /3 de 3/);
+  assert.ok(nodes.jsonImpAlert.textContent.includes('Moneda distinta de EUR (USD)'));
+  assert.doesNotMatch(nodes.jsonImpAlert.textContent, /Importación terminada|Simulación terminada/);
+  nodes.jsonImpImport.fire('click');
+  await wait(120);
+  assert.match(nodes.jsonImpAlert.className, /is-error/);
+  assert.match(nodes.jsonImpAlert.textContent, /NO se ha importado ninguna ficha/);
+  assert.match(nodes.jsonImpAlert.textContent, /catálogo no ha cambiado/);
+  assert.doesNotMatch(nodes.jsonImpAlert.className, /is-ok/);
+});
+
+test('importación parcial (algunas en revisión): aviso ámbar con el detalle, no verde', async () => {
+  const { nodes } = makeClient(reviewingServer().fn);
+  paste(nodes, [temuRec(1), usd(2)]);
+  nodes.jsonImpImport.fire('click');
+  await wait(120);
+  assert.match(nodes.jsonImpAlert.className, /is-warn/);
+  assert.ok(nodes.jsonImpAlert.textContent.includes('1 ficha(s) nueva(s)'));
+  assert.ok(nodes.jsonImpAlert.textContent.includes('1 registro(s) NO se han importado'));
+});
+
+test('«Importar y enriquecer con IA» con todo en revisión: no importa, no enriquece, no gasta créditos y lo dice en rojo', async () => {
+  const f = reviewingServer();
+  const { nodes } = makeClient(f.fn);
+  paste(nodes, [1, 2].map(usd));
+  nodes.jsonImpImportAi.fire('click');
+  await wait(120);
+  assert.equal(nodes.jsonImpAiConfirm.hidden, true);
+  assert.match(nodes.jsonImpAlert.className, /is-error/);
+  assert.match(nodes.jsonImpAlert.textContent, /No hay fichas nuevas que enriquecer, no se gasta ningún crédito/);
+  assert.match(nodes.jsonImpAlert.textContent, /NO se importaría ninguna ficha/);
+  assert.equal(f.log.enrich.length, 0);
+  assert.deepEqual(f.log.imports.map((b) => b.dryRun), [true]);
 });

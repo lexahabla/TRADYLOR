@@ -1113,6 +1113,7 @@ const h = headerConfig[initialSection] || headerConfig.products;
         <dl class="jsonimp-summary">
           <div class="jsonimp-counter"><dt>Productos cargados</dt><dd id="jsonImpSumCount">0</dd></div>
           <div class="jsonimp-counter"><dt>Origen</dt><dd id="jsonImpSumSource">—</dd></div>
+          <div class="jsonimp-counter" id="jsonImpSumCurrencyBox"><dt>Moneda</dt><dd id="jsonImpSumCurrency">—</dd></div>
           <div class="jsonimp-counter"><dt>Destino de las fichas nuevas</dt><dd id="jsonImpSumTarget">Automático (reglas habituales de clasificación)</dd></div>
         </dl>
         <div class="jsonimp-actions">
@@ -10884,6 +10885,8 @@ function renderTableRows(products, resetPage = true) {
     var sumCount = $('jsonImpSumCount');
     var sumSource = $('jsonImpSumSource');
     var sumTarget = $('jsonImpSumTarget');
+    var sumCurrency = $('jsonImpSumCurrency');
+    var sumCurrencyBox = $('jsonImpSumCurrencyBox');
     var simBtn = $('jsonImpSimulate');
     var impBtn = $('jsonImpImport');
     var aiBtn = $('jsonImpImportAi');
@@ -11169,6 +11172,26 @@ function renderTableRows(products, resetPage = true) {
       });
       return Object.keys(counts).map(function (k) { return k + ' (' + counts[k] + ')'; }).join(' · ');
     }
+    // Monedas de los registros cargados: nunca se convierten; si alguna no es EUR se avisa ANTES de importar.
+    function currencyInfo(records) {
+      var counts = {};
+      records.forEach(function (r) {
+        var o = (r && typeof r === 'object') ? r : {};
+        var offer = (o.offer && typeof o.offer === 'object') ? o.offer : {};
+        var c = String(offer.currency || o.currency || '').toUpperCase();
+        if (!c && o.price && typeof o.price === 'object') c = String(o.price.currency || '');
+        if (c === '€') c = 'EUR'; else if (c === '$') c = 'USD'; else if (c === '£') c = 'GBP';
+        c = c || '?';
+        counts[c] = (counts[c] || 0) + 1;
+      });
+      var keys = Object.keys(counts);
+      return {
+        counts: counts,
+        text: keys.map(function (k) { return (k === '?' ? 'sin indicar' : k) + ' (' + counts[k] + ')'; }).join(' · '),
+        nonEur: keys.some(function (k) { return k !== 'EUR' && k !== '?'; }),
+        nonEurCount: keys.reduce(function (n, k) { return n + (k !== 'EUR' ? counts[k] : 0); }, 0)
+      };
+    }
     function refreshSummary() {
       clearTimeout(summaryTimer);
       hideConfirm();
@@ -11179,9 +11202,14 @@ function renderTableRows(products, resetPage = true) {
       if (parsed.error) {
         sumCount.textContent = 'JSON no válido';
         sumSource.textContent = loadMethod;
+        sumCurrency.textContent = '—';
+        sumCurrencyBox.classList.toggle('is-warn', false);
       } else {
         sumCount.textContent = String(parsed.records.length);
         sumSource.textContent = originLabel(parsed.records) + ' · ' + loadMethod;
+        var cur = currencyInfo(parsed.records);
+        sumCurrency.textContent = cur.text + (cur.nonEur ? ' — NO es EUR: esos registros quedarán en revisión, no se importarán (no se convierte la moneda)' : '');
+        sumCurrencyBox.classList.toggle('is-warn', cur.nonEur);
       }
       var t = chosenTarget();
       sumTarget.textContent = t.categoryId ? t.text : 'Automático (reglas habituales de clasificación)';
@@ -11237,6 +11265,35 @@ function renderTableRows(products, resetPage = true) {
         throw err;
       });
     }
+    // Resultado global: si nada se aplica, se dice claramente (rojo) en lugar de un mensaje verde de éxito.
+    function outcomeMessage(results, dry) {
+      var c = { created: 0, linked: 0, updated: 0, unchanged: 0, review: 0, rejected: 0, error: 0 };
+      var reasons = {};
+      results.forEach(function (x) {
+        c[x.outcome] = (c[x.outcome] || 0) + 1;
+        if (x.outcome === 'review' || x.outcome === 'rejected' || x.outcome === 'error') {
+          (x.reasons || []).forEach(function (code) { reasons[code] = (reasons[code] || 0) + 1; });
+        }
+      });
+      var applied = c.created + c.linked + c.updated;
+      var blocked = c.review + c.rejected + c.error;
+      var top = Object.keys(reasons).sort(function (a, b) { return reasons[b] - reasons[a]; }).slice(0, 3).map(function (k) { return reasonText(k) + ' (' + reasons[k] + ')'; }).join('; ');
+      var what = [];
+      if (c.review) what.push(c.review + ' en revisión');
+      if (c.rejected) what.push(c.rejected + ' rechazado(s)');
+      if (c.error) what.push(c.error + ' con error');
+      if (!applied && blocked) {
+        return { kind: 'error', applied: 0, text: (dry ? 'La simulación indica que NO se importaría ninguna ficha' : 'NO se ha importado ninguna ficha') + ': ' + blocked + ' de ' + results.length + ' registro(s) (' + what.join(', ') + '). Motivos: ' + top + '. ' + (dry ? 'No se ha guardado nada. ' : 'El catálogo no ha cambiado; los registros están en la cola de revisión. ') + 'Revisa el informe.' };
+      }
+      if (!applied) {
+        return { kind: 'info', applied: 0, text: (dry ? 'Simulación: ' : '') + 'sin cambios: los ' + results.length + ' registro(s) ya estaban en el catálogo con los mismos datos.' };
+      }
+      var done = [];
+      if (c.created) done.push(c.created + ' ficha(s) nueva(s)');
+      if (c.linked) done.push(c.linked + ' oferta(s) vinculada(s)');
+      if (c.updated) done.push(c.updated + ' oferta(s) actualizada(s)');
+      return { kind: blocked ? 'warn' : 'ok', applied: applied, text: (dry ? 'Simulación terminada: se aplicarían ' : 'Importación terminada: ') + done.join(', ') + (blocked ? '; ' + blocked + ' registro(s) NO se han importado (' + what.join(', ') + '; motivos: ' + top + ')' : '') + (dry ? '. NO se ha guardado nada.' : '.') };
+    }
     function finishReport(r) {
       setProgress(r.results.length, r.total, r.interrupted ? 'Cancelado: ' + r.results.length + ' de ' + r.total + ' registros procesados.' : 'Completado: ' + r.results.length + ' de ' + r.total + ' registros.');
       renderReport(r.results, r.total, r.dryRun, r.batchId, r.interrupted);
@@ -11262,7 +11319,8 @@ function renderTableRows(products, resetPage = true) {
         return runFlow({ dryRun: true }).then(function (r) {
           if (!r) return;
           finishReport(r);
-          showMsg('ok', 'Simulación terminada: NO se ha guardado nada. Revisa el informe y, si es correcto, pulsa «Importar al catálogo».');
+          var om = outcomeMessage(r.results, true);
+          showMsg(om.kind, om.text + (om.applied ? ' Si es correcto, pulsa «Importar al catálogo».' : ''));
         });
       });
     });
@@ -11274,7 +11332,8 @@ function renderTableRows(products, resetPage = true) {
           finishReport(r);
           if (r.results.length) notifyCatalog();
           var n = createdIds(r.results).length;
-          showMsg('ok', 'Importación terminada: ' + n + ' ficha(s) nueva(s) en el catálogo, sin IA. Puedes enriquecerlas después desde el catálogo.');
+          var om = outcomeMessage(r.results, false);
+          showMsg(om.kind, om.text + (n ? ' Sin IA: puedes enriquecerlas después desde el catálogo.' : ''));
         });
       });
     });
@@ -11298,7 +11357,8 @@ function renderTableRows(products, resetPage = true) {
           if (r.interrupted) { showMsg('info', 'Vista previa cancelada: no se ha guardado ni enriquecido nada.'); return; }
           var n = createdIds(r.results).length;
           if (!n) {
-            showMsg('info', 'No hay fichas nuevas que enriquecer (' + r.total + ' registro(s): actualizaciones, ofertas vinculadas, repetidos o pendientes de revisión). Las fichas existentes nunca se enriquecen automáticamente. Usa «Importar al catálogo» si solo quieres aplicar los cambios.');
+            var pm = outcomeMessage(r.results, true);
+            showMsg(pm.kind === 'ok' ? 'info' : pm.kind, 'No hay fichas nuevas que enriquecer, no se gasta ningún crédito y no se importa nada. ' + pm.text + ' Las fichas existentes nunca se enriquecen automáticamente.');
             return;
           }
           var t = chosenTarget();
@@ -11318,7 +11378,8 @@ function renderTableRows(products, resetPage = true) {
           finishReport(r);
           if (r.results.length) notifyCatalog();
           var ids = createdIds(r.results);
-          showMsg('ok', 'Importación terminada: ' + ids.length + ' ficha(s) nueva(s). Ahora se enriquecen con IA.');
+          var om = outcomeMessage(r.results, false);
+          showMsg(om.kind, om.text + (ids.length ? ' Ahora se enriquecen con IA las ' + ids.length + ' ficha(s) nueva(s).' : ''));
           if (!ids.length) return;
           pendingIds = ids.slice();
           savePending();
@@ -11673,7 +11734,11 @@ function renderTableRows(products, resetPage = true) {
       if (s.withReview) parts.push(s.withReview + ' con motivos de revisión (datos contradictorios, precio dudoso, moneda…; irán a revisión)');
       if (s.actorErrors) parts.push(s.actorErrors + ' con error del actor (se rechazarán)');
       var head = s.partial ? 'Resultado parcial (' + records.length + ' de máx. ' + job.limit + '): ' : 'Extracción completada: ';
-      showMsg('ok', head + parts.join(' · ') + costText(job) + '. NO se ha guardado nada: usa «Simular importación», «Importar al catálogo» o «Importar y enriquecer con IA» en la zona de acciones.');
+      var curInfo = currencyInfo(records);
+      var mismatch = s.marketMismatch === true;
+      if (curInfo.nonEur || mismatch) {
+        showMsg('warn', 'ATENCIÓN: ' + (mismatch ? 'la URL pedía el mercado español (/es/) pero el actor respondió con otro mercado. ' : '') + 'La extracción devolvió precios en ' + curInfo.text + ', no en EUR. Esos ' + curInfo.nonEurCount + ' registro(s) NO se importarán: quedarán en revisión (no se convierte la moneda ni se cambia la etiqueta). Prueba con otra categoría de Temu España; el actor no sirve el mercado español en todas. NO se ha guardado nada.');
+      } else showMsg('ok', head + parts.join(' · ') + costText(job) + '. NO se ha guardado nada: usa «Simular importación», «Importar al catálogo» o «Importar y enriquecer con IA» en la zona de acciones.');
       setCatStatus('Última extracción: ' + parts.join(' · ') + costText(job) + '.', 'info');
     }
 
@@ -11882,6 +11947,9 @@ function renderTableRows(products, resetPage = true) {
   .jsonimp-msg { padding: .8rem 1rem; border-radius: var(--border-radius-sm); border: 1px solid transparent; font-size: .85rem; margin-bottom: 1rem; }
   .jsonimp-msg[hidden], .jsonimp-progress[hidden], .jsonimp-report[hidden] { display: none; }
   .jsonimp-msg.is-ok { color: #a7f3d0; background: rgba(16, 185, 129, .1); border-color: rgba(16, 185, 129, .3); }
+  .jsonimp-msg.is-warn { color: #fde68a; background: rgba(245, 158, 11, .12); border-color: rgba(245, 158, 11, .4); }
+  .jsonimp-msg.is-info { color: #bfdbfe; background: rgba(59, 130, 246, .1); border-color: rgba(59, 130, 246, .3); }
+  .jsonimp-counter.is-warn dd { color: #fde68a; }
   .jsonimp-msg.is-error { color: #fecaca; background: rgba(239, 68, 68, .1); border-color: rgba(239, 68, 68, .3); }
   .jsonimp-bar { height: 10px; border-radius: 999px; background: rgba(255, 255, 255, .08); overflow: hidden; }
   .jsonimp-bar span { display: block; height: 100%; width: 0; background: var(--color-primary); transition: width .2s ease; }

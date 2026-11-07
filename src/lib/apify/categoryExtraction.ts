@@ -85,6 +85,10 @@ export interface ResultSummary {
   withReview: number;
   partial: boolean;
   warnings: string[];
+  /** Monedas de los registros adaptados (p. ej. { EUR: 10 }): se muestran ANTES de importar. */
+  currencies?: Record<string, number>;
+  /** Se pidió el mercado español (/es/) pero el actor respondió con otro (p. ej. USD de EE. UU.). */
+  marketMismatch?: boolean;
 }
 
 export class ExtractionError extends Error {
@@ -203,6 +207,8 @@ export function validateTemuUrl(raw: unknown): { url: string; kind: UrlKind } {
     throw new ExtractionError('La portada de Temu no está admitida aquí (es un flujo de recomendaciones, no una categoría). Usa la URL de una categoría o de un producto.');
   }
   url.hash = '';
+  // Los parámetros de seguimiento (_x_sessn_id, refer_page_*, opt_level…) no aportan nada al actor: se envía la URL limpia.
+  if (!/[?&]goods_id=/.test(url.search)) url.search = '';
   const kind: UrlKind | null = /(^|[-/])g-\d{6,20}\.html$/.test(path) || /[?&]goods_id=\d{6,20}/.test(url.search) ? 'product' : /(^|[-/])o\d+-\d+\.html$/.test(path) ? 'category' : null;
   if (kind) {
     // Sin prefijo de mercado el actor usa el de EE. UU. y devuelve USD (verificado en una ejecución real): se rechaza ANTES de gastar.
@@ -469,7 +475,18 @@ async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefi
   if (temu && !items.length && job.status === 'succeeded') warnings.push('sin_resultados_no_prueba_que_la_categoria_este_vacia');
   const metas = records.map((r) => ((r as any)?.__import ?? { errors: [], review: [] }) as { errors: string[]; review: string[] });
   const partial = job.status !== 'succeeded' || items.length < job.limit;
+  // Monedas realmente devueltas (nunca se convierten ni se etiquetan de nuevo) y coherencia del mercado pedido.
+  const currencies: Record<string, number> = {};
+  for (const r of records) {
+    const code = String(((r as any)?.offer?.currency ?? '') || '?');
+    currencies[code] = (currencies[code] ?? 0) + 1;
+  }
+  const marketOfUrl = (u: unknown): string => { try { const m = new URL(String(u)).pathname.toLowerCase().match(/^\/([a-z]{2})(?:-[a-z]{2})?\//); return m ? m[1] : ''; } catch { return ''; } };
+  const marketMismatch = temu && marketOfUrl(job.url) === 'es' && items.some((it) => marketOfUrl((it as any)?.sourceUrl) !== 'es');
+  if (marketMismatch) warnings.push('mercado_pedido_es_pero_el_actor_respondio_con_otro');
   const summary: ResultSummary = {
+    currencies,
+    marketMismatch,
     fetched: items.length,
     adapted: records.length,
     actorErrors: metas.filter((m) => m.errors.length).length,

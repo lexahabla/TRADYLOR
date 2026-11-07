@@ -184,6 +184,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   prefijo de mercado /es/ (sin él el actor responde con EE. UU. en USD; se rechaza antes de gastar); rechaza
   búsquedas, colecciones, ofertas relámpago, tiendas y portada. El límite viaja como `maxItems`; `getProductDetails` va activado
   (`APIFY_TEMU_GET_DETAILS=false` lo desactiva) y se pide 1 GB de memoria (arranque 0,03 USD + 0,016 USD por producto; medido: 10 productos = 0,19 USD).
+  La URL se envía limpia (sin parámetros de seguimiento). OJO: `/es/` no garantiza el mercado español: hay categorías (p. ej. o3-1893)
+  que el actor sirve siempre en USD y canoniza sin `/es/` (medido con ejecuciones reales); el panel muestra la moneda devuelta ANTES de importar.
   Sólo EUR del mercado español se importa solo: otra moneda, «desde», precio variable, oferta relámpago o cupón → revisión.
   `EBAY_COMMISSION_RATE` (opcional): % base de comisión EPN que usa el catálogo de
   eBay para la columna "Comisión %" (4-6%; por defecto 5).

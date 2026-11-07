@@ -470,3 +470,44 @@ test('muestra real 1893 con moneda EUR y /es/ simulados: la estructura real se i
   assert.equal(run(es, { target }).results.filter((r) => r.outcome === 'created').length, 0);
   assert.equal(readCatalog(dir).length, 10);
 });
+
+/* ───────────── URL realmente enviada y mercado de la respuesta ───────────── */
+
+test('la URL de Temu se envía LIMPIA: sin parámetros de seguimiento ni fragmento; conserva /es/ y el id', () => {
+  const dirty = 'https://www.temu.com/es/calefaccion-o3-1893.html?opt_level=2&title=Equipo%20de%20calefacci%C3%B3n&_x_enter_scene_type=cate_tab&_x_sessn_id=vy89qyn4fm&refer_page_name=category&refer_page_sn=10012#top';
+  const out = lib.validateTemuUrl(dirty);
+  assert.equal(out.url, 'https://www.temu.com/es/calefaccion-o3-1893.html');
+  assert.equal(out.kind, 'category');
+  assert.doesNotMatch(out.url, /[?#]/);
+});
+
+test('la URL que se manda a Apify es la normalizada (comprobado en la petición)', async () => {
+  resetJobs();
+  const f = fakeApify();
+  try {
+    await post({ source: 'temu', url: 'https://www.temu.com/es/calefaccion-o3-1893.html?_x_sessn_id=abc&refer_page_sn=1', limit: 10 });
+    assert.deepEqual(JSON.parse(runPosts(f)[0].body).startUrls, [{ url: 'https://www.temu.com/es/calefaccion-o3-1893.html' }]);
+  } finally { f.restore(); }
+});
+
+test('el resumen de la extracción informa de las monedas devueltas y detecta que se pidió /es/ pero el actor respondió con otro mercado (muestra real categoría 1893)', async () => {
+  resetJobs();
+  let f = fakeApify({ runStatus: 'SUCCEEDED', items: REAL_1893, itemCount: 10 });
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: 'https://www.temu.com/es/category-o3-1893.html', limit: 10 }));
+    const out = await jsonOf(await get('?id=' + started.job.id));
+    assert.deepEqual(out.job.summary.currencies, { USD: 10 });
+    assert.equal(out.job.summary.marketMismatch, true);
+    assert.ok(out.job.summary.warnings.includes('mercado_pedido_es_pero_el_actor_respondio_con_otro'));
+    assert.ok(out.records.every((r) => r.__import.review.includes('moneda_no_euro:USD')), 'la validación sigue activa: no se convierte ni se reetiqueta');
+    assert.ok(out.records.every((r) => r.offer.currency === 'USD'));
+  } finally { f.restore(); }
+  resetJobs();
+  f = fakeApify({ runStatus: 'SUCCEEDED', items: REAL_ES, itemCount: 3 });
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: 'https://www.temu.com/es/category-o3-248.html', limit: 3 }));
+    const out = await jsonOf(await get('?id=' + started.job.id));
+    assert.deepEqual(out.job.summary.currencies, { EUR: 3 });
+    assert.equal(out.job.summary.marketMismatch, false);
+  } finally { f.restore(); }
+});
