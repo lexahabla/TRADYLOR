@@ -11759,9 +11759,19 @@ function renderTableRows(products, resetPage = true) {
       var phaseNote = '';
       if (ph) {
         phaseNote = ' Método de dos fases: las fichas son españolas, pero los productos se descubrieron en otro mercado, así que la selección y el orden pueden no coincidir con la categoría española.';
+        // Cuenta hasta lo solicitado: solicitados → listados por la categoría → ids únicos → fichas de España.
+        var dsc = job.discovery || {};
+        var rows = typeof dsc.fetched === 'number' ? dsc.fetched : ph.discovered;
+        var lines = [];
+        lines.push('Solicitados ' + job.limit + ' → la categoría listó ' + rows + (rows < job.limit ? ' (' + (job.limit - rows) + ' menos de los pedidos)' : '') + ' → ' + ph.discovered + ' id(s) únicos' + (ph.duplicatesRemoved || dsc.invalidIds ? ' (' + (ph.duplicatesRemoved || 0) + ' repetido(s), ' + (dsc.invalidIds || 0) + ' inválido(s) descartados)' : '') + ' → ' + ph.obtained + ' ficha(s) de España.');
         if (ph.missing && ph.missing.length) {
-          phaseNote += ' No disponibles para España (no se han sustituido): ' + ph.missing.slice(0, 5).map(function (m) { return m.id; }).join(', ') + (ph.missing.length > 5 ? '… (+' + (ph.missing.length - 5) + ')' : '') + ' — ' + ph.missing[0].reason + '.';
+          var kinds = {};
+          ph.missing.forEach(function (m) { var k = m.reason; kinds[k] = (kinds[k] || 0) + 1; });
+          lines.push('Diferencia hasta ' + job.limit + ': ' + ph.missing.length + ' sin ficha española (no se han sustituido): ' + Object.keys(kinds).map(function (k) { return kinds[k] + ' × ' + k; }).join('; ') + '. Ids: ' + ph.missing.slice(0, 6).map(function (m) { return m.id; }).join(', ') + (ph.missing.length > 6 ? '… (+' + (ph.missing.length - 6) + ')' : '') + '.');
+        } else if (ph.discovered < job.limit) {
+          lines.push('Diferencia hasta ' + job.limit + ': la categoría listó solo ' + rows + ' producto(s).');
         }
+        phaseNote += ' ' + lines.join(' ');
       }
       if (curInfo.nonEur || mismatch) {
         showMsg('warn', 'ATENCIÓN: ' + (mismatch ? 'la URL pedía el mercado español (/es/) pero el actor respondió con otro mercado. ' : '') + 'La extracción devolvió precios en ' + curInfo.text + ', no en EUR. Esos ' + curInfo.nonEurCount + ' registro(s) NO se importarán: quedarán en revisión (no se convierte la moneda ni se cambia la etiqueta). Prueba con otra categoría de Temu España; el actor no sirve el mercado español en todas. NO se ha guardado nada.');

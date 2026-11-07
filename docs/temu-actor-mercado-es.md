@@ -53,3 +53,20 @@ consultar una vez pasado un margen y marca el coste como consolidado.
 
 **Resultado observado en la validación:** ids descubiertos = ids obtenidos (mismo orden); ambos en EUR con `/es/`; los dos productos
 vinieron **agotados** (`inStock:false`) en España y así se conservan.
+
+## Caso real: 10 solicitados → 4 fichas (ejecución 80767b52…, categoría 1893, 7-nov-2026)
+Reconstruido con el diagnóstico de sólo lectura (`GET /api/admin/category-extract?id=<id>&diag=1`, SOURCE_SUMMARY del actor), sin gastar créditos:
+
+| Paso | Resultado |
+|---|---|
+| Solicitados | 10 |
+| Fase 1 «Descubriendo productos» | 10 filas listadas (`product-listing: 10`) → 10 ids únicos, 0 repetidos, 0 inválidos |
+| Fase 2 «Obteniendo fichas de España» | 10 URL `/es/-g-<id>.html` recibidas → 4 fichas (`SUCCESS: 4`) |
+| Sin ficha (6) | **5** `EMPTY_RESULT` HTTP 404 «GOODS_NOT_EXIST: Product has been delisted or does not exist on Temu» (no existen o están retirados en el mercado español) · **1** `SOURCE_ERROR` «PDP data unavailable» (HTTP 200, posible fallo transitorio) |
+| Recortes / presupuesto | Ninguno: 0 descartes; gasto 0,09 + 0,094 USD frente a topes de 0,135 + 0,375 |
+
+Conclusión: no hubo recorte incorrecto; la diferencia es de disponibilidad real en el mercado español. El panel muestra ahora la cuenta
+(«Solicitados N → la categoría listó X → ids únicos → fichas de España») y el motivo de cada ausente.
+
+Corrección de implementación: el coste de la fase 1 se leía al terminar y podía quedar incompleto (0,03 en lugar de 0,09); ahora ambas fases
+se consolidan con una segunda lectura. Coste consolidado de esa ejecución: **0,184 USD**.

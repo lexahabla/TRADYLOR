@@ -853,3 +853,89 @@ test('diagnóstico de sólo lectura (?diag=1): devuelve el SOURCE_SUMMARY del ac
     assert.equal(anon.status, 401);
   } finally { f.restore(); }
 });
+
+/* ───────────── Diferencia hasta los N solicitados: cada ausente se explica con el diagnóstico del propio actor ───────────── */
+
+const sourceSummaryFor = (rows) => ({
+  total: rows.length,
+  counts: {},
+  samples: rows.map(([id, code, status, reason]) => ({ requestedUrl: 'https://www.temu.com/es/-g-' + id + '.html', canonicalUrl: 'https://www.temu.com/es/-g-' + id + '.html', pageType: 'pdp', code, status, reason, outputCount: code === 'SUCCESS' ? 1 : 0 })),
+});
+
+test('ausentes explicados con el SOURCE_SUMMARY del actor: inexistentes/retirados en España vs error del origen; cuenta hasta lo solicitado', async () => {
+  resetJobs();
+  const f = fakeTwoPhase({
+    sourceSummary: sourceSummaryFor([
+      [IDS[0], 'SUCCESS', null, 'SUCCESS'],
+      [IDS[1], 'EMPTY_RESULT', 404, 'GOODS_NOT_EXIST: Product has been delisted or does not exist on Temu'],
+      [IDS[2], 'EMPTY_RESULT', 404, 'GOODS_NOT_EXIST: Product has been delisted or does not exist on Temu'],
+      [IDS[3], 'SOURCE_ERROR', 200, 'PDP data unavailable'],
+      [IDS[4], 'SUCCESS', null, 'SUCCESS'],
+    ]),
+  });
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 10 }));
+    f.st.discovery.status = 'SUCCEEDED';
+    f.st.discovery.items = IDS.map((id) => listing(id));
+    await jobOf(started.job.id);
+    f.st.detail.status = 'SUCCEEDED';
+    f.st.detail.items = [esItem(IDS[0]), esItem(IDS[4])];
+    const out = await jobOf(started.job.id);
+    const p = out.job.summary.phases;
+    assert.equal(p.requested, 10);
+    assert.equal(p.discoveryRows, 5, 'la categoría listó sólo 5 de los 10 pedidos');
+    assert.equal(p.discovered, 5);
+    assert.equal(p.obtained, 2);
+    assert.equal(p.unavailable, 3);
+    assert.equal(p.notInSpain, 2);
+    assert.equal(p.sourceErrors, 1);
+    assert.equal(p.explained, true);
+    const byId = Object.fromEntries(p.missing.map((m) => [m.id, m]));
+    assert.equal(byId[IDS[1]].code, 'GOODS_NOT_EXIST');
+    assert.match(byId[IDS[1]].reason, /No existe o está retirado en el mercado español/);
+    assert.equal(byId[IDS[3]].code, 'SOURCE_ERROR');
+    assert.match(byId[IDS[3]].reason, /Puede ser transitorio/);
+    // cuenta: 10 solicitados = 5 listados + 5 que la categoría no listó; 5 listados = 2 obtenidos + 2 inexistentes + 1 error del origen
+    assert.equal(p.requested - p.discoveryRows + p.obtained + p.notInSpain + p.sourceErrors, p.requested);
+  } finally { f.restore(); }
+});
+
+test('trabajos ya terminados sin explicar: se explican UNA vez con el diagnóstico (lectura) y sin lanzar ejecuciones', async () => {
+  resetJobs();
+  const f = fakeTwoPhase({
+    sourceSummary: sourceSummaryFor([
+      [IDS[0], 'SUCCESS', null, 'SUCCESS'],
+      [IDS[1], 'EMPTY_RESULT', 404, 'GOODS_NOT_EXIST: Product has been delisted or does not exist on Temu'],
+    ]),
+  });
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 2 }));
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.items = IDS.slice(0, 2).map((id) => listing(id));
+    await jobOf(started.job.id);
+    f.st.detail.status = 'SUCCEEDED'; f.st.detail.items = [esItem(IDS[0])];
+    await jobOf(started.job.id);
+    // Simula un trabajo anterior a este diagnóstico: motivo genérico y sin «explained»
+    const jobs = JSON.parse(fs.readFileSync(jobsFile, 'utf8'));
+    const j = jobs.find((x) => x.id === started.job.id);
+    j.summary.phases.missing = [{ id: IDS[1], reason: 'El actor no devolvió la ficha española de este producto (no disponible en España, retirada o bloqueada)' }];
+    delete j.summary.phases.explained; delete j.summary.phases.requested; delete j.summary.phases.notInSpain;
+    fs.writeFileSync(jobsFile, JSON.stringify(jobs));
+    const runsBefore = f.st.runs.length;
+    const out = await jobOf(started.job.id);
+    assert.equal(out.job.summary.phases.missing[0].code, 'GOODS_NOT_EXIST');
+    assert.equal(out.job.summary.phases.notInSpain, 1);
+    assert.equal(out.job.summary.phases.requested, 2);
+    assert.equal(out.job.summary.phases.explained, true);
+    assert.equal(f.st.runs.length, runsBefore, 'sólo lecturas');
+    const kvReads = () => f.st.calls.filter((c) => c.path.includes('/records/SOURCE_SUMMARY')).length;
+    const before = kvReads();
+    await jobOf(started.job.id);
+    assert.equal(kvReads(), before, 'explicado una vez: no se vuelve a leer');
+  } finally { f.restore(); }
+});
+
+test('el resumen del panel muestra la cuenta hasta los N solicitados y los motivos de los ausentes', () => {
+  const panel = fs.readFileSync(path.join('d:/AXEL/WEBS/TRADYLOR/tradylor_web', 'src/pages/upayp1b4.astro'), 'utf8');
+  assert.ok(panel.includes("'Solicitados ' + job.limit + ' → la categoría listó '"));
+  assert.ok(panel.includes("'Diferencia hasta ' + job.limit + ': '"));
+});

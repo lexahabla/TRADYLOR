@@ -114,7 +114,15 @@ export interface PhasesSummary {
   unavailable: number;
   /** Fichas españolas devueltas como agotadas (se conservan como tales). */
   outOfStock: number;
-  missing: Array<{ id: string; reason: string }>;
+  missing: Array<{ id: string; reason: string; code?: string }>;
+  /** Límite solicitado y filas que listó la categoría (para explicar la diferencia hasta lo pedido). */
+  requested?: number;
+  discoveryRows?: number;
+  /** Ausentes que el origen declara inexistentes/retirados en el mercado español, y ausentes por error del origen. */
+  notInSpain?: number;
+  sourceErrors?: number;
+  /** Los motivos de los ausentes proceden del diagnóstico del propio actor (SOURCE_SUMMARY). */
+  explained?: boolean;
   discoveryCostUsd?: number;
   detailCostUsd?: number;
   reusedDiscovery?: boolean;
@@ -528,9 +536,14 @@ async function startDetailRun(jobId: string): Promise<ExtractionJob> {
   return getJob(jobId) ?? job;
 }
 
-function phasesOf(job: ExtractionJob, obtained: number, outOfStock: number, missing: Array<{ id: string; reason: string }>): PhasesSummary {
+function phasesOf(job: ExtractionJob, obtained: number, outOfStock: number, missing: Array<{ id: string; reason: string; code?: string }>, explained = false): PhasesSummary {
   const d = job.discovery;
   return {
+    requested: job.limit,
+    discoveryRows: d?.fetched,
+    notInSpain: missing.filter((m) => m.code === 'GOODS_NOT_EXIST').length,
+    sourceErrors: missing.filter((m) => m.code === 'SOURCE_ERROR').length,
+    ...(explained ? { explained: true } : {}),
     discovered: d?.ids.length ?? 0,
     duplicatesRemoved: d?.duplicatesRemoved ?? 0,
     obtained,
@@ -541,6 +554,38 @@ function phasesOf(job: ExtractionJob, obtained: number, outOfStock: number, miss
     detailCostUsd: typeof job.costUsd === 'number' ? round4(Math.max(0, job.costUsd - (d?.costUsd ?? 0))) : undefined,
     ...(d?.reused ? { reusedDiscovery: true } : {}),
   };
+}
+
+/** SOURCE_SUMMARY del actor (de sólo lectura): resultado por URL pedida. Mejor esfuerzo: devuelve undefined si no se puede leer. */
+async function readSourceSummary(runId: string | undefined): Promise<any | undefined> {
+  if (!runId) return undefined;
+  try {
+    const run = (await apify(`/actor-runs/${encodeURIComponent(runId)}`))?.data;
+    if (!run?.defaultKeyValueStoreId) return undefined;
+    return await apify(`/key-value-stores/${encodeURIComponent(String(run.defaultKeyValueStoreId))}/records/SOURCE_SUMMARY`);
+  } catch {
+    return undefined;
+  }
+}
+
+/** Motivo concreto de cada id ausente según el diagnóstico del actor (si lo hay); si no, el motivo genérico. */
+function explainMissingIds(ids: string[], summary: any, generic: string): Array<{ id: string; reason: string; code?: string }> {
+  const samples: any[] = Array.isArray(summary?.samples) ? summary.samples : [];
+  const byUrl = new Map<string, any>();
+  for (const sample of samples) byUrl.set(String(sample?.requestedUrl ?? ''), sample);
+  return ids.map((id) => {
+    const sample = byUrl.get(temuEsProductUrl(id));
+    if (!sample) return { id, reason: generic };
+    const code = String(sample.code ?? '');
+    const why = String(sample.reason ?? '').replace(/[\r\n]+/g, ' ').slice(0, 160);
+    if (code === 'EMPTY_RESULT' && /GOODS_NOT_EXIST|delisted|does not exist/i.test(why)) {
+      return { id, code: 'GOODS_NOT_EXIST', reason: 'No existe o está retirado en el mercado español (Temu: GOODS_NOT_EXIST, HTTP ' + (sample.status ?? '404') + ')' };
+    }
+    if (code === 'SOURCE_ERROR') return { id, code, reason: 'Error del origen: «' + why + '». Puede ser transitorio: no prueba que el producto no exista en España' };
+    if (code === 'TARGET_BLOCKED') return { id, code, reason: 'Temu bloqueó la petición de esta ficha' };
+    if (code === 'UNSUPPORTED_MARKET') return { id, code, reason: 'El actor no admite este mercado para esta ficha' };
+    return { id, code: code || undefined, reason: (code ? code + ': ' : '') + (why || generic) };
+  });
 }
 
 /** Termina el trabajo sin fichas (fase 1 vacía, fallida o cancelada): resultado vacío y explicado. */
@@ -678,6 +723,7 @@ export async function refreshExtraction(id: string): Promise<{ job: ExtractionJo
     }
   }
   job = (await settleCost(job)) ?? job;
+  job = (await explainMissing(job)) ?? job;
   if (job.resultReady) {
     const stored = readResult(id);
     return { job, records: stored?.records };
@@ -689,6 +735,20 @@ export async function refreshExtraction(id: string): Promise<{ job: ExtractionJo
  * Apify puede tardar unos segundos en cerrar el uso de una ejecución: al terminar, el coste leído puede estar incompleto. Pasado un
  * margen se vuelve a consultar UNA vez (lectura, sin coste) y se marca como consolidado. En dos fases se suma la fase 1.
  */
+/** Trabajos terminados antes de este diagnóstico: se explican los ausentes UNA vez con el SOURCE_SUMMARY del actor (lectura, gratis). */
+async function explainMissing(job: ExtractionJob): Promise<ExtractionJob | undefined> {
+  const p = job.summary?.phases;
+  if (!job.twoPhase || !p || p.explained || !p.missing.length || !job.runId || !job.resultReady) return job;
+  const diag = await readSourceSummary(job.runId);
+  if (diag === undefined) return job; // se reintentará en la siguiente consulta
+  const missing = explainMissingIds(p.missing.map((m) => m.id), diag, p.missing[0]?.reason ?? 'No disponible');
+  const phases: PhasesSummary = { ...p, missing, requested: job.limit, discoveryRows: job.discovery?.fetched, notInSpain: missing.filter((m) => m.code === 'GOODS_NOT_EXIST').length, sourceErrors: missing.filter((m) => m.code === 'SOURCE_ERROR').length, explained: true };
+  const summary: ResultSummary = { ...(job.summary as ResultSummary), phases };
+  const stored = readResult(job.id);
+  if (stored) saveResult(job.id, { ...stored, summary });
+  return patchJob(job.id, { summary }) ?? job;
+}
+
 const SETTLE_AFTER_MS = 90_000;
 async function settleCost(job: ExtractionJob): Promise<ExtractionJob | undefined> {
   const d = job.discovery;
@@ -740,7 +800,8 @@ async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefi
   }
   // Dos fases: sólo se aceptan las fichas de los ids descubiertos (sin repetidos); lo que no llegó se explica, no se sustituye.
   const two = job.twoPhase === true && job.discovery !== undefined;
-  let missing: Array<{ id: string; reason: string }> = [];
+  let missing: Array<{ id: string; reason: string; code?: string }> = [];
+  let explained = false;
   if (two) {
     const wanted = new Set(job.discovery!.ids);
     const seenIds = new Set<string>();
@@ -760,7 +821,12 @@ async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefi
     const reason = job.status === 'succeeded'
       ? 'El actor no devolvió la ficha española de este producto (no disponible en España, retirada o bloqueada)'
       : 'La ejecución se interrumpió antes de obtener la ficha de este producto';
-    missing = job.discovery!.ids.filter((x) => !seenIds.has(x)).map((x) => ({ id: x, reason }));
+    const absent = job.discovery!.ids.filter((x) => !seenIds.has(x));
+    if (absent.length) {
+      const diag = await readSourceSummary(job.runId);
+      missing = explainMissingIds(absent, diag, reason);
+      explained = diag !== undefined;
+    }
   } else if (items.length > job.limit) {
     warnings.push(`el_actor_devolvio_mas_de_${job.limit}_productos:se_conservan_los_primeros_${job.limit}`);
     items = items.slice(0, job.limit);
@@ -793,7 +859,7 @@ async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefi
     withReview: metas.filter((m) => m.review.length).length,
     partial,
     warnings,
-    ...(two ? { phases: phasesOf(job, items.length, records.filter((r) => (r as any)?.offer?.availability === false).length, missing) } : {}),
+    ...(two ? { phases: phasesOf(job, items.length, records.filter((r) => (r as any)?.offer?.availability === false).length, missing, explained || missing.length === 0) } : {}),
   };
   saveResult(job.id, { records, summary });
   return patchJob(job.id, { resultReady: true, itemsSoFar: items.length, summary });
