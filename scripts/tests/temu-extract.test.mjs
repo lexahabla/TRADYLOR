@@ -780,3 +780,23 @@ test('coste real: Apify puede cerrar el uso tarde; pasado el margen se vuelve a 
     assert.equal(f.st.calls.filter((c) => c.path.endsWith('/actor-runs/RUNP2')).length, polls, 'consolidado: no se vuelve a consultar');
   } finally { f.restore(); }
 });
+
+/* ───────────── Validación REAL de las dos fases (categoría 1893, 2 productos, presupuesto 0,20 USD; 7-nov-2026) ───────────── */
+
+test('muestra real de las dos fases (2 productos de la categoría 1893): identidad con el lote USD, EUR y /es/, agotado conservado; se crean sin convertir nada', () => {
+  const real = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, 'fixtures', 'temu-real-sample-es-twophase-1893.json'), 'utf8'));
+  assert.deepEqual(real.map((o) => o.goodsId), ['601101683713758', '601100230893976'], 'los ids descubiertos en la categoría (mismo orden)');
+  // identidad: son los dos primeros productos del lote USD de la misma categoría
+  assert.deepEqual(REAL_1893.slice(0, 2).map((o) => o.goodsId), real.map((o) => o.goodsId));
+  assert.ok(real.every((o) => o.currency === 'EUR' && o.sourcePageType === 'pdp' && /^https:\/\/www\.temu\.com\/es\/-g-\d+\.html$/.test(o.sourceUrl)));
+  assert.ok(real.every((o) => o.inStock === false), 'el actor las devolvió agotadas para España');
+  const a = real.map((o) => temu.adaptApifyTemuItem(o, { resolveCategory: () => ({}) }));
+  assert.ok(a.every((r) => r.__import.review.length === 0 && r.__import.errors.length === 0));
+  assert.ok(a.every((r) => r.offer.availability === false && r.offer.currency === 'EUR'));
+  // el precio español NO es el estadounidense reutilizado ni convertido
+  assert.ok(a.every((r, i) => r.offer.price === real[i].price && r.offer.price !== REAL_1893[i].price));
+  writeCatalog(dir, []);
+  const out = run(real, { target: { category: 'Hogar', categoryId: 'c-hogar' } });
+  assert.deepEqual(out.results.map((r) => r.outcome), ['created', 'created']);
+  assert.ok(readCatalog(dir).every((p) => p.currency === 'EUR' && p.inStock === false), 'agotado conservado en la ficha');
+});

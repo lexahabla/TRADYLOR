@@ -186,6 +186,9 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   (`APIFY_TEMU_GET_DETAILS=false` lo desactiva) y se pide 1 GB de memoria (arranque 0,03 USD + 0,016 USD por producto; medido: 10 productos = 0,19 USD).
   La URL se envía limpia (sin parámetros de seguimiento). OJO: `/es/` no garantiza el mercado español: hay categorías (p. ej. o3-1893)
   que el actor sirve siempre en USD y canoniza sin `/es/` (medido con ejecuciones reales); el panel muestra la moneda devuelta ANTES de importar.
+  Categorías de Temu = DOS FASES (ver docs/temu-actor-mercado-es.md): 1) descubrir ids (sin detalle, sólo ids) y 2) fichas españolas
+  /es/-g-<id> en UNA ejecución; las dos cuentan en APIFY_MAX_RUNS_PER_DAY; POST admite `budgetUsd` (presupuesto máximo de todo el trabajo).
+  Coste medido con 2 productos: 0,104 USD. OJO: se descubre en otro mercado, así que selección y orden pueden no coincidir con la categoría española.
   Sólo EUR del mercado español se importa solo: otra moneda, «desde», precio variable, oferta relámpago o cupón → revisión.
   `EBAY_COMMISSION_RATE` (opcional): % base de comisión EPN que usa el catálogo de
   eBay para la columna "Comisión %" (4-6%; por defecto 5).

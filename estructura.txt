@@ -50,6 +50,7 @@ scripts/tests/temu-extract.test.mjs
 scripts/tests/fixtures/temu-sample.synthetic.json
 scripts/tests/fixtures/temu-real-sample-es.json
 scripts/tests/fixtures/temu-real-sample-es-pdp-1893.json
+scripts/tests/fixtures/temu-real-sample-es-twophase-1893.json
 scripts/tests/fixtures/temu-real-sample-us-category-1893.json
 scripts/tests/fixtures/amazon-real-sample-es.json
 scripts/tests/fixtures/temu-real-sample-us.json

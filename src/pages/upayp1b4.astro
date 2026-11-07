@@ -11680,7 +11680,7 @@ function renderTableRows(products, resetPage = true) {
         label: 'URL de producto o de categoría de Temu',
         hint: '(opcional · extrae con Apify (hypebridge/temu-scraper); no guarda nada en el catálogo)',
         placeholder: 'https://www.temu.com/es/category-o3-248.html',
-        idle: 'Pega la URL de un producto (…-g-<id>.html) o de una categoría (…-o3-<id>.html) de Temu España: debe llevar /es/ (sin él, Temu responde con el mercado de EE. UU. en USD). No se admiten búsquedas, colecciones, ofertas relámpago ni tiendas. Con una URL de producto se extrae solo ese producto. Una categoría puede devolver menos productos de los pedidos, o ninguno: eso no prueba que esté vacía. Coste aproximado: 0,03 USD de arranque + 0,016 USD por producto (medido: 10 productos = 0,19 USD). Obtener los productos no los guarda: después aparece la zona de acciones para simularlos o importarlos.'
+        idle: 'Pega la URL de un producto (…-g-<id>.html) o de una categoría (…-o3-<id>.html) de Temu España: debe llevar /es/ (sin él, Temu responde con el mercado de EE. UU. en USD). No se admiten búsquedas, colecciones, ofertas relámpago ni tiendas. Con una URL de producto se extrae solo ese producto (0,03 USD de arranque + 0,016 USD por ficha, medido). Una categoría se obtiene en DOS FASES: «Descubriendo productos» (ids) y «Obteniendo fichas de España» (fichas /es/ de esos productos). Coste medido con 2 productos: 0,104 USD (≈ 0,06 USD de arranque + 0,022 USD por producto). Los productos se descubren en otro mercado: la selección y el orden pueden no coincidir con la categoría española; los no disponibles o agotados en España se indican, no se sustituyen. Obtener los productos no los guarda: después aparece la zona de acciones para simularlos o importarlos.'
       }
     };
     function setSourceUi() {
@@ -11702,12 +11702,24 @@ function renderTableRows(products, resetPage = true) {
       if (!running) { simBtn.disabled = on; impBtn.disabled = on; aiBtn.disabled = on; fetchBtn.disabled = on; }
     }
     function costText(job) {
-      return typeof job.costUsd === 'number' ? ' · coste Apify: ' + job.costUsd.toFixed(3) + ' USD' : '';
+      if (typeof job.costUsd !== 'number') return '';
+      var ph = job.summary && job.summary.phases;
+      var split = ph && typeof ph.discoveryCostUsd === 'number' && typeof ph.detailCostUsd === 'number'
+        ? ' (fase 1: ' + ph.discoveryCostUsd.toFixed(3) + ' + fase 2: ' + ph.detailCostUsd.toFixed(3) + ')' : '';
+      return ' · coste Apify: ' + job.costUsd.toFixed(3) + ' USD' + split;
     }
     function describeJob(job) {
       var known = typeof job.itemsSoFar === 'number';
       var n = known ? job.itemsSoFar : 0;
       var limit = job.limit;
+      if (job.twoPhase) {
+        // Categorías de Temu en dos fases: se muestra la fase, cuántos se han descubierto y cuántas fichas de España llevamos.
+        var discovered = job.discovery && job.discovery.ids ? job.discovery.ids.length : 0;
+        if (job.status === 'aborting') return 'Cancelando el proceso completo: la ejecución se está deteniendo en Apify…';
+        if (job.phase === 'discovery') return 'Fase 1 de 2 · Descubriendo productos… ' + (known ? n + ' descubierto(s)' : 'consultando el progreso') + ' (máx. ' + limit + ')' + costText(job) + '. Solo se leen los identificadores. Puedes cancelar el proceso completo.';
+        if (job.phase === 'detail_starting') return 'Fase 2 de 2 · Obteniendo fichas de España… iniciando (' + discovered + ' producto(s) descubierto(s))' + costText(job) + '.';
+        return 'Fase 2 de 2 · Obteniendo fichas de España… ' + (known ? n : 0) + ' de ' + discovered + ' ficha(s) obtenida(s) (descubiertos: ' + discovered + ')' + costText(job) + '. Puedes cancelar el proceso completo.';
+      }
       if (job.status === 'starting') return 'Iniciando la extracción en Apify…';
       if (job.status === 'running') return 'Extrayendo en Apify… ' + (known ? n + ' de máx. ' + limit + ' productos' : 'hasta ' + limit + ' productos (consultando el progreso)') + costText(job) + '. Puedes cancelar sin perder lo ya extraído.';
       if (job.status === 'aborting') return 'Cancelando: la ejecución se está deteniendo en Apify; se conservarán los productos ya extraídos…';
@@ -11733,12 +11745,27 @@ function renderTableRows(products, resetPage = true) {
       var parts = [records.length + ' producto(s) obtenido(s)'];
       if (s.withReview) parts.push(s.withReview + ' con motivos de revisión (datos contradictorios, precio dudoso, moneda…; irán a revisión)');
       if (s.actorErrors) parts.push(s.actorErrors + ' con error del actor (se rechazarán)');
+      var ph = s.phases || null;
+      if (ph) {
+        // Dos fases: descubiertos, obtenidos y no disponibles para España (explicados), agotados conservados.
+        parts = [ph.discovered + ' descubierto(s)', ph.obtained + ' ficha(s) de España obtenida(s)', ph.unavailable + ' no disponible(s) para España'];
+        if (ph.outOfStock) parts.push(ph.outOfStock + ' agotada(s) (se conservan como agotadas)');
+        if (ph.duplicatesRemoved) parts.push(ph.duplicatesRemoved + ' identificador(es) repetido(s) eliminado(s)');
+        if (s.withReview) parts.push(s.withReview + ' con motivos de revisión');
+      }
       var head = s.partial ? 'Resultado parcial (' + records.length + ' de máx. ' + job.limit + '): ' : 'Extracción completada: ';
       var curInfo = currencyInfo(records);
       var mismatch = s.marketMismatch === true;
+      var phaseNote = '';
+      if (ph) {
+        phaseNote = ' Método de dos fases: las fichas son españolas, pero los productos se descubrieron en otro mercado, así que la selección y el orden pueden no coincidir con la categoría española.';
+        if (ph.missing && ph.missing.length) {
+          phaseNote += ' No disponibles para España (no se han sustituido): ' + ph.missing.slice(0, 5).map(function (m) { return m.id; }).join(', ') + (ph.missing.length > 5 ? '… (+' + (ph.missing.length - 5) + ')' : '') + ' — ' + ph.missing[0].reason + '.';
+        }
+      }
       if (curInfo.nonEur || mismatch) {
         showMsg('warn', 'ATENCIÓN: ' + (mismatch ? 'la URL pedía el mercado español (/es/) pero el actor respondió con otro mercado. ' : '') + 'La extracción devolvió precios en ' + curInfo.text + ', no en EUR. Esos ' + curInfo.nonEurCount + ' registro(s) NO se importarán: quedarán en revisión (no se convierte la moneda ni se cambia la etiqueta). Prueba con otra categoría de Temu España; el actor no sirve el mercado español en todas. NO se ha guardado nada.');
-      } else showMsg('ok', head + parts.join(' · ') + costText(job) + '. NO se ha guardado nada: usa «Simular importación», «Importar al catálogo» o «Importar y enriquecer con IA» en la zona de acciones.');
+      } else showMsg(ph && ph.missing && ph.missing.length ? 'warn' : 'ok', head + parts.join(' · ') + costText(job) + '. NO se ha guardado nada: usa «Simular importación», «Importar al catálogo» o «Importar y enriquecer con IA» en la zona de acciones.' + phaseNote);
       setCatStatus('Última extracción: ' + parts.join(' · ') + costText(job) + '.', 'info');
     }
 
@@ -11764,7 +11791,11 @@ function renderTableRows(products, resetPage = true) {
         if (announceDone) fillFromRecords(records, job);
         else { catLoad.hidden = false; setCatStatus('Hay una extracción terminada con ' + records.length + ' producto(s). Pulsa «Cargar la última extracción» para ponerla en el cuadro JSON.', 'info'); }
       } else if (job.status === 'succeeded') {
-        if (srcSel.value === 'temu') {
+        var gph = job.summary && job.summary.phases;
+        if (gph && gph.discovered > 0) {
+          setCatStatus('Se descubrieron ' + gph.discovered + ' producto(s) pero ninguno tiene ficha disponible para España.', 'error');
+          showMsg('error', 'Se descubrieron ' + gph.discovered + ' producto(s) en la categoría, pero el actor no devolvió NINGUNA ficha española: no se importa nada y no se han sustituido por datos de otro mercado. ' + (gph.missing && gph.missing[0] ? gph.missing[0].reason + '.' : ''));
+        } else if (srcSel.value === 'temu') {
           setCatStatus('La extracción terminó sin productos. Esto NO prueba que la categoría esté vacía: Temu no siempre la sirve bajo demanda.', 'error');
           showMsg('error', 'Temu no devolvió productos para esa URL. No significa que la categoría esté vacía: prueba más tarde u otra categoría. Se ha cobrado, como mucho, el arranque del actor.');
         } else {
