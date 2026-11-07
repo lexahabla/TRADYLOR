@@ -1114,6 +1114,7 @@ const h = headerConfig[initialSection] || headerConfig.products;
           <div class="jsonimp-counter"><dt>Productos cargados</dt><dd id="jsonImpSumCount">0</dd></div>
           <div class="jsonimp-counter"><dt>Origen</dt><dd id="jsonImpSumSource">—</dd></div>
           <div class="jsonimp-counter" id="jsonImpSumCurrencyBox"><dt>Moneda</dt><dd id="jsonImpSumCurrency">—</dd></div>
+          <div class="jsonimp-counter" id="jsonImpSumStatusBox"><dt>Frente al catálogo y al stock</dt><dd id="jsonImpSumStatus" role="status" aria-live="polite">—</dd></div>
           <div class="jsonimp-counter"><dt>Destino de las fichas nuevas</dt><dd id="jsonImpSumTarget">Automático (reglas habituales de clasificación)</dd></div>
         </dl>
         <div class="jsonimp-actions">
@@ -10887,6 +10888,8 @@ function renderTableRows(products, resetPage = true) {
     var sumTarget = $('jsonImpSumTarget');
     var sumCurrency = $('jsonImpSumCurrency');
     var sumCurrencyBox = $('jsonImpSumCurrencyBox');
+    var sumStatus = $('jsonImpSumStatus');
+    var sumStatusBox = $('jsonImpSumStatusBox');
     var simBtn = $('jsonImpSimulate');
     var impBtn = $('jsonImpImport');
     var aiBtn = $('jsonImpImportAi');
@@ -10998,6 +11001,7 @@ function renderTableRows(products, resetPage = true) {
           fileInfo.textContent = DEFAULT_FILE_INFO;
           loadMethod = 'ASIN o URL individual (ScraperAPI)';
           refreshSummary();
+          autoPreview('');
           showMsg('ok', 'JSON del ASIN ' + r.asin + ' obtenido de ScraperAPI. Revísalo y usa la zona de acciones: simular o importar.');
         })
         .catch(function (err) { showMsg('error', 'No se pudo obtener el JSON: ' + err.message); })
@@ -11197,6 +11201,8 @@ function renderTableRows(products, resetPage = true) {
       hideConfirm();
       var text = currentText();
       zone.hidden = !text;
+      sumStatusBox.classList.toggle('is-warn', false);
+      sumStatus.textContent = text ? 'Pulsa «Simular importación» para ver cuáles ya existen en el catálogo (no se guarda nada).' : '—';
       if (!text) return;
       var parsed = text.length > MAX_CHARS ? { error: 'El JSON supera los 10 MB.' } : readRecords(text);
       if (parsed.error) {
@@ -11213,6 +11219,70 @@ function renderTableRows(products, resetPage = true) {
       }
       var t = chosenTarget();
       sumTarget.textContent = t.categoryId ? t.text : 'Automático (reglas habituales de clasificación)';
+    }
+    // Disponibilidad de lo CARGADO (antes de tocar el catálogo): agotados y sin precio (no se pueden comprar).
+    function stockInfo(records) {
+      var out = 0;
+      var noPrice = 0;
+      records.forEach(function (r) {
+        var o = (r && typeof r === 'object') ? r : {};
+        var offer = (o.offer && typeof o.offer === 'object') ? o.offer : {};
+        var a = offer.availability !== undefined ? offer.availability : (o.availability !== undefined ? o.availability : o.inStock);
+        var t = String(a).toLowerCase();
+        if (a === false || t === 'out_of_stock' || t === 'false' || /agotad|sin stock|out.?of.?stock|unavailable|no disponible/.test(t)) out += 1;
+        var price = offer.price !== undefined ? offer.price : (o.price && typeof o.price === 'object' ? o.price.value : o.price);
+        if (!(Number(price) > 0)) noPrice += 1;
+      });
+      return { outOfStock: out, noPrice: noPrice };
+    }
+    // Resumen frente al catálogo a partir de una SIMULACIÓN (nunca guarda): nuevos, ya existentes, agotados, sin precio, en revisión.
+    function againstCatalogText(results, records, note) {
+      var c = { created: 0, linked: 0, updated: 0, unchanged: 0, review: 0, rejected: 0, error: 0 };
+      var stockChanged = 0;
+      var noPriceRejected = 0;
+      results.forEach(function (x) {
+        c[x.outcome] = (c[x.outcome] || 0) + 1;
+        if (x.outcome === 'updated' && (x.reasons || []).indexOf('disponibilidad') >= 0) stockChanged += 1;
+        if (x.outcome === 'rejected' && (x.reasons || []).indexOf('precio_invalido') >= 0) noPriceRejected += 1;
+      });
+      var existing = c.unchanged + c.updated + c.linked;
+      var st = stockInfo(records);
+      var parts = [];
+      parts.push(c.created + ' nuevo(s)');
+      var ex = existing + ' ya existe(n) en el catálogo';
+      var exDetail = [];
+      if (c.unchanged) exDetail.push(c.unchanged + ' sin cambios');
+      if (c.updated) exDetail.push(c.updated + ' con cambios' + (stockChanged ? ' (' + stockChanged + ' de disponibilidad)' : ''));
+      if (c.linked) exDetail.push(c.linked + ' con oferta vinculada');
+      parts.push(ex + (exDetail.length ? ' (' + exDetail.join(', ') + ')' : ''));
+      parts.push(st.outOfStock + ' agotado(s)/sin stock' + (st.outOfStock ? ' (se conserva ese estado)' : ''));
+      if (noPriceRejected || st.noPrice) parts.push((noPriceRejected || st.noPrice) + ' sin precio (no disponible para comprar: se rechazará)');
+      if (c.review) parts.push(c.review + ' en revisión');
+      if (c.rejected - noPriceRejected > 0) parts.push((c.rejected - noPriceRejected) + ' rechazado(s)');
+      if (c.error) parts.push(c.error + ' con error');
+      if (note) parts.push(note);
+      return parts.join(' · ') + '. Comprobado con una simulación: no se ha guardado nada.';
+    }
+    function autoPreview(note) {
+      if (running || catBusy) return;
+      var text = currentText();
+      if (!text) return;
+      var parsed = readRecords(text);
+      if (parsed.error) return;
+      var recs = parsed.records;
+      sumStatus.textContent = 'Comprobando frente al catálogo… (simulación gratuita, sin guardar nada)';
+      setRunning(true);
+      runFlow({ dryRun: true, silent: true }).then(function (r) {
+        progressBox.hidden = true;
+        if (!r || r.interrupted) { sumStatus.textContent = 'Comprobación cancelada.'; return; }
+        sumStatus.textContent = againstCatalogText(r.results, recs, note);
+        var c2 = { review: 0, rejected: 0, error: 0 };
+        r.results.forEach(function (x) { if (c2[x.outcome] !== undefined) c2[x.outcome] += 1; });
+        sumStatusBox.classList.toggle('is-warn', c2.review + c2.rejected + c2.error > 0);
+      }).catch(function (err) {
+        progressBox.hidden = true;
+        sumStatus.textContent = 'No se pudo comprobar frente al catálogo: ' + (err && err.message ? err.message : 'error') + '. Usa «Simular importación».';
+      }).then(function () { setRunning(false); });
     }
     function scheduleSummary() { clearTimeout(summaryTimer); summaryTimer = setTimeout(refreshSummary, 250); }
     targetCat.addEventListener('change', refreshSummary);
@@ -11740,6 +11810,8 @@ function renderTableRows(products, resetPage = true) {
       fileInfo.textContent = DEFAULT_FILE_INFO;
       loadMethod = 'URL de categoría de ' + (srcSel.value === 'temu' ? 'Temu' : 'Amazon');
       refreshSummary();
+      var jobPhases = job.summary && job.summary.phases;
+      autoPreview(jobPhases && jobPhases.unavailable ? jobPhases.unavailable + ' sin ficha en España (no disponibles en origen)' : '');
       catLoad.hidden = true;
       var s = job.summary || {};
       var parts = [records.length + ' producto(s) obtenido(s)'];

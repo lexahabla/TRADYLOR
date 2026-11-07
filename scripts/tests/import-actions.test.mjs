@@ -115,9 +115,10 @@ test('el método ASIN / URL individual alimenta el MISMO resumen y botones, reut
   assert.equal(nodes.jsonImpSumCount.textContent, '1');
   assert.match(nodes.jsonImpSumSource.textContent, /ASIN o URL individual/);
   const scrapeCalls = calls.filter((c) => String(c[0]).startsWith('/api/scrape')).length;
+  assert.deepEqual(f.log.imports.map((b) => b.dryRun), [true], 'la comprobación automática es una simulación: no guarda');
   nodes.jsonImpImport.fire('click');
   await wait(100);
-  assert.equal(f.log.imports.length, 1);
+  assert.deepEqual(f.log.imports.map((b) => b.dryRun), [true, false]);
   assert.equal(calls.filter((c) => String(c[0]).startsWith('/api/scrape')).length, scrapeCalls, 'importar no vuelve a llamar a ScraperAPI');
 });
 
@@ -292,4 +293,57 @@ test('«Importar y enriquecer con IA» con todo en revisión: no importa, no enr
   assert.match(nodes.jsonImpAlert.textContent, /NO se importaría ninguna ficha/);
   assert.equal(f.log.enrich.length, 0);
   assert.deepEqual(f.log.imports.map((b) => b.dryRun), [true]);
+});
+
+/* ───────────── Detección automática: ya existentes, agotados y sin precio (simulación gratuita, sin guardar) ───────────── */
+
+function scrapeServer(record, extra) {
+  const f = fakeServer({ extra: (u, init) => (u.startsWith('/api/scrape') ? resp(record) : extra ? extra(u, init) : null) });
+  return f;
+}
+const fetchAsin = async (nodes) => { nodes.jsonImpAsin.value = 'B01EXDG2MO'; nodes.jsonImpFetch.fire('click'); await wait(150); };
+
+test('al cargar un producto/categoría se comprueba SOLO (simulación) cuáles ya existen en el catálogo, sin guardar ni llamar de nuevo al origen', async () => {
+  const f = scrapeServer({ ...amz(1, 'existing'), availability: true });
+  const { nodes, calls } = makeClient(f.fn);
+  await fetchAsin(nodes);
+  assert.equal(f.log.imports.length, 1);
+  assert.equal(f.log.imports[0].dryRun, true);
+  const text = nodes.jsonImpSumStatus.textContent;
+  assert.ok(text.includes('0 nuevo(s)'), text);
+  assert.ok(text.includes('1 ya existe(n) en el catálogo'), text);
+  assert.ok(text.includes('1 con cambios'), text);
+  assert.ok(text.includes('no se ha guardado nada'), text);
+  assert.equal(calls.filter((c) => String(c[0]).startsWith('/api/scrape')).length, 1, 'una sola llamada al origen');
+});
+
+test('los productos agotados / sin stock se detectan antes de importar y se conserva ese estado', async () => {
+  const f = scrapeServer({ ...amz(2), availability: false });
+  const { nodes } = makeClient(f.fn);
+  await fetchAsin(nodes);
+  const text = nodes.jsonImpSumStatus.textContent;
+  assert.ok(text.includes('1 nuevo(s)'), text);
+  assert.ok(text.includes('1 agotado(s)/sin stock (se conserva ese estado)'), text);
+});
+
+test('un producto no disponible para comprar (sin precio) se detecta y se avisa de que se rechazará', async () => {
+  const f = scrapeServer({ ...amz(3), price: undefined }, (u, init) => {
+    if (!u.endsWith('/api/admin/json-import')) return null;
+    const body = JSON.parse(init.body);
+    f.log.imports.push(body);
+    return resp({ success: true, results: body.records.map((r, i) => ({ index: body.indexOffset + i, outcome: 'rejected', title: r.title, reasons: ['precio_invalido'], warnings: [], entities: { productsCreated: 0, offersCreated: 0, offersUpdated: 0 } })) });
+  });
+  const { nodes } = makeClient(f.fn);
+  await fetchAsin(nodes);
+  const text = nodes.jsonImpSumStatus.textContent;
+  assert.ok(text.includes('1 sin precio (no disponible para comprar: se rechazará)'), text);
+});
+
+test('el JSON pegado no dispara comprobaciones por su cuenta: indica cómo ver cuáles existen', async () => {
+  const f = fakeServer();
+  const { nodes } = makeClient(f.fn);
+  paste(nodes, [amz(1), amz(2, 'existing')]);
+  await wait(320);
+  assert.equal(f.log.imports.length, 0);
+  assert.ok(nodes.jsonImpSumStatus.textContent.includes('Pulsa «Simular importación»'));
 });

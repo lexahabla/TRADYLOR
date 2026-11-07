@@ -96,6 +96,9 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
     alimentan una zona común con «Simular importación» (nunca guarda), «Importar al catálogo» (sin IA) e «Importar y enriquecer con IA»
     (vista previa gratuita + confirmación de créditos; enriquece con `/api/admin/enrich-bulk` solo las fichas NUEVAS, en lotes de 5, con
     reintento de las pendientes).
+    Tras extraer una categoría (Amazon/Temu) o cargar un ASIN se hace SOLA una simulación gratuita (sin guardar ni llamar de nuevo al origen) y la zona
+    muestra «Frente al catálogo y al stock»: nuevos, ya existentes (sin cambios / con cambios / vinculadas), agotados o sin stock, sin precio (no
+    disponibles para comprar, se rechazan) y sin ficha en España. Enviar el mismo enlace de nuevo detecta lo que ya existe (sin duplicar).
   - `api/admin/json-import/index.ts` - Importación JSON por bloques; admite `target:{categoryId,subcategoryId}` (destino de las fichas NUEVAS, validado contra categories.json; las existentes no se tocan)
   - `api/admin/pipeline/index.ts` - Métricas de auditoría y reproceso del catálogo
     (síncrono o en segundo plano con `background:true`; `mode:'cancel'` lo detiene)
