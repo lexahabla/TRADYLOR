@@ -493,7 +493,7 @@ test('URL individual /es/ de un producto de la categoría 1893: mismo goodsId qu
 
 /** Apify simulado con dos (o tres) ejecuciones: la 1.ª es el descubrimiento; las siguientes, fichas españolas. */
 function fakeTwoPhase(opts = {}) {
-  const st = { calls: [], runs: [], aborts: [], discovery: { status: 'RUNNING', items: [], usage: 0.09 }, detail: { status: 'RUNNING', items: [], usage: 0.19 }, ...opts };
+  const st = { calls: [], runs: [], aborts: [], discovery: { status: 'RUNNING', items: [], usage: 0.09 }, detail: { status: 'RUNNING', items: [], usage: 0.19 }, finishedAt: '2026-11-07T10:05:00.000Z', ...opts };
   const restore = mockFetch(async (url, init = {}) => {
     const u = new URL(String(url));
     const method = init.method ?? 'GET';
@@ -509,7 +509,7 @@ function fakeTwoPhase(opts = {}) {
     let m = u.pathname.match(/\/v2\/actor-runs\/RUNP(\d+)\/abort$/);
     if (method === 'POST' && m) { st.aborts.push(m[1]); return ok({ data: { status: 'ABORTING' } }); }
     m = u.pathname.match(/\/v2\/actor-runs\/RUNP(\d+)$/);
-    if (method === 'GET' && m) { const p = phaseOf(m[1]); return ok({ data: { id: 'RUNP' + m[1], status: p.status, defaultDatasetId: 'DSP' + m[1], usageTotalUsd: p.usage, finishedAt: '2026-11-07T10:05:00.000Z' } }); }
+    if (method === 'GET' && m) { const p = phaseOf(m[1]); return ok({ data: { id: 'RUNP' + m[1], status: p.status, defaultDatasetId: 'DSP' + m[1], usageTotalUsd: p.usage, finishedAt: st.finishedAt } }); }
     m = u.pathname.match(/\/v2\/datasets\/DSP(\d+)$/);
     if (method === 'GET' && m) return ok({ data: { itemCount: phaseOf(m[1]).items.length } });
     m = u.pathname.match(/\/v2\/datasets\/DSP(\d+)\/items$/);
@@ -751,5 +751,32 @@ test('Amazon y las URL de producto de Temu no cambian: una sola ejecución', asy
     assert.equal(f.st.runs[0].body.maxItems, 1);
     assert.equal(f.st.runs[0].body.getProductDetails, true);
     assert.deepEqual(f.st.runs[0].body.startUrls, [{ url: PROD }]);
+  } finally { f.restore(); }
+});
+
+test('coste real: Apify puede cerrar el uso tarde; pasado el margen se vuelve a consultar UNA vez y se marca como consolidado (fase 1 + fase 2)', async () => {
+  resetJobs();
+  const f = fakeTwoPhase({ finishedAt: new Date().toISOString() });
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 2 }));
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.usage = 0.042; f.st.discovery.items = IDS.slice(0, 2).map((id) => listing(id));
+    await jobOf(started.job.id);
+    f.st.detail.status = 'SUCCEEDED'; f.st.detail.usage = 0.03; f.st.detail.items = IDS.slice(0, 2).map((id) => esItem(id));
+    let out = await jobOf(started.job.id);
+    assert.equal(out.job.costUsd, 0.072);
+    assert.notEqual(out.job.costSettled, true, 'recién terminado: el coste puede estar incompleto');
+    // Apify consolida el uso (0,062) y pasa el margen de consolidación
+    f.st.detail.usage = 0.062;
+    const jobs = JSON.parse(fs.readFileSync(jobsFile, 'utf8'));
+    jobs.find((j) => j.id === started.job.id).finishedAt = new Date(Date.now() - 5 * 60_000).toISOString();
+    fs.writeFileSync(jobsFile, JSON.stringify(jobs));
+    out = await jobOf(started.job.id);
+    assert.equal(out.job.costUsd, 0.104, 'fase 1 (0,042) + fase 2 consolidada (0,062)');
+    assert.equal(out.job.summary.phases.detailCostUsd, 0.062);
+    assert.equal(out.job.summary.phases.discoveryCostUsd, 0.042);
+    assert.equal(out.job.costSettled, true);
+    const polls = f.st.calls.filter((c) => c.path.endsWith('/actor-runs/RUNP2')).length;
+    await jobOf(started.job.id);
+    assert.equal(f.st.calls.filter((c) => c.path.endsWith('/actor-runs/RUNP2')).length, polls, 'consolidado: no se vuelve a consultar');
   } finally { f.restore(); }
 });

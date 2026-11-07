@@ -201,7 +201,7 @@ test('doble clic / recarga / reintento: una sola ejecución; otra distinta mient
 
 test('estado: sin esperar; mientras corre informa de los productos y el coste; al terminar adapta y devuelve los registros', async () => {
   resetJobs();
-  const f = fakeApify({ itemCount: 3 });
+  const f = fakeApify({ itemCount: 3, finishedAt: new Date().toISOString() });
   try {
     const { job } = await jsonOf(await post({ url: CAT_URL, limit: 10 }));
     let st = await jsonOf(await get('?id=' + job.id));

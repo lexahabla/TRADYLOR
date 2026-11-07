@@ -85,6 +85,8 @@ export interface ExtractionJob {
   /** Presupuesto máximo explícito de TODO el trabajo (USD), si se indicó. */
   budgetUsd?: number;
   discovery?: DiscoveryInfo;
+  /** El coste ya se volvió a consultar tras el margen de consolidación de Apify (el uso puede tardar en cerrarse). */
+  costSettled?: boolean;
 }
 
 export interface DiscoveryInfo {
@@ -671,11 +673,40 @@ export async function refreshExtraction(id: string): Promise<{ job: ExtractionJo
       fetching.delete(id);
     }
   }
+  job = (await settleCost(job)) ?? job;
   if (job.resultReady) {
     const stored = readResult(id);
     return { job, records: stored?.records };
   }
   return { job };
+}
+
+/**
+ * Apify puede tardar unos segundos en cerrar el uso de una ejecución: al terminar, el coste leído puede estar incompleto. Pasado un
+ * margen se vuelve a consultar UNA vez (lectura, sin coste) y se marca como consolidado. En dos fases se suma la fase 1.
+ */
+const SETTLE_AFTER_MS = 90_000;
+async function settleCost(job: ExtractionJob): Promise<ExtractionJob | undefined> {
+  if (job.costSettled || !TERMINAL.has(job.status) || !job.runId) return job;
+  const finished = Date.parse(job.finishedAt ?? '');
+  if (!Number.isFinite(finished) || Date.now() - finished < SETTLE_AFTER_MS) return job;
+  try {
+    const data = await apify(`/actor-runs/${encodeURIComponent(job.runId)}`);
+    const usage = data?.data?.usageTotalUsd;
+    const patch: Partial<ExtractionJob> = { costSettled: true };
+    if (typeof usage === 'number') {
+      patch.costUsd = round4(usage + (job.discovery?.costUsd ?? 0));
+      if (job.summary?.phases) {
+        const phases = { ...job.summary.phases, detailCostUsd: round4(usage) };
+        patch.summary = { ...job.summary, phases };
+        const stored = readResult(job.id);
+        if (stored) saveResult(job.id, { ...stored, summary: patch.summary });
+      }
+    }
+    return patchJob(job.id, patch) ?? job;
+  } catch {
+    return job; // se reintentará en la siguiente consulta
+  }
 }
 
 async function collectResult(job: ExtractionJob): Promise<ExtractionJob | undefined> {
