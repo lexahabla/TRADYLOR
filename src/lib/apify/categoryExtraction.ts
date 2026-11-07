@@ -87,6 +87,8 @@ export interface ExtractionJob {
   discovery?: DiscoveryInfo;
   /** El coste ya se volvió a consultar tras el margen de consolidación de Apify (el uso puede tardar en cerrarse). */
   costSettled?: boolean;
+  /** Fase 2: nº de URL /es/-g-<id> enviadas al actor en su única ejecución. */
+  detailUrlsSent?: number;
 }
 
 export interface DiscoveryInfo {
@@ -97,6 +99,8 @@ export interface DiscoveryInfo {
   invalidIds: number;
   costUsd?: number;
   runId?: string;
+  /** El coste de la fase 1 ya se consolidó (el uso de Apify puede cerrarse tarde). */
+  costSettled?: boolean;
   /** Descubrimiento reutilizado de un intento anterior (no se repitió ni se volvió a cobrar). */
   reused?: boolean;
   reusedFromJob?: string;
@@ -519,7 +523,7 @@ async function startDetailRun(jobId: string): Promise<ExtractionJob> {
   const data = await apify(`/actors/${encodeURIComponent(config.temuActor)}/runs${query}`, { method: 'POST', body: buildTemuInput(ids.map(temuEsProductUrl), ids.length, true) });
   const run = data?.data ?? {};
   if (!run.id) throw new ExtractionError('Apify no devolvió el identificador de la ejecución de fichas.', 502);
-  const patched = patchJob(jobId, { runId: String(run.id), datasetId: run.defaultDatasetId ? String(run.defaultDatasetId) : undefined, status: 'running', phase: 'detail', runsStarted: (getJob(jobId)?.runsStarted ?? 0) + 1, itemsSoFar: 0 });
+  const patched = patchJob(jobId, { runId: String(run.id), datasetId: run.defaultDatasetId ? String(run.defaultDatasetId) : undefined, status: 'running', phase: 'detail', runsStarted: (getJob(jobId)?.runsStarted ?? 0) + 1, itemsSoFar: 0, detailUrlsSent: ids.length });
   if (patched?.cancelRequested) await cancelExtraction(jobId).catch(() => undefined);
   return getJob(jobId) ?? job;
 }
@@ -687,17 +691,32 @@ export async function refreshExtraction(id: string): Promise<{ job: ExtractionJo
  */
 const SETTLE_AFTER_MS = 90_000;
 async function settleCost(job: ExtractionJob): Promise<ExtractionJob | undefined> {
-  if (job.costSettled || !TERMINAL.has(job.status) || !job.runId) return job;
+  const d = job.discovery;
+  const needsDiscovery = Boolean(d && d.runId && !d.reused && !d.costSettled);
+  if ((job.costSettled && !needsDiscovery) || !TERMINAL.has(job.status)) return job;
+  if (!job.runId && !needsDiscovery) return job;
   const finished = Date.parse(job.finishedAt ?? '');
   if (!Number.isFinite(finished) || Date.now() - finished < SETTLE_AFTER_MS) return job;
   try {
+    // Fase 1: su coste también puede haberse leído antes de que Apify lo cerrara (p. ej. sólo el arranque).
+    let discoveryCost = d?.costUsd ?? 0;
+    let discoverySettled = d?.costSettled;
+    if (needsDiscovery && d) {
+      const dd = await apify(`/actor-runs/${encodeURIComponent(d.runId as string)}`);
+      const du = dd?.data?.usageTotalUsd;
+      if (typeof du === 'number') { discoveryCost = round4(du); discoverySettled = true; }
+    }
+    const patchDiscovery: Partial<ExtractionJob> = d ? { discovery: { ...d, costUsd: discoveryCost, ...(discoverySettled ? { costSettled: true } : {}) } } : {};
+    if (!job.runId || job.costSettled) {
+      return patchJob(job.id, { ...patchDiscovery, costUsd: round4(discoveryCost + (job.costUsd ?? 0) - (d?.costUsd ?? 0)) }) ?? job;
+    }
     const data = await apify(`/actor-runs/${encodeURIComponent(job.runId)}`);
     const usage = data?.data?.usageTotalUsd;
-    const patch: Partial<ExtractionJob> = { costSettled: true };
+    const patch: Partial<ExtractionJob> = { ...patchDiscovery, costSettled: true };
     if (typeof usage === 'number') {
-      patch.costUsd = round4(usage + (job.discovery?.costUsd ?? 0));
+      patch.costUsd = round4(usage + discoveryCost);
       if (job.summary?.phases) {
-        const phases = { ...job.summary.phases, detailCostUsd: round4(usage) };
+        const phases = { ...job.summary.phases, detailCostUsd: round4(usage), discoveryCostUsd: discoveryCost };
         patch.summary = { ...job.summary, phases };
         const stored = readResult(job.id);
         if (stored) saveResult(job.id, { ...stored, summary: patch.summary });
@@ -790,6 +809,34 @@ export async function readRawItems(id: string): Promise<unknown[] | undefined> {
   if (!job?.datasetId) return undefined;
   const data = await apify(`/datasets/${encodeURIComponent(job.datasetId)}/items?format=json&limit=${job.limit + 1}`);
   return Array.isArray(data) ? data.slice(0, job.limit) : [];
+}
+
+/**
+ * Diagnóstico de sólo lectura (gratis): el SOURCE_SUMMARY que el actor deja en el almacén clave-valor de cada ejecución (resultado por
+ * fuente, URL pedidas/canónicas, fallos) y los datos de la ejecución. Sirve para explicar por qué faltan fichas.
+ */
+export async function readDiagnostics(id: string): Promise<unknown | undefined> {
+  const job = getJob(id);
+  if (!job) return undefined;
+  const runs: Array<{ phase: string; runId?: string }> = [];
+  if (job.discovery?.runId && !job.discovery.reused) runs.push({ phase: 'discovery', runId: job.discovery.runId });
+  if (job.runId) runs.push({ phase: job.twoPhase ? 'detail' : 'run', runId: job.runId });
+  const out: unknown[] = [];
+  for (const r of runs) {
+    const info: Record<string, unknown> = { phase: r.phase, runId: r.runId };
+    try {
+      const run = (await apify(`/actor-runs/${encodeURIComponent(r.runId as string)}`))?.data ?? {};
+      Object.assign(info, { status: run.status, usageTotalUsd: run.usageTotalUsd, startedAt: run.startedAt, finishedAt: run.finishedAt, statusMessage: typeof run.statusMessage === 'string' ? run.statusMessage.slice(0, 300) : undefined, options: run.options && { memoryMbytes: run.options.memoryMbytes, timeoutSecs: run.options.timeoutSecs, maxTotalChargeUsd: run.options.maxTotalChargeUsd }, usage: run.usageUsd, chargedEventCounts: run.chargedEventCounts });
+      if (run.defaultKeyValueStoreId) {
+        const summary = await apify(`/key-value-stores/${encodeURIComponent(String(run.defaultKeyValueStoreId))}/records/SOURCE_SUMMARY`).catch(() => undefined);
+        if (summary !== undefined) info.sourceSummary = JSON.parse(JSON.stringify(summary, (_k, v) => (typeof v === 'string' ? v.slice(0, 400) : v)));
+      }
+    } catch (error) {
+      info.error = error instanceof ExtractionError ? error.message : 'No se pudo leer la ejecución.';
+    }
+    out.push(info);
+  }
+  return out;
 }
 
 /** Cancela: aborta la ejecución EN APIFY (deja de generar y de cobrar) y conserva los resultados parciales. */

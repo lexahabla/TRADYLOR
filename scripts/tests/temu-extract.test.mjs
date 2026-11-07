@@ -509,8 +509,11 @@ function fakeTwoPhase(opts = {}) {
     let m = u.pathname.match(/\/v2\/actor-runs\/RUNP(\d+)\/abort$/);
     if (method === 'POST' && m) { st.aborts.push(m[1]); return ok({ data: { status: 'ABORTING' } }); }
     m = u.pathname.match(/\/v2\/actor-runs\/RUNP(\d+)$/);
-    if (method === 'GET' && m) { const p = phaseOf(m[1]); return ok({ data: { id: 'RUNP' + m[1], status: p.status, defaultDatasetId: 'DSP' + m[1], usageTotalUsd: p.usage, finishedAt: st.finishedAt } }); }
+    if (method === 'GET' && m) { const p = phaseOf(m[1]); return ok({ data: { id: 'RUNP' + m[1], status: p.status, defaultDatasetId: 'DSP' + m[1], usageTotalUsd: p.usage, finishedAt: st.finishedAt, defaultKeyValueStoreId: 'KV' + m[1], startedAt: '2026-11-07T10:00:00.000Z', options: { memoryMbytes: 1024, timeoutSecs: 900, maxTotalChargeUsd: 0.375 } } }); }
     m = u.pathname.match(/\/v2\/datasets\/DSP(\d+)$/);
+    if (method === 'GET' && u.pathname.includes('/key-value-stores/KV') && u.pathname.endsWith('/records/SOURCE_SUMMARY')) {
+      return ok(st.sourceSummary ?? { outcomes: { ok: 1, unavailable: 2 }, samples: [{ requestedUrl: 'https://www.temu.com/es/-g-601000000000003.html', outcome: 'unavailable' }] });
+    }
     if (method === 'GET' && m) return ok({ data: { itemCount: phaseOf(m[1]).items.length } });
     m = u.pathname.match(/\/v2\/datasets\/DSP(\d+)\/items$/);
     if (method === 'GET' && m) {
@@ -551,6 +554,7 @@ test('dos fases (1/2): «Descubriendo productos» sólo guarda ids, conserva el 
     assert.match(f.st.runs[1].search, /memory=1024/);
     assert.equal(out.job.phase, 'detail');
     assert.equal(out.job.runsStarted, 2);
+    assert.equal(out.job.detailUrlsSent, out.job.discovery.ids.length, 'queda registrado cuántas URL recibió la fase 2');
   } finally { f.restore(); }
 });
 
@@ -799,4 +803,53 @@ test('muestra real de las dos fases (2 productos de la categoría 1893): identid
   const out = run(real, { target: { category: 'Hogar', categoryId: 'c-hogar' } });
   assert.deepEqual(out.results.map((r) => r.outcome), ['created', 'created']);
   assert.ok(readCatalog(dir).every((p) => p.currency === 'EUR' && p.inStock === false), 'agotado conservado en la ficha');
+});
+
+test('coste real de la FASE 1: si Apify la cerró tarde (sólo el arranque), se vuelve a consultar y se corrige sin repetir ejecuciones', async () => {
+  resetJobs();
+  const f = fakeTwoPhase({ finishedAt: new Date().toISOString() });
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 10 }));
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.usage = 0.03; // lectura incompleta: sólo el arranque
+    f.st.discovery.items = IDS.map((id) => listing(id));
+    await jobOf(started.job.id);
+    f.st.detail.status = 'SUCCEEDED'; f.st.detail.usage = 0.094; f.st.detail.items = IDS.slice(0, 4).map((id) => esItem(id));
+    let out = await jobOf(started.job.id);
+    assert.equal(out.job.costUsd, 0.124, 'primera lectura (incompleta)');
+    f.st.discovery.usage = 0.06; // Apify consolida: 0,03 + 5 × 0,006
+    const jobs = JSON.parse(fs.readFileSync(jobsFile, 'utf8'));
+    jobs.find((j) => j.id === started.job.id).finishedAt = new Date(Date.now() - 5 * 60_000).toISOString();
+    fs.writeFileSync(jobsFile, JSON.stringify(jobs));
+    const runsBefore = f.st.runs.length;
+    out = await jobOf(started.job.id);
+    assert.equal(out.job.discovery.costUsd, 0.06);
+    assert.equal(out.job.summary.phases.discoveryCostUsd, 0.06);
+    assert.equal(out.job.summary.phases.detailCostUsd, 0.094);
+    assert.equal(out.job.costUsd, 0.154, 'fase 1 consolidada + fase 2');
+    assert.equal(out.job.discovery.costSettled, true);
+    assert.equal(f.st.runs.length, runsBefore, 'sólo lecturas: ninguna ejecución nueva');
+  } finally { f.restore(); }
+});
+
+test('diagnóstico de sólo lectura (?diag=1): devuelve el SOURCE_SUMMARY del actor y el uso de cada fase, sin gastar ni exponer el token', async () => {
+  resetJobs();
+  const f = fakeTwoPhase();
+  try {
+    const started = await jsonOf(await post({ source: 'temu', url: CAT, limit: 3 }));
+    f.st.discovery.status = 'SUCCEEDED'; f.st.discovery.items = IDS.slice(0, 3).map((id) => listing(id));
+    await jobOf(started.job.id);
+    f.st.detail.status = 'SUCCEEDED'; f.st.detail.items = [esItem(IDS[0])];
+    await jobOf(started.job.id);
+    const runsBefore = f.st.runs.length;
+    const q = '/api/admin/category-extract?id=' + started.job.id + '&diag=1';
+    const res = await route.GET({ request: apiRequest(q, { method: 'GET', token: true }), url: new URL('http://localhost' + q) });
+    const body = await jsonOf(res);
+    assert.deepEqual(body.runs.map((r) => r.phase), ['discovery', 'detail']);
+    assert.equal(body.runs[1].sourceSummary.outcomes.unavailable, 2);
+    assert.equal(body.runs[1].options.memoryMbytes, 1024);
+    assert.equal(f.st.runs.length, runsBefore);
+    assert.doesNotMatch(JSON.stringify(body), new RegExp(TOKEN));
+    const anon = await route.GET({ request: apiRequest(q, { method: 'GET' }), url: new URL('http://localhost' + q) });
+    assert.equal(anon.status, 401);
+  } finally { f.restore(); }
 });

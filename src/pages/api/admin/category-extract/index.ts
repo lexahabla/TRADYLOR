@@ -4,6 +4,7 @@
  * ==============================================================================
  * GET  /api/admin/category-extract            → configuración, límites y extracción activa/última (para retomar tras recargar)
  * GET  /api/admin/category-extract?id=<id>    → estado (consulta a Apify sin esperar); al terminar incluye `records`
+ * GET  /api/admin/category-extract?id=<id>&diag=1 → diagnóstico de sólo lectura de las ejecuciones (SOURCE_SUMMARY del actor, uso y eventos cobrados)
  * GET  /api/admin/category-extract?id=<id>&raw=1 → elementos crudos del dataset de Apify (diagnóstico; solo lectura)
  * POST /api/admin/category-extract            { source:"amazon"|"temu", url, limit, budgetUsd? } → inicia (categorías de Temu: dos fases; `budgetUsd` = presupuesto máximo explícito de todo el trabajo) (idempotente si ya hay una igual en curso)
  * POST /api/admin/category-extract            { action:"cancel", id } → aborta la ejecución en Apify
@@ -23,6 +24,7 @@ import {
   extractionConfig,
   getJob,
   latestJob,
+  readDiagnostics,
   readRawItems,
   refreshExtraction,
   startExtraction,
@@ -46,6 +48,11 @@ export const GET: APIRoute = async ({ request, url }) => {
   try {
     if (id) {
       if (!/^[a-f0-9-]{36}$/i.test(id)) return json({ success: false, message: 'Identificador no válido.' }, 400);
+      if (url.searchParams.get('diag') === '1') {
+        const diag = await readDiagnostics(id);
+        if (!diag) return json({ success: false, message: 'No existe esa extracción.' }, 404);
+        return json({ success: true, runs: diag });
+      }
       if (url.searchParams.get('raw') === '1') {
         const raw = await readRawItems(id);
         if (!raw) return json({ success: false, message: 'No hay dataset de esa extracción.' }, 404);
