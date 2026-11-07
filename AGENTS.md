@@ -243,6 +243,9 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 - El panel admin y las rutas `/api/*` requieren autenticación; respetar `adminAuth.ts`
   y `apiAuth.ts`. **Excepción**: `/api/redirect` es público a propósito (es la salida
   del flujo de Compra Delegada) y no debe exigir token.
+- Botón «🔄 Actualizar Precios» (`/api/admin/sync-prices` → `lib/offerRefresh.ts`): sin selección toma las 10 fichas ACTUALIZABLES (Amazon con ASIN; `isRefreshable`) con la
+  comprobación más antigua (las nunca verificadas, como las importadas, primero); las de otras redes ya no ocupan puestos. Los precios de Amazon se leen con
+  `parsePrice` (miles y decimales europeos/anglosajones). Consume créditos de ScraperAPI.
 - Los redireccionamientos de afiliación salen por `src/pages/out/[id].astro`.
   Amazon: la salida lleva a la FICHA del producto con el tag (`/dp/<ASIN>?tag=…`, `getAmazonProductUrl`), nunca a la cesta; los enlaces de cesta antiguos
   guardados en `buyNowUrl` se convierten al vuelo (`amazonCartToProductUrl`).

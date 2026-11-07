@@ -440,6 +440,10 @@ async function refreshOne(
     }
     if (observation.originalPrice != null && observation.originalPrice !== product.originalPrice) {
       patch.fields.originalPrice = observation.originalPrice;
+    } else if (observation.originalPrice == null && Number(product.originalPrice) > 0 && Number(product.originalPrice) <= newPrice) {
+      // «Precio anterior» que ya no es mayor que el actual (p. ej. quedó de una lectura errónea): descuento falso → se retira.
+      patch.fields.originalPrice = undefined;
+      changes.push('precio anterior incoherente retirado');
     }
     if (typeof reading.inStock === 'boolean' && reading.inStock !== product.inStock) {
       patch.fields.inStock = reading.inStock;
@@ -493,6 +497,12 @@ function applyPatch(product: Product, patch: Patch): Product {
   }
   next.extra = extra;
   return next as unknown as Product;
+}
+
+/** ¿Tiene esta ficha una fuente reconsultable (conector + ASIN/URL)? Sólo esas se pueden actualizar con el botón de precios. */
+export function isRefreshable(product: Product, adapters: SourceAdapter[] = DEFAULT_ADAPTERS): boolean {
+  const adapter = adapterFor(product, adapters);
+  return Boolean(adapter && adapter.resolveSource(product));
 }
 
 function adapterFor(product: Product, adapters: SourceAdapter[]): SourceAdapter | undefined {

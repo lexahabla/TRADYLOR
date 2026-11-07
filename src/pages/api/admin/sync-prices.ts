@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../lib/adminAuth';
 import { readProductsFromFile } from '../../../lib/productStore';
-import { refreshOffers, type OfferResult } from '../../../lib/offerRefresh';
+import { isRefreshable, refreshOffers, type OfferResult } from '../../../lib/offerRefresh';
 
 export const prerender = false;
 
@@ -86,7 +86,14 @@ export const POST: APIRoute = async ({ request }) => {
       const iso = (p.extra as Record<string, any> | undefined)?.refresh?.lastVerifiedAt ?? p.lastPriceSync;
       return iso ? new Date(iso).getTime() : 0;
     };
-    ids = [...allProducts].sort((a, b) => verifiedAt(a) - verifiedAt(b)).slice(0, limit).map((p) => p.id);
+    // SÓLO fichas que se pueden volver a consultar (Amazon con ASIN). Antes el lote tomaba los 10 con la verificación más antigua de
+    // TODO el catálogo: las de otras redes (sin re-consulta) nunca se verifican, ocupaban siempre esos puestos y las de Amazon
+    // con el precio mal no llegaban a actualizarse. Primero las NUNCA verificadas (las importadas) y después las más antiguas.
+    const pool = allProducts.filter((p) => isRefreshable(p));
+    if (!pool.length) {
+      return json({ success: false, message: 'No hay productos de Amazon con ASIN que se puedan actualizar en el catálogo.' }, 404);
+    }
+    ids = [...pool].sort((a, b) => verifiedAt(a) - verifiedAt(b)).slice(0, limit).map((p) => p.id);
   }
 
   if (!ids.length) {
@@ -105,6 +112,7 @@ export const POST: APIRoute = async ({ request }) => {
     success: true,
     total: report.total,
     updated: results.filter((r) => r.status === 'updated').length,
+    priceCorrected: results.filter((r) => r.priceChanged).length,
     unchanged: results.filter((r) => r.status === 'unchanged').length,
     errors: results.filter((r) => r.status === 'error').length,
     skipped: results.filter((r) => r.status === 'skipped').length,

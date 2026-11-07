@@ -9036,7 +9036,7 @@ function renderTableRows(products, resetPage = true) {
       const selectedIds = Array.from(selectedProductIds);
       const isBatch = selectedIds.length === 0;
       const msg = isBatch
-        ? '¿Sincronizar el precio actual de los 10 productos con fecha de comprobación más antigua en la tienda en vivo (Amazon)?'
+        ? '¿Actualizar y corregir el precio de los 10 productos de Amazon con la comprobación más antigua (los nunca comprobados, como los importados, primero)? Se consulta la tienda en vivo y consume créditos de ScraperAPI.'
         : `¿Sincronizar el precio actual de los ${selectedIds.length} producto(s) seleccionado(s) en la tienda en vivo?`;
 
       if (!confirm(msg)) return;
@@ -9058,7 +9058,7 @@ function renderTableRows(products, resetPage = true) {
             .join('\n');
           showAlert(
             'success',
-            `Sincronización completada (${data.updated} con cambios de precio)`,
+            `Sincronización completada (${data.priceCorrected ?? data.updated} con el precio corregido)`,
             `Total consultados: ${data.total} | Actualizados: ${data.updated} | Sin cambios: ${data.unchanged} | Errores: ${data.errors}\n\n${detail}`
           );
         } else {

@@ -35,6 +35,7 @@ scripts/tests/analytics-memo.test.mjs
 scripts/tests/catalog-concurrency.test.mjs
 scripts/tests/categories-cache.test.mjs
 scripts/tests/amazon-link.test.mjs
+scripts/tests/price-refresh-amazon.test.mjs
 scripts/tests/category-extract.test.mjs
 scripts/tests/connectors.test.mjs
 scripts/tests/deleted-identity.test.mjs

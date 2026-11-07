@@ -22,6 +22,7 @@
  */
 
 import { productSchema } from '../content.config';
+import { parsePrice } from './jsonImport/normalize';
 import { safeValidate } from './validateProducts';
 import { readJsonArrayFile, writeJsonArrayFile } from './jsonStore';
 import { dataFile } from './paths';
@@ -313,20 +314,15 @@ export function normalizeScrapedAmazonData(
   const merchant = String(raw.merchant || raw.seller || 'Amazon').trim();
 
   // ── Precio: soporta número directo, objeto { value }, string o variantes ──
+  // Lector ÚNICO y robusto (el mismo del importador JSON): «1.329,00 €», «€1,329.00», «1.329 €», 689.99… Antes se hacía
+  // replace(',', '.') y los importes de 1.000 € o más salían NaN (o 1.329 en lugar de 1329), así que el botón de actualizar precios
+  // no podía corregirlos. Lo que no es un importe válido queda sin precio (nunca NaN ni 0).
   const priceFromObj = (v: unknown): number | undefined => {
-    if (v == null) return undefined;
-    if (typeof v === 'object' && !(v instanceof Array)) {
-      const o = v as Record<string, unknown>;
-      if (o.value != null) return Number(o.value);
-      if (o.amount != null) return Number(o.amount);
-      return undefined;
-    }
-    if (typeof v === 'string') return Number(String(v).replace(/[^0-9.,]/g, '').replace(',', '.'));
-    return Number(v);
+    if (v == null || Array.isArray(v)) return undefined;
+    const parsed = parsePrice(v).value;
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
   };
-  const price =
-    priceFromObj(raw.price) ??
-    (raw.pricing != null ? Number(String(raw.pricing).replace(/[^0-9.,]/g, '').replace(',', '.')) : undefined);
+  const price = priceFromObj(raw.price) ?? priceFromObj(raw.pricing);
   const originalPrice =
     priceFromObj(raw.original_price) ??
     priceFromObj(raw.list_price) ??
