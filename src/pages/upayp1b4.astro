@@ -2304,19 +2304,19 @@ const h = headerConfig[initialSection] || headerConfig.products;
       const match = AMAZON_ASIN_IN_PATH_RE.exec(pathAndQuery) || ASIN_QUERY_RE.exec(pathAndQuery);
       return match ? match[1].toUpperCase() : '';
     }
-    function buildAmazonCartUrl(asin) {
+    // Enlace de afiliado de Amazon = la FICHA del producto con el tag (antes: la cesta).
+    function buildAmazonProductUrl(asin) {
       const clean = String(asin || '').trim().toUpperCase();
       if (!/^[A-Z0-9]{10}$/.test(clean)) return '';
       const tag = window.TRADYLOR_ASSOCIATE_TAG || 'tradylor-21';
-      const params = new URLSearchParams({ 'ASIN.1': clean, 'Quantity.1': '1', AssociateTag: tag });
-      return `https://www.amazon.es/gp/aws/cart/add.html?${params.toString()}`;
+      return `https://www.amazon.es/dp/${clean}?tag=${encodeURIComponent(tag)}`;
     }
     function autoFillBuyNow(url) {
       const asin = extractAsinFromUrl(url);
       if (!asin || !prodBuyNowUrl) return;
-      // Compra directa generada: cesta de Amazon con el tag → tramitación del pedido.
+      // Enlace de compra generado: la ficha del producto de Amazon con el tag de afiliado.
       if (!prodBuyNowUrl.value.trim()) {
-        prodBuyNowUrl.value = buildAmazonCartUrl(asin);
+        prodBuyNowUrl.value = buildAmazonProductUrl(asin);
       }
     }
     // Sincronización bidireccional entre "URL del Producto" y "Enlace de Afiliado Final".

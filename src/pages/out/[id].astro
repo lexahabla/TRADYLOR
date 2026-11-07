@@ -10,7 +10,7 @@
  *  1. Extrae el parámetro `id` de la URL (p.ej. /out/sony-wh-1000xm5).
  *  2. Busca el producto en el JSON dinámico (scrapeado/externo) primero,
  *     luego en la lista estática de products.ts como fallback seguro.
- *  3. Si existe → HTTP 302 a la URL de compra directa (deep link de cesta en
+ *  3. Si existe → HTTP 302 a la URL de compra directa (ficha del producto con el tag de afiliado en
  *     Amazon si hay ASIN, buyNowUrl si existe, si no el affiliateUrl real).
  *  4. Si no existe → Redirección limpia al inicio (/).
  *

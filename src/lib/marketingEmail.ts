@@ -181,7 +181,7 @@ export function buildCartRecoveryHtml(name: string, exits: PendingExit[]): strin
       const product = findCatalogProduct(exit.productId);
       const productUrl = product ? `${origin}/p/${encodeURIComponent(productKey(product))}` : `${origin}/p/${encodeURIComponent(exit.productId)}`;
       // Salida al carrito/pasarela del comerciante: buildPurchaseUrl prioriza
-      // buyNowUrl (checkout directo) y para Amazon genera la cesta con el tag.
+      // buyNowUrl (checkout directo) y para Amazon genera la ficha del producto con el tag.
       const merchantUrl = product
         ? `${origin}/api/redirect?id=${encodeURIComponent(productKey(product))}&src=cart-reminder`
         : productUrl;

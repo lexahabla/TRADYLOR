@@ -6,6 +6,7 @@ import { activeSignal, freshnessOf, DEFAULT_MAX_AGE_HOURS, type PriceSignal } fr
 import {
   extractAsinFromUrl,
   getAmazonAddToCartUrl,
+  amazonCartToProductUrl,
   isValidAsin,
   sanitizeAsin,
 } from '../utils/amazon';
@@ -145,12 +146,12 @@ const USED_CONDITION_RE = /used|pre-owned|refurbished|reacondicionad|segunda\s*m
 const conditionLabel = (product?.condition ?? '').trim();
 const isUsedCondition = conditionLabel ? USED_CONDITION_RE.test(conditionLabel) : false;
 
-// Enlace de compra directa del catálogo (cesta de Amazon con tag si la generó
+// Enlace de compra directa del catálogo (ficha del producto de Amazon con tag; los enlaces de cesta antiguos se convierten; si la generó
 // el admin; si no, construida desde el ASIN). Se conserva como destino de compra
 // de "Mi Radar"; la tarjeta ya no muestra salida directa (el nombre del
 // comerciante se indica en la ficha /producto/[slug]).
 const catalogDirectExitHref = product
-  ? (product.buyNowUrl?.trim() || getAmazonAddToCartUrl(product.asin || ''))
+  ? amazonCartToProductUrl(product.buyNowUrl?.trim() || getAmazonAddToCartUrl(product.asin || ''))
   : '';
 
 // Barra de satisfacción: proporción calculada con 4 factores reales del

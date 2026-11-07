@@ -244,6 +244,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   y `apiAuth.ts`. **Excepción**: `/api/redirect` es público a propósito (es la salida
   del flujo de Compra Delegada) y no debe exigir token.
 - Los redireccionamientos de afiliación salen por `src/pages/out/[id].astro`.
+  Amazon: la salida lleva a la FICHA del producto con el tag (`/dp/<ASIN>?tag=…`, `getAmazonProductUrl`), nunca a la cesta; los enlaces de cesta antiguos
+  guardados en `buyNowUrl` se convierten al vuelo (`amazonCartToProductUrl`).
 - Documentación de la API pública en `docs/api-v1.md`; mantenerla actualizada si se
   cambian los endpoints de `src/pages/api/v1/`.
 

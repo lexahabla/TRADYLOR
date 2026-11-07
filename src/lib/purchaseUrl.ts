@@ -1,12 +1,12 @@
 import type { Product } from '../data/products';
-import { appendAmazonTag } from '../utils/amazon';
+import { amazonCartToProductUrl, appendAmazonTag } from '../utils/amazon';
 
 const FALLBACK_ASSOCIATE_TAG = 'tradylor-21';
 const AMAZON_HOST_RE = /(^|\.)amazon\.[a-z]{2,3}(\.[a-z]{2})?$/i;
 const AMAZON_ASIN_RE = /\/(?:dp|gp\/product|gp\/aw\/d|product)\/([A-Z0-9]{10})(?:[/?]|$)/i;
 
 function associateTag(): string {
-  const fromEnv = process.env.AMAZON_ASSOCIATE_TAG ?? import.meta.env.AMAZON_ASSOCIATE_TAG;
+  const fromEnv = process.env.AMAZON_ASSOCIATE_TAG ?? import.meta.env?.AMAZON_ASSOCIATE_TAG;
   return typeof fromEnv === 'string' && fromEnv.trim() ? fromEnv.trim() : FALLBACK_ASSOCIATE_TAG;
 }
 
@@ -26,32 +26,31 @@ function extractAmazonAsin(url: URL): string | null {
   return match ? match[1].toUpperCase() : null;
 }
 
-function amazonCartUrl(affiliateUrl: string): string | null {
+/** Ficha del producto de Amazon con el tag de afiliado (https://<dominio>/dp/<ASIN>?tag=…). */
+function amazonProductUrl(affiliateUrl: string): string | null {
   const url = parseHttpUrl(affiliateUrl);
   if (!url || !AMAZON_HOST_RE.test(url.hostname)) return null;
 
   const asin = extractAmazonAsin(url);
   if (!asin) return null;
 
-  const tag = url.searchParams.get('tag')?.trim() || associateTag();
-  const cart = new URL(`https://${url.hostname}/gp/aws/cart/add.html`);
-  cart.searchParams.set('ASIN.1', asin);
-  cart.searchParams.set('Quantity.1', '1');
-  cart.searchParams.set('AssociateTag', tag);
-  return cart.toString();
+  const tag = url.searchParams.get('tag')?.trim() || url.searchParams.get('AssociateTag')?.trim() || associateTag();
+  const product = new URL(`https://${url.hostname}/dp/${asin}`);
+  product.searchParams.set('tag', tag);
+  return product.toString();
 }
 
 export function buildPurchaseUrl(product: Pick<Product, 'affiliateUrl' | 'buyNowUrl'>): string {
   const override = product.buyNowUrl?.trim();
   if (override && parseHttpUrl(override)) {
-    // Compra directa configurada en el admin: si es de Amazon y no trae el
-    // tag de afiliado, se añade automáticamente (best effort).
-    return appendAmazonTag(override);
+    // Compra directa configurada en el admin: si es de Amazon y no trae el tag de afiliado, se añade (best effort). Un enlace de
+    // CESTA de Amazon (fichas antiguas) se convierte en el de la ficha del producto.
+    return appendAmazonTag(amazonCartToProductUrl(override));
   }
 
   const affiliateUrl = (product.affiliateUrl ?? '').trim();
   if (!affiliateUrl) return '';
   if (!parseHttpUrl(affiliateUrl)) return affiliateUrl;
 
-  return amazonCartUrl(affiliateUrl) ?? affiliateUrl;
+  return amazonProductUrl(affiliateUrl) ?? affiliateUrl;
 }

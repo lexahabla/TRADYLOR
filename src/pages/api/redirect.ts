@@ -9,7 +9,7 @@
  *  1. Resuelve el producto por slug canónico o id legado.
  *  2. Registra el clic de salida (analítica interna + webhook opcional de n8n).
  *  3. Devuelve HTTP 302 hacia la URL de compra directa (buildPurchaseUrl):
- *     deep link de cesta de Amazon cuando se detecta ASIN, buyNowUrl del
+ *     ficha del producto de Amazon con el tag de afiliado (/dp/<ASIN>?tag=…) cuando se detecta ASIN, buyNowUrl del
  *     producto si existe o, en su defecto, el affiliateUrl real.
  *
  * CRO / SEGURIDAD:

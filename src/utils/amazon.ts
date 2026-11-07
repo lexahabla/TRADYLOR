@@ -53,27 +53,36 @@ export function isValidAsin(asin: string): boolean {
 }
 
 /**
- * Construye la URL directa a la cesta de compra de Amazon España
- * (https://www.amazon.es/gp/aws/cart/add.html) para un ASIN concreto.
+ * Enlace de salida de Amazon España para un ASIN: la PÁGINA DEL PRODUCTO con el tag de afiliado (/dp/ASIN?tag=…).
+ *
+ * Histórico: este helper construía la URL de la CESTA (/gp/aws/cart/add.html) y por eso conserva su nombre; el enlace de afiliado debe
+ * llevar a la ficha del producto, así que ahora devuelve lo mismo que getAmazonProductUrl. Los enlaces de cesta ya guardados en
+ * fichas existentes se convierten con amazonCartToProductUrl.
  *
  * @param asin  Código ASIN del producto (se sanitiza automáticamente).
  * @param tag   Tag de afiliado opcional; por defecto PUBLIC_AMAZON_ASSOCIATE_TAG.
- * @returns     URL lista para usar en el CTA de salida. Cadena vacía si el ASIN no es válido.
+ * @returns     URL de la ficha del producto. Cadena vacía si el ASIN no es válido.
  */
 export function getAmazonAddToCartUrl(asin: string, tag?: string): string {
-  const clean = sanitizeAsin(asin);
-  if (!ASIN_RE.test(clean)) return '';
+  return getAmazonProductUrl(asin, tag);
+}
 
-  const associateTag =
-    typeof tag === 'string' && tag.trim() ? tag.trim() : getAmazonAssociateTag();
-
-  const params = new URLSearchParams({
-    'ASIN.1': clean,
-    'Quantity.1': '1',
-    AssociateTag: associateTag,
-  });
-
-  return `https://www.amazon.es/gp/aws/cart/add.html?${params.toString()}`;
+/**
+ * Convierte un enlace de CESTA de Amazon (…/gp/aws/cart/add.html?ASIN.1=…&AssociateTag=…) en el de la FICHA del producto
+ * (https://<mismo dominio>/dp/<ASIN>?tag=<mismo tag>). Cualquier otra URL (no Amazon, otra ruta, sin ASIN válido) se devuelve igual.
+ */
+export function amazonCartToProductUrl(url: string): string {
+  try {
+    const parsed = new URL(String(url ?? '').trim());
+    if (!/(^|\.)amazon\.[a-z]{2,3}(\.[a-z]{2})?$/i.test(parsed.hostname)) return url;
+    if (!/\/gp\/aws\/cart\/add\.html$/i.test(parsed.pathname)) return url;
+    const asin = sanitizeAsin(parsed.searchParams.get('ASIN.1') ?? parsed.searchParams.get('ASIN') ?? '');
+    if (!ASIN_RE.test(asin)) return url;
+    const tag = (parsed.searchParams.get('AssociateTag') ?? parsed.searchParams.get('tag') ?? '').trim() || getAmazonAssociateTag();
+    return `${parsed.protocol}//${parsed.hostname}/dp/${asin}?${new URLSearchParams({ tag }).toString()}`;
+  } catch {
+    return url;
+  }
 }
 
 /**
