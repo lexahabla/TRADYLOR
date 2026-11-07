@@ -9,7 +9,8 @@
  *     "defaults": { "platform", "currency", "sellerName", "condition", "category" },
  *     "indexOffset": 0,                  // posición global del primer registro
  *     "dryRun": false,                   // true = simula sin escribir nada
- *     "target": { "categoryId", "subcategoryId" }  // opcional: destino de las fichas NUEVAS (validado)
+ *     "target": { "categoryId", "subcategoryId" },  // opcional: destino de las fichas NUEVAS (validado)
+ *     "onlyNew": false                   // true = omitir los productos que ya existen (no se actualizan ni se vinculan)
  *   }
  *
  * El cliente trocea el JSON en bloques de hasta 100 registros y los envía en
@@ -98,7 +99,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
-    const out = processChunk({ batchId, records, defaults: readDefaults(body.defaults), dryRun, indexOffset, target: resolved.target });
+    const out = processChunk({ batchId, records, defaults: readDefaults(body.defaults), dryRun, indexOffset, target: resolved.target, onlyNew: body.onlyNew === true });
     return json({ success: true, dryRun, changed: out.changed, backup: out.backup, results: out.results, summary: summarize(out.results), target: resolved.target });
   } catch (error) {
     console.error('[API admin/json-import] Error:', error);

@@ -27,6 +27,7 @@ function makeClient(fetchImpl) {
     return (nodes[id] = node);
   };
   ids.forEach(el);
+  nodes.jsonImpOnlyNew.checked = true; // por defecto: sólo productos nuevos
   ['jsonImpPlatform', 'jsonImpCurrency', 'jsonImpAsin', 'jsonImpText', 'jsonImpCatUrl', 'jsonImpCatLimit', 'jsonImpTargetCat', 'jsonImpTargetSub'].forEach((i) => { nodes[i].hidden = false; });
   nodes.jsonImpSource.value = 'amazon';
   const store = { _m: {}, getItem(k) { return k in this._m ? this._m[k] : null; }, setItem(k, v) { this._m[k] = String(v); }, removeItem(k) { delete this._m[k]; } };
@@ -346,4 +347,53 @@ test('el JSON pegado no dispara comprobaciones por su cuenta: indica cómo ver c
   await wait(320);
   assert.equal(f.log.imports.length, 0);
   assert.ok(nodes.jsonImpSumStatus.textContent.includes('Pulsa «Simular importación»'));
+});
+
+test('«Solo productos nuevos» va marcado por defecto, se envía en simular e importar, y desmarcarlo lo envía como false', async () => {
+  const f = fakeServer();
+  const { nodes } = makeClient(f.fn);
+  paste(nodes, [amz(1)]);
+  nodes.jsonImpSimulate.fire('click');
+  await wait(100);
+  nodes.jsonImpImport.fire('click');
+  await wait(100);
+  assert.deepEqual(f.log.imports.map((b) => b.onlyNew), [true, true]);
+  nodes.jsonImpOnlyNew.checked = false;
+  nodes.jsonImpOnlyNew.fire('change');
+  nodes.jsonImpImport.fire('click');
+  await wait(100);
+  assert.equal(f.log.imports.at(-1).onlyNew, false);
+});
+
+test('los existentes omitidos se cuentan como OMITIDOS y, si todos existen, el mensaje dice que no se ha incluido ninguno', async () => {
+  const omit = fakeServer({ extra: (u, init) => {
+    if (!u.endsWith('/api/admin/json-import')) return null;
+    const body = JSON.parse(init.body);
+    omit.log.imports.push(body);
+    return resp({ success: true, results: body.records.map((r, i) => ({ index: body.indexOffset + i, outcome: 'unchanged', productId: 'p-' + r.externalId, title: r.title, reasons: ['ya_existe_omitido'], warnings: [], entities: { productsCreated: 0, offersCreated: 0, offersUpdated: 0 } })) });
+  } });
+  const { nodes } = makeClient(omit.fn);
+  paste(nodes, [amz(1), amz(2)]);
+  nodes.jsonImpImport.fire('click');
+  await wait(120);
+  assert.ok(nodes.jsonImpAlert.textContent.includes('YA EXISTEN en el catálogo y se omiten'), nodes.jsonImpAlert.textContent);
+  assert.ok(nodes.jsonImpAlert.textContent.includes('no se ha incluido ni modificado ninguno'));
+  assert.ok(!/is-ok/.test(nodes.jsonImpAlert.className));
+});
+
+test('la comprobación automática con «solo nuevos» muestra los existentes como OMITIDOS (no se vuelven a incluir)', async () => {
+  const omit = fakeServer({ extra: (u, init) => {
+    if (u.startsWith('/api/scrape')) return resp({ ...amz(1, 'existing') });
+    if (!u.endsWith('/api/admin/json-import')) return null;
+    const body = JSON.parse(init.body);
+    omit.log.imports.push(body);
+    return resp({ success: true, results: body.records.map((r, i) => ({ index: body.indexOffset + i, outcome: 'unchanged', productId: 'p-1', title: r.title, reasons: ['ya_existe_omitido'], warnings: [], entities: { productsCreated: 0, offersCreated: 0, offersUpdated: 0 } })) });
+  } });
+  const { nodes } = makeClient(omit.fn);
+  nodes.jsonImpAsin.value = 'B01EXDG2MO';
+  nodes.jsonImpFetch.fire('click');
+  await wait(150);
+  const text = nodes.jsonImpSumStatus.textContent;
+  assert.ok(text.includes('0 nuevo(s)'), text);
+  assert.ok(text.includes('1 ya existe(n) en el catálogo → OMITIDOS (no se vuelven a incluir ni se actualizan)'), text);
 });

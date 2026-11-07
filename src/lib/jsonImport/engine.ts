@@ -489,6 +489,11 @@ export interface EngineOptions {
   indexOffset?: number;
   /** Destino (ya validado) de las fichas NUEVAS; no afecta a fichas existentes. Sin él rigen las reglas habituales. */
   target?: ImportTarget;
+  /**
+   * Sólo productos NUEVOS: todo registro que ya existe en el catálogo (misma oferta o mismo anuncio con otro vendedor, también dentro del
+   * propio lote) se OMITE: no se actualiza, no se vincula ni se vuelve a incluir. Sin esta opción, reimportar actualiza/vincula ofertas.
+   */
+  onlyNew?: boolean;
 }
 
 export interface EngineOutput {
@@ -562,6 +567,12 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
           results.push(result(gi, 'rejected', { ...base, offerKey, productId: hit.deletedId, reasons: ['producto_eliminado_anteriormente', `eliminado_por_${hit.by}`] }));
           return;
         }
+      }
+
+      // «Sólo nuevos»: lo que ya existe no se vuelve a incluir ni se toca.
+      if (opts.onlyNew && (res.kind === 'offer' || res.kind === 'link')) {
+        results.push(result(gi, 'unchanged', { ...base, productId: res.product.id, offerKey, reasons: ['ya_existe_omitido'] }));
+        return;
       }
 
       if (res.kind === 'offer') {

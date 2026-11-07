@@ -1117,6 +1117,10 @@ const h = headerConfig[initialSection] || headerConfig.products;
           <div class="jsonimp-counter" id="jsonImpSumStatusBox"><dt>Frente al catálogo y al stock</dt><dd id="jsonImpSumStatus" role="status" aria-live="polite">—</dd></div>
           <div class="jsonimp-counter"><dt>Destino de las fichas nuevas</dt><dd id="jsonImpSumTarget">Automático (reglas habituales de clasificación)</dd></div>
         </dl>
+        <label class="jsonimp-check" for="jsonImpOnlyNew">
+          <input type="checkbox" id="jsonImpOnlyNew" checked />
+          <span>Solo productos nuevos: omitir los que ya existen en el catálogo <span class="label-hint">(no se vuelven a incluir ni se actualizan; desmárcalo para actualizar su precio y stock o vincular ofertas)</span></span>
+        </label>
         <div class="jsonimp-actions">
           <button type="button" id="jsonImpSimulate" class="btn-secondary" title="Valida los productos y muestra el informe. NUNCA guarda nada.">Simular importación</button>
           <button type="button" id="jsonImpImport" class="btn-primary" title="Importa los registros válidos al catálogo, sin IA.">Importar al catálogo</button>
@@ -10888,6 +10892,7 @@ function renderTableRows(products, resetPage = true) {
     var sumTarget = $('jsonImpSumTarget');
     var sumCurrency = $('jsonImpSumCurrency');
     var sumCurrencyBox = $('jsonImpSumCurrencyBox');
+    var onlyNewBox = $('jsonImpOnlyNew');
     var sumStatus = $('jsonImpSumStatus');
     var sumStatusBox = $('jsonImpSumStatusBox');
     var simBtn = $('jsonImpSimulate');
@@ -11153,7 +11158,7 @@ function renderTableRows(products, resetPage = true) {
     function setRunning(on) {
       running = on;
       simBtn.disabled = on; impBtn.disabled = on; aiBtn.disabled = on; fetchBtn.disabled = on; clearBtn.disabled = on;
-      enrichRetry.disabled = on;
+      enrichRetry.disabled = on; onlyNewBox.disabled = on;
       targetCat.disabled = on; targetSub.disabled = on || !targetSub.options || targetSub.options.length < 2;
       cancelBtn.hidden = !on;
     }
@@ -11245,16 +11250,19 @@ function renderTableRows(products, resetPage = true) {
         if (x.outcome === 'updated' && (x.reasons || []).indexOf('disponibilidad') >= 0) stockChanged += 1;
         if (x.outcome === 'rejected' && (x.reasons || []).indexOf('precio_invalido') >= 0) noPriceRejected += 1;
       });
+      var omitted = results.filter(function (x) { return x.outcome === 'unchanged' && (x.reasons || []).indexOf('ya_existe_omitido') >= 0; }).length;
+      var unchangedOther = c.unchanged - omitted;
       var existing = c.unchanged + c.updated + c.linked;
       var st = stockInfo(records);
       var parts = [];
       parts.push(c.created + ' nuevo(s)');
-      var ex = existing + ' ya existe(n) en el catálogo';
+      if (omitted) parts.push(omitted + ' ya existe(n) en el catálogo → OMITIDOS (no se vuelven a incluir ni se actualizan)');
+      var ex = (existing - omitted) + ' ya existe(n) en el catálogo';
       var exDetail = [];
-      if (c.unchanged) exDetail.push(c.unchanged + ' sin cambios');
+      if (unchangedOther) exDetail.push(unchangedOther + ' sin cambios');
       if (c.updated) exDetail.push(c.updated + ' con cambios' + (stockChanged ? ' (' + stockChanged + ' de disponibilidad)' : ''));
       if (c.linked) exDetail.push(c.linked + ' con oferta vinculada');
-      parts.push(ex + (exDetail.length ? ' (' + exDetail.join(', ') + ')' : ''));
+      if (existing - omitted > 0 || !omitted) parts.push(ex + (exDetail.length ? ' (' + exDetail.join(', ') + ')' : ''));
       parts.push(st.outOfStock + ' agotado(s)/sin stock' + (st.outOfStock ? ' (se conserva ese estado)' : ''));
       if (noPriceRejected || st.noPrice) parts.push((noPriceRejected || st.noPrice) + ' sin precio (no disponible para comprar: se rechazará)');
       if (c.review) parts.push(c.review + ' en revisión');
@@ -11263,7 +11271,9 @@ function renderTableRows(products, resetPage = true) {
       if (note) parts.push(note);
       return parts.join(' · ') + '. Comprobado con una simulación: no se ha guardado nada.';
     }
+    var lastPreviewNote = '';
     function autoPreview(note) {
+      lastPreviewNote = note || '';
       if (running || catBusy) return;
       var text = currentText();
       if (!text) return;
@@ -11287,6 +11297,11 @@ function renderTableRows(products, resetPage = true) {
     function scheduleSummary() { clearTimeout(summaryTimer); summaryTimer = setTimeout(refreshSummary, 250); }
     targetCat.addEventListener('change', refreshSummary);
     targetSub.addEventListener('change', refreshSummary);
+    onlyNewBox.addEventListener('change', function () {
+      var had = sumStatus.textContent.indexOf('Comprobado con una simulación') >= 0;
+      refreshSummary();
+      if (had) autoPreview(lastPreviewNote);
+    });
 
     // ── Recorrido único de importación (simular o importar) por bloques ──
     function runFlow(opts) {
@@ -11319,7 +11334,7 @@ function renderTableRows(products, resetPage = true) {
           slice.push(rec);
           sliceChars += recChars;
         }
-        var body = { batchId: batchId, records: slice, defaults: defaults, dryRun: dryRun, indexOffset: offset };
+        var body = { batchId: batchId, records: slice, defaults: defaults, dryRun: dryRun, indexOffset: offset, onlyNew: onlyNewBox.checked };
         if (target.categoryId) body.target = { categoryId: target.categoryId, subcategoryId: target.subcategoryId };
         return postChunk(body, 0).then(function (data) {
           for (var i = 0; i < data.results.length; i++) results.push(data.results[i]);
@@ -11355,6 +11370,10 @@ function renderTableRows(products, resetPage = true) {
       if (!applied && blocked) {
         return { kind: 'error', applied: 0, text: (dry ? 'La simulación indica que NO se importaría ninguna ficha' : 'NO se ha importado ninguna ficha') + ': ' + blocked + ' de ' + results.length + ' registro(s) (' + what.join(', ') + '). Motivos: ' + top + '. ' + (dry ? 'No se ha guardado nada. ' : 'El catálogo no ha cambiado; los registros están en la cola de revisión. ') + 'Revisa el informe.' };
       }
+      var omittedN = results.filter(function (x) { return x.outcome === 'unchanged' && (x.reasons || []).indexOf('ya_existe_omitido') >= 0; }).length;
+      if (!applied && omittedN === results.length) {
+        return { kind: 'info', applied: 0, text: (dry ? 'Simulación: ' : '') + 'los ' + results.length + ' producto(s) YA EXISTEN en el catálogo y se omiten: no se ha incluido ni modificado ninguno.' };
+      }
       if (!applied) {
         return { kind: 'info', applied: 0, text: (dry ? 'Simulación: ' : '') + 'sin cambios: los ' + results.length + ' registro(s) ya estaban en el catálogo con los mismos datos.' };
       }
@@ -11362,6 +11381,7 @@ function renderTableRows(products, resetPage = true) {
       if (c.created) done.push(c.created + ' ficha(s) nueva(s)');
       if (c.linked) done.push(c.linked + ' oferta(s) vinculada(s)');
       if (c.updated) done.push(c.updated + ' oferta(s) actualizada(s)');
+      if (omittedN) done.push(omittedN + ' ya existían: omitidos');
       return { kind: blocked ? 'warn' : 'ok', applied: applied, text: (dry ? 'Simulación terminada: se aplicarían ' : 'Importación terminada: ') + done.join(', ') + (blocked ? '; ' + blocked + ' registro(s) NO se han importado (' + what.join(', ') + '; motivos: ' + top + ')' : '') + (dry ? '. NO se ha guardado nada.' : '.') };
     }
     function finishReport(r) {
@@ -11591,6 +11611,7 @@ function renderTableRows(products, resetPage = true) {
       eliminado_por_sourceId: 'Mismo identificador externo (ASIN/anuncio) que una ficha eliminada',
       eliminado_por_url: 'Misma URL de producto que una ficha eliminada',
       eliminado_por_gtin: 'Mismo GTIN y variante que una ficha eliminada',
+      ya_existe_omitido: 'Ya existe en el catálogo: omitido (no se vuelve a incluir ni se actualiza)',
       sin_categoria: 'Sin categoría: queda en revisión (no se publica) hasta que se asigne una',
       limite_de_ofertas_por_ficha: 'La ficha ya tiene el máximo de ofertas',
       lectura_anterior_descartada: 'Lectura más antigua que la ya guardada',

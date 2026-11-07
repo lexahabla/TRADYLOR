@@ -2,6 +2,7 @@
 // al reimportar, actualizar o vincular ofertas. Sólo lectura/escritura del catálogo aislado de prueba (sin red ni IA).
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { setupIsolatedData, readCatalog, writeCatalog, jsonRecord, GTIN } from './_helpers.mjs';
 
 const dir = setupIsolatedData('treidilor-legacy-');
@@ -122,4 +123,77 @@ test('los identificadores AUSENTES se completan sin tocar los presentes; un camp
   assert.equal(p.extra.identifiers.gtin, GTIN, 'se completa el que faltaba');
   assert.equal(p.extra.identifiers.mpn, 'MPN-NUEVO');
   assert.notEqual(p.brand, 'MarcaNueva', 'la marca está protegida');
+});
+
+/* ───────────── «Sólo productos nuevos»: lo que ya existe no se vuelve a incluir ni se toca ───────────── */
+
+const runNew = (records, onlyNew = true, extra = {}) =>
+  service.processChunk({ batchId: `onlynew-${++seq}-${Date.now()}`, records, defaults: { category: 'Audio' }, dryRun: extra.dryRun ?? false, indexOffset: 0, onlyNew, target: extra.target });
+
+test('sólo nuevos: un producto que ya existe se OMITE (no se actualiza), el nuevo se crea y el catálogo no cambia para el existente', () => {
+  writeCatalog(dir, []);
+  run([jsonRecord(11, { price: 50 })]);
+  const before = JSON.stringify(readCatalog(dir));
+  const out = runNew([jsonRecord(11, { price: 12, capturedAt: '2026-10-07T10:00:00Z' }), jsonRecord(12)]);
+  assert.deepEqual(outcome(out), ['unchanged', 'created']);
+  assert.deepEqual(out.results[0].reasons, ['ya_existe_omitido']);
+  const stored = readCatalog(dir);
+  assert.equal(stored.length, 2);
+  assert.equal(JSON.stringify(stored.find((p) => p.sourceId === 'Z11')), JSON.stringify(JSON.parse(before)[0]), 'la ficha existente no se modifica ni en un byte');
+  assert.equal(stored.find((p) => p.sourceId === 'Z11').price, 50, 'ni siquiera el precio');
+});
+
+test('sólo nuevos: el mismo anuncio con OTRO vendedor (que vincularía una oferta) también se omite', () => {
+  writeCatalog(dir, []);
+  run([jsonRecord(13, { platform: 'temu', externalId: '701000000000013', url: 'https://www.temu.com/es/-g-701000000000013.html' })]);
+  const link = runNew([jsonRecord(13, { platform: 'temu', externalId: '701000000000013', url: 'https://www.temu.com/es/-g-701000000000013.html', sellerName: 'Otra tienda', sellerId: 'X9', price: 9 })]);
+  assert.deepEqual(outcome(link), ['unchanged']);
+  assert.deepEqual(link.results[0].reasons, ['ya_existe_omitido']);
+  assert.equal(getOffers(readCatalog(dir)[0]).length, 1, 'no se añadió ninguna oferta');
+  // sin la opción, el comportamiento anterior (vincular) se conserva
+  const old = runNew([jsonRecord(13, { platform: 'temu', externalId: '701000000000013', url: 'https://www.temu.com/es/-g-701000000000013.html', sellerName: 'Otra tienda', sellerId: 'X9', price: 9 })], false);
+  assert.deepEqual(outcome(old), ['linked']);
+});
+
+test('sólo nuevos: un duplicado dentro del MISMO lote entra una sola vez', () => {
+  writeCatalog(dir, []);
+  const out = runNew([jsonRecord(14), jsonRecord(14), jsonRecord(15)]);
+  assert.deepEqual(outcome(out), ['created', 'unchanged', 'created']);
+  assert.equal(out.results[1].reasons[0], 'ya_existe_omitido');
+  assert.equal(readCatalog(dir).length, 2);
+});
+
+test('sólo nuevos: reenviar el MISMO lote completo no incluye nada y no toca el fichero del catálogo', () => {
+  writeCatalog(dir, []);
+  const lote = [jsonRecord(21), jsonRecord(22), jsonRecord(23)];
+  runNew(lote);
+  const before = JSON.stringify(readCatalog(dir));
+  const again = runNew(lote.map((r) => ({ ...r, price: r.price + 5, capturedAt: '2026-10-08T10:00:00Z' })));
+  assert.deepEqual(outcome(again), ['unchanged', 'unchanged', 'unchanged']);
+  assert.ok(again.results.every((r) => r.reasons.includes('ya_existe_omitido')));
+  assert.equal(JSON.stringify(readCatalog(dir)), before);
+  assert.equal(again.changed, false);
+});
+
+test('sólo nuevos no afecta a lo que NO existe: revisión, rechazos y eliminados siguen igual', () => {
+  writeCatalog(dir, []);
+  const out = service.processChunk({ batchId: 'onlynew-rev-' + Date.now(), records: [jsonRecord(31, { category: undefined }), jsonRecord(32, { price: undefined })], defaults: {}, dryRun: false, indexOffset: 0, onlyNew: true });
+  assert.deepEqual(outcome(out), ['review', 'rejected']);
+});
+
+test('el endpoint /api/admin/json-import acepta onlyNew (por defecto desactivado) y el panel lo envía activado', async () => {
+  const route = await import('../../src/pages/api/admin/json-import/index.ts');
+  const { apiRequest, jsonOf } = await import('./_helpers.mjs');
+  writeCatalog(dir, []);
+  run([jsonRecord(41, { price: 50 })]);
+  const post = (body) => route.POST({ request: apiRequest('/api/admin/json-import', { body, token: true }) });
+  const a = await jsonOf(await post({ batchId: 'onlynew-api-0001', records: [jsonRecord(41, { price: 20, capturedAt: '2026-10-09T10:00:00Z' })], onlyNew: true }));
+  assert.equal(a.results[0].outcome, 'unchanged');
+  assert.deepEqual(a.results[0].reasons, ['ya_existe_omitido']);
+  assert.equal(readCatalog(dir)[0].price, 50);
+  const b = await jsonOf(await post({ batchId: 'onlynew-api-0002', records: [jsonRecord(41, { price: 20, capturedAt: '2026-10-09T10:00:00Z' })] }));
+  assert.equal(b.results[0].outcome, 'updated', 'sin onlyNew: actualiza como siempre');
+  const panel = fs.readFileSync('d:/AXEL/WEBS/TRADYLOR/tradylor_web/src/pages/upayp1b4.astro', 'utf8');
+  assert.ok(panel.includes('id="jsonImpOnlyNew" checked'));
+  assert.ok(panel.includes('onlyNew: onlyNewBox.checked'));
 });

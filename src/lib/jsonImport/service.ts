@@ -79,6 +79,8 @@ export function processChunk(input: {
   indexOffset: number;
   /** Destino ya validado de las fichas nuevas (opcional). */
   target?: ImportTarget;
+  /** Sólo productos nuevos: omitir los que ya existen (ver `EngineOptions.onlyNew`). */
+  onlyNew?: boolean;
 }): ChunkOutput & { backup?: string } {
   const nowIso = new Date().toISOString();
   // ── Sección crítica síncrona: leer → aplicar → escribir una sola vez. ──
@@ -102,6 +104,7 @@ export function processChunk(input: {
     },
     indexOffset: input.indexOffset,
     target: input.target,
+    onlyNew: input.onlyNew === true,
   });
   let backup: string | undefined;
   if (out.changed && !input.dryRun) {

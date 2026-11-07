@@ -99,6 +99,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
     Tras extraer una categoría (Amazon/Temu) o cargar un ASIN se hace SOLA una simulación gratuita (sin guardar ni llamar de nuevo al origen) y la zona
     muestra «Frente al catálogo y al stock»: nuevos, ya existentes (sin cambios / con cambios / vinculadas), agotados o sin stock, sin precio (no
     disponibles para comprar, se rechazan) y sin ficha en España. Enviar el mismo enlace de nuevo detecta lo que ya existe (sin duplicar).
+    La casilla «Solo productos nuevos» (marcada por defecto; API: `onlyNew:true` en json-import) OMITE por completo los productos que ya existen (misma
+    oferta o mismo anuncio con otro vendedor, también dentro del lote): no se actualizan, no se vinculan y no se vuelven a incluir (motivo `ya_existe_omitido`).
   - `api/admin/json-import/index.ts` - Importación JSON por bloques; admite `target:{categoryId,subcategoryId}` (destino de las fichas NUEVAS, validado contra categories.json; las existentes no se tocan)
   - `api/admin/pipeline/index.ts` - Métricas de auditoría y reproceso del catálogo
     (síncrono o en segundo plano con `background:true`; `mode:'cancel'` lo detiene)
