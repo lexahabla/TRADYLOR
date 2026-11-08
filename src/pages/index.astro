@@ -189,7 +189,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
         clearHref={clearHref}
         rangeHrefs={rangeHrefs}
       />}
-      <div class="catalog-main">
+      <div class="catalog-top">
       <!-- Selector de ordenación del catálogo (alineado a la derecha). Incluye
            también, en el mismo select, los perfiles de comprador del
            usuario ("Perfil - " + nombre del perfil): elegir uno filtra el
@@ -229,6 +229,8 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
         <strong>{diversified.length}</strong> {diversified.length === 1 ? 'producto' : 'productos'}{queryTerm ? ` para «${queryParam}»` : ''}
       </p>
 
+      </div>
+      <div class="catalog-main">
       <div class="products-grid" data-catalog-grid>
         {sorted.length === 0 ? (
           <div class="empty-state">
@@ -1020,8 +1022,11 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     gap: 1.75rem;
     align-items: start;
   }
-  .catalog-main { min-width: 0; }
-  .catalog-main .catalog-sort-bar { margin: 0 0 1rem auto; }
+  /* Fila 1 (orden, chips, contador) sólo sobre la columna de resultados; fila 2: panel y rejilla arrancan en la MISMA línea superior. */
+  .catalog-layout.has-filters .catalog-top { grid-column: 2; grid-row: 1; min-width: 0; }
+  .catalog-layout.has-filters .catalog-main { grid-column: 2; grid-row: 2; }
+  .catalog-top, .catalog-main { min-width: 0; }
+  .catalog-top .catalog-sort-bar { margin: 0 0 1rem auto; }
   .catalog-layout.has-filters .catalog-main .products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
   .catalog-count { margin: 0 0 1rem; color: var(--color-text-muted); font-size: 0.9rem; }
   .catalog-count strong { color: var(--color-text-main); }
@@ -1043,7 +1048,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   }
   @media (max-width: 960px) {
     .catalog-layout.has-filters { display: block; }
-    .catalog-main .catalog-sort-bar { margin: 0.75rem 0 1rem auto; }
+    .catalog-top .catalog-sort-bar { margin: 0.75rem 0 1rem auto; }
     .catalog-layout.has-filters .catalog-main .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 767px) {
