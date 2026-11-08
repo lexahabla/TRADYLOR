@@ -294,6 +294,11 @@ test('el borde superior del panel coincide con el de las tarjetas (panel y rejil
   assert.ok(cf.includes('grid-column: 1;') && cf.includes('grid-row: 2;'));
 });
 
+test('migas «INICIO / CATEGORÍA» en la cabecera del listado con enlace a la portada', () => {
+  const index = read('src/pages/index.astro');
+  assert.ok(index.includes('<a href="/" class="section-crumb-link">Inicio</a>') && index.includes('aria-current="page">Categoría</span>'));
+});
+
 test('panel: drawer modal accesible en móvil con retorno del foco al botón «Filtrar», acordeones, buscadores internos y doble tirador', () => {
   const panel = read('src/components/CatalogFilters.astro');
   assert.ok(panel.includes("aria-haspopup=\"dialog\"") && panel.includes("setAttribute('aria-modal', 'true')"));
