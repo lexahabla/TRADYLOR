@@ -38,6 +38,7 @@ scripts/tests/amazon-link.test.mjs
 scripts/tests/listing.test.mjs
 scripts/tests/price-refresh-amazon.test.mjs
 scripts/tests/category-extract.test.mjs
+scripts/tests/categories-icons.test.mjs
 scripts/tests/connectors.test.mjs
 scripts/tests/deleted-identity.test.mjs
 scripts/tests/deleted-panel-paths.test.mjs
@@ -147,6 +148,7 @@ src/lib/deletedProducts.ts
 src/lib/excelExport.ts
 src/lib/formConflicts.ts
 src/lib/geminiGrounded.ts
+src/lib/iconLibrary.ts
 src/lib/imageQuality.ts
 src/lib/jsonImport/engine.ts
 src/lib/jsonImport/apifyAmazon.ts
@@ -240,6 +242,7 @@ src/pages/api/admin/catalog/index.ts
 src/pages/api/admin/category-extract/index.ts
 src/pages/api/admin/data.ts
 src/pages/api/admin/enrich-bulk.ts
+src/pages/api/admin/icon-library.ts
 src/pages/api/admin/json-import/index.ts
 src/pages/api/admin/marketing/usuarios/[id].ts
 src/pages/api/admin/marketing/usuarios/[id]/remind.ts

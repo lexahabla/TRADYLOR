@@ -37,6 +37,7 @@ const belowCatalogSections = publishedSections.filter((s) => s.position !== 'abo
 const listingParams = parseListingParams(Astro.url.searchParams);
 const listing = buildListing(allProducts, listingParams, { resolver: makeCategoryResolver() });
 const activeCategory = listingParams.category.length === 1 ? getCategoryById(listingParams.category[0]) ?? null : null;
+const parentCategory = activeCategory?.parentId ? getCategoryById(activeCategory.parentId) ?? null : null;
 const queryParam = listingParams.q;
 const queryTerm = queryParam.toLowerCase();
 const filtersActive = hasActiveFilters(listingParams);
@@ -165,7 +166,15 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
               <nav aria-label="Ruta de navegación" class="section-crumb">
                 <a href="/" class="section-crumb-link">Inicio</a>
                 <span class="section-crumb-sep" aria-hidden="true">/</span>
-                <span aria-current="page">Categoría</span>
+                {parentCategory ? (
+                  <>
+                    <a href={`/?category=${encodeURIComponent(parentCategory.slug)}#catalogo`} class="section-crumb-link">{parentCategory.name}</a>
+                    <span class="section-crumb-sep" aria-hidden="true">/</span>
+                    <span aria-current="page">{activeCategory.name}</span>
+                  </>
+                ) : (
+                  <span aria-current="page">Categoría</span>
+                )}
               </nav>
             ) : 'Catálogo Completo'}
           </div>

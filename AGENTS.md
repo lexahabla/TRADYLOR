@@ -115,6 +115,7 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `paths.ts` - Rutas persistentes: `DATA_DIR` / `IMAGES_DIR` (en prod: volumen vía env)
   - `catalog.ts`, `catalogStore.ts` - Catálogo de productos en memoria/almacenamiento
   - `catalogListing.ts` - Listado público: búsqueda (sólo título, marca y categoría, sin tildes), filtros OR/AND, chips, tramos de precio y estado en la URL (`?q&category&brand&min&max&deal&f_<atributo>&sort&page`); `catalogFacets.ts` calcula atributos, facetas y recuentos reales
+  - `iconLibrary.ts` + `api/admin/icon-library.ts` - Biblioteca local de iconos por palabra y palabras clave automáticas del formulario de categorías/subcategorías (sin IA). Las subcategorías NUNCA llevan icono de carpeta (📂/📁: se limpian al leer y al escribir; sin icono por defecto)
   - `brandResolve.ts` - Marca REAL del fabricante: una tienda («AliExpress», «ebay»…) no es marca; se toma de las especificaciones (Marca/Brand/Fabricante) y si no hay dato queda vacía (nunca se deduce del título). Se aplica en el punto único de escritura (`writeProductsToFile`) y al leer el catálogo
   - `productStore.ts` - Persistencia de `products.json` (lectura/escritura/upsert)
   - `ai.ts` - Enriquecimiento de texto y generación de imágenes con IA

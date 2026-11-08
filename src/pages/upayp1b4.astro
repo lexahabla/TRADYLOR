@@ -1448,8 +1448,13 @@ const h = headerConfig[initialSection] || headerConfig.products;
                 <input type="text" id="catName" placeholder="Ej: Electrodomésticos" required />
               </div>
               <div class="form-group">
-                <label for="catIcon" class="field-label">Icono (emoji) <span class="label-hint">(opcional)</span></label>
-                <input type="text" id="catIcon" placeholder="Ej: 🍳" maxlength="8" />
+                <label for="catIcon" class="field-label">Icono (emoji) <span class="label-hint">(opcional) · escribe una palabra (café, portátil…) y elige un icono</span></label>
+                <input type="text" id="catIcon" placeholder="Ej: 🍳 o escribe «cocina»" maxlength="40" autocomplete="off" aria-describedby="catIconPalette" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group full-width">
+                <div id="catIconPalette" class="icon-palette" role="group" aria-label="Iconos relacionados" hidden></div>
               </div>
             </div>
 
@@ -1978,8 +1983,9 @@ const h = headerConfig[initialSection] || headerConfig.products;
       </label>
       <label class="admin-modal-field">
         <span>Icono (emoji)</span>
-        <input type="text" id="createSubcatIcon" name="icon" placeholder="Ej: 💾" maxlength="8" />
+        <input type="text" id="createSubcatIcon" name="icon" placeholder="Ej: 💾 o escribe «disco»" maxlength="40" autocomplete="off" />
       </label>
+      <div id="createSubcatIconPalette" class="icon-palette" role="group" aria-label="Iconos relacionados" hidden></div>
       <label class="admin-modal-field">
         <span>Palabras clave (separadas por comas)</span>
         <input type="text" id="createSubcatKeywords" name="keywords" placeholder="Ej: ssd, disco solido, nvme" />
@@ -7931,6 +7937,93 @@ function renderTableRows(products, resetPage = true) {
     const catIcon = document.getElementById('catIcon');
     const catKeywords = document.getElementById('catKeywords');
     const catParent = document.getElementById('catParent');
+
+    // ── Biblioteca de iconos + palabras clave automáticas ──────────────────────
+    // Al escribir una palabra en «Icono» (o, si está vacío, el nombre) se proponen emojis relacionados (/api/admin/icon-library)
+    // y se rellenan las palabras clave con términos relacionados, salvo que ya haya otras escritas a mano.
+    function wireIconLibrary(nameEl, iconEl, kwEl, paletteEl) {
+      if (!iconEl || !kwEl || !paletteEl) return;
+      let timer = 0;
+      let seq = 0;
+      let lastWord = '';
+      const hasLetters = (v) => /[A-Za-zÀ-ÿ0-9]/.test(v);
+      const kwFree = () => !kwEl.value.trim() || (kwEl.dataset.auto === '1' && kwEl.value === kwEl.dataset.autoValue);
+      const setKw = (list) => {
+        if (!Array.isArray(list) || !list.length || !kwFree()) return;
+        const value = list.join(', ');
+        kwEl.value = value;
+        kwEl.dataset.auto = '1';
+        kwEl.dataset.autoValue = value;
+      };
+      const hide = () => { paletteEl.hidden = true; paletteEl.textContent = ''; };
+      const ask = async (word, emoji) => {
+        const mine = ++seq;
+        try {
+          const res = await fetch('/api/admin/icon-library?q=' + encodeURIComponent(word) + (emoji ? '&emoji=' + encodeURIComponent(emoji) : ''), { credentials: 'same-origin', cache: 'no-store' });
+          const data = await res.json();
+          return mine === seq && data && data.success ? data : null;
+        } catch (_) { return null; }
+      };
+      const render = (icons) => {
+        paletteEl.textContent = '';
+        if (!icons.length) { hide(); return; }
+        const title = document.createElement('span');
+        title.className = 'icon-palette-title';
+        title.textContent = 'Iconos relacionados:';
+        paletteEl.appendChild(title);
+        icons.forEach((icon) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'icon-opt';
+          btn.textContent = icon.emoji;
+          btn.title = icon.label;
+          btn.setAttribute('aria-label', 'Usar el icono ' + icon.label);
+          btn.addEventListener('click', async () => {
+            iconEl.value = icon.emoji;
+            hide();
+            const data = await ask(lastWord, icon.emoji);
+            if (data) setKw(data.keywords);
+            iconEl.focus();
+          });
+          paletteEl.appendChild(btn);
+        });
+        paletteEl.hidden = false;
+      };
+      const run = (word, showPalette, emoji) => {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(async () => {
+          if (!hasLetters(word)) { if (showPalette) hide(); return; }
+          lastWord = word;
+          const data = await ask(word, emoji);
+          if (!data) return;
+          if (showPalette) render(data.icons || []);
+          setKw(data.keywords);
+        }, 250);
+      };
+      iconEl.addEventListener('input', () => {
+        const v = iconEl.value.trim();
+        if (hasLetters(v)) run(v, true); else { hide(); }
+      });
+      iconEl.addEventListener('focus', () => {
+        const v = iconEl.value.trim();
+        if (!v && nameEl && nameEl.value.trim()) run(nameEl.value.trim(), true);
+      });
+      if (nameEl) {
+        nameEl.addEventListener('input', () => {
+          const icon = iconEl.value.trim();
+          if (hasLetters(icon)) return; // manda la palabra escrita en el campo Icono
+          run(nameEl.value.trim(), !icon, icon || undefined);
+        });
+      }
+      kwEl.addEventListener('input', () => { kwEl.dataset.auto = ''; });
+    }
+    wireIconLibrary(catName, catIcon, catKeywords, document.getElementById('catIconPalette'));
+    wireIconLibrary(
+      document.getElementById('createSubcatName'),
+      document.getElementById('createSubcatIcon'),
+      document.getElementById('createSubcatKeywords'),
+      document.getElementById('createSubcatIconPalette'),
+    );
     const btnSaveCategory = document.getElementById('btnSaveCategory');
     const btnSaveCategoryLabel = document.getElementById('btnSaveCategoryLabel');
     const btnCancelCategory = document.getElementById('btnCancelCategory');
@@ -8108,7 +8201,8 @@ function renderTableRows(products, resetPage = true) {
       const buildRow = (category, isSub, parentName) => {
         const keywords = (category.keywords || []).slice(0, 5);
         const productCount = category.productCount ?? 0;
-        const icon = escapeHtml(category.icon || '📦');
+        // Las subcategorías no muestran icono de carpeta ni icono por defecto.
+        const icon = escapeHtml(category.icon || (isSub ? '' : '📦'));
         const name = escapeHtml(category.name);
         const slug = escapeHtml(category.slug);
 
@@ -8240,7 +8334,7 @@ function renderTableRows(products, resetPage = true) {
       }
       const payload = {
         name,
-        icon: catIcon ? catIcon.value.trim() : '',
+        icon: catIcon && !/[A-Za-zÀ-ÿ0-9]/.test(catIcon.value) ? catIcon.value.trim() : '',
         keywords: catKeywords
           ? catKeywords.value.split(',').map((k) => k.trim()).filter(Boolean)
           : [],
@@ -8790,7 +8884,8 @@ function renderTableRows(products, resetPage = true) {
         return;
       }
       const name = String(document.getElementById('createSubcatName')?.value || '').trim();
-      const icon = String(document.getElementById('createSubcatIcon')?.value || '').trim();
+      const iconRaw = String(document.getElementById('createSubcatIcon')?.value || '').trim();
+      const icon = /[A-Za-zÀ-ÿ0-9]/.test(iconRaw) ? '' : iconRaw; // una palabra no es un icono
       const keywords = String(document.getElementById('createSubcatKeywords')?.value || '').trim();
       if (!name) {
         if (status) { status.hidden = false; status.className = 'admin-modal-status is-error'; status.textContent = 'El nombre es obligatorio.'; }
@@ -12896,6 +12991,12 @@ function renderTableRows(products, resetPage = true) {
 
   /* Celdas */
   .cat-icon-cell { width: 40px; text-align: center; font-size: 1.1rem; }
+  .icon-palette { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; padding: 0.5rem 0.6rem; margin: 0.25rem 0 0.5rem; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); }
+  .icon-palette[hidden] { display: none; }
+  .icon-palette-title { font-size: 0.78rem; color: var(--color-text-muted); margin-right: 0.25rem; }
+  .icon-opt { width: 44px; height: 44px; font-size: 1.4rem; line-height: 1; cursor: pointer; background: #0b1220; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 10px; }
+  .icon-opt:hover { border-color: #60a5fa; background: rgba(59, 130, 246, 0.15); }
+  .icon-opt:focus-visible { outline: 2px solid #22d3ee; outline-offset: 2px; }
   .cat-name-cell { min-width: 200px; }
   .cat-name-wrap { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
   .cat-name-main { display: flex; align-items: center; gap: 0.4rem; color: var(--color-text-main); font-family: var(--font-heading); font-size: 0.82rem; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

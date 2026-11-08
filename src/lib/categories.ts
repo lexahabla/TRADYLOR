@@ -263,6 +263,18 @@ function categoriesFileKey(): string {
   }
 }
 
+/** Iconos de «carpeta»: no se muestran en ninguna representación de una SUBCATEGORÍA. */
+const FOLDER_ICONS = new Set(['📂', '📁', '🗂️', '🗂', '🗃️', '🗃']);
+export const isFolderIcon = (icon: unknown): boolean => FOLDER_ICONS.has(String(icon ?? '').trim());
+/** El campo «Icono» guarda un emoji: si llega una palabra (letras o cifras) no es un icono y se descarta. */
+const iconOnly = (value: unknown): string => {
+  const text = String(value ?? '').trim().slice(0, 16);
+  return /[\p{L}\p{N}]/u.test(text) ? '' : text;
+};
+/** Una subcategoría nunca lleva el icono de carpeta (los guardados antes de esta regla se limpian al leer y al escribir). */
+const withoutFolderIcon = (category: Category): Category =>
+  category.parentId && isFolderIcon(category.icon) ? { ...category, icon: '' } : category;
+
 const cloneCategories = (list: Category[]): Category[] =>
   list.map((category) => ({ ...category, keywords: Array.isArray(category.keywords) ? [...category.keywords] : category.keywords }));
 
@@ -273,7 +285,7 @@ export function invalidateCategoriesCache(): void {
 export function getCategories(): Category[] {
   const key = categoriesFileKey();
   if (categoriesCache && categoriesCache.key === key) return cloneCategories(categoriesCache.list);
-  const list = ensureCategoriesFile(); // puede (re)escribir el fichero: la clave se calcula después
+  const list = ensureCategoriesFile().map(withoutFolderIcon); // puede (re)escribir el fichero: la clave se calcula después
   categoriesCache = { key: categoriesFileKey(), list: cloneCategories(list) };
   return list;
 }
@@ -405,7 +417,8 @@ export function createCategory(input: CategoryInput): CategoryResult {
     id: slug,
     name,
     slug,
-    icon: String(input.icon ?? '').trim() || (parentId ? '📂' : '📦'),
+    // Las subcategorías no llevan icono por defecto (nunca la carpeta); las raíces conservan 📦.
+    icon: parentId && isFolderIcon(input.icon) ? '' : iconOnly(input.icon) || (parentId ? '' : '📦'),
     keywords: (input.keywords ?? []).map((k) => String(k).trim().toLowerCase()).filter(Boolean),
     parentId,
   };
@@ -467,7 +480,7 @@ export function updateCategory(slug: string, input: CategoryInput): CategoryResu
     id: newSlug,
     name,
     slug: newSlug,
-    icon: String(input.icon ?? '').trim() || previous.icon,
+    icon: parentId && (isFolderIcon(input.icon) || (!iconOnly(input.icon) && isFolderIcon(previous.icon))) ? '' : iconOnly(input.icon) || previous.icon,
     keywords: (input.keywords ?? previous.keywords).map((k) => String(k).trim().toLowerCase()).filter(Boolean),
     parentId,
   };

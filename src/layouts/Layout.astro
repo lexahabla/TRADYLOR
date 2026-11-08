@@ -93,7 +93,7 @@ const headerCategoryPanelHtml = `
           </a>
           ${subs.length ? `
             <div class="cat-subs">
-              ${subs.map((sub) => `<a href="/?category=${sub.slug}#catalogo" class="cat-sub"><span class="cat-sub-icon">${sub.icon}</span><span>${sub.name}</span></a>`).join('')}
+              ${subs.map((sub) => `<a href="/?category=${sub.slug}#catalogo" class="cat-sub">${sub.icon ? `<span class="cat-sub-icon">${sub.icon}</span>` : ''}<span>${sub.name}</span></a>`).join('')}
             </div>
           ` : ''}
         </div>
