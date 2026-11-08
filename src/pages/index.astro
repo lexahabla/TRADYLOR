@@ -41,6 +41,8 @@ const queryParam = listingParams.q;
 const queryTerm = queryParam.toLowerCase();
 const filtersActive = hasActiveFilters(listingParams);
 const listingMode = Boolean(queryParam) || filtersActive;
+// El panel de filtros sólo aparece al buscar (buscador de la cabecera) o al elegir una categoría; con filtros ya en la URL también, para no ocultarlos.
+const showFilters = Boolean(queryParam) || listingParams.category.length > 0 || filtersActive;
 const visibleProducts = listing.filtered;
 
 // ─── Ordenación del catálogo público ─────────────────────────────────────────
@@ -176,8 +178,8 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
         </div>
       </div>
 
-      <div class="catalog-layout">
-      <CatalogFilters
+      <div class:list={['catalog-layout', { 'has-filters': showFilters }]}>
+      {showFilters && <CatalogFilters
         groups={listing.groups}
         price={listing.price}
         deals={listing.deals}
@@ -186,7 +188,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
         activeCount={listing.chips.length}
         clearHref={clearHref}
         rangeHrefs={rangeHrefs}
-      />
+      />}
       <div class="catalog-main">
       <!-- Selector de ordenación del catálogo (alineado a la derecha). Incluye
            también, en el mismo select, los perfiles de comprador del
@@ -1012,7 +1014,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   }
 
   /* ============ LISTADO CON FILTROS (panel lateral + resultados) ============ */
-  .catalog-layout {
+  .catalog-layout.has-filters {
     display: grid;
     grid-template-columns: 280px minmax(0, 1fr);
     gap: 1.75rem;
@@ -1020,7 +1022,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   }
   .catalog-main { min-width: 0; }
   .catalog-main .catalog-sort-bar { margin: 0 0 1rem auto; }
-  .catalog-main .products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
+  .catalog-layout.has-filters .catalog-main .products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
   .catalog-count { margin: 0 0 1rem; color: var(--color-text-muted); font-size: 0.9rem; }
   .catalog-count strong { color: var(--color-text-main); }
   .cf-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0 0 1rem; }
@@ -1037,15 +1039,15 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   .empty-hint { margin: 0 0 0.25rem; font-size: 0.95rem; }
 
   @media (max-width: 1100px) {
-    .catalog-main .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .catalog-layout.has-filters .catalog-main .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 960px) {
-    .catalog-layout { display: block; }
+    .catalog-layout.has-filters { display: block; }
     .catalog-main .catalog-sort-bar { margin: 0.75rem 0 1rem auto; }
-    .catalog-main .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .catalog-layout.has-filters .catalog-main .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 767px) {
-    .catalog-main .products-grid { grid-template-columns: 1fr; }
+    .catalog-layout.has-filters .catalog-main .products-grid { grid-template-columns: 1fr; }
   }
 
   .catalog-header-bar .section-header {

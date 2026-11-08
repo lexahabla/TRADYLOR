@@ -201,12 +201,9 @@ const hasAnything = Boolean(visibleCategory || visibleBrand || attrGroups.length
   .cf-backdrop[hidden] { display: none; }
 
   .cf-panel {
-    position: sticky;
-    top: calc(var(--header-h, 72px) + 16px);
+    /* Escritorio: NO fijo. La columna se desplaza con la página (sin barra de scroll propia). */
+    position: static;
     align-self: start;
-    max-height: calc(100vh - var(--header-h, 72px) - 32px);
-    overflow-y: auto;
-    overscroll-behavior: contain;
     background: linear-gradient(180deg, rgba(17, 24, 39, 0.92) 0%, rgba(11, 18, 32, 0.92) 100%);
     border: 1px solid rgba(96, 165, 250, 0.22);
     border-radius: var(--border-radius-md);
@@ -235,7 +232,7 @@ const hasAnything = Boolean(visibleCategory || visibleBrand || attrGroups.length
     background: #0b1220; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: var(--border-radius-sm);
     color: var(--color-text-main); font: inherit; font-size: 0.85rem;
   }
-  .cf-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .cf-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
   .cf-list li[hidden] { display: none; }
   .cf-check { display: flex; align-items: center; gap: 0.6rem; min-height: 44px; padding: 0 0.15rem; cursor: pointer; font-size: 0.9rem; }
   .cf-check input { width: 18px; height: 18px; accent-color: var(--color-primary); flex: none; cursor: pointer; }
@@ -317,7 +314,7 @@ const hasAnything = Boolean(visibleCategory || visibleBrand || attrGroups.length
     }
     .cf-panel {
       /* align-self: normal: con «start» un panel fijo no se estira entre top y bottom (alto = contenido) y el botón de aplicar queda fuera de pantalla. */
-      position: fixed; z-index: 10001; top: 0; bottom: 0; left: 0; align-self: normal; width: min(92vw, 380px); max-height: none; background: #0b1220;
+      position: fixed; z-index: 10001; top: 0; bottom: 0; left: 0; align-self: normal; width: min(92vw, 380px); max-height: none; overflow-y: auto; overscroll-behavior: contain; background: #0b1220;
       border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
       transform: translateX(-102%); transition: transform 0.25s ease; padding-bottom: 0;
     }

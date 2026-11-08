@@ -276,6 +276,15 @@ test('portada: filtros en la URL, diversidad desactivada con filtros, sin módul
   assert.ok(index.includes("history.scrollRestoration = 'manual'") && index.includes('back_forward'));
 });
 
+test('el panel sólo aparece con búsqueda o categoría y en escritorio no es fijo (se desplaza con la página)', () => {
+  const index = read('src/pages/index.astro');
+  assert.ok(index.includes('const showFilters = Boolean(queryParam) || listingParams.category.length > 0 || filtersActive;'));
+  assert.ok(index.includes('{showFilters && <CatalogFilters'));
+  const panel = read('src/components/CatalogFilters.astro');
+  const base = panel.slice(panel.indexOf('.cf-panel {'), panel.indexOf('.cf-head {'));
+  assert.ok(base.includes('position: static') && !base.includes('sticky') && !base.includes('overflow-y'), 'sin sticky ni scroll propio en escritorio');
+});
+
 test('panel: drawer modal accesible en móvil con retorno del foco al botón «Filtrar», acordeones, buscadores internos y doble tirador', () => {
   const panel = read('src/components/CatalogFilters.astro');
   assert.ok(panel.includes("aria-haspopup=\"dialog\"") && panel.includes("setAttribute('aria-modal', 'true')"));
@@ -283,7 +292,7 @@ test('panel: drawer modal accesible en móvil con retorno del foco al botón «F
   assert.ok(panel.includes("event.key === 'Escape'") && panel.includes("event.key === 'Tab'"), 'Esc cierra y el foco queda atrapado');
   assert.ok(panel.includes('SEARCH_THRESHOLD = 8') && panel.includes('data-cf-search'));
   assert.ok(panel.includes('cf-range-min') && panel.includes('cf-range-max') && panel.includes('＞'));
-  assert.ok(panel.includes('max-height: 220px') && panel.includes('overflow-y: auto'), 'listas con scroll interno');
+  assert.ok(panel.includes('max-height: 320px') && panel.includes('overflow-y: auto'), 'listas con scroll interno');
   assert.ok(panel.includes('Gangas') && panel.includes('20 %'));
   assert.ok(panel.includes('min-height: 44px'), 'objetivos táctiles de 44 px');
   assert.ok(panel.includes('inert'), 'panel cerrado fuera del orden de tabulación');
