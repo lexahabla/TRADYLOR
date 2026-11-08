@@ -2,6 +2,7 @@ import { dataFile } from './paths';
 import { readJsonArrayFile, writeJsonArrayFile } from './jsonStore';
 import { sameSourceId } from './offerIdentity';
 import { mergeReimport } from './reimportMerge';
+import { withResolvedBrand } from './brandResolve';
 
 // Interfaz del producto (compartida por el panel admin y los endpoints de alta)
 export interface Product {
@@ -149,7 +150,9 @@ export function readProductsFromFile(): Product[] {
  * fichero bueno sigue intacto.
  */
 export function writeProductsToFile(products: Product[]): boolean {
-  return writeJsonArrayFile(DATA_FILE_PATH, products);
+  // Punto único de escritura del catálogo: TODA vía de ingesta (JSON, API v1, conectores, alta manual) pasa por aquí, así que la marca
+  // real del fabricante se valida una sola vez (una tienda como «AliExpress» no es marca; se busca en las especificaciones).
+  return writeJsonArrayFile(DATA_FILE_PATH, products.map((p) => withResolvedBrand(p as any) as Product));
 }
 
 /**

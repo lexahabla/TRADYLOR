@@ -1,0 +1,552 @@
+---
+/**
+ * Panel de filtros del catálogo público.
+ *  - Escritorio: columna lateral izquierda fija (sticky) dentro de la rejilla del listado.
+ *  - Móvil (≤ 960 px): botón «Filtrar» que abre el MISMO panel como diálogo modal accesible
+ *    (foco atrapado, Esc cierra, el foco vuelve al botón al cerrar).
+ *  - Todo el estado vive en la URL (?q&category&brand&min&max&deal&f_*&sort): aplicar un filtro es una
+ *    navegación GET normal, así que Atrás, recarga y enlaces directos funcionan sin lógica extra.
+ *  - Sólo se pintan opciones con datos reales; los recuentos son de productos únicos (nunca inventados).
+ */
+import type { FacetGroup } from '../lib/catalogFacets';
+import type { ListingParams, PriceRange } from '../lib/catalogListing';
+
+interface Props {
+  groups: FacetGroup[];
+  price: { min: number; max: number; ranges: PriceRange[] } | null;
+  deals: number;
+  params: ListingParams;
+  total: number;
+  activeCount: number;
+  clearHref: string;
+  /** Enlaces ya construidos de cada tramo de precio (misma posición que `price.ranges`). */
+  rangeHrefs: string[];
+}
+
+const { groups, price, deals, params, total, activeCount, clearHref, rangeHrefs } = Astro.props;
+
+const SEARCH_THRESHOLD = 8;
+const categoryGroup = groups.find((g) => g.key === 'category');
+const brandGroup = groups.find((g) => g.key === 'brand');
+const attrGroups = groups.filter((g) => g.key !== 'category' && g.key !== 'brand' && g.options.length > 0);
+const visibleCategory = categoryGroup && categoryGroup.options.length > 0 ? categoryGroup : null;
+const visibleBrand = brandGroup && brandGroup.options.length > 0 ? brandGroup : null;
+const fmt = (n: number) => n.toLocaleString('es-ES');
+const nameFor = (key: string) => (key === 'category' ? 'category' : key === 'brand' ? 'brand' : `f_${key}`);
+const hasAnything = Boolean(visibleCategory || visibleBrand || attrGroups.length || price || deals > 0 || params.deal);
+---
+
+<div class="cf-toolbar">
+  <button
+    type="button"
+    class="cf-open"
+    id="cfOpen"
+    aria-haspopup="dialog"
+    aria-controls="cfPanel"
+    aria-expanded="false"
+    data-cf-open
+  >
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+      <line x1="4" y1="6" x2="20" y2="6"></line><line x1="7" y1="12" x2="17" y2="12"></line><line x1="10" y1="18" x2="14" y2="18"></line>
+    </svg>
+    <span>Filtrar</span>
+    {activeCount > 0 && <span class="cf-open-badge" aria-label={`${activeCount} filtros activos`}>{activeCount}</span>}
+  </button>
+</div>
+
+<div class="cf-backdrop" id="cfBackdrop" data-cf-backdrop hidden></div>
+
+<aside id="cfPanel" class="cf-panel" aria-label="Filtros del catálogo" data-cf-panel>
+  <form id="cfForm" class="cf-form" method="get" action="/#catalogo" data-cf-form data-total={total}>
+    {params.q && <input type="hidden" name="q" value={params.q} />}
+    {params.sort && <input type="hidden" name="sort" value={params.sort} />}
+
+    <div class="cf-head">
+      <h2 class="cf-title" id="cfTitle">Filtros</h2>
+      <button type="button" class="cf-close" id="cfClose" aria-label="Cerrar filtros" data-cf-close>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"></line><line x1="18" y1="6" x2="6" y2="18"></line></svg>
+      </button>
+    </div>
+
+    {!hasAnything && <p class="cf-empty">No hay filtros disponibles para estos productos: faltan datos fiables.</p>}
+
+    {[visibleCategory, visibleBrand].map((group) =>
+      group && (
+        <section class="cf-group" data-cf-group>
+          <h3 class="cf-group-title">
+            <button type="button" class="cf-toggle" aria-expanded="true" aria-controls={`cf-body-${group.key}`} data-cf-toggle>
+              <span>{group.label}</span>
+              <svg class="cf-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"></polyline></svg>
+            </button>
+          </h3>
+          <div class="cf-body" id={`cf-body-${group.key}`}>
+            {group.options.length > SEARCH_THRESHOLD && (
+              <div class="cf-search">
+                <input type="search" placeholder={`Buscar ${group.label}...`} aria-label={`Buscar en ${group.label}`} data-cf-search autocomplete="off" />
+              </div>
+            )}
+            <ul class="cf-list" data-cf-list>
+              {group.options.map((o) => (
+                <li data-cf-label={String(o.label).toLowerCase()}>
+                  <label class="cf-check">
+                    <input type="checkbox" name={nameFor(group.key)} value={String(o.value)} checked={o.selected} data-cf-input />
+                    <span class="cf-check-label">{o.label}</span>
+                    <span class="cf-count">{fmt(o.count)}</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      )
+    )}
+
+    {price && (
+      <section class="cf-group" data-cf-group data-cf-price data-min={price.min} data-max={price.max}>
+        <h3 class="cf-group-title">
+          <button type="button" class="cf-toggle" aria-expanded="true" aria-controls="cf-body-price" data-cf-toggle>
+            <span>Precio</span>
+            <svg class="cf-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"></polyline></svg>
+          </button>
+        </h3>
+        <div class="cf-body" id="cf-body-price">
+          {price.max > price.min && (
+            <div class="cf-slider" role="group" aria-label="Rango de precio">
+              <div class="cf-slider-track"><div class="cf-slider-fill" data-cf-fill></div></div>
+              <input type="range" class="cf-range cf-range-min" min={price.min} max={price.max} step="1" value={params.min ?? price.min} aria-label="Precio mínimo" data-cf-range-min />
+              <input type="range" class="cf-range cf-range-max" min={price.min} max={price.max} step="1" value={params.max ?? price.max} aria-label="Precio máximo" data-cf-range-max />
+            </div>
+          )}
+          <div class="cf-price-row">
+            <label class="cf-price-field"><span class="cf-sr">Precio mínimo en euros</span>
+              <input type="number" inputmode="decimal" name="min" min="0" step="1" placeholder={`${price.min}`} value={params.min ?? ''} data-cf-min />
+              <span aria-hidden="true">€</span>
+            </label>
+            <span class="cf-price-dash" aria-hidden="true">·</span>
+            <label class="cf-price-field"><span class="cf-sr">Precio máximo en euros</span>
+              <input type="number" inputmode="decimal" name="max" min="0" step="1" placeholder={`${price.max}`} value={params.max ?? ''} data-cf-max />
+              <span aria-hidden="true">€</span>
+            </label>
+            <button type="submit" class="cf-go" aria-label="Aplicar rango de precio">＞</button>
+          </div>
+          {price.ranges.length > 0 && (
+            <ul class="cf-ranges">
+              {price.ranges.map((r, i) => (
+                <li>
+                  <a class="cf-range-link" href={rangeHrefs[i]} aria-label={`Precio ${r.label}: ${r.count} productos`}>
+                    <span>{r.label}</span><span class="cf-count">{fmt(r.count)}</span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+    )}
+
+    {(deals > 0 || params.deal) && (
+      <section class="cf-group cf-group-deal">
+        <label class="cf-check cf-check-deal">
+          <input type="checkbox" name="deal" value="1" checked={params.deal} data-cf-input />
+          <span class="cf-check-label">Gangas</span>
+          <span class="cf-deal-badge" aria-hidden="true">%</span>
+          <span class="cf-count">{fmt(deals)}</span>
+        </label>
+        <p class="cf-note">Descuento mínimo del 20 % con precio anterior verificado.</p>
+      </section>
+    )}
+
+    {attrGroups.map((group) => (
+      <section class="cf-group" data-cf-group>
+        <h3 class="cf-group-title">
+          <button type="button" class="cf-toggle" aria-expanded="true" aria-controls={`cf-body-${group.key}`} data-cf-toggle>
+            <span>{group.label}</span>
+            <svg class="cf-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" aria-hidden="true"><polyline points="6 15 12 9 18 15"></polyline></svg>
+          </button>
+        </h3>
+        <div class="cf-body" id={`cf-body-${group.key}`}>
+          {group.options.length > SEARCH_THRESHOLD && (
+            <div class="cf-search">
+              <input type="search" placeholder={`Buscar ${group.label}...`} aria-label={`Buscar en ${group.label}`} data-cf-search autocomplete="off" />
+            </div>
+          )}
+          <ul class="cf-list" data-cf-list>
+            {group.options.map((o) => (
+              <li data-cf-label={String(o.label).toLowerCase()}>
+                <label class="cf-check">
+                  <input type="checkbox" name={nameFor(group.key)} value={String(o.value)} checked={o.selected} data-cf-input />
+                  <span class="cf-check-label">{o.label}</span>
+                  <span class="cf-count">{fmt(o.count)}</span>
+                </label>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+    ))}
+
+    <div class="cf-footer">
+      <button type="submit" class="cf-apply" data-cf-apply>
+        <span data-cf-apply-label>Ver {fmt(total)} {total === 1 ? 'producto' : 'productos'}</span>
+      </button>
+      {activeCount > 0 && <a class="cf-clear" href={clearHref}>Limpiar filtros</a>}
+    </div>
+    <p class="cf-sr" role="status" aria-live="polite" data-cf-status></p>
+  </form>
+</aside>
+
+<style>
+  .cf-toolbar { display: none; }
+  .cf-backdrop { position: fixed; inset: 0; background: rgba(2, 6, 23, 0.7); z-index: 10000; }
+  .cf-backdrop[hidden] { display: none; }
+
+  .cf-panel {
+    position: sticky;
+    top: calc(var(--header-h, 72px) + 16px);
+    align-self: start;
+    max-height: calc(100vh - var(--header-h, 72px) - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: linear-gradient(180deg, rgba(17, 24, 39, 0.92) 0%, rgba(11, 18, 32, 0.92) 100%);
+    border: 1px solid rgba(96, 165, 250, 0.22);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    padding: 0.25rem 1rem 1rem;
+    color: var(--color-text-main);
+  }
+  .cf-head { display: flex; align-items: center; justify-content: space-between; padding: 0.75rem 0 0.5rem; }
+  .cf-title { font-family: var(--font-heading); font-size: 1.05rem; margin: 0; }
+  .cf-close { display: none; }
+  .cf-empty { color: var(--color-text-muted); font-size: 0.85rem; margin: 0.5rem 0; }
+
+  .cf-group { border-top: 1px solid rgba(148, 163, 184, 0.16); padding: 0.35rem 0 0.6rem; }
+  .cf-group-title { margin: 0; font-size: 0.92rem; }
+  .cf-toggle {
+    display: flex; align-items: center; justify-content: space-between; width: 100%;
+    min-height: 44px; padding: 0 0.1rem; background: none; border: 0; cursor: pointer;
+    color: var(--color-text-main); font: inherit; font-weight: 700; text-align: left;
+  }
+  .cf-toggle[aria-expanded='false'] .cf-chevron { transform: rotate(180deg); }
+  .cf-chevron { transition: transform 0.2s ease; color: var(--color-text-muted); }
+  .cf-body[hidden] { display: none; }
+
+  .cf-search input {
+    width: 100%; box-sizing: border-box; padding: 0.5rem 0.65rem; margin-bottom: 0.4rem;
+    background: #0b1220; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: var(--border-radius-sm);
+    color: var(--color-text-main); font: inherit; font-size: 0.85rem;
+  }
+  .cf-list { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+  .cf-list li[hidden] { display: none; }
+  .cf-check { display: flex; align-items: center; gap: 0.6rem; min-height: 44px; padding: 0 0.15rem; cursor: pointer; font-size: 0.9rem; }
+  .cf-check input { width: 18px; height: 18px; accent-color: var(--color-primary); flex: none; cursor: pointer; }
+  .cf-check-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .cf-count { font-size: 0.75rem; color: var(--color-text-dim); font-variant-numeric: tabular-nums; }
+  .cf-note { margin: 0 0 0.3rem 2rem; font-size: 0.74rem; color: var(--color-text-dim); }
+
+  .cf-deal-badge {
+    display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 6px;
+    background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; font-weight: 800; font-size: 0.8rem;
+  }
+
+  .cf-slider { position: relative; height: 28px; margin: 0.35rem 0.4rem 0.2rem; }
+  .cf-slider-track { position: absolute; left: 0; right: 0; top: 12px; height: 4px; background: rgba(148, 163, 184, 0.28); border-radius: 4px; }
+  .cf-slider-fill { position: absolute; top: 0; bottom: 0; background: linear-gradient(90deg, #3b82f6, #22d3ee); border-radius: 4px; }
+  .cf-range {
+    position: absolute; left: 0; width: 100%; top: 0; height: 28px; margin: 0; background: none;
+    pointer-events: none; -webkit-appearance: none; appearance: none;
+  }
+  .cf-range::-webkit-slider-thumb {
+    -webkit-appearance: none; pointer-events: auto; width: 22px; height: 22px; border-radius: 50%;
+    background: #0b1220; border: 2px solid #60a5fa; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); cursor: grab;
+  }
+  .cf-range::-moz-range-thumb {
+    pointer-events: auto; width: 18px; height: 18px; border-radius: 50%; background: #0b1220; border: 2px solid #60a5fa; cursor: grab;
+  }
+  .cf-range:focus-visible::-webkit-slider-thumb { outline: 2px solid #22d3ee; outline-offset: 2px; }
+  .cf-range:focus-visible::-moz-range-thumb { outline: 2px solid #22d3ee; outline-offset: 2px; }
+
+  .cf-price-row { display: flex; align-items: center; gap: 0.4rem; margin: 0.5rem 0 0.4rem; }
+  .cf-price-field {
+    display: flex; align-items: center; gap: 0.25rem; flex: 1; min-width: 0; padding: 0 0.5rem; height: 44px;
+    background: #0b1220; border: 1px solid rgba(148, 163, 184, 0.3); border-radius: var(--border-radius-sm); color: var(--color-text-muted);
+  }
+  .cf-price-field input { width: 100%; min-width: 0; background: none; border: 0; color: var(--color-text-main); font: inherit; font-size: 0.88rem; outline: none; -moz-appearance: textfield; }
+  .cf-price-field input::-webkit-outer-spin-button, .cf-price-field input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+  .cf-price-field:focus-within { border-color: #60a5fa; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+  .cf-price-dash { color: var(--color-text-dim); }
+  .cf-go {
+    flex: none; width: 44px; height: 44px; border-radius: var(--border-radius-sm); border: 0; cursor: pointer;
+    background: var(--gradient-primary, linear-gradient(135deg, #3b82f6, #60a5fa)); color: #fff; font-size: 1.1rem; font-weight: 800;
+  }
+  .cf-ranges { list-style: none; margin: 0.2rem 0 0; padding: 0; }
+  .cf-range-link {
+    display: flex; align-items: center; justify-content: space-between; min-height: 44px; padding: 0 0.15rem;
+    color: var(--color-text-main); text-decoration: none; font-size: 0.9rem; border-radius: 6px;
+  }
+  .cf-range-link:hover { background: rgba(59, 130, 246, 0.1); }
+
+  .cf-footer { display: flex; flex-direction: column; gap: 0.5rem; padding-top: 0.75rem; border-top: 1px solid rgba(148, 163, 184, 0.16); }
+  .cf-apply {
+    min-height: 44px; border: 0; border-radius: var(--border-radius-sm); cursor: pointer; font: inherit; font-weight: 800; color: #fff;
+    background: linear-gradient(135deg, #3b82f6, #22d3ee);
+  }
+  .cf-clear { text-align: center; padding: 0.55rem; color: #60a5fa; font-weight: 600; font-size: 0.88rem; }
+
+  .cf-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  .cf-panel :is(button, a, input, summary):focus-visible, .cf-open:focus-visible {
+    outline: 2px solid #22d3ee; outline-offset: 2px;
+  }
+
+  /* Escritorio: el apply sólo hace falta en el drawer (los cambios se aplican solos). */
+  @media (min-width: 961px) {
+    .cf-footer .cf-apply { display: none; }
+  }
+
+  /* Móvil/tablet: botón «Filtrar» + panel como drawer modal. */
+  @media (max-width: 960px) {
+    .cf-toolbar { display: block; }
+    .cf-open {
+      display: inline-flex; align-items: center; gap: 0.5rem; min-height: 44px; padding: 0 1rem; cursor: pointer;
+      background: rgba(15, 23, 42, 0.85); color: var(--color-text-main); border: 1px solid rgba(96, 165, 250, 0.4);
+      border-radius: var(--border-radius-md); font: inherit; font-weight: 700;
+    }
+    .cf-open-badge {
+      min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center;
+      background: #3b82f6; color: #fff; font-size: 0.75rem;
+    }
+    .cf-panel {
+      /* align-self: normal: con «start» un panel fijo no se estira entre top y bottom (alto = contenido) y el botón de aplicar queda fuera de pantalla. */
+      position: fixed; z-index: 10001; top: 0; bottom: 0; left: 0; align-self: normal; width: min(92vw, 380px); max-height: none; background: #0b1220;
+      border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+      transform: translateX(-102%); transition: transform 0.25s ease; padding-bottom: 0;
+    }
+    .cf-panel[data-open='true'] { transform: translateX(0); }
+    .cf-close {
+      display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; background: none; cursor: pointer;
+      border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 50%; color: var(--color-text-main);
+    }
+    .cf-footer {
+      position: sticky; bottom: -1px; margin: 0.5rem -1rem -1rem; padding: 0.75rem 1rem 1rem;
+      background: #0b1220; border-top: 1px solid rgba(96, 165, 250, 0.22);
+    }
+    .cf-footer .cf-apply { display: block; }
+  }
+  @media (prefers-reduced-motion: reduce) { .cf-panel, .cf-chevron { transition: none; } }
+</style>
+
+<script>
+  /** Interacción del panel: acordeones, buscadores internos, doble tirador de precio, autoaplicado en escritorio y drawer móvil. */
+  const panel = document.querySelector<HTMLElement>('[data-cf-panel]');
+  const form = document.querySelector<HTMLFormElement>('[data-cf-form]');
+  const openBtn = document.querySelector<HTMLButtonElement>('[data-cf-open]');
+  const closeBtn = document.querySelector<HTMLButtonElement>('[data-cf-close]');
+  const backdrop = document.querySelector<HTMLElement>('[data-cf-backdrop]');
+  const mq = window.matchMedia('(max-width: 960px)');
+
+  if (panel && form) {
+    let isOpen = false;
+    let lastFocus: HTMLElement | null = null;
+
+    const focusables = (): HTMLElement[] =>
+      Array.from(panel.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"])')).filter(
+        (el) => el.offsetParent !== null,
+      );
+
+    // Móvil cerrado: el panel sale del orden de tabulación y del árbol de accesibilidad.
+    const syncMode = () => {
+      if (mq.matches) {
+        panel.setAttribute('role', 'dialog');
+        panel.setAttribute('aria-modal', 'true');
+        panel.setAttribute('aria-labelledby', 'cfTitle');
+        panel.removeAttribute('aria-label');
+        if (!isOpen) panel.setAttribute('inert', '');
+      } else {
+        panel.removeAttribute('role');
+        panel.removeAttribute('aria-modal');
+        panel.removeAttribute('aria-labelledby');
+        panel.setAttribute('aria-label', 'Filtros del catálogo');
+        panel.removeAttribute('inert');
+        panel.dataset.open = 'false';
+        if (backdrop) backdrop.hidden = true;
+        document.body.style.overflow = '';
+        isOpen = false;
+        openBtn?.setAttribute('aria-expanded', 'false');
+      }
+    };
+
+    const openPanel = () => {
+      if (!mq.matches) return;
+      isOpen = true;
+      lastFocus = (document.activeElement as HTMLElement) || openBtn;
+      panel.removeAttribute('inert');
+      panel.dataset.open = 'true';
+      if (backdrop) backdrop.hidden = false;
+      openBtn?.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
+      window.setTimeout(() => (closeBtn ?? focusables()[0])?.focus(), 30);
+    };
+
+    const closePanel = () => {
+      if (!isOpen) return;
+      isOpen = false;
+      panel.dataset.open = 'false';
+      if (backdrop) backdrop.hidden = true;
+      openBtn?.setAttribute('aria-expanded', 'false');
+      document.body.style.overflow = '';
+      panel.setAttribute('inert', '');
+      // El foco vuelve SIEMPRE al botón que abrió el panel.
+      (openBtn ?? lastFocus)?.focus();
+    };
+
+    openBtn?.addEventListener('click', openPanel);
+    closeBtn?.addEventListener('click', closePanel);
+    backdrop?.addEventListener('click', closePanel);
+    document.addEventListener('keydown', (event) => {
+      if (!isOpen) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closePanel();
+        return;
+      }
+      if (event.key === 'Tab') {
+        const items = focusables();
+        if (!items.length) return;
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    });
+    mq.addEventListener('change', syncMode);
+    syncMode();
+
+    // Acordeones.
+    panel.querySelectorAll<HTMLButtonElement>('[data-cf-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const expanded = btn.getAttribute('aria-expanded') === 'true';
+        btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+        const body = document.getElementById(btn.getAttribute('aria-controls') ?? '');
+        if (body) body.hidden = expanded;
+      });
+    });
+
+    // Buscadores internos de opciones.
+    panel.querySelectorAll<HTMLInputElement>('[data-cf-search]').forEach((input) => {
+      input.addEventListener('input', () => {
+        const term = input.value.trim().toLowerCase();
+        const list = input.closest('.cf-body')?.querySelector('[data-cf-list]');
+        list?.querySelectorAll<HTMLElement>('li').forEach((li) => {
+          li.hidden = term !== '' && !(li.dataset.cfLabel ?? '').includes(term);
+        });
+      });
+      // Intro dentro del buscador no debe enviar el formulario.
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') event.preventDefault();
+      });
+    });
+
+    // Doble tirador de precio sincronizado con los campos numéricos.
+    const priceSection = panel.querySelector<HTMLElement>('[data-cf-price]');
+    const minInput = panel.querySelector<HTMLInputElement>('[data-cf-min]');
+    const maxInput = panel.querySelector<HTMLInputElement>('[data-cf-max]');
+    const rMin = panel.querySelector<HTMLInputElement>('[data-cf-range-min]');
+    const rMax = panel.querySelector<HTMLInputElement>('[data-cf-range-max]');
+    const fill = panel.querySelector<HTMLElement>('[data-cf-fill]');
+    const bMin = Number(priceSection?.dataset.min ?? 0);
+    const bMax = Number(priceSection?.dataset.max ?? 0);
+    const paintFill = () => {
+      if (!rMin || !rMax || !fill || bMax <= bMin) return;
+      const a = ((Number(rMin.value) - bMin) / (bMax - bMin)) * 100;
+      const b = ((Number(rMax.value) - bMin) / (bMax - bMin)) * 100;
+      fill.style.left = `${Math.min(a, b)}%`;
+      fill.style.right = `${100 - Math.max(a, b)}%`;
+    };
+    paintFill();
+    const syncFromRange = () => {
+      if (!rMin || !rMax || !minInput || !maxInput) return;
+      let a = Number(rMin.value);
+      let b = Number(rMax.value);
+      if (a > b) [a, b] = [b, a];
+      minInput.value = a <= bMin ? '' : String(a);
+      maxInput.value = b >= bMax ? '' : String(b);
+      paintFill();
+    };
+    rMin?.addEventListener('input', syncFromRange);
+    rMax?.addEventListener('input', syncFromRange);
+    const syncFromInputs = () => {
+      if (!rMin || !rMax) return;
+      rMin.value = minInput?.value ? String(Math.max(bMin, Number(minInput.value))) : String(bMin);
+      rMax.value = maxInput?.value ? String(Math.min(bMax, Number(maxInput.value))) : String(bMax);
+      paintFill();
+    };
+    minInput?.addEventListener('input', syncFromInputs);
+    maxInput?.addEventListener('input', syncFromInputs);
+
+    // Cuenta en vivo (datos reales del servidor) para el botón «Ver N productos» del drawer.
+    const applyLabel = form.querySelector<HTMLElement>('[data-cf-apply-label]');
+    const status = form.querySelector<HTMLElement>('[data-cf-status]');
+    let countTimer: number | undefined;
+    let countSeq = 0;
+    const queryString = (): string => {
+      const data = new FormData(form);
+      const params = new URLSearchParams();
+      data.forEach((value, key) => {
+        const text = String(value).trim();
+        if (text !== '') params.append(key, text);
+      });
+      return params.toString();
+    };
+    const refreshCount = () => {
+      window.clearTimeout(countTimer);
+      countTimer = window.setTimeout(async () => {
+        const seq = ++countSeq;
+        try {
+          const res = await fetch(`/api/catalogo/facets?${queryString()}`, { headers: { Accept: 'application/json' } });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (seq !== countSeq || typeof data.total !== 'number') return;
+          const text = `Ver ${data.total.toLocaleString('es-ES')} ${data.total === 1 ? 'producto' : 'productos'}`;
+          if (applyLabel) applyLabel.textContent = text;
+          if (status) status.textContent = `${data.total} ${data.total === 1 ? 'producto coincide' : 'productos coinciden'} con estos filtros`;
+        } catch {
+          /* sin red: el botón conserva el último recuento conocido */
+        }
+      }, 250);
+    };
+
+    // Escritorio: cada cambio se aplica solo (navegación GET); móvil: se acumulan y se aplican con el botón.
+    let applyTimer: number | undefined;
+    const submitClean = () => {
+      // Los campos vacíos no viajan en la URL.
+      form.querySelectorAll<HTMLInputElement>('input[type="number"], input[type="search"]').forEach((el) => {
+        if (el.value.trim() === '') el.disabled = true;
+      });
+      panel.querySelectorAll<HTMLInputElement>('[data-cf-search]').forEach((el) => (el.disabled = true));
+      form.submit();
+    };
+    form.addEventListener('submit', (event) => {
+      event.preventDefault();
+      submitClean();
+    });
+    // Al volver con Atrás (bfcache) los campos que se desactivaron para enviar la URL limpia deben estar activos de nuevo.
+    window.addEventListener('pageshow', () => {
+      form.querySelectorAll<HTMLInputElement>('input:disabled').forEach((el) => (el.disabled = false));
+    });
+    form.addEventListener('change', (event) => {
+      const target = event.target as HTMLElement;
+      if (!target.matches('[data-cf-input], [data-cf-range-min], [data-cf-range-max], [data-cf-min], [data-cf-max]')) return;
+      if (mq.matches) {
+        refreshCount();
+        return;
+      }
+      window.clearTimeout(applyTimer);
+      applyTimer = window.setTimeout(submitClean, 450);
+    });
+  }
+</script>

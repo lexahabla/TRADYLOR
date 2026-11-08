@@ -108,7 +108,6 @@ export const GET: APIRoute = async ({ request }) => {
         const cat = normalize(
           getCategoryById(String(product.category ?? ''))?.name ?? String(product.category ?? ''),
         );
-        const desc = normalize(product.description ?? '');
 
         let score = 0;
         for (const term of terms) {
@@ -116,7 +115,7 @@ export const GET: APIRoute = async ({ request }) => {
           if (brand.includes(term)) score += 3;
           if (type.includes(term)) score += 3;
           if (cat.includes(term)) score += 2;
-          if (desc.includes(term)) score += 1;
+          // La descripción NO puntúa: sólo título, marca, tipo y categoría (igual que el listado del catálogo; evita el ruido de las descripciones).
         }
         if (title.startsWith(query)) score += 2;
         if (score > 0) scored.push({ product, score });

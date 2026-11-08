@@ -58,7 +58,7 @@ const ATTR_ALIASES: Record<string, string> = {
   conectividad: 'conectividad', 'tecnologia de conectividad': 'conectividad', connectivity: 'conectividad',
   resolucion: 'resolucion', resolution: 'resolucion',
   material: 'material',
-  'cancelacion de ruido': 'cancelacion-ruido', anc: 'cancelacion-ruido',
+  'cancelacion de ruido': 'cancelacion-ruido', anc: 'cancelacion-ruido', 'reduccion de ruido': 'cancelacion-ruido', 'reduccion activa de ruido': 'cancelacion-ruido',
   impermeable: 'impermeable', 'resistente al agua': 'impermeable',
 };
 
@@ -114,6 +114,15 @@ export function normalizeAttribute(name: string, rawValue: unknown, source: Attr
   return { key, type: 'text', value: folded, raw, source };
 }
 
+/**
+ * La conectividad declarada («Bluetooth 5.3», «Bluetooth, Wi-Fi»…) se reduce a la señal «bluetooth» cuando el texto la menciona;
+ * el resto de valores se conservan tal cual. No se deduce de ningún otro campo.
+ */
+function withBluetoothToken(attr: AttrValue | null): AttrValue | null {
+  if (!attr || attr.key !== 'conectividad' || attr.type !== 'text') return attr;
+  return /bluetooth/.test(String(attr.value)) ? { ...attr, value: 'bluetooth', raw: 'Bluetooth' } : attr;
+}
+
 /** Atributos estructurados de un producto (specs + estado + marca/modelo). */
 export function productAttributes(product: FacetProduct): AttrValue[] {
   const specSource = String((product.extra?.fieldSources as AnyRecord | undefined)?.specs ?? '');
@@ -125,7 +134,18 @@ export function productAttributes(product: FacetProduct): AttrValue[] {
     seen.add(value.key);
     out.push(value);
   };
-  for (const [name, value] of Object.entries((product.specs ?? {}) as AnyRecord)) push(normalizeAttribute(name, value, source));
+  for (const [name, value] of Object.entries((product.specs ?? {}) as AnyRecord)) push(withBluetoothToken(normalizeAttribute(name, value, source)));
+  // «Compatible Bluetooth: Sí» / «bluetooth_support: Yes» declarados en las especificaciones → conectividad Bluetooth (sólo si la ficha lo declara).
+  if (!seen.has('conectividad')) {
+    for (const [name, value] of Object.entries((product.specs ?? {}) as AnyRecord)) {
+      if (!/bluetooth/.test(fold(String(name)))) continue;
+      const declared = fold(String(value ?? ''));
+      if (TRUE_WORDS.has(declared) || declared === 'yes' || declared === 'si') {
+        push({ key: 'conectividad', type: 'text', value: 'bluetooth', raw: 'Bluetooth', source });
+        break;
+      }
+    }
+  }
   // Campos anidados de la red conservados en `extra` (MPN, GTIN, etc. no filtran).
   const extra = (product.extra ?? {}) as AnyRecord;
   push(normalizeAttribute('estado', product.condition ?? extra['Estado'], 'provider'));
@@ -202,11 +222,19 @@ export interface Selections {
   maxDeliveryDays?: number;
   onlyInStock?: boolean;
   currency?: string;
+  /** Categorías (raíz o subcategoría) del catálogo: O entre ellas. Requiere `FacetContext.categoryIdsOf`. */
+  category?: string[];
+  /** Sólo gangas: descuento mínimo con precio anterior VERIFICADO (ver `verifiedDealPct`). */
+  deal?: boolean;
 }
 
 export interface FacetContext {
   now?: Date;
   maxAgeHours?: number;
+  /** Resuelve las categorías (raíz y subcategoría) de una ficha; sin él no hay filtro de categoría. */
+  categoryIdsOf?: (product: FacetProduct) => string[];
+  /** Nombre visible de una categoría por id. */
+  categoryLabel?: (id: string) => string;
 }
 
 const hasCommercial = (s: Selections): boolean =>
@@ -225,13 +253,46 @@ export function offerMatches(offer: FacetOffer, s: Selections): boolean {
   return true;
 }
 
-type Facet = 'brand' | `attr:${string}` | 'commercial';
+/** Descuento mínimo (%) para considerar «ganga». */
+export const DEAL_MIN_PCT = 20;
+/** Vigencia (días) de una lectura que verifica un precio anterior. */
+export const DEAL_MAX_AGE_DAYS = 7;
+
+/**
+ * Porcentaje de descuento de una GANGA, o null si no lo es. Exige un precio anterior VERIFICADO: la última observación guardada
+ * (lectura real de la tienda, con fecha de verificación y vigente) trae un precio anterior superior al actual y coincide con el
+ * precio publicado. Un «precio de lista» declarado por el proveedor sin verificar NO cuenta.
+ */
+export function verifiedDealPct(product: FacetProduct, now: Date = new Date()): number | null {
+  const observations: AnyRecord[] = Array.isArray(product.extra?.observations) ? product.extra.observations : [];
+  const last = observations[observations.length - 1];
+  if (!last || !last.verifiedAt) return null;
+  const verified = Date.parse(String(last.verifiedAt));
+  if (!Number.isFinite(verified) || now.getTime() - verified > DEAL_MAX_AGE_DAYS * 86_400_000) return null;
+  const price = Number(product.price);
+  const previous = Number(last.originalPrice);
+  if (!(price > 0) || !(previous > price)) return null;
+  if (Math.abs(Number(last.price) - price) > 0.005) return null; // la lectura ya no corresponde al precio publicado
+  const pct = ((previous - price) / previous) * 100;
+  return pct >= DEAL_MIN_PCT ? Math.floor(pct) : null;
+}
+
+type Facet = 'brand' | `attr:${string}` | 'commercial' | 'category' | 'deal';
 
 function matchesFacet(product: FacetProduct, s: Selections, facet: Facet, ctx: FacetContext, attrs: AttrValue[]): boolean {
   if (facet === 'brand') {
     if (!s.brand?.length) return true;
     const key = normalizeBrand(product.brand).key;
     return key !== '' && s.brand.map((b) => normalizeBrand(b).key).includes(key);
+  }
+  if (facet === 'category') {
+    if (!s.category?.length) return true;
+    if (!ctx.categoryIdsOf) return true;
+    const own = ctx.categoryIdsOf(product);
+    return s.category.some((id) => own.includes(id));
+  }
+  if (facet === 'deal') {
+    return s.deal !== true || verifiedDealPct(product, ctx.now) !== null;
   }
   if (facet === 'commercial') {
     if (!hasCommercial(s) && !s.currency) return true;
@@ -246,7 +307,7 @@ function matchesFacet(product: FacetProduct, s: Selections, facet: Facet, ctx: F
 }
 
 function facetsOf(s: Selections): Facet[] {
-  return ['brand', 'commercial', ...Object.keys(s.attrs ?? {}).map((k) => `attr:${k}` as Facet)];
+  return ['brand', 'commercial', 'category', 'deal', ...Object.keys(s.attrs ?? {}).map((k) => `attr:${k}` as Facet)];
 }
 
 function passes(product: FacetProduct, s: Selections, ctx: FacetContext, skip?: Facet): boolean {
@@ -284,6 +345,8 @@ export const FACET_CONFIG: Record<string, string[]> = {
   moviles: ['ram', 'almacenamiento', 'pantalla', 'bateria'],
   tecnologia: ['almacenamiento', 'ram', 'pantalla', 'bateria', 'conectividad'],
   almacenamiento: ['almacenamiento', 'conectividad'],
+  sonido: ['conectividad', 'cancelacion-ruido', 'autonomia', 'color'],
+  audiosonido: ['conectividad', 'cancelacion-ruido', 'autonomia', 'color'],
 };
 
 const ATTR_LABELS: Record<string, string> = {
@@ -324,8 +387,8 @@ export function buildFacets(
   products: FacetProduct[],
   s: Selections = {},
   opts: FacetContext & { categoryKey?: string } = {},
-): { total: number; groups: FacetGroup[] } {
-  const ctx: FacetContext = { now: opts.now, maxAgeHours: opts.maxAgeHours };
+): { total: number; groups: FacetGroup[]; deals: number } {
+  const ctx: FacetContext = { now: opts.now, maxAgeHours: opts.maxAgeHours, categoryIdsOf: opts.categoryIdsOf, categoryLabel: opts.categoryLabel };
   const attrKeys = relevantAttributes(products, opts.categoryKey);
   const effective: Selections = { ...s, attrs: { ...(s.attrs ?? {}) } };
   for (const key of attrKeys) effective.attrs![key] ??= [];
@@ -334,9 +397,35 @@ export function buildFacets(
 
   const groups: FacetGroup[] = [];
 
+  // CATEGORÍA (sólo si el contexto sabe resolverla). Cada ficha cuenta una vez en su categoría raíz y, si la tiene, en su subcategoría.
+  if (ctx.categoryIdsOf) {
+    const counts = new Map<string, number>();
+    for (const product of products) {
+      if (!passes(product, effective, ctx, 'category')) continue;
+      for (const id of new Set(ctx.categoryIdsOf(product))) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    const selected = new Set(s.category ?? []);
+    for (const id of selected) if (!counts.has(id)) counts.set(id, 0);
+    const label = (id: string) => ctx.categoryLabel?.(id) || id;
+    groups.push({
+      key: 'category',
+      label: 'Categoría',
+      type: 'text',
+      options: [...counts.entries()]
+        .map(([id, count]) => ({ value: id, label: label(id), count, selected: selected.has(id) }))
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'es')),
+    });
+  }
+
   // MARCA (fabricante). Variantes de escritura → una sola opción; marcas distintas, opciones distintas.
   {
     const counts = new Map<string, { label: string; count: number }>();
+    // Nombre visible de cada marca (de TODOS los productos): una selección activa sin coincidencias conserva su nombre real.
+    const displayByKey = new Map<string, string>();
+    for (const product of products) {
+      const b = normalizeBrand(product.brand);
+      if (b.key && !displayByKey.has(b.key)) displayByKey.set(b.key, b.display);
+    }
     for (const product of products) {
       if (!passes(product, effective, ctx, 'brand')) continue;
       const brand = normalizeBrand(product.brand);
@@ -346,7 +435,7 @@ export function buildFacets(
       counts.set(brand.key, entry);
     }
     const selected = new Set((s.brand ?? []).map((b) => normalizeBrand(b).key));
-    for (const key of selected) if (key && !counts.has(key)) counts.set(key, { label: key, count: 0 });
+    for (const key of selected) if (key && !counts.has(key)) counts.set(key, { label: displayByKey.get(key) ?? key, count: 0 });
     groups.push({
       key: 'brand',
       label: 'Marca',
@@ -384,5 +473,6 @@ export function buildFacets(
     });
   }
 
-  return { total: applyFilters(products, effective, ctx).length, groups };
+  const deals = products.filter((product) => passes(product, effective, ctx, 'deal') && verifiedDealPct(product, ctx.now) !== null).length;
+  return { total: applyFilters(products, effective, ctx).length, groups, deals };
 }

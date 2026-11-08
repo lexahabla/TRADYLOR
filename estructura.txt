@@ -35,6 +35,7 @@ scripts/tests/analytics-memo.test.mjs
 scripts/tests/catalog-concurrency.test.mjs
 scripts/tests/categories-cache.test.mjs
 scripts/tests/amazon-link.test.mjs
+scripts/tests/listing.test.mjs
 scripts/tests/price-refresh-amazon.test.mjs
 scripts/tests/category-extract.test.mjs
 scripts/tests/connectors.test.mjs
@@ -73,6 +74,7 @@ src/components/AdminUserMenu.astro
 src/components/AffiliateLink.astro
 src/components/AsistenteIAWidget.astro
 src/components/AuthModal.astro
+src/components/CatalogFilters.astro
 src/components/CategoryMenu.astro
 src/components/CategoryNav.astro
 src/components/ComparisonTable.astro
@@ -115,6 +117,8 @@ src/lib/adminDashboard.ts
 src/lib/affiliateCatalog.ts
 src/lib/ai.ts
 src/lib/apify/categoryExtraction.ts
+src/lib/brandResolve.ts
+src/lib/catalogListing.ts
 src/lib/temuShortLink.ts
 src/lib/aiConsoleGuard.ts
 src/lib/aiKeysStore.ts
@@ -260,6 +264,7 @@ src/pages/api/admin/users/[id]/avatar.ts
 src/pages/api/admin/users/index.ts
 src/pages/api/analytics/event.ts
 src/pages/api/asistente-ia.ts
+src/pages/api/catalogo/facets.ts
 src/pages/api/categories/[id].ts
 src/pages/api/categories/index.ts
 src/pages/api/ebay/search.ts

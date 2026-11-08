@@ -114,6 +114,8 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `radarStore.ts` - Datos de Mi Radar en la nube (radar-data.json: carpetas, productos, salidas pendientes; merge en sync)
   - `paths.ts` - Rutas persistentes: `DATA_DIR` / `IMAGES_DIR` (en prod: volumen vía env)
   - `catalog.ts`, `catalogStore.ts` - Catálogo de productos en memoria/almacenamiento
+  - `catalogListing.ts` - Listado público: búsqueda (sólo título, marca y categoría, sin tildes), filtros OR/AND, chips, tramos de precio y estado en la URL (`?q&category&brand&min&max&deal&f_<atributo>&sort&page`); `catalogFacets.ts` calcula atributos, facetas y recuentos reales
+  - `brandResolve.ts` - Marca REAL del fabricante: una tienda («AliExpress», «ebay»…) no es marca; se toma de las especificaciones (Marca/Brand/Fabricante) y si no hay dato queda vacía (nunca se deduce del título). Se aplica en el punto único de escritura (`writeProductsToFile`) y al leer el catálogo
   - `productStore.ts` - Persistencia de `products.json` (lectura/escritura/upsert)
   - `ai.ts` - Enriquecimiento de texto y generación de imágenes con IA
   - `categories.ts` - Categorías
@@ -134,6 +136,7 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `radar-users.json`, `radar-data.json` - Usuarios y datos de Mi Radar (volumen; NO se suben a git)
 - `src/components/AdminNav.astro` - Nav del backend: píldora de contexto + secciones + menú de usuario (perfil, crear usuarios, cerrar sesión)
 - `src/components/AuthModal.astro` - Modal de auth dual de Mi Radar (login/registro/reset + Google); se monta en Layout
+- `src/components/CatalogFilters.astro` - Panel de filtros del catálogo (columna lateral en escritorio; drawer modal accesible en móvil con retorno del foco al botón «Filtrar»). Endpoint de recuentos en vivo: `GET /api/catalogo/facets` (público, solo lectura)
 - `src/components/ProductCard.astro` - Tarjeta de producto con botón "Guardar en Mi Radar" (`[data-radar-toggle]`)
 - `public/images/products/` - Imágenes de producto generadas con IA (ignorado en git)
 - Despliegue
@@ -230,6 +233,14 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 - `/api/health` y `/api/redirect` son públicos a propósito (healthcheck y salida de afiliado).
 
 ## Convenciones y avisos
+
+- **Listado público con filtros** (`src/pages/index.astro` + `CatalogFilters.astro`): TODO el estado vive en la URL (Atrás, recarga y enlaces
+  directos lo restauran; la posición de scroll se guarda por URL en `sessionStorage`). Con búsqueda o filtros se omiten la diversidad y los
+  módulos editoriales. La URL manda siempre sobre la cookie `tradylor_session_sort`. Los enlaces de título e imagen de `ProductCard` abren la
+  ficha en la MISMA pestaña (sólo el CTA de salida de afiliado usa `target="_blank"`). «Gangas» = descuento ≥ 20 % con precio anterior
+  VERIFICADO (última observación con `verifiedAt` vigente ≤ 7 días y coherente con el precio publicado; el «precio de lista» del proveedor no
+  cuenta). Bluetooth sólo se ofrece si lo declaran las especificaciones. Las categorías se resuelven por `category_id` y, sin él, por nombre
+  (`makeCategoryResolver`); el texto libre fragmentado («Sonido»/«Audio & Sonido») cuenta como una sola categoría.
 
 - **`<script is:inline>` NO admite TypeScript**: Astro no procesa esos bloques
   (no pasan por Vite), así que una anotación de tipo (`let x: string[] = []`,

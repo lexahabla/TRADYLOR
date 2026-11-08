@@ -18,6 +18,7 @@ import { validateProducts, validateSingleProduct } from './validateProducts';
 import { dataFile } from './paths';
 import { readJsonArrayFile } from './jsonStore';
 import { readDeletedIds, DELETED_FILE_PATH } from './deletedProducts';
+import { withResolvedBrand } from './brandResolve';
 
 const DATA_FILE_PATH = dataFile('products.json');
 
@@ -118,7 +119,8 @@ export function getCatalogProducts(): Product[] {
     const live = entry as Product;
     const curated = staticProducts.find((sp) => sp.id === probe.id);
 
-    mergedRaw.push(curated ? mergeProducts(curated, live) : live);
+    // La marca es el fabricante, nunca el comercio: las fichas guardadas antes de la regla se corrigen también al leer.
+    mergedRaw.push(withResolvedBrand((curated ? mergeProducts(curated, live) : live) as any));
     liveIds.add(probe.id);
   }
 
