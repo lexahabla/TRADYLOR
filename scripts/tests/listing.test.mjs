@@ -288,8 +288,8 @@ test('el panel sólo aparece con búsqueda o categoría y en escritorio no es fi
 test('el borde superior del panel coincide con el de las tarjetas (panel y rejilla en la misma fila de la cuadrícula)', () => {
   const index = read('src/pages/index.astro');
   assert.ok(index.includes('.catalog-layout.has-filters .catalog-main { grid-column: 2; grid-row: 2; }'));
-  assert.ok(read('src/components/CatalogFilters.astro').includes('grid-column: 1;
-    grid-row: 2;'));
+  const cf = read('src/components/CatalogFilters.astro');
+  assert.ok(cf.includes('grid-column: 1;') && cf.includes('grid-row: 2;'));
 });
 
 test('panel: drawer modal accesible en móvil con retorno del foco al botón «Filtrar», acordeones, buscadores internos y doble tirador', () => {
