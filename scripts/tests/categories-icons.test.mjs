@@ -80,6 +80,9 @@ test('al escribir una palabra se proponen emojis relacionados (con tildes, plura
   assert.equal(first('Gaming'), '🎮');
   assert.equal(first('bicicleta'), '🚲');
   assert.ok(lib.searchIcons('cocina').some((i) => i.emoji === '🍳'));
+  const cafe = lib.searchIcons('café').map((i) => i.emoji);
+  assert.equal(cafe[0], '☕');
+  assert.ok(cafe.length >= 2 && cafe.includes('🍵'), 'amplía con iconos relacionados (té, infusiones…)');
   assert.deepEqual(lib.searchIcons('zzzxqv'), [], 'sin relación no se inventa nada');
   assert.deepEqual(lib.searchIcons('🍳'), [], 'un emoji ya elegido no se busca como palabra');
   assert.deepEqual(lib.searchIcons(''), []);

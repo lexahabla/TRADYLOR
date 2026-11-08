@@ -251,6 +251,23 @@ export function searchIcons(query: string, limit = 24): IconEntry[] {
     out.push(entry);
     if (out.length >= limit) break;
   }
+  // Pocos resultados directos: se amplían con iconos RELACIONADOS (comparten términos con los mejores resultados).
+  if (out.length > 0 && out.length < 8) {
+    const topWords = new Set(out.slice(0, 2).flatMap((e) => e.words.map(foldWord)).filter((w) => w.length >= 4));
+    const extra: Array<{ entry: IconEntry; shared: number }> = [];
+    for (const entry of ICON_LIBRARY) {
+      if (used.has(entry.emoji)) continue;
+      const shared = entry.words.map(foldWord).filter((w) => topWords.has(w)).length;
+      if (shared > 0) extra.push({ entry, shared });
+    }
+    extra.sort((a, b) => b.shared - a.shared || a.entry.label.localeCompare(b.entry.label, 'es'));
+    for (const { entry } of extra) {
+      if (used.has(entry.emoji)) continue;
+      used.add(entry.emoji);
+      out.push(entry);
+      if (out.length >= 10) break;
+    }
+  }
   return out;
 }
 
