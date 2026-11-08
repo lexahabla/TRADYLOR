@@ -288,6 +288,8 @@ test('el panel sólo aparece con búsqueda o categoría y en escritorio no es fi
 test('el borde superior del panel coincide con el de las tarjetas (panel y rejilla en la misma fila de la cuadrícula)', () => {
   const index = read('src/pages/index.astro');
   assert.ok(index.includes('.catalog-layout.has-filters .catalog-main { grid-column: 2; grid-row: 2; }'));
+  assert.ok(index.includes('.catalog-layout.has-filters .catalog-top { grid-column: 1 / -1; grid-row: 1;'), 'la fila superior ocupa todo el ancho');
+  assert.ok(index.includes('class="catalog-top-row"') && index.indexOf('class="cf-chips"') < index.indexOf('class="catalog-sort-bar"'), 'chips y orden en la misma fila');
   const cf = read('src/components/CatalogFilters.astro');
   assert.ok(cf.includes('grid-column: 1;') && cf.includes('grid-row: 2;'));
 });
@@ -299,7 +301,8 @@ test('panel: drawer modal accesible en móvil con retorno del foco al botón «F
   assert.ok(panel.includes("event.key === 'Escape'") && panel.includes("event.key === 'Tab'"), 'Esc cierra y el foco queda atrapado');
   assert.ok(panel.includes('SEARCH_THRESHOLD = 8') && panel.includes('data-cf-search'));
   assert.ok(panel.includes('cf-range-min') && panel.includes('cf-range-max') && panel.includes('＞'));
-  assert.ok(panel.includes('max-height: 320px') && panel.includes('overflow-y: auto'), 'listas con scroll interno');
+  const listRule = panel.slice(panel.indexOf('.cf-list {'), panel.indexOf('}', panel.indexOf('.cf-list {')));
+  assert.ok(!/max-height|overflow|overscroll/.test(listRule), 'las listas no tienen scroll vertical propio (no atrapan la rueda del ratón)');
   assert.ok(panel.includes('Gangas') && panel.includes('20 %'));
   assert.ok(panel.includes('min-height: 44px'), 'objetivos táctiles de 44 px');
   assert.ok(panel.includes('inert'), 'panel cerrado fuera del orden de tabulación');

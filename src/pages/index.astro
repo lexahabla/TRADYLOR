@@ -190,6 +190,23 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
         rangeHrefs={rangeHrefs}
       />}
       <div class="catalog-top">
+      <!-- Fila superior a todo el ancho: filtros activos (izquierda) y orden (derecha) alineados en la misma línea. -->
+      <div class="catalog-top-row">
+      {listing.chips.length > 0 && (
+        <div class="cf-chips" role="group" aria-label="Filtros activos">
+          <ul class="cf-chips-list">
+            {listing.chips.map((chip) => (
+              <li>
+                <a class="cf-chip" href={chip.href} aria-label={`Quitar filtro: ${chip.label}`}>
+                  <span>{chip.label}</span><span aria-hidden="true">✕</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+          <a class="cf-chips-clear" href={clearHref}>Limpiar todo</a>
+        </div>
+      )}
+
       <!-- Selector de ordenación del catálogo (alineado a la derecha). Incluye
            también, en el mismo select, los perfiles de comprador del
            usuario ("Perfil - " + nombre del perfil): elegir uno filtra el
@@ -210,21 +227,8 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
           <optgroup label="Perfil de comprador" data-catalog-profile-options hidden></optgroup>
         </select>
       </div>
+      </div>
 
-      {listing.chips.length > 0 && (
-        <div class="cf-chips" role="group" aria-label="Filtros activos">
-          <ul class="cf-chips-list">
-            {listing.chips.map((chip) => (
-              <li>
-                <a class="cf-chip" href={chip.href} aria-label={`Quitar filtro: ${chip.label}`}>
-                  <span>{chip.label}</span><span aria-hidden="true">✕</span>
-                </a>
-              </li>
-            ))}
-          </ul>
-          <a class="cf-chips-clear" href={clearHref}>Limpiar todo</a>
-        </div>
-      )}
       <p class="catalog-count" data-catalog-count>
         <strong>{diversified.length}</strong> {diversified.length === 1 ? 'producto' : 'productos'}{queryTerm ? ` para «${queryParam}»` : ''}
       </p>
@@ -1023,10 +1027,12 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     align-items: start;
   }
   /* Fila 1 (orden, chips, contador) sólo sobre la columna de resultados; fila 2: panel y rejilla arrancan en la MISMA línea superior. */
-  .catalog-layout.has-filters .catalog-top { grid-column: 2; grid-row: 1; min-width: 0; }
+  .catalog-layout.has-filters .catalog-top { grid-column: 1 / -1; grid-row: 1; min-width: 0; }
+  .catalog-top-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem 1rem; margin: 0 0 1rem; }
+  .catalog-top-row .cf-chips { margin: 0; flex: 1 1 auto; }
+  .catalog-top-row .catalog-sort-bar { margin: 0 0 0 auto; }
   .catalog-layout.has-filters .catalog-main { grid-column: 2; grid-row: 2; }
   .catalog-top, .catalog-main { min-width: 0; }
-  .catalog-top .catalog-sort-bar { margin: 0 0 1rem auto; }
   .catalog-layout.has-filters .catalog-main .products-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; }
   .catalog-count { margin: 0 0 1rem; color: var(--color-text-muted); font-size: 0.9rem; }
   .catalog-count strong { color: var(--color-text-main); }
@@ -1048,7 +1054,6 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
   }
   @media (max-width: 960px) {
     .catalog-layout.has-filters { display: block; }
-    .catalog-top .catalog-sort-bar { margin: 0.75rem 0 1rem auto; }
     .catalog-layout.has-filters .catalog-main .products-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
   @media (max-width: 767px) {
