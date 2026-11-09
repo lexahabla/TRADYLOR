@@ -110,16 +110,19 @@ export const amazonAdapter: SourceAdapter = {
       raw = (await mod.scrapeAmazonProduct(source.id, { maxRetries: 1 })) as unknown as AnyRecord;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const fatal = /SCRAPER_API_KEY|clave de API inválida|cuota|Page Not Found|no encontró el producto/i.test(message);
+      const fatal = /SCRAPER_API_KEY|clave de API inválida|cuota|respondió 40[13]\b|Page Not Found|no encontró el producto/i.test(message);
       throw new RefreshError(message, !fatal);
     }
     const n = mod.normalizeScrapedAmazonData(raw as never, source.id);
-    const availabilityKnown = raw.availability != null || raw.inStock != null;
+    // ScraperAPI puede traer la disponibilidad como `availability` o `availability_status` (el nombre exacto no está confirmado con una respuesta real).
+    const availabilityText = String(raw.availability ?? (raw as AnyRecord).availability_status ?? '').toLowerCase();
+    const availabilityKnown = availabilityText !== '' || raw.inStock != null;
+    const inStockNow = n.inStock || /in stock|en stock|disponible|left in stock|quedan/.test(availabilityText);
     return {
       price: n.price ?? null,
       originalPrice: n.originalPrice ?? null,
       currency: n.currency,
-      inStock: availabilityKnown ? n.inStock : null,
+      inStock: availabilityKnown ? inStockNow : null,
       shippingCost: null, // ScraperAPI no lo entrega de forma fiable: desconocido
       rating: n.rating ?? null,
       reviewsCount: n.reviewsCount ?? null,
@@ -166,6 +169,33 @@ export interface SourceSchedule {
   maxAgeHours: number;
   /** Tope de consultas (intentos) al día de esta fuente en el programador; sin valor = sin tope. Protege el gasto de las fuentes de pago. */
   maxPerDay?: number;
+  /** Fuente detenida automáticamente (fallo de autenticación o cuota): motivo y fecha. Se limpia al volver a habilitarla. */
+  pausedReason?: string;
+  pausedAt?: string;
+}
+
+/** Frecuencias que ofrece el panel (horas). Cualquier valor entre 1 y 720 h es válido en la API. */
+export const FREQUENCY_PRESETS = [12, 24, 48, 72, 168] as const;
+
+/**
+ * ¿El fallo indica que la FUENTE no puede seguir (credenciales/permisos o cuota), no que falle un producto? Si es así se detiene la fuente
+ * (no se insiste ficha a ficha gastando cuota ni intentos de pago).
+ */
+export function classifyFailure(message: string): 'auth' | 'quota' | null {
+  const m = String(message ?? '');
+  if (/clave de API inv|SCRAPER_API_KEY|APIFY_TOKEN|credencial|OAuth|invalid[_ ]?(app[_ ])?key|publisher is not registered|insufficientpermission|permission|unauthori[sz]ed|forbidden|signature|\b40[13]\b/i.test(m)) return 'auth';
+  if (/cuota|quota|rate.?limit|too many|\b429\b|límite|créditos|máximo de \d+ ejecuciones/i.test(m)) return 'quota';
+  return null;
+}
+
+/**
+ * Lista blanca del programador: `OFFER_REFRESH_SOURCES=ebay` hace que SÓLO esa fuente se consulte, aunque otras estén habilitadas en el panel
+ * (activar eBay no puede provocar consultas de Amazon ni de Temu). Sin la variable no cambia nada.
+ */
+export function applySourceAllowlist(schedule: Record<string, SourceSchedule>, env: string | undefined = process.env.OFFER_REFRESH_SOURCES): Record<string, SourceSchedule> {
+  const allowed = new Set(String(env ?? '').toLowerCase().split(/[\s,;]+/).filter(Boolean));
+  if (!allowed.size) return schedule;
+  return Object.fromEntries(Object.entries(schedule).map(([net, cfg]) => [net, allowed.has(net) ? cfg : { ...cfg, enabled: false }]));
 }
 
 export const DEFAULT_SCHEDULE: Record<string, SourceSchedule> = {
@@ -203,6 +233,8 @@ export interface RefreshReport {
   observations: number;
   alertsSent: number;
   results: OfferResult[];
+  /** Fuentes detenidas en esta ejecución por fallo de autenticación o cuota (motivo saneado). */
+  haltedSources?: Record<string, string>;
 }
 
 export interface RefreshStore {
@@ -660,8 +692,16 @@ async function runRefresh(options: RefreshOptions): Promise<RefreshReport> {
 
   const patches = new Map<string, Patch>();
   const shared = new Map<string, { reading?: RefreshReading; error?: string; retryable?: boolean }>();
+  const halted: Record<string, string> = {};
   for (let i = 0; i < targets.length; i++) {
     const product = targets[i];
+    const net = detectNetworkId(product) || 'desconocida';
+    if (halted[net]) {
+      // Fuente detenida en esta ejecución: no se insiste ficha a ficha (cuota/intentos de pago).
+      report.results.push({ id: product.id, title: String((product as AnyRecord).title_short || product.title || ''), network: net, status: 'error', attempts: 0, changes: [], message: 'Fuente detenida en esta ejecución: ' + halted[net] });
+      report.errors++;
+      continue;
+    }
     const { result, patch, appended } = await refreshOne(product, adapterFor(product, adapters), {
       now,
       sleep,
@@ -672,6 +712,10 @@ async function runRefresh(options: RefreshOptions): Promise<RefreshReport> {
       shared,
     });
     report.results.push(result);
+    if (result.status === 'error' && result.attempts > 0) {
+      const kind = classifyFailure(result.message ?? '');
+      if (kind) halted[net] = (kind === 'auth' ? 'autenticación' : 'cuota') + ': ' + sanitizeMessage(result.message ?? '').slice(0, 140);
+    }
     if (patch) patches.set(product.id, patch);
     if (appended) report.observations++;
     if (result.status === 'updated') report.updated++;
@@ -680,6 +724,16 @@ async function runRefresh(options: RefreshOptions): Promise<RefreshReport> {
     else if (result.status === 'no_source') report.noSource++;
     else if (result.status === 'review') report.review++;
     if (i < targets.length - 1 && (options.betweenMs ?? 0) > 0) await sleep(options.betweenMs as number);
+  }
+
+  if (Object.keys(halted).length) {
+    report.haltedSources = halted;
+    // El programador deja la fuente desactivada (con su motivo) hasta que alguien la vuelva a habilitar en el panel.
+    if (!options.dryRun && !options.store && options.mode === 'scheduled') {
+      for (const [net, reason] of Object.entries(halted)) {
+        try { await writeScheduleConfig(net, { enabled: false, pausedReason: reason }); } catch { /* la parada no debe romper el refresco */ }
+      }
+    }
   }
 
   // Persistencia: se relee el catálogo y sólo se aplican los parches de este ciclo.
@@ -734,6 +788,13 @@ export interface RunLogEntry {
   byNetwork: Record<string, { attempts: number; ok: number; errors: number }>;
   /** Primeros errores (saneados, sin claves). */
   errorSamples: string[];
+  /** Fuentes detenidas por autenticación o cuota. */
+  halted?: Record<string, string>;
+}
+
+/** Quita claves/tokens de un mensaje antes de guardarlo o mostrarlo. */
+export function sanitizeMessage(message: string): string {
+  return String(message ?? '').replace(/(api[_-]?key|token|secret|authorization)[=:]\s*[^&\s,;]+/gi, '$1=***');
 }
 
 const RUN_LOG_MAX = 60;
@@ -752,13 +813,13 @@ function appendRunLog(report: RefreshReport): void {
   try {
     const byNetwork: RunLogEntry['byNetwork'] = {};
     for (const r of report.results) {
-      if (r.status === 'no_source' || r.id === '-') continue;
+      if (r.status === 'no_source' || r.id === '-' || r.attempts === 0) continue;
       const entry = (byNetwork[r.network] ??= { attempts: 0, ok: 0, errors: 0 });
       entry.attempts += Math.max(1, r.attempts || 1);
       if (r.status === 'error') entry.errors++; else entry.ok++;
     }
-    const errorSamples = report.results.filter((r) => r.status === 'error').slice(0, 5).map((r) => `${r.network}: ${String(r.message ?? '').replace(/(api[_-]?key|token|secret|authorization)[=:]\s*[^&\s,;]+/gi, '$1=***').slice(0, 160)}`);
-    const entry: RunLogEntry = { runId: report.runId, mode: report.mode, startedAt: report.startedAt, finishedAt: report.finishedAt, total: report.total, updated: report.updated, verified: report.verified, errors: report.errors, noSource: report.noSource, review: report.review, byNetwork, errorSamples };
+    const errorSamples = report.results.filter((r) => r.status === 'error').slice(0, 5).map((r) => `${r.network}: ${sanitizeMessage(r.message ?? '').slice(0, 160)}`);
+    const entry: RunLogEntry = { runId: report.runId, mode: report.mode, startedAt: report.startedAt, finishedAt: report.finishedAt, total: report.total, updated: report.updated, verified: report.verified, errors: report.errors, noSource: report.noSource, review: report.review, byNetwork, errorSamples, ...(report.haltedSources ? { halted: report.haltedSources } : {}) };
     const runs = [...readRunLog(), entry].slice(-RUN_LOG_MAX);
     const tmp = `${runLogFile()}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify({ runs }, null, 2), 'utf-8');
@@ -832,13 +893,15 @@ export async function readScheduleConfig(): Promise<Record<string, SourceSchedul
  */
 export async function writeScheduleConfig(
   network: string,
-  patch: { enabled?: boolean; everyHours?: number; maxPerDay?: number | null },
+  patch: { enabled?: boolean; everyHours?: number; maxPerDay?: number | null; pausedReason?: string },
 ): Promise<Record<string, SourceSchedule>> {
   const key = String(network || '').trim().toLowerCase();
   if (!/^[a-z0-9_-]{2,30}$/.test(key)) throw new Error('Fuente no válida.');
   const current = await readScheduleConfig();
   const next: SourceSchedule = { ...(current[key] ?? { enabled: false, everyHours: 24, batchSize: 10, maxAgeHours: DEFAULT_MAX_AGE_HOURS }) };
   if (patch.enabled !== undefined) next.enabled = patch.enabled === true;
+  if (patch.enabled === true) { delete next.pausedReason; delete next.pausedAt; }
+  if (patch.pausedReason !== undefined) { next.pausedReason = sanitizeMessage(patch.pausedReason).slice(0, 200); next.pausedAt = new Date().toISOString(); }
   if (patch.everyHours !== undefined) {
     const hours = Math.round(Number(patch.everyHours));
     if (!Number.isFinite(hours) || hours < 1 || hours > 720) throw new Error('La frecuencia debe estar entre 1 y 720 horas.');
@@ -875,9 +938,9 @@ export function startOfferRefreshScheduler(): void {
   schedulerStarted = true;
   const tick = async () => {
     try {
-      const schedule = await readScheduleConfig();
-      const batch = Math.max(1, ...Object.values(schedule).filter((s) => s.enabled).map((s) => s.batchSize));
-      await refreshOffers({ onlyDue: true, limit: batch, mode: 'scheduled', schedule, betweenMs: 3000 });
+      // Lista blanca opcional (OFFER_REFRESH_SOURCES) y lote propio por fuente (sin un límite global que reparta mal entre fuentes).
+      const schedule = applySourceAllowlist(await readScheduleConfig());
+      await refreshOffers({ onlyDue: true, mode: 'scheduled', schedule, betweenMs: 3000 });
     } catch (error) {
       console.error('[OfferRefresh] Tick falló:', error);
     }

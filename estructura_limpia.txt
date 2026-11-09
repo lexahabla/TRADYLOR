@@ -10,6 +10,7 @@ chat.js
 deploy.ps1
 docker/entrypoint.sh
 docs/api-v1.md
+docs/actualizacion-precios-activacion.md
 docs/deploy-easypanel.md
 docs/temu-actor-mercado-es.md
 estructura.txt
@@ -81,6 +82,8 @@ scripts/tests/price-verification.test.mjs
 scripts/tests/public-claims.test.mjs
 scripts/tests/refresh-alert-guard.test.mjs
 scripts/tests/refresh-alerts-integration.test.mjs
+scripts/tests/refresh-platform-guards.test.mjs
+scripts/tests/refresh-adapters-raw.test.mjs
 scripts/tests/refresh-source-limits.test.mjs
 scripts/tests/temu-refresh-adapter.test.mjs
 scripts/tests/refresh.test.mjs
@@ -240,6 +243,7 @@ src/lib/radarAuth.ts
 src/lib/radarStore.ts
 src/lib/rateLimit.ts
 src/lib/refreshAlertGuard.ts
+src/lib/refreshPlatforms.ts
 src/lib/reimportMerge.ts
 src/lib/reminders.ts
 src/lib/salesLedger.ts

@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../../lib/adminAuth';
 import { readProductsFromFile } from '../../../../lib/productStore';
+import { buildPlatformStatuses, readConnections } from '../../../../lib/refreshPlatforms';
 import { alertExposure } from '../../../../lib/refreshAlertGuard';
 import { detectNetworkId } from '../../../../lib/productNetwork';
 import {
@@ -8,6 +9,7 @@ import {
   getRefreshStatus,
   readRefreshMeta,
   readRunLog,
+  ensureExtraAdapters,
   attemptsToday,
   readScheduleConfig,
   refreshOffers,
@@ -33,6 +35,7 @@ export const GET: APIRoute = async ({ request }) => {
   const unauthorized = requireAdminAuth(request);
   if (unauthorized) return unauthorized;
 
+  await ensureExtraAdapters();
   const products = readProductsFromFile();
   const schedule = await readScheduleConfig();
   const noSource = products
@@ -50,6 +53,8 @@ export const GET: APIRoute = async ({ request }) => {
     schedule,
     status: getRefreshStatus(),
     coverage: summarizeCoverage(products, DEFAULT_ADAPTERS, schedule),
+    platforms: buildPlatformStatuses({ products: products as never, schedule, adapters: DEFAULT_ADAPTERS, connections: await readConnections(), runs: readRunLog(), attemptsToday: attemptsToday(new Date()), schedulerEnabled: String(process.env.OFFER_REFRESH_ENABLED ?? '').trim().toLowerCase() === 'true' }),
+    allowlist: String(process.env.OFFER_REFRESH_SOURCES ?? '').trim() || null,
     runs: readRunLog().slice(-20).reverse(),
     attemptsToday: attemptsToday(new Date()),
     noSource: noSource.slice(0, 200),

@@ -46,7 +46,7 @@ export const aliexpressAdapter: SourceAdapter = {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new RefreshError(message, !/Faltan|credencial|signature|sign/i.test(message));
+      throw new RefreshError(message, !/Faltan|credencial|signature|sign|\b40[13]\b|publisher|permission|invalid app key/i.test(message));
     }
     if (!result) throw new RefreshError('AliExpress no devolvió este anuncio (¿retirado?).', false);
     return { price: result.price ?? null, originalPrice: result.originalPrice ?? null, currency: result.currency, inStock: null, shippingCost: null, identity: { title: result.title, sourceId: source.id } };
@@ -74,7 +74,7 @@ export const ebayAdapter: SourceAdapter = {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new RefreshError(message, !/Faltan credenciales|OAuth/i.test(message));
+      throw new RefreshError(message, !/Faltan credenciales|OAuth|HTTP 40[13]\b|invalid_client|forbidden/i.test(message));
     }
     if (!result) throw new RefreshError('eBay no encuentra este artículo (¿finalizado o retirado?).', false);
     return { price: result.price ?? null, currency: result.currency ?? 'EUR', inStock: result.inStock ?? null, shippingCost: result.shippingCost ?? null, identity: { title: result.title } };
