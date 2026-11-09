@@ -82,10 +82,25 @@ function ficha() {
   return p;
 }
 
-test('identificadores y atributos de variante se conservan al ACTUALIZAR la oferta con datos distintos', () => {
+test('identificadores y atributos de variante se conservan al ACTUALIZAR la oferta con datos distintos (mismo MPN)', () => {
   const before = ficha();
-  const out = run([jsonRecord(3, { gtin: GTIN, mpn: 'MPN-OTRO', brand: 'Zeta', color: 'Negro', capacity: '128GB', platform: 'tienda', externalId: 'V3', url: 'https://tienda.invalid/v/3', price: 35, capturedAt: '2026-10-07T10:00:00Z' })]);
+  const out = run([jsonRecord(3, { gtin: GTIN, mpn: 'MPN-ORIGINAL', brand: 'Zeta', color: 'Negro', capacity: '128GB', platform: 'tienda', externalId: 'V3', url: 'https://tienda.invalid/v/3', price: 41, capturedAt: '2026-10-07T10:00:00Z' })]);
   assert.ok(['updated', 'unchanged'].includes(out.results[0].outcome), JSON.stringify(out.results[0]));
+  const [p] = readCatalog(dir);
+  assert.deepEqual(p.extra.identifiers, before.extra.identifiers);
+  assert.deepEqual(p.extra.variantAttributes, before.extra.variantAttributes);
+});
+
+// ETAPA 1.5: antes este registro (con un MPN que CONTRADICE el guardado) se APLICABA como actualización y sólo se comprobaba que el MPN no
+// se sustituía. Ahora, por decisión expresa («identificadores contradictorios → revisión»), no se aplica nada: queda en revisión y la ficha
+// no cambia (se sigue comprobando que identificadores y variante se conservan).
+test('un registro con un MPN que CONTRADICE el guardado va a REVISIÓN y no modifica la ficha (etapa 1.5)', () => {
+  const before = ficha();
+  const raw = JSON.stringify(readCatalog(dir));
+  const out = run([jsonRecord(3, { gtin: GTIN, mpn: 'MPN-OTRO', brand: 'Zeta', color: 'Negro', capacity: '128GB', platform: 'tienda', externalId: 'V3', url: 'https://tienda.invalid/v/3', price: 35, capturedAt: '2026-10-07T10:00:00Z' })]);
+  assert.equal(out.results[0].outcome, 'review', JSON.stringify(out.results[0]));
+  assert.ok(out.results[0].reasons.includes('mpn_contradictorio'));
+  assert.equal(JSON.stringify(readCatalog(dir)), raw, 'la ficha no cambia ni en un byte');
   const [p] = readCatalog(dir);
   assert.deepEqual(p.extra.identifiers, before.extra.identifiers, 'el mpn ya guardado no se sustituye');
   assert.deepEqual(p.extra.variantAttributes, before.extra.variantAttributes);

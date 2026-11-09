@@ -22,6 +22,8 @@
 import { cleanTitleKey, canonicalProductUrl, extractSourceId } from '../curation';
 import { normalizeBrand, normalizeSourceId, offerKey as baseOfferKey } from '../offerIdentity';
 import { mergeReimport, readLockedFields } from '../reimportMerge';
+import { contradictionOfOffer, resolveSeller, sameSeller, sellerRejection, type ResolvedSeller } from '../comparableOffers';
+import { isMerchantOrPlaceholderBrand, resolveBrand } from '../brandResolve';
 import { slugify, type Product } from '../productStore';
 import { normalizeCondition, normalizeRecord } from './normalize';
 import {
@@ -43,6 +45,7 @@ import {
   type PriceReading,
   type CanonicalRecord,
   type Condition,
+  type OfferShipping,
   type ImportDefaults,
   type ImportTarget,
   type RecordResult,
@@ -139,7 +142,8 @@ function jaccard(a: Set<string>, b: Set<string>): number {
 type Resolution =
   | { kind: 'offer'; product: P; offer: StoredOffer }
   | { kind: 'link'; product: P; reason: string }
-  | { kind: 'review'; reasons: string[]; candidates: ReviewCandidate[] }
+  /** `existing`: la revisión protege una ficha/oferta EXISTENTE (con «Sólo productos nuevos» se omite como «ya existe»). */
+  | { kind: 'review'; reasons: string[]; candidates: ReviewCandidate[]; existing?: boolean }
   | { kind: 'create' };
 
 function candidatesOf(index: Index, ids: Iterable<string>, reason: string): ReviewCandidate[] {
@@ -173,9 +177,160 @@ function resolveByIdentifier(index: Index, rec: CanonicalRecord, ids: Set<string
   return null; // sólo había estados distintos → es otra variante, no es coincidencia
 }
 
+/* ───────────────────────── Seguridad de identidad (etapa 1.5) ─────────────────────────
+ * Un identificador fuerte (anuncio de plataforma, GTIN, marca+MPN) identifica el ANUNCIO, no demuestra que el registro sea la misma
+ * variante, cantidad, condición, moneda ni producto. Ante diferencia, falta de información o contradicción, NO se vincula, NO se
+ * actualiza y NO se crea una ficha nueva: el registro va a REVISIÓN con su motivo. Nunca se une por título, marca+modelo ni specs. */
+
+type VariantKey = (typeof VARIANT_KEYS)[number];
+type GuardMode = 'offer' | 'link';
+
+/** Plataformas donde un anuncio pertenece a UN solo vendedor: el mismo anuncio con otro vendedor es una contradicción, no una oferta nueva. */
+const SINGLE_SELLER_PLATFORMS = new Set(['aliexpress', 'ebay']);
+
+const listingOf = (o: { platform: string; externalId?: string }): string => platformIdKey(o.platform, o.externalId);
+
+/** Vendedor (validado) de un registro entrante. Un nombre malformado/logístico no cuenta; un id sí identifica. */
+function sellerOfRecord(rec: CanonicalRecord): ResolvedSeller {
+  const o = rec.offer;
+  const reason = sellerRejection(o.sellerName, [o.platform]);
+  const id = o.sellerId && String(o.sellerId).trim() ? String(o.sellerId).trim() : undefined;
+  if (reason === null) return { name: String(o.sellerName).trim(), id, source: 'oferta', known: true, rejected: [] };
+  if (id) return { id, source: 'oferta', known: true, rejected: [] };
+  return { source: 'ninguna', known: false, rejected: [] };
+}
+
+/** Vendedor (validado) de una oferta EXISTENTE: la implícita usa la jerarquía offerSeller → Tienda → fulfillmentProvider. */
+function sellerOfExisting(p: P, offer: StoredOffer): ResolvedSeller {
+  if (offer.implicit) return resolveSeller(p);
+  const reason = sellerRejection(offer.sellerName, [offer.platform, String(p.network ?? ''), String(p.merchant ?? '')]);
+  const id = offer.sellerId && String(offer.sellerId).trim() ? String(offer.sellerId).trim() : undefined;
+  if (reason === null) return { name: String(offer.sellerName).trim(), id, source: 'oferta', known: true, rejected: [] };
+  if (id) return { id, source: 'oferta', known: true, rejected: [] };
+  return { source: 'ninguna', known: false, rejected: [] };
+}
+
+/** Descarta del registro los nombres de vendedor malformados o puramente logísticos (con aviso). No toca nada más. */
+function sanitizeSeller(rec: CanonicalRecord): CanonicalRecord {
+  const name = rec.offer.sellerName;
+  if (name === undefined || name === null) return rec;
+  const reason = sellerRejection(name, [rec.offer.platform]);
+  if (reason === 'malformado' || reason === 'logistica') {
+    return { ...rec, offer: { ...rec.offer, sellerName: undefined }, warnings: [...rec.warnings, `vendedor_descartado:${reason}`] };
+  }
+  return rec;
+}
+
+interface RefAttrs {
+  condition: Condition;
+  variant: Partial<Record<VariantKey, string>>;
+  currency: string;
+}
+
+/** Atributos de la oferta/ficha contra la que se compara el registro entrante. Las ofertas antiguas sin variante cuentan como «desconocida». */
+function refOf(p: P, offer: StoredOffer | null): RefAttrs {
+  if (!offer || offer.implicit) return { condition: productCondition(p), variant: productVariant(p), currency: String(p.currency || 'EUR').toUpperCase() };
+  const variant: Partial<Record<VariantKey, string>> = {};
+  const raw = (offer.variant ?? {}) as Record<string, string | undefined>;
+  for (const key of VARIANT_KEYS) if (raw[key]) variant[key] = String(raw[key]);
+  if (offer.quantity && !variant.pack) variant.pack = String(offer.quantity);
+  return { condition: offer.condition ?? 'unknown', variant, currency: String(offer.currency || 'EUR').toUpperCase() };
+}
+
+const MODEL_WORDS = new Set(['pro', 'plus', 'max', 'ultra', 'mini', 'lite', 'air', 'xl', 'fe', 'se', 'promax']);
+
+/** Palabras/cifras que distinguen un modelo de otro (14, 15, f920, pro…). Los años no cuentan. */
+function modelTokens(title: string): Set<string> {
+  const out = new Set<string>();
+  for (const t of cleanTitleKey(title).split(' ')) {
+    if (!t || /^(19|20)\d\d$/.test(t)) continue;
+    if (/\d/.test(t) || MODEL_WORDS.has(t)) out.add(t);
+  }
+  return out;
+}
+
+/** Contradicción EVIDENTE entre dos títulos: cada uno lleva elementos distintivos que el otro no tiene. Sólo VETA (nunca une). */
+function titleModelConflict(a: string, b: string): boolean {
+  const x = modelTokens(a);
+  const y = modelTokens(b);
+  if (!x.size || !y.size) return false;
+  let onlyX = false;
+  let onlyY = false;
+  x.forEach((t) => { if (!y.has(t)) onlyX = true; });
+  y.forEach((t) => { if (!x.has(t)) onlyY = true; });
+  return onlyX && onlyY;
+}
+
+/** Contradicciones entre el producto existente y el registro (marca, GTIN, MPN y, al vincular otra oferta, el título). */
+function productContradictions(p: P, rec: CanonicalRecord, mode: GuardMode): string[] {
+  const out: string[] = [];
+  const existingBrand = resolveBrand(p as never);
+  const incomingBrand = rec.product.brand ?? '';
+  if (existingBrand && incomingBrand && !isMerchantOrPlaceholderBrand(incomingBrand, p.merchant)) {
+    const left = normalizeBrand(existingBrand).key;
+    const right = normalizeBrand(incomingBrand).key;
+    if (left && right && left !== right) out.push(`marca_contradictoria:${existingBrand}≠${incomingBrand}`);
+  }
+  const ids = productIdentifiers(p);
+  if (ids.gtin && rec.product.gtin && ids.gtin !== rec.product.gtin) out.push('gtin_contradictorio');
+  if (ids.mpn && rec.product.mpn && fold(ids.mpn) !== fold(rec.product.mpn)) out.push('mpn_contradictorio');
+  if (mode === 'link' && titleModelConflict(String(p.title ?? ''), rec.product.title)) out.push('titulo_incompatible_con_el_producto_existente');
+  return out;
+}
+
+/**
+ * Comprobaciones de seguridad antes de actualizar una oferta existente (`offer`) o vincular una nueva (`link`). Devuelve los motivos de
+ * bloqueo (vacío = seguro). Moneda y diferencias CONOCIDAS bloquean siempre; la información insuficiente bloquea al vincular y, al
+ * actualizar, sólo cuando el registro declara una cantidad/pack que la oferta no confirma.
+ */
+function guard(p: P, offer: StoredOffer | null, rec: CanonicalRecord, mode: GuardMode): string[] {
+  const ref = refOf(p, offer);
+  const reasons: string[] = [];
+  const currency = String(rec.offer.currency || 'EUR').toUpperCase();
+  if (currency !== ref.currency) reasons.push(`moneda_distinta:${ref.currency}≠${currency}`);
+  const ec = ref.condition;
+  const ic = rec.variant.condition;
+  if (ec !== 'unknown' && ic !== 'unknown' && ec !== ic) reasons.push(`condicion_distinta:${ec}≠${ic}`);
+  else if (mode === 'link' && (ec === 'unknown') !== (ic === 'unknown')) reasons.push('condicion_no_verificable');
+  // Al actualizar: un registro SIN condición no puede confirmar la de una ficha que sí la tiene, y uno que declara una condición distinta de «nuevo»
+  // (usado, reacondicionado, abierto…) tampoco puede sobrescribir el precio de una ficha sin condición conocida.
+  else if (mode === 'offer' && ((ec !== 'unknown' && ic === 'unknown') || (ec === 'unknown' && ic !== 'unknown' && ic !== 'new'))) reasons.push('condicion_no_verificable');
+  for (const key of VARIANT_KEYS) {
+    const left = fold(ref.variant[key]);
+    const right = fold(rec.variant[key]);
+    const label = key === 'pack' ? 'cantidad' : 'variante';
+    if (left && right && left !== right) reasons.push(`${label}_distinta:${key}`);
+    else if (Boolean(left) !== Boolean(right)) {
+      if (mode === 'link' || (key === 'pack' && right && !left)) reasons.push(`${label}_no_verificable:${key}`);
+    }
+  }
+  reasons.push(...productContradictions(p, rec, mode));
+  return reasons;
+}
+
+/** Revisión que protege una ficha existente (no crea, no vincula, no actualiza). */
+function reviewExisting(index: Index, reasons: string[], ids: Iterable<string>): Resolution {
+  return { kind: 'review', reasons, candidates: candidatesOf(index, ids, reasons[0].split(':')[0]), existing: true };
+}
+
+/** Un vínculo por identificador fuerte (GTIN, marca+MPN) también pasa por las comprobaciones de seguridad. */
+function secured(index: Index, res: Resolution, rec: CanonicalRecord): Resolution {
+  if (res.kind !== 'link') return res;
+  const blocked = guard(res.product, null, rec, 'link');
+  return blocked.length ? reviewExisting(index, blocked, [res.product.id]) : res;
+}
+
 function resolve(index: Index, rec: CanonicalRecord): Resolution {
   const o = rec.offer;
   const key = computeOfferKey(o);
+  const listing = listingOf(o);
+  const holders = listing ? index.byPlatformId.get(listing) : undefined;
+  const incoming = sellerOfRecord(rec);
+  // «Vendedor: Amazon» (el nombre de la propia plataforma) es una declaración EXPLÍCITA de que vende la plataforma; no es «desconocido».
+  const declaredPlatformSeller = sellerRejection(o.sellerName, [o.platform]) === 'plataforma';
+
+  // 0) El anuncio ya está en VARIAS fichas (p. ej. los repetidos): no se crea otra, no se elige una al azar, no se actualiza ninguna.
+  if (holders && holders.size > 1) return reviewExisting(index, ['anuncio_en_varias_fichas'], holders);
 
   // 1) Misma oferta (red + id [+ vendedor]) o misma URL canónica.
   const byKey = key ? index.byOfferKey.get(key) : undefined;
@@ -188,36 +343,73 @@ function resolve(index: Index, rec: CanonicalRecord): Resolution {
     const offer = getOffers(p).find(
       (x) => x.offerKey === key || (o.canonicalUrl && x.canonicalUrl === o.canonicalUrl && sellerKey(x.platform, x.sellerId, x.sellerName) === mySeller),
     );
-    if (offer) return { kind: 'offer', product: p, offer };
+    if (offer) {
+      // Sin vendedor fiable y con varias ofertas de ese anuncio no se puede saber a cuál corresponde.
+      if (!incoming.known && !declaredPlatformSeller && listing && getOffers(p).filter((x) => listingOf(x) === listing).length >= 2) {
+        return reviewExisting(index, ['vendedor_no_confirmado_varias_ofertas'], [p.id]);
+      }
+      const blocked = guard(p, offer, rec, 'offer');
+      return blocked.length ? reviewExisting(index, blocked, [p.id]) : { kind: 'offer', product: p, offer };
+    }
   }
 
-  // 1b) Mismo anuncio/ASIN de la plataforma con OTRO vendedor → misma ficha, oferta distinta.
-  const samePlatformId = index.byPlatformId.get(platformIdKey(o.platform, o.externalId));
-  if (samePlatformId && samePlatformId.size === 1) {
-    const p = index.byId.get([...samePlatformId][0])!;
-    if (compatibility(p, rec) === 'compatible') return { kind: 'link', product: p, reason: 'mismo_anuncio_otro_vendedor' };
+  // 1b) Mismo anuncio/ASIN de la plataforma en UNA ficha.
+  if (holders && holders.size === 1) {
+    const p = index.byId.get([...holders][0])!;
+    const same = getOffers(p).filter((x) => listingOf(x) === listing);
+    if (incoming.known) {
+      // Mismo vendedor que una oferta existente (aunque llegara por otra vía: API/JSON) = la MISMA oferta: no se duplica.
+      const match = same.find((x) => sameSeller(incoming, sellerOfExisting(p, x)));
+      if (match) {
+        const blocked = guard(p, match, rec, 'offer');
+        return blocked.length ? reviewExisting(index, blocked, [p.id]) : { kind: 'offer', product: p, offer: match };
+      }
+      // En plataformas de un solo vendedor por anuncio, otro vendedor es una CONTRADICCIÓN de identidad, no una oferta nueva.
+      const knownOthers = same.filter((x) => sellerOfExisting(p, x).known);
+      if (SINGLE_SELLER_PLATFORMS.has(fold(o.platform).replace(/ /g, '')) && knownOthers.length) {
+        const known = sellerOfExisting(p, knownOthers[0]);
+        return reviewExisting(index, [`anuncio_con_vendedor_distinto:${known.name ?? known.id}≠${incoming.name ?? incoming.id}`], [p.id]);
+      }
+      const blocked = guard(p, null, rec, 'link');
+      if (blocked.length) return reviewExisting(index, blocked, [p.id]);
+      return { kind: 'link', product: p, reason: 'mismo_anuncio_otro_vendedor' };
+    }
+    if (declaredPlatformSeller) {
+      // Vende la plataforma: coincide con la oferta SIN vendedor nombrado (si existe) o es otra oferta (la de la plataforma).
+      const unnamed = same.find((x) => !sellerOfExisting(p, x).known);
+      const blocked = guard(p, unnamed ?? null, rec, unnamed ? 'offer' : 'link');
+      if (blocked.length) return reviewExisting(index, blocked, [p.id]);
+      return unnamed ? { kind: 'offer', product: p, offer: unnamed } : { kind: 'link', product: p, reason: 'mismo_anuncio_otro_vendedor' };
+    }
+    // Sin vendedor fiable en el registro y con ofertas ya registradas de ese anuncio: no se asume que coincide con ninguna.
+    if (same.length) return reviewExisting(index, ['vendedor_no_confirmado'], [p.id]);
   }
 
   // 2) GTIN válido.
   const byGtin = rec.product.gtin ? resolveByIdentifier(index, rec, index.byGtin.get(rec.product.gtin), 'gtin') : null;
-  if (byGtin) return byGtin;
+  if (byGtin) return secured(index, byGtin, rec);
 
   // 3) Marca + referencia del fabricante.
   const brandKey = normalizeBrand(rec.product.brand).key;
   if (brandKey && rec.product.mpn) {
     const byMpn = resolveByIdentifier(index, rec, index.byBrandMpn.get(`${brandKey}|${fold(rec.product.mpn)}`), 'marca_mpn');
-    if (byMpn) return byMpn;
+    if (byMpn) return secured(index, byMpn, rec);
   }
 
   // 4) Parecido débil (título): NUNCA fusiona; sólo deja la coincidencia para revisión.
   const titleKey = cleanTitleKey(rec.product.title);
   const weak = new Set<string>();
   index.byTitle.get(titleKey)?.forEach((id) => weak.add(id));
+  const mine = tokens(rec.product.title);
   if (brandKey) {
-    const mine = tokens(rec.product.title);
     index.byBrand.get(brandKey)?.forEach((id) => {
       const p = index.byId.get(id);
       if (p && jaccard(mine, tokens(p.title)) >= 0.9) weak.add(id);
+    });
+  } else {
+    // Sin marca en el registro no se puede acotar por fabricante: se comparan los títulos de las fichas SIN marca conocida.
+    index.byId.forEach((p, id) => {
+      if (!normalizeBrand(resolveBrand(p as never)).key && jaccard(mine, tokens(p.title)) >= 0.9) weak.add(id);
     });
   }
   const weakPlausible = [...weak].filter((id) => {
@@ -225,7 +417,9 @@ function resolve(index: Index, rec: CanonicalRecord): Resolution {
     return compatibility(p, rec) !== 'different_condition';
   });
   if (weakPlausible.length) {
-    return { kind: 'review', reasons: ['titulo_parecido_sin_identificador_fuerte'], candidates: candidatesOf(index, weakPlausible, 'titulo_parecido') };
+    // Identidad al CREAR: si el título se parece pero los identificadores del fabricante se contradicen, se dice expresamente (sigue sin crearse ni unirse).
+    const contradictory = weakPlausible.flatMap((id) => productContradictions(index.byId.get(id)!, rec, 'offer').filter((r) => /^(gtin|mpn)_contradictori/.test(r)));
+    return { kind: 'review', reasons: contradictory.length ? ['titulo_parecido_con_identificadores_contradictorios', ...new Set(contradictory)] : ['titulo_parecido_sin_identificador_fuerte'], candidates: candidatesOf(index, weakPlausible, 'titulo_parecido') };
   }
   return { kind: 'create' };
 }
@@ -236,13 +430,30 @@ const CONDITION_LABEL: Record<Condition, string | undefined> = {
   new: 'Nuevo',
   used: 'Usado',
   refurbished: 'Reacondicionado',
+  open_box: 'Abierto, sin usar',
   unknown: undefined,
 };
 
+/** Envío CONOCIDO de la oferta (sólo valores declarados) con la fecha de captura que lo respalda, si es fiable (no inferida). */
+function shippingSnapshot(o: CanonicalRecord['offer']): OfferShipping | undefined {
+  const s = o.shipping;
+  const out: OfferShipping = { cost: s.cost, free: s.free, days: s.days };
+  if (s.text) out.text = s.text;
+  if (s.cost === null && s.free === null && s.days === null && !s.text) return undefined;
+  if (!o.capturedAtInferred && o.capturedAt) out.asOf = o.capturedAt;
+  return out;
+}
+
 function storedFrom(rec: CanonicalRecord, batchId: string, nowIso: string): StoredOffer {
   const key = computeOfferKey(rec.offer);
+  // Sólo se guardan atributos CONOCIDOS que la fuente declaró (nada inventado). Las ofertas ya guardadas no se completan.
+  const variant: NonNullable<StoredOffer['variant']> = {};
+  for (const k of VARIANT_KEYS) if (rec.variant[k]) variant[k] = rec.variant[k];
   return {
     ...rec.offer,
+    shipping: shippingSnapshot(rec.offer) ?? rec.offer.shipping,
+    ...(Object.keys(variant).length ? { variant } : {}),
+    ...(rec.variant.pack ? { quantity: rec.variant.pack } : {}),
     offerId: shortHash(key, 10),
     offerKey: key,
     receivedAt: nowIso, // recepción por Treidilor (no es verificación)
@@ -273,6 +484,8 @@ function buildProduct(rec: CanonicalRecord, id: string, batchId: string, nowIso:
     capturedAtInferred: o.capturedAtInferred === true,
     receivedAt: nowIso,
     source: { channel: 'json', batchId, adapter: 'json-import' },
+    // Envío de la oferta principal (coste, gratis, plazo) con su fecha de referencia: los campos planos no guardan el coste.
+    ...(shippingSnapshot(o) ? { shipping: shippingSnapshot(o) } : {}),
   };
   const extra: Any = { importMeta: { channel: 'json', batchId, importedAt: nowIso }, priceReading: reading };
   // Trazabilidad: la categoría que traía la fuente se conserva aunque el destino elegido en el panel la sustituya.
@@ -392,6 +605,7 @@ function patchOffer(existing: StoredOffer, rec: CanonicalRecord, batchId: string
   if (s.free !== null && existing.shipping.free !== s.free) { next.shipping.free = s.free; changed.push('envio_gratis'); }
   if (s.days !== null && existing.shipping.days !== s.days) { next.shipping.days = s.days; changed.push('envio_plazo'); }
   if (s.text && s.text !== existing.shipping.text) { next.shipping.text = s.text; changed.push('envio_texto'); }
+  if (changed.some((c) => c.startsWith('envio_')) && !incoming.capturedAtInferred && incoming.capturedAt) next.shipping.asOf = incoming.capturedAt;
   // El vendedor de la oferta implícita no es representable en los campos planos: no cuenta como cambio.
   if (!existing.implicit && !existing.sellerName && incoming.sellerName) { next.sellerName = incoming.sellerName; changed.push('vendedor'); }
   if (!existing.affiliateUrl && incoming.affiliateUrl && !existing.implicit) { next.affiliateUrl = incoming.affiliateUrl; changed.push('enlace_afiliado'); }
@@ -430,7 +644,22 @@ function applyToFlat(p: P, patch: OfferPatch, rec: CanonicalRecord, batchId: str
     receivedAt: nowIso,
     source: { channel: 'json', batchId, adapter: 'json-import' },
     ...(previous?.verifiedBefore?.length ? { verifiedBefore: previous.verifiedBefore } : {}),
+    ...(previous?.shipping ? { shipping: previous.shipping } : {}),
   };
+  // Envío de la oferta principal: sólo se actualiza si el envío cambió (coste, gratis, plazo o texto) y con lo que declara el registro.
+  if (patch.changed.some((c) => c.startsWith('envio_'))) {
+    const snap = shippingSnapshot(rec.offer);
+    if (snap) {
+      const prev = (previous?.shipping ?? {}) as Any;
+      const merged: Any = { ...prev };
+      if (snap.cost !== null) merged.cost = snap.cost;
+      if (snap.free !== null) merged.free = snap.free;
+      if (snap.days !== null) merged.days = snap.days;
+      if (snap.text) merged.text = snap.text;
+      if (snap.asOf) merged.asOf = snap.asOf;
+      reading.shipping = merged as never;
+    }
+  }
 
   // Si el PRECIO (o la moneda) cambió de verdad, la verificación anterior corresponde a un precio que ya no es el actual:
   // se retira de los campos públicos (la ficha deja de mostrar «Precio verificado» y las alertas no se apoyan en ella) y
@@ -514,6 +743,8 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
   const created: P[] = [];
   const results: RecordResult[] = [];
   const offset = opts.indexOffset ?? 0;
+  // Anuncios ya aplicados en ESTE lote (clave de oferta → precio): un segundo registro con otro precio es contradictorio.
+  const batchApplied = new Map<string, number>();
 
   const setProduct = (p: P) => {
     if (created.some((c) => c.id === p.id)) created[created.findIndex((c) => c.id === p.id)] = p;
@@ -529,7 +760,7 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
         results.push(result(gi, 'rejected', { reasons: norm.errors, title: titleOf(raw) }));
         return;
       }
-      const rec = norm.record;
+      const rec = sanitizeSeller(norm.record);
       const base = { title: rec.product.title, warnings: rec.warnings };
       const offerKey = computeOfferKey(rec.offer);
       // Datos contradictorios en la propia fuente (título ≠ atributos…): no se aplica nada; se conserva para revisión.
@@ -537,9 +768,20 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
         results.push(result(gi, 'review', { ...base, offerKey, reasons: rec.reviewReasons, record: rec }));
         return;
       }
+      // El id declarado de la oferta no puede contradecir el que lleva su propia URL (ASIN, id de AliExpress).
+      const contradiction = contradictionOfOffer({ platform: rec.offer.platform, externalId: rec.offer.externalId, url: rec.offer.url, canonicalUrl: rec.offer.canonicalUrl });
+      if (contradiction) {
+        results.push(result(gi, 'review', { ...base, offerKey, reasons: ['identificadores_contradictorios', contradiction], record: rec }));
+        return;
+      }
       const res = resolve(index, rec);
 
       if (res.kind === 'review') {
+        // «Sólo productos nuevos»: si la revisión protege algo que YA existe, se omite como «ya existe» (no se escribe nada).
+        if (opts.onlyNew && res.existing) {
+          results.push(result(gi, 'unchanged', { ...base, productId: res.candidates[0]?.productId, offerKey, reasons: ['ya_existe_omitido', ...res.reasons] }));
+          return;
+        }
         results.push(result(gi, 'review', { ...base, offerKey, reasons: res.reasons, candidates: res.candidates, record: rec }));
         return;
       }
@@ -575,6 +817,12 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
         return;
       }
 
+      // Mismo anuncio repetido en el lote con un precio contradictorio: no se actualiza en silencio; queda en revisión (se conserva el primero).
+      if (offerKey && (res.kind === 'offer' || res.kind === 'link') && batchApplied.has(offerKey) && !sameNumber(batchApplied.get(offerKey), rec.offer.price)) {
+        results.push(result(gi, 'review', { ...base, offerKey, reasons: [`anuncio_repetido_en_lote_con_precio_distinto:${batchApplied.get(offerKey)}≠${rec.offer.price}`], candidates: candidatesOf(index, [res.product.id], 'repetido_en_lote'), record: rec }));
+        return;
+      }
+
       if (res.kind === 'offer') {
         const patch = patchOffer(res.offer, rec, opts.batchId, opts.nowIso);
         if ('stale' in patch) {
@@ -600,6 +848,7 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
           nextProduct = { ...filled, extra: { ...(filled.extra ?? {}), offers: list } } as P;
         }
         setProduct(nextProduct);
+        if (offerKey) batchApplied.set(offerKey, rec.offer.price);
         const reasons = [...patch.changed, ...blocked.map((b) => `campo_bloqueado_${b}`)];
         if (!patch.changed.length) reasons.push('datos_de_producto_completados');
         results.push(
@@ -624,6 +873,7 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
         const filled = fillProductData(res.product, rec);
         const nextProduct = { ...filled, extra: { ...(filled.extra ?? {}), offers: [...stored, offer] } } as P;
         setProduct(nextProduct);
+        if (offerKey) batchApplied.set(offerKey, rec.offer.price);
         results.push(
           result(gi, 'linked', {
             ...base,
@@ -660,6 +910,7 @@ export function runImport(catalog: Product[], rawRecords: unknown[], defaults: I
       const product = buildProduct(createRec, id, opts.batchId, opts.nowIso, opts.target, sourceCategory);
       created.push(product);
       index.register(product);
+      if (offerKey) batchApplied.set(offerKey, rec.offer.price);
       results.push(
         result(gi, 'created', {
           ...base,

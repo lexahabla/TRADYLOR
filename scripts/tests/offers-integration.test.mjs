@@ -213,7 +213,9 @@ test('LIMITACIÓN · ningún módulo lee extra.offers fuera del importador: no h
     }
   };
   walk(root);
-  const allowed = ['lib/catalogOffers.ts', 'lib/jsonImport/engine.ts', 'lib/jsonImport/types.ts', 'lib/deletedIdentity.ts'];
+  // Etapa 1 (09/11/2026): lib/comparableOffers.ts es un lector NUEVO y de SÓLO LECTURA (capa del futuro comparador; no escribe ni toca
+  // refresco, observaciones o alertas). Se añade aquí de forma explícita para que el aviso siga cumpliendo su función con cualquier otro lector.
+  const allowed = ['lib/catalogOffers.ts', 'lib/comparableOffers.ts', 'lib/jsonImport/engine.ts', 'lib/jsonImport/types.ts', 'lib/deletedIdentity.ts'];
   assert.deepEqual(hits.filter((h) => !allowed.includes(h)), [], 'si aparece otro lector, revisar su integración con refresco, observaciones y alertas');
 });
 

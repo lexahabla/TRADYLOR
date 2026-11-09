@@ -62,8 +62,9 @@ export function productCondition(p: P): Condition {
 /** Oferta «implícita»: los campos planos de la ficha vistos como una oferta. */
 export function implicitOffer(p: P): StoredOffer | null {
   const reading = (p.extra as Record<string, unknown> | undefined)?.priceReading as
-    | { capturedAt?: string; capturedAtInferred?: boolean; receivedAt?: string }
+    | { capturedAt?: string; capturedAtInferred?: boolean; receivedAt?: string; shipping?: { cost?: number; free?: boolean; days?: number; text?: string; asOf?: string } }
     | undefined;
+  const readShip = reading?.shipping;
   const platform = fold(p.network || p.merchant).replace(/ /g, '');
   const externalId = extractSourceId(p as never) || undefined;
   const url = String(p.affiliateUrl || p.buyNowUrl || '');
@@ -88,11 +89,13 @@ export function implicitOffer(p: P): StoredOffer | null {
     currency: String(p.currency || 'EUR').toUpperCase(),
     originalPrice: Number(p.originalPrice) > Number(p.price) ? Number(p.originalPrice) : undefined,
     availability: p.inStock === true ? 'in_stock' : p.inStock === false ? 'out_of_stock' : 'unknown',
+    // El coste/«gratis» de la oferta principal recibida por JSON se guarda en `extra.priceReading.shipping` (los campos planos no tienen coste).
     shipping: {
-      cost: null,
-      free: p.freeShipping === true ? true : null,
-      days: typeof p.shippingDays === 'number' ? p.shippingDays : null,
-      text: p.shippingInfo || undefined,
+      cost: typeof readShip?.cost === 'number' ? readShip.cost : null,
+      free: p.freeShipping === true || readShip?.free === true ? true : null,
+      days: typeof p.shippingDays === 'number' ? p.shippingDays : typeof readShip?.days === 'number' ? readShip.days : null,
+      text: p.shippingInfo || readShip?.text || undefined,
+      ...(readShip?.asOf ? { asOf: String(readShip.asOf) } : {}),
     },
     condition: productCondition(p),
     // CAPTURA: la de la última lectura recibida por JSON (si existe); si no, la verificación del refresco.

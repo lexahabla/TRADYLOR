@@ -113,6 +113,8 @@ export function normalizeCondition(value: unknown): Condition {
   const t = String(value ?? '').toLowerCase();
   if (!t.trim()) return 'unknown';
   if (/refurb|reacondicion|renewed|renovad|reconditioned/.test(t)) return 'refurbished';
+  // «Abierto, sin usar» / «Open box»: condición propia (ni nuevo ni usado). Antes «open box» contaba como usado y el texto en español como desconocido.
+  if (/open[- ]?box|abiert[oa]|caja abierta|opened/.test(t)) return 'open_box';
   if (/\bused\b|usad|segunda mano|pre-?owned|second.?hand|like new|open box/.test(t)) return 'used';
   if (/\bnew\b|nuevo|neuf|neu\b/.test(t)) return 'new';
   return 'unknown';

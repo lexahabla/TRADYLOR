@@ -19,6 +19,7 @@ import fs from 'node:fs';
 import { dataFile } from './paths';
 import { canonicalToUnified, normalizeCatalogProducts } from './networks/connectors/base';
 import type { Product } from '../data/products';
+import { isFallbackShippingText } from './commercialClaims';
 
 export interface ResolvedShipping {
   shippingDays?: number;
@@ -27,8 +28,6 @@ export interface ResolvedShipping {
 }
 
 const CATALOG_FILE = dataFile('aliexpress-catalog.json');
-/** Días ≤ 3 se consideran envío rápido/gratis (mismo criterio que el importador). */
-const FREE_SHIPPING_MAX_DAYS = 3;
 
 interface SnapshotEntry {
   productUrl?: string;
@@ -138,7 +137,8 @@ function findSnapshotEntry(product: Product): SnapshotEntry | null {
 export function resolveProductShipping(product: Product): ResolvedShipping {
   const own: ResolvedShipping = {};
   if (product.shippingDays != null) own.shippingDays = product.shippingDays;
-  if (product.shippingInfo) own.shippingInfo = product.shippingInfo;
+  // El texto «Envío estándar eBay (3-5 días)» es el fallback del código (la fuente no dio plazo): no se presenta como dato del proveedor.
+  if (product.shippingInfo && !isFallbackShippingText(product.shippingInfo)) own.shippingInfo = product.shippingInfo;
   if (product.freeShipping != null) own.freeShipping = product.freeShipping;
   if (own.shippingDays != null && own.shippingInfo && own.freeShipping != null) return own;
 
@@ -147,8 +147,11 @@ export function resolveProductShipping(product: Product): ResolvedShipping {
 
   const extra = entry.extra ?? {};
   const days = own.shippingDays ?? parseDays(extra['Días de envío']);
-  const info = own.shippingInfo ?? (entry.shippingInfo || (days != null ? `Envío en ${days} días` : undefined));
-  const free = own.freeShipping ?? (days != null ? days <= FREE_SHIPPING_MAX_DAYS : undefined);
+  const snapshotInfo = entry.shippingInfo && !isFallbackShippingText(entry.shippingInfo) ? entry.shippingInfo : undefined;
+  const info = own.shippingInfo ?? (snapshotInfo || (days != null ? `Envío en ${days} días` : undefined));
+  // Un plazo corto NO prueba que el envío sea gratis: sólo se presenta «gratis» si el dato lo afirma (`freeShipping`). Antes se
+  // deducía «≤ 3 días ⇒ gratis». `freeShipping=false` por defecto tampoco prueba un coste positivo (no se interpreta).
+  const free = own.freeShipping;
 
   const resolved: ResolvedShipping = {};
   if (days != null) resolved.shippingDays = days;

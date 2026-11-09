@@ -11815,7 +11815,7 @@ function renderTableRows(products, resetPage = true) {
       detailsBox.appendChild(destination);
       var describe = function (r) {
         var label = '#' + (r.index + 1) + (r.title ? ' · ' + r.title : '');
-        return label + ' — ' + (r.reasons || []).map(reasonText).join('; ');
+        return label + ' — ' + ((r.reasonTexts && r.reasonTexts.length) ? r.reasonTexts : (r.reasons || []).map(reasonText)).join('; ');
       };
       var d1 = detailList('Registros rechazados', by.rejected, describe);
       var d2 = detailList('Coincidencias dudosas pendientes de revisión', by.review, function (r) {

@@ -24,6 +24,7 @@ import { DATA_FILE_PATH, readProductsFromFile, writeProductsToFile } from '../pr
 import { loadDeletedSnapshot, matchDeletedOffer, matchDeletedProduct } from '../deletedIdentity';
 import { invalidateCatalogCache } from '../catalog';
 import { runImport } from './engine';
+import { explainReasons } from './reasonLabels';
 import type { ImportDefaults, ImportTarget, Outcome, RecordResult } from './types';
 import { adaptApifyAmazonItem, isApifyAmazonItem } from './apifyAmazon';
 import { adaptApifyTemuItem, isApifyTemuItem } from './apifyTemu';
@@ -126,7 +127,7 @@ export function processChunk(input: {
     backup,
     results: out.results.map((r) => {
       const { record: _omit, ...rest } = r;
-      return rest;
+      return { ...rest, reasonTexts: explainReasons(rest.reasons) };
     }),
   };
 }
