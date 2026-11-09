@@ -1,7 +1,7 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
-import { json, readJson, requireUser, sameOrigin } from '../../../lib/alertsHttp';
+import { forbiddenOrigin, json, readJson, requireUser, sameOrigin } from '../../../lib/alertsHttp';
 import { AlertError, alertValue, createAlert, currentPriceOf, dropVisitsEnabled, evaluateAlerts, getPrefs, listAlerts, listNotifications, unreadCount } from '../../../lib/priceAlertCenter';
 import { productKey } from '../../../lib/catalog';
 
@@ -22,7 +22,7 @@ export const GET: APIRoute = ({ request }) => {
 };
 
 export const POST: APIRoute = async ({ request }) => {
-  if (!sameOrigin(request)) return json({ error: 'origen_no_permitido' }, 403);
+  if (!sameOrigin(request)) return forbiddenOrigin();
   const auth = requireUser(request);
   if (auth instanceof Response) return auth;
   const body = await readJson(request);

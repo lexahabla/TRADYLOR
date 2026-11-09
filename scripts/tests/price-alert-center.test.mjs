@@ -308,3 +308,18 @@ test('menú de usuario: «Alertas de precio» con campana y punto rojo sólo con
   // La página pinta con textContent (sin innerHTML con datos del usuario/catálogo).
   assert.doesNotMatch(page.split('<script')[1] ?? '', /innerHTML/);
 });
+
+test('API detrás del proxy: el Origin público (https://treidilor.com) se acepta aunque la URL interna sea otra (regresión del «no se pudo activar la alerta»)', async () => {
+  reset(); setCatalog([PRODUCT({ price: 50 })]);
+  const index = await import('../../src/pages/api/alertas-precio/index.ts');
+  const proxied = async (headers) => index.POST({
+    request: new Request('http://0.0.0.0:4321/api/alertas-precio', { method: 'POST', headers: { 'Content-Type': 'application/json', Cookie: cookieOf(alice), ...headers }, body: JSON.stringify({ productId: 'prod-a', targetPrice: 40 }) }),
+  });
+  assert.equal((await proxied({ Origin: 'https://treidilor.com' })).status, 201, 'Origin público detrás del proxy');
+  assert.equal((await proxied({ Origin: 'https://www.treidilor.com' })).status, 201);
+  assert.equal((await proxied({ Origin: 'https://otro.example', 'Sec-Fetch-Site': 'same-origin' })).status, 201, 'Sec-Fetch-Site: same-origin basta');
+  assert.equal((await proxied({ 'X-Forwarded-Host': 'beta.ejemplo.es', Origin: 'https://beta.ejemplo.es' })).status, 201, 'host reenviado por el proxy');
+  const evil = await proxied({ Origin: 'https://evil.example' });
+  assert.equal(evil.status, 403);
+  assert.match((await evil.json()).message, /No se pudo verificar el origen/, 'el 403 trae un mensaje legible');
+});

@@ -1,12 +1,12 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
-import { json, readJson, requireUser, sameOrigin } from '../../../lib/alertsHttp';
+import { forbiddenOrigin, json, readJson, requireUser, sameOrigin } from '../../../lib/alertsHttp';
 import { AlertError, deleteAlert, updateAlert } from '../../../lib/priceAlertCenter';
 
 /** PATCH: modifica el objetivo, el envío incluido o activa/pausa. DELETE: elimina. Sólo el propietario (si no es suya: 404). */
 export const PATCH: APIRoute = async ({ request, params }) => {
-  if (!sameOrigin(request)) return json({ error: 'origen_no_permitido' }, 403);
+  if (!sameOrigin(request)) return forbiddenOrigin();
   const auth = requireUser(request);
   if (auth instanceof Response) return auth;
   const body = await readJson(request);
@@ -25,7 +25,7 @@ export const PATCH: APIRoute = async ({ request, params }) => {
 };
 
 export const DELETE: APIRoute = ({ request, params }) => {
-  if (!sameOrigin(request)) return json({ error: 'origen_no_permitido' }, 403);
+  if (!sameOrigin(request)) return forbiddenOrigin();
   const auth = requireUser(request);
   if (auth instanceof Response) return auth;
   return deleteAlert(auth.userId, String(params.id ?? '')) ? json({ ok: true }) : json({ error: 'no_encontrada' }, 404);
