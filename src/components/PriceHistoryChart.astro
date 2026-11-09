@@ -1,291 +1,264 @@
 ---
 /**
- * TREIDILOR — Gráfico de histórico de precio (ficha de producto).
- * SVG 100% propio (sin librerías), igual que el resto de gráficos del proyecto.
- * Con menos de 3 lecturas no dibuja curva: muestra el precio verificado hoy.
+ * TREIDILOR — Historial de precios y alerta de precio (ficha de producto).
+ * SVG 100% propio. Vista de lib/priceHistoryView.ts: periodos 1/3/6/12 meses con lecturas REALES (nunca puntos inventados; gráfico en escalón),
+ * mínimo/máximo con su fecha, precio del producto SIN envío (el envío se indica aparte) y la caja «Alerta de precio» (precio objetivo).
  */
 import { formatDateEs } from '../lib/commercialClaims';
+import { buildHistoryView } from '../lib/priceHistoryView';
 
 export interface Props {
-  points: { date: string; price: number }[];
+  product: Record<string, any>;
   currentPrice: number;
   /** Fecha (ISO) de la última verificación REAL contra la tienda; sin ella el precio actual se rotula «no verificado». */
   verifiedAt?: string | null;
+  /** Texto de gastos de envío (dato de la tienda) o null. Se muestra APARTE del precio. */
+  shippingText?: string | null;
 }
 
-const { points, currentPrice, verifiedAt = null } = Astro.props;
+const { product, currentPrice, verifiedAt = null, shippingText = null } = Astro.props;
 const verifiedDate = formatDateEs(verifiedAt);
+const view = buildHistoryView(product);
+const eur = new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 });
+const day = (iso: string | null | undefined) => (iso ? formatDateEs(iso) : '');
 
-const valid = (Array.isArray(points) ? points : []).filter(
-  (p) => p && typeof p.date === 'string' && Number.isFinite(p.price) && p.price > 0,
-);
-
-const hasChart = valid.length >= 3;
-
-const currency = new Intl.NumberFormat('es-ES', {
-  style: 'currency',
-  currency: 'EUR',
-  minimumFractionDigits: 2,
-});
-const shortDate = new Intl.DateTimeFormat('es-ES', { day: '2-digit', month: 'short' });
-
-const prices = valid.map((p) => p.price);
-const min = hasChart ? Math.min(...prices) : currentPrice;
-const max = hasChart ? Math.max(...prices) : currentPrice;
-const first = hasChart ? valid[0] : null;
-const last = hasChart ? valid[valid.length - 1] : null;
-const deltaPct =
-  hasChart && first && first.price > 0 ? ((last!.price - first.price) / first.price) * 100 : 0;
-
-const parseDate = (iso: string): Date => new Date(`${iso}T00:00:00`);
-
-// --- Geometría del SVG -------------------------------------------------------
-const W = 640;
-const H = 190;
-const PAD_X = 10;
-const PAD_Y = 18;
-const n = valid.length;
-const range = max - min || 1;
-const xAt = (i: number): number => (n <= 1 ? W / 2 : PAD_X + (i * (W - PAD_X * 2)) / (n - 1));
-const yAt = (price: number): number => PAD_Y + (1 - (price - min) / range) * (H - PAD_Y * 2);
-
-const linePath = valid
-  .map((p, i) => `${i === 0 ? 'M' : 'L'}${xAt(i).toFixed(1)},${yAt(p.price).toFixed(1)}`)
-  .join(' ');
-const areaPath = hasChart
-  ? `${linePath} L${xAt(n - 1).toFixed(1)},${H - PAD_Y} L${xAt(0).toFixed(1)},${H - PAD_Y} Z`
-  : '';
-const minIndex = prices.indexOf(min);
-const maxIndex = prices.indexOf(max);
+// Rango orientativo del control deslizante de la alerta: desde la mitad del mínimo observado hasta el precio actual.
+const allPrices = view.periods.flatMap((p) => p.points.map((x) => x.price));
+const observedMin = allPrices.length ? Math.min(...allPrices) : currentPrice;
+const sliderMin = Math.max(0.5, Math.floor(Math.min(observedMin, currentPrice) * 0.5));
+const sliderMax = Math.ceil(currentPrice);
+const suggested = Math.round((observedMin < currentPrice ? observedMin : currentPrice * 0.95) * 100) / 100;
+const hasAny = view.total >= 1;
 ---
 
-{hasChart ? (
-  <section class="phc" aria-label="Histórico de precio">
-    <header class="phc-head">
-      <div>
-        <p class="phc-kicker">Seguimiento de precio</p>
-        <h2 class="phc-title">Histórico de precio</h2>
-      </div>
-      <span class={`phc-delta${deltaPct < 0 ? ' is-down' : deltaPct > 0 ? ' is-up' : ''}`}>
-        {deltaPct > 0 ? '+' : ''}
-        {deltaPct.toFixed(1)}% desde el {first ? shortDate.format(parseDate(first.date)) : ''}
-      </span>
-    </header>
+<section class="phc" id="historico-precio-panel" aria-label="Historial de precios y alerta de precio" data-phc data-default-period={view.defaultPeriod}>
+  <header class="phc-head">
+    <div>
+      <p class="phc-kicker">Seguimiento de precio</p>
+      <h2 class="phc-title">Historial de precios</h2>
+    </div>
+    <div class="phc-tabs" role="tablist" aria-label="Periodo del historial">
+      {view.periods.map((p) => (
+        <button type="button" role="tab" class="phc-tab" id={`phc-tab-${p.key}`} data-phc-tab={p.key} aria-controls={`phc-panel-${p.key}`} aria-selected={p.key === view.defaultPeriod ? 'true' : 'false'} tabindex={p.key === view.defaultPeriod ? 0 : -1}>
+          {p.key === '12m' ? '12 m.' : p.key === '6m' ? '6 m.' : p.key === '3m' ? '3 m.' : '1 m.'}<span class="sr-only"> ({p.label})</span>
+        </button>
+      ))}
+    </div>
+  </header>
 
-    <div class="phc-stats">
-      <div class="phc-stat">
-        <span class="phc-stat-label">Precio actual</span>
-        <strong class="phc-stat-value">{currency.format(currentPrice)}</strong>
-      </div>
-      <div class="phc-stat">
-        <span class="phc-stat-label">Mínimo</span>
-        <strong class="phc-stat-value is-low">{currency.format(min)}</strong>
-      </div>
-      <div class="phc-stat">
-        <span class="phc-stat-label">Máximo</span>
-        <strong class="phc-stat-value is-high">{currency.format(max)}</strong>
-      </div>
-      <div class="phc-stat">
-        <span class="phc-stat-label">Lecturas</span>
-        <strong class="phc-stat-value">{n} días</strong>
+  <div class="phc-now">
+    <span class="phc-now-price">{eur.format(currentPrice)}</span>
+    <span class="phc-now-label">Precio actual registrado{verifiedDate ? ` · verificado el ${verifiedDate}` : ' · no verificado con la tienda'}</span>
+    <span class="phc-now-ship">Gastos de envío (aparte): {shippingText ?? 'no indicado'}</span>
+  </div>
+
+  {view.periods.map((p) => (
+    <div class="phc-panel" role="tabpanel" id={`phc-panel-${p.key}`} aria-labelledby={`phc-tab-${p.key}`} hidden={p.key !== view.defaultPeriod}>
+      {p.sufficient && p.chart ? (
+        <>
+          <div class="phc-stats">
+            <div class="phc-stat">
+              <span class="phc-stat-label">Mínimo</span>
+              <strong class="phc-stat-value is-low">{eur.format(p.min!.price)}</strong>
+              <span class="phc-stat-date">{day(p.min!.date)}</span>
+            </div>
+            <div class="phc-stat">
+              <span class="phc-stat-label">Máximo</span>
+              <strong class="phc-stat-value is-high">{eur.format(p.max!.price)}</strong>
+              <span class="phc-stat-date">{day(p.max!.date)}</span>
+            </div>
+            <div class="phc-stat">
+              <span class="phc-stat-label">Último registro</span>
+              <strong class="phc-stat-value">{eur.format(p.last!.price)}</strong>
+              <span class="phc-stat-date">{day(p.last!.date)}</span>
+            </div>
+            <div class="phc-stat">
+              <span class="phc-stat-label">Variación</span>
+              <strong class={`phc-stat-value ${p.changePct! < 0 ? 'is-low' : p.changePct! > 0 ? 'is-high' : ''}`}>{p.changePct! > 0 ? '+' : ''}{p.changePct!.toLocaleString('es-ES')} %</strong>
+              <span class="phc-stat-date">{p.points.length} lecturas · {day(p.first!.date)} → {day(p.last!.date)}</span>
+            </div>
+          </div>
+          <div class="phc-chart">
+            <div class="phc-yaxis" aria-hidden="true">
+              {p.chart.yTicks.map((t) => <span style={`top:${(t.y / p.chart!.height) * 100}%`}>{eur.format(t.price)}</span>)}
+            </div>
+            <svg viewBox={`0 0 ${p.chart.width} ${p.chart.height}`} role="img" preserveAspectRatio="none"
+              aria-label={`Evolución del precio en ${p.label}: de ${eur.format(p.min!.price)} (mínimo) a ${eur.format(p.max!.price)} (máximo), ${p.points.length} lecturas reales`}>
+              <path d={p.chart.area} fill="rgba(59,130,246,0.14)" />
+              <path d={p.chart.path} fill="none" stroke="#60a5fa" stroke-width="2.4" stroke-linejoin="round" vector-effect="non-scaling-stroke" />
+              {p.chart.markers.map((m) => (
+                <circle cx={m.x} cy={m.y} r="3.2" fill={m.source === 'verificada' ? '#34d399' : '#0d1422'} stroke={m.source === 'verificada' ? '#34d399' : '#60a5fa'} stroke-width="2" vector-effect="non-scaling-stroke">
+                  <title>{`${day(m.date)}: ${eur.format(m.price)} (${m.source === 'verificada' ? 'verificado con la tienda' : 'precio registrado al visitar la ficha'})`}</title>
+                </circle>
+              ))}
+            </svg>
+            <div class="phc-axis"><span>{day(p.first!.date)}</span><span>{day(p.last!.date)}</span></div>
+          </div>
+        </>
+      ) : (
+        <p class="phc-empty" role="status">
+          Sin historial suficiente en este periodo ({p.points.length === 1 ? '1 lectura registrada' : `${p.points.length} lecturas registradas`}). Hacen falta al menos 2 lecturas reales; no se
+          inventan precios para completar el gráfico.
+        </p>
+      )}
+    </div>
+  ))}
+
+  <p class="phc-footnote">
+    Cada punto es el precio de esta ficha registrado en la fecha indicada (al visitarse la ficha o al verificarse con la tienda; los verdes están verificados).
+    No hay una actualización diaria automática: los huecos entre lecturas no se rellenan y el gráfico mantiene el último precio registrado hasta la siguiente lectura.
+    Es el historial de esta oferta y variante, sin gastos de envío. El precio final lo confirma la tienda.
+  </p>
+
+  <!-- Alerta de precio (precio objetivo) -->
+  <div class="phc-alert" data-alert-box data-product-id={product.id} data-current={currentPrice} data-min={sliderMin} data-max={sliderMax}>
+    <h3 class="phc-alert-title">Activar alerta de precio</h3>
+    <p class="phc-alert-help">Te avisamos en «Alertas de precio» (y por correo, si lo permites) cuando el precio registrado alcance tu objetivo.</p>
+    <div class="phc-alert-row">
+      <label class="phc-alert-label" for="phc-target">Tu precio objetivo</label>
+      <div class="phc-alert-input">
+        <input id="phc-target" type="number" inputmode="decimal" step="0.01" min="0.01" value={suggested.toFixed(2)} data-alert-target />
+        <span aria-hidden="true">€</span>
       </div>
     </div>
-
-    <div class="phc-chart">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img"
-        aria-label={`Evolución del precio: de ${currency.format(min)} a ${currency.format(max)} en ${n} lecturas`}
-        preserveAspectRatio="none">
-        <defs>
-          <linearGradient id="phcFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.34" />
-            <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.02" />
-          </linearGradient>
-        </defs>
-        <path d={areaPath} fill="url(#phcFill)" />
-        <path d={linePath} fill="none" stroke="#60a5fa" stroke-width="2.5" stroke-linejoin="round"
-          stroke-linecap="round" vector-effect="non-scaling-stroke" />
-        {valid.map((p, i) => (
-          <circle cx={xAt(i)} cy={yAt(p.price)} r={n > 60 ? 0 : 3} fill="#0d1422" stroke="#60a5fa"
-            stroke-width="2">
-            <title>{`${shortDate.format(parseDate(p.date))}: ${currency.format(p.price)}`}</title>
-          </circle>
-        ))}
-        <circle cx={xAt(maxIndex)} cy={yAt(max)} r="4.5" fill="#fbbf24" />
-        <circle cx={xAt(minIndex)} cy={yAt(min)} r="4.5" fill="#34d399" />
-      </svg>
-      <div class="phc-axis">
-        <span>{first ? shortDate.format(parseDate(first.date)) : ''}</span>
-        <span>{last ? shortDate.format(parseDate(last.date)) : ''}</span>
-      </div>
-    </div>
-
-    <p class="phc-footnote">
-      Puntos registrados cuando se visita la ficha o se verifica el precio (no es una lectura diaria garantizada).
-      Último punto: {last ? shortDate.format(parseDate(last.date)) : 'sin fecha'} ·
-      {verifiedDate ? ` precio verificado el ${verifiedDate}` : ' precio no verificado con la tienda'} · el precio final lo confirma la tienda.
-    </p>
-  </section>
-) : (
-  <section class="phc phc-pending" aria-label="Histórico de precio">
-    <p class="phc-kicker">Seguimiento de precio</p>
-    <p class="phc-pending-text">
-      Precio actual: <strong>{currency.format(currentPrice)}</strong>
-      {verifiedDate ? `(verificado el ${verifiedDate})` : '(no verificado con la tienda)'}.
-      Estamos registrando el histórico; en cuanto haya 3 lecturas verás aquí la gráfica de evolución.
-    </p>
-  </section>
-)}
+    <input class="phc-range" type="range" min={sliderMin} max={sliderMax} step="0.01" value={suggested} data-alert-range aria-label="Ajustar el precio objetivo" />
+    <div class="phc-range-scale" aria-hidden="true"><span>poco realista</span><span>realista</span></div>
+    <label class="phc-toggle">
+      <input type="checkbox" data-alert-ship /> <span>Incluir gastos de envío en el objetivo</span>
+    </label>
+    <button type="button" class="phc-alert-btn" data-alert-submit>Activar alerta de precio</button>
+    <p class="phc-alert-msg" data-alert-msg role="status" aria-live="polite"></p>
+    <a class="phc-alert-link" href="/alertas-precio">Ver mis alertas de precio</a>
+    {!hasAny && <p class="phc-alert-note">Todavía no hay historial de esta ficha; la alerta se comprobará con los precios que se registren.</p>}
+  </div>
+</section>
 
 <style>
-  .phc {
-    background: rgba(15, 23, 42, 0.55);
-    border: 1px solid rgba(96, 165, 250, 0.18);
-    border-radius: 16px;
-    padding: 1.25rem 1.35rem;
-  }
+  .phc { background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(96, 165, 250, 0.18); border-radius: 16px; padding: 1.25rem 1.35rem; }
+  .phc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.9rem; }
+  .phc-kicker { margin: 0 0 0.25rem; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.09em; text-transform: uppercase; color: #60a5fa; }
+  .phc-title { margin: 0; font-family: var(--font-heading); font-size: 1.1rem; color: var(--color-text-main); }
+  .phc-tabs { display: inline-flex; gap: 0.25rem; padding: 0.2rem; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 999px; }
+  .phc-tab { min-height: 36px; min-width: 44px; padding: 0 0.8rem; border: 0; border-radius: 999px; background: transparent; color: #94a3b8; font-weight: 700; font-size: 0.8rem; cursor: pointer; }
+  .phc-tab:hover { color: var(--color-text-main); }
+  .phc-tab[aria-selected='true'] { background: var(--color-primary); color: #fff; }
+  .phc-tab:focus-visible { outline: 2px solid var(--color-accent-amber); outline-offset: 2px; }
+  .phc-now { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.2rem 0.9rem; margin-bottom: 1rem; }
+  .phc-now-price { font-size: 1.6rem; font-weight: 800; color: var(--color-text-main); }
+  .phc-now-label, .phc-now-ship { font-size: 0.78rem; color: #94a3b8; }
+  .phc-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.6rem; margin-bottom: 1rem; }
+  .phc-stat { display: flex; flex-direction: column; gap: 0.15rem; padding: 0.55rem 0.7rem; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 10px; min-width: 0; }
+  .phc-stat-label { font-size: 0.66rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; }
+  .phc-stat-value { font-size: 0.95rem; font-weight: 800; color: var(--color-text-main); }
+  .phc-stat-value.is-low { color: #34d399; }
+  .phc-stat-value.is-high { color: #fbbf24; }
+  .phc-stat-date { font-size: 0.68rem; color: #94a3b8; }
+  .phc-chart { position: relative; width: 100%; padding-left: 62px; }
+  .phc-chart svg { display: block; width: 100%; height: 190px; background: rgba(2, 6, 23, 0.45); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 12px; }
+  .phc-yaxis { position: absolute; left: 0; top: 0; width: 58px; height: 190px; }
+  .phc-yaxis span { position: absolute; right: 4px; transform: translateY(-50%); font-size: 0.66rem; color: #94a3b8; white-space: nowrap; }
+  .phc-axis { display: flex; justify-content: space-between; margin-top: 0.35rem; font-size: 0.7rem; color: #94a3b8; }
+  .phc-empty { margin: 0 0 0.5rem; padding: 1rem; border: 1px dashed rgba(148, 163, 184, 0.35); border-radius: 12px; font-size: 0.85rem; line-height: 1.6; color: #9ca3af; }
+  .phc-footnote { margin: 0.85rem 0 0; font-size: 0.72rem; line-height: 1.5; color: #94a3b8; }
 
-  .phc-head {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-    margin-bottom: 1rem;
-  }
-
-  .phc-kicker {
-    margin: 0 0 0.25rem;
-    font-size: 0.68rem;
-    font-weight: 800;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: #60a5fa;
-  }
-
-  .phc-title {
-    margin: 0;
-    font-family: var(--font-heading);
-    font-size: 1.1rem;
-    color: var(--color-text-main);
-  }
-
-  .phc-delta {
-    font-size: 0.8rem;
-    font-weight: 800;
-    padding: 0.3rem 0.7rem;
-    border-radius: 999px;
-    color: #9ca3af;
-    background: rgba(148, 163, 184, 0.12);
-    border: 1px solid rgba(148, 163, 184, 0.3);
-    white-space: nowrap;
-  }
-
-  .phc-delta.is-down {
-    color: #6ee7b7;
-    background: rgba(16, 185, 129, 0.12);
-    border-color: rgba(16, 185, 129, 0.4);
-  }
-
-  .phc-delta.is-up {
-    color: #fca5a5;
-    background: rgba(239, 68, 68, 0.12);
-    border-color: rgba(239, 68, 68, 0.4);
-  }
-
-  .phc-stats {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 0.6rem;
-    margin-bottom: 1rem;
-  }
-
-  .phc-stat {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15rem;
-    padding: 0.55rem 0.7rem;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 10px;
-    min-width: 0;
-  }
-
-  .phc-stat-label {
-    font-size: 0.66rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #94a3b8;
-  }
-
-  .phc-stat-value {
-    font-size: 0.92rem;
-    font-weight: 800;
-    color: var(--color-text-main);
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .phc-stat-value.is-low {
-    color: #34d399;
-  }
-
-  .phc-stat-value.is-high {
-    color: #fbbf24;
-  }
-
-  .phc-chart {
-    width: 100%;
-  }
-
-  .phc-chart svg {
-    display: block;
-    width: 100%;
-    height: 170px;
-    background: rgba(2, 6, 23, 0.45);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-  }
-
-  .phc-axis {
-    display: flex;
-    justify-content: space-between;
-    margin-top: 0.35rem;
-    font-size: 0.7rem;
-    color: #94a3b8;
-  }
-
-  .phc-footnote {
-    margin: 0.85rem 0 0;
-    font-size: 0.72rem;
-    line-height: 1.5;
-    color: #94a3b8;
-  }
-
-  .phc-pending {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
-  }
-
-  .phc-pending-text {
-    margin: 0;
-    font-size: 0.85rem;
-    line-height: 1.6;
-    color: #9ca3af;
-  }
-
-  .phc-pending-text strong {
-    color: var(--color-text-main);
-  }
-
+  .phc-alert { margin-top: 1.1rem; padding: 1rem 1.1rem; border-radius: 14px; background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(96, 165, 250, 0.25); }
+  .phc-alert-title { margin: 0 0 0.25rem; font-family: var(--font-heading); font-size: 1rem; color: var(--color-text-main); }
+  .phc-alert-help { margin: 0 0 0.8rem; font-size: 0.8rem; color: #94a3b8; }
+  .phc-alert-row { display: flex; align-items: center; justify-content: space-between; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+  .phc-alert-label { font-size: 0.85rem; font-weight: 600; color: var(--color-text-main); }
+  .phc-alert-input { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0 0.7rem; min-height: 44px; background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
+  .phc-alert-input input { width: 6.5rem; border: 0; background: transparent; color: #fb923c; font-size: 1.1rem; font-weight: 800; text-align: right; outline: none; }
+  .phc-alert-input:focus-within { border-color: var(--color-primary); }
+  .phc-range { width: 100%; height: 28px; accent-color: #f59e0b; cursor: pointer; }
+  .phc-range-scale { display: flex; justify-content: space-between; font-size: 0.7rem; color: #94a3b8; margin: -0.1rem 0 0.7rem; }
+  .phc-toggle { display: flex; align-items: center; gap: 0.6rem; min-height: 44px; font-size: 0.85rem; color: var(--color-text-main); cursor: pointer; }
+  .phc-toggle input { width: 20px; height: 20px; accent-color: var(--color-primary); }
+  .phc-alert-btn { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; margin-top: 0.4rem; border: 0; border-radius: 12px; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #fff; font-weight: 800; font-size: 0.95rem; cursor: pointer; box-shadow: 0 8px 22px rgba(59, 130, 246, 0.35); }
+  .phc-alert-btn:hover { background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%); }
+  .phc-alert-btn:disabled { opacity: 0.6; cursor: progress; }
+  .phc-alert-btn:focus-visible, .phc-alert-link:focus-visible, .phc-alert-input input:focus-visible, .phc-range:focus-visible { outline: 2px solid var(--color-accent-amber); outline-offset: 2px; }
+  .phc-alert-msg { min-height: 1.2em; margin: 0.6rem 0 0; font-size: 0.82rem; color: #94a3b8; }
+  .phc-alert-msg.is-ok { color: #34d399; }
+  .phc-alert-msg.is-error { color: #fca5a5; }
+  .phc-alert-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 0.82rem; color: var(--color-primary); }
+  .phc-alert-note { margin: 0; font-size: 0.74rem; color: #94a3b8; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   @media (max-width: 640px) {
-    .phc {
-      padding: 1.1rem;
-    }
-
-    .phc-stats {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
+    .phc { padding: 1.1rem; }
+    .phc-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .phc-chart { padding-left: 54px; }
+    .phc-yaxis { width: 50px; }
   }
 </style>
+
+<script is:inline>
+  (function () {
+    var root = document.querySelector('[data-phc]');
+    if (!root) return;
+
+    /* Periodos (pestañas accesibles: clic y flechas) */
+    var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-phc-tab]'));
+    function select(key) {
+      tabs.forEach(function (t) {
+        var on = t.getAttribute('data-phc-tab') === key;
+        t.setAttribute('aria-selected', on ? 'true' : 'false');
+        t.tabIndex = on ? 0 : -1;
+        var panel = document.getElementById('phc-panel-' + t.getAttribute('data-phc-tab'));
+        if (panel) panel.hidden = !on;
+      });
+    }
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { select(t.getAttribute('data-phc-tab')); });
+      t.addEventListener('keydown', function (e) {
+        var next = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : -1;
+        if (next < 0 || next >= tabs.length) return;
+        e.preventDefault();
+        tabs[next].focus();
+        select(tabs[next].getAttribute('data-phc-tab'));
+      });
+    });
+
+    /* Alerta de precio */
+    var box = root.querySelector('[data-alert-box]');
+    if (!box) return;
+    var input = box.querySelector('[data-alert-target]');
+    var range = box.querySelector('[data-alert-range]');
+    var ship = box.querySelector('[data-alert-ship]');
+    var btn = box.querySelector('[data-alert-submit]');
+    var msg = box.querySelector('[data-alert-msg]');
+    function say(text, cls) { msg.textContent = text; msg.className = 'phc-alert-msg' + (cls ? ' ' + cls : ''); }
+    range.addEventListener('input', function () { input.value = Number(range.value).toFixed(2); });
+    input.addEventListener('input', function () { var v = Number(String(input.value).replace(',', '.')); if (isFinite(v)) range.value = String(v); });
+
+    btn.addEventListener('click', function () {
+      var target = Number(String(input.value).replace(',', '.'));
+      if (!isFinite(target) || target <= 0) { say('Introduce un precio objetivo válido.', 'is-error'); input.focus(); return; }
+      btn.disabled = true;
+      say('Activando…');
+      fetch('/api/radar/auth/session', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (s) {
+          if (!s || !s.authenticated) {
+            btn.disabled = false;
+            say('Inicia sesión para activar tu alerta de precio.', 'is-error');
+            if (window.TradylorAuth && window.TradylorAuth.open) window.TradylorAuth.open('login');
+            return null;
+          }
+          return fetch('/api/alertas-precio', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify({ productId: box.getAttribute('data-product-id'), targetPrice: target, includeShipping: !!ship.checked })
+          }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); });
+        })
+        .then(function (res) {
+          if (!res) return;
+          btn.disabled = false;
+          if (!res.ok) { say((res.body && res.body.message) || 'No se pudo activar la alerta.', 'is-error'); return; }
+          if (res.body.alreadyMet) say('Ya está a ese precio o por debajo: te hemos avisado en «Alertas de precio».', 'is-ok');
+          else say('Alerta activada: te avisaremos cuando llegue a ' + target.toFixed(2).replace('.', ',') + ' €.', 'is-ok');
+          window.dispatchEvent(new CustomEvent('price-alerts:changed'));
+        })
+        .catch(function () { btn.disabled = false; say('No se pudo conectar. Inténtalo de nuevo.', 'is-error'); });
+    });
+  })();
+</script>

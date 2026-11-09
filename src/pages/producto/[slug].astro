@@ -31,6 +31,7 @@ import { applyProductFieldVisibility, getVisibleCustomFieldEntries } from '../..
 import { captureDateOf, formatDateEs, ratingSupport, readCondition, shownDiscount, verifiedAtOf } from '../../lib/commercialClaims';
 import { getComparableOffers } from '../../lib/comparableOffers';
 import { buildOffersView } from '../../lib/offersView';
+import { buildSpecsView } from '../../lib/specsView';
 import { withPublicText } from '../../lib/publicClaims';
 import OffersComparator from '../../components/OffersComparator.astro';
 
@@ -67,6 +68,8 @@ const visibleCustomFields = getVisibleCustomFieldEntries(product);
 const checkoutUrl = `/checkout/${productKey(product)}`;
 const specs = product.specs && Object.keys(product.specs).length > 0 ? product.specs : null;
 const techSheet = (product.techSheet ?? '').trim();
+// Ficha técnica desplegable: 6 características principales según la categoría + el resto tras «Ver todas las características».
+const specsView = specs ? buildSpecsView(product as any) : null;
 const fulfillmentProvider = product.fulfillmentProvider ?? product.merchant;
 // Clave normalizada del comerciante (para colorear el sello según la tienda).
 const merchantSlug = String(product.merchant ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -647,7 +650,7 @@ const productSchema = {
          HISTÓRICO DE PRECIO (captura progresiva, 1 punto/día)
          ====================================================== -->
     <section class="price-history-section container" id="historico-precio">
-      <PriceHistoryChart points={product.priceHistory ?? []} currentPrice={product.price} verifiedAt={verifiedAtOf(product)} />
+      <PriceHistoryChart product={product as any} currentPrice={product.price} verifiedAt={verifiedAtOf(product)} shippingText={shippingIsFree ? 'gratis (dato de la tienda)' : shippingCost !== null ? `${new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(shippingCost)} (dato de la tienda)` : null} />
     </section>
 
     <OffersComparator view={offersView} />
@@ -664,15 +667,34 @@ const productSchema = {
         </p>
       </div>
 
-      {specs && (
-        <dl class="specs-grid">
-          {Object.entries(specs).map(([label, value]) => (
-            <div class="spec-row">
-              <dt class="spec-label">{label}</dt>
-              <dd class="spec-value">{value}</dd>
-            </div>
-          ))}
-        </dl>
+      {specsView && (
+        <>
+          <dl class="specs-grid" data-specs-featured>
+            {specsView.featured.map((s) => (
+              <div class="spec-row">
+                <dt class="spec-label">{s.label}</dt>
+                <dd class="spec-value">{s.value}</dd>
+              </div>
+            ))}
+          </dl>
+          {specsView.rest.length > 0 && (
+            <details class="specs-more" data-specs-more>
+              <summary class="specs-more-toggle">
+                <span class="specs-more-open">Ver todas las características ({specsView.rest.length} más)</span>
+                <span class="specs-more-close">Mostrar menos</span>
+                <svg class="specs-more-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
+              </summary>
+              <dl class="specs-grid specs-grid--rest">
+                {specsView.rest.map((s) => (
+                  <div class="spec-row">
+                    <dt class="spec-label">{s.label}</dt>
+                    <dd class="spec-value">{s.value}</dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          )}
+        </>
       )}
 
       {/* Sin specs del contrato: la ficha técnica (techSheet) se muestra dentro del propio aviso specs-empty. */}
@@ -2450,6 +2472,19 @@ const productSchema = {
     margin: 0;
     line-height: 1.6;
   }
+  /* Ficha técnica desplegable (<details>: funciona sin JS, con teclado y en móvil). */
+  .specs-more { margin-top: 0.75rem; }
+  .specs-more-toggle { list-style: none; display: inline-flex; align-items: center; gap: 0.5rem; min-height: 44px; padding: 0 1rem; cursor: pointer; border: 1px solid var(--color-border); border-radius: var(--border-radius-md); background: var(--color-surface-subtle); color: var(--color-primary); font-weight: 700; font-size: 0.9rem; }
+  .specs-more-toggle::-webkit-details-marker { display: none; }
+  .specs-more-toggle:hover { border-color: var(--color-primary); }
+  .specs-more-toggle:focus-visible { outline: 2px solid var(--color-accent-amber); outline-offset: 2px; }
+  .specs-more-close { display: none; }
+  .specs-more[open] .specs-more-open { display: none; }
+  .specs-more[open] .specs-more-close { display: inline; }
+  .specs-more-chevron { transition: transform 0.2s ease; }
+  .specs-more[open] .specs-more-chevron { transform: rotate(180deg); }
+  .specs-grid--rest { margin-top: 0.75rem; }
+
   .specs-grid {
     display: flex;
     flex-direction: column;

@@ -47,6 +47,7 @@ scripts/tests/deleted-panel-paths.test.mjs
 scripts/tests/deploy-config.test.mjs
 scripts/tests/discount-claims.test.mjs
 scripts/tests/facets.test.mjs
+scripts/tests/ficha-specs-history.test.mjs
 scripts/tests/fixtures/amazon-real-sample-es.json
 scripts/tests/fixtures/fineblue-f920.json
 scripts/tests/fixtures/temu-real-sample-es-pdp-1893.json
@@ -72,6 +73,7 @@ scripts/tests/offers-comparator.test.mjs
 scripts/tests/offers-integration.test.mjs
 scripts/tests/offers-preservation.test.mjs
 scripts/tests/pages-guard.test.mjs
+scripts/tests/price-alert-center.test.mjs
 scripts/tests/price-refresh-amazon.test.mjs
 scripts/tests/price-verification.test.mjs
 scripts/tests/public-claims.test.mjs
@@ -136,6 +138,7 @@ src/lib/aiKeysStore.ts
 src/lib/aiPersonas.ts
 src/lib/aiProviders.ts
 src/lib/aiSkillsStore.ts
+src/lib/alertsHttp.ts
 src/lib/aliCatalogMerge.ts
 src/lib/aliexpressCatalog.ts
 src/lib/amazonImport.ts
@@ -213,8 +216,10 @@ src/lib/pipeline/stageCategorize.ts
 src/lib/pipeline/stageIngest.ts
 src/lib/pipeline/stagePublish.ts
 src/lib/pipeline/types.ts
+src/lib/priceAlertCenter.ts
 src/lib/priceAlerts.ts
 src/lib/priceHistory.ts
+src/lib/priceHistoryView.ts
 src/lib/productFieldsStore.ts
 src/lib/productNetwork.ts
 src/lib/productStore.ts
@@ -237,11 +242,13 @@ src/lib/services/databaseSchema.ts
 src/lib/services/massCatalogPipeline.ts
 src/lib/shareGeo.ts
 src/lib/shipping.ts
+src/lib/specsView.ts
 src/lib/temuShortLink.ts
 src/lib/userProfiles.ts
 src/lib/userStore.ts
 src/lib/validateProducts.ts
 src/middleware.ts
+src/pages/alertas-precio.astro
 src/pages/api/admin/add-product.ts
 src/pages/api/admin/ai-console.ts
 src/pages/api/admin/ai-keys/index.ts
@@ -287,6 +294,11 @@ src/pages/api/admin/upload-image.ts
 src/pages/api/admin/users/[id].ts
 src/pages/api/admin/users/[id]/avatar.ts
 src/pages/api/admin/users/index.ts
+src/pages/api/alertas-precio/[id].ts
+src/pages/api/alertas-precio/index.ts
+src/pages/api/alertas-precio/notificaciones.ts
+src/pages/api/alertas-precio/preferencias.ts
+src/pages/api/alertas-precio/resumen.ts
 src/pages/api/analytics/event.ts
 src/pages/api/asistente-ia.ts
 src/pages/api/catalogo/facets.ts
