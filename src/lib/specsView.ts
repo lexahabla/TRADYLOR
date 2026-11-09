@@ -14,6 +14,8 @@
 import { functionFamilyOf } from './modelComparison';
 
 export const FEATURED_MAX = 6;
+/** El desplegable sólo existe con 12 o más características (se ven 6 = la mitad de 12); con menos se muestran todas, sin control. */
+export const COLLAPSE_MIN = 12;
 
 export interface SpecEntry { label: string; value: string }
 export interface SpecsView { featured: SpecEntry[]; rest: SpecEntry[]; family: string | null }
@@ -59,5 +61,7 @@ export function buildSpecsView(product: { title?: string; specs?: Record<string,
     }
   }
   const rest = entries.filter((_, i) => !used.has(i));
+  // Pocas características: todas visibles y sin desplegable.
+  if (entries.length < COLLAPSE_MIN) return { featured: [...featured, ...rest], rest: [], family };
   return { featured, rest, family };
 }

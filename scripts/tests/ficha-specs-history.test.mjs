@@ -12,7 +12,7 @@ const read = (p) => fs.readFileSync(new URL(`../../${p}`, import.meta.url), 'utf
 /* ───────────── Ficha técnica desplegable ───────────── */
 
 test('un ordenador destaca procesador, RAM, almacenamiento y pantalla entre sus 6 primeras características; el resto queda tras el control', () => {
-  const specs = { Color: 'Gris', Peso: '1,4 kg', Marca: 'Zeta', 'Tamaño de pantalla': '15,6 pulgadas', Almacenamiento: '512 GB SSD', 'Memoria RAM': '16 GB', Procesador: 'Core i5', Garantía: '2 años', 'Sistema operativo': 'Windows 11', Puertos: '2 USB' };
+  const specs = { Color: 'Gris', Peso: '1,4 kg', Marca: 'Zeta', 'Tamaño de pantalla': '15,6 pulgadas', Almacenamiento: '512 GB SSD', 'Memoria RAM': '16 GB', Procesador: 'Core i5', Garantía: '2 años', 'Sistema operativo': 'Windows 11', Puertos: '2 USB', Cámara: 'HD', Teclado: 'Español', Batería: '50 Wh' };
   const v = buildSpecsView({ title: 'Portátil Zeta 15 Core i5', specs });
   assert.equal(v.featured.length, FEATURED_MAX);
   const labels = v.featured.map((e) => e.label);
@@ -22,7 +22,7 @@ test('un ordenador destaca procesador, RAM, almacenamiento y pantalla entre sus 
 });
 
 test('unos auriculares destacan autonomía y conectividad (no RAM ni GPU)', () => {
-  const specs = { Color: 'Negro', Peso: '40 g', Conectividad: 'Bluetooth 5.3', Autonomía: '20 h', Micrófono: 'Integrado', Estuche: 'Sí', Material: 'ABS', Impermeabilidad: 'IPX4' };
+  const specs = { Color: 'Negro', Peso: '40 g', Conectividad: 'Bluetooth 5.3', Autonomía: '20 h', Micrófono: 'Integrado', Estuche: 'Sí', Material: 'ABS', Impermeabilidad: 'IPX4', Garantía: '1 año', Cable: 'USB-C', Alcance: '10 m', Códec: 'AAC', Carga: 'USB-C' };
   const v = buildSpecsView({ title: 'Auriculares inalámbricos Zeta TWS', specs });
   const labels = v.featured.map((e) => e.label);
   assert.equal(v.family, 'auriculares');
@@ -30,12 +30,16 @@ test('unos auriculares destacan autonomía y conectividad (no RAM ni GPU)', () =
   assert.ok(labels.indexOf('Autonomía') < labels.indexOf('Color') || !labels.includes('Color'));
 });
 
-test('con 6 características o menos no hay sección desplegable; sin familia se respeta el orden original; las vacías se omiten', () => {
-  const few = buildSpecsView({ title: 'Producto raro', specs: { A: '1', B: '2', C: '3' } });
-  assert.equal(few.rest.length, 0);
-  const many = buildSpecsView({ title: 'Producto raro', specs: Object.fromEntries('ABCDEFGHI'.split('').map((k, i) => [k, String(i + 1)])) });
+test('el desplegable sólo existe con 12 o más características (se ven 6, la mitad de 12); con menos se muestran todas; las vacías se omiten', () => {
+  const few = buildSpecsView({ title: 'Producto raro', specs: Object.fromEntries('ABCDEFGHIJK'.split('').map((k, i) => [k, String(i + 1)])) });
+  assert.equal(few.rest.length, 0, '11 características: todas visibles, sin control');
+  assert.equal(few.featured.length, 11);
+  const twelve = buildSpecsView({ title: 'Producto raro', specs: Object.fromEntries('ABCDEFGHIJKL'.split('').map((k, i) => [k, String(i + 1)])) });
+  assert.equal(twelve.featured.length, 6, '12 características: la mitad visible');
+  assert.equal(twelve.rest.length, 6);
+  const many = buildSpecsView({ title: 'Producto raro', specs: Object.fromEntries('ABCDEFGHIJKLM'.split('').map((k, i) => [k, String(i + 1)])) });
   assert.deepEqual(many.featured.map((e) => e.label), ['A', 'B', 'C', 'D', 'E', 'F']);
-  assert.deepEqual(many.rest.map((e) => e.label), ['G', 'H', 'I']);
+  assert.deepEqual(many.rest.map((e) => e.label), ['G', 'H', 'I', 'J', 'K', 'L', 'M']);
   assert.equal(buildSpecsView({ title: 'x', specs: { A: '', B: '  ' } }).featured.length, 0);
 });
 
@@ -46,6 +50,7 @@ test('la ficha usa <details> accesible con los textos pedidos y conserva el ancl
   assert.match(ficha, /Ver todas las características/);
   assert.match(ficha, /Mostrar menos/);
   assert.match(ficha, /specs-more-toggle:focus-visible/);
+  assert.match(ficha, /.specs-more { margin-top: 1.5rem; }/, 'margen entre la ficha y el desplegable');
 });
 
 /* ───────────── Historial de precios ───────────── */
