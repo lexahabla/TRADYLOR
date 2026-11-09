@@ -7,6 +7,8 @@ import {
   DEFAULT_ADAPTERS,
   getRefreshStatus,
   readRefreshMeta,
+  readRunLog,
+  attemptsToday,
   readScheduleConfig,
   refreshOffers,
   summarizeCoverage,
@@ -48,6 +50,8 @@ export const GET: APIRoute = async ({ request }) => {
     schedule,
     status: getRefreshStatus(),
     coverage: summarizeCoverage(products, DEFAULT_ADAPTERS, schedule),
+    runs: readRunLog().slice(-20).reverse(),
+    attemptsToday: attemptsToday(new Date()),
     noSource: noSource.slice(0, 200),
     noSourceTotal: noSource.length,
   });
@@ -79,6 +83,7 @@ export const POST: APIRoute = async ({ request }) => {
       const schedule = await writeScheduleConfig(String(body?.network ?? ''), {
         enabled: typeof body?.enabled === 'boolean' ? body.enabled : undefined,
         everyHours: body?.everyHours !== undefined ? Number(body.everyHours) : undefined,
+        maxPerDay: body?.maxPerDay === null ? null : body?.maxPerDay !== undefined ? Number(body.maxPerDay) : undefined,
       });
       return json({ success: true, schedule });
     } catch (error) {

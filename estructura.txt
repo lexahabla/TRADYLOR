@@ -81,6 +81,8 @@ scripts/tests/price-verification.test.mjs
 scripts/tests/public-claims.test.mjs
 scripts/tests/refresh-alert-guard.test.mjs
 scripts/tests/refresh-alerts-integration.test.mjs
+scripts/tests/refresh-source-limits.test.mjs
+scripts/tests/temu-refresh-adapter.test.mjs
 scripts/tests/refresh.test.mjs
 scripts/tests/repair.test.mjs
 scripts/tests/scrape-request.test.mjs

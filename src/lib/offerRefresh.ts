@@ -22,6 +22,8 @@
  * ==============================================================================
  */
 
+import fs from 'node:fs';
+import { dataFile } from './paths';
 import type { Product } from './productStore';
 import { detectNetworkId } from './productNetwork';
 import { brandIsMerchant, normalizeBrand, normalizeSourceId, offerKey, sameSourceId } from './offerIdentity';
@@ -146,7 +148,7 @@ export async function ensureExtraAdapters(): Promise<void> {
       if (DEFAULT_ADAPTERS.some((a) => a.id === adapter.id)) continue;
       DEFAULT_ADAPTERS.push(adapter);
       for (const network of adapter.networks) {
-        DEFAULT_SCHEDULE[network] ??= { enabled: false, everyHours: 24, batchSize: 10, maxAgeHours: DEFAULT_MAX_AGE_HOURS };
+        DEFAULT_SCHEDULE[network] ??= { enabled: false, everyHours: 24, batchSize: 10, maxAgeHours: DEFAULT_MAX_AGE_HOURS, ...(EXTRA_DEFAULT_MAX_PER_DAY[network] ? { maxPerDay: EXTRA_DEFAULT_MAX_PER_DAY[network] } : {}) };
       }
     }
   } catch (error) {
@@ -162,11 +164,17 @@ export interface SourceSchedule {
   batchSize: number;
   /** Pasado este tiempo sin verificar, la lectura deja de contar como vigente. */
   maxAgeHours: number;
+  /** Tope de consultas (intentos) al día de esta fuente en el programador; sin valor = sin tope. Protege el gasto de las fuentes de pago. */
+  maxPerDay?: number;
 }
 
 export const DEFAULT_SCHEDULE: Record<string, SourceSchedule> = {
-  amazon: { enabled: true, everyHours: 24, batchSize: 10, maxAgeHours: DEFAULT_MAX_AGE_HOURS },
+  // Amazon consume créditos de ScraperAPI (≈ 5 por consulta): tope diario por defecto, ajustable en el panel.
+  amazon: { enabled: true, everyHours: 24, batchSize: 10, maxAgeHours: DEFAULT_MAX_AGE_HOURS, maxPerDay: 10 },
 };
+
+/** Tope diario por defecto de las fuentes adicionales de PAGO al cargarse (las gratuitas no tienen tope). */
+const EXTRA_DEFAULT_MAX_PER_DAY: Record<string, number> = { temu: 2 };
 
 export interface OfferResult {
   id: string;
@@ -619,6 +627,19 @@ async function runRefresh(options: RefreshOptions): Promise<RefreshReport> {
       return (readRefreshMeta(a).lastVerifiedAt ?? '').localeCompare(readRefreshMeta(b).lastVerifiedAt ?? '');
     });
   }
+  if (options.onlyDue) {
+    // Límites por fuente: lote propio (batchSize) y tope diario (maxPerDay menos los intentos ya hechos hoy según el registro de ejecuciones).
+    const used = attemptsToday(now());
+    const taken: Record<string, number> = {};
+    targets = targets.filter((p) => {
+      const net = detectNetworkId(p);
+      const cfg = schedule[net];
+      if (!cfg) return true;
+      const room = Math.min(cfg.batchSize > 0 ? cfg.batchSize : Infinity, cfg.maxPerDay !== undefined ? Math.max(0, cfg.maxPerDay - (used[net] ?? 0)) : Infinity);
+      taken[net] = (taken[net] ?? 0) + 1;
+      return taken[net] <= room;
+    });
+  }
   if (options.limit && options.limit > 0) targets = targets.slice(0, options.limit);
 
   const report: RefreshReport = {
@@ -692,7 +713,70 @@ async function runRefresh(options: RefreshOptions): Promise<RefreshReport> {
 
   report.finishedAt = now().toISOString();
   lastReport = report;
+  if (!options.dryRun && !options.store) appendRunLog(report);
   return report;
+}
+
+/* ───────────────────────────── REGISTRO DE EJECUCIONES ───────────────────────────── */
+
+export interface RunLogEntry {
+  runId: string;
+  mode: string;
+  startedAt: string;
+  finishedAt?: string;
+  total: number;
+  updated: number;
+  verified: number;
+  errors: number;
+  noSource: number;
+  review: number;
+  /** Intentos reales por fuente (cada reintento cuenta: es lo que cuesta) y resultado. */
+  byNetwork: Record<string, { attempts: number; ok: number; errors: number }>;
+  /** Primeros errores (saneados, sin claves). */
+  errorSamples: string[];
+}
+
+const RUN_LOG_MAX = 60;
+const runLogFile = (): string => dataFile('offer-refresh-runs.json');
+
+export function readRunLog(): RunLogEntry[] {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(runLogFile(), 'utf-8')) as { runs?: RunLogEntry[] };
+    return Array.isArray(parsed.runs) ? parsed.runs : [];
+  } catch {
+    return [];
+  }
+}
+
+function appendRunLog(report: RefreshReport): void {
+  try {
+    const byNetwork: RunLogEntry['byNetwork'] = {};
+    for (const r of report.results) {
+      if (r.status === 'no_source' || r.id === '-') continue;
+      const entry = (byNetwork[r.network] ??= { attempts: 0, ok: 0, errors: 0 });
+      entry.attempts += Math.max(1, r.attempts || 1);
+      if (r.status === 'error') entry.errors++; else entry.ok++;
+    }
+    const errorSamples = report.results.filter((r) => r.status === 'error').slice(0, 5).map((r) => `${r.network}: ${String(r.message ?? '').replace(/(api[_-]?key|token|secret|authorization)[=:]\s*[^&\s,;]+/gi, '$1=***').slice(0, 160)}`);
+    const entry: RunLogEntry = { runId: report.runId, mode: report.mode, startedAt: report.startedAt, finishedAt: report.finishedAt, total: report.total, updated: report.updated, verified: report.verified, errors: report.errors, noSource: report.noSource, review: report.review, byNetwork, errorSamples };
+    const runs = [...readRunLog(), entry].slice(-RUN_LOG_MAX);
+    const tmp = `${runLogFile()}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify({ runs }, null, 2), 'utf-8');
+    fs.renameSync(tmp, runLogFile());
+  } catch {
+    /* el registro no debe romper el refresco */
+  }
+}
+
+/** Intentos de hoy (UTC) por fuente según el registro: base del tope diario. */
+export function attemptsToday(now: Date): Record<string, number> {
+  const day = now.toISOString().slice(0, 10);
+  const out: Record<string, number> = {};
+  for (const run of readRunLog()) {
+    if (!String(run.startedAt).startsWith(day)) continue;
+    for (const [net, v] of Object.entries(run.byNetwork ?? {})) out[net] = (out[net] ?? 0) + v.attempts;
+  }
+  return out;
 }
 
 /** Resumen de cobertura/frescura para el panel. */
@@ -748,7 +832,7 @@ export async function readScheduleConfig(): Promise<Record<string, SourceSchedul
  */
 export async function writeScheduleConfig(
   network: string,
-  patch: { enabled?: boolean; everyHours?: number },
+  patch: { enabled?: boolean; everyHours?: number; maxPerDay?: number | null },
 ): Promise<Record<string, SourceSchedule>> {
   const key = String(network || '').trim().toLowerCase();
   if (!/^[a-z0-9_-]{2,30}$/.test(key)) throw new Error('Fuente no válida.');
@@ -760,6 +844,14 @@ export async function writeScheduleConfig(
     if (!Number.isFinite(hours) || hours < 1 || hours > 720) throw new Error('La frecuencia debe estar entre 1 y 720 horas.');
     next.everyHours = hours;
     next.maxAgeHours = Math.max(DEFAULT_MAX_AGE_HOURS, hours * 3);
+  }
+  if (patch.maxPerDay !== undefined) {
+    if (patch.maxPerDay === null) delete next.maxPerDay;
+    else {
+      const cap = Math.round(Number(patch.maxPerDay));
+      if (!Number.isFinite(cap) || cap < 0 || cap > 1000) throw new Error('El tope diario debe estar entre 0 y 1000 consultas.');
+      next.maxPerDay = cap;
+    }
   }
   const merged = { ...current, [key]: next };
   const fs = await import('node:fs');
