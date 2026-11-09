@@ -81,6 +81,7 @@ scripts/tests/refresh.test.mjs
 scripts/tests/repair.test.mjs
 scripts/tests/scrape-request.test.mjs
 scripts/tests/source-fingerprint.test.mjs
+scripts/tests/stock-and-specs.test.mjs
 scripts/tests/temu-extract.test.mjs
 scripts/tests/temu-shortlink.test.mjs
 scripts/ts-resolve-hooks.mjs
@@ -100,6 +101,8 @@ src/components/PriceHistoryChart.astro
 src/components/ProductCard.astro
 src/components/ReturnBanner.astro
 src/components/SmartMatcherWizard.astro
+src/components/StockAlert.astro
+src/components/StockBadge.astro
 src/components/TestProofBadge.astro
 src/components/TransparencyDashboard.astro
 src/components/admin/AdminSectionHeader.astro
@@ -242,7 +245,9 @@ src/lib/services/databaseSchema.ts
 src/lib/services/massCatalogPipeline.ts
 src/lib/shareGeo.ts
 src/lib/shipping.ts
+src/lib/specExtract.ts
 src/lib/specsView.ts
+src/lib/stock.ts
 src/lib/temuShortLink.ts
 src/lib/userProfiles.ts
 src/lib/userStore.ts

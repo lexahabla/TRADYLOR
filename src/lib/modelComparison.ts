@@ -19,6 +19,9 @@ import { ratingSupport, shownDiscount, NOT_INDICATED } from './commercialClaims'
 import { satisfactionPercent } from './satisfaction';
 import { productKey } from './catalog';
 import { publicText } from './publicClaims';
+import { TITLE_EXTRACTORS } from './specExtract';
+import { stockOf, type StockInfo } from './stock';
+import { getCategories } from './categories';
 
 type Any = Record<string, any>;
 
@@ -30,19 +33,28 @@ export const MAX_SPEC_ITEMS = 8;
 /** Características que no se listan como especificación (color, estado, marca, nombre del modelo). */
 const SPEC_EXCLUDED = /^(color|colour|estado|marca|modelo|nombre-del-modelo|nombre)$|^color-|-color$/;
 
-/** Conceptos de especificación, en orden de relevancia. Cada uno agrupa las claves equivalentes del catálogo (sin duplicar el concepto). */
-const SPEC_GROUPS: Array<{ id: string; label: string; re: RegExp; text?: boolean }> = [
-  { id: 'storage', label: 'Almacenamiento', re: /^(almacenamiento|capacidad-de-almacenamiento|memoria-interna|storage|ssd|tamano-del-disco-duro|disco-duro|capacidad-del-disco-duro)$|disco-duro|^almacenamiento/ },
-  { id: 'ram', label: 'RAM', re: /^ram$|memoria-ram|ram-instalada|tamano-de-memoria-ram/ },
-  { id: 'cpu', label: 'Procesador', re: /cpu|procesador/, text: true },
-  { id: 'gpu', label: 'GPU', re: /gpu|grafic/, text: true },
-  { id: 'screen', label: 'Pantalla', re: /^pantalla$|tamano-de-pantalla|tamano-de-la-pantalla|screen/ },
-  { id: 'resolution', label: 'Resolución', re: /resoluc/, text: true },
-  { id: 'battery', label: 'Batería', re: /bater/ },
-  { id: 'autonomy', label: 'Autonomía', re: /autonom/ },
-  { id: 'connectivity', label: 'Conectividad', re: /conectiv|bluetooth/, text: true },
-  { id: 'power', label: 'Potencia', re: /potencia|^power$/ },
-  { id: 'weight', label: 'Peso', re: /^peso$|^weight$/ },
+/**
+ * Conceptos de especificación, en orden de relevancia. Cada uno agrupa las claves equivalentes del catálogo (sin duplicar el concepto):
+ *  - `re`/`exclude`: qué claves del catálogo cuentan; `prefer`: cuáles se prefieren (en orden) cuando hay varias;
+ *  - `valid`: un valor inservible («330» como procesador, «SSD» sin capacidad) NO sirve: se prueba el siguiente y, si no hay, el TÍTULO;
+ *  - `text`: se muestra tal como lo declara la ficha (un número suelto no lo describe).
+ */
+interface SpecGroup { id: string; label: string; re: RegExp; exclude?: RegExp; prefer?: RegExp[]; valid?: (raw: string) => boolean; text?: boolean; /** Familias en las que el concepto no aporta (p. ej. conectividad en un portátil). */ skipFor?: string[] }
+const hasCapacity = (v: string) => /\d+(?:[.,]\d+)?\s?(?:gb|tb|mb)\b/i.test(v);
+const hasDigit = (v: string) => /\d/.test(v);
+const hasWords = (v: string) => /[a-záéíóúñ]{2,}/i.test(v) && !/^\d+([.,]\d+)?$/.test(v.trim());
+const SPEC_GROUPS: SpecGroup[] = [
+  { id: 'storage', label: 'Almacenamiento', re: /almacen|disco-duro|^ssd$|storage|memoria-interna/, exclude: /tecnologia|tipo|velocidad|interfaz|ram|camara|bateria|maxima|conexion|factor/, prefer: [/^almacenamiento$/, /capacidad-del-disco-duro|capacidad-de-almacenamiento|capacidad-almacenamiento/, /tamano-del-disco-duro/], valid: hasCapacity },
+  { id: 'ram', label: 'RAM', re: /^ram$|memoria-ram|ram-instalada|^memoria$/, exclude: /grafica|video|tipo-de-ram|maxima|capacidad-maxima|velocidad|tecnologia|ranuras/, prefer: [/^ram$|^memoria-ram$/, /tamano-de-memoria-ram-instalada|ram-instalada/], valid: hasCapacity },
+  { id: 'cpu', label: 'Procesador', re: /cpu|procesador/, exclude: /velocidad|numero-de|n-de|marca|fabricante|nucleos|grafic|maxima|socket|generacion/, prefer: [/^procesador$/, /^tipo-de-procesador$|^tipo-de-cpu$/, /numero-modelo-cpu|modelo-de-cpu|modelo-del-procesador/], valid: hasWords, text: true },
+  { id: 'gpu', label: 'GPU', re: /gpu|grafic/, exclude: /ram-de-la-tarjeta|tipo-de-ram|memoria|salida|resoluc|fabricante|marca/, prefer: [/descripcion-de-la-tarjeta-grafica|procesador-grafico|gpu/, /^tarjeta-grafica$/], valid: hasWords, text: true },
+  { id: 'screen', label: 'Pantalla', re: /^pantalla$|tamano-de-pantalla|tamano-de-la-pantalla|screen/, exclude: /resoluc|tipo-de-pantalla|tecnologia|frecuencia|maxima|panel/, prefer: [/^pantalla$/, /tamano-de-pantalla|tamano-de-la-pantalla/], valid: hasDigit },
+  { id: 'resolution', label: 'Resolución', re: /resoluc/, exclude: /maxima|tecnologia/, valid: hasDigit, text: true },
+  { id: 'battery', label: 'Batería', re: /bater/, exclude: /tipo|tecnologia|energia|pilas/, valid: hasDigit },
+  { id: 'autonomy', label: 'Autonomía', re: /autonom/, valid: hasDigit },
+  { id: 'connectivity', label: 'Conectividad', re: /conectiv|bluetooth/, exclude: /tecnologia-de-conexion|compatible/, valid: hasWords, text: true, skipFor: ['portatil'] },
+  { id: 'power', label: 'Potencia', re: /potencia|^power$/, valid: hasDigit },
+  { id: 'weight', label: 'Peso', re: /^peso$|^weight$/, exclude: /unidad/, valid: hasDigit },
 ];
 
 const ACCESSORY = /\b(funda|estuche|organizador|soporte|adaptador|cable|cargador|protector|almohadillas?|repuesto|correa|case|bolsa|carcasa|pegatinas?|limpiador)\b/i;
@@ -127,10 +139,14 @@ export interface ModelColumn {
   ratingOrigin: 'vendedor' | 'producto' | null;
   /** Mismo indicador orientativo que la barra de ProductCard (lib/satisfaction.ts). */
   satisfaction: number;
+  /** Disponibilidad (imprescindible; sólo lo que declara la fuente). */
+  stock: StockInfo;
+  /** Datos mínimos para el aviso de stock (Mi Radar) de este modelo. */
+  alertProduct: { id: string; slug?: string; title: string; price: number; image: string; merchant?: string; inStock?: boolean };
   /** Descripción breve (1-2 frases, ya depurada de afirmaciones sin respaldo); '' si no hay. */
   description: string;
 }
-export interface SpecItem { label: string; value: string; missing: boolean }
+export interface SpecItem { label: string; value: string; missing: boolean; /** true si el dato se ha leído del TÍTULO (la ficha no lo declaraba). */ fromTitle?: boolean }
 export interface ModelRow {
   label: string;
   /** Sólo en «Especificaciones técnicas»: una lista por columna, con las MISMAS características en el mismo orden. */
@@ -141,6 +157,8 @@ export interface ModelRow {
   differs: boolean;
 }
 export interface ModelComparison {
+  /** «Comparar Portátiles de Informática». */
+  heading: string;
   columns: ModelColumn[];
   rows: ModelRow[];
   explanation: string;
@@ -203,6 +221,39 @@ function cardRating(p: Any): string | null {
   return `★ ${s.rating.toLocaleString('es-ES')}${count}${s.origin === 'vendedor' ? ' (del vendedor)' : ''}`;
 }
 
+/** Presentación de valores técnicos: «Integrated» → «Integrada», «16 Inches» → «16 pulgadas»… (sólo formato, el dato no cambia). */
+function tidy(groupId: string, value: string): string {
+  let v = String(value).trim();
+  if (groupId === 'gpu') v = v.replace(/^integrated$/i, 'Integrada').replace(/^dedicated$|^dedicado$/i, 'Dedicada');
+  if (groupId === 'screen') v = v.replace(/\s*inch(?:es)?$/i, ' pulgadas').replace(/\s+in$/i, ' pulgadas').replace(/\s*pulgada$/i, ' pulgadas').replace(/(\d)\.(\d)/, '$1,$2');
+  return v;
+}
+
+/** Etiqueta en plural de la familia de producto (para el encabezado «Comparar Portátiles de Informática»). */
+const FAMILY_PLURAL: Record<string, string> = {
+  gafas: 'Gafas inteligentes', auriculares: 'Auriculares', altavoz: 'Altavoces', powerbank: 'Power banks', reloj: 'Relojes inteligentes', portatil: 'Portátiles',
+  tablet: 'Tablets', raton: 'Ratones', teclado: 'Teclados', monitor: 'Monitores', televisor: 'Televisores', almacenamiento: 'Almacenamiento', camara: 'Cámaras',
+  proyector: 'Proyectores', aspirador: 'Aspiradores', freidora: 'Freidoras', cafetera: 'Cafeteras', impresora: 'Impresoras', consola: 'Consolas', movil: 'Móviles',
+};
+
+/** Encabezado del comparador: «Comparar {subcategoría} de {categoría}» (p. ej. «Comparar Portátiles de Informática»). Sin subcategoría se usa la familia del producto. */
+export function comparisonHeading(reference: Any): string {
+  let cats: Array<{ id: string; name: string; parentId?: string | null }> = [];
+  try { cats = getCategories() as never; } catch { cats = []; }
+  const fold2 = (t: unknown) => fold(String(t ?? '')).trim();
+  const sub = reference.subcategory_id ? cats.find((c) => c.id === reference.subcategory_id) : undefined;
+  const cat =
+    (reference.category_id && cats.find((c) => c.id === reference.category_id)) ||
+    (sub?.parentId ? cats.find((c) => c.id === sub.parentId) : undefined) ||
+    cats.find((c) => fold2(c.name) === fold2(reference.category));
+  const catName = String(cat?.name ?? reference.category ?? '').trim();
+  const family = functionFamilyOf(reference);
+  const subName = String(sub?.name ?? (family ? FAMILY_PLURAL[family] : '') ?? '').trim();
+  if (subName && catName && fold2(subName) !== fold2(catName)) return `Comparar ${subName} de ${catName}`;
+  if (subName) return `Comparar ${subName}`;
+  return catName ? `Comparar modelos: ${catName}` : 'Comparar modelos';
+}
+
 export function buildModelComparison(reference: Any, catalog: Any[]): ModelComparison {
   const { rivals, hiddenTwins, excluded } = selectRivals(reference, catalog);
   const products = [reference, ...rivals];
@@ -216,6 +267,8 @@ export function buildModelComparison(reference: Any, catalog: Any[]): ModelCompa
     ratingOrigin: ratingSupport(p).rating !== null ? ratingSupport(p).origin : null,
     satisfaction: satisfactionPercent(p),
     description: briefDescription(p),
+    stock: stockOf(p),
+    alertProduct: { id: p.id, slug: p.slug, title: p.title, price: Number(p.price) || 0, image: p.image ?? '', merchant: p.merchant, inStock: p.inStock },
   }));
 
   const rows: ModelRow[] = [];
@@ -237,20 +290,27 @@ export function buildModelComparison(reference: Any, catalog: Any[]): ModelCompa
   // modelo se muestra UN valor por concepto (el numérico si lo hay, para que sea comparable) y nunca aparece el mismo concepto repetido. Los
   // conceptos salen solos según la categoría (unos auriculares no tienen GPU ni RAM). Excluidos: color, estado, marca y nombre del modelo.
   // Sólo se listan los conceptos presentes en ≥2 modelos. No se modifica ningún dato del catálogo.
+  const refFamily = functionFamilyOf(reference);
   const perProduct = products.map((p) => {
-    const out = new Map<string, { label: string; value: string }>();
+    const out = new Map<string, { label: string; value: string; fromTitle?: boolean }>();
     const list = productAttributes(p).filter((x) => !SPEC_EXCLUDED.test(x.key));
     const fmt = (x: (typeof list)[number]) => (x.type === 'number' ? `${(x.value as number).toLocaleString('es-ES')}${x.unit ? ' ' + x.unit : ''}` : x.type === 'boolean' ? (x.value ? 'Sí' : 'No') : x.raw || String(x.value));
     const used = new Set<string>();
+    const title = String(p?.title ?? '');
     for (const g of SPEC_GROUPS) {
-      const hits = list.filter((x) => g.re.test(x.key));
-      if (!hits.length) continue;
+      if (g.skipFor?.includes(refFamily ?? '')) continue;
+      const hits = list.filter((x) => g.re.test(x.key) && !(g.exclude && g.exclude.test(x.key)));
       hits.forEach((h) => used.add(h.key));
-      // Procesador, GPU, resolución y conectividad se muestran tal como los declara la ficha (un número suelto no los describe).
-      const pick = g.text ? hits[0] : hits.find((h) => h.type === 'number') ?? hits[0];
-      out.set(g.id, { label: g.label, value: g.text ? pick.raw || String(pick.value) : fmt(pick) });
+      // Orden de preferencia: primero las claves preferidas (en su orden), después el resto; sólo valen los valores utilizables.
+      const rank = (x: (typeof list)[number]) => { const i = (g.prefer ?? []).findIndex((re) => re.test(x.key)); return i < 0 ? 99 : i; };
+      const ordered = [...hits].sort((x, y) => rank(x) - rank(y));
+      const shown = (x: (typeof list)[number]) => (g.text ? x.raw || String(x.value) : fmt(x));
+      const good = ordered.find((x) => !g.valid || g.valid(shown(x)));
+      if (good) { out.set(g.id, { label: g.label, value: tidy(g.id, shown(good)) }); continue; }
+      const fromTitle = TITLE_EXTRACTORS[g.id]?.(title) ?? null;
+      if (fromTitle) out.set(g.id, { label: g.label, value: fromTitle, fromTitle: true });
     }
-    for (const x of list) if (!used.has(x.key)) out.set(`k:${x.key}`, { label: labelOfKey(x.key), value: fmt(x) });
+    for (const x of list) if (!used.has(x.key) && !SPEC_GROUPS.some((g) => g.re.test(x.key))) out.set(`k:${x.key}`, { label: labelOfKey(x.key), value: fmt(x) });
     return out;
   });
   const counts = new Map<string, number>();
@@ -262,7 +322,7 @@ export function buildModelComparison(reference: Any, catalog: Any[]): ModelCompa
       keys.map((k) => {
         const hit = m.get(k);
         const label = hit?.label ?? perProduct.map((x) => x.get(k)?.label).find(Boolean) ?? k;
-        return hit ? { label, value: hit.value, missing: false } : { label, value: NO_DATA, missing: true };
+        return hit ? { label, value: hit.value, missing: false, ...(hit.fromTitle ? { fromTitle: true } : {}) } : { label, value: NO_DATA, missing: true };
       }),
     );
     const cells = items.map((list) => list.map((i) => `${i.label}: ${i.value}`).join(' · '));
@@ -278,6 +338,7 @@ export function buildModelComparison(reference: Any, catalog: Any[]): ModelCompa
     hasRivals,
     hiddenTwins,
     excluded,
+    heading: comparisonHeading(reference),
     explanation: hasRivals
       ? 'Modelos distintos del mismo tipo de producto. Los datos son los de cada ficha; «Sin dato» indica que no consta.'
       : 'No hay otros modelos comparables registrados para este producto.',

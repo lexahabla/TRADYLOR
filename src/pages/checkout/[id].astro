@@ -22,6 +22,8 @@ import { findCatalogProduct, productKey } from '../../lib/catalog';
 import { resolveProductShipping } from '../../lib/shipping';
 import { captureDateOf, formatDateEs, ratingSupport, shownDiscount, verifiedAtOf } from '../../lib/commercialClaims';
 import { getComparableOffers } from '../../lib/comparableOffers';
+import StockBadge from '../../components/StockBadge.astro';
+import StockAlert from '../../components/StockAlert.astro';
 
 // ---------------------------------------------------------------------------
 // Resolución del producto (slug canónico o id legado)
@@ -171,6 +173,8 @@ const isSoldOut = stockStatus === 'Agotado';
             <div class="summary-info">
               <span class="summary-category">{product.category}</span>
               <h2 class="summary-title">{shortTitle}</h2>
+              {/* Disponibilidad a la vista de antemano. */}
+              <StockBadge product={product as any} size="md" />
               {ratingInfo.rating && (
                 <span class="summary-rating">
                   <svg width="13" height="13" viewBox="0 0 20 20" fill="#f59e0b" aria-hidden="true">
@@ -315,6 +319,7 @@ const isSoldOut = stockStatus === 'Agotado';
               comparables de la categoría.
             </p>
           )}
+          {isSoldOut && <StockAlert product={product as any} />}
 
           <p class="exit-disclaimer">
             Al hacer clic en <strong>«Continuar a la tienda»</strong>, saldrás de Treidilor

@@ -7,12 +7,14 @@
  */
 import type { ModelComparison } from '../lib/modelComparison';
 import { SATISFACTION_NOTE } from '../lib/satisfaction';
+import StockBadge from './StockBadge.astro';
+import StockAlert from './StockAlert.astro';
 
 export interface Props {
   comparison: ModelComparison;
   title?: string;
 }
-const { comparison, title = 'Comparar modelos' } = Astro.props;
+const { comparison, title = comparison.heading } = Astro.props;
 
 // Precio, valoración e indicador viven en la tarjeta de cabecera: no se repiten como filas.
 const IN_CARD = new Set(['Precio publicado', 'Valoración', 'Indicador de satisfacción (orientativo)']);
@@ -52,6 +54,9 @@ const others = rows.filter((r) => r !== specs && r !== pros);
                     <p class="mc-price">
                       {c.priceText ? <strong>{c.priceText}</strong> : <span class="mc-nodata">Sin precio</span>}
                     </p>
+                    {/* Disponibilidad: dato imprescindible, a la vista; agotado → aviso de stock en Mi Radar. */}
+                    <StockBadge stock={c.stock} />
+                    <StockAlert product={c.alertProduct} compact />
                     {c.discountPct !== null && (
                       <p class="mc-saving">
                         {c.previousPriceText && <span class="mc-old">{c.previousPriceText}</span>}
@@ -83,7 +88,7 @@ const others = rows.filter((r) => r !== specs && r !== pros);
                       {list.map((s) => (
                         <li class:list={{ 'is-missing': s.missing }}>
                           <span class="m-spec-k">{s.label}</span>
-                          <span class="m-spec-v">{s.value}</span>
+                          <span class="m-spec-v">{s.value}{s.fromTitle && <span class="m-spec-title" title="Dato leído del título del producto (la ficha no lo declaraba)"> · del título</span>}</span>
                         </li>
                       ))}
                     </ul>
@@ -182,6 +187,7 @@ const others = rows.filter((r) => r !== specs && r !== pros);
   .m-specs li { display: flex; flex-direction: column; line-height: 1.3; }
   .m-spec-k { color: var(--color-text-dim); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; }
   .m-spec-v { color: var(--color-text-main); font-size: 0.84rem; font-weight: 600; }
+  .m-spec-title { color: var(--color-text-dim); font-weight: 400; font-size: 0.68rem; }
   .m-specs li.is-missing .m-spec-v { color: var(--color-text-dim); font-weight: 400; }
 
   /* Botón azul inferior, misma altura y posición en todas las columnas. */

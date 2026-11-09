@@ -3891,6 +3891,8 @@ const headerCategoryPanelHtml = `
           onRadarChange,
           removeProduct,
           saveToRadar,
+          setProductAlert,
+          syncLocalToCloud,
           trackExitClick,
         } from '../utils/radarStore';
         import {
@@ -4508,6 +4510,71 @@ const headerCategoryPanelHtml = `
             saveToRadar(payload);
           }
           syncButtons();
+        });
+
+        // Aviso de vuelta a stock («Avísame cuando vuelva a haber stock»): guarda el producto en Mi Radar y activa su aviso de stock.
+        document.addEventListener('click', async (event) => {
+          const target = event.target;
+          if (!(target instanceof Element)) return;
+          const btn = target.closest<HTMLButtonElement>('[data-stock-alert]');
+          if (!btn) return;
+          event.preventDefault();
+          const wrap = btn.closest<HTMLElement>('[data-stock-alert-wrap]');
+          const msg = wrap?.querySelector<HTMLElement>('[data-stock-alert-msg]') ?? null;
+          const label = btn.querySelector<HTMLElement>('[data-stock-alert-label]');
+          const say = (text: string, error = false, withLink = false) => {
+            if (!msg) return;
+            msg.textContent = text + ' ';
+            msg.classList.toggle('is-error', error);
+            if (withLink) {
+              const a = document.createElement('a');
+              a.href = '/mi-radar';
+              a.textContent = 'Ver en Mi Radar';
+              msg.appendChild(a);
+            }
+          };
+          const { radarId, radarTitle, radarPrice, radarPriceValue, radarImage, radarUrl, radarStore } = btn.dataset;
+          if (!radarId) return;
+          if (!authReady) {
+            try { await getSession(); } catch { /* sin red: se asume anónimo */ }
+          }
+          if (!getCachedSession()?.user) {
+            say('Inicia sesión para recibir el aviso de stock en Mi Radar.');
+            const w = window as unknown as Record<string, { open?: (view?: string, context?: string) => void } | undefined>;
+            if (w.TradylorAuth?.open) w.TradylorAuth.open('login', 'radar-add');
+            else window.location.href = '/perfil';
+            return;
+          }
+          btn.disabled = true;
+          say('Activando el aviso…');
+          try {
+            if (!isSaved(radarId)) {
+              saveToRadar({
+                id: radarId,
+                title: radarTitle ?? '',
+                price: radarPrice ?? '',
+                priceValue: radarPriceValue ? Number(radarPriceValue) : undefined,
+                image: radarImage ?? '',
+                buyUrl: radarUrl ?? '',
+                store: radarStore === 'aliexpress' ? 'aliexpress' : 'amazon',
+                dateAdded: new Date().toISOString(),
+              });
+            }
+            await syncLocalToCloud();
+            const result = await setProductAlert({ productId: radarId, notifyStock: true });
+            if (result.ok) {
+              wrap?.classList.add('is-done');
+              if (label) label.textContent = 'Aviso de stock activado';
+              say('Te avisaremos por correo cuando vuelva a haber stock.', false, true);
+              syncButtons();
+            } else {
+              btn.disabled = false;
+              say(result.message ?? 'No se pudo activar el aviso.', true);
+            }
+          } catch {
+            btn.disabled = false;
+            say('No se pudo conectar. Inténtalo de nuevo.', true);
+          }
         });
 
         // Gate de conversión del CTA principal "Comprar Ya" (ficha de producto):

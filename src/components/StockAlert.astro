@@ -1,0 +1,54 @@
+---
+/**
+ * «Avísame cuando vuelva a haber stock»: sólo si la fuente declara el producto AGOTADO. Guarda el producto en Mi Radar y activa su aviso de stock
+ * (`notifyStock`); el worker de Mi Radar lo vigila y envía el correo. El manejador vive en el script de la cabecera (Layout.astro).
+ */
+import { stockOf } from '../lib/stock';
+import { productKey } from '../lib/catalog';
+
+export interface Props {
+  product: Record<string, any>;
+  compact?: boolean;
+}
+const { product, compact = false } = Astro.props;
+const stock = stockOf(product);
+const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n);
+const key = productKey(product as never);
+---
+
+{
+  stock.canNotify && (
+    <div class:list={['stock-alert', { 'is-compact': compact }]} data-stock-alert-wrap>
+      <button
+        type="button"
+        class="stock-alert-btn"
+        data-stock-alert
+        data-radar-id={key}
+        data-radar-title={product.title}
+        data-radar-price={eur(Number(product.price) || 0)}
+        data-radar-price-value={Number(product.price) || undefined}
+        data-radar-image={product.image}
+        data-radar-url={`/checkout/${key}`}
+        data-radar-store={/ali/i.test(String(product.merchant ?? '')) ? 'aliexpress' : 'amazon'}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+        <span data-stock-alert-label>Avísame cuando vuelva a haber stock</span>
+      </button>
+      {!compact && <p class="stock-alert-help">Se guarda en Mi Radar y te avisamos por correo cuando la tienda lo declare disponible.</p>}
+      <p class="stock-alert-msg" data-stock-alert-msg role="status" aria-live="polite"></p>
+    </div>
+  )
+}
+
+<style is:global>
+  .stock-alert { margin-top: 0.5rem; }
+  .stock-alert-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%; min-height: 44px; padding: 0 0.9rem; border-radius: 12px; border: 1px solid rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.12); color: #fbbf24; font-weight: 700; font-size: 0.85rem; cursor: pointer; }
+  .stock-alert-btn:hover { background: rgba(245, 158, 11, 0.2); }
+  .stock-alert-btn:focus-visible { outline: 2px solid var(--color-accent-amber, #f59e0b); outline-offset: 2px; }
+  .stock-alert-btn[disabled] { opacity: 0.75; cursor: default; }
+  .stock-alert.is-done .stock-alert-btn { color: #34d399; border-color: rgba(16, 185, 129, 0.5); background: rgba(16, 185, 129, 0.12); }
+  .stock-alert-help { margin: 0.35rem 0 0; font-size: 0.74rem; color: #94a3b8; }
+  .stock-alert-msg { margin: 0.35rem 0 0; font-size: 0.78rem; color: #94a3b8; min-height: 1em; }
+  .stock-alert-msg a { color: var(--color-primary, #3b82f6); }
+  .stock-alert-msg.is-error { color: #fca5a5; }
+</style>

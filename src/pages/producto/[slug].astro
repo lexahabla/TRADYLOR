@@ -20,6 +20,8 @@ export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
 import ModelComparison from '../../components/ModelComparison.astro';
+import StockBadge from '../../components/StockBadge.astro';
+import StockAlert from '../../components/StockAlert.astro';
 import { buildModelComparison, listingKeyOf } from '../../lib/modelComparison';
 import PriceHistoryChart from '../../components/PriceHistoryChart.astro';
 import { getCatalogProducts, findCatalogProduct, productKey } from '../../lib/catalog';
@@ -422,11 +424,16 @@ const productSchema = {
               </>
             )}
           </div>
+          {/* Disponibilidad a la vista de antemano; agotado → aviso de vuelta a stock (Mi Radar). */}
+          <div class="price-stock">
+            <StockBadge product={product as any} size="md" />
+          </div>
+          <StockAlert product={product as any} />
           <p class="price-disclaimer">
             {verifiedDate ? (
               <span>✓ Precio verificado el {verifiedDate} · Puede variar en el momento de la compra.</span>
             ) : (
-              'Precio no verificado con la tienda · Puede variar en el momento de la compra en la tienda oficial.'
+              'Precio no verificado con la tienda · Puede variar en el momento de la compra en la tienda.'
             )}
           </p>
         </div>
@@ -935,7 +942,7 @@ const productSchema = {
          COMPARATIVA DE LA CATEGORÍA (Tabla dinámica)
          ====================================================== -->
     <div class="container" id="comparativa">
-      <ModelComparison comparison={modelComparison} title={`Comparar modelos: ${product.category}`} />
+      <ModelComparison comparison={modelComparison} />
       {!modelComparison.hasRivals && (
         <div class="comparison-empty container">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
@@ -1820,6 +1827,7 @@ const productSchema = {
   }
 
   /* ---- Bloque de Precio ---- */
+  .price-stock { margin: 0.2rem 0 0.5rem; }
   .price-block {
     background: rgba(13, 19, 31, 0.8);
     border: 1px solid var(--color-border);

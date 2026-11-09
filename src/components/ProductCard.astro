@@ -2,6 +2,8 @@
 import type { Product } from '../data/products';
 import { getAffiliateUrl, NETWORK_LABELS, type AffiliateNetwork } from '../utils/affiliate';
 import TestProofBadge from './TestProofBadge.astro';
+import StockBadge from './StockBadge.astro';
+import StockAlert from './StockAlert.astro';
 import { activeSignal, freshnessOf, DEFAULT_MAX_AGE_HOURS, type PriceSignal } from '../lib/offerObservations';
 import { ratingSupport, shownDiscount, verifiedAtOf } from '../lib/commercialClaims';
 import { satisfactionPercent, SATISFACTION_NOTE } from '../lib/satisfaction';
@@ -387,6 +389,13 @@ const radarPayload = {
         )}
       </div>
     </div>
+    {/* Disponibilidad a la vista de antemano; agotado → aviso de vuelta a stock (Mi Radar). */}
+    {product && (
+      <div class="card-stock">
+        <StockBadge product={product as any} />
+        <StockAlert product={product as any} compact />
+      </div>
+    )}
   </div>
   </div>
 
@@ -717,6 +726,8 @@ const radarPayload = {
   }
 
   /* ============ SATISFACTION BAR ============ */
+  .card-stock { margin-top: 0.45rem; display: flex; flex-direction: column; align-items: flex-start; gap: 0.35rem; width: 100%; }
+
   .satisfaction-bar {
     margin-top: auto;
     padding-top: 0.4rem;

@@ -1,0 +1,30 @@
+---
+/** Pastilla de disponibilidad (stock): punto de color + TEXTO (no depende sólo del color). Reutilizada en tarjeta, ficha, checkout y comparador. */
+import { stockOf, type StockInfo } from '../lib/stock';
+
+export interface Props {
+  product?: Record<string, any>;
+  /** Disponibilidad ya calculada (si no, se calcula desde `product`). */
+  stock?: StockInfo;
+  /** 'sm' para tarjetas/comparador, 'md' para ficha y checkout. */
+  size?: 'sm' | 'md';
+}
+const { product, size = 'sm' } = Astro.props;
+const stock = Astro.props.stock ?? stockOf(product);
+---
+
+<span class:list={['stock-badge', `is-${stock.state}`, `is-${size}`]} title={stock.hint} data-stock-state={stock.state}>
+  <span class="stock-badge-dot" aria-hidden="true"></span>
+  <span class="stock-badge-text">{stock.label}</span>
+</span>
+
+<style>
+  .stock-badge { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 700; border-radius: 999px; line-height: 1.2; white-space: nowrap; border: 1px solid transparent; }
+  .stock-badge.is-sm { font-size: 0.72rem; padding: 0.2rem 0.6rem; }
+  .stock-badge.is-md { font-size: 0.82rem; padding: 0.3rem 0.8rem; }
+  .stock-badge-dot { width: 7px; height: 7px; border-radius: 999px; background: currentColor; flex: 0 0 auto; }
+  .stock-badge.is-in_stock { color: #34d399; background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.35); }
+  .stock-badge.is-low_stock { color: #fbbf24; background: rgba(245, 158, 11, 0.12); border-color: rgba(245, 158, 11, 0.35); }
+  .stock-badge.is-out_of_stock { color: #f87171; background: rgba(248, 113, 113, 0.12); border-color: rgba(248, 113, 113, 0.4); }
+  .stock-badge.is-unknown { color: #94a3b8; background: rgba(148, 163, 184, 0.12); border-color: rgba(148, 163, 184, 0.3); }
+</style>
