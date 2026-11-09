@@ -82,7 +82,7 @@ const shippingFeeLabel =
       ? `${formatCurrency(primaryShipping.cost)} según la tienda${asOfLabel}`
       : shippingInfo
         ? shippingInfo
-        : 'Se calcula en la pasarela';
+        : 'Se calcula en la página de pago de la tienda';
 const shippingIsFree = primaryShipping?.free === true || freeShipping === true;
 
 const specsPreview = product.specs
@@ -100,7 +100,7 @@ const isSoldOut = stockStatus === 'Agotado';
 
 <Layout
   title={`Confirmación de pedido — ${shortTitle} | Treidilor`}
-  description={`Resumen de tu pedido de ${shortTitle}. El pago, el envío y la garantía los gestiona ${provider} desde su pasarela oficial.`}
+  description={`Resumen de tu pedido de ${shortTitle}. El pago y el envío los gestiona la tienda vendedora (${provider}).`}
   image={product.image}
   type="product"
   noindex={true}
@@ -133,7 +133,7 @@ const isSoldOut = stockStatus === 'Agotado';
           <li class="step-sep" aria-hidden="true"></li>
           <li class="step">
             <span class="step-dot">3</span>
-            <span class="step-label">Pasarela oficial</span>
+            <span class="step-label">Página de pago de la tienda</span>
           </li>
         </ol>
       </div>
@@ -144,8 +144,8 @@ const isSoldOut = stockStatus === 'Agotado';
         <span class="checkout-kicker">Resumen del pedido</span>
         <h1 class="checkout-title">Confirma tu selección antes de salir</h1>
         <p class="checkout-subtitle">
-          Revisa los detalles. Al continuar, te conectaremos con la pasarela oficial
-          de {provider} para completar el pago de forma segura.
+          Revisa los detalles. Al continuar, te llevaremos a la página de {provider}
+          para completar la compra. El pago y el envío los gestiona la tienda vendedora.
         </p>
       </header>
 
@@ -232,7 +232,7 @@ const isSoldOut = stockStatus === 'Agotado';
             {shippingInfo && !shippingIsFree && primaryShipping?.cost == null && (
               <div class="order-line order-line--shipping-note">
                 <dt>Tarifas de envío</dt>
-                <dd class="order-value order-value--note">{shippingInfo}. Las opciones y tarifas definitivas (urgente, estándar, recogida…) las elige {provider} en su pasarela.</dd>
+                <dd class="order-value order-value--note">{shippingInfo}. Las opciones y tarifas definitivas (urgente, estándar, recogida…) las elige {provider} en su página de pago.</dd>
               </div>
             )}
             <div class="order-line order-line--total">
@@ -259,11 +259,11 @@ const isSoldOut = stockStatus === 'Agotado';
              ================================================== -->
         <aside class="exit-panel">
           <div class="provider-block">
-            <span class="summary-block-label">Distribuidor oficial</span>
+            <span class="summary-block-label">Tienda vendedora</span>
             <p class="provider-name">{provider}</p>
             <p class="provider-role">
-              Gestiona el cobro, el envío, los correos de seguimiento y la garantía
-              de este pedido.
+              Gestiona el cobro, el envío y las condiciones de este pedido
+              (plazos, devoluciones y garantía, según indique la tienda).
             </p>
             <span class:list={['stock-pill', { 'is-low': stockStatus === 'Pocas unidades', 'is-out': isSoldOut }]}>
               <span class="stock-dot" aria-hidden="true"></span>
@@ -277,7 +277,7 @@ const isSoldOut = stockStatus === 'Agotado';
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              El pago lo gestiona {provider} en su pasarela
+              El pago y el envío los gestiona la tienda vendedora
             </li>
             <li class="trust-seal">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -306,7 +306,7 @@ const isSoldOut = stockStatus === 'Agotado';
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
-            {isSoldOut ? 'Producto agotado' : 'Proceder al pago seguro'}
+            {isSoldOut ? 'Producto agotado' : 'Continuar a la tienda'}
           </button>
 
           {isSoldOut && (
@@ -317,10 +317,9 @@ const isSoldOut = stockStatus === 'Agotado';
           )}
 
           <p class="exit-disclaimer">
-            Al hacer clic en <strong>«Proceder al pago seguro»</strong>, serás
-            conectado con la pasarela de pago oficial de <strong>{provider}</strong>,
-            quien procesará la transacción de forma segura y te enviará los correos
-            de confirmación y seguimiento.
+            Al hacer clic en <strong>«Continuar a la tienda»</strong>, saldrás de Treidilor
+            hacia la página de <strong>{provider}</strong>, que gestionará el pago y el
+            envío y te enviará, si procede, los correos de confirmación y seguimiento.
           </p>
 
           <a
@@ -329,7 +328,7 @@ const isSoldOut = stockStatus === 'Agotado';
             rel="sponsored nofollow noopener"
             class="exit-fallback-link"
           >
-            Continuar con la tramitación en la pasarela oficial
+            Continuar la compra en la página de la tienda
           </a>
 
           <div class="exit-disclosure">
@@ -354,8 +353,8 @@ const isSoldOut = stockStatus === 'Agotado';
     <div class="exit-overlay" id="exitOverlay" role="status" aria-live="polite" hidden>
       <div class="overlay-card">
         <span class="overlay-spinner" aria-hidden="true"></span>
-        <p class="overlay-title">Conectando con el almacén oficial para procesar tu pedido…</p>
-        <p class="overlay-text">Estableciendo el enlace seguro de pago con {provider}. No cierres esta ventana.</p>
+        <p class="overlay-title">Redirigiendo a la tienda vendedora…</p>
+        <p class="overlay-text">Te llevamos a la página de {provider}. No cierres esta ventana.</p>
         <div class="overlay-bar" aria-hidden="true"><span></span></div>
       </div>
     </div>

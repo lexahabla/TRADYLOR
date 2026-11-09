@@ -87,3 +87,15 @@ test('ficha: sin «distribuidor oficial» ni promesa de garantía; la tienda ven
   assert.match(FICHA, /La tienda vendedora gestiona el cobro y el envío/);
   assert.doesNotMatch(FICHA, /garantía los administrará/);
 });
+
+test('checkout: sin «oficial», «pago seguro» ni pasarelas concretas; la tienda vendedora gestiona pago y envío', () => {
+  const visible = CHECKOUT.replace(/\/\*[\s\S]*?\*\/|<!--[\s\S]*?-->|^\s*\/\/.*$/gm, '');
+  assert.doesNotMatch(visible, /distribuidor oficial|pasarela oficial|pasarela de pago oficial|almacén oficial|pago seguro|enlace seguro|de forma segura/i);
+  assert.doesNotMatch(visible, /en su pasarela/i);
+  assert.match(CHECKOUT, /Tienda vendedora/);
+  assert.match(CHECKOUT, /El pago y el envío los gestiona la tienda vendedora/);
+  // La lógica de salida no cambia: el botón y el enlace de respaldo siguen yendo a /api/redirect con su id.
+  assert.match(CHECKOUT, /exitUrl = `\/api\/redirect\?id=\$\{encodeURIComponent\(productKey\(product\)\)\}&src=checkout`/);
+  assert.match(CHECKOUT, /id="exitBtn"/);
+  assert.match(CHECKOUT, /id="exitFallback"/);
+});
