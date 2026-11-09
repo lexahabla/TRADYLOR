@@ -114,7 +114,9 @@ test('el control del historial es accesible (pestañas con aria) y la caja de al
   assert.match(comp, /role="tab"/);
   assert.match(comp, /aria-selected/);
   assert.match(comp, /Activar alerta de precio/);
-  assert.match(comp, /poco realista/);
+  assert.match(comp, /phc-zonebar/);
+  assert.match(comp, /Precio recomendado/);
+  assert.match(comp, /data-alert-use-recommended/);
   assert.match(comp, /data-alert-ship/);
   assert.match(comp, /href="\/alertas-precio"/);
 });

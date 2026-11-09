@@ -73,6 +73,7 @@ scripts/tests/offers-comparator.test.mjs
 scripts/tests/offers-integration.test.mjs
 scripts/tests/offers-preservation.test.mjs
 scripts/tests/pages-guard.test.mjs
+scripts/tests/price-alert-advice.test.mjs
 scripts/tests/price-alert-center.test.mjs
 scripts/tests/price-refresh-amazon.test.mjs
 scripts/tests/price-verification.test.mjs
@@ -224,6 +225,7 @@ src/lib/pipeline/types.ts
 src/lib/priceAlertCenter.ts
 src/lib/priceAlerts.ts
 src/lib/priceHistory.ts
+src/lib/priceAlertAdvice.ts
 src/lib/priceHistoryView.ts
 src/lib/productFieldsStore.ts
 src/lib/productNetwork.ts
