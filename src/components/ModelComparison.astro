@@ -1,12 +1,25 @@
 ---
-/** Comparador de MODELOS (#comparativa): un modelo por columna, una característica por fila. Vista de lib/modelComparison.ts. */
+/**
+ * Comparador de MODELOS (#comparativa). Cabecera de cada columna = tarjeta estilo Product Card (foto centrada de tamaño uniforme, nombre,
+ * descripción breve, valoración fiable, precio con descuento verificado en pastilla verde y la barra de pros y contras de ProductCard).
+ * Debajo: UNA fila «Especificaciones técnicas» (adaptada a la categoría), «Ventajas destacadas» y un botón «Ver ficha del producto» alineado.
+ * Vista de lib/modelComparison.ts: todo sale del catálogo; el descuento sólo si está verificado; nada se inventa. Sin enlaces de afiliación.
+ */
 import type { ModelComparison } from '../lib/modelComparison';
+import { SATISFACTION_NOTE } from '../lib/satisfaction';
 
 export interface Props {
   comparison: ModelComparison;
   title?: string;
 }
 const { comparison, title = 'Comparar modelos' } = Astro.props;
+
+// Precio, valoración e indicador viven en la tarjeta de cabecera: no se repiten como filas.
+const IN_CARD = new Set(['Precio publicado', 'Valoración', 'Indicador de satisfacción (orientativo)']);
+const rows = comparison.rows.filter((r) => !IN_CARD.has(r.label));
+const specs = rows.find((r) => r.label === 'Especificaciones técnicas');
+const pros = rows.find((r) => r.label === 'Ventajas destacadas');
+const others = rows.filter((r) => r !== specs && r !== pros);
 ---
 
 {
@@ -14,31 +27,87 @@ const { comparison, title = 'Comparar modelos' } = Astro.props;
     <section class="models-section" aria-labelledby="modelos-title">
       <h2 id="modelos-title" class="models-title">{title}</h2>
       <p class="models-sub">{comparison.explanation}</p>
-      <div class="models-scroll" role="region" aria-label="Tabla comparativa de modelos (desplazable)" tabindex="0">
-        <table class="models-table">
-          <caption class="sr-only">Comparativa de modelos: un modelo por columna</caption>
+      <div class="models-scroll" role="region" aria-label="Comparativa de modelos (desplazable)" tabindex="0">
+        <table class="models-table" style={`min-width: ${124 + comparison.columns.length * 210}px`}>
+          <caption class="sr-only">Comparativa de modelos: un modelo por columna, con sus especificaciones técnicas y un enlace a su ficha</caption>
           <thead>
             <tr>
               <th scope="col" class="m-feature"><span class="sr-only">Característica</span></th>
               {comparison.columns.map((c) => (
-                <th scope="col" class:list={['m-col', { 'is-ref': c.isReference }]}>
-                  {c.isReference && <span class="m-ref">Este producto</span>}
-                  <a href={c.href}>{c.title}</a>
-                  {c.brand && <span class="m-brand">{c.brand}</span>}
+                <th scope="col" class="m-col">
+                  <div class:list={['mc-card', { 'is-ref': c.isReference }]}>
+                    {c.isReference && <span class="mc-ref">Este producto</span>}
+                    <a href={c.href} class="mc-img-link" aria-label={`Ver ficha de ${c.title}`}>
+                      <span class="mc-img">
+                        {c.image ? (
+                          <img src={c.image} alt={c.title} width="160" height="160" loading="lazy" decoding="async" />
+                        ) : (
+                          <span class="mc-noimg">Sin imagen</span>
+                        )}
+                      </span>
+                    </a>
+                    <h3 class="mc-title"><a href={c.href}>{c.title}</a></h3>
+                    {c.description && <p class="mc-desc">{c.description}</p>}
+                    {c.ratingText && <p class="mc-rating">{c.ratingText}</p>}
+                    <p class="mc-price">
+                      {c.priceText ? <strong>{c.priceText}</strong> : <span class="mc-nodata">Sin precio</span>}
+                    </p>
+                    {c.discountPct !== null && (
+                      <p class="mc-saving">
+                        {c.previousPriceText && <span class="mc-old">{c.previousPriceText}</span>}
+                        <span class="mc-pill-green" aria-label={`Descuento verificado del ${c.discountPct}%`}>-{c.discountPct}%</span>
+                      </p>
+                    )}
+                    <div class="satisfaction-bar" role="img" aria-label={`Indicador orientativo de Treidilor: ${c.satisfaction}% positivo, ${100 - c.satisfaction}% negativo`}>
+                      <div class="satisfaction-header" aria-hidden="true">
+                        <span class="satisfaction-label sat-positive">{c.satisfaction}%</span>
+                        <span class="satisfaction-label sat-negative">{100 - c.satisfaction}%</span>
+                      </div>
+                      <div class="satisfaction-track" aria-hidden="true">
+                        <div class="satisfaction-fill" style={`width: ${c.satisfaction}%`}></div>
+                      </div>
+                      <p class="satisfaction-note">{SATISFACTION_NOTE}</p>
+                    </div>
+                  </div>
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {comparison.rows.map((r) => (
+            {specs && (
+              <tr>
+                <th scope="row" class="m-feature">{specs.label}</th>
+                {(specs.items ?? []).map((list) => (
+                  <td>
+                    <ul class="m-specs">
+                      {list.map((s) => (
+                        <li class:list={{ 'is-missing': s.missing }}>
+                          <span class="m-spec-k">{s.label}</span>
+                          <span class="m-spec-v">{s.value}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </td>
+                ))}
+              </tr>
+            )}
+            {others.map((r) => (
               <tr>
                 <th scope="row" class="m-feature">{r.label}</th>
                 {r.cells.map((cell) => <td class:list={{ 'is-missing': cell === 'Sin dato' }}>{cell}</td>)}
               </tr>
             ))}
-            <tr>
-              <th scope="row" class="m-feature">Ficha completa</th>
-              {comparison.columns.map((c) => <td><a class="m-link" href={c.href}>Ver ficha</a></td>)}
+            {pros && (
+              <tr class="m-secondary">
+                <th scope="row" class="m-feature">{pros.label}</th>
+                {pros.cells.map((cell) => <td class:list={{ 'is-missing': cell === 'Sin dato' }}>{cell}</td>)}
+              </tr>
+            )}
+            <tr class="m-action">
+              <th scope="row" class="m-feature">Ficha del producto</th>
+              {comparison.columns.map((c) => (
+                <td><a href={c.href} class="mc-btn" aria-label={`Ver ficha del producto: ${c.title}`}>Ver ficha del producto</a></td>
+              ))}
             </tr>
           </tbody>
         </table>
@@ -51,16 +120,81 @@ const { comparison, title = 'Comparar modelos' } = Astro.props;
   .models-section { margin: 2rem 0; }
   .models-title { font-family: var(--font-heading); font-size: 1.4rem; margin: 0 0 0.25rem; }
   .models-sub { color: var(--color-text-muted); font-size: 0.85rem; margin: 0 0 0.75rem; }
-  .models-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
-  .models-scroll:focus-visible, .models-table a:focus-visible { outline: 2px solid var(--color-accent-amber); outline-offset: 2px; }
-  .models-table { border-collapse: collapse; width: 100%; min-width: 640px; background: var(--color-bg-card); }
-  .models-table th, .models-table td { text-align: left; vertical-align: top; padding: 0.7rem 0.8rem; border-bottom: 1px solid var(--color-border); font-size: 0.88rem; overflow-wrap: anywhere; }
-  .m-feature { position: sticky; left: 0; background: var(--color-surface-subtle); color: var(--color-text-muted); min-width: 130px; z-index: 1; }
-  .m-col { min-width: 180px; }
-  .m-col a, .m-link { color: var(--color-text-main); font-weight: 700; }
-  .m-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--color-primary); }
-  .m-ref { display: block; color: var(--color-accent); font-size: 0.72rem; text-transform: uppercase; }
-  .m-brand { display: block; color: var(--color-text-dim); font-size: 0.78rem; font-weight: 400; }
+  .models-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--color-border); border-radius: var(--border-radius-md); background: var(--color-bg-card); }
+  .models-scroll:focus-visible { outline: 2px solid var(--color-accent-amber); outline-offset: 2px; }
+  /* min-width inline = columna de etiquetas + 210px por modelo: en móvil el contenido hace scroll horizontal en lugar de comprimirse. */
+  .models-table { border-collapse: separate; border-spacing: 0; width: 100%; table-layout: fixed; }
+  .models-table th, .models-table td { text-align: left; vertical-align: top; padding: 0.75rem 0.8rem; border-bottom: 1px solid var(--color-border); font-size: 0.86rem; overflow-wrap: anywhere; }
+  /* height:1px permite que .mc-card (height:100%) iguale la altura de todas las tarjetas de la fila. */
+  .models-table thead th { border-bottom: 0; padding: 0.9rem 0.6rem 0.7rem; font-weight: inherit; height: 1px; }
+  .models-table thead th.m-feature { height: auto; }
+  .m-feature { position: sticky; left: 0; background: var(--color-surface-subtle); color: var(--color-text-muted); width: 124px; min-width: 124px; z-index: 2; font-weight: 600; font-size: 0.74rem; text-transform: uppercase; letter-spacing: 0.02em; overflow-wrap: normal; word-break: normal; hyphens: auto; }
+  .m-col { min-width: 210px; }
+  .m-secondary td { font-size: 0.78rem; color: var(--color-text-muted); }
   .is-missing { color: var(--color-text-dim); font-style: italic; }
+  .m-action td, .m-action th { border-bottom: 0; vertical-align: middle; }
+
+  /* Tarjeta de cabecera: lenguaje visual de ProductCard (degradado, borde suave, foto sobre fondo claro), contenido centrado. */
+  .mc-card {
+    position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 0.4rem; height: 100%;
+    padding: 0.9rem 0.7rem 0.8rem;
+    background: linear-gradient(135deg, rgba(17, 24, 39, 0.7) 0%, rgba(30, 41, 59, 0.5) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    transition: transform 0.3s cubic-bezier(0.23, 1, 0.32, 1), border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  .mc-card.is-ref { border-color: rgba(16, 185, 129, 0.45); }
+  .mc-card:hover, .mc-card:focus-within {
+    transform: translateY(-4px); border-color: rgba(59, 130, 246, 0.5);
+    box-shadow: 0 18px 44px rgba(59, 130, 246, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  .mc-ref { font-size: 0.66rem; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; color: #10b981; }
+  .mc-img-link { display: block; }
+  .mc-img { display: flex; align-items: center; justify-content: center; width: 128px; height: 128px; background: #f8fafc; border-radius: 14px; padding: 6px; overflow: hidden; margin: 0 auto; }
+  .mc-img img { width: 100%; height: 100%; object-fit: contain; display: block; transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1); }
+  .mc-card:hover .mc-img img { transform: scale(1.05); }
+  .mc-noimg { color: #64748b; font-size: 0.78rem; }
+  .mc-title { margin: 0.2rem 0 0; font-family: var(--font-heading); font-size: 0.92rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .mc-title a { color: var(--color-text-main); text-decoration: none; }
+  .mc-title a:hover { color: var(--color-primary); }
+  .mc-desc { margin: 0; color: var(--color-text-muted); font-size: 0.76rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .mc-rating { margin: 0; color: #fbbf24; font-size: 0.78rem; font-weight: 700; }
+  .mc-price { margin: 0.2rem 0 0; }
+  .mc-price strong { font-size: 1.35rem; color: var(--color-text-main); }
+  .mc-nodata { color: var(--color-text-dim); font-style: italic; font-size: 0.85rem; }
+  .mc-saving { margin: 0; display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap; }
+  .mc-old { color: var(--color-text-dim); text-decoration: line-through; font-size: 0.8rem; }
+  /* Pastilla VERDE: el descuento verificado es un ahorro para el comprador. */
+  .mc-pill-green { display: inline-block; font-size: 0.72rem; font-weight: 800; padding: 0.2rem 0.55rem; border-radius: 999px; line-height: 1.3; color: #fff; background: linear-gradient(135deg, #059669 0%, #047857 100%); box-shadow: 0 6px 16px rgba(5, 150, 105, 0.35); }
+
+  /* Barra de pros y contras: mismas reglas que ProductCard.astro (.satisfaction-*). */
+  .satisfaction-bar { margin-top: auto; padding-top: 0.4rem; width: 100%; }
+  .satisfaction-header { display: flex; justify-content: space-between; margin-bottom: 0.35rem; }
+  .satisfaction-label { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.02em; }
+  .sat-positive { color: #10b981; }
+  .sat-negative { color: #f97316; }
+  .satisfaction-track { width: 100%; height: 6px; background: rgba(249, 115, 22, 0.25); border-radius: 999px; overflow: hidden; }
+  .satisfaction-fill { height: 100%; background: linear-gradient(90deg, #10b981, #34d399); border-radius: 999px; transition: width 0.6s ease; }
+  .satisfaction-note { margin: 0.35rem 0 0; font-size: 0.65rem; line-height: 1.35; color: rgba(255, 255, 255, 0.45); text-align: center; }
+
+  /* Especificaciones técnicas: lista compacta etiqueta/valor, mismas características y orden en todas las columnas. */
+  .m-specs { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.35rem; }
+  .m-specs li { display: flex; flex-direction: column; line-height: 1.3; }
+  .m-spec-k { color: var(--color-text-dim); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .m-spec-v { color: var(--color-text-main); font-size: 0.84rem; font-weight: 600; }
+  .m-specs li.is-missing .m-spec-v { color: var(--color-text-dim); font-weight: 400; }
+
+  /* Botón azul inferior, misma altura y posición en todas las columnas. */
+  .mc-btn { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 44px; padding: 0 0.8rem; background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); color: #fff; font-weight: 700; font-size: 0.86rem; border-radius: 12px; text-decoration: none; box-shadow: 0 8px 22px rgba(59, 130, 246, 0.35); transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; }
+  .mc-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(59, 130, 246, 0.5); background: linear-gradient(135deg, #60a5fa 0%, #2563eb 100%); }
+  .mc-img-link:focus-visible, .mc-title a:focus-visible, .mc-btn:focus-visible { outline: 2px solid var(--color-accent-amber); outline-offset: 2px; border-radius: 10px; }
+  @media (prefers-reduced-motion: reduce) {
+    .mc-card, .mc-img img, .mc-btn { transition: none; }
+    .mc-card:hover, .mc-card:focus-within, .mc-btn:hover { transform: none; }
+    .mc-card:hover .mc-img img { transform: none; }
+  }
+  @media (max-width: 640px) {
+    .m-feature { width: 96px; min-width: 96px; font-size: 0.68rem; padding: 0.6rem 0.45rem; letter-spacing: 0; text-transform: none; }
+  }
   .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>

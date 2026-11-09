@@ -18,7 +18,7 @@ type Any = Record<string, any>;
 
 export const CLAIM_RULES = {
   reviews: /\b\d[\d.,]*\s*(rese[nñ]as|opiniones|valoraciones|reviews|ratings|compradores|clientes|usuarios)\b|basad[ao]s?\s+en\s+\d|valoraci[oó]n media/i,
-  discount: /(descuento|ahorro|rebaja|oferta|reducci[oó]n)[^.]{0,60}\d+(?:[.,]\d+)?\s*%|\d+(?:[.,]\d+)?\s*%[^.]{0,40}(descuento|ahorro|rebaja|menos que|respecto al precio|frente al precio)/i,
+  discount: /descuento\s+(notable|significativo|importante|considerable|sustancial)|rebajado\s+respecto|(descuento|ahorro|rebaja|oferta|reducci[oó]n)[^.]{0,60}\d+(?:[.,]\d+)?\s*%|\d+(?:[.,]\d+)?\s*%[^.]{0,40}(descuento|ahorro|rebaja|menos que|respecto al precio|frente al precio)/i,
   satisfaction: /\d+(?:[.,]\d+)?\s*%\s*(de\s+)?(los\s+)?(satisf|compradores|clientes|usuarios|recomiend)/i,
   ownAnalysis: /nuestr[oa]s?\s+(an[aá]lisis|pruebas?|tests?|laboratorio|equipo de pruebas)|hemos\s+(probado|testado|analizado)|laboratorio|pruebas independientes|an[aá]lisis independiente/i,
   internal: /comisi[oó]n|afiliad|\bepn\b|\bcpa\b/i,

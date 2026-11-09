@@ -34,3 +34,8 @@ test('no muta el producto original y conserva textos válidos', () => {
   assert.deepEqual(p.pros, ['Ligero', 'Descuento del 15 %']);
   assert.equal(claimProblem('Diseño cómodo', ''), null);
 });
+
+test('descuentos «notables» sin cifra tampoco se publican como ventaja (no hay descuento verificado que lo respalde)', () => {
+  const t = publicText({ title: 'Portátil X', specs: {}, pros: ['Descuento notable respecto al precio original', 'Pantalla de 16 pulgadas'], cons: [] });
+  assert.deepEqual(t.pros, ['Pantalla de 16 pulgadas']);
+});
