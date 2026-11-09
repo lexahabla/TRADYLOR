@@ -202,6 +202,7 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   `APIFY_PROXY_COUNTRY` (sólo si se define se envía). El límite de productos
   viaja a Apify (`maxItemsPerStartUrl`); la fecha de captura de lo extraído es el FIN de la ejecución (aproximación: no es la hora exacta en que
   se observó cada producto); no se envían `countryCode`/`zipCode` (cobran 0,06 USD por resultado).
+  AliExpress «Validar conexión» (`AliExpressConnector.validate`): comprueba el `resp_code` DENTRO de la respuesta (401 «This publisher is not registered», 404 «System Error»…) además de los errores de firma/transporte; ya no da «Conexión verificada» con la cuenta de afiliado bloqueada (`aliexpress-validate.test.mjs`).
   Temu (mismo bloque, selector «Origen»): actor `hypebridge/temu-scraper` (id 2CKn7F7pA4eH2mVRm; `APIFY_TEMU_ACTOR` lo
   sobreescribe) con el mismo `APIFY_TOKEN`. Admite URL de producto (…-g-<id>.html) y de categoría (…-o3-<id>.html) CON
   prefijo de mercado /es/ (sin él el actor responde con EE. UU. en USD; se rechaza antes de gastar); rechaza

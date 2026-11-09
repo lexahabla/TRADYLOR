@@ -193,7 +193,7 @@ function responseNode(payload: Record<string, unknown>, method: string): Record<
   const node = (payload[key] ?? payload.resp_result ?? payload) as Record<string, unknown>;
   const resp = (node.resp_result ?? node) as Record<string, unknown>;
   if (resp && typeof resp === 'object' && 'resp_code' in resp && Number(resp.resp_code) !== 200) {
-    throw new ConnectorError('aliexpress', `AliExpress: ${text(resp.resp_msg) || 'petición rechazada'}.`);
+    throw new ConnectorError('aliexpress', `AliExpress: ${text(resp.resp_msg) || 'petición rechazada'} (código ${Number(resp.resp_code)}).`);
   }
   return (resp.result ?? resp) as Record<string, unknown>;
 }
@@ -422,7 +422,10 @@ export class AliExpressConnector implements NetworkConnector {
       return { ok: false, message };
     }
     try {
-      await callApi('aliexpress.affiliate.category.get', creds, {});
+      // callApi sólo detecta errores de transporte/firma; el rechazo de la cuenta llega DENTRO de la respuesta (resp_code 401/404,
+      // p. ej. «This publisher is not registered»). Se valida con responseNode para no dar una conexión falsa.
+      const method = 'aliexpress.affiliate.category.get';
+      responseNode(await callApi(method, creds, {}), method);
       const message = 'Conexión verificada con la API de afiliados de AliExpress.';
       setNetworkStatus(this.networkId, 'connected', message);
       return { ok: true, message };

@@ -47,6 +47,7 @@ scripts/tests/deleted-panel-paths.test.mjs
 scripts/tests/deploy-config.test.mjs
 scripts/tests/discount-claims.test.mjs
 scripts/tests/facets.test.mjs
+scripts/tests/aliexpress-validate.test.mjs
 scripts/tests/ficha-specs-history.test.mjs
 scripts/tests/fixtures/amazon-real-sample-es.json
 scripts/tests/fixtures/fineblue-f920.json
