@@ -15,6 +15,7 @@ import { recordPricePoint } from './lib/priceHistory';
 import { startReminderScheduler } from './lib/reminders';
 import { getAllRadarUsers, getRadarSessionUser, recordRadarUserVisit, SESSION_COOKIE_NAME } from './lib/radarAuth';
 import { startMarketingScheduler } from './lib/marketingEmail';
+import { recordVisit as recordAlertVisit, startPriceAlertCenterScheduler } from './lib/priceAlertCenter';
 import { startPriceAlertScheduler } from './lib/priceAlerts';
 import { startOfferRefreshScheduler } from './lib/offerRefresh';
 import { gzip } from 'node:zlib';
@@ -33,6 +34,8 @@ startPriceAlertScheduler();
 // defecto. Sólo actúa con OFFER_REFRESH_ENABLED=true; su activación en
 // producción requiere autorización aparte (consume créditos de ScraperAPI).
 startOfferRefreshScheduler();
+// Centro «Alertas de precio» (independiente de Mi Radar): vigila los precios objetivo que crean los usuarios. Registra sus ejecuciones.
+startPriceAlertCenterScheduler();
 
 /**
  * Precalienta en el arranque las cachés en memoria más caras (catálogo,
@@ -129,6 +132,8 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
                 title: product.title,
                 category: product.category,
               });
+              // Centro «Alertas de precio» (datos propios, separado de Mi Radar). No hace nada mientras PRICE_DROP_VISITS_ENABLED esté apagado.
+              recordAlertVisit(radarUser.id, product.id, product.title);
             }
           }
         }

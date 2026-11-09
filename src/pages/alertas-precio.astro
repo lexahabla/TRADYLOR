@@ -1,0 +1,269 @@
+---
+/**
+ * TREIDILOR — ALERTAS DE PRECIO (centro de notificaciones del usuario)
+ * Privado y SEPARADO de Mi Radar: datos propios (`price-alert-center.json`), API propia (`/api/alertas-precio/*`).
+ * Reúne dos cosas: «Alertas configuradas» (precio objetivo del usuario) y «Bajadas de precio» (productos visitados), más las preferencias.
+ * Todo el contenido se pinta en el cliente con la sesión de cuenta; sin sesión sólo se muestra la invitación a iniciar sesión.
+ */
+import Layout from '../layouts/Layout.astro';
+
+export const prerender = false;
+---
+
+<Layout title="Alertas de precio | Treidilor" description="Tus alertas de precio y los avisos de bajadas de precio." noindex={true}>
+  <main class="ap container" id="alertas-precio" data-ap>
+    <header class="ap-head">
+      <span class="ap-bell" aria-hidden="true">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+      </span>
+      <div>
+        <h1 class="ap-title">Alertas de precio</h1>
+        <p class="ap-sub">Avisos de precio objetivo y bajadas de precio. Es independiente de Mi Radar.</p>
+      </div>
+    </header>
+
+    <section class="ap-login" data-ap-login hidden>
+      <p>Inicia sesión para crear y consultar tus alertas de precio.</p>
+      <button type="button" class="ap-btn" data-open-auth="login">Iniciar sesión</button>
+    </section>
+
+    <div data-ap-app hidden>
+      <div class="ap-tabs" role="tablist" aria-label="Secciones">
+        <button type="button" role="tab" class="ap-tab" data-ap-tab="alerts" aria-selected="true" id="ap-tab-alerts" aria-controls="ap-panel-alerts">Alertas configuradas <span class="ap-count" data-ap-count-alerts></span></button>
+        <button type="button" role="tab" class="ap-tab" data-ap-tab="drops" aria-selected="false" tabindex="-1" id="ap-tab-drops" aria-controls="ap-panel-drops">Bajadas de precio <span class="ap-count ap-count--unread" data-ap-count-drops></span></button>
+        <button type="button" role="tab" class="ap-tab" data-ap-tab="prefs" aria-selected="false" tabindex="-1" id="ap-tab-prefs" aria-controls="ap-panel-prefs">Preferencias</button>
+      </div>
+
+      <section class="ap-panel" id="ap-panel-alerts" role="tabpanel" aria-labelledby="ap-tab-alerts">
+        <div class="ap-toolbar">
+          <div class="ap-filter" role="group" aria-label="Filtrar alertas">
+            <button type="button" class="ap-chip is-active" data-ap-filter="active">Activas</button>
+            <button type="button" class="ap-chip" data-ap-filter="met">Cumplidas</button>
+          </div>
+          <button type="button" class="ap-link" data-ap-readall>Marcar todo como leído</button>
+        </div>
+        <p class="ap-hint">Para crear una alerta, abre la ficha de un producto y usa «Activar alerta de precio» en el historial de precios.</p>
+        <ul class="ap-list" data-ap-alerts></ul>
+        <p class="ap-empty" data-ap-alerts-empty hidden></p>
+      </section>
+
+      <section class="ap-panel" id="ap-panel-drops" role="tabpanel" aria-labelledby="ap-tab-drops" hidden>
+        <p class="ap-hint" data-ap-drops-off hidden>Los avisos automáticos de bajadas de productos visitados todavía no están activados en Treidilor: se activarán cuando se complete la información de privacidad correspondiente. Aquí verás también tus alertas de precio ya cumplidas.</p>
+        <ul class="ap-list" data-ap-notes></ul>
+        <p class="ap-empty" data-ap-notes-empty hidden>No tienes avisos todavía.</p>
+      </section>
+
+      <section class="ap-panel" id="ap-panel-prefs" role="tabpanel" aria-labelledby="ap-tab-prefs" hidden>
+        <p class="ap-hint">Los avisos internos (el centro y la campana) y los correos se configuran por separado. Los cambios se aplican de inmediato.</p>
+        <fieldset class="ap-fieldset">
+          <legend>Alertas de precio objetivo (las que tú creas)</legend>
+          <label class="ap-switch"><input type="checkbox" data-ap-pref="targets.inApp" /> <span>Avisarme en el centro de alertas</span></label>
+          <label class="ap-switch"><input type="checkbox" data-ap-pref="targets.email" /> <span>Avisarme también por correo electrónico</span></label>
+        </fieldset>
+        <fieldset class="ap-fieldset">
+          <legend>Bajadas de precio de productos que he visitado</legend>
+          <label class="ap-switch"><input type="checkbox" data-ap-pref="drops.inApp" /> <span>Avisarme en el centro de alertas</span></label>
+          <label class="ap-switch"><input type="checkbox" data-ap-pref="drops.email" /> <span>Avisarme también por correo electrónico</span></label>
+          <p class="ap-hint">Estas bajadas sólo se avisan cuando están verificadas con lecturas comparables de la tienda. Al desactivar ambas casillas se borran las visitas guardadas para este fin.</p>
+        </fieldset>
+        <p class="ap-status" data-ap-prefs-status role="status" aria-live="polite"></p>
+      </section>
+    </div>
+  </main>
+</Layout>
+
+<style is:global>
+  .ap { max-width: 880px; margin: 2rem auto 4rem; }
+  .ap-head { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+  .ap-bell { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 14px; background: rgba(245, 158, 11, 0.14); color: #fbbf24; }
+  .ap-title { margin: 0; font-family: var(--font-heading); font-size: 1.7rem; }
+  .ap-sub { margin: 0.2rem 0 0; color: var(--color-text-muted); font-size: 0.9rem; }
+  .ap-login { padding: 1.5rem; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-bg-card); text-align: center; }
+  .ap-tabs { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-bottom: 1rem; border-bottom: 1px solid var(--color-border); }
+  .ap-tab { min-height: 44px; padding: 0 1rem; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--color-text-muted); font-weight: 700; cursor: pointer; }
+  .ap-tab[aria-selected='true'] { color: var(--color-text-main); border-bottom-color: var(--color-primary); }
+  .ap-tab:focus-visible, .ap-chip:focus-visible, .ap-btn:focus-visible, .ap-link:focus-visible, .ap-item a:focus-visible { outline: 2px solid var(--color-accent-amber); outline-offset: 2px; }
+  .ap-count { display: inline-block; min-width: 1.3rem; padding: 0 0.4rem; margin-left: 0.3rem; border-radius: 999px; background: rgba(148, 163, 184, 0.2); font-size: 0.72rem; text-align: center; }
+  .ap-count--unread.has-unread { background: #ef4444; color: #fff; }
+  .ap-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+  .ap-filter { display: inline-flex; gap: 0.3rem; }
+  .ap-chip { min-height: 40px; padding: 0 0.9rem; border-radius: 999px; border: 1px solid var(--color-border); background: transparent; color: var(--color-text-muted); font-weight: 700; cursor: pointer; }
+  .ap-chip.is-active { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  .ap-link { min-height: 40px; border: 0; background: transparent; color: var(--color-primary); font-weight: 600; cursor: pointer; text-decoration: underline; }
+  .ap-hint { color: var(--color-text-muted); font-size: 0.82rem; margin: 0.4rem 0 0.9rem; }
+  .ap-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.8rem; }
+  .ap-item { display: grid; grid-template-columns: 84px 1fr; gap: 0.9rem; padding: 0.9rem; border: 1px solid var(--color-border); border-radius: 16px; background: var(--color-bg-card); }
+  .ap-item.is-unread { border-color: rgba(239, 68, 68, 0.55); box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.25); }
+  .ap-photo { width: 84px; height: 84px; border-radius: 12px; background: #f8fafc; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .ap-photo img { width: 100%; height: 100%; object-fit: contain; }
+  .ap-name { margin: 0; font-weight: 700; font-size: 0.95rem; }
+  .ap-name a { color: var(--color-text-main); text-decoration: none; }
+  .ap-name a:hover { color: var(--color-primary); }
+  .ap-prices { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.8rem; margin: 0.35rem 0; font-size: 0.85rem; color: var(--color-text-muted); }
+  .ap-prices strong { color: var(--color-text-main); font-size: 1.05rem; }
+  .ap-prices s { color: var(--color-text-dim); }
+  .ap-pill { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.72rem; font-weight: 800; color: #fff; background: linear-gradient(135deg, #059669, #047857); }
+  .ap-badge { display: inline-block; padding: 0.15rem 0.55rem; border-radius: 999px; font-size: 0.7rem; font-weight: 700; background: rgba(148, 163, 184, 0.18); color: var(--color-text-muted); }
+  .ap-badge--met { background: rgba(16, 185, 129, 0.18); color: #34d399; }
+  .ap-badge--off { background: rgba(245, 158, 11, 0.16); color: #fbbf24; }
+  .ap-meta { font-size: 0.74rem; color: var(--color-text-dim); margin: 0.2rem 0 0; }
+  .ap-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; align-items: center; }
+  .ap-btn { min-height: 40px; padding: 0 0.9rem; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-surface-subtle); color: var(--color-text-main); font-weight: 700; font-size: 0.82rem; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+  .ap-btn--primary { background: var(--color-primary); border-color: var(--color-primary); color: #fff; }
+  .ap-btn--danger { color: #fca5a5; }
+  .ap-edit { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .ap-edit input { width: 6rem; min-height: 40px; padding: 0 0.5rem; border-radius: 10px; border: 1px solid var(--color-border); background: var(--color-bg-card); color: var(--color-text-main); font-weight: 700; }
+  .ap-empty { padding: 1.4rem; text-align: center; color: var(--color-text-muted); border: 1px dashed var(--color-border); border-radius: 14px; }
+  .ap-fieldset { border: 1px solid var(--color-border); border-radius: 14px; padding: 0.9rem 1rem; margin: 0 0 1rem; }
+  .ap-fieldset legend { padding: 0 0.4rem; font-weight: 700; }
+  .ap-switch { display: flex; align-items: center; gap: 0.7rem; min-height: 44px; cursor: pointer; }
+  .ap-switch input { width: 20px; height: 20px; accent-color: var(--color-primary); }
+  .ap-status { min-height: 1.2em; color: #34d399; font-size: 0.85rem; }
+  @media (max-width: 560px) {
+    .ap-item { grid-template-columns: 64px 1fr; }
+    .ap-photo { width: 64px; height: 64px; }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    var root = document.querySelector('[data-ap]');
+    if (!root) return;
+    var loginBox = root.querySelector('[data-ap-login]');
+    var app = root.querySelector('[data-ap-app]');
+    var state = { alerts: [], notifications: [], prefs: null, filter: 'active', dropAvailable: false };
+
+    function eur(n) { return Number(n).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' }); }
+    function dateEs(iso) { if (!iso) return ''; var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' }); }
+    function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+    function api(method, url, body) {
+      return fetch(url, { method: method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: body ? JSON.stringify(body) : undefined })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, status: r.status, body: j }; }); });
+    }
+    function announce() { window.dispatchEvent(new CustomEvent('price-alerts:changed')); }
+
+    function photo(src, alt) {
+      var box = el('div', 'ap-photo');
+      if (src) { var img = document.createElement('img'); img.src = src; img.alt = alt || ''; img.loading = 'lazy'; img.width = 84; img.height = 84; box.appendChild(img); }
+      return box;
+    }
+
+    function renderAlerts() {
+      var ul = root.querySelector('[data-ap-alerts]');
+      var empty = root.querySelector('[data-ap-alerts-empty]');
+      ul.textContent = '';
+      var list = state.alerts.filter(function (a) { return state.filter === 'met' ? a.status === 'met' : a.status !== 'met'; });
+      root.querySelector('[data-ap-count-alerts]').textContent = String(state.alerts.filter(function (a) { return a.status !== 'met'; }).length);
+      empty.hidden = list.length > 0;
+      empty.textContent = state.filter === 'met' ? 'Todavía no se ha cumplido ninguna de tus alertas.' : 'No tienes alertas activas. Crea una desde la ficha de un producto.';
+      list.forEach(function (a) {
+        var li = el('li', 'ap-item');
+        li.appendChild(photo(a.productImage, a.productTitle));
+        var body = el('div');
+        var h = el('h3', 'ap-name'); var link = el('a', null, a.productTitle); link.href = a.href; h.appendChild(link); body.appendChild(h);
+        var prices = el('p', 'ap-prices');
+        var target = el('span', null, 'Objetivo: '); var ts = el('strong', null, eur(a.targetPrice)); target.appendChild(ts); prices.appendChild(target);
+        prices.appendChild(el('span', null, a.includeShipping ? 'con envío incluido' : 'sin envío'));
+        if (a.current) {
+          var c = el('span', null, 'Precio registrado: ' + eur(a.current.price) + (a.current.asOf ? ' (' + dateEs(a.current.asOf) + ')' : ''));
+          prices.appendChild(c);
+        } else { prices.appendChild(el('span', null, 'Producto sin precio disponible ahora')); }
+        body.appendChild(prices);
+        var badge = el('span', 'ap-badge' + (a.status === 'met' ? ' ap-badge--met' : a.active ? '' : ' ap-badge--off'), a.status === 'met' ? 'Cumplida el ' + dateEs(a.metAt) + ' a ' + eur(a.metPrice) : a.active ? 'Vigilando' : 'Pausada');
+        body.appendChild(badge);
+        var actions = el('div', 'ap-actions');
+        var edit = el('span', 'ap-edit');
+        var inp = document.createElement('input'); inp.type = 'number'; inp.step = '0.01'; inp.min = '0.01'; inp.value = a.targetPrice.toFixed(2); inp.setAttribute('aria-label', 'Nuevo precio objetivo para ' + a.productTitle);
+        var save = el('button', 'ap-btn', 'Cambiar objetivo'); save.type = 'button';
+        save.addEventListener('click', function () { var v = Number(String(inp.value).replace(',', '.')); api('PATCH', '/api/alertas-precio/' + a.id, { targetPrice: v }).then(function (r) { if (r.ok) load(); else alert((r.body && r.body.message) || 'No se pudo modificar.'); }); });
+        edit.appendChild(inp); edit.appendChild(save); actions.appendChild(edit);
+        if (a.status !== 'met') {
+          var tg = el('button', 'ap-btn', a.active ? 'Pausar' : 'Reactivar'); tg.type = 'button';
+          tg.addEventListener('click', function () { api('PATCH', '/api/alertas-precio/' + a.id, { active: !a.active }).then(load); });
+          actions.appendChild(tg);
+        }
+        var del = el('button', 'ap-btn ap-btn--danger', 'Eliminar'); del.type = 'button';
+        del.addEventListener('click', function () { if (confirm('¿Eliminar esta alerta?')) api('DELETE', '/api/alertas-precio/' + a.id).then(function () { load(); announce(); }); });
+        actions.appendChild(del);
+        body.appendChild(actions);
+        li.appendChild(body);
+        ul.appendChild(li);
+      });
+    }
+
+    function renderNotes() {
+      var ul = root.querySelector('[data-ap-notes]');
+      var empty = root.querySelector('[data-ap-notes-empty]');
+      ul.textContent = '';
+      var unread = state.notifications.filter(function (n) { return !n.readAt; }).length;
+      var cnt = root.querySelector('[data-ap-count-drops]');
+      cnt.textContent = unread ? String(unread) : '';
+      cnt.classList.toggle('has-unread', unread > 0);
+      empty.hidden = state.notifications.length > 0;
+      root.querySelector('[data-ap-drops-off]').hidden = state.dropAvailable;
+      state.notifications.forEach(function (n) {
+        var li = el('li', 'ap-item' + (n.readAt ? '' : ' is-unread'));
+        li.appendChild(photo(n.image, n.title));
+        var body = el('div');
+        var h = el('h3', 'ap-name'); var link = el('a', null, n.title); link.href = n.href; h.appendChild(link); body.appendChild(h);
+        var kind = el('span', 'ap-badge' + (n.kind === 'target_met' ? ' ap-badge--met' : ''), n.kind === 'target_met' ? 'Alerta cumplida' : 'Ha bajado de precio');
+        body.appendChild(kind);
+        var prices = el('p', 'ap-prices');
+        if (n.oldPrice != null) { var s = document.createElement('s'); s.textContent = eur(n.oldPrice); prices.appendChild(s); }
+        prices.appendChild(el('strong', null, eur(n.newPrice)));
+        if (n.pct != null) prices.appendChild(el('span', 'ap-pill', '-' + n.pct + ' %'));
+        if (n.targetPrice != null) prices.appendChild(el('span', null, 'Tu objetivo: ' + eur(n.targetPrice) + (n.includeShipping ? ' (con envío)' : '')));
+        body.appendChild(prices);
+        body.appendChild(el('p', 'ap-meta', 'Aviso del ' + dateEs(n.createdAt) + (n.priceAsOf ? ' · precio registrado el ' + dateEs(n.priceAsOf) : '') + ' · el precio final lo confirma la tienda'));
+        var actions = el('div', 'ap-actions');
+        var open = el('a', 'ap-btn ap-btn--primary', 'Ver ficha del producto'); open.href = n.href; actions.appendChild(open);
+        if (!n.readAt) { var rd = el('button', 'ap-btn', 'Marcar como leído'); rd.type = 'button'; rd.addEventListener('click', function () { api('POST', '/api/alertas-precio/notificaciones', { ids: [n.id] }).then(function () { load(); announce(); }); }); actions.appendChild(rd); }
+        body.appendChild(actions);
+        li.appendChild(body);
+        ul.appendChild(li);
+      });
+    }
+
+    function renderPrefs() {
+      root.querySelectorAll('[data-ap-pref]').forEach(function (cb) {
+        var path = cb.getAttribute('data-ap-pref').split('.');
+        cb.checked = !!(state.prefs && state.prefs[path[0]] && state.prefs[path[0]][path[1]]);
+      });
+    }
+    root.querySelectorAll('[data-ap-pref]').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        var path = cb.getAttribute('data-ap-pref').split('.');
+        var patch = {}; patch[path[0]] = {}; patch[path[0]][path[1]] = cb.checked;
+        api('PUT', '/api/alertas-precio/preferencias', patch).then(function (r) {
+          var st = root.querySelector('[data-ap-prefs-status]');
+          if (r.ok) { state.prefs = r.body.prefs; st.textContent = 'Preferencias guardadas.'; announce(); } else { st.textContent = 'No se pudieron guardar.'; }
+        });
+      });
+    });
+
+    function load() {
+      return api('GET', '/api/alertas-precio').then(function (r) {
+        if (r.status === 401) { loginBox.hidden = false; app.hidden = true; return; }
+        loginBox.hidden = true; app.hidden = false;
+        state.alerts = r.body.alerts || []; state.notifications = r.body.notifications || []; state.prefs = r.body.prefs; state.dropAvailable = !!r.body.dropAlertsAvailable;
+        renderAlerts(); renderNotes(); renderPrefs();
+      });
+    }
+
+    /* Pestañas y filtros */
+    var tabs = Array.prototype.slice.call(root.querySelectorAll('[data-ap-tab]'));
+    function selectTab(key) {
+      tabs.forEach(function (t) { var on = t.getAttribute('data-ap-tab') === key; t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; document.getElementById('ap-panel-' + t.getAttribute('data-ap-tab')).hidden = !on; });
+    }
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { selectTab(t.getAttribute('data-ap-tab')); });
+      t.addEventListener('keydown', function (e) { var n = e.key === 'ArrowRight' ? i + 1 : e.key === 'ArrowLeft' ? i - 1 : -1; if (n < 0 || n >= tabs.length) return; e.preventDefault(); tabs[n].focus(); selectTab(tabs[n].getAttribute('data-ap-tab')); });
+    });
+    root.querySelectorAll('[data-ap-filter]').forEach(function (b) {
+      b.addEventListener('click', function () { state.filter = b.getAttribute('data-ap-filter'); root.querySelectorAll('[data-ap-filter]').forEach(function (x) { x.classList.toggle('is-active', x === b); }); renderAlerts(); });
+    });
+    root.querySelector('[data-ap-readall]').addEventListener('click', function () { api('POST', '/api/alertas-precio/notificaciones', { all: true }).then(function () { load(); announce(); }); });
+    window.addEventListener('radar:auth-changed', function () { load(); });
+    load();
+  })();
+</script>

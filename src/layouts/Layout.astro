@@ -1338,6 +1338,11 @@ const headerCategoryPanelHtml = `
       }
 
       /* Perfil: mini avatar + nombre/email + estado de sesión */
+      .header-alert-bell { position: relative; }
+      .header-alert-dot { position: absolute; top: -3px; right: -4px; width: 9px; height: 9px; border-radius: 50%; background: #ef4444; border: 2px solid #0a0e17; }
+      .header-alert-dot[hidden] { display: none; }
+      .header-radar-avatar.has-price-alert { position: relative; }
+      .header-radar-avatar.has-price-alert::after { content: ''; position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; border-radius: 50%; background: #ef4444; border: 2px solid #0a0e17; }
       .header-user-menu-profile {
         display: flex;
         align-items: center;
@@ -2993,6 +2998,13 @@ const headerCategoryPanelHtml = `
                         </span>
                         <span class="header-user-menu-label">Mi Radar</span>
                       </a>
+                      <a href="/alertas-precio" class="header-user-menu-btn" data-price-alerts-link>
+                        <span class="header-user-menu-icon header-user-menu-icon--amber header-alert-bell" aria-hidden="true">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>
+                          <i class="header-alert-dot" data-price-alert-dot hidden></i>
+                        </span>
+                        <span class="header-user-menu-label">Alertas de precio</span>
+                      </a>
                       <a href="/perfil" class="header-user-menu-btn">
                         <span class="header-user-menu-icon" aria-hidden="true">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -3028,6 +3040,37 @@ const headerCategoryPanelHtml = `
                   </div>
                 </div>
               </div>
+
+              <!-- Centro «Alertas de precio»: punto rojo en la campana y en el avatar sólo si hay avisos sin leer (consulta privada con la sesión). -->
+              <script is:inline>
+                (function () {
+                  var authed = false;
+                  var busy = false;
+                  function paint(n) {
+                    document.querySelectorAll('[data-price-alert-dot]').forEach(function (d) { d.hidden = !(n > 0); });
+                    var avatar = document.querySelector('[data-header-avatar]');
+                    if (avatar) avatar.classList.toggle('has-price-alert', n > 0);
+                    var link = document.querySelector('[data-price-alerts-link]');
+                    if (link) link.setAttribute('aria-label', n > 0 ? 'Alertas de precio (' + n + ' sin leer)' : 'Alertas de precio');
+                  }
+                  function refresh() {
+                    if (!authed || busy) return;
+                    busy = true;
+                    fetch('/api/alertas-precio/resumen', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+                      .then(function (r) { return r.ok ? r.json() : { unread: 0 }; })
+                      .then(function (j) { paint(Number(j.unread) || 0); })
+                      .catch(function () {})
+                      .then(function () { busy = false; });
+                  }
+                  // El estado de sesión lo anuncia la utilidad de autenticación existente: no se hace ninguna petición extra para visitantes anónimos.
+                  window.addEventListener('radar:auth-changed', function (e) {
+                    authed = !!(e && e.detail && e.detail.user);
+                    if (authed) refresh(); else paint(0);
+                  });
+                  window.addEventListener('price-alerts:changed', refresh);
+                  document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+                })();
+              </script>
 
               <!-- Traductor de Google: botón circular exclusivamente al tamaño del icono de la bola del mundo (🌐) -->
               <div class="header-translate rounded-full" data-header-translate title="Cambiar idioma">
