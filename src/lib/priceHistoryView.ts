@@ -45,6 +45,8 @@ export interface PeriodView {
 export interface HistoryView {
   /** Todas las lecturas reales ordenadas por fecha. */
   total: number;
+  /** true si el historial se compone sólo de lecturas verificadas con la tienda. */
+  onlyVerified: boolean;
   firstDate: string | null;
   lastDate: string | null;
   periods: PeriodView[];
@@ -75,7 +77,10 @@ export function collectPoints(product: { priceHistory?: unknown; extra?: unknown
     const currency = String(o?.context?.currency ?? 'EUR').toUpperCase();
     if (date && currency === 'EUR' && Number.isFinite(price) && price > 0 && o?.verifiedAt) byDate.set(date, { date, price, source: 'verificada' });
   }
-  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  const all = [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
+  // Con lecturas VERIFICADAS suficientes (≥ 2) el historial se construye sólo con ellas: el precio del catálogo anotado en una visita no es una lectura de tienda.
+  const verified = all.filter((p) => p.source === 'verificada');
+  return verified.length >= 2 ? verified : all;
 }
 
 const W = 640;
@@ -131,6 +136,7 @@ export function buildHistoryView(product: { priceHistory?: unknown; extra?: unkn
   const firstSufficient = periods.find((p) => p.key === '3m' && p.sufficient) ?? periods.find((p) => p.sufficient);
   return {
     total: all.length,
+    onlyVerified: all.length > 0 && all.every((p) => p.source === 'verificada'),
     firstDate: all[0]?.date ?? null,
     lastDate: all[all.length - 1]?.date ?? null,
     periods,

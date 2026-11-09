@@ -15,6 +15,7 @@ import { recordPricePoint } from './lib/priceHistory';
 import { startReminderScheduler } from './lib/reminders';
 import { getAllRadarUsers, getRadarSessionUser, recordRadarUserVisit, SESSION_COOKIE_NAME } from './lib/radarAuth';
 import { startMarketingScheduler } from './lib/marketingEmail';
+import { ensureExtraAdapters } from './lib/offerRefresh';
 import { recordVisit as recordAlertVisit, startPriceAlertCenterScheduler } from './lib/priceAlertCenter';
 import { startPriceAlertScheduler } from './lib/priceAlerts';
 import { startOfferRefreshScheduler } from './lib/offerRefresh';
@@ -36,6 +37,8 @@ startPriceAlertScheduler();
 startOfferRefreshScheduler();
 // Centro «Alertas de precio» (independiente de Mi Radar): vigila los precios objetivo que crean los usuarios. Registra sus ejecuciones.
 startPriceAlertCenterScheduler();
+// Fuentes adicionales de actualización (AliExpress/eBay por id): sólo si OFFER_REFRESH_EXTRA_SOURCES las activa; sin ella no hace nada.
+void ensureExtraAdapters();
 
 /**
  * Precalienta en el arranque las cachés en memoria más caras (catálogo,
@@ -120,7 +123,8 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
           // La IP sólo se usa para descartar el ordenador de desarrollo.
           trackProductVisit(slug, context.url.pathname, clientIpFrom(context.request));
           // 1 punto de histórico de precio por día (cola con debounce).
-          recordPricePoint(product.id, product.price);
+          // Si el servicio de actualización ya verifica esta ficha, el historial se alimenta de sus lecturas reales (no del precio anotado en la visita).
+          if (!(product.extra as Record<string, any> | undefined)?.refresh?.lastVerifiedAt) recordPricePoint(product.id, product.price);
           // Comportamiento por usuario de Mi Radar (última categoría, vistos).
           // Sólo si hay cookie de sesión de radar; el throttle por usuario vive
           // dentro de recordRadarUserVisit para no saturar radar-users.json.

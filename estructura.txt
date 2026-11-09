@@ -77,6 +77,7 @@ scripts/tests/price-alert-center.test.mjs
 scripts/tests/price-refresh-amazon.test.mjs
 scripts/tests/price-verification.test.mjs
 scripts/tests/public-claims.test.mjs
+scripts/tests/refresh-alerts-integration.test.mjs
 scripts/tests/refresh.test.mjs
 scripts/tests/repair.test.mjs
 scripts/tests/scrape-request.test.mjs
@@ -208,6 +209,7 @@ src/lib/offerIdentity.ts
 src/lib/offerObservations.ts
 src/lib/offerRedirect.ts
 src/lib/offerRefresh.ts
+src/lib/offerRefreshExtra.ts
 src/lib/offersView.ts
 src/lib/paths.ts
 src/lib/pipeline/config.ts

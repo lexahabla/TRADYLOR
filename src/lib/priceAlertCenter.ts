@@ -171,14 +171,40 @@ export interface CurrentPrice {
   asOf: string | null;
 }
 
-/** Precio REGISTRADO de la oferta principal (sin envío) y su total con envío si consta. null si no hay precio válido o no hay stock. */
-export function currentPriceOf(productId: string): CurrentPrice | null {
+/** Por qué una alerta no se puede comprobar ahora (se muestra al usuario; nunca se dispara con un dato dudoso). */
+export type PriceUnavailable = 'producto_no_encontrado' | 'sin_precio' | 'sin_stock' | 'otra_moneda' | 'lectura_caducada' | 'sin_verificar';
+
+export const UNAVAILABLE_TEXT: Record<PriceUnavailable, string> = {
+  producto_no_encontrado: 'El producto ya no está en el catálogo.',
+  sin_precio: 'El producto no tiene un precio válido ahora.',
+  sin_stock: 'El producto está agotado: la alerta se comprobará cuando vuelva a haber stock.',
+  otra_moneda: 'El precio no está en euros: no se compara con tu objetivo.',
+  lectura_caducada: 'La última lectura de la tienda ya no es reciente: se esperará a una nueva verificación.',
+  sin_verificar: 'El precio recibido todavía no se ha verificado con la tienda: se esperará a esa verificación.',
+};
+
+/**
+ * Precio REGISTRADO de la oferta principal (sin envío) y su total con envío si consta, con las MISMAS salvaguardas que el vigilante de Mi Radar:
+ * sólo EUR; una lectura verificada que ya no es vigente no dispara avisos; y un precio recibido o cambiado por JSON (`extra.priceReading`) no se
+ * anuncia hasta que el servicio de actualización lo verifique DESPUÉS de recibirlo. `asOf` es la fecha de la última verificación real si existe.
+ */
+export function priceStatusOf(productId: string, now: Date = new Date()): { cur: CurrentPrice | null; reason: PriceUnavailable | null } {
   const product = findCatalogProduct(productId) as any;
-  if (!product) return null;
+  if (!product) return { cur: null, reason: 'producto_no_encontrado' };
   const price = Number(product.price);
-  if (!(price > 0) || product.inStock === false) return null;
+  if (!(price > 0)) return { cur: null, reason: 'sin_precio' };
+  if (product.inStock === false) return { cur: null, reason: 'sin_stock' };
+  if (product.currency && String(product.currency).toUpperCase() !== 'EUR') return { cur: null, reason: 'otra_moneda' };
+  const verifiedAt = product.extra?.refresh?.lastVerifiedAt as string | undefined;
+  if (verifiedAt && freshnessOf(verifiedAt, DEFAULT_MAX_AGE_HOURS, now) === 'stale') return { cur: null, reason: 'lectura_caducada' };
+  const reading = product.extra?.priceReading;
+  if (reading?.receivedAt && !(verifiedAt && Date.parse(verifiedAt) >= Date.parse(reading.receivedAt))) return { cur: null, reason: 'sin_verificar' };
   const main = getComparableOffers(product).offers.find((o) => o.origin === 'implicit');
-  return { product, price, total: main?.totalPrice ?? null, asOf: captureDateOf(product) };
+  return { cur: { product, price, total: main?.totalPrice ?? null, asOf: verifiedAt ?? captureDateOf(product) }, reason: null };
+}
+
+export function currentPriceOf(productId: string, now: Date = new Date()): CurrentPrice | null {
+  return priceStatusOf(productId, now).cur;
 }
 
 /** ¿Alcanza el precio la alerta? Con envío incluido exige un total conocido (si el envío no consta, no se dispara). */
@@ -219,6 +245,11 @@ export function setPrefs(userId: string, patch: Partial<{ targets: Partial<Alert
 
 export class AlertError extends Error {
   constructor(public code: string, message: string) { super(message); }
+}
+
+/** ids de producto con alguna alerta de precio vigilando (activa y no cumplida): el servicio de actualización las consulta primero. */
+export function alertedProductIds(): Set<string> {
+  return new Set(load().alerts.filter((a) => a.active && a.status === 'watching').map((a) => a.productId));
 }
 
 export function listAlerts(userId: string): PriceAlert[] {
@@ -411,7 +442,7 @@ export async function evaluateAlerts(opts: EvaluateOptions = {}): Promise<RunRec
       for (const alert of s.alerts) {
         if (!alert.active || alert.status !== 'watching') continue;
         try {
-          const cur = currentPriceOf(alert.productId);
+          const cur = currentPriceOf(alert.productId, now);
           alert.lastCheckedAt = now.toISOString();
           run.alertsChecked++;
           if (!cur) continue;

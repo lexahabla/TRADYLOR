@@ -105,8 +105,11 @@ const hasAny = view.total >= 1;
   ))}
 
   <p class="phc-footnote">
-    Cada punto es el precio de esta ficha registrado en la fecha indicada (al visitarse la ficha o al verificarse con la tienda; los verdes están verificados).
-    No hay una actualización diaria automática: los huecos entre lecturas no se rellenan y el gráfico mantiene el último precio registrado hasta la siguiente lectura.
+    {view.onlyVerified
+      ? 'Cada punto es una lectura verificada con la tienda en la fecha indicada.'
+      : 'Cada punto es el precio de esta ficha registrado en la fecha indicada (al visitarse la ficha o al verificarse con la tienda; los verdes están verificados).'}
+    Los huecos entre lecturas no se rellenan y el gráfico mantiene el último precio registrado hasta la siguiente lectura.
+    {view.onlyVerified ? '' : ' No hay una actualización diaria automática para esta ficha.'}
     Es el historial de esta oferta y variante, sin gastos de envío. El precio final lo confirma la tienda.
   </p>
 
@@ -248,12 +251,12 @@ const hasAny = view.total >= 1;
             method: 'POST', credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
             body: JSON.stringify({ productId: box.getAttribute('data-product-id'), targetPrice: target, includeShipping: !!ship.checked })
-          }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); });
+          }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, status: r.status, body: j }; }); });
         })
         .then(function (res) {
           if (!res) return;
           btn.disabled = false;
-          if (!res.ok) { say((res.body && res.body.message) || 'No se pudo activar la alerta.', 'is-error'); return; }
+          if (!res.ok) { say((res.body && res.body.message) || ('No se pudo activar la alerta (error ' + res.status + (res.body && res.body.error ? ': ' + res.body.error : '') + ').'), 'is-error'); return; }
           if (res.body.alreadyMet) say('Ya está a ese precio o por debajo: te hemos avisado en «Alertas de precio».', 'is-ok');
           else say('Alerta activada: te avisaremos cuando llegue a ' + target.toFixed(2).replace('.', ',') + ' €.', 'is-ok');
           window.dispatchEvent(new CustomEvent('price-alerts:changed'));

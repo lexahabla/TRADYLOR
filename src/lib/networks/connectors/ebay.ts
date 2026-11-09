@@ -88,6 +88,44 @@ export class EbayConnector implements NetworkConnector {
     return data.access_token;
   }
 
+  /**
+   * Precio y disponibilidad actuales de UN artículo (Browse API `getItem` / `get_item_by_legacy_id`). Lo usa el servicio de actualización de
+   * ofertas (opt-in con OFFER_REFRESH_EXTRA_SOURCES). Devuelve null si eBay no encuentra el artículo.
+   */
+  async getItemSnapshot(itemId: string): Promise<{ price?: number; currency?: string; inStock?: boolean | null; shippingCost?: number | null; title?: string } | null> {
+    const token = await this.getAccessToken();
+    const restful = /^v1\|\d+\|\d+$/.test(itemId);
+    const url = restful
+      ? `https://api.ebay.com/buy/browse/v1/item/${encodeURIComponent(itemId)}`
+      : `https://api.ebay.com/buy/browse/v1/item/get_item_by_legacy_id?legacy_item_id=${encodeURIComponent(itemId)}`;
+    const response = await fetchWithTimeout(
+      url,
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Language': 'es-ES', 'X-EBAY-C-MARKETPLACE-ID': 'EBAY-ES', 'X-EBAY-C-ENDUSERCTX': 'contextualLocation=country=ES' } },
+      15000,
+    );
+    if (response.status === 404) return null;
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new ConnectorError(this.networkId, `Browse API HTTP ${response.status}: ${text.slice(0, 200)}`);
+    }
+    const data = (await response.json()) as {
+      title?: string;
+      price?: { value?: string; currency?: string };
+      estimatedAvailabilities?: Array<{ estimatedAvailabilityStatus?: string }>;
+      shippingOptions?: Array<{ shippingCost?: { value?: string } }>;
+    };
+    const price = Number(String(data.price?.value ?? '').replace(',', '.'));
+    const status = data.estimatedAvailabilities?.[0]?.estimatedAvailabilityStatus;
+    const ship = Number(String(data.shippingOptions?.[0]?.shippingCost?.value ?? ''));
+    return {
+      price: Number.isFinite(price) && price > 0 ? price : undefined,
+      currency: data.price?.currency,
+      inStock: status === 'IN_STOCK' || status === 'LIMITED_STOCK' ? true : status === 'OUT_OF_STOCK' ? false : null,
+      shippingCost: data.shippingOptions?.[0]?.shippingCost?.value !== undefined && Number.isFinite(ship) && ship >= 0 ? ship : null,
+      title: data.title,
+    };
+  }
+
   /** Consulta la Browse API y devuelve los itemSummaries crudos de eBay. */
   private async fetchItemSummaries(params: UnifiedSearchParams): Promise<EbayItemSummary[]> {
     const creds = getCredentialValues(this.networkId);

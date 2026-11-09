@@ -165,9 +165,9 @@ export const prerender = false;
         var target = el('span', null, 'Objetivo: '); var ts = el('strong', null, eur(a.targetPrice)); target.appendChild(ts); prices.appendChild(target);
         prices.appendChild(el('span', null, a.includeShipping ? 'con envío incluido' : 'sin envío'));
         if (a.current) {
-          var c = el('span', null, 'Precio registrado: ' + eur(a.current.price) + (a.current.asOf ? ' (' + dateEs(a.current.asOf) + ')' : ''));
+          var c = el('span', null, 'Precio registrado: ' + eur(a.current.price) + (a.current.asOf ? ' (a fecha ' + dateEs(a.current.asOf) + ')' : ''));
           prices.appendChild(c);
-        } else { prices.appendChild(el('span', null, 'Producto sin precio disponible ahora')); }
+        } else { prices.appendChild(el('span', null, a.unavailableReason || 'Producto sin precio disponible ahora')); }
         body.appendChild(prices);
         var badge = el('span', 'ap-badge' + (a.status === 'met' ? ' ap-badge--met' : a.active ? '' : ' ap-badge--off'), a.status === 'met' ? 'Cumplida el ' + dateEs(a.metAt) + ' a ' + eur(a.metPrice) : a.active ? 'Vigilando' : 'Pausada');
         body.appendChild(badge);

@@ -433,6 +433,31 @@ export class AliExpressConnector implements NetworkConnector {
     }
   }
 
+  /**
+   * Precio actual de UN anuncio por su id (API oficial `aliexpress.affiliate.productdetail.get`, en EUR para España). Lo usa el servicio de
+   * actualización de ofertas (opt-in con OFFER_REFRESH_EXTRA_SOURCES). Devuelve null si la API no devuelve el anuncio.
+   */
+  async getProductPrice(productId: string): Promise<{ price?: number; originalPrice?: number; currency: string; title?: string } | null> {
+    const creds = resolveCreds();
+    if (!creds?.appKey || !creds?.appSecret) throw new ConnectorError(this.networkId, 'Faltan ALIEXPRESS_APP_KEY o ALIEXPRESS_APP_SECRET.');
+    const method = 'aliexpress.affiliate.productdetail.get';
+    const payload = await callApi(method, creds, {
+      product_ids: String(productId),
+      target_currency: 'EUR',
+      target_language: 'ES',
+      country: 'ES',
+      fields: 'product_id,product_title,target_sale_price,target_original_price,sale_price,original_price',
+    });
+    const result = responseNode(payload, method);
+    const bucket = result.products as { product?: AliProduct[] } | AliProduct[] | undefined;
+    const list = Array.isArray(bucket) ? bucket : Array.isArray(bucket?.product) ? bucket.product : [];
+    const item = list.find((p) => String((p as { product_id?: unknown }).product_id ?? '') === String(productId)) ?? null;
+    if (!item) return null;
+    const price = num(item.target_sale_price) ?? num(item.sale_price);
+    const originalPrice = num(item.target_original_price) ?? num(item.original_price);
+    return { price, originalPrice, currency: 'EUR', title: text((item as { product_title?: unknown }).product_title) || undefined };
+  }
+
   async search(params: UnifiedSearchParams): Promise<UnifiedProduct[]> {
     // Delega en la ruta canónica: mismo mapeo de precios/descuento/envío que
     // usa el pipeline de catálogo (evita dos normalizadores divergentes).

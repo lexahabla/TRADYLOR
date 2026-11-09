@@ -79,6 +79,8 @@ export interface SourceRef {
 export interface SourceAdapter {
   id: string;
   networks: string[];
+  /** Adaptador aún no contrastado con respuestas reales: un cambio de precio superior al 50 % no se aplica (va a revisión). */
+  experimental?: boolean;
   /** Fuente e identificador con los que repetir la consulta, o null si no hay. */
   resolveSource(product: Product): SourceRef | null;
   fetch(product: Product, source: SourceRef): Promise<RefreshReading>;
@@ -129,6 +131,28 @@ export const amazonAdapter: SourceAdapter = {
 
 /** Redes sin re-consulta implementada: se informa, no se inventa. */
 export const DEFAULT_ADAPTERS: SourceAdapter[] = [amazonAdapter];
+
+let extrasLoaded = false;
+/**
+ * Añade (una vez) los adaptadores opt-in de AliExpress/eBay (`OFFER_REFRESH_EXTRA_SOURCES`, ver offerRefreshExtra.ts). Sin esa variable no cambia nada.
+ * Su programación nace APAGADA: hay que habilitarla expresamente en el panel; el botón manual sí los usa.
+ */
+export async function ensureExtraAdapters(): Promise<void> {
+  if (extrasLoaded) return;
+  extrasLoaded = true;
+  try {
+    const extra = await import('./offerRefreshExtra');
+    for (const adapter of extra.extraAdaptersFromEnv()) {
+      if (DEFAULT_ADAPTERS.some((a) => a.id === adapter.id)) continue;
+      DEFAULT_ADAPTERS.push(adapter);
+      for (const network of adapter.networks) {
+        DEFAULT_SCHEDULE[network] ??= { enabled: false, everyHours: 24, batchSize: 10, maxAgeHours: DEFAULT_MAX_AGE_HOURS };
+      }
+    }
+  } catch (error) {
+    console.error('[OfferRefresh] No se pudieron cargar las fuentes adicionales:', error);
+  }
+}
 
 /* ───────────────────────────── ESTADO / CONFIG ───────────────────────────── */
 
@@ -249,10 +273,21 @@ export function readSignal(product: Pick<Product, 'extra'>): PriceSignal | null 
   return signal && typeof signal === 'object' ? (signal as PriceSignal) : null;
 }
 
+/** ¿El precio es el mismo en las 3 últimas observaciones verificadas del mismo contexto? */
+export function isStable(product: Pick<Product, 'extra'>): boolean {
+  const obs = readObservations(product);
+  if (obs.length < 3) return false;
+  const tail = obs.slice(-3);
+  return tail.every((o) => o.contextKey === tail[0].contextKey && Math.abs(o.price - tail[0].price) < 0.005);
+}
+
 /** ¿Toca verificar esta oferta según la frecuencia de su fuente y sus fallos previos? */
-export function isDue(product: Product, schedule: SourceSchedule, now: Date): boolean {
+export function isDue(product: Product, schedule: SourceSchedule, now: Date, opts: { hasAlert?: boolean } = {}): boolean {
   const meta = readRefreshMeta(product);
-  const everyMs = schedule.everyHours * 3_600_000;
+  // Cadencia adaptativa (ahorra consultas de pago): si el precio no ha cambiado en las 3 últimas lecturas verificadas se espera el doble (máx. 72 h).
+  // Una ficha con alerta de precio activa se consulta siempre con la frecuencia normal.
+  const stable = !opts.hasAlert && isStable(product);
+  const everyMs = Math.min(schedule.everyHours * (stable ? 2 : 1), Math.max(schedule.everyHours, 72)) * 3_600_000;
   const verified = meta.lastVerifiedAt ? Date.parse(meta.lastVerifiedAt) : 0;
   if (verified && now.getTime() - verified < everyMs) return false;
   // Espera progresiva tras fallos: 30 min · 2^fallos, sin superar la frecuencia.
@@ -287,6 +322,8 @@ async function refreshOne(
     baseDelayMs: number;
     destination: string;
     runId: string;
+    /** Lecturas ya obtenidas en ESTE ciclo por anuncio (varias fichas del mismo anuncio = una sola consulta a la tienda). */
+    shared?: Map<string, { reading?: RefreshReading; error?: string; retryable?: boolean }>;
   },
 ): Promise<{ result: OfferResult; patch: Patch | null; appended: boolean }> {
   const network = detectNetworkId(product) || 'desconocida';
@@ -317,11 +354,15 @@ async function refreshOne(
     };
   }
 
-  // Reintentos con espera progresiva.
+  // Reintentos con espera progresiva. Si otra ficha del MISMO anuncio ya se consultó en este ciclo, se reutiliza su lectura (0 consultas).
   let reading: RefreshReading | null = null;
   let lastError = '';
   let attempts = 0;
-  for (let attempt = 1; attempt <= ctx.maxAttempts; attempt++) {
+  const shareKey = `${adapter.id}:${source.type}:${String(source.id).toLowerCase()}`;
+  const shared = ctx.shared?.get(shareKey);
+  if (shared?.reading) reading = shared.reading;
+  else if (shared?.error) lastError = shared.error;
+  for (let attempt = 1; !reading && !shared && attempt <= ctx.maxAttempts; attempt++) {
     attempts = attempt;
     try {
       const candidate = await adapter.fetch(product, source);
@@ -330,6 +371,7 @@ async function refreshOne(
         throw new RefreshError('La fuente respondió sin un precio válido.', true);
       }
       reading = candidate;
+      ctx.shared?.set(shareKey, { reading: candidate });
       break;
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error);
@@ -340,6 +382,7 @@ async function refreshOne(
   }
 
   if (!reading) {
+    if (!shared && lastError) ctx.shared?.set(shareKey, { error: lastError });
     const failures = (meta.failures ?? 0) + 1;
     return {
       result: {
@@ -393,7 +436,17 @@ async function refreshOne(
       ...reviewItems.map((item) => ({ ...item, detectedAt: finishedAt, runId: ctx.runId })),
     ].slice(-50);
   }
-  const currencyMismatch = reviewItems.some((item) => item.field === 'currency');
+  // Adaptador experimental: un salto de precio superior al 50 % no se aplica solo (podría ser una lectura mal interpretada): va a revisión.
+  const previousPrice = Number(product.price) || 0;
+  if (adapter.experimental && previousPrice > 0 && Math.abs(newPrice - previousPrice) / previousPrice > 0.5) {
+    reviewItems.push({ field: 'price', old: previousPrice, new: newPrice });
+    patch.extra.reviewQueue = [
+      ...(((product.extra as AnyRecord | undefined)?.reviewQueue as AnyRecord[] | undefined) ?? []),
+      { field: 'price', old: previousPrice, new: newPrice, detectedAt: finishedAt, runId: ctx.runId },
+    ].slice(-50);
+  }
+  // Moneda o salto sospechoso: no se aplica ni se registra la lectura.
+  const currencyMismatch = reviewItems.some((item) => item.field === 'currency' || item.field === 'price');
 
   // Observación fechada (no se registra si la moneda no es comparable).
   const merchantId = (product.extra as AnyRecord | undefined)?.['ID tienda'];
@@ -528,6 +581,7 @@ export async function refreshOffers(options: RefreshOptions = {}): Promise<Refre
 async function runRefresh(options: RefreshOptions): Promise<RefreshReport> {
   const now = options.now ?? (() => new Date());
   const sleep = options.sleep ?? defaultSleep;
+  await ensureExtraAdapters();
   const store = options.store ?? (await defaultStore());
   const adapters = options.adapters ?? DEFAULT_ADAPTERS;
   const schedule = options.schedule ?? DEFAULT_SCHEDULE;
@@ -544,13 +598,26 @@ async function runRefresh(options: RefreshOptions): Promise<RefreshReport> {
     targets = [];
   }
   if (options.onlyDue) {
+    // Fichas con una alerta de precio activa: se consultan primero y con la frecuencia normal (nunca con la cadencia ampliada).
+    let alerted = new Set<string>();
+    try {
+      alerted = (await import('./priceAlertCenter')).alertedProductIds();
+    } catch {
+      /* sin centro de alertas: sin prioridad por alertas */
+    }
     targets = targets.filter((p) => {
       const adapter = adapterFor(p, adapters);
       if (!adapter) return false; // sin conector no se reintenta en bucle
       const cfg = schedule[detectNetworkId(p)] ?? { enabled: false, everyHours: 24, batchSize: 10, maxAgeHours: 72 };
-      return cfg.enabled && isDue(p, cfg, now());
+      return cfg.enabled && isDue(p, cfg, now(), { hasAlert: alerted.has(p.id) });
     });
-    targets.sort((a, b) => (readRefreshMeta(a).lastVerifiedAt ?? '').localeCompare(readRefreshMeta(b).lastVerifiedAt ?? ''));
+    // Orden: con alerta → nunca verificadas → la verificación más antigua.
+    targets.sort((a, b) => {
+      const aa = alerted.has(a.id) ? 0 : 1;
+      const bb = alerted.has(b.id) ? 0 : 1;
+      if (aa !== bb) return aa - bb;
+      return (readRefreshMeta(a).lastVerifiedAt ?? '').localeCompare(readRefreshMeta(b).lastVerifiedAt ?? '');
+    });
   }
   if (options.limit && options.limit > 0) targets = targets.slice(0, options.limit);
 
@@ -571,6 +638,7 @@ async function runRefresh(options: RefreshOptions): Promise<RefreshReport> {
   liveReport = report;
 
   const patches = new Map<string, Patch>();
+  const shared = new Map<string, { reading?: RefreshReading; error?: string; retryable?: boolean }>();
   for (let i = 0; i < targets.length; i++) {
     const product = targets[i];
     const { result, patch, appended } = await refreshOne(product, adapterFor(product, adapters), {
@@ -580,6 +648,7 @@ async function runRefresh(options: RefreshOptions): Promise<RefreshReport> {
       baseDelayMs: options.baseDelayMs ?? 2000,
       destination: options.destination ?? 'ES',
       runId,
+      shared,
     });
     report.results.push(result);
     if (patch) patches.set(product.id, patch);
@@ -610,6 +679,14 @@ async function runRefresh(options: RefreshOptions): Promise<RefreshReport> {
       report.alertsSent = await runner();
     } catch {
       /* las alertas no deben romper el refresco */
+    }
+    // Centro «Alertas de precio» (independiente de Mi Radar): una pasada con los precios recién verificados, sin consultar de nuevo a las tiendas.
+    try {
+      // Sólo con el almacén real: una ejecución con almacén inyectado (pruebas/simulaciones) no debe escribir en el centro de alertas.
+      const center = await import('./priceAlertCenter');
+      if (!options.store && center.alertCenterEnabled()) await center.evaluateAlerts();
+    } catch {
+      /* idem */
     }
   }
 

@@ -2,7 +2,7 @@ export const prerender = false;
 
 import type { APIRoute } from 'astro';
 import { forbiddenOrigin, json, readJson, requireUser, sameOrigin } from '../../../lib/alertsHttp';
-import { AlertError, alertValue, createAlert, currentPriceOf, dropVisitsEnabled, evaluateAlerts, getPrefs, listAlerts, listNotifications, unreadCount } from '../../../lib/priceAlertCenter';
+import { AlertError, alertValue, createAlert, dropVisitsEnabled, priceStatusOf, UNAVAILABLE_TEXT, evaluateAlerts, getPrefs, listAlerts, listNotifications, unreadCount } from '../../../lib/priceAlertCenter';
 import { productKey } from '../../../lib/catalog';
 
 /** GET: alertas, notificaciones y preferencias del PROPIO usuario. POST: crea (o actualiza) una alerta por precio objetivo. */
@@ -10,8 +10,9 @@ export const GET: APIRoute = ({ request }) => {
   const auth = requireUser(request);
   if (auth instanceof Response) return auth;
   const alerts = listAlerts(auth.userId).map((a) => {
-    const cur = currentPriceOf(a.productId);
+    const { cur, reason } = priceStatusOf(a.productId);
     return {
+      unavailableReason: reason ? UNAVAILABLE_TEXT[reason] : null,
       ...a,
       href: cur ? `/producto/${encodeURIComponent(productKey(cur.product))}` : `/producto/${encodeURIComponent(a.productId)}`,
       current: cur ? { price: cur.price, value: alertValue(a, cur), total: cur.total, asOf: cur.asOf } : null,
