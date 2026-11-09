@@ -79,6 +79,7 @@ scripts/tests/price-alert-center.test.mjs
 scripts/tests/price-refresh-amazon.test.mjs
 scripts/tests/price-verification.test.mjs
 scripts/tests/public-claims.test.mjs
+scripts/tests/refresh-alert-guard.test.mjs
 scripts/tests/refresh-alerts-integration.test.mjs
 scripts/tests/refresh.test.mjs
 scripts/tests/repair.test.mjs
@@ -236,6 +237,7 @@ src/lib/purchaseUrl.ts
 src/lib/radarAuth.ts
 src/lib/radarStore.ts
 src/lib/rateLimit.ts
+src/lib/refreshAlertGuard.ts
 src/lib/reimportMerge.ts
 src/lib/reminders.ts
 src/lib/salesLedger.ts

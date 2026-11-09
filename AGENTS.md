@@ -270,6 +270,7 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 - El panel admin y las rutas `/api/*` requieren autenticación; respetar `adminAuth.ts`
   y `apiAuth.ts`. **Excepción**: `/api/redirect` es público a propósito (es la salida
   del flujo de Compra Delegada) y no debe exigir token.
+- Actualización manual `POST /api/admin/offers/refresh` con `evaluateAlerts:false` (sólo admin, sólo con `ids`; por defecto las alertas se evalúan): omite el barrido de Mi Radar y del centro «Alertas de precio» tras el refresco. Como los vigilantes independientes notificarían igualmente tras guardar el precio, se RECHAZA (409 `alertas_vigilando`, con el recuento `alertExposure` sin datos de usuarios) si alguna alerta del centro o de Mi Radar vigila esas fichas (`refreshAlertGuard.ts`; pruebas `refresh-alert-guard.test.mjs`).
 - Botón «🔄 Actualizar Precios» (`/api/admin/sync-prices` → `lib/offerRefresh.ts`): sin selección toma las 10 fichas ACTUALIZABLES (Amazon con ASIN; `isRefreshable`) con la
   comprobación más antigua (las nunca verificadas, como las importadas, primero); las de otras redes ya no ocupan puestos. Los precios de Amazon se leen con
   `parsePrice` (miles y decimales europeos/anglosajones). Consume créditos de ScraperAPI.

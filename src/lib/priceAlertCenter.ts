@@ -252,6 +252,11 @@ export function alertedProductIds(): Set<string> {
   return new Set(load().alerts.filter((a) => a.active && a.status === 'watching').map((a) => a.productId));
 }
 
+/** Número de alertas vigilando (activas y sin cumplir) sobre esas fichas. Solo lectura: lo usa la guarda de la actualización manual. */
+export function vigilantAlertCountFor(productIds: Set<string>): number {
+  return load().alerts.filter((a) => a.active && a.status === 'watching' && productIds.has(a.productId)).length;
+}
+
 export function listAlerts(userId: string): PriceAlert[] {
   return load().alerts.filter((a) => a.userId === userId).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }

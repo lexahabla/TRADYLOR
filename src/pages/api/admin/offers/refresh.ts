@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../../lib/adminAuth';
 import { readProductsFromFile } from '../../../../lib/productStore';
+import { alertExposure } from '../../../../lib/refreshAlertGuard';
 import { detectNetworkId } from '../../../../lib/productNetwork';
 import {
   DEFAULT_ADAPTERS,
@@ -94,9 +95,25 @@ export const POST: APIRoute = async ({ request }) => {
     return json({ success: false, message: 'Ya hay una actualización en curso. Consulta su progreso con GET.' }, 409);
   }
 
+  // evaluateAlerts:false (sólo admin: este endpoint ya exige sesión admin). Por defecto las alertas se evalúan como siempre.
+  // Sólo vale el booleano false; cualquier otro valor se ignora.
+  const skipAlerts = body?.evaluateAlerts === false;
+  if (skipAlerts) {
+    // Los vigilantes de Mi Radar y del centro «Alertas de precio» siguen funcionando por su cuenta y notificarían tras guardar un precio
+    // nuevo: omitir la evaluación sólo es seguro si ninguna alerta vigila las fichas objetivo.
+    if (all || !ids?.length) {
+      return json({ success: false, code: 'evaluate_alerts_requiere_ids', message: 'evaluateAlerts:false sólo se admite con una lista concreta de fichas (ids), no con all:true.' }, 400);
+    }
+    const exposure = await alertExposure(ids);
+    if (exposure.total > 0) {
+      return json({ success: false, code: 'alertas_vigilando', message: 'Hay alertas vigilando estas fichas: sus vigilantes notificarían tras guardar el precio. No se ejecuta nada.', alertExposure: exposure }, 409);
+    }
+  }
+
   const options = {
     ids,
     all,
+    evaluateAlerts: skipAlerts ? false : undefined,
     limit: Number.isFinite(Number(body?.limit)) && Number(body.limit) > 0 ? Number(body.limit) : undefined,
     dryRun: body?.dryRun === true,
     mode: 'manual' as const,
@@ -106,7 +123,7 @@ export const POST: APIRoute = async ({ request }) => {
   if (body?.wait === true || (ids && ids.length <= 3)) {
     const report = await refreshOffers(options);
     if (!report) return json({ success: false, message: 'Ya hay una actualización en curso.' }, 409);
-    return json({ success: true, report });
+    return json({ success: true, report, alertsEvaluation: skipAlerts ? 'omitida' : 'normal' });
   }
 
   void refreshOffers(options).catch((error) => console.error('[OfferRefresh] Ejecución manual falló:', error));
