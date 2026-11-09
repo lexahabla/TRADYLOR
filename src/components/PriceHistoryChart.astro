@@ -4,12 +4,17 @@
  * SVG 100% propio (sin librerías), igual que el resto de gráficos del proyecto.
  * Con menos de 3 lecturas no dibuja curva: muestra el precio verificado hoy.
  */
+import { formatDateEs } from '../lib/commercialClaims';
+
 export interface Props {
   points: { date: string; price: number }[];
   currentPrice: number;
+  /** Fecha (ISO) de la última verificación REAL contra la tienda; sin ella el precio actual se rotula «no verificado». */
+  verifiedAt?: string | null;
 }
 
-const { points, currentPrice } = Astro.props;
+const { points, currentPrice, verifiedAt = null } = Astro.props;
+const verifiedDate = formatDateEs(verifiedAt);
 
 const valid = (Array.isArray(points) ? points : []).filter(
   (p) => p && typeof p.date === 'string' && Number.isFinite(p.price) && p.price > 0,
@@ -69,7 +74,7 @@ const maxIndex = prices.indexOf(max);
 
     <div class="phc-stats">
       <div class="phc-stat">
-        <span class="phc-stat-label">Hoy</span>
+        <span class="phc-stat-label">Precio actual</span>
         <strong class="phc-stat-value">{currency.format(currentPrice)}</strong>
       </div>
       <div class="phc-stat">
@@ -115,15 +120,17 @@ const maxIndex = prices.indexOf(max);
     </div>
 
     <p class="phc-footnote">
-      Lectura diaria automática del precio publicado. Última actualización:
-      {last ? shortDate.format(parseDate(last.date)) : 'hoy'} · el precio final lo confirma la tienda.
+      Puntos registrados cuando se visita la ficha o se verifica el precio (no es una lectura diaria garantizada).
+      Último punto: {last ? shortDate.format(parseDate(last.date)) : 'sin fecha'} ·
+      {verifiedDate ? ` precio verificado el ${verifiedDate}` : ' precio no verificado con la tienda'} · el precio final lo confirma la tienda.
     </p>
   </section>
 ) : (
   <section class="phc phc-pending" aria-label="Histórico de precio">
     <p class="phc-kicker">Seguimiento de precio</p>
     <p class="phc-pending-text">
-      Precio verificado hoy: <strong>{currency.format(currentPrice)}</strong>.
+      Precio actual: <strong>{currency.format(currentPrice)}</strong>
+      {verifiedDate ? `(verificado el ${verifiedDate})` : '(no verificado con la tienda)'}.
       Estamos registrando el histórico; en cuanto haya 3 lecturas verás aquí la gráfica de evolución.
     </p>
   </section>

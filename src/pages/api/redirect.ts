@@ -25,7 +25,8 @@
 export const prerender = false;
 
 import type { APIRoute } from 'astro';
-import { findCatalogProduct, productKey } from '../../lib/catalog';
+import { findCatalogProduct, getCatalogProducts, productKey } from '../../lib/catalog';
+import { resolveOfferDestination } from '../../lib/offerRedirect';
 import { trackEvent } from '../../lib/analytics';
 import { buildPurchaseUrl } from '../../lib/purchaseUrl';
 
@@ -100,13 +101,23 @@ export const GET: APIRoute = async ({ url }) => {
     .extra?.crossMerchant?.affiliateUrls;
   const crossMerchantUrl = network && crossMerchantUrls ? crossMerchantUrls[network] : undefined;
 
-  const destination = crossMerchantUrl || buildPurchaseUrl(product) || product.affiliateUrl;
+  // Salida a UNA oferta concreta del comparador: sólo entre las ofertas de ESTA ficha; si no existe, vuelve a #ofertas (nunca a otro vendedor).
+  const offerId = (url.searchParams.get('offer') ?? '').trim().slice(0, 40);
+  let offerInfo: ReturnType<typeof resolveOfferDestination> = null;
+  if (offerId) {
+    offerInfo = resolveOfferDestination(product, offerId, getCatalogProducts());
+    if (!offerInfo) {
+      return new Response(null, { status: 302, headers: redirectHeaders(`/producto/${encodeURIComponent(productKey(product))}#ofertas`) });
+    }
+  }
+
+  const destination = offerInfo?.destination || crossMerchantUrl || buildPurchaseUrl(product) || product.affiliateUrl;
 
   // 1. Registro del clic de salida (cola en memoria, se persiste en segundo plano).
   trackEvent({
     type: 'outbound_click',
     productId: product.id,
-    path: source ? `/${source}` : undefined,
+    path: offerInfo ? `/${source || 'ofertas'}/offer:${offerInfo.offer.offerId}` : source ? `/${source}` : undefined,
     source: 'redirect',
   });
 

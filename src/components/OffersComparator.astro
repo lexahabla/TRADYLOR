@@ -1,0 +1,195 @@
+---
+/**
+ * Comparador de OFERTAS del mismo producto (#ofertas). Pinta el modelo de vista de lib/offersView.ts:
+ * tabla de 7 columnas en escritorio y una tarjeta por oferta en móvil (sin scroll horizontal). El orden/filtros son mejora progresiva.
+ */
+import type { OffersView } from '../lib/offersView';
+
+export interface Props {
+  view: OffersView;
+}
+const { view } = Astro.props;
+const cols = ['Producto', 'Precio y gastos', 'Métodos de pago', 'Condiciones de envío', 'Descuento', 'Tienda y valoración', 'Acción'];
+const multiple = view.state === 'multiple';
+---
+
+<section class="offers-section container" id="ofertas" aria-labelledby="ofertas-title" data-offers-comparator>
+  <div class="offers-head">
+    <h2 id="ofertas-title" class="offers-title">Comparar ofertas</h2>
+    <p class="offers-sub">Mismo producto en distintas tiendas. Los datos son los capturados por Treidilor; el precio final lo confirma la tienda.</p>
+  </div>
+
+  {view.message && <p class="offers-msg" role="status">{view.message}</p>}
+  {view.note && <p class="offers-msg" role="status">{view.note}</p>}
+
+  {
+    view.rows.length > 0 && (
+      <>
+        {multiple && (
+          <div class="offers-tools" data-offers-tools hidden>
+            <label>
+              Ordenar por{' '}
+              <select data-offers-sort>
+                <option value="price">Precio</option>
+                <option value="total" disabled={!view.sort.totalEnabled}>Total con envío{view.sort.totalEnabled ? '' : ' (no disponible)'}</option>
+              </select>
+            </label>
+            <label class="offers-check" title={view.filters.fastShipping.reason}>
+              <input type="checkbox" data-offers-fast disabled={!view.filters.fastShipping.enabled} /> Envío rápido (≤ 3 días)
+            </label>
+            <label class="offers-check" title={view.filters.freeReturn.reason}>
+              <input type="checkbox" disabled /> Devolución gratuita
+            </label>
+            {!view.sort.totalEnabled && <span class="offers-hint">{view.sort.totalReason}</span>}
+            {!view.filters.freeReturn.enabled && <span class="offers-hint">{view.filters.freeReturn.reason}</span>}
+          </div>
+        )}
+
+        <div class="offers-table-wrap">
+          <table class="offers-table">
+            <caption class="sr-only">Ofertas del producto, una fila por oferta</caption>
+            <thead>
+              <tr>{cols.map((c) => <th scope="col">{c}</th>)}</tr>
+            </thead>
+            <tbody data-offers-body>
+              {
+                view.rows.map((r) => (
+                  <tr data-offer data-price={r.priceValue} data-total={r.totalValue ?? ''} data-fast={r.fastShipping === true ? '1' : '0'}>
+                    <td>
+                      <strong class="o-title">{r.title}</strong>
+                      <span class="o-sub">{r.conditionLabel}</span>
+                      {r.variantLabels.map((v) => <span class="o-sub">{v}</span>)}
+                      {r.quantityLabel && <span class="o-sub">{r.quantityLabel}</span>}
+                    </td>
+                    <td>
+                      <strong class="o-price">{r.priceText}</strong>
+                      {r.isCheapest && <span class="o-badge">Más barata (total con envío)</span>}
+                      <span class="o-sub">{r.shippingText}</span>
+                      <span class="o-sub">{r.totalText}</span>
+                      {r.asOfLabel && <span class="o-sub o-dim">{r.asOfLabel}</span>}
+                    </td>
+                    <td>{r.paymentText}</td>
+                    <td>
+                      <span class="o-sub">{r.deliveryText}</span>
+                      <span class="o-sub">{r.returnsText}</span>
+                    </td>
+                    <td>
+                      <strong>{r.discountText}</strong>
+                      {r.discountVerified && <span class="o-sub">{r.discountNote}</span>}
+                    </td>
+                    <td>
+                      <strong>{r.sellerLabel}</strong>
+                      <span class="o-sub">{r.platformLabel}</span>
+                      <span class="o-sub">{r.ratingText}</span>
+                    </td>
+                    <td>
+                      <a class="o-btn" href={r.href} target="_blank" rel="sponsored noopener noreferrer" aria-label={r.ariaLabel}>Ver oferta</a>
+                    </td>
+                  </tr>
+                ))
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <ul class="offers-cards" data-offers-cards>
+          {
+            view.rows.map((r) => (
+              <li class="offer-card" data-offer data-price={r.priceValue} data-total={r.totalValue ?? ''} data-fast={r.fastShipping === true ? '1' : '0'}>
+                <dl>
+                  <div><dt>{cols[0]}</dt><dd><strong>{r.title}</strong><span class="o-sub">{r.conditionLabel}</span>{r.variantLabels.map((v) => <span class="o-sub">{v}</span>)}{r.quantityLabel && <span class="o-sub">{r.quantityLabel}</span>}</dd></div>
+                  <div><dt>{cols[1]}</dt><dd><strong class="o-price">{r.priceText}</strong>{r.isCheapest && <span class="o-badge">Más barata (total con envío)</span>}<span class="o-sub">{r.shippingText}</span><span class="o-sub">{r.totalText}</span>{r.asOfLabel && <span class="o-sub o-dim">{r.asOfLabel}</span>}</dd></div>
+                  <div><dt>{cols[2]}</dt><dd>{r.paymentText}</dd></div>
+                  <div><dt>{cols[3]}</dt><dd><span class="o-sub">{r.deliveryText}</span><span class="o-sub">{r.returnsText}</span></dd></div>
+                  <div><dt>{cols[4]}</dt><dd><strong>{r.discountText}</strong>{r.discountVerified && <span class="o-sub">{r.discountNote}</span>}</dd></div>
+                  <div><dt>{cols[5]}</dt><dd><strong>{r.sellerLabel}</strong><span class="o-sub">{r.platformLabel}</span><span class="o-sub">{r.ratingText}</span></dd></div>
+                </dl>
+                <a class="o-btn" href={r.href} target="_blank" rel="sponsored noopener noreferrer" aria-label={r.ariaLabel}>Ver oferta</a>
+              </li>
+            ))
+          }
+        </ul>
+
+        <p class="offers-foot">{view.footer}</p>
+      </>
+    )
+  }
+
+  {
+    view.otherVersions.length > 0 && (
+      <details class="offers-other">
+        <summary>Otras versiones de este producto ({view.otherVersions.length}) — no comparables directamente</summary>
+        <ul>
+          {view.otherVersions.map((v) => (
+            <li>
+              {v.reasonLabel} · {v.conditionLabel} · {v.sellerLabel} ({v.platformLabel}) · {v.priceText} ·{' '}
+              <a href={v.href} target="_blank" rel="sponsored noopener noreferrer">Ver oferta</a>
+            </li>
+          ))}
+        </ul>
+      </details>
+    )
+  }
+</section>
+
+<style>
+  .offers-section { margin: 2rem auto; }
+  .offers-title { font-family: var(--font-heading); font-size: 1.4rem; margin: 0 0 0.25rem; }
+  .offers-sub, .offers-foot, .offers-hint { color: var(--color-text-muted); font-size: 0.85rem; margin: 0.25rem 0 0.75rem; }
+  .offers-msg { background: var(--color-surface-subtle); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); padding: 0.75rem 1rem; }
+  .offers-tools { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center; margin-bottom: 0.75rem; }
+  .offers-tools select { min-height: 44px; background: var(--color-bg-card); color: var(--color-text-main); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); padding: 0 0.5rem; }
+  .offers-check { min-height: 44px; display: inline-flex; align-items: center; gap: 0.4rem; }
+  .offers-table { width: 100%; border-collapse: collapse; background: var(--color-bg-card); border: 1px solid var(--color-border); }
+  .offers-table th, .offers-table td { text-align: left; vertical-align: top; padding: 0.75rem; border-bottom: 1px solid var(--color-border); font-size: 0.9rem; }
+  .offers-table th { color: var(--color-text-muted); font-weight: 600; }
+  .o-sub { display: block; color: var(--color-text-muted); font-size: 0.8rem; margin-top: 0.15rem; }
+  .o-dim { color: var(--color-text-dim); }
+  .o-price { font-size: 1.15rem; display: block; }
+  .o-badge { display: inline-block; background: var(--color-accent); color: #04120c; font-size: 0.72rem; font-weight: 700; border-radius: var(--border-radius-md); padding: 0.1rem 0.5rem; margin-top: 0.2rem; }
+  .o-btn { white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 1rem; background: var(--color-primary); color: #fff; border-radius: var(--border-radius-md); font-weight: 700; text-decoration: none; }
+  .o-btn:hover { background: var(--color-primary-hover); }
+  .o-btn:focus-visible, .offers-other summary:focus-visible { outline: 2px solid var(--color-accent-amber); outline-offset: 2px; }
+  .offers-cards { display: none; list-style: none; margin: 0; padding: 0; gap: 0.75rem; }
+  .offer-card { background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-md); padding: 0.9rem; }
+  .offer-card dl { margin: 0 0 0.75rem; display: grid; gap: 0.6rem; }
+  .offer-card dt { color: var(--color-text-dim); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  .offer-card dd { margin: 0; overflow-wrap: anywhere; }
+  .offer-card .o-btn { width: 100%; }
+  .offers-other { margin-top: 1rem; }
+  .offers-other summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  @media (max-width: 640px) {
+    .offers-table-wrap { display: none; }
+    .offers-cards { display: grid; }
+  }
+</style>
+
+<script is:inline>
+  (function () {
+    var root = document.querySelector('[data-offers-comparator]');
+    if (!root) return;
+    var tools = root.querySelector('[data-offers-tools]');
+    if (!tools) return;
+    tools.hidden = false;
+    var sort = tools.querySelector('[data-offers-sort]');
+    var fast = tools.querySelector('[data-offers-fast]');
+    var containers = [root.querySelector('[data-offers-body]'), root.querySelector('[data-offers-cards]')];
+    function apply() {
+      var key = sort ? sort.value : 'price';
+      containers.forEach(function (box) {
+        if (!box) return;
+        var items = Array.prototype.slice.call(box.querySelectorAll('[data-offer]'));
+        items.sort(function (a, b) {
+          return parseFloat(a.getAttribute('data-' + key)) - parseFloat(b.getAttribute('data-' + key));
+        });
+        items.forEach(function (it) {
+          it.hidden = !!(fast && fast.checked && it.getAttribute('data-fast') !== '1');
+          box.appendChild(it);
+        });
+      });
+    }
+    if (sort) sort.addEventListener('change', apply);
+    if (fast) fast.addEventListener('change', apply);
+  })();
+</script>

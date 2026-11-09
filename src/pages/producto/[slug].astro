@@ -19,7 +19,8 @@
 export const prerender = false;
 
 import Layout from '../../layouts/Layout.astro';
-import ComparisonTable from '../../components/ComparisonTable.astro';
+import ModelComparison from '../../components/ModelComparison.astro';
+import { buildModelComparison, listingKeyOf } from '../../lib/modelComparison';
 import PriceHistoryChart from '../../components/PriceHistoryChart.astro';
 import { getCatalogProducts, findCatalogProduct, productKey } from '../../lib/catalog';
 import { isVideoUrl, videoThumbUrl } from '../../lib/media';
@@ -27,6 +28,11 @@ import { areSameProductType } from '../../lib/curation';
 import { resolveProductShipping } from '../../lib/shipping';
 import { getCrossMerchantOffers } from '../../lib/productNetwork';
 import { applyProductFieldVisibility, getVisibleCustomFieldEntries } from '../../lib/productFieldsStore';
+import { captureDateOf, formatDateEs, ratingSupport, readCondition, shownDiscount, verifiedAtOf } from '../../lib/commercialClaims';
+import { getComparableOffers } from '../../lib/comparableOffers';
+import { buildOffersView } from '../../lib/offersView';
+import { withPublicText } from '../../lib/publicClaims';
+import OffersComparator from '../../components/OffersComparator.astro';
 
 const allProducts = getCatalogProducts();
 const cleanMarketplaceSuffix = (text: string) => text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
@@ -36,7 +42,7 @@ const cleanMarketplaceSuffix = (text: string) => text.replace(/\s*[\-|:]\s*(Amaz
 // ---------------------------------------------------------------------------
 let product = findCatalogProduct(Astro.params.slug);
 const displayTitle = product ? cleanMarketplaceSuffix(product.title) : '';
-const displayDescription = product ? cleanMarketplaceSuffix(product.description) : '';
+let displayDescription = product ? cleanMarketplaceSuffix(product.description) : '';
 
 // Si no existe el producto, redirigir al inicio
 if (!product) {
@@ -51,6 +57,9 @@ if (!product) {
 // (...)}`...), así que reacciona sola sin tocar esta plantilla. Por defecto
 // (sin configurar nada) no cambia nada: todo sigue visible como hasta ahora.
 product = applyProductFieldVisibility(product);
+// Textos generados: se descartan cifras sin respaldo (reseñas, % de descuento, análisis propios, rendimiento sin evidencia). Sólo lectura.
+product = withPublicText(product as any) as typeof product;
+displayDescription = cleanMarketplaceSuffix(product.description);
 const visibleCustomFields = getVisibleCustomFieldEntries(product);
 
 // Pantalla puente de Compra Delegada: resumen (envío, transportista, vendedor)
@@ -68,7 +77,9 @@ const conditionLabel = (product.condition ?? '').trim();
 const isUsedCondition = conditionLabel ? USED_CONDITION_RE.test(conditionLabel) : false;
 // Mapeo a los valores estándar de schema.org para el JSON-LD (SEO / Google Shopping).
 const schemaItemCondition = conditionLabel
-  ? /refurb|reacondicionad/i.test(conditionLabel)
+  ? readCondition(product) === 'open_box'
+    ? undefined // sin equivalente exacto en schema.org: no se afirma «Nuevo»
+    : /refurb|reacondicionad/i.test(conditionLabel)
     ? 'https://schema.org/RefurbishedCondition'
     : /damaged|for parts|desguace|averiad/i.test(conditionLabel)
       ? 'https://schema.org/DamagedCondition'
@@ -80,6 +91,27 @@ const schemaItemCondition = conditionLabel
 // los del snapshot del catálogo AliExpress (ver lib/shipping.ts).
 const shipping = resolveProductShipping(product);
 
+// Presentación veraz (ver lib/commercialClaims.ts): sólo se afirma lo que tiene evidencia; el resto se rotula como dato a fecha de captura,
+// «no verificado» o se oculta. No cambia ningún valor almacenado.
+const ratingInfo = ratingSupport(product);
+const verifiedDate = formatDateEs(verifiedAtOf(product));
+const capturedDate = formatDateEs(captureDateOf(product));
+const shippingAsOf = capturedDate ? `a fecha de captura (${capturedDate}); puede haber cambiado` : 'sin fecha de captura; puede haber cambiado';
+const primaryShipping = getComparableOffers(product).offers.find((o) => o.origin === 'implicit')?.shipping;
+const shippingIsFree = shipping.freeShipping === true || primaryShipping?.free === true;
+const shippingCost = primaryShipping?.cost != null && primaryShipping.cost > 0 ? primaryShipping.cost : null;
+const shippingHeadline =
+  shippingIsFree
+    ? 'Envío gratis (dato de la tienda)'
+    : shippingCost !== null
+      ? `Envío: ${new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(shippingCost)} (dato de la tienda)`
+      : shipping.shippingDays != null
+        ? `Plazo declarado por la tienda: ${shipping.shippingDays} días`
+        : 'Envío';
+
+// Comparador de ofertas del mismo producto (#ofertas): vista sobre la capa de lectura (sin escribir nada).
+const offersView = buildOffersView(product as any, allProducts as any);
+
 // Comparativa multitienda automática (mismo producto en otras redes de afiliación).
 const crossMerchantOffers = getCrossMerchantOffers(product);
 
@@ -90,11 +122,16 @@ const galleryImages = [
 const hasGalleryCarousel = galleryImages.length > 1;
 
 // Comparativa: productos estrictamente del MISMO TIPO que el actual (nunca tipos incompatibles como monitor vs disco duro)
-const sameCategory = allProducts.filter((p) => p.id === product.id || areSameProductType(product as any, p as any));
+// Fichas gemelas (mismo anuncio comercial que ésta): se ocultan de las recomendaciones SOLO en la lectura; no se tocan ni fusionan.
+const ownListing = listingKeyOf(product as any);
+const isTwinOfCurrent = (p: any) => Boolean(ownListing) && p.id !== product.id && listingKeyOf(p) === ownListing;
+const sameCategory = allProducts.filter((p) => p.id === product.id || (areSameProductType(product as any, p as any) && !isTwinOfCurrent(p)));
+// Comparador de MODELOS (#comparativa): sólo lectura; excluye accesorios y fichas gemelas del mismo anuncio.
+const modelComparison = buildModelComparison(product as any, allProducts as any);
 // Alternativas vinculadas desde el panel admin (cross-matching bidireccional).
 const linkedAlternativeProducts = (product.alternative_product_ids ?? [])
   .map((altId) => allProducts.find((p) => p.id === altId))
-  .filter((p): p is NonNullable<typeof p> => Boolean(p));
+  .filter((p): p is NonNullable<typeof p> => Boolean(p) && !isTwinOfCurrent(p));
 // El contador mezcla "misma categoría" + "alternativas vinculadas" (sin duplicados).
 const alternativesCount = new Set([
   ...sameCategory.filter((p) => p.id !== product.id).map((p) => p.id),
@@ -104,9 +141,9 @@ const alternativesCount = new Set([
 // ---------------------------------------------------------------------------
 // Cómputos de la página
 // ---------------------------------------------------------------------------
-const discountPercent = product.originalPrice
-  ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
-  : null;
+// Sólo descuento verificado (ver lib/commercialClaims.ts › shownDiscount); el precio anterior declarado no se presenta como descuento.
+const shown = shownDiscount(product);
+const discountPercent = shown ? shown.pct : null;
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('es-ES', {
@@ -168,7 +205,7 @@ const hasVariants = variantProducts.length > 0;
 
 // Productos de la misma categoría como relacionados (fallback si no hay variantes)
 const sameCategoryRelated = allProducts.filter(
-  (p) => p.id !== product.id && String(p.category || '').trim() === String(product.category || '').trim()
+  (p) => p.id !== product.id && !isTwinOfCurrent(p) && String(p.category || '').trim() === String(product.category || '').trim()
 );
 
 // SEO: Datos estructurados de producto (Schema.org Product)
@@ -185,16 +222,19 @@ const productSchema = {
     '@type': 'Offer',
     priceCurrency: product.currency || 'EUR',
     price: product.price.toFixed(2),
-    availability: product.inStock === false ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock',
+    // Sólo si la fuente lo declara: lo desconocido no se publica como «en stock».
+    ...(product.inStock === true ? { availability: 'https://schema.org/InStock' } : product.inStock === false ? { availability: 'https://schema.org/OutOfStock' } : {}),
     seller: { '@type': 'Organization', name: product.merchant },
-    url: product.affiliateUrl || undefined,
+    // La URL de la propia ficha: el enlace de afiliado nunca viaja en el HTML (sólo en la cabecera Location de /api/redirect).
+    url: `https://treidilor.com/producto/${encodeURIComponent(productKey(product as any))}`,
     ...(schemaItemCondition && { itemCondition: schemaItemCondition }),
   },
-  ...(product.rating && {
+  // Sólo con valoración Y recuento sustentados (nunca el 100 por defecto del alta ni un «1» inventado).
+  ...(ratingInfo.rating && ratingInfo.count && ratingInfo.origin === 'producto' && {
     aggregateRating: {
       '@type': 'AggregateRating',
-      ratingValue: product.rating,
-      reviewCount: product.reviewsCount ?? 1,
+      ratingValue: ratingInfo.rating,
+      reviewCount: ratingInfo.count,
       bestRating: 5,
       worstRating: 1,
     },
@@ -310,31 +350,23 @@ const productSchema = {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
               <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
             </svg>
-            <span>Análisis independiente</span>
+            <span>Datos con fecha de captura</span>
           </div>
           <div class="trust-item">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
             </svg>
-            <span>Precio verificado hoy</span>
+            <span>{verifiedDate ? `Precio verificado el ${verifiedDate}` : 'Precio sin verificar con la tienda'}</span>
           </div>
           <div class="trust-item">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2">
               <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
               <path d="M7 11V7a5 5 0 0 1 10 0v4" />
             </svg>
-            <span>Compra oficial protegida</span>
+            <span>El pago y el envío los gestiona {fulfillmentProvider}</span>
           </div>
-          {hasNewSchema && investigation!.hoursInvestigated > 0 && (
-            <div class="trust-item trust-investigation">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="2">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <span>{investigation!.hoursInvestigated}h de análisis · {investigation!.modelsCompared} modelos comparados</span>
-            </div>
-          )}
+          {/* «Xh de análisis · N modelos comparados» se retiró: eran constantes del código (10 h / 5 modelos), sin dato real. */}
         </div>
       </div>
 
@@ -344,15 +376,17 @@ const productSchema = {
         <!-- Cabecera: categoría + rating -->
         <div class="panel-meta-top">
           <span class="category-chip">{product.category}</span>
-          {product.rating && (
-            <div class="rating-inline" aria-label={`Puntuación: ${product.rating} sobre 5`}>
+          {ratingInfo.rating && (
+            <div class="rating-inline" aria-label={`Valoración ${ratingInfo.origin === 'vendedor' ? 'del vendedor' : 'del producto'}: ${ratingInfo.rating} sobre 5`}>
               <svg class="star-svg" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
               </svg>
-              <strong>{product.rating.toFixed(1)}</strong>
-              {product.reviewsCount && (
-                <span class="review-count">({product.reviewsCount.toLocaleString('es-ES')} valoraciones)</span>
-              )}
+              <strong>{ratingInfo.rating.toFixed(1)}</strong>
+              {ratingInfo.count ? (
+                <span class="review-count">({ratingInfo.count.toLocaleString('es-ES')} {ratingInfo.origin === 'vendedor' ? 'valoraciones del vendedor' : 'valoraciones'})</span>
+              ) : ratingInfo.origin === 'vendedor' ? (
+                <span class="review-count">(del vendedor)</span>
+              ) : null}
             </div>
           )}
         </div>
@@ -376,22 +410,20 @@ const productSchema = {
         <div class="price-block">
           <div class="price-row">
             <span class="price-main">{formatCurrency(product.price)}</span>
-            {product.originalPrice && (
+            {shown && (
               <>
-                <span class="price-original">{formatCurrency(product.originalPrice)}</span>
+                <span class="price-original">{formatCurrency(shown.previousPrice)}</span>
                 {discountPercent && discountPercent > 0 && (
-                  <span class="savings-tag">Ahorras {formatCurrency(product.originalPrice - product.price)}</span>
+                  <span class="savings-tag">Ahorras {formatCurrency(shown.previousPrice - product.price)}</span>
                 )}
               </>
             )}
           </div>
           <p class="price-disclaimer">
-            {product.lastPriceSync ? (
-              <span title={`Comprobado con la tienda: ${new Date(product.lastPriceSync).toLocaleDateString('es-ES')}`}>
-                ✓ Precio verificado · Puede variar en el momento de la compra.
-              </span>
+            {verifiedDate ? (
+              <span>✓ Precio verificado el {verifiedDate} · Puede variar en el momento de la compra.</span>
             ) : (
-              'Puede variar en el momento de la compra en la tienda oficial.'
+              'Precio no verificado con la tienda · Puede variar en el momento de la compra en la tienda oficial.'
             )}
           </p>
         </div>
@@ -423,7 +455,7 @@ const productSchema = {
         )}
 
         <!-- Bloque de envío (datos del comerciante cuando están disponibles) -->
-        {(shipping.shippingInfo || shipping.shippingDays != null || shipping.freeShipping) && (
+        {(shipping.shippingInfo || shipping.shippingDays != null || shippingIsFree || shippingCost !== null) && (
           <div class="shipping-block">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <rect x="1" y="3" width="15" height="13" />
@@ -432,12 +464,18 @@ const productSchema = {
               <circle cx="18.5" cy="18.5" r="2.5" />
             </svg>
             <div class="shipping-block-body">
-              <strong>{shipping.freeShipping ? 'Envío gratis' : (shipping.shippingDays != null ? `Envío en ${shipping.shippingDays} días` : 'Envío')}</strong>
-              {shipping.shippingInfo && !shipping.freeShipping && (
-                <span>{shipping.shippingInfo}. Las tarifas y opciones definitivas las elige {fulfillmentProvider} en su pasarela.</span>
+              <strong>{shippingHeadline}</strong>
+              {shippingIsFree && (
+                <span>El envío estándar es gratuito según la tienda, {shippingAsOf}{shipping.shippingDays != null ? `; plazo declarado: ${shipping.shippingDays} días` : ''}. Otras opciones (urgente, recogida…) las elige {fulfillmentProvider} en su pasarela.</span>
               )}
-              {shipping.freeShipping && (
-                <span>El envío estándar es gratuito. Otras opciones (urgente, recogida…) las elige {fulfillmentProvider} en su pasarela.</span>
+              {!shippingIsFree && shippingCost !== null && (
+                <span>Coste de envío declarado {shippingAsOf}{shipping.shippingDays != null ? `; plazo declarado: ${shipping.shippingDays} días` : ''}. Las tarifas y opciones definitivas las elige {fulfillmentProvider} en su pasarela.</span>
+              )}
+              {!shippingIsFree && shippingCost === null && shipping.shippingDays != null && (
+                <span>Estimación {shippingAsOf}. Las tarifas y opciones definitivas las elige {fulfillmentProvider} en su pasarela.</span>
+              )}
+              {!shippingIsFree && shippingCost === null && shipping.shippingDays == null && shipping.shippingInfo && (
+                <span>{shipping.shippingInfo} ({shippingAsOf}). Las tarifas y opciones definitivas las elige {fulfillmentProvider} en su pasarela.</span>
               )}
             </div>
           </div>
@@ -527,6 +565,12 @@ const productSchema = {
           </a>
         </div>
 
+        {offersView.state === 'multiple' && (
+          <a href="#ofertas" class="cta-secondary-btn" id={`offers-cta-${product.id}`}>
+            Comparar {offersView.rows.length} ofertas de este producto →
+          </a>
+        )}
+
         <!-- CTA terciario: análisis cruzado dentro de Treidilor -->
         {alternativesCount > 0 ? (
           <a href="#comparativa" class="cta-secondary-btn" id={`compare-cta-${product.id}`}>
@@ -603,8 +647,10 @@ const productSchema = {
          HISTÓRICO DE PRECIO (captura progresiva, 1 punto/día)
          ====================================================== -->
     <section class="price-history-section container" id="historico-precio">
-      <PriceHistoryChart points={product.priceHistory ?? []} currentPrice={product.price} />
+      <PriceHistoryChart points={product.priceHistory ?? []} currentPrice={product.price} verifiedAt={verifiedAtOf(product)} />
     </section>
+
+    <OffersComparator view={offersView} />
 
     <!-- ======================================================
          FICHA TÉCNICA OBJETIVA (specs del contrato n8n)
@@ -691,10 +737,10 @@ const productSchema = {
     <section class="delegated-section container" aria-labelledby="delegated-title">
       <div class="delegated-head">
         <span class="specs-tag delegated-tag">Compra delegada</span>
-        <h2 class="specs-title" id="delegated-title">Tú eliges. El distribuidor oficial cobra y envía.</h2>
+        <h2 class="specs-title" id="delegated-title">Tú eliges. La tienda vendedora gestiona el cobro y el envío.</h2>
         <p class="specs-subtitle">
-          Treidilor gestiona la selección y el análisis; el pago, la logística y la
-          garantía los administrará {fulfillmentProvider}.
+          Treidilor gestiona la selección y la comparación de datos; el pago, la logística y
+          las condiciones comerciales las gestiona {fulfillmentProvider}, la tienda vendedora.
         </p>
       </div>
 
@@ -714,8 +760,8 @@ const productSchema = {
           <div class="step-body">
             <h3 class="step-title">Confirmas el resumen</h3>
             <p class="step-text">
-              Revisas artículo, precio, plazo estimado de entrega y quién figura
-              como distribuidor oficial antes de salir.
+              Revisas artículo, precio, el plazo de entrega si la tienda lo indica y la tienda vendedora
+              que gestionará la compra antes de salir.
             </p>
           </div>
         </li>
@@ -867,17 +913,13 @@ const productSchema = {
          COMPARATIVA DE LA CATEGORÍA (Tabla dinámica)
          ====================================================== -->
     <div class="container" id="comparativa">
-      <ComparisonTable
-        products={sameCategory}
-        highlightId={product.id}
-        title={`Comparativa: ${product.category}`}
-      />
-      {alternativesCount === 0 && (
+      <ModelComparison comparison={modelComparison} title={`Comparar modelos: ${product.category}`} />
+      {!modelComparison.hasRivals && (
         <div class="comparison-empty container">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true">
             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
           </svg>
-          <p>Este producto es actualmente <strong>la mejor opción analizada</strong> de la categoría <strong>{product.category}</strong>. No hay alternativas comparables que lo superen en nuestra selección editorial.</p>
+          <p>Todavía no hay otros modelos comparables de la categoría <strong>{product.category}</strong> registrados en Treidilor.</p>
         </div>
       )}
     </div>
@@ -1052,8 +1094,9 @@ const productSchema = {
           {hasNewSchema && affiliate!.alternativeStore && (
             <> También disponible en {affiliate!.alternativeStore}.</>
           )}
-          Si realizas una compra a través de nuestros enlaces, Treidilor puede recibir una pequeña comisión
-          sin ningún coste adicional para ti. Nuestros análisis son siempre independientes e imparciales.
+          Si realizas una compra a través de nuestros enlaces, Treidilor puede recibir una comisión, sin que añada un cargo propio al precio.
+          La compra se realiza en la tienda y el vendedor fija el precio y las condiciones finales.
+          <a href="/#aviso-afiliacion">Ver aviso de afiliación</a>.
         </p>
       </div>
     </section>
@@ -2152,6 +2195,16 @@ const productSchema = {
   /* =====================================================
      AVISO DE AFILIACIÓN
      ===================================================== */
+  .affiliate-notice a {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .affiliate-notice a:focus-visible {
+    outline: 2px solid var(--color-accent-amber);
+    outline-offset: 2px;
+  }
+
   .affiliate-notice {
     padding-bottom: 2rem;
   }

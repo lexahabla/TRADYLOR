@@ -17,6 +17,7 @@
  */
 
 import type { Product } from '../data/products';
+import { ratingSupport, shownDiscount } from '../lib/commercialClaims';
 
 export interface Props {
   products: Product[];
@@ -46,10 +47,8 @@ const editorChoiceId = highlightId ?? selection[0]?.id;
 // Máximo de características a comparar por producto
 const MAX_FEATURES = 4;
 const getFeatures = (p: Product) => p.pros.slice(0, MAX_FEATURES);
-const discountOf = (p: Product) =>
-  p.originalPrice && p.originalPrice > p.price
-    ? Math.round(((p.originalPrice - p.price) / p.originalPrice) * 100)
-    : null;
+// Sólo descuento verificado (lib/commercialClaims.ts › shownDiscount).
+const discountOf = (p: Product) => shownDiscount(p)?.pct ?? null;
 ---
 
 {selection.length >= 2 && (
@@ -81,13 +80,13 @@ const discountOf = (p: Product) =>
                   <img src={p.image} alt={p.title} loading="lazy" width="160" height="160" />
                 </a>
                 <a href={`/producto/${p.slug ?? p.id}`} class="col-title">{p.title}</a>
-                {p.rating != null && p.rating > 0 && (
+                {ratingSupport(p).rating !== null && (
                   <span class="col-rating">
                     <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
-                    {p.rating.toFixed(1)}
-                    {p.reviewsCount != null && <span class="col-reviews">({p.reviewsCount.toLocaleString('es-ES')})</span>}
+                    {ratingSupport(p).rating!.toFixed(1)}
+                    {ratingSupport(p).count != null && <span class="col-reviews">({ratingSupport(p).count!.toLocaleString('es-ES')}{ratingSupport(p).origin === 'vendedor' ? ' · vendedor' : ''})</span>}
                   </span>
                 )}
               </th>
@@ -97,14 +96,14 @@ const discountOf = (p: Product) =>
         <tbody>
           <!-- Fila: Precio -->
           <tr class="price-row">
-            <th scope="row" class="feature-label">Precio verificado</th>
+            <th scope="row" class="feature-label">Precio publicado</th>
             {selection.map((p) => {
               const discount = discountOf(p);
               return (
                 <td class:list={[{ 'is-editor-choice': p.id === editorChoiceId }]}>
                   <span class="cell-price">{formatCurrency(p.price)}</span>
-                  {p.originalPrice && discount != null && (
-                    <span class="cell-original">{formatCurrency(p.originalPrice)}</span>
+                  {shownDiscount(p) && discount != null && (
+                    <span class="cell-original">{formatCurrency(shownDiscount(p)!.previousPrice)}</span>
                   )}
                   {discount != null && <span class="cell-discount">-{discount}%</span>}
                 </td>

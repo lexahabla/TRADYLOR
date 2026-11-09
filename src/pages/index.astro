@@ -115,17 +115,7 @@ const pageDescription = "Descubre las mejores selecciones y comparativas de prod
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(amount);
 
-const totalSavings = allProducts.reduce(
-  (acc, p) => (p.originalPrice && p.originalPrice > p.price ? acc + (p.originalPrice - p.price) : acc),
-  0
-);
-const showSavingsMetric = totalSavings >= 5000;
-const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
-  style: 'currency',
-  currency: 'EUR',
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-}).format(Math.round(totalSavings))}`;
+// (el contador de «ahorro total» se retiró: no es demostrable; los descuentos sólo se muestran si están verificados)
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
@@ -184,7 +174,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
           <p class="section-desc">
             {activeCategory
               ? `Explora nuestra selección verificada de ${activeCategory.name}, ordenada por puntuación de recomendación (${diversified.length} analizados).`
-              : `Explora nuestra selección completa ordenada por puntuación de recomendación. ${diversified.length} productos verificados y en constante actualización.`}
+              : `Explora nuestra selección completa ordenada por puntuación de recomendación. ${diversified.length} productos analizados, con datos capturados de las tiendas.`}
           </p>
           {queryTerm && (
             <p class="filter-note">
@@ -337,7 +327,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     <div class="container hero-container">
       <div class="hero-badge">
         <span class="badge-dot"></span>
-        <span>Curación de Productos & Análisis Independientes</span>
+        <span>Curación de Productos & Comparativas</span>
       </div>
 
       <h1 class="hero-title">
@@ -346,7 +336,7 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       </h1>
 
       <p class="hero-subtitle">
-        En Treidilor desarmamos las campañas de marketing engañosas. Analizamos a fondo especificaciones, fiabilidad y relación calidad-precio para que ahorres tiempo, dinero y tomas decisiones de compra 100% acertadas.
+        En Treidilor reunimos y comparamos los datos que publican las tiendas: especificaciones, precios, envío y valoraciones, con su fecha de captura, para que decidas con la información delante.
       </p>
     </div>
 
@@ -354,22 +344,13 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
       <!-- Badges de Autoridad E-E-A-T -->
       <div class="hero-trust-metrics">
         <div class="metric-item">
-          <span class="metric-number">+500h</span>
-          <span class="metric-label">De análisis y pruebas de producto</span>
+          <span class="metric-number">Fecha</span>
+          <span class="metric-label">De captura visible en cada precio y oferta</span>
         </div>
-        {showSavingsMetric && (
-          <>
-            <div class="metric-divider"></div>
-            <div class="metric-item">
-              <span class="metric-number">{savingsDisplay}</span>
-              <span class="metric-label">Ahorrado a nuestros usuarios</span>
-            </div>
-          </>
-        )}
         <div class="metric-divider"></div>
         <div class="metric-item">
-          <span class="metric-number">24/7</span>
-          <span class="metric-label">Monitoreo activo de bajadas de precio</span>
+          <span class="metric-number">0 €</span>
+          <span class="metric-label">Cargo propio de Treidilor. Puede recibir comisión de afiliación y el vendedor fija el precio final (<a class="metric-link" href="#aviso-afiliacion">ver aviso de afiliación</a>)</span>
         </div>
       </div>
     </div>
@@ -959,6 +940,21 @@ const savingsDisplay = `+${new Intl.NumberFormat('es-ES', {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
+  }
+
+  .metric-link {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-weight: 600;
+  }
+  .metric-link:hover {
+    color: var(--color-primary-hover);
+  }
+  .metric-link:focus-visible {
+    outline: 2px solid var(--color-accent-amber);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 
   .metric-label {

@@ -1,0 +1,66 @@
+---
+/** Comparador de MODELOS (#comparativa): un modelo por columna, una característica por fila. Vista de lib/modelComparison.ts. */
+import type { ModelComparison } from '../lib/modelComparison';
+
+export interface Props {
+  comparison: ModelComparison;
+  title?: string;
+}
+const { comparison, title = 'Comparar modelos' } = Astro.props;
+---
+
+{
+  comparison.hasRivals && (
+    <section class="models-section" aria-labelledby="modelos-title">
+      <h2 id="modelos-title" class="models-title">{title}</h2>
+      <p class="models-sub">{comparison.explanation}</p>
+      <div class="models-scroll" role="region" aria-label="Tabla comparativa de modelos (desplazable)" tabindex="0">
+        <table class="models-table">
+          <caption class="sr-only">Comparativa de modelos: un modelo por columna</caption>
+          <thead>
+            <tr>
+              <th scope="col" class="m-feature"><span class="sr-only">Característica</span></th>
+              {comparison.columns.map((c) => (
+                <th scope="col" class:list={['m-col', { 'is-ref': c.isReference }]}>
+                  {c.isReference && <span class="m-ref">Este producto</span>}
+                  <a href={c.href}>{c.title}</a>
+                  {c.brand && <span class="m-brand">{c.brand}</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {comparison.rows.map((r) => (
+              <tr>
+                <th scope="row" class="m-feature">{r.label}</th>
+                {r.cells.map((cell) => <td class:list={{ 'is-missing': cell === 'Sin dato' }}>{cell}</td>)}
+              </tr>
+            ))}
+            <tr>
+              <th scope="row" class="m-feature">Ficha completa</th>
+              {comparison.columns.map((c) => <td><a class="m-link" href={c.href}>Ver ficha</a></td>)}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+<style>
+  .models-section { margin: 2rem 0; }
+  .models-title { font-family: var(--font-heading); font-size: 1.4rem; margin: 0 0 0.25rem; }
+  .models-sub { color: var(--color-text-muted); font-size: 0.85rem; margin: 0 0 0.75rem; }
+  .models-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border: 1px solid var(--color-border); border-radius: var(--border-radius-md); }
+  .models-scroll:focus-visible, .models-table a:focus-visible { outline: 2px solid var(--color-accent-amber); outline-offset: 2px; }
+  .models-table { border-collapse: collapse; width: 100%; min-width: 640px; background: var(--color-bg-card); }
+  .models-table th, .models-table td { text-align: left; vertical-align: top; padding: 0.7rem 0.8rem; border-bottom: 1px solid var(--color-border); font-size: 0.88rem; overflow-wrap: anywhere; }
+  .m-feature { position: sticky; left: 0; background: var(--color-surface-subtle); color: var(--color-text-muted); min-width: 130px; z-index: 1; }
+  .m-col { min-width: 180px; }
+  .m-col a, .m-link { color: var(--color-text-main); font-weight: 700; }
+  .m-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--color-primary); }
+  .m-ref { display: block; color: var(--color-accent); font-size: 0.72rem; text-transform: uppercase; }
+  .m-brand { display: block; color: var(--color-text-dim); font-size: 0.78rem; font-weight: 400; }
+  .is-missing { color: var(--color-text-dim); font-style: italic; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>

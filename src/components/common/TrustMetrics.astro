@@ -7,18 +7,20 @@ const { variant = 'card' } = Astro.props;
 
 const metrics = [
   {
-    value: '+300h',
-    label: 'De análisis y tests trimestrales',
+    value: 'Fecha',
+    label: 'De captura visible en cada precio y oferta',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
   },
   {
-    value: '100%',
-    label: 'Independencia editorial garantizada',
+    value: 'Sin dato',
+    label: 'Si un dato no consta lo decimos («No indicado»), no lo suponemos',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>',
   },
   {
-    value: '0€',
-    label: 'Coste adicional por comprar con nosotros',
+    value: '0 €',
+    label: 'Cargo propio de Treidilor. Puede recibir comisión de afiliación; el vendedor fija el precio y las condiciones finales',
+    href: '/#aviso-afiliacion',
+    linkText: 'Ver aviso de afiliación',
     icon: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
   },
 ];
@@ -30,6 +32,7 @@ const metrics = [
       <span class="trust-metric-icon" set:html={m.icon} />
       <span class="trust-metric-value">{m.value}</span>
       <span class="trust-metric-label">{m.label}</span>
+      {m.href && <a class="trust-metric-link" href={m.href}>{m.linkText}</a>}
     </div>
   ))}
 </div>
@@ -105,6 +108,25 @@ const metrics = [
     color: rgba(255, 255, 255, 0.6);
     font-weight: 500;
     line-height: 1.4;
+  }
+
+  .trust-metric-link {
+    color: var(--color-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-weight: 600;
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+  }
+  .trust-metric-link:hover {
+    color: var(--color-primary-hover);
+  }
+  .trust-metric-link:focus-visible {
+    outline: 2px solid var(--color-accent-amber);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 
   @media (max-width: 640px) {

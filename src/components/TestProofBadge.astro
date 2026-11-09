@@ -1,5 +1,7 @@
 ---
 import type { Product } from '../data/products';
+import { ratingSupport, verifiedAtOf, formatDateEs } from '../lib/commercialClaims';
+import { publicText } from '../lib/publicClaims';
 
 export interface Props {
   product: Product;
@@ -7,20 +9,19 @@ export interface Props {
 
 const { product } = Astro.props;
 
-const priceStable = product.metrics?.priceStability === 'stable';
-const priceInflated = product.originalPrice
-  ? (product.originalPrice - product.price) / product.originalPrice < 0.1
-  : false;
-const priceOk = priceStable || priceInflated;
+// Sólo se afirma lo que los datos de la ficha respaldan: precio verificado (fecha real), valoración sustentada (con su procedencia) y el
+// recuento de ventajas/inconvenientes que se muestran. Nada de «auditado», «reputación» inventada ni puntuaciones internas.
+const verifiedDate = formatDateEs(verifiedAtOf(product));
+const priceOk = Boolean(verifiedDate);
 
-const sellerRating = product.metrics?.sellerRating ?? 0;
-const sellerReviews = product.metrics?.sellerReviews ?? 0;
-const sellerOk = sellerRating >= 4.0 || sellerReviews > 100;
+const support = ratingSupport(product);
+const sellerOk = support.rating !== null && support.rating >= 4.0;
+const ratingWho = support.origin === 'vendedor' ? 'del vendedor' : 'del producto';
 
-const prosCount = Array.isArray(product.pros) ? product.pros.length : 0;
-const consCount = Array.isArray(product.cons) ? product.cons.length : 0;
-const convScore = product.conversion_score ?? 50;
-const balanceOk = prosCount > consCount || convScore >= 60;
+const shown = publicText(product);
+const prosCount = shown.pros.length;
+const consCount = shown.cons.length;
+const balanceOk = prosCount > consCount;
 
 const pillar1Ok = priceOk;
 const pillar2Ok = sellerOk;
@@ -34,13 +35,13 @@ const allOk = pillar1Ok && pillar2Ok && pillar3Ok;
     class="tpb-badge"
     data-tpb-toggle
     aria-expanded="false"
-    aria-label="Ver desglose Test & Proof Auditado"
+    aria-label="Ver los datos en los que se basa esta ficha"
   >
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
       <polyline points="9 12 11 14 15 10"/>
     </svg>
-    <span>Test &amp; Proof Auditado</span>
+    <span>Datos de la ficha</span>
     <svg class="tpb-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <polyline points="6 9 12 15 18 9"/>
     </svg>
@@ -52,15 +53,15 @@ const allOk = pillar1Ok && pillar2Ok && pillar3Ok;
         <span class="tpb-pillar-icon" aria-hidden="true">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
         </span>
-        <span class="tpb-pillar-title">Histórico y Transparencia de Precio</span>
+        <span class="tpb-pillar-title">Precio y verificación</span>
         {pillar1Ok
           ? <span class="tpb-check ok" aria-label="Verificado"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
           : <span class="tpb-check warn" aria-label="Atención"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>}
       </div>
       <p class="tpb-pillar-desc">
         {priceOk
-          ? 'Precio verificado sin inflado previo. El histórico muestra una evolución estable.'
-          : 'Precio con posibles fluctuaciones. Se recomienda revisar el histórico antes de comprar.'}
+          ? `Precio verificado con la tienda el ${verifiedDate}. El precio final lo confirma la tienda.`
+          : 'Precio publicado, no verificado con la tienda. El precio final lo confirma la tienda.'}
       </p>
     </div>
 
@@ -69,15 +70,15 @@ const allOk = pillar1Ok && pillar2Ok && pillar3Ok;
         <span class="tpb-pillar-icon" aria-hidden="true">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
         </span>
-        <span class="tpb-pillar-title">Puntuación del Vendedor y Reseñas</span>
+        <span class="tpb-pillar-title">Valoración</span>
         {pillar2Ok
           ? <span class="tpb-check ok" aria-label="Verificado"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
           : <span class="tpb-check warn" aria-label="Atención"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>}
       </div>
       <p class="tpb-pillar-desc">
-        {sellerOk
-          ? `Vendedor con ${sellerRating > 0 ? `${sellerRating.toFixed(1)}/5` : 'buena reputación'} y ${sellerReviews > 0 ? `${sellerReviews} reseñas` : 'respuestas verificadas'}.`
-          : 'Vendedor con puntuación limitada. Se recomienda verificar las reseñas externas.'}
+        {support.rating !== null
+          ? `Valoración ${ratingWho}: ${support.rating.toFixed(1)}/5${support.count ? ` (${support.count} valoraciones)` : ''}.`
+          : 'Sin valoración sustentada por la fuente.'}
       </p>
     </div>
 
@@ -86,15 +87,13 @@ const allOk = pillar1Ok && pillar2Ok && pillar3Ok;
         <span class="tpb-pillar-icon" aria-hidden="true">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="10"/></svg>
         </span>
-        <span class="tpb-pillar-title">Balance Técnico Automatizado</span>
+        <span class="tpb-pillar-title">Ventajas e inconvenientes</span>
         {pillar3Ok
           ? <span class="tpb-check ok" aria-label="Verificado"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>
           : <span class="tpb-check warn" aria-label="Atención"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>}
       </div>
       <p class="tpb-pillar-desc">
-        {balanceOk
-          ? `${prosCount} pros vs ${consCount} contras. Conversion score: ${convScore}/100.`
-          : `${prosCount} pros vs ${consCount} contras. Se recomienda revisar las limitaciones.`}
+        {`${prosCount} ventajas y ${consCount} inconvenientes indicados en la ficha (redactados por Treidilor).`}
       </p>
     </div>
   </div>

@@ -20,6 +20,8 @@ export const prerender = false;
 import Layout from '../../layouts/Layout.astro';
 import { findCatalogProduct, productKey } from '../../lib/catalog';
 import { resolveProductShipping } from '../../lib/shipping';
+import { captureDateOf, formatDateEs, ratingSupport, shownDiscount, verifiedAtOf } from '../../lib/commercialClaims';
+import { getComparableOffers } from '../../lib/comparableOffers';
 
 // ---------------------------------------------------------------------------
 // Resolución del producto (slug canónico o id legado)
@@ -32,16 +34,22 @@ if (!product || !product.affiliateUrl) {
 
 const pricing = product.pricing;
 const hooks = product.conversionHooks;
-const stockStatus = pricing?.stockStatus ?? 'En stock';
+// Disponibilidad: sólo se afirma «En stock» si la fuente lo declara (`inStock === true`); lo desconocido no es «en stock».
+const stockStatus: 'En stock' | 'Pocas unidades' | 'Agotado' | 'Disponibilidad no indicada' =
+  pricing?.stockStatus === 'Pocas unidades' ? 'Pocas unidades' : product.inStock === true ? 'En stock' : product.inStock === false ? 'Agotado' : 'Disponibilidad no indicada';
 // Envío: campos propios o snapshot del catálogo AliExpress (lib/shipping.ts),
 // para que los productos importados antes de existir estos campos también
 // muestren plazo/tarifa reales en la pantalla puente.
 const shippingResolved = resolveProductShipping(product);
 const freeShipping = shippingResolved.freeShipping ?? product.freeShipping ?? pricing?.freeShipping ?? false;
 const provider = product.fulfillmentProvider ?? product.merchant;
-const returnDays = hooks?.returnPolicyDays ?? 30;
+// La política de devolución NO es un dato del catálogo: `returnPolicyDays` es un valor por defecto (30) del esquema, no una promesa de la tienda.
+const ratingInfo = ratingSupport(product);
+const verifiedDate = formatDateEs(verifiedAtOf(product));
+const capturedDate = formatDateEs(captureDateOf(product));
 const shippingDays = shippingResolved.shippingDays ?? product.shippingDays;
-const shippingInfo = shippingResolved.shippingInfo ?? product.shippingInfo;
+// resolveProductShipping ya incluye el texto propio de la ficha y descarta el fallback del código ("Envío estándar eBay (3-5 días)"): no se vuelve a leer en bruto.
+const shippingInfo = shippingResolved.shippingInfo;
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('es-ES', {
@@ -50,28 +58,32 @@ const formatCurrency = (amount: number) =>
     minimumFractionDigits: 2,
   }).format(amount);
 
-const discountPercent = product.originalPrice
-  ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
-  : null;
+// Sólo descuento verificado (ver lib/commercialClaims.ts › shownDiscount).
+const shown = shownDiscount(product);
+const discountPercent = shown ? shown.pct : null;
 
+// Plazo: sólo lo que declara la tienda, rotulado a fecha de captura (puede haber cambiado). Sin dato: «No indicado» (antes se inventaban
+// «24 h», «24 – 48 h», «3 – 5 días laborables» o «2 – 4 días laborables» según el stock o un «envío gratis» inferido).
 const deliveryEstimate =
   stockStatus === 'Agotado'
     ? 'Sin previsión de entrega'
     : shippingDays != null
-      ? shippingDays <= 1
-        ? '24 h'
-        : `${shippingDays} días`
-      : stockStatus === 'Pocas unidades'
-        ? '3 – 5 días laborables'
-        : freeShipping
-          ? '24 – 48 h'
-          : '2 – 4 días laborables';
+      ? `${shippingDays <= 1 ? '24 h' : `${shippingDays} días`} según la tienda${capturedDate ? ` (a fecha de captura, ${capturedDate})` : ' (sin fecha de captura)'}; puede haber cambiado`
+      : 'No indicado';
 
-const shippingFeeLabel = freeShipping
-  ? 'Gratis'
-  : shippingInfo
-    ? shippingInfo
-    : 'Se calcula en la pasarela';
+// Envío: coste o «gratis» sólo si el dato lo afirma (capa de lectura: campos planos y, en eBay, specs['Coste de envío']), rotulado a fecha de
+// captura. Sin dato: se calcula en la pasarela (nunca un coste ni «gratis» inventados).
+const primaryShipping = getComparableOffers(product).offers.find((o) => o.origin === 'implicit')?.shipping;
+const asOfLabel = capturedDate ? ` (dato a fecha de captura, ${capturedDate})` : ' (dato sin fecha de captura)';
+const shippingFeeLabel =
+  primaryShipping?.free === true || freeShipping === true
+    ? `Gratis según la tienda${asOfLabel}`
+    : primaryShipping?.cost != null && primaryShipping.cost > 0
+      ? `${formatCurrency(primaryShipping.cost)} según la tienda${asOfLabel}`
+      : shippingInfo
+        ? shippingInfo
+        : 'Se calcula en la pasarela';
+const shippingIsFree = primaryShipping?.free === true || freeShipping === true;
 
 const specsPreview = product.specs
   ? Object.entries(product.specs).slice(0, 4)
@@ -82,6 +94,7 @@ const cleanMarketplaceSuffix = (text: string) =>
   text.replace(/\s*[\-|:]\s*(Amazon(?:\.es)?|PcComponentes|El Corte Inglés|MediaMarkt|Fnac|AliExpress|Carrefour|Apple).*$/i, '').trim();
 
 const shortTitle = cleanMarketplaceSuffix(product.title);
+
 const isSoldOut = stockStatus === 'Agotado';
 ---
 
@@ -158,15 +171,17 @@ const isSoldOut = stockStatus === 'Agotado';
             <div class="summary-info">
               <span class="summary-category">{product.category}</span>
               <h2 class="summary-title">{shortTitle}</h2>
-              {product.rating && (
+              {ratingInfo.rating && (
                 <span class="summary-rating">
                   <svg width="13" height="13" viewBox="0 0 20 20" fill="#f59e0b" aria-hidden="true">
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                   </svg>
-                  <strong>{product.rating.toFixed(1)}</strong>
-                  {product.reviewsCount && (
-                    <span class="summary-reviews">({product.reviewsCount.toLocaleString('es-ES')} valoraciones)</span>
-                  )}
+                  <strong>{ratingInfo.rating.toFixed(1)}</strong>
+                  {ratingInfo.count ? (
+                    <span class="summary-reviews">({ratingInfo.count.toLocaleString('es-ES')} {ratingInfo.origin === 'vendedor' ? 'valoraciones del vendedor' : 'valoraciones'})</span>
+                  ) : ratingInfo.origin === 'vendedor' ? (
+                    <span class="summary-reviews">(del vendedor)</span>
+                  ) : null}
                 </span>
               )}
             </div>
@@ -198,7 +213,7 @@ const isSoldOut = stockStatus === 'Agotado';
             </div>
             <div class="order-line">
               <dt>Envío estimado</dt>
-              <dd class:list={['order-value', { 'is-free': freeShipping }]}>
+              <dd class:list={['order-value', { 'is-free': shippingIsFree }]}>
                 {shippingFeeLabel}
               </dd>
             </div>
@@ -214,7 +229,7 @@ const isSoldOut = stockStatus === 'Agotado';
               </dt>
               <dd class="order-value">{deliveryEstimate}</dd>
             </div>
-            {shippingInfo && !freeShipping && (
+            {shippingInfo && !shippingIsFree && primaryShipping?.cost == null && (
               <div class="order-line order-line--shipping-note">
                 <dt>Tarifas de envío</dt>
                 <dd class="order-value order-value--note">{shippingInfo}. Las opciones y tarifas definitivas (urgente, estándar, recogida…) las elige {provider} en su pasarela.</dd>
@@ -223,8 +238,8 @@ const isSoldOut = stockStatus === 'Agotado';
             <div class="order-line order-line--total">
               <dt>Total orientativo</dt>
               <dd>
-                {product.originalPrice && (
-                  <span class="total-original">{formatCurrency(product.originalPrice)}</span>
+                {shown && (
+                  <span class="total-original">{formatCurrency(shown.previousPrice)}</span>
                 )}
                 <strong class="total-main">{formatCurrency(product.price)}</strong>
               </dd>
@@ -262,20 +277,20 @@ const isSoldOut = stockStatus === 'Agotado';
                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                 <path d="M7 11V7a5 5 0 0 1 10 0v4" />
               </svg>
-              Pasarela cifrada SSL 256-bit
+              El pago lo gestiona {provider} en su pasarela
             </li>
             <li class="trust-seal">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <polyline points="1 4 1 10 7 10" />
                 <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
               </svg>
-              Devolución hasta {returnDays} días
+              Devolución: No indicado
             </li>
             <li class="trust-seal">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
               </svg>
-              Precio y disponibilidad verificados hoy
+              {verifiedDate ? `Precio verificado el ${verifiedDate}` : 'Precio y disponibilidad no verificados'}
             </li>
           </ul>
 

@@ -12,6 +12,7 @@ import { getCatalogProducts, productKey } from '../../lib/catalog';
 import { getCrossMerchantOffers } from '../../lib/productNetwork';
 import { getCategoryById } from '../../lib/categories';
 import { areSameProductType } from '../../lib/curation';
+import { shownDiscount } from '../../lib/commercialClaims';
 
 export const prerender = false;
 
@@ -90,10 +91,7 @@ const compareSearchItems = optionGroups.flatMap((group) =>
     image: product.image,
     merchant: product.merchant,
     categoryId: group.id,
-    discountPct:
-      product.originalPrice && product.originalPrice > product.price
-        ? Math.round((1 - product.price / product.originalPrice) * 100)
-        : null,
+    discountPct: shownDiscount(product)?.pct ?? null, // sólo descuento verificado
   })),
 );
 const compareSearchDataJson = JSON.stringify({ items: compareSearchItems }).replace(/</g, '\\u003c');
@@ -264,8 +262,8 @@ const pageDescription = baseProduct
             <h2 class="comparator-picked-title">{cleanMarketplaceSuffix(baseProduct.title)}</h2>
             <p class="comparator-picked-meta">
               <strong>{formatCurrency(baseProduct.price)}</strong>
-              {baseProduct.originalPrice && baseProduct.originalPrice > baseProduct.price && (
-                <span class="comparator-picked-old">{formatCurrency(baseProduct.originalPrice)}</span>
+              {shownDiscount(baseProduct) && (
+                <span class="comparator-picked-old">{formatCurrency(shownDiscount(baseProduct)!.previousPrice)}</span>
               )}
               {typeof baseProduct.rating === 'number' && (
                 <span>★ {baseProduct.rating.toFixed(1)}{baseProduct.reviewsCount ? ` (${baseProduct.reviewsCount})` : ''}</span>
