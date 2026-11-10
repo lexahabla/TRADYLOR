@@ -12,7 +12,19 @@ assert.ok(start > 0, 'script del bloque no encontrado');
 const clientScript = source.slice(start + '<script is:inline>\n'.length, source.indexOf('</script>', start));
 const ids = [...new Set([...source.matchAll(/id="(jsonImp[A-Za-z]+)"/g)].map((m) => m[1]))];
 
+// Actividad pendiente del cliente simulado (llamadas `fetch` en curso y temporizadores cortos del propio script: antirrebote, etc.).
+// `wait()` espera a que se quede QUIETO en lugar de dormir un tiempo fijo, de modo que no dependa de la carga de la máquina.
+let activity = { inflight: 0, timers: 0 };
+const SHORT_TIMER_MS = 600; // sólo se esperan los temporizadores cortos (los de segundos, p. ej. el sondeo de 3 s, se esperan con waitFor)
+
 function makeClient(fetchImpl) {
+  activity = { inflight: 0, timers: 0 };
+  const act = activity;
+  const trackedSetTimeout = (fn, delay, ...args) => {
+    if (!(delay <= SHORT_TIMER_MS)) return setTimeout(fn, delay, ...args);
+    act.timers++;
+    return setTimeout(() => { act.timers--; fn(...args); }, delay);
+  };
   const calls = [];
   const nodes = {};
   const el = (id) => {
@@ -33,8 +45,8 @@ function makeClient(fetchImpl) {
   const store = { _m: {}, getItem(k) { return k in this._m ? this._m[k] : null; }, setItem(k, v) { this._m[k] = String(v); }, removeItem(k) { delete this._m[k]; } };
   const sandbox = {
     document: { getElementById: (i) => nodes[i], createElement: () => el('x'), body: { appendChild() {} } },
-    fetch: (...a) => { calls.push(a); return fetchImpl(...a); },
-    setTimeout, clearTimeout, sessionStorage: store, Promise, JSON, Math, Date, String, Array, Object, Boolean, Blob: class {}, URL: { createObjectURL: () => 'blob:', revokeObjectURL() {} },
+    fetch: (...a) => { calls.push(a); act.inflight++; return Promise.resolve(fetchImpl(...a)).finally(() => { act.inflight--; }); },
+    setTimeout: trackedSetTimeout, clearTimeout, sessionStorage: store, Promise, JSON, Math, Date, String, Array, Object, Boolean, Blob: class {}, URL: { createObjectURL: () => 'blob:', revokeObjectURL() {} },
     FileReader: class {}, BroadcastChannel: class { postMessage() {} close() {} },
     window: { IntersectionObserver: class {}, confirm: () => true },
     IntersectionObserver: class { observe() {} disconnect() {} },
@@ -44,7 +56,35 @@ function makeClient(fetchImpl) {
   return { nodes, calls, store };
 }
 
-const wait = (ms = 40) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const turn = () => new Promise((r) => setImmediate(r));
+const MAX_WAIT_MS = 10000;
+/**
+ * Espera a que el flujo en curso del cliente simulado TERMINE (sin `fetch` en curso durante varios turnos seguidos), con un máximo de 10 s: si no
+ * termina, la aserción siguiente falla con el estado real (no se oculta nada). No espera a los temporizadores del propio script (el antirrebote de
+ * 250 ms), igual que antes: así el resultado no depende de la carga de la máquina. `ms` sólo fija una pausa mínima (pruebas «negativas»).
+ */
+const wait = async (ms = 40) => {
+  await sleep(Math.min(ms, 30));
+  const deadline = Date.now() + MAX_WAIT_MS;
+  let calm = 0;
+  while (calm < 5 && Date.now() < deadline) {
+    await turn();
+    if (activity.inflight === 0) calm++; else { calm = 0; await sleep(2); }
+  }
+};
+/** Espera a que dispare el antirrebote del script (temporizadores cortos pendientes) y a que su flujo termine. Máximo 10 s. */
+const waitDebounce = async () => {
+  const deadline = Date.now() + MAX_WAIT_MS;
+  while (activity.timers > 0 && Date.now() < deadline) await sleep(5);
+  await wait(0);
+};
+/** Espera a una condición concreta (p. ej. el sondeo de estado de 3 s). Máximo `timeout` ms; no oculta fallos: al agotarse la aserción siguiente falla. */
+const waitFor = async (cond, timeout = MAX_WAIT_MS) => {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) { if (cond()) return true; await sleep(10); }
+  return false;
+};
 const resp = (data, status = 200) => ({ ok: status < 400, status, json: async () => data });
 const amz = (n, kind = 'new') => ({ asin: 'B0TEST000' + n, title: 'Producto Amazon ' + n, kind, externalId: 'a' + n, url: 'https://www.amazon.es/dp/B0TEST000' + n, price: 10 + n, currency: 'EUR' });
 const temuRec = (n) => ({ goodsId: '70100000000000' + n, title: 'Producto Temu ' + n, kind: 'new', externalId: 't' + n, productUrl: 'https://www.temu.com/es/-g-70100000000000' + n + '.html', price: 5 + n, currency: 'EUR' });
@@ -76,7 +116,7 @@ test('zona común: oculta sin datos; con datos muestra nº de productos, origen 
   const { nodes } = makeClient(fakeServer().fn);
   assert.notEqual(nodes.jsonImpActionZone.hidden, false, 'sin productos cargados no se muestra');
   paste(nodes, [amz(1), amz(2), temuRec(3)]);
-  await wait(320);
+  await waitDebounce();
   assert.equal(nodes.jsonImpActionZone.hidden, false);
   assert.equal(nodes.jsonImpSumCount.textContent, '3');
   assert.match(nodes.jsonImpSumSource.textContent, /Amazon \(2\)/);
@@ -84,7 +124,7 @@ test('zona común: oculta sin datos; con datos muestra nº de productos, origen 
   assert.match(nodes.jsonImpSumSource.textContent, /JSON pegado/);
   assert.match(nodes.jsonImpSumTarget.textContent, /Automático/);
   nodes.jsonImpText.value = '{no json'; nodes.jsonImpText.fire('input');
-  await wait(320);
+  await waitDebounce();
   assert.equal(nodes.jsonImpSumCount.textContent, 'JSON no válido');
   nodes.jsonImpClear.fire('click');
   assert.equal(nodes.jsonImpActionZone.hidden, true);
@@ -244,12 +284,12 @@ function reviewingServer() {
 test('la moneda de lo cargado se muestra ANTES de importar y avisa si no es EUR', async () => {
   const { nodes } = makeClient(reviewingServer().fn);
   paste(nodes, [usd(1), usd(2)]);
-  await wait(320);
+  await waitDebounce();
   assert.ok(nodes.jsonImpSumCurrency.textContent.includes('USD (2)'));
   assert.match(nodes.jsonImpSumCurrency.textContent, /NO es EUR/);
   assert.match(nodes.jsonImpSumCurrency.textContent, /no se convierte/);
   paste(nodes, [temuRec(1), temuRec(2)]);
-  await wait(320);
+  await waitDebounce();
   assert.equal(nodes.jsonImpSumCurrency.textContent, 'EUR (2)');
 });
 
@@ -344,7 +384,7 @@ test('el JSON pegado no dispara comprobaciones por su cuenta: indica cómo ver c
   const f = fakeServer();
   const { nodes } = makeClient(f.fn);
   paste(nodes, [amz(1), amz(2, 'existing')]);
-  await wait(320);
+  await waitDebounce();
   assert.equal(f.log.imports.length, 0);
   assert.ok(nodes.jsonImpSumStatus.textContent.includes('Pulsa «Simular importación»'));
 });
@@ -442,7 +482,7 @@ test('Temu producto individual: una URL sin mercado se envía como ficha españo
   assert.deepEqual(log.posts, [{ source: 'temu', url: 'https://www.temu.com/es/-g-601101683713758.html', limit: 1 }]);
   assert.equal(nodes.jsonImpSource.value, 'temu');
   assert.ok(nodes.jsonImpTemuHint.textContent.length > 0, 'el estado se refleja en el bloque individual');
-  await wait(3500); // consulta de estado (3 s)
+  await waitFor(() => nodes.jsonImpActionZone.hidden === false); // consulta de estado (3 s)
   assert.equal(nodes.jsonImpActionZone.hidden, false);
   assert.equal(nodes.jsonImpSumCount.textContent, '1');
   assert.ok(nodes.jsonImpSumSource.textContent.includes('URL de producto de Temu'), nodes.jsonImpSumSource.textContent);
@@ -463,7 +503,7 @@ test('Temu enlace corto de afiliado: el bloque lo acepta, lo envía TAL CUAL al 
   assert.deepEqual(log.posts, [{ source: 'temu', url: 'https://temu.to/k/gk2abc9xyz', limit: 1 }], 'el servidor resuelve el enlace: el cliente no toca la URL');
   assert.ok(nodes.jsonImpTemuHint.textContent.includes('Enlace de afiliado reconocido (temu.to/k/gk2abc9xyz) → producto 601101683713758'), nodes.jsonImpTemuHint.textContent);
   assert.ok(nodes.jsonImpTemuHint.textContent.includes('separado del enlace de origen'));
-  await wait(3500);
+  await waitFor(() => nodes.jsonImpSumSource.textContent.includes('enlace corto de afiliado de Temu'));
   assert.ok(nodes.jsonImpSumSource.textContent.includes('enlace corto de afiliado de Temu'), nodes.jsonImpSumSource.textContent);
   assert.equal(nodes.jsonImpSumCount.textContent, '1');
   assert.ok(nodes.jsonImpAlert.textContent.includes('Enlace de afiliado reconocido: se guardará como enlace de afiliado'), nodes.jsonImpAlert.textContent);

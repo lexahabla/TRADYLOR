@@ -51,11 +51,25 @@ const listingMode = Boolean(queryParam) || filtersActive;
 // nunca lanza: ante cualquier fallo devuelve «legacy» y se pinta la portada de siempre (secciones, catálogo, método). Con búsqueda o filtros
 // activos los resultados comerciales mandan, como hasta ahora: no se pinta nada editorial.
 const publicHome = listingMode ? null : buildPublicHome();
-const layoutHome = publicHome && publicHome.mode === 'layout' ? publicHome : null;
+let layoutHome = publicHome && publicHome.mode === 'layout' ? publicHome : null;
 const layoutProducts: Record<string, any> = {};
 if (layoutHome) {
   const wanted = new Set([...layoutHome.top, ...layoutHome.bottom].flatMap((b) => b.productIds));
   for (const p of allProducts) if (wanted.has(p.id)) layoutProducts[p.id] = p;
+  // Renderizado protegido: un error DENTRO de un componente se produce a mitad del flujo de salida y dejaría la página rota (200 con «Internal server
+  // error»). Por eso los componentes de la portada nueva se renderizan primero «en seco» (sin efectos: no escriben ni consultan nada; los scripts del
+  // navegador no se ejecutan aquí). Si algo lanza o el resultado queda vacío, se pinta la portada de siempre completa.
+  try {
+    const { experimental_AstroContainer: AstroContainer } = await import('astro/container');
+    const container = await AstroContainer.create();
+    const topHtml = await container.renderToString(HomeLayoutBlocks, { props: { blocks: layoutHome.top, products: layoutProducts, region: 'top' } });
+    const bottomHtml = await container.renderToString(HomeLayoutBlocks, { props: { blocks: layoutHome.bottom, products: layoutProducts, region: 'bottom' } });
+    await container.renderToString(HomeStories, { props: { stories: layoutHome.stories } });
+    if (!topHtml.includes('data-home-layout="top"') && !bottomHtml.includes('data-home-layout="bottom"')) throw new Error('la portada nueva no produjo contenido');
+  } catch (error) {
+    console.error('[portada] el renderizado de prueba falló; se sirve la portada de siempre:', String(error).slice(0, 300));
+    layoutHome = null;
+  }
 }
 const belowSectionsToRender = layoutHome ? [] : belowCatalogSections;
 // El panel de filtros sólo aparece al buscar (buscador de la cabecera) o al elegir una categoría; con filtros ya en la URL también, para no ocultarlos.

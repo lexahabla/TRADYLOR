@@ -197,3 +197,73 @@ test('rendimiento: 2.000 productos, 60 bloques y 20 secciones se resuelven en ti
   console.log(`  buildPublicHome con 2.000 productos y 60 bloques: ${ms.toFixed(0)} ms`);
   assert.ok(ms < 1500, `tardó ${ms} ms`);
 });
+
+/* ───────── Recuperación (cierre de la etapa 6) ───────── */
+const LEGACY_SHAPE = (h) => assert.deepEqual(Object.keys(h).sort(), ['mode', 'reason'], 'la recuperación devuelve SOLO «legacy» + motivo: nunca contenido parcial');
+
+test('recuperación: cualquier fallo de almacenamiento, de versión o de catálogo devuelve la portada de siempre completa (sin contenido parcial)', () => {
+  seed();
+  const d = docWith([ver(1, [blk('m1')])]);
+  const okAct = { status: 'ok', doc: { schemaVersion: 1, active: true, pinnedVersion: 1, updatedAt: 'x', log: [] }, errors: [] };
+  const boom = () => { throw new Error('fallo simulado'); };
+  const normal = Pub.buildPublicHome(deps(d, 1));
+  assert.equal(normal.mode, 'layout', 'sin errores funciona con normalidad');
+  assert.ok(normal.top.length + normal.bottom.length > 0);
+  const cases = {
+    'portada dañada': { layout: () => ({ status: 'corrupt', doc: d, errors: [] }) },
+    'portada inválida': { layout: () => ({ status: 'invalid', doc: d, errors: [] }) },
+    'portada de esquema más nuevo': { layout: () => ({ status: 'newer', doc: d, errors: [] }) },
+    'portada ausente': { layout: () => ({ status: 'missing', doc: d, errors: [] }) },
+    'lectura de la portada lanza': { layout: boom },
+    'activación dañada': { activation: () => ({ ...okAct, status: 'corrupt' }) },
+    'activación ausente': { activation: () => ({ ...okAct, status: 'missing' }) },
+    'lectura de la activación lanza': { activation: boom },
+    'versión activada inexistente': { activation: () => ({ ...okAct, doc: { ...okAct.doc, pinnedVersion: 42 } }) },
+    'versión activada sin bloques': { layout: () => ({ status: 'ok', doc: docWith([ver(1, [])]), errors: [] }) },
+    'catálogo lanza': { sources: boom },
+    'secciones lanzan': { sectionDescriptions: boom },
+  };
+  for (const [name, over] of Object.entries(cases)) {
+    const h = Pub.buildPublicHome({ ...deps(d, 1), ...over });
+    assert.equal(h.mode, 'legacy', name);
+    LEGACY_SHAPE(h);
+  }
+});
+
+test('recuperación: un fallo en Historias NO tumba la portada (se omiten sólo las historias) y un almacén de historias dañado tampoco', () => {
+  seed();
+  const d = docWith([ver(1, [blk('m1')])]);
+  const boom = () => { throw new Error('fallo simulado'); };
+  for (const stories of [boom, () => ({ status: 'corrupt', doc: { schemaVersion: 1, draft: { stories: [], updatedAt: null } }, errors: [] }), () => ({ status: 'newer', doc: { schemaVersion: 1, draft: { stories: [], updatedAt: null } }, errors: [] })]) {
+    const h = Pub.buildPublicHome(deps(d, 1, { stories }));
+    assert.equal(h.mode, 'layout');
+    assert.deepEqual(h.stories, []);
+    assert.deepEqual(ids(h.top), ['m1']);
+  }
+});
+
+test('recuperación: contenido inexistente nunca produce una portada vacía (todo omitido → portada de siempre)', () => {
+  seed();
+  const empty = docWith([ver(1, [blk('a', { refs: [{ kind: 'product', id: 'p404' }] }), blk('b', { modality: 'seccion', config: {}, refs: [{ kind: 'section', id: 'no-existe' }] })])]);
+  const h = Pub.buildPublicHome(deps(empty, 1));
+  assert.deepEqual(h, { mode: 'legacy', reason: 'sin_contenido_visible' });
+});
+
+const read = (p) => fs.readFileSync(new URL(`../../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+test('estático: index.astro protege el renderizado (render de prueba con el contenedor de Astro, try/catch y vuelta a la portada de siempre) sin middleware ni cachés', () => {
+  const idx = read('src/pages/index.astro');
+  assert.match(idx, /experimental_AstroContainer/);
+  assert.match(idx, /await import\('astro\/container'\)/);
+  for (const t of ["HomeLayoutBlocks, { props: { blocks: layoutHome.top", "HomeLayoutBlocks, { props: { blocks: layoutHome.bottom", 'HomeStories, { props: { stories: layoutHome.stories']) assert.ok(idx.includes(t), `protege: ${t}`);
+  assert.match(idx, /catch \(error\)[\s\S]{0,260}layoutHome = null;/, 'ante un error se descarta la portada nueva');
+  assert.match(idx, /let layoutHome = /);
+  // el render de prueba va ANTES de decidir qué secciones se pintan y de pintar nada
+  assert.ok(idx.indexOf('layoutHome = null;') < idx.indexOf('const belowSectionsToRender'), 'la decisión final precede a las listas de secciones');
+  assert.ok(idx.indexOf('layoutHome = null;') < idx.indexOf('<Layout title='), 'y al marcado de la página');
+  // la portada de siempre sigue intacta (líneas originales presentes)
+  for (const t of ["const aboveCatalogSections = listingMode ? [] : aboveCatalogSectionsAll;", '<MethodSection />', 'class="hero-title"', 'id="catalogo"', 'const belowCatalogSections = publishedSections.filter']) assert.ok(idx.includes(t), t);
+  const guard = idx.slice(idx.indexOf('Renderizado protegido'), idx.indexOf('layoutHome = null;'));
+  assert.doesNotMatch(guard, /cache|memo|new Map|globalThis|setTimeout/i, 'sin caché adicional');
+  assert.doesNotMatch(read('src/middleware.ts'), /homeLayout|home-layout|AstroContainer/, 'middleware.ts no se toca');
+  for (const c of ['src/components/home/HomeLayoutBlocks.astro', 'src/components/home/HomeStories.astro']) assert.doesNotMatch(read(c), /writeFile|fs\.|fetch\(|process\.env|cookies\.set|Astro\.response/, `${c} no tiene efectos secundarios (el render de prueba lo ejecuta dos veces)`);
+});
