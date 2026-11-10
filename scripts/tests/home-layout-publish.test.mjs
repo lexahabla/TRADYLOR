@@ -411,6 +411,8 @@ test('estático: el módulo de publicación es puro, los endpoints no activan na
   assert.equal((client.match(/home-layout\/preview', \{\s*method: 'POST'/g) ?? []).length, 1, 'el otro POST es la previsualización de sólo lectura');
   // Etapa 6 añade el POST de activar/desactivar (confirmación explícita en el servidor y en el cliente): uno solo.
   assert.equal((client.match(/home-layout\/activation', \{\s*method: 'POST'/g) ?? []).length, 1, 'un único punto de activación/desactivación');
-  assert.equal((client.match(/method: 'POST'/g) ?? []).length, 3);
-  assert.equal((client.match(/confirm: true/g) ?? []).length, 2, 'publicar y activar siempre con confirm: true');
+  // Carga de la portada inicial (v1): un cuarto POST, con confirmación explícita, sólo sobre portada virgen (ver home-layout-initial.test.mjs).
+  assert.equal((client.match(/home-layout\/initial', \{\s*method: 'POST'/g) ?? []).length, 1, 'un único punto de carga inicial');
+  assert.equal((client.match(/method: 'POST'/g) ?? []).length, 4);
+  assert.equal((client.match(/confirm: true/g) ?? []).length, 3, 'publicar, activar y cargar la portada inicial siempre con confirm: true');
 });

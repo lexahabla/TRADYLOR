@@ -36,6 +36,10 @@ El menú «Top Selecciones» del encabezado (junto a «Lo más vendido» y «Mej
 - **Reversión:** borrar `nav-top-sections.json` devuelve el menú al automático de siempre.
 - **API:** `GET/PUT/POST /api/admin/top-selections` (admin, CSRF `sameOrigin` + `X-Home-Layout-Editor: 1`, ≤ 8 KiB, ≤ 30 secciones, sin duplicados). Código: `src/lib/topSelections.ts`, `src/scripts/topSelectionsAdmin.ts`. Pruebas: `top-selections.test.mjs`.
 
+## Portada inicial en una sola acción
+
+Con la portada virgen (sin borrador, versiones ni activación) la pestaña «B · Publicación y versiones» muestra la tarjeta **«Portada inicial»**: «Cargar, publicar y activar la portada inicial…» (con confirmación) guarda 7 bloques conectados al catálogo real (bienvenida editorial, tarjetas de categoría, «Los más económicos», «Más económicos en Amazon» y carruseles de Portabilidad, Informática y Sonido por precio ascendente), publica la v1 y la deja fijada y activada internamente. NO sobrescribe nada (si existe cualquier borrador, versión o activación se rechaza con 409), se rechaza (422) si algún bloque no puede mostrarse con los datos reales, y si falla la escritura se deshace. La web pública no cambia hasta `HOME_LAYOUT_ENABLED=true`. API: `GET/POST /api/admin/home-layout/initial`; código en `homeLayout/initialLayout.ts`; pruebas `home-layout-initial.test.mjs`. Después todo se edita desde el editor.
+
 ## Procedimiento de activación (producción)
 
 1. Publicar el código (merge a `main` + push → despliegue automático). Con `HOME_LAYOUT_ENABLED` sin definir **la web no cambia**. Comprobar `GET /api/health` (`sourceHash`).

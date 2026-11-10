@@ -667,6 +667,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     msg: null as Msg,
     detail: null as null | { title: string; kind: 'preview' | 'compare'; blocks?: Block[]; changes?: DiffEntry[]; chip?: string; data?: PvData },
     busy: false,
+    initial: null as null | { available: boolean; reason?: string; message?: string; blocks: Array<{ id: string; title: string; modality: string; format: string; width: number }>; check: { canLoad: boolean; blocking: BlockingIssue[]; warnings: BlockingIssue[]; visibleBlocks: number; totalBlocks: number }; draftRevision: string; activationRevision: string; gates: { env: boolean } },
     act: null as null | { gates: { stage: boolean; env: boolean; adminFlag: boolean; activeFile: boolean; pinnedVersion: number | null }; revision: string; log: Array<{ at: string; by: string; action: string; version: number | null; result: string; note?: string }>; storage: { layout: string; activation: string } },
   };
   const dateTxt = (iso: string) => new Date(iso).toLocaleString('es-ES');
@@ -697,6 +698,8 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     vs.loading = true; vs.error = ''; renderVersions();
     const r = await api('/api/admin/home-layout/versions');
     const a = await api('/api/admin/home-layout/activation');
+    const ini = await api('/api/admin/home-layout/initial');
+    vs.initial = ini.status === 200 && ini.body?.success ? ini.body : null;
     vs.act = a.status === 200 && a.body?.success ? { gates: a.body.gates, revision: a.body.revision, log: a.body.log, storage: a.body.storage } : null;
     vs.loading = false;
     if (r.status === 200 && r.body?.success) {
@@ -810,6 +813,38 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     } else { await loadVersions(); vsay({ kind: 'error', text: explain(r) }); }
   }
 
+  /* ---- Portada inicial: cargar, publicar y activar internamente (v1) en una sola acción ---- */
+  function initialPanel(): HTMLElement {
+    const ini = vs.initial;
+    if (!ini || !ini.available) return h('div', { hidden: true });
+    const box = h('div', { class: 'pe-box pe-act' }, h('h3', {}, 'Portada inicial'));
+    box.append(h('p', { class: 'pe-note' }, 'Todavía no hay ninguna portada. Con un solo paso se cargan 7 bloques que se rellenan solos con los productos reales del catálogo (bienvenida, categorías y los más económicos), se publica la versión 1 y se deja activada internamente. Después podrás modificarlo todo en este editor. La web pública no cambia hasta que el servidor tenga HOME_LAYOUT_ENABLED=true.'));
+    box.append(h('ul', { class: 'pe-diff' }, ...ini.blocks.map((b) => h('li', {}, h('span', { class: 'pe-dk is-added', 'aria-hidden': 'true' }, '＋'), h('span', {}, `${b.title} (${b.modality}, ${b.format})`)))));
+    if (!ini.check.canLoad) box.append(h('div', {}, h('div', { class: 'pe-sub' }, `No se puede cargar con los datos actuales (${ini.check.blocking.length})`), issueList(ini.check.blocking)));
+    box.append(h('div', { class: 'pe-vact' }, h('button', { class: 'pe-btn pe-primary', type: 'button', disabled: vs.busy || !ini.check.canLoad, onclick: () => { void startInitial(); } }, 'Cargar, publicar y activar la portada inicial…')));
+    return box;
+  }
+  async function startInitial() {
+    const ini = vs.initial;
+    if (vs.busy || !ini || !ini.available) return;
+    const body = h('div', { class: 'pe-confirm-body' },
+      h('p', { class: 'pe-note' }, `Se guardarán ${ini.check.totalBlocks} bloques como borrador, se publicará la versión 1 y quedará fijada y activada internamente (${ini.check.visibleBlocks} de ${ini.check.totalBlocks} bloques se mostrarían). No se sobrescribe nada: solo funciona si todavía no existe ninguna portada. ${ini.gates.env ? 'ATENCIÓN: el servidor ya tiene HOME_LAYOUT_ENABLED=true, así que la portada nueva se verá públicamente al confirmar.' : 'La web seguirá mostrando la portada actual hasta definir HOME_LAYOUT_ENABLED=true en el servidor.'} Podrás volver a la portada anterior con «Desactivar».`),
+      ini.check.warnings.length ? h('div', {}, h('div', { class: 'pe-sub' }, `Avisos (${ini.check.warnings.length}) — no bloquean`), issueList(ini.check.warnings)) : null);
+    if (!(await confirmBox('Cargar la portada inicial', 'Se cargan, publican y activan internamente los 7 bloques de la portada inicial.', 'Cargar y activar', false, body, !ini.check.canLoad))) return;
+    vs.busy = true; renderVersions();
+    const r = await api('/api/admin/home-layout/initial', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Home-Layout-Editor': '1' }, body: JSON.stringify({ action: 'load_initial', baseRevision: ini.draftRevision, baseActivation: ini.activationRevision, confirm: true }) });
+    vs.busy = false;
+    if (r.status === 200 && r.body?.success) {
+      state.dirty = false;
+      await load();
+      await loadVersions();
+      vsay({ kind: 'ok', text: `Portada inicial cargada: versión ${r.body.version} publicada y activada internamente.${r.body.envEnabled ? '' : ' La web pública no cambia hasta definir HOME_LAYOUT_ENABLED=true en el servidor.'}` });
+    } else {
+      await loadVersions();
+      vsay({ kind: 'error', text: r.status === 409 ? 'Ya existe una portada o el estado cambió: no se ha sobrescrito nada.' : r.status === 422 ? 'Hay bloques que no se pueden mostrar con los datos actuales: no se ha cargado nada.' : r.status === 423 ? 'El almacenamiento está protegido: no se sobrescribe.' : 'No se pudo cargar la portada inicial. La web sigue como estaba.' });
+    }
+  }
+
   /* ---- Activación (etapa 6) ---- */
   function activationPanel(): HTMLElement {
     const a = vs.act;
@@ -892,7 +927,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
       h('button', { class: 'pe-btn', type: 'button', disabled: !vs.published || vs.busy, onclick: () => { void compareWith('published', 'draft', 'Publicada → borrador guardado'); } }, 'Comparar publicada con borrador'),
       h('button', { class: 'pe-btn', type: 'button', disabled: vs.loading, onclick: () => { void loadVersions(); } }, 'Actualizar'),
       state.dirty ? h('span', { class: 'pe-note pe-warn' }, 'Hay cambios sin guardar: sólo se publica lo guardado.') : null);
-    versionsPane.append(head, actions, activationPanel());
+    versionsPane.append(head, initialPanel(), actions, activationPanel());
     if (vs.msg) versionsPane.append(h('p', { class: `pe-msg is-${vs.msg.kind}`, role: vs.msg.kind === 'error' ? 'alert' : undefined }, vs.msg.text));
     if (vs.loading && !vs.loaded) { versionsPane.append(h('p', { class: 'pe-empty' }, 'Cargando el historial…')); return; }
     if (vs.error) { versionsPane.append(h('p', { class: 'pe-msg is-error', role: 'alert' }, vs.error)); return; }
