@@ -89,3 +89,10 @@ src/data/deleted-product-ids.json
 # logs locales de desarrollo (npm run dev)
 dev-*.log
 server-*.log
+
+
+# portada editable y menú Top Selecciones (se generan en el volumen/local, nunca en el repo)
+src/data/home-layout.json
+src/data/home-layout-activation.json
+src/data/home-stories.json
+src/data/nav-top-sections.json
