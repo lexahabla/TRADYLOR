@@ -103,6 +103,7 @@ scripts/tests/source-fingerprint.test.mjs
 scripts/tests/stock-and-specs.test.mjs
 scripts/tests/temu-extract.test.mjs
 scripts/tests/temu-shortlink.test.mjs
+scripts/tests/top-selections.test.mjs
 scripts/ts-resolve-hooks.mjs
 src/components/AdminNav.astro
 src/components/AdminUserMenu.astro
@@ -289,6 +290,7 @@ src/lib/specExtract.ts
 src/lib/specsView.ts
 src/lib/stock.ts
 src/lib/temuShortLink.ts
+src/lib/topSelections.ts
 src/lib/userProfiles.ts
 src/lib/userStore.ts
 src/lib/validateProducts.ts
@@ -343,6 +345,7 @@ src/pages/api/admin/sections.ts
 src/pages/api/admin/sections/suggestions.ts
 src/pages/api/admin/sync-prices.ts
 src/pages/api/admin/synthesize-title.ts
+src/pages/api/admin/top-selections.ts
 src/pages/api/admin/tombstones/index.ts
 src/pages/api/admin/upload-image.ts
 src/pages/api/admin/users/[id].ts
@@ -433,6 +436,7 @@ src/pages/upayp1b4/usuarios.astro
 src/styles/tailwind.css
 src/scripts/homeLayoutEditor.ts
 src/scripts/homeLayoutStories.ts
+src/scripts/topSelectionsAdmin.ts
 src/types/buyerProfile.ts
 src/types/radar.ts
 src/utils/affiliate.ts

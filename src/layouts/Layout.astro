@@ -21,7 +21,7 @@ import { getCategories, type Category } from '../lib/categories';
 // Utilidades Tailwind (Tráfico y Ventas, su Glosario, Mi Radar): ver el
 // comentario de cabecera de ese fichero sobre por qué es imprescindible.
 import '../styles/tailwind.css';
-import { readSections } from '../lib/sections';
+import { resolveTopSelectionsNav } from '../lib/topSelections';
 
 const {
   title = "Treidilor | Portal de Curación, Recomendaciones y Comparativas de Productos",
@@ -66,11 +66,9 @@ for (const cat of headerCategories) {
 }
 const headerHueOf = (index: number) => (index * 43) % 360;
 
-// "Top Selecciones" del mainNav: secciones creadas desde el panel admin
-// ("Secciones de la web") + las dos opciones fijas (ventas/valoración).
-const navTopSections = (readSections() || [])
-  .filter((s) => s.published)
-  .sort((a, b) => a.order - b.order);
+// "Top Selecciones" del mainNav: las secciones que el administrador eligió y ordenó a mano ("Secciones de la web" → «Menú Top Selecciones»), sólo
+// si su ancla existe de verdad en la portada (ver lib/topSelections.ts), + las dos opciones fijas (ventas/valoración).
+const navTopSections = isBackend ? [] : resolveTopSelectionsNav().items;
 
 // HTML del panel de categorías del buscador de cabecera (inyectado con set:html).
 const headerCategoryPanelHtml = `

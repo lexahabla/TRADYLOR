@@ -25,6 +25,17 @@ Cualquier otro fallo (archivos dañados o de esquema más nuevo, versión fijada
 
 Publicar una versión interna **no cambia la web**. La web sirve la versión que se **fijó al activar**. Para cambiarla hay que pulsar «Activar vN…» (con su validación y confirmación). Guardado en `home-layout-activation.json` (volumen, no va a git; escritura atómica + `.bak`; archivo dañado/no válido/más nuevo = no se sobrescribe y la web sirve la portada de siempre).
 
+## Menú «Top Selecciones» (gestión manual)
+
+El menú «Top Selecciones» del encabezado (junto a «Lo más vendido» y «Mejor valorados», que son fijos) lo administra el administrador desde **Secciones de la web → «Menú Top Selecciones»**: elegir qué secciones salen, ordenarlas con ▲▼, añadir/retirar (sin eliminar la sección) y «Guardar menú». Es independiente del `order` y de la posición de la portada y de la visibilidad de los bloques de la portada nueva, y funciona igual con la portada de siempre y con la nueva.
+
+- **Almacenamiento:** `nav-top-sections.json` en el volumen (no va a git; atómico + `.bak`; control de revisión; un archivo dañado/no válido/más nuevo NO se sobrescribe: el menú vuelve al automático de siempre, el panel avisa y ofrece «Recuperar copia»). `sections.json` no se toca.
+- **Inicio:** sin archivo el menú es AUTOMÁTICO (todas las publicadas, como hasta ahora). «Fijar el menú actual» (o guardar) lo pasa a manual conservando las actuales.
+- **Crear una sección NO la añade:** `POST /api/admin/sections` fija antes el menú vigente si todavía no hay configuración manual; si no se puede fijar (archivo dañado o fallo de escritura) la sección NO se crea (423/500) y, si falla la creación después, se deshace la copia fija.
+- **Enlaces válidos:** el encabezado sólo enlaza `/#section-<id>` si esa sección se renderiza en la portada `/`: portada de siempre = publicada y con productos; portada nueva = las que pinta el plan público (un bloque oculto o una sección no incluida ⇒ sin enlace). Lo guardado no se modifica; el administrador ve el aviso por sección. En búsquedas y filtros los enlaces siguen apuntando a `/#section-…` (la portada).
+- **Reversión:** borrar `nav-top-sections.json` devuelve el menú al automático de siempre.
+- **API:** `GET/PUT/POST /api/admin/top-selections` (admin, CSRF `sameOrigin` + `X-Home-Layout-Editor: 1`, ≤ 8 KiB, ≤ 30 secciones, sin duplicados). Código: `src/lib/topSelections.ts`, `src/scripts/topSelectionsAdmin.ts`. Pruebas: `top-selections.test.mjs`.
+
 ## Procedimiento de activación (producción)
 
 1. Publicar el código (merge a `main` + push → despliegue automático). Con `HOME_LAYOUT_ENABLED` sin definir **la web no cambia**. Comprobar `GET /api/health` (`sourceHash`).

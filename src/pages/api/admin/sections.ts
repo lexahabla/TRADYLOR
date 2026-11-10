@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requireAdminAuth } from '../../../lib/adminAuth';
+import { ensureSnapshot, removeSnapshot } from '../../../lib/topSelections';
 import { readSections, upsertSection, deleteSection, findSection, slugifySection, type WebSection, type SectionSpeed } from '../../../lib/sections';
 
 export const prerender = false;
@@ -43,7 +44,20 @@ export const POST: APIRoute = async ({ request }) => {
       speed,
       createdAt: existing?.createdAt || (body?.createdAt ? String(body.createdAt) : new Date().toISOString()),
     };
+    // Crear una sección NO la añade al menú «Top Selecciones»: antes se fija el menú vigente (si todavía no hay configuración manual). Si no se puede
+    // fijar, la sección NO se crea (sin estados parciales); si la creación falla después, se deshace la copia fija recién hecha.
+    let snapshotCreated = false;
+    if (!existing) {
+      const snap = ensureSnapshot();
+      if (!snap.ok) {
+        return new Response(JSON.stringify({ success: false, code: snap.reason, message: `No se creó la sección: ${snap.errors[0] ?? 'no se pudo fijar el menú «Top Selecciones»'}` }), {
+          status: snap.reason === 'archivo_protegido' ? 423 : 500, headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      snapshotCreated = snap.created;
+    }
     const ok = upsertSection(section);
+    if (!ok && snapshotCreated) removeSnapshot();
     return new Response(JSON.stringify({ success: ok, section }), {
       status: ok ? 200 : 500, headers: { 'Content-Type': 'application/json' },
     });

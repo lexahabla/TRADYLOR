@@ -909,6 +909,7 @@ const h = headerConfig[initialSection] || headerConfig.products;
           </div>
         </div>
         <div id="sectionsListAdmin" class="sections-list-admin"></div>
+        <div id="topSelectionsAdmin" aria-label="Menú Top Selecciones"></div>
       </div>
     </section>
 
@@ -2182,6 +2183,12 @@ const h = headerConfig[initialSection] || headerConfig.products;
 <script>
   import { filterAliCatalog, mountAliFilters, queryAliCatalog, storeTierOf } from '../utils/aliCatalogFilters';
   window.tradylorAliFilters = { filterAliCatalog, mountAliFilters, queryAliCatalog, storeTierOf };
+</script>
+
+<!-- Subpanel «Menú Top Selecciones» (fuera del condicional, como el script anterior; sólo actúa si existe #topSelectionsAdmin, que es exclusivo del admin). -->
+<script>
+  import { initTopSelectionsAdmin } from '../scripts/topSelectionsAdmin';
+  initTopSelectionsAdmin();
 </script>
 
 {isAuthenticated && sessionUser && sessionUser.role === 'admin' && (
