@@ -7,7 +7,7 @@
  * dinámico se crea con `textContent` (nunca `innerHTML`).
  *   · carga con GET /api/admin/home-layout/stories (no guarda nada al cargar);
  *   · guarda ÚNICAMENTE al pulsar «Guardar historias» (PUT con control de revisiones); no hay guardado automático;
- *   · «Publicada» es INTERNO: no se muestra en la web pública (la integración es de la etapa 6);
+ *   · «Publicada» se muestra en la web SOLO con la portada nueva activada y sin errores (etapa 6); un borrador nunca se muestra;
  *   · las imágenes se eligen del catálogo o se suben con la API existente `/api/admin/upload-image` (sin modificarla).
  * ==============================================================================
  */
@@ -83,7 +83,7 @@ export function initHomeLayoutStories(root: HTMLElement, deps: StoriesDeps): { a
     issues: [] as StoryIssue[],
     msg: null as Msg,
     blocking: [] as StoryIssue[],
-    picker: { open: false, q: '', items: [] as CatalogItem[], loading: false, error: '' },
+    picker: { open: true, q: '', items: [] as CatalogItem[], loading: false, error: '' },
     uploading: false,
   };
   const categories: CatOption[] = [];
@@ -205,7 +205,7 @@ export function initHomeLayoutStories(root: HTMLElement, deps: StoriesDeps): { a
   /* ---- Vistas ---- */
   const img = (src: string, cls = '') => h('img', { src: src || FALLBACK_IMAGE, alt: '', class: cls, loading: 'lazy', referrerpolicy: 'no-referrer', onerror: (e: any) => { e.target.style.visibility = 'hidden'; } });
   const issuesOf = (id: string, idx?: number) => S.issues.filter((i) => i.storyId === id && (idx === undefined || i.screenIndex === idx || i.screenIndex === undefined));
-  const chip = (s: Story) => h('span', { class: `pe-chip-s${s.status === 'publicada' ? '' : ' is-alt'}` }, s.status === 'publicada' ? 'Publicada internamente' : 'Borrador');
+  const chip = (s: Story) => h('span', { class: `pe-chip-s${s.status === 'publicada' ? '' : ' is-alt'}` }, s.status === 'publicada' ? 'Publicada' : 'Borrador');
 
   function renderList(): HTMLElement {
     const box = h('aside', { class: 'pe-box ps-list' }, h('h3', {}, 'Historias'),
@@ -258,8 +258,9 @@ export function initHomeLayoutStories(root: HTMLElement, deps: StoriesDeps): { a
       dest.append(
         h('p', { class: 'pe-note' }, `Actual: ${labels.get(`product:${link.target}`) ?? link.target}`),
         h('input', { type: 'search', maxlength: 80, placeholder: 'Buscar producto…', 'aria-label': 'Buscar producto de destino', value: destQuery, oninput: (e: any) => { const q = e.target.value.trim(); destQuery = e.target.value; window.clearTimeout(destTimer); destTimer = window.setTimeout(() => { void searchDest(q); }, 250); } }),
-        h('ul', { class: 'pe-results', id: 'psDestResults', 'aria-label': 'Resultados' }, ...destResults.map((p) => h('li', {}, h('span', { class: 'pe-ref-l' }, p.title, p.price !== null ? h('small', {}, ` · ${p.price.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}`) : h('small', { class: 'pe-warn' }, ' · sin precio')),
-          h('button', { class: 'pe-btn pe-sm', type: 'button', onclick: () => { labels.set(`product:${p.id}`, p.title); setLinkPatch({ type: 'product', target: p.id }); } }, 'Elegir')))));
+        h('select', { id: 'psDestResults', 'aria-label': 'Producto de destino (resultados de la búsqueda)', onchange: (e: any) => { const p = destResults.find((x) => x.id === e.target.value); if (p) { labels.set(`product:${p.id}`, p.title); setLinkPatch({ type: 'product', target: p.id }); } } },
+          h('option', { value: '' }, destResults.length ? 'Elige un producto…' : 'Escribe para buscar…'),
+          ...destResults.map((p) => h('option', { value: p.id, selected: p.id === link.target }, `${p.title.slice(0, 70)}${p.price !== null ? ` · ${p.price.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}` : ' · sin precio'}`))));
     } else if (link?.type === 'category') {
       dest.append(h('select', { 'aria-label': 'Categoría de destino', onchange: (e: any) => { if (e.target.value) setLinkPatch({ type: 'category', target: e.target.value }); } },
         h('option', { value: '' }, 'Elige…'), ...categories.map((c) => h('option', { value: c.id, selected: c.id === link.target }, `${c.parentId ? '— ' : ''}${c.name}`))));
@@ -273,8 +274,8 @@ export function initHomeLayoutStories(root: HTMLElement, deps: StoriesDeps): { a
       h('div', { class: 'pe-two' },
         field('Nombre de la historia', h('input', { type: 'text', id: 'psName', value: st.name, maxlength: 60, 'data-fk': 'name', oninput: (e: any) => { S.stories = updateStory(S.stories, st.id, { name: e.target.value }); S.dirty = isDirty(); renderBar(); renderViewer(); renderListOnly(); } })),
         field('Estado', h('select', { 'aria-label': 'Estado de la historia', onchange: (e: any) => set(updateStory(S.stories, st.id, { status: e.target.value }), {}) },
-          h('option', { value: 'borrador', selected: st.status === 'borrador' }, 'Borrador'), h('option', { value: 'publicada', selected: st.status === 'publicada' }, 'Publicada internamente')),
-        'Publicada es interno: la web pública no cambia.')),
+          h('option', { value: 'borrador', selected: st.status === 'borrador' }, 'Borrador'), h('option', { value: 'publicada', selected: st.status === 'publicada' }, 'Publicada')),
+        'Una historia publicada y sin errores se verá en la web cuando la portada nueva esté activada. Los borradores nunca se muestran.')),
       field(`Imagen de la pantalla ${S.screen + 1} (vertical 9:16)`, h('div', {},
         h('div', { class: 'ps-imgrow' }, img(sc.image, 'ps-curimg'),
           h('div', { class: 'ps-imgctl' },
@@ -289,7 +290,7 @@ export function initHomeLayoutStories(root: HTMLElement, deps: StoriesDeps): { a
         field('Texto del botón', text(sc.buttonLabel ?? '', 40, (v) => optionalTextQuiet('buttonLabel', v), 'psBtn')),
         field('Duración', h('select', { id: 'psDur', 'aria-label': 'Duración', onchange: (e: any) => patchScreen({ duration: Number(e.target.value) as StoryScreen['duration'] }) }, ...DURATIONS.map((d) => h('option', { value: d, selected: sc.duration === d }, `${d} s`))))),
       h('div', { class: 'pe-two' },
-        field('El botón enlaza a', h('select', { id: 'psLinkType', 'aria-label': 'Tipo de destino', onchange: (e: any) => { destResults = []; destQuery = ''; const t = e.target.value as StoryLinkType | ''; setLinkPatch(t ? { type: t, target: '' } as StoryLink : undefined); } },
+        field('El botón enlaza a', h('select', { id: 'psLinkType', 'aria-label': 'Tipo de destino', onchange: (e: any) => { destResults = []; destQuery = ''; const t = e.target.value as StoryLinkType | ''; setLinkPatch(t ? { type: t, target: '' } as StoryLink : undefined); if (t === 'product') void searchDest(''); } },
           h('option', { value: '' }, 'Sin enlace'), ...(Object.keys(LINK_LABEL) as StoryLinkType[]).map((k) => h('option', { value: k, selected: link?.type === k }, LINK_LABEL[k])))),
         link ? field('Destino', dest) : h('div', {})),
       h('div', { class: 'ps-actions' },
@@ -352,8 +353,8 @@ export function initHomeLayoutStories(root: HTMLElement, deps: StoriesDeps): { a
         h('button', { type: 'button', 'aria-pressed': String(S.device === 'desktop'), onclick: () => { S.device = 'desktop'; renderViewer(); } }, '🖥 Escritorio'),
         h('button', { type: 'button', 'aria-pressed': String(S.device === 'mobile'), onclick: () => { S.device = 'mobile'; renderViewer(); } }, '📱 Móvil')));
     const published = S.stories.filter((s) => s.status === 'publicada');
-    const circles = h('div', { class: 'ps-circles', role: 'list', 'aria-label': 'Historias publicadas internamente, en orden' },
-      ...(published.length ? published.map((s) => h('span', { class: `ps-circle${s.id === S.story ? ' is-sel' : ''}`, role: 'listitem' }, img(coverOf(s)), h('small', {}, s.name.slice(0, 12)))) : [h('small', { class: 'pe-note' }, 'Ninguna historia publicada internamente')]));
+    const circles = h('div', { class: 'ps-circles', role: 'list', 'aria-label': 'Historias publicadas, en orden' },
+      ...(published.length ? published.map((s) => h('span', { class: `ps-circle${s.id === S.story ? ' is-sel' : ''}`, role: 'listitem' }, img(coverOf(s)), h('small', {}, s.name.slice(0, 12)))) : [h('small', { class: 'pe-note' }, 'Ninguna historia publicada')]));
     const stage = h('div', { class: `ps-stage${S.device === 'mobile' ? ' is-mobile' : ''}` }, h('div', { class: 'ps-hd' }, h('b', {}, 'Treidilor')), circles);
     if (!st) { stage.append(h('p', { class: 'pe-note' }, 'Sin historia seleccionada')); viewer.append(stage); return; }
     const idx = Math.max(0, Math.min(S.viewing, st.screens.length - 1));
@@ -362,13 +363,14 @@ export function initHomeLayoutStories(root: HTMLElement, deps: StoriesDeps): { a
     const dest = sc.link ? (sc.link.type === 'product' ? labels.get(`product:${sc.link.target}`) : sc.link.type === 'category' ? labels.get(`category:${sc.link.target}`) : sc.link.target) : '';
     const phone = h('div', { class: 'ps-phone', role: 'group', 'aria-label': `Pantalla ${idx + 1} de ${st.screens.length} de «${st.name}»` },
       img(sc.image, 'ps-bg'), bars,
+      h('div', { class: 'ps-vhd', 'aria-hidden': 'true' }, img(coverOf(st), 'ps-av'), h('b', {}, st.name), h('span', {}, '✕')),
       h('div', { class: 'ps-cap' }, sc.title ? h('h4', {}, sc.title) : null, sc.text ? h('p', {}, sc.text) : null, sc.buttonLabel ? h('span', { class: 'pv-btn' }, sc.buttonLabel) : null),
       h('button', { class: 'ps-tap is-l', type: 'button', disabled: idx === 0, 'aria-label': 'Pantalla anterior', onclick: () => { S.viewing = idx - 1; renderViewer(); } }),
       h('button', { class: 'ps-tap is-r', type: 'button', disabled: idx >= st.screens.length - 1, 'aria-label': 'Pantalla siguiente', onclick: () => { S.viewing = idx + 1; renderViewer(); } }));
     stage.append(phone);
     viewer.append(stage,
       h('p', { class: 'pe-note' }, `Pantalla ${idx + 1}/${st.screens.length} · ${sc.duration} s${dest ? ` · botón → ${dest}` : ''}`),
-      h('p', { class: 'pe-note' }, 'Toque izquierdo/derecho = anterior/siguiente. Vista aproximada: el tamaño, la tipografía y las animaciones finales de la web pública se aplicarán al integrar las historias (etapa 6).'));
+      h('p', { class: 'pe-note' }, 'Toque izquierdo/derecho = anterior/siguiente. Vista aproximada del visor de la web pública (avance automático, pausa al mantener pulsado, teclado ← → y Esc).'));
   }
 
   /* ---- Barra superior ---- */

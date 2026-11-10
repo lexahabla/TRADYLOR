@@ -317,7 +317,7 @@ test('la lógica de index.astro que reproduce la propuesta sigue siendo la misma
   assert.match(index, /speed: s\.speed \|\| 'normal'/);
   assert.match(index, /s\.productIds\.map\(\(id\) => allProducts\.find\(\(p\) => p\.id === id\)\)\.filter\(Boolean\)/);
   assert.match(index, /\.filter\(\(s\) => s\.products\.length > 0\)/);
-  assert.doesNotMatch(index, /homeLayout|home-layout/);
+  const idx = code('src/pages/index.astro'); assert.match(idx, /lib\/homeLayout\/public/, 'usa el plan público'); assert.doesNotMatch(idx, /writeHomeLayout|writeStories|writeActivation|readHomeLayout|readStories|readActivation|prepareDraftSave|homeLayout\/(draft|publish|store|storiesStore|activationStore|activation)'|upload-image/, 'sólo el plan público de solo lectura');
 });
 
 /* ───────── Endpoints ───────── */
@@ -460,12 +460,13 @@ test('los módulos de la etapa 2 no importan ni llaman a nada que escriba o inic
   }
 });
 
-test('la página sigue exigiendo admin, es de solo lectura y la portada pública no consulta el módulo', () => {
+test('la página sigue exigiendo admin, es de solo lectura y la portada pública sólo usa el plan público de solo lectura', () => {
   const page = read('src/pages/upayp1b4/portada.astro');
   assert.match(page, /sessionUser\.role !== 'admin'\) return Astro\.redirect/);
   assert.match(page, /loadSources\(\)/);
   assert.doesNotMatch(code('src/pages/upayp1b4/portada.astro'), /writeHomeLayout|recoverHomeLayoutFromBackup|writeFileSync|getCategories\(/);
-  for (const p of ['src/pages/index.astro', 'src/layouts/Layout.astro', 'src/lib/sections.ts', 'src/lib/catalog.ts', 'src/middleware.ts']) assert.doesNotMatch(read(p), /homeLayout|home-layout/, p);
+  for (const p of ['src/layouts/Layout.astro', 'src/lib/sections.ts', 'src/lib/catalog.ts', 'src/middleware.ts']) assert.doesNotMatch(read(p), /homeLayout|home-layout/, p);
+  const idx = code('src/pages/index.astro'); assert.match(idx, /lib\/homeLayout\/public/, 'usa el plan público'); assert.doesNotMatch(idx, /writeHomeLayout|writeStories|writeActivation|readHomeLayout|readStories|readActivation|prepareDraftSave|homeLayout\/(draft|publish|store|storiesStore|activationStore|activation)'|upload-image/, 'sólo el plan público de solo lectura');
 });
 
 /* ───────── Rendimiento ───────── */

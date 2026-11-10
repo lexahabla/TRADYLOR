@@ -57,7 +57,7 @@ const defaultWidth = (format: Format): Width => (format === 'carrusel' ? 12 : 6)
 /** Contenido inicial de una modalidad (la manual y la de sección empiezan sin referencias: hay que completarlas antes de guardar). */
 export function defaultsFor(modality: Modality, format: Format): Pick<Block, 'card' | 'config' | 'refs'> {
   const card = cardsFor(modality)[0];
-  if (modality === 'automatica') return { card, config: { rules: { order: 'recientes', limit: Math.min(8, maxItemsFor(format)) } }, refs: [] };
+  if (modality === 'automatica') return { card, config: { rules: { order: 'precio_asc', limit: Math.min(8, maxItemsFor(format)) } }, refs: [] };
   if (modality === 'editorial') return { card, config: { headline: 'Nuevo titular' }, refs: [] };
   return { card, config: {}, refs: [] };
 }

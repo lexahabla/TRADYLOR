@@ -334,7 +334,7 @@ test('el cliente no usa innerHTML/eval, sólo toca módulos puros y guarda únic
   assert.equal((src.match(/method: 'PUT'/g) ?? []).length, 1, 'un único punto de guardado');
   assert.match(src, /X-Home-Layout-Editor/);
   // el guardado sólo se invoca desde el botón
-  assert.equal((src.match(/\bsave\(\)/g) ?? []).length, 2, 'definición + botón');
+  assert.equal((src.match(/\bsave\(\)/g) ?? []).length, 3, 'definición + botón de la barra + botón de la franja global (siempre acción explícita)');
   assert.match(src, /onclick: \(\) => \{ void save\(\); \}/);
   assert.doesNotMatch(src, /setInterval|setTimeout\([^)]*save/, 'sin guardado automático');
   assert.match(src, /beforeunload/);
@@ -350,5 +350,6 @@ test('la página monta el editor, sigue exigiendo admin y no escribe al cargar; 
   assert.match(page, /initHomeLayoutEditor\(root\)/);
   assert.match(page, /sessionUser\.role !== 'admin'\) return Astro\.redirect/);
   assert.doesNotMatch(code('src/pages/upayp1b4/portada.astro'), /writeHomeLayout|prepareDraftSave|writeFileSync/);
-  for (const p of ['src/pages/index.astro', 'src/layouts/Layout.astro', 'src/lib/sections.ts', 'src/lib/catalog.ts', 'src/middleware.ts']) assert.doesNotMatch(read(p), /homeLayout|home-layout/, p);
+  for (const p of ['src/layouts/Layout.astro', 'src/lib/sections.ts', 'src/lib/catalog.ts', 'src/middleware.ts']) assert.doesNotMatch(read(p), /homeLayout|home-layout/, p);
+  const idx = code('src/pages/index.astro'); assert.match(idx, /lib\/homeLayout\/public/, 'usa el plan público'); assert.doesNotMatch(idx, /writeHomeLayout|writeStories|writeActivation|readHomeLayout|readStories|readActivation|prepareDraftSave|homeLayout\/(draft|publish|store|storiesStore|activationStore|activation)'|upload-image/, 'sólo el plan público de solo lectura');
 });

@@ -336,7 +336,7 @@ test('estático: módulo de historias puro, almacén independiente, API segura y
   assert.match(api, /sameOrigin/);
   assert.match(api, /x-home-layout-editor/);
   for (const p of ['src/lib/homeLayout/types.ts', 'src/lib/homeLayout/validate.ts', 'src/lib/homeLayout/store.ts']) assert.doesNotMatch(code(p), /stor(y|ies)|historia/i, `${p} no se ha tocado`);
-  assert.doesNotMatch(code('src/pages/index.astro'), /home-stories|storiesStore|homeLayout/);
+  const idx = code('src/pages/index.astro'); assert.match(idx, /lib\/homeLayout\/public/, 'usa el plan público'); assert.doesNotMatch(idx, /writeHomeLayout|writeStories|writeActivation|readHomeLayout|readStories|readActivation|prepareDraftSave|homeLayout\/(draft|publish|store|storiesStore|activationStore|activation)'|upload-image/, 'sólo el plan público de solo lectura');
   assert.doesNotMatch(code('src/pages/api/admin/upload-image.ts'), /home-stories|homeLayout/);
   const client = code('src/scripts/homeLayoutStories.ts');
   assert.doesNotMatch(client, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|\beval\(|new Function/);

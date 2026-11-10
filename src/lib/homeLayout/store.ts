@@ -12,10 +12,9 @@
  *  · RECUPERAR desde `.bak` es una acción explícita (no se ejecuta sola): antes de reemplazar un archivo corrupto guarda una copia
  *    `home-layout.corrupt-<fecha>.json`.
  *
- * Mecanismo de respaldo de la portada pública: `resolveHomeMode()` devuelve SIEMPRE `legacy` (la portada actual) en la etapa 1, porque
- * `HOME_LAYOUT_STAGE_ENABLED` es una constante del código en `false`. `index.astro` no consulta este módulo. Cuando una etapa futura
- * habilite la portada nueva seguirá siendo necesario que la variable `HOME_LAYOUT_ENABLED=true`, que `activation.enabled` sea
- * verdadero y que exista una portada publicada válida; ante cualquier error, ausencia o duda se vuelve a la portada actual.
+ * Mecanismo de respaldo de la portada pública (etapa 6): `resolveHomeMode()` devuelve `layout` SOLO con los tres candados abiertos
+ * (`HOME_LAYOUT_STAGE_ENABLED` del código, `HOME_LAYOUT_ENABLED=true` del entorno y la activación del administrador con una versión fijada
+ * válida en `home-layout-activation.json`); ante cualquier error, ausencia o duda se vuelve a la portada actual.
  * ==============================================================================
  */
 
@@ -24,9 +23,14 @@ import path from 'node:path';
 import { dataFile } from '../paths';
 import { SCHEMA_VERSION, type HomeMode, type LayoutDocument } from './types';
 import { emptyDocument, validateDocument } from './validate';
+import { selectActiveVersion, type ActivationDocument } from './activation';
+import { readActivation } from './activationStore';
 
-/** Candado del código: la portada nueva NO puede activarse hasta que una etapa futura lo cambie expresamente (con sus pruebas). */
-export const HOME_LAYOUT_STAGE_ENABLED = false;
+/**
+ * Candado 1 de 3 (código). Etapa 6: el código de la portada nueva ya está integrado, así que el candado se abre; la portada NO se sirve
+ * mientras falte cualquiera de los otros dos (`HOME_LAYOUT_ENABLED=true` en el servidor y la activación del administrador con versión fijada).
+ */
+export const HOME_LAYOUT_STAGE_ENABLED = true;
 
 export type LayoutStatus = 'missing' | 'ok' | 'corrupt' | 'invalid' | 'newer';
 
@@ -143,12 +147,22 @@ export function recoverHomeLayoutFromBackup(): RecoverResult {
  * Qué portada se sirve. Función pura (inyectable en pruebas): `layout` sólo si TODAS las condiciones se cumplen; cualquier otra cosa →
  * `legacy` (la portada actual).
  */
-export function evaluateHomeMode(read: ReadResult, env: Record<string, string | undefined>, stageEnabled: boolean): HomeMode {
+export function evaluateHomeMode(
+  read: ReadResult,
+  env: Record<string, string | undefined>,
+  stageEnabled: boolean,
+  /** Etapa 6: archivo de activación (versión fijada). Si se indica, la versión fijada manda sobre «la última publicada». */
+  pin?: { status: string; doc: Pick<ActivationDocument, 'active' | 'pinnedVersion'> },
+): HomeMode {
   try {
     if (!stageEnabled) return 'legacy';
-    if (String(env.HOME_LAYOUT_ENABLED ?? '').trim().toLowerCase() !== 'true') return 'legacy';
+    if (!envEnabled(env)) return 'legacy';
     if (read.status !== 'ok') return 'legacy';
     if (!read.doc.activation.enabled) return 'legacy';
+    if (pin !== undefined) {
+      if (pin.status !== 'ok') return 'legacy';
+      return selectActiveVersion(read.doc, pin.doc) ? 'layout' : 'legacy';
+    }
     if (!read.doc.published || read.doc.published.blocks.length === 0) return 'legacy';
     return 'layout';
   } catch {
@@ -156,10 +170,14 @@ export function evaluateHomeMode(read: ReadResult, env: Record<string, string | 
   }
 }
 
-/** Portada que debe servirse hoy. En la etapa 1 siempre `legacy`. */
+/** Candado 2 de 3: `HOME_LAYOUT_ENABLED=true`. */
+export const envEnabled = (env: Record<string, string | undefined>): boolean => String(env.HOME_LAYOUT_ENABLED ?? '').trim().toLowerCase() === 'true';
+
+/** Portada que debe servirse hoy. Sin los tres candados (y sin entrada/E-S de disco si los dos primeros están cerrados) → `legacy`. */
 export function resolveHomeMode(): HomeMode {
   try {
-    return evaluateHomeMode(readHomeLayout(), process.env, HOME_LAYOUT_STAGE_ENABLED);
+    if (!HOME_LAYOUT_STAGE_ENABLED || !envEnabled(process.env)) return 'legacy';
+    return evaluateHomeMode(readHomeLayout(), process.env, HOME_LAYOUT_STAGE_ENABLED, readActivation());
   } catch {
     return 'legacy';
   }

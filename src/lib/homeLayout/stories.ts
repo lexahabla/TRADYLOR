@@ -8,7 +8,7 @@
  *   Pantalla  = imagen vertical (9:16), texto principal, texto secundario, botón (texto + destino) y duración (5, 7 o 10 s).
  *   Destino   = producto, categoría o campaña (ruta propia). Se REFERENCIA por id; nunca se copian datos del catálogo.
  * Un único borrador con control de revisión (`draft.updatedAt`, «inicial» si no hay) y estado por historia; no hay historial de versiones.
- * «Publicada» es INTERNO: no aparece en la web pública (la integración es de la etapa 6).
+ * «Publicada» se muestra en la web pública SOLO si la portada nueva está activada (etapa 6) y la historia no tiene errores (`public.ts`).
  *
  * Límites: ≤ 20 historias, ≤ 10 pantallas por historia, documento ≤ 128 KiB. Las imágenes se guardan aparte (sistema de subida existente).
  * Una historia con errores bloqueantes NO puede pasar a «publicada» (ver `blockingErrors`); en borrador puede tener errores.
@@ -16,6 +16,7 @@
  */
 
 import { isSafeImageUrl } from './validate';
+import { isPublicSafeImage, isPublicSafePath } from './publicSafety';
 import type { ReferenceSources } from './sources';
 
 export const STORIES_SCHEMA_VERSION = 1;
@@ -197,7 +198,9 @@ export function checkStories(stories: readonly Story[], src: StorySources): Stor
       if (!sc.title && !sc.text) add('warning', 'screen_without_text', `La pantalla ${n} no tiene texto`, i);
       if (sc.buttonLabel && !sc.link) add('warning', 'button_without_link', `La pantalla ${n} tiene botón pero no destino`, i);
       if (sc.link && !sc.buttonLabel) add('warning', 'link_without_button', `La pantalla ${n} tiene destino pero no texto de botón`, i);
-      if (sc.image.startsWith('https://')) add('info', 'image_external', `La imagen de la pantalla ${n} es una URL externa`, i);
+      // Etapa 6: segunda barrera para la web pública (no invalida documentos ya guardados; bloquea «publicada»).
+      if (!isPublicSafeImage(sc.image)) add('error', 'image_unsafe', `La imagen de la pantalla ${n} no es admisible (formato no admitido, vídeo o ruta/URL peligrosa)`, i);
+      else if (sc.image.startsWith('https://')) add('info', 'image_external', `La imagen de la pantalla ${n} es una URL externa`, i);
       if (!sc.link) return;
       if (sc.link.type === 'product') {
         const p = src.products.get(sc.link.target);
@@ -205,7 +208,8 @@ export function checkStories(stories: readonly Story[], src: StorySources): Stor
         else if (p.price === null) add('warning', 'link_product_without_price', `El producto de la pantalla ${n} no tiene precio utilizable`, i);
       } else if (sc.link.type === 'category') {
         if (!categoryExists(src, sc.link.target)) add('error', 'link_category_missing', `La categoría de la pantalla ${n} no existe`, i);
-      } else add('info', 'link_campaign_unverified', `El destino de campaña de la pantalla ${n} es una ruta propia que no se puede comprobar`, i);
+      } else if (!isPublicSafePath(sc.link.target)) add('error', 'link_campaign_unsafe', `El destino de la pantalla ${n} no es admisible (zona administrativa o ruta peligrosa)`, i);
+      else add('info', 'link_campaign_unverified', `El destino de campaña de la pantalla ${n} es una ruta propia que no se puede comprobar`, i);
     });
   }
   return out;

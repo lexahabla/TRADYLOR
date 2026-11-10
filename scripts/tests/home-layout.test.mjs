@@ -196,13 +196,13 @@ test('recuperación EXPLÍCITA desde .bak: conserva antes una copia del archivo 
 });
 
 /* ───────── Respaldo: la portada actual es la única activa ───────── */
-test('resolveHomeMode() devuelve SIEMPRE la portada actual en la etapa 1, aunque haya configuración y variable de entorno', () => {
-  assert.equal(S.HOME_LAYOUT_STAGE_ENABLED, false);
+test('resolveHomeMode() devuelve la portada actual salvo con los tres candados y una versión fijada (etapa 6)', () => {
+  assert.equal(S.HOME_LAYOUT_STAGE_ENABLED, true, 'el candado del código se abre en la etapa 6; los otros dos siguen cerrados por defecto');
   assert.equal(S.resolveHomeMode(), 'legacy');
   const published = { version: 1, publishedAt: '2026-11-10T10:00:00.000Z', blocks: [manual()] };
   S.writeHomeLayout({ ...V.emptyDocument(), activation: { enabled: true }, published });
   process.env.HOME_LAYOUT_ENABLED = 'true';
-  try { assert.equal(S.resolveHomeMode(), 'legacy', 'candado del código cerrado'); } finally { delete process.env.HOME_LAYOUT_ENABLED; }
+  try { assert.equal(S.resolveHomeMode(), 'legacy', 'variable + activación + publicada, pero SIN versión fijada (archivo de activación)'); } finally { delete process.env.HOME_LAYOUT_ENABLED; }
 });
 
 test('la lógica de respaldo vuelve a la portada actual ante cualquier duda (probada con el candado abierto sólo en la prueba)', () => {
@@ -217,6 +217,13 @@ test('la lógica de respaldo vuelve a la portada actual ante cualquier duda (pro
   assert.equal(S.evaluateHomeMode({ ...ok, doc: { ...ok.doc, published: { version: 1, publishedAt: 'x', blocks: [] } } }, env, true), 'legacy', 'publicada vacía');
   for (const status of ['missing', 'corrupt', 'invalid', 'newer']) assert.equal(S.evaluateHomeMode({ ...ok, status }, env, true), status && 'legacy', status);
   assert.equal(S.evaluateHomeMode(null, env, true), 'legacy', 'entrada rota');
+  // etapa 6: con la versión fijada manda ésta (no «la última publicada»)
+  const pinOk = { status: 'ok', doc: { active: true, pinnedVersion: 1 } };
+  assert.equal(S.evaluateHomeMode(ok, env, true, pinOk), 'layout');
+  assert.equal(S.evaluateHomeMode(ok, env, true, { status: 'ok', doc: { active: false, pinnedVersion: 1 } }), 'legacy', 'archivo de activación apagado');
+  assert.equal(S.evaluateHomeMode(ok, env, true, { status: 'ok', doc: { active: true, pinnedVersion: 9 } }), 'legacy', 'versión fijada inexistente');
+  assert.equal(S.evaluateHomeMode(ok, env, true, { status: 'ok', doc: { active: true, pinnedVersion: null } }), 'legacy', 'sin versión fijada');
+  for (const status of ['missing', 'corrupt', 'invalid', 'newer']) assert.equal(S.evaluateHomeMode(ok, env, true, { ...pinOk, status }), 'legacy', `activación ${status}`);
 });
 
 /* ───────── Endpoint de solo lectura y acceso ───────── */
@@ -298,9 +305,8 @@ test('compatibilidad con las secciones existentes: home-layout.json es independi
   for (const f of ['types', 'validate', 'store']) assert.doesNotMatch(code(`src/lib/homeLayout/${f}.ts`), /lib\/sections|from '\.\.\/sections'|sections\.json/);
 });
 
-test('la portada pública no consulta el módulo nuevo y el almacenamiento no toca el catálogo', () => {
-  const index = read('src/pages/index.astro');
-  assert.doesNotMatch(index, /homeLayout|home-layout|resolveHomeMode/);
+test('la portada pública sólo consulta el plan público de solo lectura y el almacenamiento no toca el catálogo', () => {
+  const idx = code('src/pages/index.astro'); assert.match(idx, /lib\/homeLayout\/public/, 'usa el plan público'); assert.doesNotMatch(idx, /writeHomeLayout|writeStories|writeActivation|readHomeLayout|readStories|readActivation|prepareDraftSave|homeLayout\/(draft|publish|store|storiesStore|activationStore|activation)'|upload-image/, 'sólo el plan público de solo lectura');
   for (const f of ['src/layouts/Layout.astro', 'src/lib/sections.ts', 'src/lib/catalog.ts', 'src/lib/productStore.ts', 'src/middleware.ts']) assert.doesNotMatch(read(f), /homeLayout|home-layout/, f);
   const src = ['types', 'validate', 'store'].map((f) => code(`src/lib/homeLayout/${f}.ts`)).join('\n');
   assert.doesNotMatch(src, /products\.json|productStore|categories\.json|credentials|fetch\(/);

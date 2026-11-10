@@ -12,6 +12,7 @@ docker/entrypoint.sh
 docs/api-v1.md
 docs/actualizacion-precios-activacion.md
 docs/deploy-easypanel.md
+docs/portada-editable.md
 docs/temu-actor-mercado-es.md
 estructura.txt
 estructura_limpia.txt
@@ -50,6 +51,9 @@ scripts/tests/discount-claims.test.mjs
 scripts/tests/facets.test.mjs
 scripts/tests/aliexpress-validate.test.mjs
 scripts/tests/ficha-specs-history.test.mjs
+scripts/tests/home-layout-activation.test.mjs
+scripts/tests/home-layout-public.test.mjs
+scripts/tests/home-layout-stories-public.test.mjs
 scripts/tests/home-layout.test.mjs
 scripts/tests/home-layout-automatic.test.mjs
 scripts/tests/home-layout-draft.test.mjs
@@ -137,6 +141,8 @@ src/components/admin/TrafficSalesDashboard.astro
 src/components/common/TrustMetrics.astro
 src/components/comparativa/ProductComparator.astro
 src/components/herramientas/ToolPageHeader.astro
+src/components/home/HomeLayoutBlocks.astro
+src/components/home/HomeStories.astro
 src/components/home/MethodSection.astro
 src/components/metodologia/MethodologyQuiz.astro
 src/content.config.ts
@@ -184,8 +190,12 @@ src/lib/deletedProducts.ts
 src/lib/excelExport.ts
 src/lib/formConflicts.ts
 src/lib/geminiGrounded.ts
+src/lib/homeLayout/activationStore.ts
+src/lib/homeLayout/activation.ts
 src/lib/homeLayout/automatic.ts
 src/lib/homeLayout/draft.ts
+src/lib/homeLayout/publicSafety.ts
+src/lib/homeLayout/public.ts
 src/lib/homeLayout/publish.ts
 src/lib/homeLayout/resolve.ts
 src/lib/homeLayout/sectionsProposal.ts
@@ -306,6 +316,7 @@ src/pages/api/admin/catalog/index.ts
 src/pages/api/admin/category-extract/index.ts
 src/pages/api/admin/data.ts
 src/pages/api/admin/enrich-bulk.ts
+src/pages/api/admin/home-layout/activation.ts
 src/pages/api/admin/home-layout/draft.ts
 src/pages/api/admin/home-layout/index.ts
 src/pages/api/admin/home-layout/options.ts

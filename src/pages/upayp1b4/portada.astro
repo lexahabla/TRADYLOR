@@ -99,7 +99,7 @@ const SPEED_TEXT: Record<string, string> = { slow: 'lenta', normal: 'normal', fa
         </div>
       </dl>
       <p class="portada-note">
-        Etapas 3-5: editor del borrador, publicación INTERNA con historial de versiones, historias y selección automática. La portada que ven los visitantes no cambia: la portada nueva sigue desactivada y su integración pública es de la etapa 6, siempre con tu autorización.
+        Editor del borrador, publicación con historial de versiones, historias, selección automática y activación. La portada nueva solo se muestra a los visitantes cuando están abiertos los tres candados (código, variable HOME_LAYOUT_ENABLED del servidor y activación del administrador con una versión fijada); si no, se ve la portada de siempre.
       </p>
     </section>
 
@@ -288,7 +288,8 @@ const SPEED_TEXT: Record<string, string> = { slow: 'lenta', normal: 'normal', fa
   .ps-grid { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr) minmax(260px, 1fr); gap: 14px; align-items: start; }
   .ps-row { display: flex; align-items: center; gap: 4px; border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); margin-bottom: 6px; padding: 4px; } .ps-row.is-sel { border-color: var(--color-primary); background: rgba(59,130,246,.08); }
   .ps-pick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; background: transparent; border: 0; color: inherit; text-align: left; cursor: pointer; min-height: 44px; font: inherit; }
-  .ps-cover { width: 34px; height: 48px; object-fit: cover; border-radius: 6px; background: #111827; flex: none; } .ps-rg { display: grid; gap: 2px; min-width: 0; } .ps-rg b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .86rem; } .ps-rg small { color: var(--color-text-muted); }
+  .ps-cover { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; background: #111827; flex: none; border: 2px solid var(--color-border-hover); }
+  .ps-vhd { position: absolute; top: 14px; left: 8px; right: 8px; z-index: 2; display: flex; align-items: center; gap: 6px; font-size: .75rem; text-shadow: 0 1px 3px #000; } .ps-vhd b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ps-av { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; border: 1px solid #fff; } .ps-rg { display: grid; gap: 2px; min-width: 0; } .ps-rg b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .86rem; } .ps-rg small { color: var(--color-text-muted); }
   .ps-mv { display: grid; gap: 2px; } .ps-new { width: 100%; margin-top: 6px; }
   .ps-strip { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
   .ps-th, .ps-add { position: relative; width: 54px; height: 82px; border-radius: 8px; border: 2px solid var(--color-border-hover); background: #111827; padding: 0; overflow: hidden; cursor: pointer; color: var(--color-text-main); }
@@ -313,6 +314,8 @@ const SPEED_TEXT: Record<string, string> = { slow: 'lenta', normal: 'normal', fa
   .pe-tab[aria-selected="true"] { color: var(--color-text-main); border-bottom-color: var(--color-primary); }
   .pe-tab:disabled { opacity: .45; cursor: not-allowed; }
   .pe-pane[hidden] { display: none; }
+  .pe-gstrip { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .5rem .75rem; margin-bottom: .6rem; border: 1px solid var(--color-border); border-radius: var(--border-radius-md); background: rgba(255,255,255,.02); }
+  .pe-act { margin: .8rem 0; } .pe-gates { list-style: none; padding: 0; margin: .5rem 0; display: grid; gap: .3rem; } .pe-gates li small { color: var(--color-text-muted); } .pe-gates li.pe-warn { color: #fcd34d; }
   .pe-vhead { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; margin-bottom: .8rem; }
   .pe-vcard { display: flex; flex-direction: column; gap: 3px; padding: .75rem .9rem; border: 1px solid var(--color-border); border-radius: var(--border-radius-md); background: rgba(255,255,255,.02); }
   .pe-vcard small { color: var(--color-text-muted); }

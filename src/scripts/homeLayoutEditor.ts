@@ -304,6 +304,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   /* ---- Barra superior ---- */
   function renderToolbar() {
     clear(toolbar);
+    queueMicrotask(() => { if (typeof renderGlobal === 'function') renderGlobal(); });
     const v = validation();
     const stateChip = !state.loaded
       ? h('span', { class: 'pe-chip' }, 'Cargando…')
@@ -628,7 +629,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     const win = h('div', { class: `pe-pvwin${mobile ? ' is-phone' : ''}` }, inner);
     return h('div', { class: 'pe-pvbox' }, h('h3', {}, label, h('span', { class: 'pe-chip-s' }, chip)), win);
   }
-  const previewNote = () => h('p', { class: 'pe-note pe-pvnote' }, 'Vista aproximada con los datos reales del catálogo (imágenes, títulos, precios, orden, anchos y selección automática). Aún dependen de la integración en la web pública (etapa 6): el aspecto exacto de las tarjetas, la tipografía, el espaciado y las animaciones.');
+  const previewNote = () => h('p', { class: 'pe-note pe-pvnote' }, 'Vista aproximada con los datos reales del catálogo (imágenes, títulos, precios, orden, anchos y selección automática). En la web, las tarjetas de producto usan el diseño habitual del sitio.');
   /** Escala: escritorio = 1200 px virtuales; móvil = 390 px virtuales. Hay que llamarla con las cajas ya insertadas en el documento. */
   function scalePreviews(boxes: Array<[HTMLElement, number]>) {
     for (const [box, nat] of boxes) {
@@ -666,6 +667,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     msg: null as Msg,
     detail: null as null | { title: string; kind: 'preview' | 'compare'; blocks?: Block[]; changes?: DiffEntry[]; chip?: string; data?: PvData },
     busy: false,
+    act: null as null | { gates: { stage: boolean; env: boolean; adminFlag: boolean; activeFile: boolean; pinnedVersion: number | null }; revision: string; log: Array<{ at: string; by: string; action: string; version: number | null; result: string; note?: string }>; storage: { layout: string; activation: string } },
   };
   const dateTxt = (iso: string) => new Date(iso).toLocaleString('es-ES');
   const DIFF_ICON: Record<string, string> = { added: '＋', removed: '－', moved: '↕', width: '↔', format: '▦', modality: '⚙', title: 'Aa', card: '🃏', visibility: '👁', refs: '🔗', config: '✎' };
@@ -675,7 +677,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     clear(tabs);
     const mk = (id: Tab, label: string) => h('button', { class: 'pe-tab', type: 'button', role: 'tab', 'aria-selected': String(tab === id), 'aria-controls': id === 'editor' ? 'peEditorPane' : id === 'versions' ? 'peVersionsPane' : 'peStoriesPane', onclick: () => { void setTab(id); } }, label);
     tabs.append(
-      mk('editor', 'A · Editor'),
+      mk('editor', 'A · Editor visual'),
       mk('versions', 'B · Publicación y versiones'),
       mk('stories', 'C · Historias'),
     );
@@ -694,6 +696,8 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   async function loadVersions() {
     vs.loading = true; vs.error = ''; renderVersions();
     const r = await api('/api/admin/home-layout/versions');
+    const a = await api('/api/admin/home-layout/activation');
+    vs.act = a.status === 200 && a.body?.success ? { gates: a.body.gates, revision: a.body.revision, log: a.body.log, storage: a.body.storage } : null;
     vs.loading = false;
     if (r.status === 200 && r.body?.success) {
       vs.loaded = true;
@@ -703,6 +707,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
       vs.published = r.body.published;
       vs.versions = r.body.versions;
       vs.maxVersions = r.body.limits.maxVersions;
+      renderGlobal();
     } else vs.error = r.status === 401 ? 'La sesión ha caducado: vuelve a iniciar sesión.' : 'No se pudo cargar el historial de versiones.';
     renderVersions();
   }
@@ -768,7 +773,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
       limite_versiones: 'Se alcanzó el máximo de versiones archivadas.',
     };
     const body = h('div', { class: 'pe-confirm-body' },
-      h('p', { class: 'pe-note' }, `Se publicará el borrador guardado como la versión ${chk.nextVersion}. Es una publicación INTERNA: la web pública sigue mostrando la portada actual; la portada nueva no se activa.`),
+      h('p', { class: 'pe-note' }, `Se publicará el borrador guardado como la versión ${chk.nextVersion}. Publicar NO cambia la web: la portada que ven los visitantes es la versión FIJADA al activar (o la portada anterior si no hay ninguna activada). Para cambiarla hay que activar la versión expresamente.`),
       chk.reasons.length ? h('div', {}, h('div', { class: 'pe-sub' }, 'No se puede publicar'), h('ul', { class: 'pe-diff' }, ...chk.reasons.map((x) => h('li', {}, h('span', { class: 'pe-dk is-removed', 'aria-hidden': 'true' }, '⚠'), REASON[x] ?? x)))) : null,
       chk.blocking.length ? h('div', {}, h('div', { class: 'pe-sub' }, `Errores que bloquean (${chk.blocking.length})`), issueList(chk.blocking)) : null,
       chk.warnings.length ? h('div', {}, h('div', { class: 'pe-sub' }, `Avisos (${chk.warnings.length}) — no bloquean`), issueList(chk.warnings)) : null,
@@ -783,7 +788,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     if (r.status === 200 && r.body?.success) {
       vs.detail = null;
       await loadVersions();
-      vsay({ kind: 'ok', text: `Versión ${r.body.version} publicada internamente (${dateTxt(r.body.publishedAt)}). La web pública no ha cambiado.` });
+      vsay({ kind: 'ok', text: `Versión ${r.body.version} publicada (${dateTxt(r.body.publishedAt)}). La web pública no ha cambiado: actívala para que la vean los visitantes.` });
     } else { await loadVersions(); vsay({ kind: 'error', text: explain(r) }); }
   }
 
@@ -805,24 +810,89 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     } else { await loadVersions(); vsay({ kind: 'error', text: explain(r) }); }
   }
 
+  /* ---- Activación (etapa 6) ---- */
+  function activationPanel(): HTMLElement {
+    const a = vs.act;
+    const box = h('div', { class: 'pe-box pe-act' }, h('h3', {}, 'Activación de la portada nueva'));
+    if (!a) { box.append(h('p', { class: 'pe-note' }, vs.loaded ? 'No se pudo leer el estado de la activación.' : 'Cargando…')); return box; }
+    const g = a.gates;
+    const gate = (ok: boolean, label: string, hint: string) => h('li', { class: ok ? 'pe-ok' : 'pe-warn' }, `${ok ? '✔' : '✖'} ${label}`, h('small', {}, ` — ${hint}`));
+    box.append(h('p', { class: 'pe-note' }, 'La portada nueva solo se muestra si están abiertos los tres candados. Activar fija una versión: publicar otra después no cambia la web.'),
+      h('ul', { class: 'pe-gates', 'aria-label': 'Candados de la portada nueva' },
+        gate(g.stage, 'Candado del código', g.stage ? 'abierto' : 'cerrado en esta versión del código'),
+        gate(g.env, 'Variable HOME_LAYOUT_ENABLED del servidor', g.env ? 'activada' : 'no activada (la configura quien administra el servidor)'),
+        gate(g.adminFlag && g.activeFile, 'Activación del administrador', g.adminFlag && g.activeFile ? `activa · versión fijada v${g.pinnedVersion}` : 'desactivada')));
+    const on = g.adminFlag && g.activeFile;
+    box.append(h('div', { class: 'pe-vact' },
+      h('button', { class: 'pe-btn pe-primary', type: 'button', disabled: vs.busy || !vs.published, onclick: () => { void startActivate(); } }, vs.published ? `${on && g.pinnedVersion === vs.published.version ? 'Revalidar' : 'Activar'} v${vs.published.version}…` : 'Activar…'),
+      h('button', { class: 'pe-btn pe-danger', type: 'button', disabled: vs.busy || !(on || g.adminFlag || g.activeFile), onclick: () => { void startDeactivate(); } }, 'Desactivar (volver a la portada de siempre)…')));
+    if (a.log.length) box.append(h('details', {}, h('summary', {}, `Registro de operaciones (${a.log.length})`), h('ul', { class: 'pe-diff' }, ...a.log.slice(0, 10).map((e) => h('li', {}, h('span', { class: `pe-dk ${e.result === 'ok' ? 'is-added' : 'is-removed'}`, 'aria-hidden': 'true' }, e.result === 'ok' ? '✔' : '✖'), h('span', {}, `${dateTxt(e.at)} · ${e.by} · ${e.action === 'activate' ? 'activar' : 'desactivar'}${e.version ? ` v${e.version}` : ''} · ${e.result}${e.note ? ` (${e.note})` : ''}`))))));
+    return box;
+  }
+  async function actApi(payload: Record<string, unknown>) {
+    return api('/api/admin/home-layout/activation', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Home-Layout-Editor': '1' }, body: JSON.stringify({ ...payload, confirm: true }) });
+  }
+  async function startActivate() {
+    if (vs.busy || !vs.published || !vs.act) return;
+    const n = vs.published.version;
+    const c = await api(`/api/admin/home-layout/activation?check=${n}`);
+    if (c.status !== 200 || !c.body?.success) { vsay({ kind: 'error', text: 'No se pudo comprobar la versión.' }); return; }
+    const chk = c.body.check as { canActivate: boolean; blocking: BlockingIssue[]; warnings: BlockingIssue[]; visibleBlocks: number; totalBlocks: number };
+    const body = h('div', { class: 'pe-confirm-body' },
+      h('p', { class: 'pe-note' }, `Se FIJARÁ la versión ${n} (${chk.visibleBlocks} de ${chk.totalBlocks} bloques se mostrarían). ${vs.act.gates.env ? 'Los visitantes verán la portada nueva en cuanto confirmes.' : 'El servidor no tiene HOME_LAYOUT_ENABLED=true: los visitantes seguirán viendo la portada de siempre hasta que se active.'} Puedes volver a la portada anterior en cualquier momento con «Desactivar».`),
+      chk.blocking.length ? h('div', {}, h('div', { class: 'pe-sub' }, `Errores que impiden activar (${chk.blocking.length})`), issueList(chk.blocking)) : null,
+      chk.warnings.length ? h('div', {}, h('div', { class: 'pe-sub' }, `Avisos (${chk.warnings.length}) — no bloquean`), issueList(chk.warnings)) : null);
+    if (!(await confirmBox(`Activar la versión ${n}`, 'Esta acción cambia lo que ven los visitantes (si el servidor lo permite).', 'Activar portada nueva', false, body, !chk.canActivate))) return;
+    vs.busy = true; renderVersions();
+    const r = await actApi({ action: 'activate', version: n, baseRevision: vs.act.revision });
+    vs.busy = false;
+    await loadVersions();
+    vsay(r.status === 200 && r.body?.success ? { kind: 'ok', text: `Versión ${n} activada y fijada.${r.body.envEnabled ? '' : ' (El servidor aún no tiene HOME_LAYOUT_ENABLED=true: la web no cambia.)'}` } : { kind: 'error', text: r.status === 409 ? 'El estado cambió desde que lo viste (o la versión ya está activa). Recarga e inténtalo de nuevo.' : r.status === 422 ? 'La versión tiene errores que impiden activarla.' : r.status === 423 ? 'El almacenamiento está protegido: no se sobrescribe.' : 'No se pudo activar. La web sigue como estaba.' });
+  }
+  async function startDeactivate() {
+    if (vs.busy || !vs.act) return;
+    if (!(await confirmBox('Desactivar la portada nueva', 'La web pública volverá a la portada de siempre de inmediato. No se borra ninguna versión ni ningún borrador.', 'Desactivar ahora', true))) return;
+    vs.busy = true; renderVersions();
+    const r = await actApi({ action: 'deactivate' });
+    vs.busy = false;
+    await loadVersions();
+    vsay(r.status === 200 && r.body?.success ? { kind: 'ok', text: 'Portada nueva desactivada: los visitantes ven la portada de siempre.' } : { kind: 'error', text: r.body?.message ?? 'No se pudo desactivar.' });
+  }
+
+  /** Franja global (maqueta v3): última versión publicada, portada servida y acciones frecuentes, visible en las tres pestañas. */
+  const gstrip = h('div', { class: 'pe-gstrip' });
+  tabs.before(gstrip);
+  function renderGlobal() {
+    clear(gstrip);
+    const v = validation();
+    const canSave = state.loaded && state.dirty && v.ok && state.writable && !state.busy && !state.conflict;
+    gstrip.append(
+      h('span', { class: 'pe-note' }, vs.published ? `Última versión publicada: v${vs.published.version} · ${dateTxt(vs.published.publishedAt)}` : 'Aún no hay versión publicada'),
+      h('span', { class: `pe-chip-s${vs.mode === 'layout' ? '' : ' is-alt'}` }, vs.mode === 'layout' ? 'Web: portada nueva' : 'Web: portada de siempre'),
+      h('span', { class: 'pe-grow' }),
+      h('button', { class: 'pe-btn', type: 'button', disabled: !canSave, onclick: () => { void save(); } }, 'Guardar borrador'),
+      h('button', { class: 'pe-btn pe-primary', type: 'button', disabled: vs.busy, onclick: async () => { await setTab('versions'); void startPublish(); } }, 'Publicar…'));
+  }
+
   function renderVersions() {
+    renderGlobal();
     clear(versionsPane);
     const head = h('div', { class: 'pe-vhead' },
       h('div', { class: 'pe-vcard' }, h('div', { class: 'pe-sub' }, 'Borrador actual'),
         h('b', {}, state.dirty ? '✎ Cambios sin guardar en el editor' : vs.draft.revision === 'inicial' ? '✎ Sin borrador guardado' : `✎ Guardado · ${dateTxt(vs.draft.revision)}`),
         h('small', {}, `${vs.draft.blocks} bloques en el servidor`)),
-      h('div', { class: 'pe-vcard' }, h('div', { class: 'pe-sub' }, 'Publicada internamente'),
+      h('div', { class: 'pe-vcard' }, h('div', { class: 'pe-sub' }, 'Última versión publicada'),
         vs.published ? h('b', {}, `v${vs.published.version} · ${dateTxt(vs.published.publishedAt)}`) : h('b', {}, 'Ninguna todavía'),
-        h('small', {}, vs.published ? `${vs.published.blocks} bloques · NO visible para el público` : 'Nada se ha publicado')),
+        h('small', {}, vs.published ? `${vs.published.blocks} bloques · ${vs.act?.gates.pinnedVersion === vs.published.version && vs.mode === 'layout' ? 'es la que ven los visitantes' : 'no se muestra hasta activarla'}` : 'Nada se ha publicado')),
       h('div', { class: 'pe-vcard' }, h('div', { class: 'pe-sub' }, 'Portada servida a los visitantes'),
-        h('b', {}, vs.mode === 'legacy' ? 'La portada actual (sin cambios)' : vs.mode),
-        h('small', {}, 'La portada nueva sigue desactivada.')));
+        h('b', {}, vs.mode === 'layout' ? `Portada nueva · versión fijada v${vs.act?.gates.pinnedVersion ?? '?'}` : 'La portada de siempre'),
+        h('small', {}, vs.mode === 'layout' ? 'Activada y en servicio.' : 'La portada nueva no se está mostrando.')));
     const actions = h('div', { class: 'pe-vact' },
       h('button', { class: 'pe-btn pe-primary', type: 'button', disabled: !vs.loaded || vs.busy || vs.storage !== 'ok' && vs.storage !== 'missing', onclick: () => { void startPublish(); }, title: state.dirty ? 'Guarda antes el borrador (pestaña A)' : '' }, vs.busy ? 'Trabajando…' : 'Publicar borrador…'),
       h('button', { class: 'pe-btn', type: 'button', disabled: !vs.published || vs.busy, onclick: () => { void compareWith('published', 'draft', 'Publicada → borrador guardado'); } }, 'Comparar publicada con borrador'),
       h('button', { class: 'pe-btn', type: 'button', disabled: vs.loading, onclick: () => { void loadVersions(); } }, 'Actualizar'),
       state.dirty ? h('span', { class: 'pe-note pe-warn' }, 'Hay cambios sin guardar: sólo se publica lo guardado.') : null);
-    versionsPane.append(head, actions);
+    versionsPane.append(head, actions, activationPanel());
     if (vs.msg) versionsPane.append(h('p', { class: `pe-msg is-${vs.msg.kind}`, role: vs.msg.kind === 'error' ? 'alert' : undefined }, vs.msg.text));
     if (vs.loading && !vs.loaded) { versionsPane.append(h('p', { class: 'pe-empty' }, 'Cargando el historial…')); return; }
     if (vs.error) { versionsPane.append(h('p', { class: 'pe-msg is-error', role: 'alert' }, vs.error)); return; }
@@ -882,4 +952,5 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   renderVersions();
   renderAll();
   void load();
+  void loadVersions();
 }

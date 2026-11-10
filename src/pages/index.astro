@@ -4,6 +4,9 @@ import ProductCard from '../components/ProductCard.astro';
 import MethodSection from '../components/home/MethodSection.astro';
 import { getCatalogProducts } from '../lib/catalog';
 import { readSections } from '../lib/sections';
+import HomeLayoutBlocks from '../components/home/HomeLayoutBlocks.astro';
+import HomeStories from '../components/home/HomeStories.astro';
+import { buildPublicHome } from '../lib/homeLayout/public';
 import { getCategoryById } from '../lib/categories';
 import CatalogFilters from '../components/CatalogFilters.astro';
 import { buildListing, hasActiveFilters, listingHref, makeCategoryResolver, parseListingParams } from '../lib/catalogListing';
@@ -42,6 +45,19 @@ const queryParam = listingParams.q;
 const queryTerm = queryParam.toLowerCase();
 const filtersActive = hasActiveFilters(listingParams);
 const listingMode = Boolean(queryParam) || filtersActive;
+
+// ─── Portada editable (etapa 6) ───────────────────────────────────────────────
+// Sólo con los TRES candados abiertos (código + HOME_LAYOUT_ENABLED + activación del administrador con versión fijada). `buildPublicHome`
+// nunca lanza: ante cualquier fallo devuelve «legacy» y se pinta la portada de siempre (secciones, catálogo, método). Con búsqueda o filtros
+// activos los resultados comerciales mandan, como hasta ahora: no se pinta nada editorial.
+const publicHome = listingMode ? null : buildPublicHome();
+const layoutHome = publicHome && publicHome.mode === 'layout' ? publicHome : null;
+const layoutProducts: Record<string, any> = {};
+if (layoutHome) {
+  const wanted = new Set([...layoutHome.top, ...layoutHome.bottom].flatMap((b) => b.productIds));
+  for (const p of allProducts) if (wanted.has(p.id)) layoutProducts[p.id] = p;
+}
+const belowSectionsToRender = layoutHome ? [] : belowCatalogSections;
 // El panel de filtros sólo aparece al buscar (buscador de la cabecera) o al elegir una categoría; con filtros ya en la URL también, para no ocultarlos.
 const showFilters = Boolean(queryParam) || listingParams.category.length > 0 || filtersActive;
 const visibleProducts = listing.filtered;
@@ -106,6 +122,7 @@ const buildPageRange = (current: number, total: number) => {
 const pageRange = buildPageRange(currentPage, totalPages);
 
 const aboveCatalogSections = listingMode ? [] : aboveCatalogSectionsAll;
+const aboveSectionsToRender = layoutHome ? [] : aboveCatalogSections;
 const rangeHrefs = (listing.price?.ranges ?? []).map((r) => listingHref({ ...listingParams, min: r.min, max: r.max }, { sort: listingParams.sort }));
 const clearHref = listingHref({ ...listingParams, category: [], brand: [], attrs: {}, min: undefined, max: undefined, deal: false });
 
@@ -119,10 +136,12 @@ const formatCurrency = (amount: number) =>
 ---
 
 <Layout title={pageTitle} description={pageDescription}>
+  {layoutHome && <HomeStories stories={layoutHome.stories} />}
+  {layoutHome && <HomeLayoutBlocks blocks={layoutHome.top} products={layoutProducts} region="top" />}
   <!-- ============================================================
        SECCIONES DINÁMICAS POR ENCIMA DEL CATÁLOGO (carrusel deslizable)
        ============================================================ -->
-  {aboveCatalogSections.map((section) => (
+  {aboveSectionsToRender.map((section) => (
     <section class="feed-section" id={`section-${section.id}`} data-dynamic-section={section.id} data-section-speed={section.speed || 'normal'} aria-label={section.title}>
       <div class="container">
         <div class="section-header">
@@ -364,7 +383,8 @@ const formatCurrency = (amount: number) =>
   <!-- ============================================================
        SECCIONES DINÁMICAS POR DEBAJO DEL CATÁLOGO (carrusel deslizable)
        ============================================================ -->
-  {belowCatalogSections.map((section) => (
+  {layoutHome && <HomeLayoutBlocks blocks={layoutHome.bottom} products={layoutProducts} region="bottom" />}
+  {belowSectionsToRender.map((section) => (
     <section class="feed-section" id={`section-${section.id}`} data-dynamic-section={section.id} data-section-speed={section.speed || 'normal'} aria-label={section.title}>
       <div class="container">
         <div class="section-header">

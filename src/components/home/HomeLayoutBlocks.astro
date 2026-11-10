@@ -1,0 +1,159 @@
+---
+/**
+ * Portada editable (etapa 6): pinta los bloques ya validados de `buildPublicHome()`.
+ * Reutiliza `ProductCard` (carrusel/banner = layout compact, cuadrícula 2×2 = tarjeta completa) y el mismo marcado de carrusel que las
+ * secciones de la portada (`feed-section`, `data-dynamic-section`, `data-carousel-*`), de modo que el script de carruseles de `index.astro`
+ * (flechas, arrastre, auto-scroll, velocidad) funciona sin cambios. Los `id="section-<id>"` de las secciones se conservan (menú de navegación).
+ * Sin enlaces de afiliado: sólo ids de producto y rutas internas ya comprobadas.
+ */
+import ProductCard from '../ProductCard.astro';
+import type { PublicBlock } from '../../lib/homeLayout/public';
+
+interface Props {
+  blocks: PublicBlock[];
+  products: Record<string, any>;
+  region: 'top' | 'bottom';
+}
+const { blocks, products, region } = Astro.props as Props;
+const cards = (b: PublicBlock) => b.productIds.map((id) => products[id]).filter(Boolean);
+const domId = (b: PublicBlock) => (b.section ? `section-${b.section.id}` : `bloque-${b.id}`);
+const rendered = blocks.filter((b) => b.modality === 'editorial' || b.categories?.length || cards(b).length > 0);
+---
+
+{rendered.length > 0 && (
+  <div class={`hl-root hl-${region}`} data-home-layout={region}>
+    <div class="container">
+      <div class="hl-grid">
+        {rendered.map((b) => {
+          const list = cards(b);
+          const carousel = !b.editorial && !b.categories && b.format === 'carrusel';
+          const style = `--span:${b.width}`;
+          if (b.editorial) {
+            const e = b.editorial;
+            return (
+              <section class={`hl-cell hl-promo${e.imageUrl ? ' has-img' : ''}`} style={style} id={domId(b)} aria-label={e.headline}>
+                {e.imageUrl && <img class="hl-promo-img" src={e.imageUrl} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />}
+                <div class="hl-promo-body">
+                  <h2 class="hl-promo-title">{e.headline}</h2>
+                  {e.text && <p class="hl-promo-text">{e.text}</p>}
+                  {e.href && e.buttonLabel && (
+                    <a class="hl-btn" href={e.href} {...(e.external ? { target: '_blank', rel: 'noopener noreferrer nofollow' } : {})}>
+                      {e.buttonLabel}
+                    </a>
+                  )}
+                </div>
+              </section>
+            );
+          }
+          if (b.categories) {
+            return (
+              <section class="hl-cell hl-cats" style={style} id={domId(b)} aria-label={b.title}>
+                <h2 class="hl-title">{b.title}</h2>
+                <ul class="hl-cat-list">
+                  {b.categories.map((c) => (
+                    <li><a class="hl-cat" href={c.href}>{c.name}</a></li>
+                  ))}
+                </ul>
+              </section>
+            );
+          }
+          if (carousel) {
+            return (
+              <section
+                class="hl-cell feed-section hl-feed"
+                style={style}
+                id={domId(b)}
+                data-dynamic-section={b.section ? b.section.id : b.id}
+                data-section-speed={b.section ? b.section.speed || 'normal' : 'none'}
+                aria-label={b.title}
+              >
+                <div class="hl-head">
+                  <h2 class="hl-title">{b.title}</h2>
+                  {b.section?.description && <p class="hl-desc">{b.section.description}</p>}
+                </div>
+                <div class="feed-carousel">
+                  <button type="button" class="feed-carousel-btn feed-carousel-prev" data-carousel-prev aria-label="Anteriores">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+                  </button>
+                  <div class="feed-carousel-track" data-carousel-track>
+                    {list.map((item) => <ProductCard product={item} layout="compact" />)}
+                  </div>
+                  <button type="button" class="feed-carousel-btn feed-carousel-next" data-carousel-next aria-label="Siguientes">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+                  </button>
+                </div>
+              </section>
+            );
+          }
+          // banner (producto destacado a ancho completo del bloque) y cuadrícula 2×2
+          return (
+            <section class={`hl-cell ${b.format === 'banner' ? 'hl-banner' : 'hl-quad-wrap'}`} style={style} id={domId(b)} aria-label={b.title}>
+              <h2 class="hl-title">{b.title}</h2>
+              <div class={b.format === 'banner' ? 'hl-featured' : 'hl-quad'}>
+                {list.map((item) => <ProductCard product={item} layout={b.format === 'banner' ? 'compact' : 'grid'} />)}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  </div>
+)}
+
+<style is:global>
+  .hl-root { padding: 2.5rem 0 1rem; }
+  .hl-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2rem 1.5rem; align-items: start; }
+  .hl-cell { grid-column: span var(--span, 12); min-width: 0; }
+  .hl-title { font-family: var(--font-heading); font-size: clamp(1.5rem, 3vw, 2.25rem); font-weight: 800; letter-spacing: -0.02em; color: #ffffff; margin: 0 0 0.75rem; }
+  .hl-desc { color: rgba(255, 255, 255, 0.7); font-size: 1rem; max-width: 700px; line-height: 1.6; margin: 0 0 1rem; }
+  .hl-head { margin-bottom: 1.25rem; }
+
+  /* Carrusel (mismo aspecto que las secciones de la portada) */
+  .hl-root .feed-section { padding: 0; }
+  .hl-root .feed-carousel { position: relative; }
+  .hl-root .feed-carousel-track { display: flex; align-items: stretch; gap: 1rem; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; padding: 0.75rem 0 1rem; margin-top: -0.75rem; scrollbar-width: thin; scrollbar-color: rgba(96, 165, 250, 0.45) transparent; cursor: grab; }
+  .hl-root .feed-carousel-track.is-dragging-track { cursor: grabbing; scroll-behavior: auto !important; user-select: none; }
+  .hl-root .feed-carousel-track.is-dragging-track a { pointer-events: none; }
+  .hl-root .feed-carousel-track::-webkit-scrollbar { height: 8px; }
+  .hl-root .feed-carousel-track::-webkit-scrollbar-track { background: rgba(2, 6, 23, 0.5); border-radius: 999px; }
+  .hl-root .feed-carousel-track::-webkit-scrollbar-thumb { background: rgba(96, 165, 250, 0.45); border-radius: 999px; }
+  .hl-root .feed-carousel-btn { position: absolute; top: 50%; transform: translateY(-50%); z-index: 6; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; color: #93c5fd; background: rgba(2, 6, 23, 0.92); border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 50%; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); transition: all 0.2s ease; }
+  .hl-root .feed-carousel-btn:hover:not(:disabled) { color: #ffffff; background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95)); border-color: rgba(96, 165, 250, 0.7); }
+  .hl-root .feed-carousel-btn:focus-visible, .hl-btn:focus-visible, .hl-cat:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
+  .hl-root .feed-carousel-btn:disabled { opacity: 0.3; cursor: default; }
+  .hl-root .feed-carousel-prev { left: -0.5rem; }
+  .hl-root .feed-carousel-next { right: -0.5rem; }
+
+  /* Cuadrícula 2×2 y banner con producto destacado */
+  .hl-quad { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+  .hl-featured { display: block; }
+  .hl-featured .product-card { width: 100%; }
+
+  /* Editorial (campaña) */
+  .hl-promo { position: relative; overflow: hidden; border-radius: 16px; border: 1px solid rgba(148, 163, 184, 0.25); background: linear-gradient(135deg, #1e293b, #0f172a); min-height: 200px; display: flex; }
+  .hl-promo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .hl-promo.has-img::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(2, 6, 23, 0.88), rgba(2, 6, 23, 0.35)); }
+  .hl-promo-body { position: relative; z-index: 1; padding: 1.75rem; display: grid; gap: 0.75rem; align-content: center; max-width: 640px; }
+  .hl-promo-title { font-family: var(--font-heading); font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 800; color: #ffffff; margin: 0; }
+  .hl-promo-text { color: rgba(255, 255, 255, 0.88); line-height: 1.6; margin: 0; }
+  .hl-btn { justify-self: start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 1.25rem; border-radius: 999px; background: #2563eb; color: #ffffff; font-weight: 700; text-decoration: none; }
+  .hl-btn:hover { background: #1d4ed8; }
+
+  /* Categorías */
+  .hl-cat-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.6rem; }
+  .hl-cat { display: inline-flex; align-items: center; min-height: 44px; padding: 0 1.1rem; border-radius: 999px; border: 1px solid rgba(96, 165, 250, 0.45); color: #dbeafe; text-decoration: none; font-weight: 600; background: rgba(15, 23, 42, 0.7); }
+  .hl-cat:hover { background: rgba(37, 99, 235, 0.35); }
+
+  @media (max-width: 768px) {
+    .hl-root { padding: 1.5rem 0 0.5rem; }
+    .hl-cell { grid-column: span 12; }
+    .hl-root .feed-carousel-btn { display: none; }
+    .hl-promo-body { padding: 1.25rem; }
+  }
+  @media (max-width: 480px) {
+    .hl-quad { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hl-root .feed-carousel-btn { transition: none; }
+  }
+</style>

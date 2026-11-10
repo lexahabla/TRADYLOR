@@ -401,7 +401,7 @@ test('estático: el módulo de publicación es puro, los endpoints no activan na
   }
   assert.match(code('src/pages/api/admin/home-layout/publish.ts'), /sameOrigin/);
   assert.doesNotMatch(code('src/pages/api/admin/home-layout/versions.ts'), /writeHomeLayout/);
-  assert.doesNotMatch(code('src/pages/index.astro'), /homeLayout|home-layout/);
+  const idx = code('src/pages/index.astro'); assert.match(idx, /lib\/homeLayout\/public/, 'usa el plan público'); assert.doesNotMatch(idx, /writeHomeLayout|writeStories|writeActivation|readHomeLayout|readStories|readActivation|prepareDraftSave|homeLayout\/(draft|publish|store|storiesStore|activationStore|activation)'|upload-image/, 'sólo el plan público de solo lectura');
   assert.doesNotMatch(code('src/layouts/Layout.astro'), /homeLayout\/(publish|store)/);
   const client = code('src/scripts/homeLayoutEditor.ts');
   assert.doesNotMatch(client, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|\beval\(|new Function/);
@@ -409,6 +409,8 @@ test('estático: el módulo de publicación es puro, los endpoints no activan na
   // Etapa 5 añade un segundo POST, de SÓLO LECTURA (previsualización de lo que hay en el editor): el de publicar/recuperar sigue siendo único.
   assert.equal((client.match(/home-layout\/publish'/g) ?? []).length, 1, 'un único punto de publicación/recuperación');
   assert.equal((client.match(/home-layout\/preview', \{\s*method: 'POST'/g) ?? []).length, 1, 'el otro POST es la previsualización de sólo lectura');
-  assert.equal((client.match(/method: 'POST'/g) ?? []).length, 2);
-  assert.equal((client.match(/confirm: true/g) ?? []).length, 1);
+  // Etapa 6 añade el POST de activar/desactivar (confirmación explícita en el servidor y en el cliente): uno solo.
+  assert.equal((client.match(/home-layout\/activation', \{\s*method: 'POST'/g) ?? []).length, 1, 'un único punto de activación/desactivación');
+  assert.equal((client.match(/method: 'POST'/g) ?? []).length, 3);
+  assert.equal((client.match(/confirm: true/g) ?? []).length, 2, 'publicar y activar siempre con confirm: true');
 });

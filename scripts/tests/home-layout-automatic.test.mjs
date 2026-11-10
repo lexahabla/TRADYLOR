@@ -337,7 +337,8 @@ test('estático: el motor y la previsualización son de sólo lectura y no tocan
   for (const p of ['src/lib/homeLayout/automatic.ts', 'src/pages/api/admin/home-layout/preview.ts']) {
     assert.doesNotMatch(code(p), /writeFileSync|writeHomeLayout|writeStories|fs\.rename|unlinkSync|fetch\(/, p);
   }
-  assert.doesNotMatch(code('src/pages/index.astro'), /homeLayout|home-layout|automatic/);
+  const idx = code('src/pages/index.astro'); assert.match(idx, /lib\/homeLayout\/public/, 'usa el plan público'); assert.doesNotMatch(idx, /writeHomeLayout|writeStories|writeActivation|readHomeLayout|readStories|readActivation|prepareDraftSave|homeLayout\/(draft|publish|store|storiesStore|activationStore|activation)'|upload-image/, 'sólo el plan público de solo lectura');
+  assert.doesNotMatch(code('src/pages/index.astro'), /runAutomatic|automatic'/, 'index.astro no ejecuta el motor: lo hace public.ts');
   assert.doesNotMatch(code('src/layouts/Layout.astro'), /homeLayout/);
   assert.equal(typeof preview.PUT, 'undefined');
   const post = code('src/pages/api/admin/home-layout/preview.ts');
