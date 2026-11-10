@@ -12,7 +12,9 @@
  *   ?compare=A&with=B             Diferencias para pasar de A a B. A y B ∈ draft | published | N. Deben ir las dos
  *                                 (si falta una → 400 `combinacion_no_valida`; valor no válido → 400 `referencia_no_valida`; no existe → 404).
  *   ?check=publish                Comprobación previa a publicar con los datos actuales: { canPublish, reasons[], blocking[], warnings[],
- *                                 changes[], nextVersion }. No publica nada.
+ *                                 changes[], nextVersion, stories }. No publica nada. Ejecuta la selección de los bloques automáticos.
+ *                                 `stories` (etapa 5) = avisos INFORMATIVOS de las historias publicadas internamente (nunca bloquean la
+ *                                 publicación de la portada): { published, issues[] }.
  * Respuestas 200 { success, … } · 400/404 { success:false, code, message } · 500 { code:'error_interno' } sin detalles internos.
  * No devuelve enlaces de afiliado, comisiones, credenciales ni rutas del servidor.
  * ==============================================================================
@@ -26,6 +28,8 @@ import { resolveBlocks } from '../../../../lib/homeLayout/resolve';
 import { revisionOf } from '../../../../lib/homeLayout/draft';
 import { MAX_VERSIONS } from '../../../../lib/homeLayout/validate';
 import { diffBlocks, findVersion, listVersions, nextVersionNumber, splitIssues } from '../../../../lib/homeLayout/publish';
+import { readStories } from '../../../../lib/homeLayout/storiesStore';
+import { checkStories } from '../../../../lib/homeLayout/stories';
 import type { Block, ContentRef } from '../../../../lib/homeLayout/types';
 
 export const prerender = false;
@@ -69,7 +73,7 @@ export const GET: APIRoute = async ({ request }) => {
       if (n === null) return fail(400, 'version_no_valida', 'version debe ser un entero ≥ 1');
       const v = findVersion(doc, n);
       if (!v) return fail(404, 'version_no_encontrada', 'La versión indicada no existe');
-      return ok({ version: v.version, state: v.state, publishedAt: v.publishedAt, blocks: v.blocks, resolved: resolveBlocks(v.blocks, src).blocks });
+      return ok({ version: v.version, state: v.state, publishedAt: v.publishedAt, blocks: v.blocks, resolved: resolveBlocks(v.blocks, src, { runAutomatic: true }).blocks });
     }
 
     if (q.has('compare')) {
@@ -91,7 +95,10 @@ export const GET: APIRoute = async ({ request }) => {
     if (q.has('check')) {
       if (q.get('check') !== 'publish') return fail(400, 'check_no_valido', 'check solo admite publish');
       const blocks = doc.draft.blocks;
-      const { blocking, warnings } = splitIssues(blocks, resolveBlocks(blocks, src).blocks);
+      const { blocking, warnings } = splitIssues(blocks, resolveBlocks(blocks, src, { runAutomatic: true }).blocks);
+      const storyDoc = readStories().doc.draft.stories;
+      const published = storyDoc.filter((s) => s.status === 'publicada');
+      const storyIssues = checkStories(published, src).filter((i) => i.severity !== 'info').slice(0, 50);
       const reasons: string[] = [];
       if (read.status === 'corrupt' || read.status === 'invalid' || read.status === 'newer') reasons.push('archivo_protegido');
       if (doc.draft.updatedAt === null) reasons.push('borrador_vacio');
@@ -108,6 +115,7 @@ export const GET: APIRoute = async ({ request }) => {
         nextVersion: nextVersionNumber(doc),
         revision: revisionOf(doc.draft.updatedAt),
         basePublished: doc.published?.version ?? null,
+        stories: { published: published.length, issues: storyIssues },
       });
     }
 

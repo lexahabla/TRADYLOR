@@ -51,9 +51,11 @@ scripts/tests/facets.test.mjs
 scripts/tests/aliexpress-validate.test.mjs
 scripts/tests/ficha-specs-history.test.mjs
 scripts/tests/home-layout.test.mjs
+scripts/tests/home-layout-automatic.test.mjs
 scripts/tests/home-layout-draft.test.mjs
 scripts/tests/home-layout-publish.test.mjs
 scripts/tests/home-layout-resolve.test.mjs
+scripts/tests/home-layout-stories.test.mjs
 scripts/tests/fixtures/amazon-real-sample-es.json
 scripts/tests/fixtures/fineblue-f920.json
 scripts/tests/fixtures/temu-real-sample-es-pdp-1893.json
@@ -182,12 +184,15 @@ src/lib/deletedProducts.ts
 src/lib/excelExport.ts
 src/lib/formConflicts.ts
 src/lib/geminiGrounded.ts
+src/lib/homeLayout/automatic.ts
 src/lib/homeLayout/draft.ts
 src/lib/homeLayout/publish.ts
 src/lib/homeLayout/resolve.ts
 src/lib/homeLayout/sectionsProposal.ts
 src/lib/homeLayout/sources.ts
 src/lib/homeLayout/store.ts
+src/lib/homeLayout/stories.ts
+src/lib/homeLayout/storiesStore.ts
 src/lib/homeLayout/types.ts
 src/lib/homeLayout/validate.ts
 src/lib/iconLibrary.ts
@@ -304,8 +309,10 @@ src/pages/api/admin/enrich-bulk.ts
 src/pages/api/admin/home-layout/draft.ts
 src/pages/api/admin/home-layout/index.ts
 src/pages/api/admin/home-layout/options.ts
+src/pages/api/admin/home-layout/preview.ts
 src/pages/api/admin/home-layout/publish.ts
 src/pages/api/admin/home-layout/resolve.ts
+src/pages/api/admin/home-layout/stories.ts
 src/pages/api/admin/home-layout/versions.ts
 src/pages/api/admin/icon-library.ts
 src/pages/api/admin/json-import/index.ts
@@ -414,6 +421,7 @@ src/pages/upayp1b4/trafico-ventas/index.astro
 src/pages/upayp1b4/usuarios.astro
 src/styles/tailwind.css
 src/scripts/homeLayoutEditor.ts
+src/scripts/homeLayoutStories.ts
 src/types/buyerProfile.ts
 src/types/radar.ts
 src/utils/affiliate.ts

@@ -16,11 +16,15 @@
  *  · null  — modalidad automática con reglas válidas: depende de una selección que NO se ejecuta todavía.
  * La falta de stock NUNCA oculta un producto: el catálogo no tiene un dato de stock fiable para todas las plataformas.
  * «Presentable» = producto con título y precio utilizable (la falta de imagen sólo avisa).
+ * Etapa 5: con `{ runAutomatic: true }` la modalidad automática EJECUTA su selección (`automatic.ts`, sólo lectura) y su visibilidad deja de
+ * ser desconocida salvo que la selección no sea ejecutable («más recientes» sin fecha de alta fiable). Sin esa opción el comportamiento es el
+ * de la etapa 2 (selección sin ejecutar, `visible = null`).
  * ==============================================================================
  */
 
 import type { Block, ContentRef, Format } from './types';
 import { findCategory, type ProductInfo, type ReferenceSources, type SectionInfo } from './sources';
+import { runAutomatic, type AutoResult } from './automatic';
 
 export type Severity = 'error' | 'warning' | 'info';
 
@@ -52,6 +56,12 @@ export interface ResolvedBlock {
   valid: number;
   refs: ResolvedRef[];
   issues: Issue[];
+  /** Sólo con `runAutomatic`: resultado de la selección automática (ids ordenados y, si procede, la explicación). */
+  selection?: AutoResult;
+}
+
+export interface ResolveOptions {
+  runAutomatic?: boolean;
 }
 
 export interface ResolvedTotals {
@@ -164,12 +174,13 @@ function checkEditorialLink(block: Block, src: ReferenceSources): Issue[] {
 }
 
 /** Resuelve un bloque YA validado por `validate.ts`. Puro: no escribe ni lee nada fuera de `src`. */
-export function resolveBlock(block: Block, src: ReferenceSources): ResolvedBlock {
+export function resolveBlock(block: Block, src: ReferenceSources, opts: ResolveOptions = {}): ResolvedBlock {
   const refs: ResolvedRef[] = [];
   const issues: Issue[] = [];
   let valid = 0;
   let items = block.refs.length;
   let visible: boolean | null;
+  let selection: AutoResult | undefined;
 
   switch (block.modality) {
     case 'manual': {
@@ -206,7 +217,22 @@ export function resolveBlock(block: Block, src: ReferenceSources): ResolvedBlock
     case 'automatica': {
       items = 0;
       issues.push(...checkAutomaticRules(block, src));
-      issues.push(issue('info', 'auto_selection_not_evaluated', 'La selección automática todavía no se ejecuta: la visibilidad se desconoce'));
+      if (!opts.runAutomatic) {
+        issues.push(issue('info', 'auto_selection_not_evaluated', 'La selección automática todavía no se ejecuta: la visibilidad se desconoce'));
+        break;
+      }
+      const rules = (block.config as { rules: Parameters<typeof runAutomatic>[0] }).rules;
+      selection = runAutomatic(rules, src);
+      items = selection.ids.length;
+      valid = selection.ids.filter((id) => isPresentable(src.products.get(id))).length;
+      if (selection.status === 'ok') {
+        issues.push(issue('info', 'auto_selection_ok', `La selección devuelve ${items} producto(s)${valid < items ? ` (${items - valid} sin precio utilizable)` : ''}`));
+      } else if (selection.status === 'vacio') {
+        issues.push(issue('warning', 'auto_selection_empty', selection.message ?? 'La selección no devuelve productos'));
+      } else if (selection.status === 'no_ejecutable') {
+        issues.push(issue('warning', 'auto_selection_not_executable', selection.message ?? 'La selección no se puede ejecutar'));
+      }
+      // `reglas_invalidas`: ya informado como error por `checkAutomaticRules` (no se duplica).
       break;
     }
   }
@@ -218,8 +244,18 @@ export function resolveBlock(block: Block, src: ReferenceSources): ResolvedBlock
   if (!block.visible) {
     issues.push(issue('info', 'block_hidden_by_admin', 'El bloque está oculto por el administrador'));
     visible = false;
-  } else if (block.modality === 'automatica') {
+  } else if (block.modality === 'automatica' && !opts.runAutomatic) {
     visible = blockingBlockIssue ? false : null;
+  } else if (block.modality === 'automatica') {
+    if (blockingBlockIssue || selection?.status === 'vacio') visible = false;
+    else if (selection?.status === 'no_ejecutable') visible = null;
+    else if (valid === 0) {
+      issues.push(issue('warning', 'block_without_valid_content', 'Ningún producto de la selección es presentable: el bloque no se mostraría'));
+      visible = false;
+    } else if (valid < min) {
+      issues.push(issue('warning', 'below_format_minimum', `El formato necesita al menos ${min} elementos presentables (hay ${valid}): el bloque no se mostraría`));
+      visible = false;
+    } else visible = true;
   } else if (block.modality === 'editorial') {
     visible = !blockingBlockIssue;
   } else if (valid === 0) {
@@ -244,11 +280,12 @@ export function resolveBlock(block: Block, src: ReferenceSources): ResolvedBlock
     valid,
     refs,
     issues: all.slice(0, MAX_ISSUES_PER_BLOCK),
+    ...(selection ? { selection } : {}),
   };
 }
 
-export function resolveBlocks(blocks: Block[], src: ReferenceSources): { blocks: ResolvedBlock[]; totals: ResolvedTotals } {
-  const resolved = blocks.map((b) => resolveBlock(b, src));
+export function resolveBlocks(blocks: Block[], src: ReferenceSources, opts: ResolveOptions = {}): { blocks: ResolvedBlock[]; totals: ResolvedTotals } {
+  const resolved = blocks.map((b) => resolveBlock(b, src, opts));
   const totals: ResolvedTotals = { blocks: resolved.length, visible: 0, hidden: 0, unknown: 0, errors: 0, warnings: 0, info: 0 };
   for (const b of resolved) {
     if (b.visible === true) totals.visible++;

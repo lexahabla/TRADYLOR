@@ -11,6 +11,9 @@
  *              · published bloques de la portada publicada (vacío si no hay ninguna)
  *              · proposal  bloques «Sección» generados EN MEMORIA desde las secciones publicadas de «Crear sección» (no se guardan)
  *              Otro valor → 400 `source_no_valido`.
+ *   auto     = 1 (opcional, etapa 5): EJECUTA la selección de los bloques automáticos (sólo lectura, `automatic.ts`); sin él la selección
+ *              sigue sin ejecutarse (`visible: null`), como en la etapa 2. Otro valor → 400 `auto_no_valido`. Con `auto=1` cada bloque
+ *              automático incluye `selection` (estado, ids, explicación y recuentos).
  * Respuestas:
  *   200 { success, source, generatedAt, storage, sources, totals, blocks[], proposal? }
  *       blocks[].visible = true | false | null (null = modalidad automática sin evaluar); blocks[].issues[] con gravedad error|warning|info.
@@ -46,13 +49,15 @@ export const GET: APIRoute = async ({ request }) => {
     const url = new URL(request.url);
     const seen = new Set<string>();
     for (const key of url.searchParams.keys()) {
-      if (key !== 'source') return fail(400, 'parametro_desconocido', `Parámetro no admitido: ${key.slice(0, 40)}`);
-      if (seen.has(key)) return fail(400, 'parametro_duplicado', 'El parámetro «source» está repetido');
+      if (key !== 'source' && key !== 'auto') return fail(400, 'parametro_desconocido', `Parámetro no admitido: ${key.slice(0, 40)}`);
+      if (seen.has(key)) return fail(400, 'parametro_duplicado', 'El parámetro «' + key + '» está repetido');
       seen.add(key);
     }
     const raw = url.searchParams.get('source') ?? 'draft';
     if (!SOURCES.includes(raw as SourceName)) return fail(400, 'source_no_valido', 'source debe ser draft, published o proposal');
     const source = raw as SourceName;
+    const autoRaw = url.searchParams.get('auto');
+    if (autoRaw !== null && autoRaw !== '1') return fail(400, 'auto_no_valido', 'auto solo admite el valor 1');
 
     const read = readHomeLayout();
     const src = loadSources();
@@ -83,7 +88,7 @@ export const GET: APIRoute = async ({ request }) => {
       };
     }
 
-    const { blocks: resolved, totals } = resolveBlocks(blocks, src);
+    const { blocks: resolved, totals } = resolveBlocks(blocks, src, { runAutomatic: autoRaw === '1' });
     return new Response(
       JSON.stringify({
         success: true,

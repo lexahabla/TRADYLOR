@@ -31,6 +31,16 @@ export interface ProductInfo {
   network: string;
   category: string;
   linkStatus: string;
+  /** Etapa 5 (aditivo, opcional). Identificadores de categoría y subcategoría del catálogo, si el producto los tiene. */
+  categoryId?: string;
+  subcategoryId?: string;
+  /** Imagen principal tal y como figura en el catálogo (ruta propia o URL); sólo se expone si es segura. */
+  image?: string;
+  /**
+   * Fecha de alta FIABLE (ISO) o null. Sólo se toma `extra.importMeta.importedAt`, que graba la importación JSON al CREAR la ficha. Nunca se
+   * deduce de fechas de modificación, de precio o de captura: los productos creados por otras vías no tienen fecha de alta fiable.
+   */
+  addedAt?: string | null;
 }
 
 export interface CategoryInfo {
@@ -79,6 +89,15 @@ function priceOf(value: unknown): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/** Fecha de alta fiable (ver `ProductInfo.addedAt`): ISO válida y no futura, o null. */
+function reliableAddedAt(p: Record<string, unknown>): string | null {
+  const extra = p.extra as { importMeta?: { importedAt?: unknown } } | undefined;
+  const v = extra?.importMeta?.importedAt;
+  if (typeof v !== 'string') return null;
+  const ms = Date.parse(v);
+  return Number.isFinite(ms) && ms <= Date.now() + 86_400_000 ? v : null;
+}
+
 /* ───────── Productos ───────── */
 function readProducts(): { map: Map<string, ProductInfo>; retired: Set<string>; networks: Map<string, number>; status: SourceStatus } {
   const map = new Map<string, ProductInfo>();
@@ -99,6 +118,10 @@ function readProducts(): { map: Map<string, ProductInfo>; retired: Set<string>; 
         network,
         category: typeof p.category === 'string' ? p.category : '',
         linkStatus: typeof p.link_status === 'string' ? p.link_status : '',
+        categoryId: typeof p.category_id === 'string' && p.category_id ? p.category_id : undefined,
+        subcategoryId: typeof p.subcategory_id === 'string' && p.subcategory_id ? p.subcategory_id : undefined,
+        image: typeof p.image === 'string' && p.image.trim() ? p.image.trim().slice(0, 600) : undefined,
+        addedAt: reliableAddedAt(p),
       });
       if (network) networks.set(network, (networks.get(network) ?? 0) + 1);
     }

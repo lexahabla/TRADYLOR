@@ -10,6 +10,9 @@
  * Etapa 4 · pestaña «Publicación y versiones»: publica el borrador GUARDADO como versión INTERNA (no activa la portada pública), lista el
  *   historial, previsualiza y compara versiones y recupera una versión como borrador. Cada acción exige confirmación explícita y se envía con
  *   UNA sola petición POST (`act`), nunca de forma automática.
+ * Etapa 5 · previsualizaciones con datos REALES (imágenes, títulos y precios del catálogo, selección de la modalidad Automática) y comprobación
+ *   de referencias EN VIVO sobre lo que se edita aunque no esté guardado (POST de sólo lectura a /preview: no escribe nada); pestaña C «Historias»
+ *   (módulo `homeLayoutStories.ts`, almacenamiento propio).
  * Las operaciones sobre bloques son las funciones puras de `lib/homeLayout/draft.ts`; la validación, la de `validate.ts`.
  * ==============================================================================
  */
@@ -35,10 +38,15 @@ import {
 } from '../lib/homeLayout/draft';
 
 import type { BlockingIssue, DiffEntry, VersionSummary } from '../lib/homeLayout/publish';
+import { initHomeLayoutStories } from './homeLayoutStories';
 
 /* ───────────────────────── Tipos de las API de lectura ───────────────────────── */
 interface Issue { severity: 'error' | 'warning' | 'info'; code: string; message: string }
-interface ResolvedBlock { id: string; visible: boolean | null; items: number; valid: number; issues: Issue[]; refs: Array<{ kind: string; id: string; label?: string; status: string }> }
+interface AutoSel { status: 'ok' | 'vacio' | 'no_ejecutable' | 'reglas_invalidas'; ids: string[]; reason?: string; message?: string }
+interface ResolvedBlock { id: string; visible: boolean | null; items: number; valid: number; issues: Issue[]; refs: Array<{ kind: string; id: string; label?: string; status: string }>; selection?: AutoSel }
+interface PItem { kind: 'product' | 'category'; id: string; title: string; price: number | null; image: string | null; network: string; inStock: boolean | null; missing?: boolean }
+interface BlockPreview { items: PItem[]; auto?: { status: AutoSel['status']; message?: string; reason?: string; items: PItem[]; stats?: Record<string, number> }; note?: string }
+type PvData = Record<string, BlockPreview>;
 interface CatOption { id: string; name: string; parentId: string | null; level: string }
 interface SecOption { id: string; title: string; published: boolean; productCount: number; validProductCount: number }
 interface MerOption { id: string; productCount: number }
@@ -87,7 +95,12 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     msg: null as Msg,
     resolved: new Map<string, ResolvedBlock>(),
     resolvedStale: true,
+    /** Datos reales de las previsualizaciones (bloque → elementos), calculados por el servidor con lo que hay en el editor. */
+    pv: {} as PvData,
+    pvInvalid: {} as Record<string, string[]>,
   };
+  let liveTimer: number | undefined;
+  let liveSeq = 0;
   const catalog = { categories: [] as CatOption[], sections: [] as SecOption[], merchants: [] as MerOption[] };
   const info = new Map<string, { label: string; price?: number | null }>();
   const key = (r: ContentRef) => `${r.kind}:${r.id}`;
@@ -110,6 +123,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   const tabs = h('div', { class: 'pe-tabs', role: 'tablist', 'aria-label': 'Secciones del editor de portada' });
   const editorPane = h('div', { class: 'pe-pane', id: 'peEditorPane', role: 'tabpanel' });
   const versionsPane = h('div', { class: 'pe-pane', id: 'peVersionsPane', role: 'tabpanel', hidden: true });
+  const storiesPane = h('div', { class: 'pe-pane', id: 'peStoriesPane', role: 'tabpanel', hidden: true });
   editorPane.append(
     toolbar,
     banner,
@@ -117,7 +131,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     h('div', { class: 'pe-main' }, h('div', {}, canvasWrap, h('p', { class: 'pe-note' }, 'Arrastra ⠿ o usa ▲ ▼ para ordenar · pulsa un ancho para cambiarlo. Los bloques no se muestran en la web con una búsqueda o categoría activa. Solo se guarda al pulsar «Guardar borrador»; nada se publica.')), props),
     previews,
   );
-  root.append(tabs, editorPane, versionsPane, live, modal);
+  root.append(tabs, editorPane, versionsPane, storiesPane, live, modal);
 
   /* ---- API ---- */
   async function api(path: string, init?: RequestInit): Promise<{ status: number; body: any }> {
@@ -146,9 +160,14 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     return { ok: v.ok, errors: v.ok ? [] : v.errors, byIndex };
   }
   const isDirty = () => JSON.stringify(state.blocks) !== state.saved;
+  function scheduleLive() {
+    window.clearTimeout(liveTimer);
+    liveTimer = window.setTimeout(() => { void refreshLive(); }, 450);
+  }
   function touch() {
     state.dirty = isDirty();
     state.resolvedStale = true;
+    scheduleLive();
     renderToolbar();
     renderCanvas();
     renderPreviews();
@@ -158,6 +177,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     if (opts.focus) focusKey = opts.focus;
     state.dirty = isDirty();
     state.resolvedStale = true;
+    scheduleLive();
     renderAll();
   }
   const selected = () => state.blocks.find((b) => b.id === state.sel) ?? null;
@@ -175,14 +195,25 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     for (const x of catalog.categories) info.set(`category:${x.id}`, { label: x.name });
     for (const x of catalog.sections) info.set(`section:${x.id}`, { label: x.title });
   }
-  async function loadResolved() {
-    const r = await api('/api/admin/home-layout/resolve?source=draft');
-    if (r.status === 200) {
-      state.resolved = new Map((r.body.blocks as ResolvedBlock[]).map((b) => [b.id, b]));
-      for (const b of r.body.blocks as ResolvedBlock[]) for (const ref of b.refs) if (ref.label) info.set(`${ref.kind}:${ref.id}`, { label: ref.label, price: info.get(`${ref.kind}:${ref.id}`)?.price });
+  /** Comprueba y previsualiza LO QUE HAY EN EL EDITOR (guardado o no) con los datos actuales del catálogo. Sólo lectura: no guarda nada. */
+  async function refreshLive() {
+    const seq = ++liveSeq;
+    const r = await api('/api/admin/home-layout/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Home-Layout-Editor': '1' },
+      body: JSON.stringify({ blocks: state.blocks }),
+    });
+    if (seq !== liveSeq) return; // llegó una respuesta más antigua que otra posterior
+    if (r.status === 200 && r.body?.success) {
+      state.pv = r.body.blocks as PvData;
+      state.pvInvalid = r.body.invalid as Record<string, string[]>;
+      state.resolved = new Map((r.body.resolved.blocks as ResolvedBlock[]).map((b) => [b.id, b]));
+      for (const b of r.body.resolved.blocks as ResolvedBlock[]) for (const ref of b.refs) if (ref.label) info.set(`${ref.kind}:${ref.id}`, { label: ref.label, price: info.get(`${ref.kind}:${ref.id}`)?.price });
       state.resolvedStale = false;
+      if (tab === 'editor') { renderCanvas(); renderProps(); renderPreviews(); }
     }
   }
+  const loadResolved = () => refreshLive();
   async function load() {
     const r = await api('/api/admin/home-layout/draft');
     if (r.status !== 200 || !r.body?.success) { say({ kind: 'error', text: r.status === 401 ? 'La sesión ha caducado: vuelve a iniciar sesión.' : 'No se pudo cargar el borrador.' }); return; }
@@ -325,7 +356,11 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   function thumbs(b: Block): HTMLElement {
     const n = b.format === 'cuadricula2x2' ? 4 : 5;
     if (b.modality === 'editorial') return h('div', { class: 'pe-thumbs' }, h('span', { class: 'pe-banner-th' }, (b.config as { headline?: string }).headline || 'Editorial'));
-    if (b.modality === 'automatica') return h('div', { class: 'pe-thumbs' }, h('span', { class: 'pe-banner-th' }, 'Selección automática (no ejecutada)'));
+    if (b.modality === 'automatica') {
+      const a = state.pv[b.id]?.auto;
+      if (a?.status === 'ok') return h('div', { class: 'pe-thumbs' }, ...a.items.slice(0, n).map((it) => h('span', { title: it.title }, it.title.slice(0, 14))));
+      return h('div', { class: 'pe-thumbs' }, h('span', { class: 'pe-banner-th' + (a ? ' is-empty' : '') }, a?.message ? a.message.slice(0, 90) : 'Selección automática (calculando…)'));
+    }
     const refs = b.refs.slice(0, n);
     if (!refs.length) return h('div', { class: 'pe-thumbs' }, h('span', { class: 'pe-banner-th is-empty' }, 'Sin contenido: complétalo'));
     return h('div', { class: 'pe-thumbs' }, ...refs.map((r) => h('span', { title: labelOf(r) }, labelOf(r).slice(0, 14))));
@@ -333,11 +368,12 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   function statusBadge(b: Block): HTMLElement | null {
     const rb = state.resolved.get(b.id);
     if (!rb) return h('span', { class: 'pe-badge' }, 'Sin comprobar');
-    if (state.resolvedStale) return h('span', { class: 'pe-badge', title: 'Guarda el borrador para actualizar la comprobación' }, 'Comprobación pendiente');
+    if (state.resolvedStale) return h('span', { class: 'pe-badge', title: 'Se está comprobando con los datos actuales del catálogo' }, 'Comprobando…');
     const errs = rb.issues.filter((i) => i.severity === 'error').length;
     const warns = rb.issues.filter((i) => i.severity === 'warning').length;
     const vis = rb.visible === true ? '✓ Se mostraría' : rb.visible === false ? '● No se mostraría' : '? Visibilidad sin evaluar';
-    return h('span', { class: `pe-badge ${rb.visible === false ? 'is-err' : errs || warns ? 'is-warn' : 'is-ok'}`, title: rb.issues.map((i) => i.message).slice(0, 6).join('\n') }, `${vis}${errs ? ` · ${errs} error(es)` : ''}${warns ? ` · ${warns} aviso(s)` : ''}`);
+    const auto = b.modality === 'automatica' && rb.selection ? ` · ${rb.items} producto(s)` : '';
+    return h('span', { class: `pe-badge ${rb.visible === false ? 'is-err' : errs || warns ? 'is-warn' : 'is-ok'}`, title: rb.issues.map((i) => i.message).slice(0, 6).join('\n') }, `${vis}${auto}${errs ? ` · ${errs} error(es)` : ''}${warns ? ` · ${warns} aviso(s)` : ''}`);
   }
   function renderCanvas() {
     canvasWrap.className = `pe-frame ${state.device === 'mobile' ? 'is-mobile' : ''}`;
@@ -471,7 +507,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
       const s = catalog.sections.find((x) => x.id === id);
       info.set(`section:${id}`, { label: s?.title ?? id });
       state.blocks = updateBlock(state.blocks, b.id, { refs: [{ kind: 'section', id }], title: b.title && b.title !== 'Nuevo bloque' ? b.title : (s?.title ?? b.title).slice(0, 120) });
-      state.dirty = isDirty(); state.resolvedStale = true; renderAll();
+      state.dirty = isDirty(); state.resolvedStale = true; scheduleLive(); renderAll();
     } }, ...optionList(catalog.sections.map((s) => ({ value: s.id, label: `${s.title}${s.published ? '' : ' (no publicada)'} · ${s.validProductCount}/${s.productCount} productos` })), cur, 'Elige una sección…'));
     const s = catalog.sections.find((x) => x.id === cur);
     return h('div', {},
@@ -480,16 +516,24 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
       s && !s.published ? h('p', { class: 'pe-note pe-warn' }, 'La sección no está publicada: el bloque no se mostraría.') : null);
   }
 
+  /** Resultado real de la selección con los datos actuales (sólo lectura): cuántos productos devuelve o por qué no devuelve ninguno. */
+  function autoStatus(b: Block): HTMLElement {
+    const a = state.pv[b.id]?.auto;
+    if (state.resolvedStale || !a) return h('p', { class: 'pe-note' }, 'Calculando la selección con los datos actuales del catálogo…');
+    if (a.status === 'ok') return h('p', { class: 'pe-note pe-ok' }, `✓ La selección devuelve ${a.items.length} producto(s) con los datos actuales. Sólo se calcula para previsualizar y validar; no se muestra en la web pública.`);
+    return h('p', { class: 'pe-note pe-warn', role: 'status' }, `⚠ ${a.message ?? 'La selección no devuelve productos.'}`);
+  }
+
   function automaticEditor(b: Block): HTMLElement {
     const rules = (b.config as { rules: { categoryId?: string; subcategoryId?: string; merchant?: string; order: string; limit: number; onlyWithPrice?: boolean } }).rules;
     const roots = catalog.categories.filter((c) => !c.parentId);
     const subs = catalog.categories.filter((c) => c.parentId && c.parentId === rules.categoryId);
     return h('div', {},
-      h('p', { class: 'pe-note pe-warn' }, 'La selección automática se podrá configurar pero todavía NO se ejecuta: aquí solo se guardan las reglas.'),
+      autoStatus(b),
       field('Categoría', h('select', { onchange: (e: any) => { patchRules(b.id, { categoryId: e.target.value, subcategoryId: '' }); renderProps(); } }, ...optionList(roots.map((c) => ({ value: c.id, label: c.name })), rules.categoryId, 'Cualquiera'))),
       field('Subcategoría', h('select', { disabled: !subs.length, onchange: (e: any) => patchRules(b.id, { subcategoryId: e.target.value }) }, ...optionList(subs.map((c) => ({ value: c.id, label: c.name })), rules.subcategoryId, subs.length ? 'Cualquiera' : 'Sin subcategorías'))),
       field('Comercio o plataforma', h('select', { onchange: (e: any) => patchRules(b.id, { merchant: e.target.value }) }, ...optionList(catalog.merchants.map((m) => ({ value: m.id, label: `${m.id} (${m.productCount})` })), rules.merchant, 'Cualquiera'))),
-      field('Orden', h('select', { onchange: (e: any) => patchRules(b.id, { order: e.target.value }) }, ...optionList(Object.entries(ORDER_LABEL).map(([value, label]) => ({ value, label })), rules.order)), 'Solo criterios con datos fiables: no hay descuentos, bajadas de precio ni ventas.'),
+      field('Orden', h('select', { onchange: (e: any) => patchRules(b.id, { order: e.target.value }) }, ...optionList(Object.entries(ORDER_LABEL).map(([value, label]) => ({ value, label })), rules.order)), 'Solo criterios con datos fiables: no hay descuentos, bajadas de precio ni ventas. «Más recientes» sólo funciona si todos los productos tienen fecha de alta fiable.'),
       field(`Máximo de productos (1–${maxItemsFor(b.format)})`, h('input', { type: 'number', min: 1, max: maxItemsFor(b.format), value: rules.limit, oninput: (e: any) => patchRules(b.id, { limit: Number(e.target.value) }) })),
       h('label', { class: 'pe-check' }, h('input', { type: 'checkbox', checked: rules.onlyWithPrice === true, onchange: (e: any) => patchRules(b.id, { onlyWithPrice: e.target.checked ? true : undefined }) }), ' Solo productos con precio'));
   }
@@ -539,37 +583,52 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   }
 
   /* ---- Vista previa (de lo que hay en el editor, guardado o no) ---- */
-  function pvCard(label: string, price?: number | null): HTMLElement {
-    return h('div', { class: 'pv-card' }, h('div', { class: 'pv-im' }, '🖼'), h('div', { class: 'pv-tt' }, label), price ? h('div', { class: 'pv-pr' }, eur(price)) : null);
+  function pvImg(src: string | null, alt = ''): HTMLElement {
+    return src ? h('img', { src, alt, loading: 'lazy', referrerpolicy: 'no-referrer', onerror: (e: any) => { e.target.replaceWith(document.createTextNode('🖼')); } }) : h('span', { class: 'pv-noimg' }, '🖼');
   }
-  function pvBlock(b: Block, mobile: boolean): HTMLElement {
+  function pvCard(it: { title: string; price?: number | null; image?: string | null; missing?: boolean }): HTMLElement {
+    return h('div', { class: `pv-card${it.missing ? ' is-missing' : ''}` }, h('div', { class: 'pv-im' }, pvImg(it.image ?? null)), h('div', { class: 'pv-tt' }, it.title), it.price ? h('div', { class: 'pv-pr' }, eur(it.price)) : null);
+  }
+  /** Elementos de un bloque: los del servidor (datos reales) y, mientras llegan, los que ya se conocen por etiqueta. */
+  function itemsOf(b: Block, data: PvData): { items: PItem[]; note?: string; auto?: BlockPreview['auto'] } {
+    const d = data[b.id];
+    if (d) return { items: d.auto ? d.auto.items : d.items, note: d.note, auto: d.auto };
+    if (b.modality === 'manual') return { items: b.refs.map((r) => ({ kind: r.kind === 'category' ? 'category' : 'product', id: r.id, title: labelOf(r), price: info.get(key(r))?.price ?? null, image: null, network: '', inStock: null }) as PItem) };
+    return { items: [] };
+  }
+  function pvBlock(b: Block, mobile: boolean, data: PvData = state.pv): HTMLElement {
     const span = mobile ? (b.width === 3 ? 6 : 12) : b.width;
     const el = h('div', { class: `pv-bk${b.visible ? '' : ' is-off'}`, style: `grid-column: span ${span}` });
     const title = b.modality === 'editorial' ? (b.config as { headline?: string }).headline || b.title : b.title;
     if (!b.visible) el.append(h('div', { class: 'pv-hidden' }, `Oculto: ${b.title}`));
     else if (b.modality === 'editorial') {
-      const c = b.config as { text?: string; buttonLabel?: string };
-      el.append(h('div', { class: 'pv-ban' }, h('h4', {}, title), c.text ? h('p', {}, c.text) : null, c.buttonLabel ? h('span', { class: 'pv-btn' }, c.buttonLabel) : null));
-    } else if (b.modality === 'automatica') {
-      const r = (b.config as { rules: { categoryId?: string; merchant?: string; order: string; limit: number } }).rules;
-      el.append(h('div', { class: 'pv-bt' }, b.title), h('div', { class: 'pv-auto' }, `Selección automática · ${r.categoryId ? labelOf({ kind: 'category', id: r.categoryId }) : 'todas las categorías'}${r.merchant ? ` · ${r.merchant}` : ''} · ${ORDER_LABEL[r.order] ?? r.order} · hasta ${r.limit} (sin ejecutar)`));
-    } else if (b.modality === 'seccion') {
-      const r = b.refs[0];
-      el.append(h('div', { class: 'pv-bt' }, b.title), r ? h('div', { class: 'pv-auto' }, `Sección «${labelOf(r)}» (se resuelve al publicar)`) : h('div', { class: 'pv-hidden' }, 'Elige una sección'));
+      const c = b.config as { text?: string; buttonLabel?: string; imageUrl?: string };
+      el.append(h('div', { class: `pv-ban${c.imageUrl ? ' has-img' : ''}` }, c.imageUrl ? h('img', { class: 'pv-ban-img', src: c.imageUrl, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer', onerror: (e: any) => { e.target.remove(); } }) : null, h('h4', {}, title), c.text ? h('p', {}, c.text) : null, c.buttonLabel ? h('span', { class: 'pv-btn' }, c.buttonLabel) : null));
     } else {
-      const items = b.refs.slice(0, b.format === 'cuadricula2x2' ? 4 : 8);
-      const cards = items.map((r) => pvCard(labelOf(r), info.get(key(r))?.price));
-      el.append(h('div', { class: 'pv-bt' }, b.title), items.length ? h('div', { class: b.format === 'cuadricula2x2' ? 'pv-grid' : 'pv-rail' }, ...cards) : h('div', { class: 'pv-hidden' }, 'Sin elementos'));
+      const { items, note, auto } = itemsOf(b, data);
+      const max = b.format === 'cuadricula2x2' ? 4 : 8;
+      el.append(h('div', { class: 'pv-bt' }, b.title));
+      if (b.modality === 'automatica') {
+        const r = (b.config as { rules: { categoryId?: string; merchant?: string; order: string; limit: number } }).rules;
+        el.append(h('div', { class: 'pv-auto' }, `Selección automática · ${r.categoryId ? labelOf({ kind: 'category', id: r.categoryId }) : 'todas las categorías'}${r.merchant ? ` · ${r.merchant}` : ''} · ${ORDER_LABEL[r.order] ?? r.order} · hasta ${r.limit}`));
+        if (auto && auto.status !== 'ok') { el.append(h('div', { class: 'pv-hidden' }, auto.message ?? 'La selección no devuelve productos')); return el; }
+      }
+      if (note) { el.append(h('div', { class: 'pv-hidden' }, note)); return el; }
+      const shown = items.slice(0, max);
+      if (!shown.length) { el.append(h('div', { class: 'pv-hidden' }, b.modality === 'seccion' && !b.refs.length ? 'Elige una sección' : b.modality === 'automatica' ? 'Calculando…' : 'Sin elementos')); return el; }
+      if (b.format !== 'cuadricula2x2' && shown.length < items.length) el.append(h('div', { class: 'pv-more' }, `+${items.length - shown.length}`));
+      el.append(h('div', { class: b.format === 'cuadricula2x2' ? 'pv-grid' : 'pv-rail' }, ...shown.map((it) => pvCard(it))));
     }
     return el;
   }
-  function pvFrame(label: string, mobile: boolean, blocks: Block[] = state.blocks, chip: string = state.dirty ? 'con cambios sin guardar' : 'borrador guardado'): HTMLElement {
+  function pvFrame(label: string, mobile: boolean, blocks: Block[] = state.blocks, chip: string = state.dirty ? 'con cambios sin guardar' : 'borrador guardado', data: PvData = state.pv): HTMLElement {
     const inner = h('div', { class: `pv${mobile ? ' is-m' : ''}` },
       h('div', { class: 'pv-hd' }, h('b', {}, 'Treidilor'), h('span', {}, '🔍 Buscar productos…')),
-      h('div', { class: 'pv-grid12' }, ...blocks.map((b) => pvBlock(b, mobile))));
+      h('div', { class: 'pv-grid12' }, ...blocks.map((b) => pvBlock(b, mobile, data))));
     const win = h('div', { class: `pe-pvwin${mobile ? ' is-phone' : ''}` }, inner);
     return h('div', { class: 'pe-pvbox' }, h('h3', {}, label, h('span', { class: 'pe-chip-s' }, chip)), win);
   }
+  const previewNote = () => h('p', { class: 'pe-note pe-pvnote' }, 'Vista aproximada con los datos reales del catálogo (imágenes, títulos, precios, orden, anchos y selección automática). Aún dependen de la integración en la web pública (etapa 6): el aspecto exacto de las tarjetas, la tipografía, el espaciado y las animaciones.');
   /** Escala: escritorio = 1200 px virtuales; móvil = 390 px virtuales. Hay que llamarla con las cajas ya insertadas en el documento. */
   function scalePreviews(boxes: Array<[HTMLElement, number]>) {
     for (const [box, nat] of boxes) {
@@ -587,12 +646,12 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     clear(previews);
     const d = pvFrame('Vista previa · escritorio', false);
     const m = pvFrame('Vista previa · móvil', true);
-    previews.append(d, m);
+    previews.append(d, m, previewNote());
     scalePreviews([[d, 1200], [m, 390]]);
   }
 
   /* ---- Pestaña B · Publicación y versiones (etapa 4) ---- */
-  type Tab = 'editor' | 'versions';
+  type Tab = 'editor' | 'versions' | 'stories';
   let tab: Tab = 'editor';
   const vs = {
     loaded: false,
@@ -605,7 +664,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     versions: [] as VersionSummary[],
     maxVersions: 100,
     msg: null as Msg,
-    detail: null as null | { title: string; kind: 'preview' | 'compare'; blocks?: Block[]; changes?: DiffEntry[]; chip?: string },
+    detail: null as null | { title: string; kind: 'preview' | 'compare'; blocks?: Block[]; changes?: DiffEntry[]; chip?: string; data?: PvData },
     busy: false,
   };
   const dateTxt = (iso: string) => new Date(iso).toLocaleString('es-ES');
@@ -614,20 +673,22 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
 
   function renderTabs() {
     clear(tabs);
-    const mk = (id: Tab, label: string) => h('button', { class: 'pe-tab', type: 'button', role: 'tab', 'aria-selected': String(tab === id), 'aria-controls': id === 'editor' ? 'peEditorPane' : 'peVersionsPane', onclick: () => { void setTab(id); } }, label);
+    const mk = (id: Tab, label: string) => h('button', { class: 'pe-tab', type: 'button', role: 'tab', 'aria-selected': String(tab === id), 'aria-controls': id === 'editor' ? 'peEditorPane' : id === 'versions' ? 'peVersionsPane' : 'peStoriesPane', onclick: () => { void setTab(id); } }, label);
     tabs.append(
       mk('editor', 'A · Editor'),
       mk('versions', 'B · Publicación y versiones'),
-      h('button', { class: 'pe-tab', type: 'button', role: 'tab', disabled: true, title: 'Llegará en una etapa posterior' }, 'C · Historias (próximamente)'),
+      mk('stories', 'C · Historias'),
     );
   }
   async function setTab(next: Tab) {
     tab = next;
     editorPane.hidden = next !== 'editor';
     versionsPane.hidden = next !== 'versions';
+    storiesPane.hidden = next !== 'stories';
     renderTabs();
     if (next === 'editor') renderPreviews();
-    else await loadVersions();
+    else if (next === 'versions') await loadVersions();
+    else stories.activate();
   }
 
   async function loadVersions() {
@@ -647,10 +708,10 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   }
 
   async function showVersion(v: number) {
-    const r = await api(`/api/admin/home-layout/versions?version=${v}`);
+    const [r, p] = await Promise.all([api(`/api/admin/home-layout/versions?version=${v}`), api(`/api/admin/home-layout/preview?version=${v}`)]);
     if (r.status !== 200 || !r.body?.success) { vsay({ kind: 'error', text: r.status === 404 ? 'Esa versión ya no existe.' : 'No se pudo cargar la versión.' }); return; }
     for (const rb of r.body.resolved as ResolvedBlock[]) for (const ref of rb.refs) if (ref.label) info.set(`${ref.kind}:${ref.id}`, { label: ref.label, price: info.get(`${ref.kind}:${ref.id}`)?.price });
-    vs.detail = { title: `Versión ${v} · ${r.body.state === 'published' ? 'publicada internamente' : 'archivada'}`, kind: 'preview', blocks: r.body.blocks as Block[], chip: `v${v} · ${dateTxt(r.body.publishedAt)}` };
+    vs.detail = { title: `Versión ${v} · ${r.body.state === 'published' ? 'publicada internamente' : 'archivada'}`, kind: 'preview', blocks: r.body.blocks as Block[], data: p.status === 200 && p.body?.success ? (p.body.blocks as PvData) : {}, chip: `v${v} · ${dateTxt(r.body.publishedAt)}` };
     vs.msg = null;
     renderVersions();
   }
@@ -791,9 +852,9 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
         versionsPane.append(box);
       } else {
         const blocks = d.blocks ?? [];
-        const dsk = pvFrame('Escritorio', false, blocks, d.chip ?? '');
-        const mob = pvFrame('Móvil', true, blocks, d.chip ?? '');
-        box.append(blocks.length ? h('div', { class: 'pe-previews' }, dsk, mob) : h('p', { class: 'pe-note' }, 'Esta versión no tiene bloques.'), h('p', { class: 'pe-note' }, 'Vista aproximada con marcadores (no es la web pública). Los textos de producto se resuelven con el catálogo actual.'));
+        const dsk = pvFrame('Escritorio', false, blocks, d.chip ?? '', d.data ?? {});
+        const mob = pvFrame('Móvil', true, blocks, d.chip ?? '', d.data ?? {});
+        box.append(blocks.length ? h('div', { class: 'pe-previews' }, dsk, mob) : h('p', { class: 'pe-note' }, 'Esta versión no tiene bloques.'), previewNote());
         versionsPane.append(box);
         scalePreviews([[dsk, 1200], [mob, 390]]);
       }
@@ -816,6 +877,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   }
   window.addEventListener('resize', () => { if (state.loaded) renderPreviews(); });
 
+  const stories = initHomeLayoutStories(storiesPane, { api, confirmBox, announce: (t) => { live.textContent = t; } });
   renderTabs();
   renderVersions();
   renderAll();

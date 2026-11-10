@@ -406,6 +406,9 @@ test('estático: el módulo de publicación es puro, los endpoints no activan na
   const client = code('src/scripts/homeLayoutEditor.ts');
   assert.doesNotMatch(client, /innerHTML|outerHTML|insertAdjacentHTML|document\.write|\beval\(|new Function/);
   assert.doesNotMatch(client, /setInterval|setTimeout\([^)]*(publish|restore)/i, 'sin publicación automática');
-  assert.equal((client.match(/method: 'POST'/g) ?? []).length, 1, 'un único punto de publicación/recuperación');
+  // Etapa 5 añade un segundo POST, de SÓLO LECTURA (previsualización de lo que hay en el editor): el de publicar/recuperar sigue siendo único.
+  assert.equal((client.match(/home-layout\/publish'/g) ?? []).length, 1, 'un único punto de publicación/recuperación');
+  assert.equal((client.match(/home-layout\/preview', \{\s*method: 'POST'/g) ?? []).length, 1, 'el otro POST es la previsualización de sólo lectura');
+  assert.equal((client.match(/method: 'POST'/g) ?? []).length, 2);
   assert.equal((client.match(/confirm: true/g) ?? []).length, 1);
 });
