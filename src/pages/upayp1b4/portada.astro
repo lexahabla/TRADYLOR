@@ -1,0 +1,127 @@
+---
+/**
+ * TREIDILOR — /upayp1b4/portada (etapa 1: integración administrativa, SOLO LECTURA)
+ *
+ * Apartado «Portada» del backend. Reutiliza la cabecera, el menú de usuario, la miga de pan y la navegación del backend (mismo patrón que
+ * Marketing). En esta etapa únicamente muestra el estado: la portada pública actual sigue activa y la nueva está desactivada. No escribe
+ * nada al cargar (no crea `home-layout.json`). El editor visual llega en etapas posteriores y requiere autorización.
+ */
+export const prerender = false;
+
+import Layout from '../../layouts/Layout.astro';
+import AdminNav from '../../components/AdminNav.astro';
+import AdminSectionHeader from '../../components/admin/AdminSectionHeader.astro';
+import AdminUserMenu from '../../components/AdminUserMenu.astro';
+import { getSessionUser } from '../../lib/adminAuth';
+import { readHomeLayout, resolveHomeMode } from '../../lib/homeLayout/store';
+import { FORMATS, MODALITIES, WIDTHS } from '../../lib/homeLayout/types';
+import { FORMAT_REGISTRY, MODALITY_REGISTRY } from '../../lib/homeLayout/validate';
+
+const sessionUser = getSessionUser(Astro.request);
+if (!sessionUser) return Astro.redirect('/upayp1b4');
+// Igual que Marketing: sólo administradores; el resto va a su perfil.
+if (sessionUser.role !== 'admin') return Astro.redirect('/upayp1b4/perfil');
+
+Astro.response.headers.set('Cache-Control', 'no-store');
+
+const read = readHomeLayout();
+const mode = resolveHomeMode();
+const statusText: Record<string, string> = {
+  missing: 'Sin datos todavía (aún no se ha guardado ninguna portada)',
+  ok: 'Correcto',
+  corrupt: 'Archivo dañado: se conserva sin tocar para diagnóstico',
+  invalid: 'Datos no válidos: se conserva sin tocar para diagnóstico',
+  newer: 'Esquema más nuevo que esta versión: se conserva sin tocar',
+};
+const WIDTH_LABEL: Record<number, string> = { 3: '¼', 4: '⅓', 6: '½', 8: '⅔', 9: '¾', 12: 'completo' };
+---
+
+<Layout title="Portada | Admin Treidilor" description="Portada editable de Treidilor: bloques, versiones e historias.">
+  <Fragment slot="header-end">
+    <AdminUserMenu user={sessionUser} active="portada" />
+  </Fragment>
+  <div class="portada-wrapper">
+    <AdminSectionHeader
+      crumbs={[{ label: 'Panel de administración', href: '/upayp1b4' }, { label: 'Portada' }]}
+      headingLevel={1}
+      title="Portada"
+      subtitle="Diseña la portada pública con bloques, gestiona sus versiones y las historias. Nada se publica hasta que lo confirmes."
+    />
+
+    <AdminNav context="catalogo" active="portada" user={sessionUser} />
+
+    <section class="portada-card" aria-labelledby="portadaEstado">
+      <h2 id="portadaEstado" class="portada-card-title">Estado de la portada</h2>
+      <dl class="portada-grid">
+        <div>
+          <dt>Portada pública</dt>
+          <dd><span class="portada-pill is-ok">✓ Actual (sin cambios)</span></dd>
+        </div>
+        <div>
+          <dt>Portada nueva</dt>
+          <dd><span class="portada-pill is-off">● Desactivada</span></dd>
+        </div>
+        <div>
+          <dt>Modo servido</dt>
+          <dd>{mode === 'legacy' ? 'Portada actual' : 'Portada nueva'}</dd>
+        </div>
+        <div>
+          <dt>Almacenamiento</dt>
+          <dd>{statusText[read.status] ?? read.status}</dd>
+        </div>
+        <div>
+          <dt>Borrador</dt>
+          <dd>{read.doc.draft.blocks.length} bloques</dd>
+        </div>
+        <div>
+          <dt>Publicada / versiones</dt>
+          <dd>{read.doc.published ? `v${read.doc.published.version}` : 'Ninguna'} · {read.doc.versions.length} archivadas</dd>
+        </div>
+      </dl>
+      <p class="portada-note">
+        Etapa 1: base administrativa. La portada que ven los visitantes no cambia. El editor visual, las versiones y las historias se
+        incorporarán en etapas posteriores, siempre con tu autorización.
+      </p>
+    </section>
+
+    <section class="portada-card" aria-labelledby="portadaModelo">
+      <h2 id="portadaModelo" class="portada-card-title">Modelo de bloques <span class="portada-pill is-prov">Provisional</span></h2>
+      <p class="portada-note">
+        Cada bloque combina una <b>modalidad</b> (cómo se obtiene el contenido), un <b>formato</b> (cómo se presenta), un <b>ancho</b> y una <b>tarjeta</b> reutilizable. La clasificación de modalidades es una propuesta funcional pendiente de confirmación definitiva.
+      </p>
+      <div class="portada-lists">
+        <div>
+          <h3>Modalidades</h3>
+          <ul>{MODALITIES.map((m) => <li>{MODALITY_REGISTRY[m].label}</li>)}</ul>
+        </div>
+        <div>
+          <h3>Formatos</h3>
+          <ul>{FORMATS.map((f) => <li>{FORMAT_REGISTRY[f].label}</li>)}</ul>
+        </div>
+        <div>
+          <h3>Anchos</h3>
+          <ul>{WIDTHS.map((w) => <li>{WIDTH_LABEL[w]}</li>)}</ul>
+        </div>
+      </div>
+    </section>
+  </div>
+</Layout>
+
+<style is:global>
+  .portada-wrapper { display: flex; flex-direction: column; gap: 30px; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+  .portada-card { background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-lg); box-shadow: var(--shadow-card); padding: 1.6rem 2rem; }
+  .portada-card-title { font-family: var(--font-heading); font-size: 1.15rem; color: var(--color-text-main); margin-bottom: 1rem; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+  .portada-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem 1.5rem; }
+  .portada-grid dt { font-size: .75rem; color: var(--color-text-muted); font-weight: 600; margin-bottom: .2rem; }
+  .portada-grid dd { color: var(--color-text-main); font-size: .92rem; }
+  .portada-note { margin-top: 1rem; font-size: .85rem; color: var(--color-text-muted); line-height: 1.55; }
+  .portada-pill { display: inline-flex; align-items: center; gap: .35rem; padding: .15rem .65rem; border-radius: 999px; font-size: .75rem; font-weight: 700; border: 1px solid transparent; }
+  .portada-pill.is-ok { background: rgba(16, 185, 129, .14); color: #6ee7b7; border-color: rgba(16, 185, 129, .4); }
+  .portada-pill.is-off { background: rgba(148, 163, 184, .12); color: #cbd5e1; border-color: rgba(148, 163, 184, .3); }
+  .portada-pill.is-prov { background: rgba(245, 158, 11, .14); color: #fcd34d; border-color: rgba(245, 158, 11, .4); }
+  .portada-lists { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1.5rem; margin-top: 1rem; }
+  .portada-lists h3 { font-size: .8rem; color: var(--color-text-muted); margin-bottom: .4rem; }
+  .portada-lists ul { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; }
+  .portada-lists li { padding: .2rem .7rem; border-radius: var(--border-radius-sm); border: 1px solid var(--color-border); background: rgba(255, 255, 255, .03); font-size: .85rem; }
+  @media (max-width: 760px) { .portada-grid, .portada-lists { grid-template-columns: 1fr; } .portada-card { padding: 1.2rem; } }
+</style>
