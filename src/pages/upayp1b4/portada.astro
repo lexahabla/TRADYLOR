@@ -16,6 +16,9 @@ import { getSessionUser } from '../../lib/adminAuth';
 import { readHomeLayout, resolveHomeMode } from '../../lib/homeLayout/store';
 import { FORMATS, MODALITIES, WIDTHS } from '../../lib/homeLayout/types';
 import { FORMAT_REGISTRY, MODALITY_REGISTRY } from '../../lib/homeLayout/validate';
+import { loadSources } from '../../lib/homeLayout/sources';
+import { resolveBlocks } from '../../lib/homeLayout/resolve';
+import { buildSectionsProposal } from '../../lib/homeLayout/sectionsProposal';
 
 const sessionUser = getSessionUser(Astro.request);
 if (!sessionUser) return Astro.redirect('/upayp1b4');
@@ -34,6 +37,17 @@ const statusText: Record<string, string> = {
   newer: 'Esquema más nuevo que esta versión: se conserva sin tocar',
 };
 const WIDTH_LABEL: Record<number, string> = { 3: '¼', 4: '⅓', 6: '½', 8: '⅔', 9: '¾', 12: 'completo' };
+
+// Etapa 2 (SOLO LECTURA): conexión con los datos reales y propuesta en memoria a partir de «Crear sección». No se guarda nada.
+const sources = loadSources();
+const proposal = buildSectionsProposal(sources);
+const proposalResolved = resolveBlocks(proposal.proposed.map((p) => p.block), sources);
+const draftResolved = resolveBlocks(read.doc.draft.blocks, sources);
+const resolvedById = new Map(proposalResolved.blocks.map((b) => [b.id, b]));
+const srcText: Record<string, string> = { ok: 'Correcto', missing: 'No existe el archivo', corrupt: 'Archivo no utilizable', error: 'Error de lectura' };
+const SKIP_TEXT: Record<string, string> = { no_publicada: 'no publicada', sin_productos: 'sin productos existentes', id_no_valido: 'id no válido', bloque_no_valido: 'bloque no válido' };
+const POS_TEXT: Record<string, string> = { above: 'Encima del catálogo', below: 'Debajo del catálogo' };
+const SPEED_TEXT: Record<string, string> = { slow: 'lenta', normal: 'normal', fast: 'rápida', none: 'sin desplazamiento' };
 ---
 
 <Layout title="Portada | Admin Treidilor" description="Portada editable de Treidilor: bloques, versiones e historias.">
@@ -79,9 +93,70 @@ const WIDTH_LABEL: Record<number, string> = { 3: '¼', 4: '⅓', 6: '½', 8: '�
         </div>
       </dl>
       <p class="portada-note">
-        Etapa 1: base administrativa. La portada que ven los visitantes no cambia. El editor visual, las versiones y las historias se
+        Etapa 2: conexión de solo lectura con el catálogo y las secciones. La portada que ven los visitantes no cambia. El editor visual, las versiones y las historias se
         incorporarán en etapas posteriores, siempre con tu autorización.
       </p>
+    </section>
+
+    <section class="portada-card" aria-labelledby="portadaDatos">
+      <h2 id="portadaDatos" class="portada-card-title">Conexión con el catálogo <span class="portada-pill is-off">Solo lectura</span></h2>
+      <dl class="portada-grid">
+        <div>
+          <dt>Productos</dt>
+          <dd>{sources.status.products.count} · {srcText[sources.status.products.status]}</dd>
+        </div>
+        <div>
+          <dt>Categorías</dt>
+          <dd>{sources.status.categories.count} · {srcText[sources.status.categories.status]}{sources.status.categories.origin === 'defaults' ? ' (se usan las categorías base)' : ''}</dd>
+        </div>
+        <div>
+          <dt>Secciones de «Crear sección»</dt>
+          <dd>{sources.status.sections.count} · {srcText[sources.status.sections.status]}</dd>
+        </div>
+        <div>
+          <dt>Comercios con productos</dt>
+          <dd>{[...sources.networks.entries()].filter(([, n]) => n > 0).map(([id, n]) => `${id} (${n})`).join(', ') || 'Ninguno'}</dd>
+        </div>
+        <div>
+          <dt>Borrador: referencias</dt>
+          <dd>{draftResolved.totals.errors} errores · {draftResolved.totals.warnings} avisos</dd>
+        </div>
+        <div>
+          <dt>Propuesta desde secciones</dt>
+          <dd>{proposal.proposed.length} bloques · {proposal.skipped.length} secciones no incluidas</dd>
+        </div>
+      </dl>
+      {proposal.proposed.length > 0 ? (
+        <div class="portada-table-wrap">
+          <table class="portada-table">
+            <caption>Propuesta en memoria: así se verían hoy las secciones publicadas como bloques «Sección» (no se guarda nada)</caption>
+            <thead>
+              <tr><th scope="col">Sección</th><th scope="col">Posición</th><th scope="col">Velocidad</th><th scope="col">Productos</th><th scope="col">Estado</th></tr>
+            </thead>
+            <tbody>
+              {proposal.proposed.map((p) => {
+                const rb = resolvedById.get(p.block.id);
+                return (
+                  <tr>
+                    <th scope="row">{p.section.title || p.section.id}</th>
+                    <td>{POS_TEXT[p.section.position]}</td>
+                    <td>{SPEED_TEXT[p.section.speed]}</td>
+                    <td>{p.validProductIds.length} válidos{p.invalidProductIds.length ? ` · ${p.invalidProductIds.length} inexistentes` : ''}</td>
+                    <td>{rb?.visible === true ? '✓ Se mostraría' : '● No se mostraría'}{rb && rb.issues.some((i) => i.severity !== 'info') ? ' · con avisos' : ''}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p class="portada-note">No hay secciones publicadas con productos: la portada actual no muestra bloques de sección.</p>
+      )}
+      {proposal.skipped.length > 0 && (
+        <p class="portada-note">
+          No incluidas: {proposal.skipped.map((s) => `${s.sectionId} (${SKIP_TEXT[s.reason] ?? s.reason})`).join(', ')}.
+        </p>
+      )}
     </section>
 
     <section class="portada-card" aria-labelledby="portadaModelo">
@@ -123,5 +198,11 @@ const WIDTH_LABEL: Record<number, string> = { 3: '¼', 4: '⅓', 6: '½', 8: '�
   .portada-lists h3 { font-size: .8rem; color: var(--color-text-muted); margin-bottom: .4rem; }
   .portada-lists ul { list-style: none; display: flex; flex-wrap: wrap; gap: .4rem; }
   .portada-lists li { padding: .2rem .7rem; border-radius: var(--border-radius-sm); border: 1px solid var(--color-border); background: rgba(255, 255, 255, .03); font-size: .85rem; }
+  .portada-table-wrap { overflow-x: auto; margin-top: 1rem; }
+  .portada-table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  .portada-table caption { text-align: left; color: var(--color-text-muted); font-size: .78rem; padding-bottom: .5rem; }
+  .portada-table th, .portada-table td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--color-border); vertical-align: top; }
+  .portada-table thead th { color: var(--color-text-muted); font-size: .75rem; font-weight: 600; }
+  .portada-table tbody th { font-weight: 600; color: var(--color-text-main); }
   @media (max-width: 760px) { .portada-grid, .portada-lists { grid-template-columns: 1fr; } .portada-card { padding: 1.2rem; } }
 </style>

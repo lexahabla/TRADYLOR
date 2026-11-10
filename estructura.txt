@@ -51,6 +51,7 @@ scripts/tests/facets.test.mjs
 scripts/tests/aliexpress-validate.test.mjs
 scripts/tests/ficha-specs-history.test.mjs
 scripts/tests/home-layout.test.mjs
+scripts/tests/home-layout-resolve.test.mjs
 scripts/tests/fixtures/amazon-real-sample-es.json
 scripts/tests/fixtures/fineblue-f920.json
 scripts/tests/fixtures/temu-real-sample-es-pdp-1893.json
@@ -179,6 +180,9 @@ src/lib/deletedProducts.ts
 src/lib/excelExport.ts
 src/lib/formConflicts.ts
 src/lib/geminiGrounded.ts
+src/lib/homeLayout/resolve.ts
+src/lib/homeLayout/sectionsProposal.ts
+src/lib/homeLayout/sources.ts
 src/lib/homeLayout/store.ts
 src/lib/homeLayout/types.ts
 src/lib/homeLayout/validate.ts
@@ -294,6 +298,8 @@ src/pages/api/admin/category-extract/index.ts
 src/pages/api/admin/data.ts
 src/pages/api/admin/enrich-bulk.ts
 src/pages/api/admin/home-layout/index.ts
+src/pages/api/admin/home-layout/options.ts
+src/pages/api/admin/home-layout/resolve.ts
 src/pages/api/admin/icon-library.ts
 src/pages/api/admin/json-import/index.ts
 src/pages/api/admin/marketing/usuarios/[id].ts
