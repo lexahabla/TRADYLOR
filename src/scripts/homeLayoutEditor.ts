@@ -7,6 +7,9 @@
  *   · carga con GET /api/admin/home-layout/draft (no guarda nada al cargar);
  *   · guarda ÚNICAMENTE cuando el administrador pulsa «Guardar borrador» (PUT con control de revisiones);
  *   · no publica, no activa la portada nueva y no modifica el catálogo, las secciones ni las categorías.
+ * Etapa 4 · pestaña «Publicación y versiones»: publica el borrador GUARDADO como versión INTERNA (no activa la portada pública), lista el
+ *   historial, previsualiza y compara versiones y recupera una versión como borrador. Cada acción exige confirmación explícita y se envía con
+ *   UNA sola petición POST (`act`), nunca de forma automática.
  * Las operaciones sobre bloques son las funciones puras de `lib/homeLayout/draft.ts`; la validación, la de `validate.ts`.
  * ==============================================================================
  */
@@ -30,6 +33,8 @@ import {
   setWidth,
   updateBlock,
 } from '../lib/homeLayout/draft';
+
+import type { BlockingIssue, DiffEntry, VersionSummary } from '../lib/homeLayout/publish';
 
 /* ───────────────────────── Tipos de las API de lectura ───────────────────────── */
 interface Issue { severity: 'error' | 'warning' | 'info'; code: string; message: string }
@@ -102,15 +107,17 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   const previews = h('div', { class: 'pe-previews' });
   const modal = h('div', { class: 'pe-modal', hidden: true, role: 'dialog', 'aria-modal': 'true' });
   canvasWrap.append(canvas);
-  root.append(
+  const tabs = h('div', { class: 'pe-tabs', role: 'tablist', 'aria-label': 'Secciones del editor de portada' });
+  const editorPane = h('div', { class: 'pe-pane', id: 'peEditorPane', role: 'tabpanel' });
+  const versionsPane = h('div', { class: 'pe-pane', id: 'peVersionsPane', role: 'tabpanel', hidden: true });
+  editorPane.append(
     toolbar,
     banner,
     addbar,
     h('div', { class: 'pe-main' }, h('div', {}, canvasWrap, h('p', { class: 'pe-note' }, 'Arrastra ⠿ o usa ▲ ▼ para ordenar · pulsa un ancho para cambiarlo. Los bloques no se muestran en la web con una búsqueda o categoría activa. Solo se guarda al pulsar «Guardar borrador»; nada se publica.')), props),
     previews,
-    live,
-    modal,
   );
+  root.append(tabs, editorPane, versionsPane, live, modal);
 
   /* ---- API ---- */
   async function api(path: string, init?: RequestInit): Promise<{ status: number; body: any }> {
@@ -245,21 +252,21 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   window.addEventListener('beforeunload', (e) => { if (state.dirty) { e.preventDefault(); e.returnValue = ''; } });
 
   /* ---- Confirmaciones ---- */
-  function confirmBox(title: string, text: string, ok: string, danger = false): Promise<boolean> {
+  function confirmBox(title: string, text: string, ok: string, danger = false, extra: Node | null = null, okDisabled = false): Promise<boolean> {
     return new Promise((resolve) => {
       const previous = document.activeElement as HTMLElement | null;
       const done = (v: boolean) => { modal.hidden = true; clear(modal); document.removeEventListener('keydown', onKey); previous?.focus?.(); resolve(v); };
       const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') done(false); };
       clear(modal);
-      const yes = h('button', { class: danger ? 'pe-btn pe-danger' : 'pe-btn pe-primary', type: 'button', onclick: () => done(true) }, ok);
+      const yes = h('button', { class: danger ? 'pe-btn pe-danger' : 'pe-btn pe-primary', type: 'button', disabled: okDisabled, onclick: () => done(true) }, ok);
       modal.append(
         h('div', { class: 'pe-backdrop', onclick: () => done(false) }),
-        h('div', { class: 'pe-dialog' }, h('h3', {}, title), h('p', {}, text), h('div', { class: 'pe-row-end' }, h('button', { class: 'pe-btn', type: 'button', onclick: () => done(false) }, 'Cancelar'), yes)),
+        h('div', { class: 'pe-dialog' }, h('h3', {}, title), h('p', {}, text), extra, h('div', { class: 'pe-row-end' }, h('button', { class: 'pe-btn', type: 'button', onclick: () => done(false) }, 'Cancelar'), yes)),
       );
       modal.setAttribute('aria-label', title);
       modal.hidden = false;
       document.addEventListener('keydown', onKey);
-      yes.focus();
+      (okDisabled ? (modal.querySelector('.pe-btn') as HTMLElement | null) : yes)?.focus();
     });
   }
 
@@ -556,20 +563,16 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     }
     return el;
   }
-  function pvFrame(label: string, mobile: boolean): HTMLElement {
+  function pvFrame(label: string, mobile: boolean, blocks: Block[] = state.blocks, chip: string = state.dirty ? 'con cambios sin guardar' : 'borrador guardado'): HTMLElement {
     const inner = h('div', { class: `pv${mobile ? ' is-m' : ''}` },
       h('div', { class: 'pv-hd' }, h('b', {}, 'Treidilor'), h('span', {}, '🔍 Buscar productos…')),
-      h('div', { class: 'pv-grid12' }, ...state.blocks.map((b) => pvBlock(b, mobile))));
+      h('div', { class: 'pv-grid12' }, ...blocks.map((b) => pvBlock(b, mobile))));
     const win = h('div', { class: `pe-pvwin${mobile ? ' is-phone' : ''}` }, inner);
-    return h('div', { class: 'pe-pvbox' }, h('h3', {}, label, h('span', { class: 'pe-chip-s' }, state.dirty ? 'con cambios sin guardar' : 'borrador guardado')), win);
+    return h('div', { class: 'pe-pvbox' }, h('h3', {}, label, h('span', { class: 'pe-chip-s' }, chip)), win);
   }
-  function renderPreviews() {
-    clear(previews);
-    const d = pvFrame('Vista previa · escritorio', false);
-    const m = pvFrame('Vista previa · móvil', true);
-    previews.append(d, m);
-    // Escala: escritorio = 1200 px virtuales; móvil = 390 px virtuales.
-    for (const [box, nat] of [[d, 1200], [m, 390]] as Array<[HTMLElement, number]>) {
+  /** Escala: escritorio = 1200 px virtuales; móvil = 390 px virtuales. Hay que llamarla con las cajas ya insertadas en el documento. */
+  function scalePreviews(boxes: Array<[HTMLElement, number]>) {
+    for (const [box, nat] of boxes) {
       const win = box.querySelector('.pe-pvwin') as HTMLElement;
       const inner = win.firstElementChild as HTMLElement;
       const w = Math.max(200, win.clientWidth || (nat === 390 ? 280 : 640));
@@ -578,6 +581,222 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
       inner.style.transform = `scale(${s})`;
       inner.style.transformOrigin = '0 0';
       win.style.height = `${Math.min(inner.scrollHeight * s, 560)}px`;
+    }
+  }
+  function renderPreviews() {
+    clear(previews);
+    const d = pvFrame('Vista previa · escritorio', false);
+    const m = pvFrame('Vista previa · móvil', true);
+    previews.append(d, m);
+    scalePreviews([[d, 1200], [m, 390]]);
+  }
+
+  /* ---- Pestaña B · Publicación y versiones (etapa 4) ---- */
+  type Tab = 'editor' | 'versions';
+  let tab: Tab = 'editor';
+  const vs = {
+    loaded: false,
+    loading: false,
+    error: '',
+    mode: 'legacy',
+    storage: 'ok',
+    draft: { revision: 'inicial', blocks: 0 },
+    published: null as { version: number; publishedAt: string; blocks: number } | null,
+    versions: [] as VersionSummary[],
+    maxVersions: 100,
+    msg: null as Msg,
+    detail: null as null | { title: string; kind: 'preview' | 'compare'; blocks?: Block[]; changes?: DiffEntry[]; chip?: string },
+    busy: false,
+  };
+  const dateTxt = (iso: string) => new Date(iso).toLocaleString('es-ES');
+  const DIFF_ICON: Record<string, string> = { added: '＋', removed: '－', moved: '↕', width: '↔', format: '▦', modality: '⚙', title: 'Aa', card: '🃏', visibility: '👁', refs: '🔗', config: '✎' };
+  const vsay = (m: Msg) => { vs.msg = m; live.textContent = m ? m.text : ''; renderVersions(); };
+
+  function renderTabs() {
+    clear(tabs);
+    const mk = (id: Tab, label: string) => h('button', { class: 'pe-tab', type: 'button', role: 'tab', 'aria-selected': String(tab === id), 'aria-controls': id === 'editor' ? 'peEditorPane' : 'peVersionsPane', onclick: () => { void setTab(id); } }, label);
+    tabs.append(
+      mk('editor', 'A · Editor'),
+      mk('versions', 'B · Publicación y versiones'),
+      h('button', { class: 'pe-tab', type: 'button', role: 'tab', disabled: true, title: 'Llegará en una etapa posterior' }, 'C · Historias (próximamente)'),
+    );
+  }
+  async function setTab(next: Tab) {
+    tab = next;
+    editorPane.hidden = next !== 'editor';
+    versionsPane.hidden = next !== 'versions';
+    renderTabs();
+    if (next === 'editor') renderPreviews();
+    else await loadVersions();
+  }
+
+  async function loadVersions() {
+    vs.loading = true; vs.error = ''; renderVersions();
+    const r = await api('/api/admin/home-layout/versions');
+    vs.loading = false;
+    if (r.status === 200 && r.body?.success) {
+      vs.loaded = true;
+      vs.mode = r.body.mode;
+      vs.storage = r.body.storage.status;
+      vs.draft = { revision: r.body.draft.revision, blocks: r.body.draft.blocks };
+      vs.published = r.body.published;
+      vs.versions = r.body.versions;
+      vs.maxVersions = r.body.limits.maxVersions;
+    } else vs.error = r.status === 401 ? 'La sesión ha caducado: vuelve a iniciar sesión.' : 'No se pudo cargar el historial de versiones.';
+    renderVersions();
+  }
+
+  async function showVersion(v: number) {
+    const r = await api(`/api/admin/home-layout/versions?version=${v}`);
+    if (r.status !== 200 || !r.body?.success) { vsay({ kind: 'error', text: r.status === 404 ? 'Esa versión ya no existe.' : 'No se pudo cargar la versión.' }); return; }
+    for (const rb of r.body.resolved as ResolvedBlock[]) for (const ref of rb.refs) if (ref.label) info.set(`${ref.kind}:${ref.id}`, { label: ref.label, price: info.get(`${ref.kind}:${ref.id}`)?.price });
+    vs.detail = { title: `Versión ${v} · ${r.body.state === 'published' ? 'publicada internamente' : 'archivada'}`, kind: 'preview', blocks: r.body.blocks as Block[], chip: `v${v} · ${dateTxt(r.body.publishedAt)}` };
+    vs.msg = null;
+    renderVersions();
+  }
+  async function compareWith(a: string, b: string, title: string) {
+    const r = await api(`/api/admin/home-layout/versions?compare=${encodeURIComponent(a)}&with=${encodeURIComponent(b)}`);
+    if (r.status !== 200 || !r.body?.success) { vsay({ kind: 'error', text: 'No se pudo comparar: alguna de las versiones ya no existe.' }); return; }
+    vs.detail = { title, kind: 'compare', changes: r.body.changes as DiffEntry[] };
+    vs.msg = null;
+    renderVersions();
+  }
+
+  function diffList(changes: DiffEntry[], empty: string): HTMLElement {
+    if (!changes.length) return h('p', { class: 'pe-note' }, empty);
+    return h('ul', { class: 'pe-diff' }, ...changes.map((c) => h('li', {}, h('span', { class: `pe-dk is-${c.kind}`, 'aria-hidden': 'true' }, DIFF_ICON[c.kind] ?? '•'), h('span', {}, h('b', {}, c.title || '(sin título)'), ` — ${c.detail}`))));
+  }
+  const issueList = (items: BlockingIssue[]) => h('ul', { class: 'pe-diff' }, ...items.map((i) => h('li', {}, h('span', { class: 'pe-dk is-removed', 'aria-hidden': 'true' }, '⚠'), h('span', {}, h('b', {}, i.title || i.blockId), ` — ${i.message}`))));
+
+  /** ÚNICO punto de publicación y recuperación: sólo se llama tras una confirmación explícita del administrador. */
+  async function act(payload: Record<string, unknown>) {
+    const r = await api('/api/admin/home-layout/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Home-Layout-Editor': '1' },
+      body: JSON.stringify({ ...payload, confirm: true }),
+    });
+    return r;
+  }
+  function explain(r: { status: number; body: any }): string {
+    const code = r.body?.code as string | undefined;
+    if (r.status === 409 && code === 'conflicto') return 'Otra sesión ha cambiado el borrador. No se ha hecho nada: recarga y vuelve a intentarlo.';
+    if (r.status === 409 && code === 'conflicto_publicada') return 'Otra sesión ha publicado una versión mientras tanto. No se ha hecho nada: recarga el historial.';
+    if (r.status === 409 && code === 'sin_cambios') return 'No hay nada que hacer: el borrador es idéntico a esa versión.';
+    if (r.status === 409 && code === 'borrador_vacio') return 'No hay ningún borrador guardado con bloques que publicar.';
+    if (r.status === 409 && code === 'limite_versiones') return 'Se alcanzó el máximo de versiones archivadas. No se borra ninguna automáticamente: consulta con el responsable técnico.';
+    if (r.status === 422) return 'Hay errores en las referencias de bloques visibles. No se ha publicado nada: corrígelos y guarda el borrador.';
+    if (r.status === 423) return 'El almacenamiento está dañado: no se sobrescribe. Avisa al responsable técnico.';
+    if (r.status === 404) return 'Esa versión ya no existe.';
+    if (r.status === 401) return 'La sesión ha caducado: vuelve a iniciar sesión.';
+    if (r.status === 403) return 'No se pudo verificar el origen de la petición. Recarga la página.';
+    if (r.status === 400) return `El servidor rechazó la petición: ${(r.body?.errors ?? [r.body?.message ?? 'petición no válida']).slice(0, 2).join(' · ')}`;
+    return 'No se pudo completar la operación. El historial anterior sigue intacto; inténtalo de nuevo.';
+  }
+
+  async function startPublish() {
+    if (vs.busy) return;
+    if (state.dirty) { vsay({ kind: 'error', text: 'Hay cambios sin guardar en el editor. Guarda el borrador (pestaña A) antes de publicar: sólo se publica lo guardado.' }); return; }
+    const c = await api('/api/admin/home-layout/versions?check=publish');
+    if (c.status !== 200 || !c.body?.success) { vsay({ kind: 'error', text: 'No se pudo comprobar el borrador.' }); return; }
+    const chk = c.body as { canPublish: boolean; reasons: string[]; blocking: BlockingIssue[]; warnings: BlockingIssue[]; changes: DiffEntry[]; nextVersion: number; revision: string; basePublished: number | null };
+    const REASON: Record<string, string> = {
+      archivo_protegido: 'El almacenamiento está protegido (archivo dañado).',
+      borrador_vacio: 'No hay un borrador guardado con bloques.',
+      referencias_bloqueantes: 'Hay errores de referencias en bloques visibles.',
+      sin_cambios: 'El borrador es idéntico a la versión publicada.',
+      limite_versiones: 'Se alcanzó el máximo de versiones archivadas.',
+    };
+    const body = h('div', { class: 'pe-confirm-body' },
+      h('p', { class: 'pe-note' }, `Se publicará el borrador guardado como la versión ${chk.nextVersion}. Es una publicación INTERNA: la web pública sigue mostrando la portada actual; la portada nueva no se activa.`),
+      chk.reasons.length ? h('div', {}, h('div', { class: 'pe-sub' }, 'No se puede publicar'), h('ul', { class: 'pe-diff' }, ...chk.reasons.map((x) => h('li', {}, h('span', { class: 'pe-dk is-removed', 'aria-hidden': 'true' }, '⚠'), REASON[x] ?? x)))) : null,
+      chk.blocking.length ? h('div', {}, h('div', { class: 'pe-sub' }, `Errores que bloquean (${chk.blocking.length})`), issueList(chk.blocking)) : null,
+      chk.warnings.length ? h('div', {}, h('div', { class: 'pe-sub' }, `Avisos (${chk.warnings.length}) — no bloquean`), issueList(chk.warnings)) : null,
+      h('div', { class: 'pe-sub' }, vs.published ? `Cambios respecto a la versión publicada (v${vs.published.version})` : 'Contenido que se publicará (primera versión)'),
+      diffList(chk.changes, 'Sin cambios.'),
+    );
+    const ok = await confirmBox(`Publicar internamente la versión ${chk.nextVersion}`, vs.published ? `La versión v${vs.published.version} pasará al historial; no se borra nada.` : 'Será la primera versión publicada.', 'Publicar internamente', false, body, !chk.canPublish);
+    if (!ok) return;
+    vs.busy = true; renderVersions();
+    const r = await act({ action: 'publish', baseRevision: chk.revision, basePublished: chk.basePublished });
+    vs.busy = false;
+    if (r.status === 200 && r.body?.success) {
+      vs.detail = null;
+      await loadVersions();
+      vsay({ kind: 'ok', text: `Versión ${r.body.version} publicada internamente (${dateTxt(r.body.publishedAt)}). La web pública no ha cambiado.` });
+    } else { await loadVersions(); vsay({ kind: 'error', text: explain(r) }); }
+  }
+
+  async function startRestore(v: VersionSummary) {
+    if (vs.busy) return;
+    const warn = state.dirty ? ' Además hay cambios SIN GUARDAR en el editor: se perderán.' : '';
+    const ok = await confirmBox(`Recuperar la versión ${v.version} como borrador`, `El borrador guardado se sustituirá por el contenido de la versión ${v.version} (${dateTxt(v.publishedAt)}, ${v.blocks} bloques).${warn} La versión publicada y el historial no cambian y la web pública tampoco. Después podrás editar y volver a publicar.`, 'Recuperar como borrador', true);
+    if (!ok) return;
+    vs.busy = true; renderVersions();
+    const r = await act({ action: 'restore', baseRevision: vs.draft.revision, version: v.version });
+    vs.busy = false;
+    if (r.status === 200 && r.body?.success) {
+      vs.detail = null;
+      state.dirty = false;
+      await load();
+      await loadVersions();
+      say({ kind: 'ok', text: `Versión ${r.body.version} recuperada como borrador. Revisa el editor y guarda o publica cuando quieras.` });
+      await setTab('editor');
+    } else { await loadVersions(); vsay({ kind: 'error', text: explain(r) }); }
+  }
+
+  function renderVersions() {
+    clear(versionsPane);
+    const head = h('div', { class: 'pe-vhead' },
+      h('div', { class: 'pe-vcard' }, h('div', { class: 'pe-sub' }, 'Borrador actual'),
+        h('b', {}, state.dirty ? '✎ Cambios sin guardar en el editor' : vs.draft.revision === 'inicial' ? '✎ Sin borrador guardado' : `✎ Guardado · ${dateTxt(vs.draft.revision)}`),
+        h('small', {}, `${vs.draft.blocks} bloques en el servidor`)),
+      h('div', { class: 'pe-vcard' }, h('div', { class: 'pe-sub' }, 'Publicada internamente'),
+        vs.published ? h('b', {}, `v${vs.published.version} · ${dateTxt(vs.published.publishedAt)}`) : h('b', {}, 'Ninguna todavía'),
+        h('small', {}, vs.published ? `${vs.published.blocks} bloques · NO visible para el público` : 'Nada se ha publicado')),
+      h('div', { class: 'pe-vcard' }, h('div', { class: 'pe-sub' }, 'Portada servida a los visitantes'),
+        h('b', {}, vs.mode === 'legacy' ? 'La portada actual (sin cambios)' : vs.mode),
+        h('small', {}, 'La portada nueva sigue desactivada.')));
+    const actions = h('div', { class: 'pe-vact' },
+      h('button', { class: 'pe-btn pe-primary', type: 'button', disabled: !vs.loaded || vs.busy || vs.storage !== 'ok' && vs.storage !== 'missing', onclick: () => { void startPublish(); }, title: state.dirty ? 'Guarda antes el borrador (pestaña A)' : '' }, vs.busy ? 'Trabajando…' : 'Publicar borrador…'),
+      h('button', { class: 'pe-btn', type: 'button', disabled: !vs.published || vs.busy, onclick: () => { void compareWith('published', 'draft', 'Publicada → borrador guardado'); } }, 'Comparar publicada con borrador'),
+      h('button', { class: 'pe-btn', type: 'button', disabled: vs.loading, onclick: () => { void loadVersions(); } }, 'Actualizar'),
+      state.dirty ? h('span', { class: 'pe-note pe-warn' }, 'Hay cambios sin guardar: sólo se publica lo guardado.') : null);
+    versionsPane.append(head, actions);
+    if (vs.msg) versionsPane.append(h('p', { class: `pe-msg is-${vs.msg.kind}`, role: vs.msg.kind === 'error' ? 'alert' : undefined }, vs.msg.text));
+    if (vs.loading && !vs.loaded) { versionsPane.append(h('p', { class: 'pe-empty' }, 'Cargando el historial…')); return; }
+    if (vs.error) { versionsPane.append(h('p', { class: 'pe-msg is-error', role: 'alert' }, vs.error)); return; }
+    if (vs.storage !== 'ok' && vs.storage !== 'missing') versionsPane.append(h('p', { class: 'pe-msg is-error', role: 'alert' }, `El almacenamiento está en estado «${vs.storage}»: se conserva sin sobrescribir.`));
+
+    const table = h('div', { class: 'pe-vtable', role: 'table', 'aria-label': 'Historial de versiones' });
+    table.append(h('div', { class: 'pe-vrow is-head', role: 'row' }, ...['Versión', 'Estado', 'Fecha', 'Bloques', 'Acciones'].map((t) => h('div', { role: 'columnheader' }, t))));
+    if (!vs.versions.length) table.append(h('p', { class: 'pe-empty' }, 'Todavía no hay versiones. Guarda un borrador y publícalo internamente para crear la primera.'));
+    for (const v of vs.versions) {
+      table.append(h('div', { class: 'pe-vrow', role: 'row' },
+        h('div', { role: 'cell', 'data-l': 'Versión' }, h('b', {}, `v${v.version}`)),
+        h('div', { role: 'cell', 'data-l': 'Estado' }, h('span', { class: `pe-chip-s${v.state === 'published' ? '' : ' is-alt'}` }, v.state === 'published' ? 'Publicada internamente' : 'Archivada')),
+        h('div', { role: 'cell', 'data-l': 'Fecha' }, dateTxt(v.publishedAt)),
+        h('div', { role: 'cell', 'data-l': 'Bloques' }, String(v.blocks)),
+        h('div', { role: 'cell', class: 'pe-vbtns' },
+          h('button', { class: 'pe-btn pe-sm', type: 'button', disabled: vs.busy, 'aria-label': `Previsualizar la versión ${v.version}`, onclick: () => { void showVersion(v.version); } }, 'Previsualizar'),
+          h('button', { class: 'pe-btn pe-sm', type: 'button', disabled: vs.busy, 'aria-label': `Comparar la versión ${v.version} con el borrador`, onclick: () => { void compareWith(String(v.version), 'draft', `v${v.version} → borrador guardado`); } }, 'Comparar con borrador'),
+          h('button', { class: 'pe-btn pe-sm', type: 'button', disabled: vs.busy || vs.storage !== 'ok', 'aria-label': `Recuperar la versión ${v.version} como borrador`, onclick: () => { void startRestore(v); } }, 'Recuperar como borrador'))));
+    }
+    versionsPane.append(table, h('p', { class: 'pe-note' }, `Máximo de ${vs.maxVersions} versiones. Nunca se elimina una versión: al llegar al límite no se podrá publicar hasta decidir una política de retención.`));
+
+    if (vs.detail) {
+      const d = vs.detail;
+      const box = h('div', { class: 'pe-vdetail' }, h('h3', {}, d.title, h('button', { class: 'pe-btn pe-sm', type: 'button', onclick: () => { vs.detail = null; renderVersions(); } }, 'Cerrar')));
+      if (d.kind === 'compare') {
+        box.append(diffList(d.changes ?? [], 'Sin diferencias.'));
+        versionsPane.append(box);
+      } else {
+        const blocks = d.blocks ?? [];
+        const dsk = pvFrame('Escritorio', false, blocks, d.chip ?? '');
+        const mob = pvFrame('Móvil', true, blocks, d.chip ?? '');
+        box.append(blocks.length ? h('div', { class: 'pe-previews' }, dsk, mob) : h('p', { class: 'pe-note' }, 'Esta versión no tiene bloques.'), h('p', { class: 'pe-note' }, 'Vista aproximada con marcadores (no es la web pública). Los textos de producto se resuelven con el catálogo actual.'));
+        versionsPane.append(box);
+        scalePreviews([[dsk, 1200], [mob, 390]]);
+      }
     }
   }
 
@@ -597,6 +816,8 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   }
   window.addEventListener('resize', () => { if (state.loaded) renderPreviews(); });
 
+  renderTabs();
+  renderVersions();
   renderAll();
   void load();
 }
