@@ -53,6 +53,7 @@ scripts/tests/aliexpress-validate.test.mjs
 scripts/tests/ficha-specs-history.test.mjs
 scripts/tests/home-layout-activation.test.mjs
 scripts/tests/home-layout-backups.test.mjs
+scripts/tests/home-layout-delete.test.mjs
 scripts/tests/home-layout-design.test.mjs
 scripts/tests/home-layout-initial.test.mjs
 scripts/tests/home-layout-preview.test.mjs
@@ -214,6 +215,7 @@ src/lib/homeLayout/stories.ts
 src/lib/homeLayout/storiesStore.ts
 src/lib/homeLayout/types.ts
 src/lib/homeLayout/validate.ts
+src/lib/homeLayout/versionDelete.ts
 src/lib/iconLibrary.ts
 src/lib/imageQuality.ts
 src/lib/jsonImport/apifyAmazon.ts
@@ -337,6 +339,7 @@ src/pages/api/admin/home-layout/publish.ts
 src/pages/api/admin/home-layout/resolve.ts
 src/pages/api/admin/home-layout/stories.ts
 src/pages/api/admin/home-layout/versions.ts
+src/pages/api/admin/home-layout/version-delete.ts
 src/pages/api/admin/icon-library.ts
 src/pages/api/admin/json-import/index.ts
 src/pages/api/admin/marketing/usuarios/[id].ts

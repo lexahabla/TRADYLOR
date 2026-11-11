@@ -861,6 +861,38 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     } else { await loadVersions(); vsay({ kind: 'error', text: explain(r) }); }
   }
 
+  /* ---- Eliminar una versión (permanente) ---- */
+  const isActiveVersion = (n: number) => Boolean(vs.act && vs.act.gates.activeFile && vs.act.gates.pinnedVersion === n);
+  async function startDelete(v: VersionSummary) {
+    if (vs.busy) return;
+    if (isActiveVersion(v.version)) { vsay({ kind: 'error', text: `La versión ${v.version} está activa públicamente y no se puede eliminar.` }); return; }
+    const isPub = vs.published?.version === v.version;
+    const body = h('div', { class: 'pe-confirm-body' },
+      h('p', { class: 'pe-note' }, `Versión ${v.version} · ${v.blocks} bloques · publicada el ${dateTxt(v.publishedAt)}${isPub ? ' · es la «publicada internamente»' : ''}.`),
+      h('ul', { class: 'pe-diff' },
+        h('li', {}, h('span', { class: 'pe-dk is-removed', 'aria-hidden': 'true' }, '－'), h('span', {}, `Se elimina la versión ${v.version}. No se puede deshacer ni recuperar.`)),
+        h('li', {}, h('span', { class: 'pe-dk is-added', 'aria-hidden': 'true' }, '＝'), h('span', {}, 'No cambian el borrador, las copias de seguridad, la web pública ni la activación. Las demás versiones conservan su número y el número eliminado no se reutiliza.')),
+        isPub ? h('li', {}, h('span', { class: 'pe-dk is-removed', 'aria-hidden': 'true' }, '！'), h('span', {}, 'Es la versión publicada: tras eliminarla no habrá ninguna «publicada» hasta que vuelvas a publicar el borrador.')) : null));
+    if (!(await confirmBox(`Eliminar la versión ${v.version}`, `Vas a eliminar DEFINITIVAMENTE la versión v${v.version}.`, `Eliminar v${v.version} definitivamente`, true, body))) return;
+    if (!vs.act) { vsay({ kind: 'error', text: 'No se pudo leer el estado de la activación: actualiza e inténtalo de nuevo. No se ha eliminado nada.' }); return; }
+    vs.busy = true; renderVersions();
+    const r = await api('/api/admin/home-layout/version-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Home-Layout-Editor': '1' },
+      body: JSON.stringify({ action: 'delete', version: v.version, publishedAt: v.publishedAt, basePublished: vs.published?.version ?? null, baseActivation: vs.act.revision, confirm: true }),
+    });
+    vs.busy = false;
+    if (r.status === 200 && r.body?.success) {
+      vs.detail = null;
+      await loadVersions();
+      vsay({ kind: 'ok', text: `Versión ${v.version} eliminada. Quedan: ${(r.body.remaining as number[]).map((n) => `v${n}`).join(', ') || 'ninguna'}. El borrador, las copias y la activación no han cambiado.` });
+    } else {
+      await loadVersions();
+      const code = r.body?.code as string | undefined;
+      vsay({ kind: 'error', text: code === 'version_activa' ? `La versión ${v.version} está activa públicamente: no se puede eliminar.` : code === 'version_no_encontrada' ? `La versión ${v.version} ya no existe.` : r.status === 409 ? 'Algo cambió mientras tanto (versiones o activación): la tabla se ha actualizado. No se ha eliminado nada; vuelve a intentarlo.' : r.status === 423 ? 'El almacenamiento está protegido: no se ha eliminado nada.' : 'No se pudo eliminar la versión; sigue existiendo.' });
+    }
+  }
+
   /* ---- Copias de seguridad del borrador ---- */
   const REASON_TXT: Record<string, string> = { antes_de_cargar_diseno: 'Antes de cargar el nuevo diseño', antes_de_recuperar_copia: 'Antes de recuperar otra copia', antes_de_recuperar_version: 'Antes de recuperar una versión' };
   async function showBackup(b: BackupRow) {
@@ -993,7 +1025,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     box.append(h('div', { class: 'pe-vact' },
       h('button', { class: 'pe-btn pe-primary', type: 'button', disabled: vs.busy || !vs.published, onclick: () => { void startActivate(); } }, vs.published ? `${on && g.pinnedVersion === vs.published.version ? 'Revalidar' : 'Activar'} v${vs.published.version}…` : 'Activar…'),
       h('button', { class: 'pe-btn pe-danger', type: 'button', disabled: vs.busy || !(on || g.adminFlag || g.activeFile), onclick: () => { void startDeactivate(); } }, 'Desactivar (volver a la portada de siempre)…')));
-    if (a.log.length) box.append(h('details', {}, h('summary', {}, `Registro de operaciones (${a.log.length})`), h('ul', { class: 'pe-diff' }, ...a.log.slice(0, 10).map((e) => h('li', {}, h('span', { class: `pe-dk ${e.result === 'ok' ? 'is-added' : 'is-removed'}`, 'aria-hidden': 'true' }, e.result === 'ok' ? '✔' : '✖'), h('span', {}, `${dateTxt(e.at)} · ${e.by} · ${e.action === 'activate' ? 'activar' : 'desactivar'}${e.version ? ` v${e.version}` : ''} · ${e.result}${e.note ? ` (${e.note})` : ''}`))))));
+    if (a.log.length) box.append(h('details', {}, h('summary', {}, `Registro de operaciones (${a.log.length})`), h('ul', { class: 'pe-diff' }, ...a.log.slice(0, 10).map((e) => h('li', {}, h('span', { class: `pe-dk ${e.result === 'ok' ? 'is-added' : 'is-removed'}`, 'aria-hidden': 'true' }, e.result === 'ok' ? '✔' : '✖'), h('span', {}, `${dateTxt(e.at)} · ${e.by} · ${e.action === 'activate' ? 'activar' : e.action === 'delete_version' ? 'eliminar versión' : 'desactivar'}${e.version ? ` v${e.version}` : ''} · ${e.result}${e.note ? ` (${e.note})` : ''}`))))));
     return box;
   }
   async function actApi(payload: Record<string, unknown>) {
@@ -1077,9 +1109,12 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
         h('div', { role: 'cell', class: 'pe-vbtns' },
           h('button', { class: 'pe-btn pe-sm', type: 'button', disabled: vs.busy, 'aria-label': `Previsualizar la versión ${v.version}`, onclick: () => { void showVersion(v.version); } }, 'Previsualizar'),
           h('button', { class: 'pe-btn pe-sm', type: 'button', disabled: vs.busy, 'aria-label': `Comparar la versión ${v.version} con el borrador`, onclick: () => { void compareWith(String(v.version), 'draft', `v${v.version} → borrador guardado`); } }, 'Comparar con borrador'),
-          h('button', { class: 'pe-btn pe-sm', type: 'button', disabled: vs.busy || vs.storage !== 'ok', 'aria-label': `Recuperar la versión ${v.version} como borrador`, onclick: () => { void startRestore(v); } }, 'Recuperar como borrador'))));
+          h('button', { class: 'pe-btn pe-sm', type: 'button', disabled: vs.busy || vs.storage !== 'ok', 'aria-label': `Recuperar la versión ${v.version} como borrador`, onclick: () => { void startRestore(v); } }, 'Recuperar como borrador'),
+          isActiveVersion(v.version)
+            ? h('button', { class: 'pe-btn pe-sm pe-danger', type: 'button', disabled: true, 'aria-label': `La versión ${v.version} está activa públicamente y no se puede eliminar`, title: 'Activa públicamente: no se puede eliminar' }, 'Eliminar')
+            : h('button', { class: 'pe-btn pe-sm pe-danger', type: 'button', disabled: vs.busy || vs.storage !== 'ok' || !vs.act, 'aria-label': `Eliminar la versión ${v.version}`, onclick: () => { void startDelete(v); } }, 'Eliminar'))));
     }
-    versionsPane.append(table, h('p', { class: 'pe-note' }, `Máximo de ${vs.maxVersions} versiones. Nunca se elimina una versión: al llegar al límite no se podrá publicar hasta decidir una política de retención.`));
+    versionsPane.append(table, h('p', { class: 'pe-note' }, `Máximo de ${vs.maxVersions} versiones. Nada se elimina solo: «Eliminar» es permanente, siempre pide confirmación y nunca se puede con la versión activa públicamente. Los números no se reutilizan.`));
 
     versionsPane.append(backupsPanel());
 

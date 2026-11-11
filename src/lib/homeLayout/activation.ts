@@ -28,7 +28,7 @@ export const MAX_LOG_ENTRIES = 200;
 export const MAX_ACTIVATION_BODY_BYTES = 2 * 1024;
 export const INITIAL_REVISION = 'inicial';
 
-export type ActivationAction = 'activate' | 'deactivate';
+export type ActivationAction = 'activate' | 'deactivate' | 'delete_version';
 export interface ActivationLogEntry {
   at: string;
   by: string;
@@ -69,7 +69,7 @@ export function validateActivationDocument(raw: unknown): { ok: true; value: Act
   if (!Array.isArray(raw.log)) errors.push('log: debe ser una lista');
   else {
     raw.log.slice(-MAX_LOG_ENTRIES).forEach((e, i) => {
-      if (!isObj(e) || typeof e.at !== 'string' || typeof e.by !== 'string' || !['activate', 'deactivate'].includes(e.action as string) || !['ok', 'rechazada', 'error'].includes(e.result as string)) {
+      if (!isObj(e) || typeof e.at !== 'string' || typeof e.by !== 'string' || !['activate', 'deactivate', 'delete_version'].includes(e.action as string) || !['ok', 'rechazada', 'error'].includes(e.result as string)) {
         errors.push(`log[${i}]: entrada no válida`);
         return;
       }

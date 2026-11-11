@@ -131,6 +131,11 @@ export interface LayoutDocument {
   published: PublishedLayout | null;
   /** Reservado para la etapa 4 (versiones archivadas). */
   versions: PublishedLayout[];
+  /**
+   * Número más alto que se ha usado nunca (también el de versiones ELIMINADAS). Las versiones nuevas siempre son `lastVersion + 1`: un número
+   * eliminado no se reutiliza. Opcional: los documentos antiguos no lo tienen y se calcula con las versiones existentes.
+   */
+  lastVersion?: number;
 }
 
 export type ValidationResult<T> = { ok: true; value: T } | { ok: false; errors: string[] };

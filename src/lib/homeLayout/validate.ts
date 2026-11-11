@@ -380,6 +380,12 @@ export function validateDocument(raw: unknown): ValidationResult<LayoutDocument>
       else if (p) versions.push(p);
     });
   }
+  let lastVersion: number | undefined;
+  if (raw.lastVersion !== undefined) {
+    const top = Math.max(0, published?.version ?? 0, ...versions.map((v) => v.version));
+    if (!Number.isInteger(raw.lastVersion) || (raw.lastVersion as number) < 0) errors.push('lastVersion: debe ser un entero ≥ 0');
+    else lastVersion = Math.max(raw.lastVersion as number, top);
+  }
   if (errors.length) return { ok: false, errors };
-  return { ok: true, value: { schemaVersion: SCHEMA_VERSION, activation: { enabled: enabled as boolean }, draft, published, versions } };
+  return { ok: true, value: { schemaVersion: SCHEMA_VERSION, activation: { enabled: enabled as boolean }, draft, published, versions, ...(lastVersion !== undefined ? { lastVersion } : {}) } };
 }

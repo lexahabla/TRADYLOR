@@ -152,7 +152,8 @@ export function findVersion(doc: LayoutDocument, version: number): (PublishedLay
   return v ? { ...v, state: 'archived' } : null;
 }
 
-export const nextVersionNumber = (doc: LayoutDocument): number => Math.max(0, doc.published?.version ?? 0, ...doc.versions.map((v) => v.version)) + 1;
+/** Siguiente número de versión: nunca reutiliza uno ya usado, tampoco el de una versión eliminada (`lastVersion`). */
+export const nextVersionNumber = (doc: LayoutDocument): number => Math.max(0, doc.lastVersion ?? 0, doc.published?.version ?? 0, ...doc.versions.map((v) => v.version)) + 1;
 
 /* ───────────────────────── Decisiones puras de publicar y recuperar ───────────────────────── */
 
@@ -206,6 +207,7 @@ export function planPublish(read: { status: string; doc: LayoutDocument }, input
     ...doc,
     published: { version, publishedAt, blocks: draft.value },
     versions: doc.published ? [doc.published, ...doc.versions] : [...doc.versions],
+    lastVersion: version,
   };
   const full = validateDocument(next);
   if (!full.ok) return { ok: false, reason: 'documento_invalido', errors: full.errors.slice(0, 20) };

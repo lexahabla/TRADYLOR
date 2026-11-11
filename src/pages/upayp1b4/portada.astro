@@ -185,7 +185,43 @@ const SPEED_TEXT: Record<string, string> = { slow: 'lenta', normal: 'normal', fa
       </div>
     </section>
   </div>
+
+  <!-- Botón flotante «Secciones»: mismo botón que el resto del backend (/upayp1b4, Marketing, Tráfico y ventas). Aquí sólo aparece al bajar. -->
+  <button type="button" id="adminBackToTop" class="admin-back-to-top" title="Volver al menú de secciones" aria-label="Volver al menú de secciones" hidden>
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <line x1="12" y1="19" x2="12" y2="5"></line>
+      <polyline points="5 12 12 5 19 12"></polyline>
+    </svg>
+    <span>Secciones</span>
+  </button>
 </Layout>
+
+<script is:inline>
+  (function () {
+    var btn = document.getElementById('adminBackToTop');
+    if (!btn) return;
+    var SHOW_AFTER = 320;
+    var ticking = false;
+    function update() {
+      ticking = false;
+      var show = (window.scrollY || document.documentElement.scrollTop || 0) > SHOW_AFTER;
+      if (show && btn.hidden) btn.hidden = false;
+      btn.classList.toggle('is-visible', show);
+      if (!show && !btn.hidden && !btn.matches(':focus')) btn.hidden = true;
+    }
+    window.addEventListener('scroll', function () { if (!ticking) { ticking = true; requestAnimationFrame(update); } }, { passive: true });
+    window.addEventListener('resize', update);
+    update();
+    btn.addEventListener('click', function () {
+      var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+      // Teclado y lectores de pantalla: el foco pasa a la navegación de secciones (arriba del todo).
+      var nav = document.getElementById('adminNavToggle');
+      var target = nav && nav.offsetParent !== null ? nav : document.querySelector('.admin-nav-item');
+      if (target) window.setTimeout(function () { try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); } btn.hidden = true; }, reduce ? 0 : 450);
+    });
+  })();
+</script>
 
 <script>
   import { initHomeLayoutEditor } from '../../scripts/homeLayoutEditor';
@@ -194,6 +230,14 @@ const SPEED_TEXT: Record<string, string> = { slow: 'lenta', normal: 'normal', fa
 </script>
 
 <style is:global>
+  /* Botón «Secciones» (volver arriba): mismo aspecto que en el resto del backend; aquí aparece sólo al desplazarse hacia abajo. */
+  .admin-back-to-top { position: fixed; left: 1.1rem; bottom: 1.1rem; z-index: 70; display: inline-flex; align-items: center; gap: .4rem; min-height: 44px; padding: .65rem .95rem; color: #04121f; background: linear-gradient(135deg, #38bdf8, #22d3ee); border: 0; border-radius: 999px; box-shadow: 0 10px 26px rgba(56, 189, 248, .35); cursor: pointer; font: inherit; font-size: .78rem; font-weight: 800; letter-spacing: .02em; opacity: 0; transform: translateY(10px); pointer-events: none; transition: opacity .2s ease, transform .2s ease, box-shadow .18s ease; }
+  .admin-back-to-top[hidden] { display: none; }
+  .admin-back-to-top.is-visible { opacity: 1; transform: none; pointer-events: auto; }
+  .admin-back-to-top:hover { transform: translateY(-2px); box-shadow: 0 14px 32px rgba(56, 189, 248, .5); }
+  .admin-back-to-top:focus-visible { outline: 3px solid #fbbf24; outline-offset: 3px; }
+  .admin-back-to-top svg { display: block; }
+  @media (prefers-reduced-motion: reduce) { .admin-back-to-top { transition: none; } }
   .portada-wrapper { display: flex; flex-direction: column; gap: 30px; max-width: var(--max-width); margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
   .portada-card { background: var(--color-bg-card); border: 1px solid var(--color-border); border-radius: var(--border-radius-lg); box-shadow: var(--shadow-card); padding: 1.6rem 2rem; }
   .portada-card-title { font-family: var(--font-heading); font-size: 1.15rem; color: var(--color-text-main); margin-bottom: 1rem; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
