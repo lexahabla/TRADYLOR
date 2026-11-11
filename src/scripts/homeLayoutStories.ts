@@ -85,6 +85,7 @@ export function initHomeLayoutStories(root: HTMLElement, deps: StoriesDeps): { a
     blocking: [] as StoryIssue[],
     picker: { open: true, q: '', items: [] as CatalogItem[], loading: false, error: '' },
     uploading: false,
+    initial: null as null | { available: boolean; reason?: string; stories: Array<{ id: string; name: string; screens: unknown[] }>; report: Array<{ id: string; name: string; status: string; screens: number; reason?: string }> },
   };
   const categories: CatOption[] = [];
   const labels = new Map<string, string>();
@@ -118,7 +119,38 @@ export function initHomeLayoutStories(root: HTMLElement, deps: StoriesDeps): { a
     S.loaded = true; S.dirty = false; S.conflict = false; S.blocking = [];
     if (!S.story || !S.stories.some((s) => s.id === S.story)) { S.story = S.stories[0]?.id ?? null; S.screen = 0; S.viewing = 0; }
     if (!catalogLoaded) { catalogLoaded = true; void loadCategories(); void searchCatalog(''); }
+    S.initial = null;
+    if (!S.stories.length) {
+      const ir = await api('/api/admin/home-layout/stories-initial');
+      if (ir.status === 200 && ir.body?.success) S.initial = { available: ir.body.available, reason: ir.body.reason, stories: ir.body.stories, report: ir.body.report };
+    }
     render();
+  }
+  /** Crea las seis historias iniciales (BORRADOR, con el catálogo real de ahora). Sólo si no existe ninguna historia. */
+  async function createInitial() {
+    const ini = S.initial;
+    if (S.busy || !ini || !ini.available) return;
+    const lines = ini.report.map((r) => (r.status === 'creada' ? `· ${r.name}: ${r.screens} pantalla(s)` : `· ${r.name}: se omite (${r.reason ?? 'sin datos'})`)).join('\n');
+    if (!(await confirmBox('Crear las historias iniciales', `Se crearán como BORRADOR (no se ven en la web hasta que marques cada una como «publicada») con productos y categorías reales del catálogo de ahora:\n${lines}`, 'Crear como borrador'))) return;
+    S.busy = true; render();
+    const r = await api('/api/admin/home-layout/stories-initial', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Home-Layout-Editor': '1' }, body: JSON.stringify({ action: 'create_initial', baseRevision: S.revision, confirm: true }) });
+    S.busy = false;
+    if (r.status === 200 && r.body?.success) {
+      await load();
+      say({ kind: 'ok', text: `Historias iniciales creadas como borrador (${(r.body.created as unknown[]).length}). Revísalas y, cuando quieras, cambia el estado de cada una a «publicada» y guarda.` });
+    } else {
+      await load();
+      say({ kind: 'error', text: r.status === 409 ? 'Ya existen historias (o cambiaron mientras tanto): no se ha sobrescrito nada.' : r.status === 423 ? 'El almacenamiento está protegido: no se ha sobrescrito nada.' : r.status === 422 ? 'No hay productos reales suficientes para crear las historias.' : 'No se pudieron crear las historias; no se ha cambiado nada.' });
+    }
+  }
+  function initialCard(): HTMLElement | null {
+    const ini = S.initial;
+    if (!S.loaded || !ini || S.stories.length) return null;
+    const box = h('section', { class: 'pe-box pe-act', 'aria-labelledby': 'psInitialTitle' }, h('h3', { id: 'psInitialTitle' }, 'Historias iniciales'));
+    box.append(h('p', { class: 'pe-note' }, 'Crea de una vez seis historias (Informática, Portabilidad, Sonido, Hogar, Bajadas de precio y Descubre) con productos y categorías REALES del catálogo, con su imagen, precio y comercio. Se crean como BORRADOR: no se ven en la web hasta que marques cada una como «publicada». Los precios del texto son los de hoy (con su fecha) y no se actualizan solos. Sólo está disponible mientras no exista ninguna historia: nunca sobrescribe.'));
+    box.append(h('ul', { class: 'pe-diff' }, ...ini.report.map((r) => h('li', {}, h('span', { class: `pe-dk ${r.status === 'creada' ? 'is-added' : 'is-removed'}`, 'aria-hidden': 'true' }, r.status === 'creada' ? '＋' : '－'), h('span', {}, r.status === 'creada' ? `${r.name} · ${r.screens} pantalla(s)` : `${r.name}: no se crea (${r.reason ?? 'sin datos'})`)))));
+    box.append(h('div', { class: 'pe-vact' }, h('button', { class: 'pe-btn pe-primary', type: 'button', disabled: !ini.available || S.busy, onclick: () => { void createInitial(); } }, 'Crear las historias iniciales como borrador…')));
+    return box;
   }
   async function loadCategories() {
     const r = await api('/api/admin/home-layout/options?kind=category&limit=50');
@@ -405,7 +437,8 @@ export function initHomeLayoutStories(root: HTMLElement, deps: StoriesDeps): { a
     const list = renderList();
     listHost = list;
     renderViewer();
-    board.append(bar, banner, h('div', { class: 'ps-grid' }, list, renderEditor(), viewer));
+    const card = initialCard();
+    board.append(bar, banner, ...(card ? [card] : []), h('div', { class: 'ps-grid' }, list, renderEditor(), viewer));
     if (focusKey) { const el = board.querySelector(`[data-fk="${focusKey}"]`) as HTMLElement | null; focusKey = null; el?.focus(); }
   }
 

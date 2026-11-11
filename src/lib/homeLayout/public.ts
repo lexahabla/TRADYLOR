@@ -318,6 +318,7 @@ export function composeHome(blocks: readonly Block[], meta: { version: number; p
       stories = [];
     }
     const independent = isIndependentFromCatalog(blocks);
+    if (independent) stories = stories.map((st) => ({ ...st, screens: st.screens.map((sc) => (sc.href ? { ...sc, href: toCatalogHref(sc.href) } : sc)) }));
     const fin = (list: PublicBlock[]) => (independent ? list.map(mapHrefs) : list);
     return { mode: 'layout', version: meta.version, publishedAt: meta.publishedAt, top: fin(top), bottom: fin(bottom), stories, independent };
   } catch {
