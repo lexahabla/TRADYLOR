@@ -74,3 +74,16 @@ Rama `feature/rediseno-portada`. La cabecera y la navegación NO cambian; sólo 
 Modelo (sólo campos opcionales aditivos; los bloques guardados siguen siendo válidos): formato `lista` (numerada, ≤ 10), variantes editoriales con `eyebrow`/`kicker`/`imageUrl2`/`items`, `Block.link` («Ver todo») y `Block.subtitle`, orden `descuento_desc` y regla «Solo con bajada VERIFICADA» (`onlyVerifiedDiscount`; sólo observaciones verificadas, nunca el precio anterior suelto). Tarjeta `home/HomeProductCard.astro`. Sin datos inventados: «Los 5 más económicos» ordena por precio, sin afirmar popularidad.
 
 Cargar el diseño: pestaña B → «Nuevo diseño de la portada» (`POST /api/admin/home-layout/initial {action:'load_design'}`) lo deja como BORRADOR sólo si el borrador es la v1 sin modificar; no publica ni activa. Restaurar la portada anterior: pestaña B → versiones → «Recuperar», o desactivar la portada nueva (vuelve la de siempre). Pruebas: `home-layout-design.test.mjs`.
+
+## Copias de seguridad del borrador y comparaciones visibles (12/11/2026, LOCAL, sin publicar)
+
+**Comparaciones.** En «B · Publicación y versiones», «Comparar con borrador» (fila de versión), «Comparar publicada con borrador», «Previsualizar» y «Ver diferencias» (copias) abren el resultado en un recuadro al final de la pestaña, **se desplazan hasta él**, le dan el foco y lo anuncian; «Cerrar resultado» lo cierra. «Sin diferencias: el contenido es idéntico» si no hay cambios. Vale en escritorio y móvil.
+
+**Copias del borrador** (`lib/homeLayout/draftBackups.ts` PURO + `draftBackupsStore.ts` + `api/admin/home-layout/draft-backups`; archivo `home-layout-draft-backups.json` en el volumen, independiente de `home-layout.json`; atómico + `.bak`; dañado/de esquema nuevo = no se sobrescribe, 423). Antes de SUSTITUIR un borrador con contenido se guarda una copia recuperable: al cargar el nuevo diseño con borrador propio (`load_design` + `acknowledgeBackup:true`), al recuperar una copia y al recuperar una versión. Reglas: la copia se escribe PRIMERO y el borrador después (si falla la copia no se toca nada); una copia idéntica no se duplica; borrador vacío = sin copia; máximo 30 y NUNCA se borra ninguna (al llegar al máximo se rechaza con `limite_copias`). No toca versiones, historial ni activación; no publica ni activa. Revisión (`baseRevision`) obligatoria: obsoleta → 409 `conflicto`.
+
+- `GET /api/admin/home-layout/draft-backups` lista; `?id=<id>` devuelve la copia y las diferencias frente al borrador actual (sólo lectura).
+- `POST {action:'restore', id, baseRevision, confirm:true}` recupera como borrador y protege antes el actual (CSRF `sameOrigin` + `X-Home-Layout-Editor: 1`, ≤ 4 KiB).
+- La tarjeta «Nuevo diseño de la portada» ya aparece siempre (salvo almacenamiento protegido o sin portada): con borrador propio el botón dice «Cargar el nuevo diseño (guardando antes una copia del borrador actual)…» y el diálogo «Guardar copia y cargar». Si el borrador ya es el nuevo diseño: 409 `sin_cambios`.
+- Panel «Copias de seguridad del borrador» en la pestaña B: «Ver diferencias» y «Recuperar como borrador».
+
+Pruebas: `home-layout-backups.test.mjs` (más ajustes en `home-layout-initial` y `home-layout-publish`).

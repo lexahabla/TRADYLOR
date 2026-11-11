@@ -53,6 +53,7 @@ interface MerOption { id: string; productCount: number }
 interface ProdOption { id: string; title: string; price: number | null; hasImage: boolean; network: string }
 
 type Msg = { kind: 'ok' | 'error' | 'info'; text: string } | null;
+type BackupRow = { id: string; createdAt: string; by: string; reason: string; blocks: number; titles: string[] };
 
 const WIDTH_LABEL: Record<number, string> = { 3: '¼', 4: '⅓', 6: '½', 8: '⅔', 9: '¾', 12: '1' };
 const WIDTH_NAME: Record<number, string> = { 3: 'un cuarto', 4: 'un tercio', 6: 'la mitad', 8: 'dos tercios', 9: 'tres cuartos', 12: 'el ancho completo' };
@@ -697,9 +698,10 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     versions: [] as VersionSummary[],
     maxVersions: 100,
     msg: null as Msg,
-    detail: null as null | { title: string; kind: 'preview' | 'compare'; blocks?: Block[]; changes?: DiffEntry[]; chip?: string; data?: PvData },
+    detail: null as null | { title: string; kind: 'preview' | 'compare'; blocks?: Block[]; changes?: DiffEntry[]; chip?: string; data?: PvData; note?: string },
+    backups: null as null | { storage: string; max: number; rows: BackupRow[] },
     busy: false,
-    initial: null as null | { available: boolean; designAvailable?: boolean; reason?: string; message?: string; blocks: Array<{ id: string; title: string; modality: string; format: string; width: number }>; check: { canLoad: boolean; blocking: BlockingIssue[]; warnings: BlockingIssue[]; visibleBlocks: number; totalBlocks: number }; draftRevision: string; activationRevision: string; gates: { env: boolean } },
+    initial: null as null | { available: boolean; designAvailable?: boolean; designNeedsBackup?: boolean; draftBlocks?: number; backupsCount?: number; reason?: string; message?: string; blocks: Array<{ id: string; title: string; modality: string; format: string; width: number }>; check: { canLoad: boolean; blocking: BlockingIssue[]; warnings: BlockingIssue[]; visibleBlocks: number; totalBlocks: number }; draftRevision: string; activationRevision: string; gates: { env: boolean } },
     act: null as null | { gates: { stage: boolean; env: boolean; adminFlag: boolean; activeFile: boolean; pinnedVersion: number | null }; revision: string; log: Array<{ at: string; by: string; action: string; version: number | null; result: string; note?: string }>; storage: { layout: string; activation: string } },
   };
   const dateTxt = (iso: string) => new Date(iso).toLocaleString('es-ES');
@@ -731,6 +733,8 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     const r = await api('/api/admin/home-layout/versions');
     const a = await api('/api/admin/home-layout/activation');
     const ini = await api('/api/admin/home-layout/initial');
+    const bks = await api('/api/admin/home-layout/draft-backups');
+    vs.backups = bks.status === 200 && bks.body?.success ? { storage: bks.body.storage, max: bks.body.max, rows: bks.body.backups as BackupRow[] } : null;
     vs.initial = ini.status === 200 && ini.body?.success ? ini.body : null;
     vs.act = a.status === 200 && a.body?.success ? { gates: a.body.gates, revision: a.body.revision, log: a.body.log, storage: a.body.storage } : null;
     vs.loading = false;
@@ -754,6 +758,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     vs.detail = { title: `Versión ${v} · ${r.body.state === 'published' ? 'publicada internamente' : 'archivada'}`, kind: 'preview', blocks: r.body.blocks as Block[], data: p.status === 200 && p.body?.success ? (p.body.blocks as PvData) : {}, chip: `v${v} · ${dateTxt(r.body.publishedAt)}` };
     vs.msg = null;
     renderVersions();
+    revealDetail();
   }
   async function compareWith(a: string, b: string, title: string) {
     const r = await api(`/api/admin/home-layout/versions?compare=${encodeURIComponent(a)}&with=${encodeURIComponent(b)}`);
@@ -761,6 +766,18 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     vs.detail = { title, kind: 'compare', changes: r.body.changes as DiffEntry[] };
     vs.msg = null;
     renderVersions();
+    revealDetail();
+  }
+  /** Lleva la vista hasta el resultado (comparación o previsualización), le da el foco y lo anuncia a lectores de pantalla. */
+  function revealDetail() {
+    requestAnimationFrame(() => {
+      const el = versionsPane.querySelector('.pe-vdetail') as HTMLElement | null;
+      if (!el) return;
+      const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      el.scrollIntoView({ block: 'start', behavior: reduce ? 'auto' : 'smooth' });
+      el.focus({ preventScroll: true });
+      live.textContent = `Resultado abierto: ${vs.detail?.title ?? ''}`;
+    });
   }
 
   function diffList(changes: DiffEntry[], empty: string): HTMLElement {
@@ -830,7 +847,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   async function startRestore(v: VersionSummary) {
     if (vs.busy) return;
     const warn = state.dirty ? ' Además hay cambios SIN GUARDAR en el editor: se perderán.' : '';
-    const ok = await confirmBox(`Recuperar la versión ${v.version} como borrador`, `El borrador guardado se sustituirá por el contenido de la versión ${v.version} (${dateTxt(v.publishedAt)}, ${v.blocks} bloques).${warn} La versión publicada y el historial no cambian y la web pública tampoco. Después podrás editar y volver a publicar.`, 'Recuperar como borrador', true);
+    const ok = await confirmBox(`Recuperar la versión ${v.version} como borrador`, `El borrador guardado se sustituirá por el contenido de la versión ${v.version} (${dateTxt(v.publishedAt)}, ${v.blocks} bloques).${warn} Antes se guarda una copia del borrador actual (la podrás recuperar en «Copias de seguridad del borrador»). La versión publicada y el historial no cambian y la web pública tampoco. Después podrás editar y volver a publicar.`, 'Recuperar como borrador', true);
     if (!ok) return;
     vs.busy = true; renderVersions();
     const r = await act({ action: 'restore', baseRevision: vs.draft.revision, version: v.version });
@@ -845,15 +862,69 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     } else { await loadVersions(); vsay({ kind: 'error', text: explain(r) }); }
   }
 
+  /* ---- Copias de seguridad del borrador ---- */
+  const REASON_TXT: Record<string, string> = { antes_de_cargar_diseno: 'Antes de cargar el nuevo diseño', antes_de_recuperar_copia: 'Antes de recuperar otra copia', antes_de_recuperar_version: 'Antes de recuperar una versión' };
+  async function showBackup(b: BackupRow) {
+    const r = await api(`/api/admin/home-layout/draft-backups?id=${encodeURIComponent(b.id)}`);
+    if (r.status !== 200 || !r.body?.success) { vsay({ kind: 'error', text: 'No se pudo cargar la copia.' }); return; }
+    vs.detail = { title: `Copia del ${dateTxt(b.createdAt)} · qué cambiaría al recuperarla`, kind: 'compare', changes: r.body.changes as DiffEntry[], note: 'Diferencias para pasar del borrador guardado actual a esta copia. No se ha cambiado nada.' };
+    vs.msg = null;
+    renderVersions();
+    revealDetail();
+  }
+  async function startRestoreBackup(b: BackupRow) {
+    if (vs.busy) return;
+    const warn = state.dirty ? ' Además hay cambios SIN GUARDAR en el editor: se perderán.' : '';
+    const ok = await confirmBox('Recuperar la copia como borrador', `El borrador guardado (${vs.draft.blocks} bloques) se guardará antes como una copia nueva y después será sustituido por esta copia (${b.blocks} bloques, ${dateTxt(b.createdAt)}).${warn} No cambia ninguna versión ni la activación; la web pública tampoco. Podrás volver atrás desde esta misma lista.`, 'Recuperar como borrador', true);
+    if (!ok) return;
+    vs.busy = true; renderVersions();
+    const r = await api('/api/admin/home-layout/draft-backups', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Home-Layout-Editor': '1' }, body: JSON.stringify({ action: 'restore', id: b.id, baseRevision: vs.draft.revision, confirm: true }) });
+    vs.busy = false;
+    if (r.status === 200 && r.body?.success) {
+      vs.detail = null;
+      state.dirty = false;
+      await load();
+      await loadVersions();
+      say({ kind: 'ok', text: `Copia recuperada como borrador.${r.body.protectedId ? ' El borrador anterior se guardó como copia.' : ''} Revisa el editor y guarda o publica cuando quieras.` });
+      await setTab('editor');
+    } else {
+      await loadVersions();
+      vsay({ kind: 'error', text: r.status === 409 && r.body?.code === 'conflicto' ? 'El borrador cambió mientras tanto: actualiza y vuelve a intentarlo. No se ha cambiado nada.' : r.status === 409 && r.body?.code === 'limite_copias' ? 'Se alcanzó el máximo de copias: no se ha cambiado nada.' : r.status === 423 ? 'El almacenamiento está protegido: no se ha sobrescrito nada.' : 'No se pudo recuperar la copia; tu borrador sigue como estaba.' });
+    }
+  }
+  function backupsPanel(): HTMLElement {
+    const box = h('div', { class: 'pe-box pe-act', id: 'peBackups' }, h('h3', {}, 'Copias de seguridad del borrador'));
+    const bk = vs.backups;
+    if (!bk) { box.append(h('p', { class: 'pe-note' }, vs.loaded ? 'No se pudieron leer las copias.' : 'Cargando…')); return box; }
+    box.append(h('p', { class: 'pe-note' }, `Antes de sustituir un borrador con contenido (cargar el nuevo diseño, recuperar una copia o una versión) se guarda aquí una copia automática. Nunca se borran (máximo ${bk.max}). Hay ${bk.rows.length}.`));
+    const blocked = bk.storage === 'corrupt' || bk.storage === 'invalid' || bk.storage === 'newer';
+    if (blocked) box.append(h('p', { class: 'pe-msg is-error', role: 'alert' }, `El archivo de copias está en estado «${bk.storage}»: se conserva sin sobrescribir.`));
+    if (!bk.rows.length) { box.append(h('p', { class: 'pe-empty' }, 'Todavía no hay copias.')); return box; }
+    const table = h('div', { class: 'pe-vtable', role: 'table', 'aria-label': 'Copias de seguridad del borrador' });
+    table.append(h('div', { class: 'pe-vrow is-head', role: 'row' }, ...['Fecha', 'Motivo', 'Bloques', 'Acciones'].map((t) => h('div', { role: 'columnheader' }, t))));
+    for (const b of bk.rows) {
+      table.append(h('div', { class: 'pe-vrow', role: 'row' },
+        h('div', { role: 'cell', 'data-l': 'Fecha' }, dateTxt(b.createdAt)),
+        h('div', { role: 'cell', 'data-l': 'Motivo' }, REASON_TXT[b.reason] ?? b.reason),
+        h('div', { role: 'cell', 'data-l': 'Bloques' }, `${b.blocks}`, h('small', { class: 'pe-note' }, ` · ${b.titles.slice(0, 4).join(', ')}${b.titles.length > 4 ? '…' : ''}`)),
+        h('div', { role: 'cell', class: 'pe-vbtns' },
+          h('button', { class: 'pe-btn pe-sm', type: 'button', disabled: vs.busy, 'aria-label': `Ver diferencias de la copia del ${dateTxt(b.createdAt)}`, onclick: () => { void showBackup(b); } }, 'Ver diferencias'),
+          h('button', { class: 'pe-btn pe-sm', type: 'button', disabled: vs.busy || vs.storage !== 'ok' || blocked, 'aria-label': `Recuperar la copia del ${dateTxt(b.createdAt)} como borrador`, onclick: () => { void startRestoreBackup(b); } }, 'Recuperar como borrador'))));
+    }
+    box.append(table);
+    return box;
+  }
+
   /* ---- Portada inicial: cargar, publicar y activar internamente (v1) en una sola acción ---- */
   function initialPanel(): HTMLElement {
     const ini = vs.initial;
     if (ini && !ini.available && ini.designAvailable) {
       const dbox = h('div', { class: 'pe-box pe-act' }, h('h3', {}, 'Nuevo diseño de la portada'));
-      dbox.append(h('p', { class: 'pe-note' }, 'Carga el nuevo diseño (hero, campaña, bajadas de precio verificadas, categorías, lista numerada, banner de categoría, carruseles y franja de confianza) como BORRADOR, con los productos y categorías reales del catálogo. No publica ni activa nada: revisa la vista previa, publica y activa cuando quieras; la versión actual sigue guardada y se puede recuperar. Sólo funciona si el borrador es la primera portada sin modificar.'));
+      dbox.append(h('p', { class: 'pe-note' }, 'Carga el nuevo diseño (hero, campaña, bajadas de precio verificadas, categorías, lista numerada, banner de categoría, carruseles y franja de confianza) como BORRADOR, con los productos y categorías reales del catálogo. No publica ni activa nada: revisa la vista previa, publica y activa cuando quieras; la versión actual sigue guardada y se puede recuperar.'));
+      if (ini.designNeedsBackup) dbox.append(h('p', { class: 'pe-msg is-info' }, `Tu borrador actual (${ini.draftBlocks ?? '?'} bloques) tiene contenido propio. Antes de sustituirlo se guardará automáticamente una COPIA que podrás recuperar en «Copias de seguridad del borrador». Las versiones y la activación no cambian.`));
       dbox.append(h('ul', { class: 'pe-diff' }, ...ini.blocks.map((b) => h('li', {}, h('span', { class: 'pe-dk is-added', 'aria-hidden': 'true' }, '＋'), h('span', {}, `${b.title} (${b.modality}, ${b.format})`)))));
       if (!ini.check.canLoad) dbox.append(h('div', {}, h('div', { class: 'pe-sub' }, `No se puede cargar con los datos actuales (${ini.check.blocking.length})`), issueList(ini.check.blocking)));
-      dbox.append(h('div', { class: 'pe-vact' }, h('button', { class: 'pe-btn pe-primary', type: 'button', disabled: vs.busy || !ini.check.canLoad || state.dirty, title: state.dirty ? 'Guarda o descarta antes los cambios del editor' : '', onclick: () => { void startDesign(); } }, 'Cargar el nuevo diseño como borrador…')));
+      dbox.append(h('div', { class: 'pe-vact' }, h('button', { class: 'pe-btn pe-primary', type: 'button', disabled: vs.busy || !ini.check.canLoad || state.dirty, title: state.dirty ? 'Guarda o descarta antes los cambios del editor' : '', onclick: () => { void startDesign(); } }, ini.designNeedsBackup ? 'Cargar el nuevo diseño (guardando antes una copia del borrador actual)…' : 'Cargar el nuevo diseño como borrador…')));
       return dbox;
     }
     if (!ini || !ini.available) return h('div', { hidden: true });
@@ -889,21 +960,21 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     const ini = vs.initial;
     if (vs.busy || !ini || !ini.designAvailable) return;
     const body = h('div', { class: 'pe-confirm-body' },
-      h('p', { class: 'pe-note' }, `El borrador se sustituirá por el nuevo diseño (${ini.check.totalBlocks} bloques; ${ini.check.visibleBlocks} se mostrarían ahora). NO se publica ni se activa nada: la web pública no cambia. Podrás revisar las vistas previas, publicar la versión y activarla; la versión actual queda en el historial.`),
+      h('p', { class: 'pe-note' }, `El borrador se sustituirá por el nuevo diseño (${ini.check.totalBlocks} bloques; ${ini.check.visibleBlocks} se mostrarían ahora). NO se publica ni se activa nada: la web pública no cambia. Podrás revisar las vistas previas, publicar la versión y activarla; la versión actual queda en el historial.${ini.designNeedsBackup ? ` ANTES se guardará una copia de tu borrador actual (${ini.draftBlocks ?? '?'} bloques) para que puedas recuperarlo.` : ''}`),
       ini.check.warnings.length ? h('div', {}, h('div', { class: 'pe-sub' }, `Avisos (${ini.check.warnings.length}) — no bloquean`), issueList(ini.check.warnings)) : null);
-    if (!(await confirmBox('Cargar el nuevo diseño como borrador', 'Sólo sustituye el borrador; no publica ni activa nada.', 'Cargar como borrador', false, body, !ini.check.canLoad))) return;
+    if (!(await confirmBox('Cargar el nuevo diseño como borrador', 'Sólo sustituye el borrador; no publica ni activa nada.', ini.designNeedsBackup ? 'Guardar copia y cargar' : 'Cargar como borrador', false, body, !ini.check.canLoad))) return;
     vs.busy = true; renderVersions();
-    const r = await api('/api/admin/home-layout/initial', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Home-Layout-Editor': '1' }, body: JSON.stringify({ action: 'load_design', baseRevision: ini.draftRevision, confirm: true }) });
+    const r = await api('/api/admin/home-layout/initial', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Home-Layout-Editor': '1' }, body: JSON.stringify({ action: 'load_design', baseRevision: ini.draftRevision, confirm: true, ...(ini.designNeedsBackup ? { acknowledgeBackup: true } : {}) }) });
     vs.busy = false;
     if (r.status === 200 && r.body?.success) {
       state.dirty = false;
       await load();
       await loadVersions();
       await setTab('editor');
-      say({ kind: 'ok', text: 'Nuevo diseño cargado como borrador. Revisa las vistas previas y, cuando quieras, publícalo y actívalo desde «B · Publicación y versiones».' });
+      say({ kind: 'ok', text: `Nuevo diseño cargado como borrador.${r.body.backupId ? ' Tu borrador anterior se guardó como copia (pestaña B › «Copias de seguridad del borrador»).' : ''} Revisa las vistas previas y, cuando quieras, publícalo y actívalo desde «B · Publicación y versiones».` });
     } else {
       await loadVersions();
-      vsay({ kind: 'error', text: r.status === 409 ? 'El borrador tiene cambios propios o cambió mientras tanto: no se ha sobrescrito nada.' : r.status === 422 ? 'Hay bloques que no se pueden mostrar con los datos actuales: no se ha cargado nada.' : r.status === 423 ? 'El almacenamiento está protegido: no se sobrescribe.' : 'No se pudo cargar el nuevo diseño. La web sigue como estaba.' });
+      vsay({ kind: 'error', text: r.status === 409 ? 'El borrador cambió mientras tanto, ya es idéntico al nuevo diseño o se alcanzó el máximo de copias: no se ha sobrescrito nada.' : r.status === 422 ? 'Hay bloques que no se pueden mostrar con los datos actuales: no se ha cargado nada.' : r.status === 423 ? 'El almacenamiento está protegido: no se sobrescribe.' : 'No se pudo cargar el nuevo diseño. La web sigue como estaba.' });
     }
   }
 
@@ -1011,11 +1082,14 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     }
     versionsPane.append(table, h('p', { class: 'pe-note' }, `Máximo de ${vs.maxVersions} versiones. Nunca se elimina una versión: al llegar al límite no se podrá publicar hasta decidir una política de retención.`));
 
+    versionsPane.append(backupsPanel());
+
     if (vs.detail) {
       const d = vs.detail;
-      const box = h('div', { class: 'pe-vdetail' }, h('h3', {}, d.title, h('button', { class: 'pe-btn pe-sm', type: 'button', onclick: () => { vs.detail = null; renderVersions(); } }, 'Cerrar')));
+      const box = h('div', { class: 'pe-vdetail', id: 'peVdetail', tabindex: '-1', role: 'region', 'aria-label': d.title }, h('h3', {}, d.title, h('button', { class: 'pe-btn pe-sm', type: 'button', onclick: () => { vs.detail = null; renderVersions(); live.textContent = 'Resultado cerrado'; versionsPane.scrollIntoView({ block: 'start' }); } }, 'Cerrar resultado')));
+      if (d.note) box.append(h('p', { class: 'pe-note' }, d.note));
       if (d.kind === 'compare') {
-        box.append(diffList(d.changes ?? [], 'Sin diferencias.'));
+        box.append(diffList(d.changes ?? [], 'Sin diferencias: el contenido es idéntico.'));
         versionsPane.append(box);
       } else {
         const blocks = d.blocks ?? [];

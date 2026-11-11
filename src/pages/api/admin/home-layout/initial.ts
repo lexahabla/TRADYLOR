@@ -8,7 +8,8 @@
  * POST /api/admin/home-layout/initial   { action:'load_initial', baseRevision, baseActivation, confirm:true }
  *   Guarda los 7 bloques como borrador, publica la v1 y la FIJA/activa internamente (decisiones existentes: publish + activation). La web pública NO
  *   cambia hasta que el servidor tenga HOME_LAYOUT_ENABLED=true. SÓLO sobre una portada virgen (sin borrador, versiones ni activación): nunca sobrescribe.
- * POST {action:'load_design', baseRevision, confirm:true}: carga el REDISEÑO como borrador (sólo si el borrador es la primera portada sin modificar). No publica ni activa.
+ * POST {action:'load_design', baseRevision, confirm:true, acknowledgeBackup?:true}: carga el REDISEÑO como borrador. Si el borrador tiene cambios propios exige
+ *   acknowledgeBackup:true y guarda ANTES una copia recuperable (home-layout-draft-backups.json); si la copia no se puede guardar no se sustituye nada. No publica ni activa.
  *   Si algún bloque no se puede mostrar con los datos reales → 422 sin escribir nada. Escritura: activación primero y portada después; si falla la
  *   segunda se deshace la primera. Seguridad: administrador (401), CSRF (sameOrigin + X-Home-Layout-Editor: 1 + JSON), cuerpo ≤ 2 KiB, 405 en otros métodos.
  * ==============================================================================
@@ -23,6 +24,7 @@ import { loadSources } from '../../../../lib/homeLayout/sources';
 import { resolveBlocks } from '../../../../lib/homeLayout/resolve';
 import { activationRevision, appendLog, checkForActivation } from '../../../../lib/homeLayout/activation';
 import { revisionOf } from '../../../../lib/homeLayout/draft';
+import { readDraftBackups, backupsProtected, writeDraftBackups } from '../../../../lib/homeLayout/draftBackupsStore';
 import { MAX_INITIAL_BODY_BYTES, buildInitialBlocks, deriveInitialContext, designAvailability, initialAvailability, planDesignLoad, planInitialLoad, type InitialReason } from '../../../../lib/homeLayout/initialLayout';
 import type { Block } from '../../../../lib/homeLayout/types';
 
@@ -34,7 +36,7 @@ const fail = (status: number, code: string, message: string, extra: Record<strin
 
 const STATUS: Record<InitialReason, number> = {
   peticion_invalida: 400, confirmacion_requerida: 400, documento_invalido: 400, conflicto: 409, ya_existe_borrador: 409, ya_hay_versiones: 409, activacion_existente: 409,
-  referencias_bloqueantes: 422, archivo_protegido: 423, activacion_protegida: 423,
+  referencias_bloqueantes: 422, archivo_protegido: 423, activacion_protegida: 423, sin_cambios: 409, limite_copias: 409,
 };
 
 /** Bloques del diseño actual con los datos REALES de este momento (categorías e imágenes del catálogo). */
@@ -56,7 +58,7 @@ export const GET: APIRoute = async ({ request }) => {
       available: av.available,
       ...(av.available ? {} : { reason: av.reason, message: av.message }),
       designAvailable: dv.available,
-      ...(dv.available ? {} : { designReason: dv.reason }),
+      ...(dv.available ? { designNeedsBackup: dv.needsBackup, draftBlocks: layout.doc.draft.blocks.length, backupsCount: readDraftBackups().doc.backups.length } : { designReason: dv.reason }),
       blocks: blocksNow.map((b) => ({ id: b.id, title: b.title, modality: b.modality, format: b.format, width: b.width })),
       check: { canLoad: chk.blocking.length === 0, blocking: chk.blocking, warnings: chk.warnings, visibleBlocks: chk.visibleBlocks, totalBlocks: chk.totalBlocks },
       draftRevision: revisionOf(layout.doc.draft.updatedAt),
@@ -97,12 +99,18 @@ export const POST: APIRoute = async ({ request }) => {
     const act = readActivation();
     const now = new Date();
     if (typeof body === 'object' && body !== null && (body as { action?: unknown }).action === 'load_design') {
-      // Rediseño: sustituye SÓLO el borrador (si es la v1 sin modificar). No publica ni activa nada.
-      const dplan = planDesignLoad(layout, body, checkBlocks, now, designBlocks());
+      // Rediseño: sustituye SÓLO el borrador. Con borrador propio, la copia se escribe PRIMERO; si falla, no se toca nada.
+      const bk = readDraftBackups();
+      if (backupsProtected(bk.status)) return fail(423, 'archivo_protegido', `El archivo de copias está en estado «${bk.status}»: se conserva sin sobrescribir`);
+      const dplan = planDesignLoad(layout, body, checkBlocks, now, designBlocks(), bk.doc, by);
       if (!dplan.ok) return fail(STATUS[dplan.reason], dplan.reason, dplan.errors[0] ?? 'Operación rechazada', { errors: dplan.errors, ...(dplan.blocking ? { blocking: dplan.blocking } : {}) });
+      if (dplan.backups) {
+        const bw = writeDraftBackups(dplan.backups);
+        if (!bw.ok) return bw.reason === 'archivo_protegido' ? fail(423, 'archivo_protegido', bw.errors[0] ?? 'Archivo protegido') : fail(500, 'error_copia', 'No se pudo guardar la copia del borrador; no se cambió nada');
+      }
       const dw = writeHomeLayout(dplan.layout);
-      if (!dw.ok) return dw.reason === 'archivo_protegido' ? fail(423, 'archivo_protegido', dw.errors[0] ?? 'Archivo protegido') : fail(500, 'error_escritura', 'No se pudo guardar el borrador; no se cambió nada');
-      return json(200, { success: true, action: 'load_design', revision: dplan.revision, warnings: dplan.warnings, mode: resolveHomeMode() });
+      if (!dw.ok) return dw.reason === 'archivo_protegido' ? fail(423, 'archivo_protegido', dw.errors[0] ?? 'Archivo protegido') : fail(500, 'error_escritura', 'No se pudo guardar el borrador; la copia previa se conserva y el borrador sigue como estaba');
+      return json(200, { success: true, action: 'load_design', revision: dplan.revision, warnings: dplan.warnings, backupId: dplan.backupId, mode: resolveHomeMode() });
     }
     const plan = planInitialLoad(layout, act, body, checkBlocks, now, by, designBlocks());
     if (!plan.ok) return fail(STATUS[plan.reason], plan.reason, plan.errors[0] ?? 'Operación rechazada', { errors: plan.errors, ...(plan.blocking ? { blocking: plan.blocking } : {}) });

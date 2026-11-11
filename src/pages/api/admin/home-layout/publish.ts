@@ -32,14 +32,24 @@
  */
 
 import type { APIRoute } from 'astro';
-import { requireAdminAuth } from '../../../../lib/adminAuth';
+import { getSessionUser, requireAdminAuth } from '../../../../lib/adminAuth';
 import { sameOrigin } from '../../../../lib/alertsHttp';
 import { readHomeLayout, resolveHomeMode, writeHomeLayout } from '../../../../lib/homeLayout/store';
+import { backupsProtected, readDraftBackups, writeDraftBackups } from '../../../../lib/homeLayout/draftBackupsStore';
+import { protectDraft } from '../../../../lib/homeLayout/draftBackups';
 import { loadSources } from '../../../../lib/homeLayout/sources';
 import { resolveBlocks } from '../../../../lib/homeLayout/resolve';
 import { MAX_PUBLISH_BODY_BYTES, planPublish, planRestore, splitIssues, type PlanRefusal } from '../../../../lib/homeLayout/publish';
 
 export const prerender = false;
+
+const actor = (request: Request): string => {
+  try {
+    return getSessionUser(request)?.username ?? 'admin';
+  } catch {
+    return 'admin';
+  }
+};
 
 const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' };
 const fail = (status: number, code: string, message: string, extra: Record<string, unknown> = {}, more: Record<string, string> = {}) =>
@@ -94,8 +104,17 @@ export const POST: APIRoute = async ({ request }) => {
     } else {
       const plan = planRestore(read, body, now);
       if (!plan.ok) return refuse(plan);
+      // Protege ANTES el borrador que se va a sustituir (copia recuperable desde la pestaña B); si no se puede, no se cambia nada.
+      const bk = readDraftBackups();
+      if (backupsProtected(bk.status)) return fail(423, 'archivo_protegido', `El archivo de copias está en estado «${bk.status}»: se conserva sin sobrescribir`);
+      const prot = protectDraft(bk.doc, read.doc.draft, 'antes_de_recuperar_version', now, actor(request));
+      if (!prot.ok) return fail(409, 'limite_copias', prot.errors[0] ?? 'Límite de copias alcanzado');
+      if (prot.created) {
+        const bw = writeDraftBackups(prot.doc);
+        if (!bw.ok) return fail(bw.reason === 'archivo_protegido' ? 423 : 500, bw.reason === 'archivo_protegido' ? 'archivo_protegido' : 'error_copia', 'No se pudo guardar la copia del borrador actual; no se cambió nada');
+      }
       written = writeHomeLayout(plan.doc);
-      result = { action, version: plan.version, revision: plan.revision, published: plan.doc.published ? { version: plan.doc.published.version, publishedAt: plan.doc.published.publishedAt } : null };
+      result = { action, version: plan.version, protectedId: prot.id, revision: plan.revision, published: plan.doc.published ? { version: plan.doc.published.version, publishedAt: plan.doc.published.publishedAt } : null };
     }
     if (!written.ok) {
       if (written.reason === 'archivo_protegido') return fail(423, 'archivo_protegido', written.errors[0] ?? 'Almacenamiento protegido');

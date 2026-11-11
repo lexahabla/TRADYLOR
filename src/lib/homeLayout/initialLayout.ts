@@ -22,6 +22,7 @@ import { validateBlocks } from './validate';
 import { runAutomatic } from './automatic';
 import type { ReferenceSources } from './sources';
 import { isPublicSafeImage } from './publicSafety';
+import { emptyBackupsDocument, protectDraft, type BackupsDocument } from './draftBackups';
 
 /** Primera portada inicial (v1, ya publicada en producción). Se conserva para reconocer un borrador SIN modificar y ofrecer el rediseño sin pisar cambios. */
 export const LEGACY_V1_BLOCKS: Block[] = [
@@ -136,7 +137,7 @@ export function buildInitialBlocks(ctx: InitialContext): Block[] {
 
 export type InitialReason =
   | 'peticion_invalida' | 'confirmacion_requerida' | 'archivo_protegido' | 'activacion_protegida' | 'conflicto' | 'ya_existe_borrador'
-  | 'ya_hay_versiones' | 'activacion_existente' | 'referencias_bloqueantes' | 'documento_invalido';
+  | 'ya_hay_versiones' | 'activacion_existente' | 'referencias_bloqueantes' | 'documento_invalido' | 'sin_cambios' | 'limite_copias';
 export type InitialRefusal = { ok: false; reason: InitialReason; errors: string[]; blocking?: BlockingIssue[] };
 export type InitialPlan = { ok: true; layout: LayoutDocument; activation: ActivationDocument; version: number; warnings: BlockingIssue[] } | InitialRefusal;
 
@@ -199,42 +200,60 @@ export function planInitialLoad(
 const sameBlocks = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /**
- * ¿Se puede cargar el rediseño COMO BORRADOR? Sólo si el borrador es exactamente la primera portada inicial (v1) sin modificar, o si no hay
- * borrador pero ya existe una versión publicada. Cualquier cambio del administrador en el borrador lo impide (no se pisa nada).
+ * ¿Se puede cargar el rediseño COMO BORRADOR? Sí, salvo almacenamiento protegido o portada inexistente. Si el borrador tiene contenido propio (distinto
+ * de la primera portada inicial sin modificar) `needsBackup` es true: antes de sustituirlo se guarda una copia recuperable (ver `draftBackups.ts`).
  */
-export function designAvailability(layout: { status: string; doc: LayoutDocument }): { available: true } | { available: false; reason: InitialReason; message: string } {
+export function designAvailability(layout: { status: string; doc: LayoutDocument }): { available: true; needsBackup: boolean } | { available: false; reason: InitialReason; message: string } {
   if (protectedStatus(layout.status)) return { available: false, reason: 'archivo_protegido', message: `El almacenamiento de la portada está en estado «${layout.status}»: se conserva sin tocar` };
   const d = layout.doc.draft;
   if (d.updatedAt === null && !d.blocks.length) {
-    return layout.doc.published ? { available: true } : { available: false, reason: 'peticion_invalida', message: 'Todavía no hay ninguna portada: usa la carga de la portada inicial' };
+    return layout.doc.published ? { available: true, needsBackup: false } : { available: false, reason: 'peticion_invalida', message: 'Todavía no hay ninguna portada: usa la carga de la portada inicial' };
   }
   const v1 = validateBlocks(LEGACY_V1_BLOCKS, 'blocks');
-  if (v1.ok && sameBlocks(d.blocks, v1.value)) return { available: true };
-  return { available: false, reason: 'ya_existe_borrador', message: 'El borrador tiene cambios propios: no se sobrescribe' };
+  if (v1.ok && sameBlocks(d.blocks, v1.value)) return { available: true, needsBackup: false };
+  return { available: true, needsBackup: d.blocks.length > 0 };
 }
 
-/** Cuerpo: { action:'load_design', baseRevision, confirm:true }. Sustituye SÓLO el borrador (no publica ni activa nada). */
+export type DesignPlan = { ok: true; layout: LayoutDocument; revision: string; warnings: BlockingIssue[]; backups: BackupsDocument | null; backupId: string | null } | InitialRefusal;
+
+/**
+ * Cuerpo: { action:'load_design', baseRevision, confirm:true, acknowledgeBackup?:true }. Sustituye SÓLO el borrador (no publica ni activa nada).
+ * Si el borrador tiene contenido propio exige `acknowledgeBackup:true` y devuelve en `backups` el documento de copias a escribir ANTES que el borrador.
+ */
 export function planDesignLoad(
   layout: { status: string; doc: LayoutDocument },
   input: unknown,
   check: (blocks: readonly Block[]) => ActivationCheck,
   now: Date,
   designBlocks: readonly Block[],
-): { ok: true; layout: LayoutDocument; revision: string; warnings: BlockingIssue[] } | InitialRefusal {
+  backups: BackupsDocument = emptyBackupsDocument(),
+  by = 'admin',
+): DesignPlan {
   const bad = (errors: string[], reason: InitialReason = 'peticion_invalida'): InitialRefusal => ({ ok: false, reason, errors });
   if (!isObj(input)) return bad(['El cuerpo debe ser un objeto']);
-  const extra = Object.keys(input).filter((k) => !['action', 'baseRevision', 'confirm'].includes(k));
+  const extra = Object.keys(input).filter((k) => !['action', 'baseRevision', 'confirm', 'acknowledgeBackup'].includes(k));
   if (extra.length) return bad([`Campos no admitidos: ${extra.slice(0, 5).join(', ')}`]);
   if (input.action !== 'load_design') return bad(['action debe ser load_design']);
   if (typeof input.baseRevision !== 'string' || !input.baseRevision || input.baseRevision.length > 64) return bad(['baseRevision es obligatoria']);
+  if (input.acknowledgeBackup !== undefined && typeof input.acknowledgeBackup !== 'boolean') return bad(['acknowledgeBackup debe ser booleano']);
   if (input.confirm !== true) return bad(['La carga exige confirmación explícita (confirm: true)'], 'confirmacion_requerida');
   const av = designAvailability(layout);
   if (!av.available) return bad([av.message], av.reason);
   if (input.baseRevision !== revisionOf(layout.doc.draft.updatedAt)) return bad(['El borrador cambió desde que lo viste'], 'conflicto');
+  if (av.needsBackup && input.acknowledgeBackup !== true) return bad(['El borrador tiene cambios propios: confirma que se guardará una copia antes de sustituirlo (acknowledgeBackup: true)'], 'confirmacion_requerida');
   const parsed = validateBlocks(designBlocks, 'blocks');
   if (!parsed.ok) return bad(parsed.errors.slice(0, 10), 'documento_invalido');
+  if (sameBlocks(layout.doc.draft.blocks, parsed.value)) return bad(['El borrador ya es idéntico al nuevo diseño'], 'sin_cambios');
   const chk = check(parsed.value);
   if (chk.blocking.length) return { ok: false, reason: 'referencias_bloqueantes', errors: ['El rediseño no se puede mostrar con los datos actuales'], blocking: chk.blocking };
+  let backupDoc: BackupsDocument | null = null;
+  let backupId: string | null = null;
+  if (av.needsBackup) {
+    const prot = protectDraft(backups, layout.doc.draft, 'antes_de_cargar_diseno', now, by);
+    if (!prot.ok) return bad(prot.errors, 'limite_copias');
+    backupId = prot.id;
+    if (prot.created) backupDoc = prot.doc;
+  }
   const stamp = nextStamp(layout.doc.draft.updatedAt, now);
-  return { ok: true, layout: { ...layout.doc, draft: { blocks: parsed.value, updatedAt: stamp } }, revision: stamp, warnings: chk.warnings };
+  return { ok: true, layout: { ...layout.doc, draft: { blocks: parsed.value, updatedAt: stamp } }, revision: stamp, warnings: chk.warnings, backups: backupDoc, backupId };
 }

@@ -324,6 +324,8 @@ const SPEED_TEXT: Record<string, string> = { slow: 'lenta', normal: 'normal', fa
   .pe-vrow { display: grid; grid-template-columns: 80px minmax(0, 1.2fr) minmax(0, 1.2fr) 80px minmax(0, 3fr); gap: .6rem; align-items: center; padding: .55rem .8rem; border-top: 1px solid var(--color-border); font-size: .86rem; }
   .pe-vrow.is-head { border-top: 0; background: rgba(255,255,255,.04); font-weight: 700; font-size: .78rem; color: var(--color-text-muted); }
   .pe-vbtns { display: flex; flex-wrap: wrap; gap: .4rem; }
+  #peBackups .pe-vrow { grid-template-columns: 150px minmax(0, 1.1fr) minmax(0, 1.6fr) minmax(0, 1.6fr); }
+  #peVersionsPane .pe-vdetail:focus { outline: 2px solid #fbbf24; outline-offset: 2px; }
   .pe-vdetail { margin-top: 1rem; padding: .9rem; border: 1px solid var(--color-border-hover); border-radius: var(--border-radius-md); }
   .pe-vdetail h3 { font-family: var(--font-heading); font-size: 1rem; margin-bottom: .6rem; display: flex; align-items: center; justify-content: space-between; gap: .6rem; flex-wrap: wrap; }
   .pe-diff { list-style: none; padding: 0; margin: .3rem 0 .6rem; display: grid; gap: .35rem; font-size: .86rem; }
@@ -334,7 +336,7 @@ const SPEED_TEXT: Record<string, string> = { slow: 'lenta', normal: 'normal', fa
   .pe-dialog:has(.pe-confirm-body) { width: min(640px, 100%); }
   @media (max-width: 1000px) {
     .pe-vhead { grid-template-columns: minmax(0, 1fr); }
-    .pe-vrow { grid-template-columns: minmax(0, 1fr); gap: .25rem; padding: .7rem .8rem; }
+    .pe-vrow, #peBackups .pe-vrow { grid-template-columns: minmax(0, 1fr); gap: .25rem; padding: .7rem .8rem; }
     .pe-vrow.is-head { display: none; }
     .pe-vrow > [data-l]::before { content: attr(data-l) ': '; color: var(--color-text-muted); font-size: .75rem; }
   }

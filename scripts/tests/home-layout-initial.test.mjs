@@ -119,8 +119,27 @@ test('rediseño sobre una portada ya publicada: sólo si el borrador es la v1 SI
   assert.ok(I.planDesignLoad(doc([], null), { action: 'load_design', baseRevision: 'inicial', confirm: true }, okCheck, NOW, bl).ok, 'sin borrador pero con versión publicada');
   const reason = (input, l) => I.planDesignLoad(l, input, okCheck, NOW, bl).reason;
   const good = { action: 'load_design', baseRevision: '2026-11-10T10:00:00.000Z', confirm: true };
-  assert.equal(reason(good, doc(v1.map((b, i) => (i === 0 ? { ...b, title: 'Editado por el admin' } : b)))), 'ya_existe_borrador', 'borrador modificado');
-  assert.equal(reason(good, doc(v1.slice(0, 3))), 'ya_existe_borrador');
+  // Borrador con cambios propios: se puede sustituir, pero SÓLO con la confirmación de la copia previa, que se devuelve para escribirla antes.
+  const edited = v1.map((b, i) => (i === 0 ? { ...b, title: 'Editado por el admin' } : b));
+  assert.equal(reason(good, doc(edited)), 'confirmacion_requerida', 'sin confirmar la copia no se sustituye');
+  const withBackup = I.planDesignLoad(doc(edited), { ...good, acknowledgeBackup: true }, okCheck, NOW, bl, undefined, 'axel');
+  assert.ok(withBackup.ok && withBackup.backups && withBackup.backupId, 'con confirmación devuelve la copia a escribir');
+  assert.equal(withBackup.backups.backups.length, 1);
+  assert.deepEqual(withBackup.backups.backups[0].blocks, edited, 'la copia contiene el borrador anterior completo');
+  assert.equal(withBackup.backups.backups[0].by, 'axel');
+  assert.equal(withBackup.backups.backups[0].reason, 'antes_de_cargar_diseno');
+  assert.deepEqual(withBackup.layout.published.blocks, v1, 'publicada intacta');
+  assert.equal(withBackup.layout.activation.enabled, true, 'activación intacta');
+  assert.equal(reason({ ...good, acknowledgeBackup: 'si' }, doc(edited)), 'peticion_invalida');
+  assert.equal(I.planDesignLoad(doc(v1.slice(0, 3)), { ...good, acknowledgeBackup: true }, okCheck, NOW, bl).ok, true);
+  // copia ya existente (mismos bloques): no se duplica
+  const dup = I.planDesignLoad(doc(edited), { ...good, acknowledgeBackup: true }, okCheck, NOW, bl, withBackup.backups);
+  assert.ok(dup.ok && dup.backups === null && dup.backupId === withBackup.backupId, 'no duplica una copia idéntica');
+  // si el borrador ya es el nuevo diseño no hay nada que hacer
+  assert.equal(I.planDesignLoad(doc(V.validateBlocks(bl).value), { ...good, acknowledgeBackup: true }, okCheck, NOW, bl).reason, 'sin_cambios');
+  // límite de copias: se rechaza sin perder nada
+  const full = { schemaVersion: 1, backups: Array.from({ length: 30 }, (_, i) => ({ id: `c-x${i}`, createdAt: NOW.toISOString(), by: 'a', reason: 'antes_de_cargar_diseno', draftRevision: null, blocks: [{ ...v1[0], id: `b${i}` }] })) };
+  assert.equal(I.planDesignLoad(doc(edited), { ...good, acknowledgeBackup: true }, okCheck, NOW, bl, full).reason, 'limite_copias');
   assert.equal(reason({ ...good, baseRevision: 'otra' }, doc(v1)), 'conflicto');
   assert.equal(reason({ ...good, confirm: false }, doc(v1)), 'confirmacion_requerida');
   assert.equal(reason({ ...good, x: 1 }, doc(v1)), 'peticion_invalida');
@@ -241,14 +260,36 @@ test('API: rediseño sobre la v1 ya publicada y activa: sólo cambia el BORRADOR
   assert.deepEqual(lay.published.blocks, v1, 'la versión publicada (la que ven los visitantes) NO cambia');
   assert.equal(lay.published.version, 1);
   assert.equal(sha(f('home-layout-activation.json')), actBefore, 'la activación no se toca');
-  assert.deepEqual((await j(await get())).designAvailable, false, 'ya no es la v1 sin modificar: no se puede repetir');
-  assert.equal((await post({ action: 'load_design', baseRevision: lay.draft.updatedAt, confirm: true })).status, 409);
-  // cambios propios del administrador en el borrador → no se pisa
+  assert.equal(fs.existsSync(f('home-layout-draft-backups.json')), false, 'borrador = v1 sin modificar: no hace falta copia');
+  const g2 = await j(await get());
+  assert.deepEqual([g2.designAvailable, g2.designNeedsBackup], [true, true], 'con el borrador ya distinto de la v1, hay copia previa');
+  // repetir con el borrador idéntico al nuevo diseño: nada que hacer (409), con la copia confirmada
+  assert.equal((await post({ action: 'load_design', baseRevision: lay.draft.updatedAt, confirm: true, acknowledgeBackup: true })).status, 409);
+  // cambios propios del administrador en el borrador → se protege con una copia, nunca se pierde
   const mine = { ...lay, draft: { blocks: v1.map((b, i) => (i === 0 ? { ...b, title: 'Mi título' } : b)), updatedAt: '2026-11-10T11:00:00.000Z' } };
   assert.ok(L.writeHomeLayout(mine).ok);
   const s = sha(f('home-layout.json'));
-  assert.equal((await post({ action: 'load_design', baseRevision: '2026-11-10T11:00:00.000Z', confirm: true })).status, 409);
-  assert.equal(sha(f('home-layout.json')), s);
+  const noAck = await post({ action: 'load_design', baseRevision: '2026-11-10T11:00:00.000Z', confirm: true });
+  assert.equal(noAck.status, 400, 'sin confirmar la copia se rechaza');
+  assert.equal(sha(f('home-layout.json')), s, 'y no se escribe nada');
+  assert.equal(fs.existsSync(f('home-layout-draft-backups.json')), false);
+  // archivo de copias dañado → no se toca el borrador
+  fs.writeFileSync(f('home-layout-draft-backups.json'), '{ no es json');
+  const prot = await post({ action: 'load_design', baseRevision: '2026-11-10T11:00:00.000Z', confirm: true, acknowledgeBackup: true });
+  assert.equal(prot.status, 423, 'archivo de copias dañado: protegido');
+  assert.equal(sha(f('home-layout.json')), s, 'el borrador sigue igual');
+  fs.rmSync(f('home-layout-draft-backups.json'));
+  const ok = await post({ action: 'load_design', baseRevision: '2026-11-10T11:00:00.000Z', confirm: true, acknowledgeBackup: true });
+  assert.equal(ok.status, 200);
+  const okBody = await j(ok);
+  assert.ok(okBody.backupId, 'devuelve el id de la copia');
+  const bk = JSON.parse(fs.readFileSync(f('home-layout-draft-backups.json'), 'utf8'));
+  assert.equal(bk.backups.length, 1);
+  assert.equal(bk.backups[0].blocks[0].title, 'Mi título', 'la copia conserva el borrador del administrador');
+  const after = L.readHomeLayout().doc;
+  assert.equal(after.draft.blocks.length, 10);
+  assert.deepEqual(after.published.blocks, v1, 'versión publicada intacta');
+  assert.equal(sha(f('home-layout-activation.json')), actBefore, 'activación intacta');
 });
 
 test('API: con un catálogo vacío no se inventa nada: sólo los bloques editoriales (3 de 10) y ningún bloque de productos ni categorías', async () => {

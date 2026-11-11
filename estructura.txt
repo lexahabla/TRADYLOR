@@ -52,6 +52,7 @@ scripts/tests/facets.test.mjs
 scripts/tests/aliexpress-validate.test.mjs
 scripts/tests/ficha-specs-history.test.mjs
 scripts/tests/home-layout-activation.test.mjs
+scripts/tests/home-layout-backups.test.mjs
 scripts/tests/home-layout-design.test.mjs
 scripts/tests/home-layout-initial.test.mjs
 scripts/tests/home-layout-public.test.mjs
@@ -198,6 +199,8 @@ src/lib/homeLayout/activationStore.ts
 src/lib/homeLayout/activation.ts
 src/lib/homeLayout/automatic.ts
 src/lib/homeLayout/draft.ts
+src/lib/homeLayout/draftBackups.ts
+src/lib/homeLayout/draftBackupsStore.ts
 src/lib/homeLayout/initialLayout.ts
 src/lib/homeLayout/publicSafety.ts
 src/lib/homeLayout/public.ts
@@ -324,6 +327,7 @@ src/pages/api/admin/data.ts
 src/pages/api/admin/enrich-bulk.ts
 src/pages/api/admin/home-layout/activation.ts
 src/pages/api/admin/home-layout/draft.ts
+src/pages/api/admin/home-layout/draft-backups.ts
 src/pages/api/admin/home-layout/index.ts
 src/pages/api/admin/home-layout/initial.ts
 src/pages/api/admin/home-layout/options.ts

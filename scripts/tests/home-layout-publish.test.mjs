@@ -413,6 +413,8 @@ test('estático: el módulo de publicación es puro, los endpoints no activan na
   assert.equal((client.match(/home-layout\/activation', \{\s*method: 'POST'/g) ?? []).length, 1, 'un único punto de activación/desactivación');
   // Carga de la portada inicial (v1): un cuarto POST, con confirmación explícita, sólo sobre portada virgen (ver home-layout-initial.test.mjs).
   assert.equal((client.match(/home-layout\/initial', \{\s*method: 'POST'/g) ?? []).length, 2, 'carga inicial y carga del rediseño (ambas con confirmación)');
-  assert.equal((client.match(/method: 'POST'/g) ?? []).length, 5);
-  assert.equal((client.match(/confirm: true/g) ?? []).length, 4, 'publicar, activar, cargar la portada inicial y cargar el rediseño: siempre con confirm: true');
+  // Copias del borrador: un POST más (recuperar una copia), también con confirmación explícita.
+  assert.equal((client.match(/home-layout\/draft-backups', \{\s*method: 'POST'/g) ?? []).length, 1, 'recuperar una copia: un único POST');
+  assert.equal((client.match(/method: 'POST'/g) ?? []).length, 6);
+  assert.equal((client.match(/confirm: true/g) ?? []).length, 5, 'publicar, activar, cargar la portada inicial, cargar el rediseño y recuperar una copia: siempre con confirm: true');
 });
