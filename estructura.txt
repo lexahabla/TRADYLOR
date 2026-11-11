@@ -410,6 +410,7 @@ src/pages/api/v1/products/build-catalog.ts
 src/pages/api/v1/products/delete-all.ts
 src/pages/api/v1/products/import.ts
 src/pages/api/v1/products/index.ts
+src/pages/categorias.astro
 src/pages/checkout/[id].astro
 src/pages/ejemplo-afiliados.astro
 src/pages/herramientas/comparador.astro
