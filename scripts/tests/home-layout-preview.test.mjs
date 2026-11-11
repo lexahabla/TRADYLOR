@@ -110,6 +110,9 @@ test('estático: /catalogo reutiliza el listado; la portada independiente no pin
   assert.match(view, /validateBlocks/, 'valida los bloques antes de pintar');
   assert.doesNotMatch(view, /write(HomeLayout|Stories|Activation|DraftBackups)|planPublish|planActivate|\bfs\./, 'sólo lectura');
   assert.match(view, /noindex/);
+  assert.match(idx, /window\.addEventListener\('auxclick', block, true\)/, 'también el clic central');
+  assert.ok(idx.includes('/\\/api\\/analytics\\//.test(url)'), 'la vista previa no cuenta visitas');
+  assert.match(idx, /method !== 'GET'\) return Promise\.resolve/, 'la vista previa descarta toda petición que no sea de lectura');
   const client = code('src/scripts/homeLayoutEditor.ts');
   assert.match(client, /sandbox: 'allow-scripts allow-same-origin'/);
   assert.match(client, /method: 'post', action: PV_URL, target: name/);

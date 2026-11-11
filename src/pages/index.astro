@@ -451,12 +451,26 @@ const formatCurrency = (amount: number) =>
     <script is:inline>
       (function () {
         // Vista previa: nada navega ni guarda. Los carruseles, las historias y el desplazamiento siguen funcionando.
-        window.addEventListener('click', function (e) {
+        // Ni cuenta como visita ni escribe: la analítica y cualquier petición que no sea de lectura (GET) se descartan sin salir del navegador.
+        var realFetch = window.fetch;
+        window.fetch = function (input, init) {
+          try {
+            var url = String((input && input.url) || input);
+            var method = String((init && init.method) || (input && input.method) || 'GET').toUpperCase();
+            if (/\/api\/analytics\//.test(url) || method !== 'GET') return Promise.resolve(new Response('{"success":true,"preview":true}', { status: 200, headers: { 'Content-Type': 'application/json' } }));
+          } catch (_) { /* si no se puede inspeccionar, se bloquea */ return Promise.resolve(new Response('{}', { status: 200 })); }
+          return realFetch.apply(this, arguments);
+        };
+        try { navigator.sendBeacon = function () { return true; }; } catch (_) {}
+        function block(e) {
           var t = e.target; if (!(t && t.closest)) return;
           if (t.closest('[data-radar-toggle],[data-stock-alert],[data-price-alert],[data-compare-toggle]')) { e.preventDefault(); e.stopImmediatePropagation(); return; }
           var a = t.closest('a[href]');
           if (a) { e.preventDefault(); e.stopImmediatePropagation(); }
-        }, true);
+        }
+        window.addEventListener('click', block, true);
+        window.addEventListener('auxclick', block, true);
+        window.addEventListener('keydown', function (e) { if (e.key === 'Enter' && e.target && e.target.closest && e.target.closest('a[href]')) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
         window.addEventListener('submit', function (e) { e.preventDefault(); }, true);
       })();
     </script>
