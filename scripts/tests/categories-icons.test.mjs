@@ -54,7 +54,10 @@ test('una palabra escrita en el campo Icono no se guarda como icono', () => {
 });
 
 test('la web pública no pinta icono en subcategorías (menú de categorías, listado y tabla de administración)', () => {
-  assert.ok(read('src/layouts/Layout.astro').includes("${sub.icon ? `<span class=\"cat-sub-icon\">${sub.icon}</span>` : ''}"));
+  // Panel de categorías rediseñado: las SUBCATEGORÍAS son enlaces de texto (sin icono); sólo las categorías principales llevan icono.
+  const layout = read('src/layouts/Layout.astro');
+  assert.ok(layout.includes('class="cm2-sub-link"') && !layout.includes('sub.icon') && !layout.includes('cat-sub-icon">${'));
+  assert.ok(layout.includes('class="cm2-root-icon"'));
   assert.ok(read('src/pages/upayp1b4.astro').includes("category.icon || (isSub ? '' : '📦')"));
 });
 

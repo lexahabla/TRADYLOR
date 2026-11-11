@@ -18,6 +18,7 @@ import { dataFile } from '../paths';
 import { getCatalogProducts } from '../catalog';
 import { readDeletedIds } from '../deletedProducts';
 import { detectNetworkId } from '../productNetwork';
+import { shownDiscount } from '../commercialClaims';
 import { DEFAULT_CATEGORIES, normalizeKey, slugifyCategory } from '../categories';
 
 export interface ProductInfo {
@@ -41,6 +42,8 @@ export interface ProductInfo {
    * deduce de fechas de modificación, de precio o de captura: los productos creados por otras vías no tienen fecha de alta fiable.
    */
   addedAt?: string | null;
+  /** Rediseño: % de bajada VERIFICADA (`shownDiscount`: observación vigente y coherente con el precio publicado) o null. */
+  discountPct?: number | null;
 }
 
 export interface CategoryInfo {
@@ -48,6 +51,8 @@ export interface CategoryInfo {
   name: string;
   slug: string;
   parentId: string | null;
+  /** Rediseño: icono (emoji) tal y como figura en la categoría; sólo lectura. */
+  icon?: string;
 }
 
 export interface SectionInfo {
@@ -98,6 +103,15 @@ function reliableAddedAt(p: Record<string, unknown>): string | null {
   return Number.isFinite(ms) && ms <= Date.now() + 86_400_000 ? v : null;
 }
 
+/** % de bajada verificada (misma función que la ficha y la tarjeta) o null; nunca lanza. */
+function verifiedPct(p: Record<string, unknown>): number | null {
+  try {
+    return shownDiscount(p)?.pct ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /* ───────── Productos ───────── */
 function readProducts(): { map: Map<string, ProductInfo>; retired: Set<string>; networks: Map<string, number>; status: SourceStatus } {
   const map = new Map<string, ProductInfo>();
@@ -122,6 +136,7 @@ function readProducts(): { map: Map<string, ProductInfo>; retired: Set<string>; 
         subcategoryId: typeof p.subcategory_id === 'string' && p.subcategory_id ? p.subcategory_id : undefined,
         image: typeof p.image === 'string' && p.image.trim() ? p.image.trim().slice(0, 600) : undefined,
         addedAt: reliableAddedAt(p),
+        discountPct: verifiedPct(p),
       });
       if (network) networks.set(network, (networks.get(network) ?? 0) + 1);
     }
@@ -141,7 +156,8 @@ function readCategoriesReadOnly(): { list: CategoryInfo[]; status: SourceStatus;
   const toInfo = (c: unknown): CategoryInfo | null => {
     if (!isObj(c) || typeof c.id !== 'string' || typeof c.name !== 'string' || !c.id) return null;
     const slug = typeof c.slug === 'string' && c.slug ? c.slug : slugifyCategory(c.name);
-    return { id: c.id, name: c.name, slug, parentId: typeof c.parentId === 'string' && c.parentId ? c.parentId : null };
+    const icon = typeof c.icon === 'string' && c.icon.trim() && c.icon.trim().length <= 8 ? c.icon.trim() : undefined;
+    return { id: c.id, name: c.name, slug, parentId: typeof c.parentId === 'string' && c.parentId ? c.parentId : null, ...(icon ? { icon } : {}) };
   };
   const defaults = (status: SourceStatus) => ({
     list: DEFAULT_CATEGORIES.map(toInfo).filter((c): c is CategoryInfo => c !== null),

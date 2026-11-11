@@ -128,8 +128,13 @@ export function checkForActivation(blocks: readonly Block[], resolved: readonly 
       });
       for (let i = warnings.length - 1; i >= 0; i--) if (warnings[i].blockId === b.id && warnings[i].code === 'auto_selection_not_executable') warnings.splice(i, 1);
     }
+    const bl = b.link;
+    if (bl && ((bl.type === 'path' && !isPublicSafePath(bl.target)) || (bl.type === 'url' && !isPublicSafeExternalUrl(bl.target)))) {
+      blocking.push({ blockId: b.id, title: b.title, code: 'block_link_unsafe', message: 'El enlace «Ver todo» del bloque no es admisible (destino administrativo, peligroso o no https).' });
+    }
     if (b.modality === 'editorial') {
-      const cfg = b.config as { imageUrl?: string; link?: { type: string; target: string } };
+      const cfg = b.config as { imageUrl?: string; imageUrl2?: string; link?: { type: string; target: string } };
+      if (cfg.imageUrl2 && !isPublicSafeImage(cfg.imageUrl2)) blocking.push({ blockId: b.id, title: b.title, code: 'editorial_image_unsafe', message: 'La segunda imagen del bloque editorial no es admisible (formato no admitido o ruta peligrosa).' });
       if (cfg.imageUrl && !isPublicSafeImage(cfg.imageUrl)) blocking.push({ blockId: b.id, title: b.title, code: 'editorial_image_unsafe', message: 'La imagen del bloque editorial no es admisible (formato no admitido o ruta peligrosa).' });
       const l = cfg.link;
       if (l && ((l.type === 'path' && !isPublicSafePath(l.target)) || (l.type === 'url' && !isPublicSafeExternalUrl(l.target)))) {

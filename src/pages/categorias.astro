@@ -1,0 +1,104 @@
+---
+/**
+ * Todas las categorías: categorías principales con una imagen representativa y sus subcategorías agrupadas debajo. Usa las categorías y subcategorías
+ * REALES del administrador (se actualiza sola al cambiarlas; sin código). La imagen es la de un producto real de la categoría (nunca inventado); sin
+ * producto con imagen se usa el icono de la categoría. Sin datos de afiliación ni llamadas externas.
+ */
+import Layout from '../layouts/Layout.astro';
+import { getCategories } from '../lib/categories';
+import { getCatalogProducts } from '../lib/catalog';
+import { makeCategoryResolver } from '../lib/catalogListing';
+
+export const prerender = false;
+
+const categories = getCategories();
+const roots = categories.filter((c) => !c.parentId);
+const subsOf = (id: string) => categories.filter((c) => c.parentId === id);
+const resolver = makeCategoryResolver(categories);
+
+// Una imagen y un recuento reales por categoría principal (a partir de los productos publicados).
+const imageFor = new Map<string, string>();
+const countFor = new Map<string, number>();
+for (const p of getCatalogProducts() as Array<Record<string, any>>) {
+  let ids: string[] = [];
+  try {
+    ids = resolver.idsOf(p as never);
+  } catch {
+    ids = [];
+  }
+  for (const root of roots) {
+    if (!ids.includes(root.slug)) continue;
+    countFor.set(root.id, (countFor.get(root.id) ?? 0) + 1);
+    const img = typeof p.image === 'string' ? p.image.trim() : '';
+    if (img && !imageFor.has(root.id) && (img.startsWith('/') || img.startsWith('https://'))) imageFor.set(root.id, img);
+  }
+}
+
+const title = 'Todas las categorías | Treidilor';
+const description = 'Explora todas las categorías y subcategorías de Treidilor y encuentra productos con su precio y la fecha de captura de cada dato.';
+---
+
+<Layout title={title} description={description}>
+  <main class="cats-page">
+    <div class="container">
+      <nav class="cats-crumbs" aria-label="Migas de pan"><a href="/">Inicio</a> <span aria-hidden="true">›</span> <span aria-current="page">Categorías</span></nav>
+      <h1 class="cats-title">Todas las categorías</h1>
+      <p class="cats-lead">Elige una categoría o una subcategoría para ver sus productos.</p>
+      {roots.length === 0 ? (
+        <p class="cats-empty">Todavía no hay categorías. <a href="/#catalogo">Ver el catálogo</a></p>
+      ) : (
+        <div class="cats-grid">
+          {roots.map((root) => {
+            const subs = subsOf(root.id);
+            const img = imageFor.get(root.id);
+            const n = countFor.get(root.id) ?? 0;
+            return (
+              <section class="cats-group" aria-labelledby={`cat-${root.id}`}>
+                <a class="cats-media" href={`/?category=${encodeURIComponent(root.slug)}#catalogo`} tabindex="-1" aria-hidden="true">
+                  {img ? <img src={img} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" /> : <span class="cats-icon">{root.icon}</span>}
+                </a>
+                <h2 class="cats-name" id={`cat-${root.id}`}>
+                  <a href={`/?category=${encodeURIComponent(root.slug)}#catalogo`}>{root.name}<span aria-hidden="true"> ›</span></a>
+                </h2>
+                {n > 0 && <p class="cats-count">{n} producto{n > 1 ? 's' : ''}</p>}
+                {subs.length > 0 && (
+                  <ul class="cats-subs">
+                    {subs.map((s) => (
+                      <li><a href={`/?category=${encodeURIComponent(s.slug)}#catalogo`}>{s.name}</a></li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  </main>
+</Layout>
+
+<style is:global>
+  .cats-page { padding: 1.5rem 0 4rem; }
+  .cats-crumbs { display: flex; gap: 0.4rem; font-size: 0.82rem; color: #9ca3af; margin-bottom: 0.8rem; }
+  .cats-crumbs a { color: #60a5fa; text-decoration: none; }
+  .cats-title { font-family: var(--font-heading); font-size: clamp(1.8rem, 4vw, 2.5rem); font-weight: 800; color: #ffffff; margin: 0 0 0.4rem; }
+  .cats-lead { color: #9ca3af; margin: 0 0 2rem; }
+  .cats-empty { color: #9ca3af; }
+  .cats-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2.25rem 1.75rem; }
+  .cats-group { min-width: 0; }
+  .cats-media { display: grid; place-items: center; height: 130px; margin-bottom: 0.9rem; background: #ffffff; border-radius: 14px; overflow: hidden; padding: 0.5rem; text-decoration: none; }
+  .cats-media img { max-width: 100%; max-height: 100%; object-fit: contain; }
+  .cats-icon { font-size: 3rem; filter: grayscale(0.1); }
+  .cats-group:has(.cats-icon) .cats-media { background: rgba(17, 24, 39, 0.8); border: 1px solid rgba(148, 163, 184, 0.16); }
+  .cats-name { margin: 0; font-family: var(--font-heading); font-size: 1.1rem; font-weight: 800; padding-bottom: 0.55rem; border-bottom: 1px solid rgba(148, 163, 184, 0.28); }
+  .cats-name a { color: #ffffff; text-decoration: none; display: flex; justify-content: space-between; align-items: center; min-height: 32px; }
+  .cats-name a:hover { color: #93c5fd; }
+  .cats-count { margin: 0.5rem 0 0; font-size: 0.76rem; color: #9ca3af; }
+  .cats-subs { list-style: none; margin: 0.35rem 0 0; padding: 0; display: grid; }
+  .cats-subs a { display: block; padding: 0.4rem 0; color: #cbd5e1; font-size: 0.9rem; text-decoration: none; }
+  .cats-subs a:hover { color: #ffffff; text-decoration: underline; }
+  .cats-page a:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
+  @media (max-width: 1100px) { .cats-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 760px) { .cats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.75rem 1rem; } .cats-media { height: 110px; } }
+  @media (max-width: 440px) { .cats-grid { grid-template-columns: minmax(0, 1fr); } }
+</style>

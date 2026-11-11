@@ -52,6 +52,7 @@ scripts/tests/facets.test.mjs
 scripts/tests/aliexpress-validate.test.mjs
 scripts/tests/ficha-specs-history.test.mjs
 scripts/tests/home-layout-activation.test.mjs
+scripts/tests/home-layout-design.test.mjs
 scripts/tests/home-layout-initial.test.mjs
 scripts/tests/home-layout-public.test.mjs
 scripts/tests/home-layout-stories-public.test.mjs
@@ -144,6 +145,7 @@ src/components/common/TrustMetrics.astro
 src/components/comparativa/ProductComparator.astro
 src/components/herramientas/ToolPageHeader.astro
 src/components/home/HomeLayoutBlocks.astro
+src/components/home/HomeProductCard.astro
 src/components/home/HomeStories.astro
 src/components/home/MethodSection.astro
 src/components/metodologia/MethodologyQuiz.astro

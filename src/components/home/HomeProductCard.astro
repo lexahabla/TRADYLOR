@@ -1,0 +1,85 @@
+---
+/**
+ * Portada rediseñada: tarjeta de producto de las maquetas (imagen sobre blanco, título a dos líneas, precio, precio anterior SÓLO si la bajada
+ * está verificada, comercio · disponibilidad y botón «Guardar en Mi Radar»). Datos reales del catálogo; nada inventado:
+ *  · «-N %» y el precio tachado salen de `shownDiscount` (observación vigente), igual que en `ProductCard`;
+ *  · disponibilidad = lo que declara la fuente (`stockOf`), con «Stock no indicado» si no hay dato;
+ *  · sin enlaces de afiliado: la tarjeta lleva a la ficha interna.
+ * `variant="row"` es la fila de la lista numerada («1, 2, 3…»).
+ */
+import { shownDiscount } from '../../lib/commercialClaims';
+import { stockOf } from '../../lib/stock';
+import { NETWORK_LABELS } from '../../utils/affiliate';
+
+interface Props {
+  product: any;
+  variant?: 'card' | 'row';
+  rank?: number;
+}
+const { product, variant = 'card', rank } = Astro.props as Props;
+const clean = (t: string) => t.replace(/\s+/g, ' ').replace(/\s*[-|:]\s*(Amazon(?:\.es)?|AliExpress|eBay|Temu)\b.*$/i, '').trim();
+const raw = String(product?.title_short || product?.title || '').trim();
+const title = clean(raw).length > 78 ? `${clean(raw).slice(0, 78).trimEnd()}…` : clean(raw);
+const slug = String(product?.slug ?? '').trim() || String(product?.id ?? '');
+const href = `/producto/${encodeURIComponent(slug)}`;
+const eur = (n: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', minimumFractionDigits: 2 }).format(n);
+const price = Number(product?.price) > 0 ? Number(product.price) : null;
+const shown = (() => {
+  try {
+    return shownDiscount(product);
+  } catch {
+    return null;
+  }
+})();
+const stock = stockOf(product);
+const net = String(product?.network ?? '').toLowerCase();
+const store = (NETWORK_LABELS as Record<string, string>)[net] ?? String(product?.merchant ?? '').trim();
+const image = typeof product?.image === 'string' ? product.image : '';
+const radarStore = /ali/i.test(String(product?.merchant ?? '')) ? 'aliexpress' : 'amazon';
+---
+
+{price !== null && title && variant === 'card' && (
+  <article class="hp-card" id={`hp-${product.id}`}>
+    <div class="hp-img">
+      <a href={href} class="hp-img-link" tabindex="-1" aria-hidden="true">
+        {image ? <img src={image} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" /> : <span class="hp-noimg" aria-hidden="true">🖼</span>}
+      </a>
+      {shown && <span class="hp-pill" title={`Bajada verificada respecto a ${eur(shown.previousPrice)}`}>-{shown.pct} %</span>}
+      <button
+        type="button"
+        class="hp-heart"
+        data-radar-toggle
+        data-radar-id={slug}
+        data-radar-title={String(product.title)}
+        data-radar-price={eur(price)}
+        data-radar-price-value={price}
+        data-radar-image={image}
+        data-radar-url={`/checkout/${slug}`}
+        data-radar-store={radarStore}
+        aria-pressed="false"
+        aria-label={`Guardar ${title} en Mi Radar`}
+        title="Guardar en Mi Radar"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z" /></svg>
+      </button>
+    </div>
+    <h3 class="hp-title"><a href={href}>{title}</a></h3>
+    <p class="hp-price">
+      <strong>{eur(price)}</strong>
+      {shown && <s aria-label={`Precio anterior verificado ${eur(shown.previousPrice)}`}>{eur(shown.previousPrice)}</s>}
+    </p>
+    <p class="hp-meta" title={stock.hint}>
+      <span class={`hp-dot is-${stock.state}`} aria-hidden="true"></span>
+      {store ? `${store} · ` : ''}{stock.label}
+    </p>
+  </article>
+)}
+
+{price !== null && title && variant === 'row' && (
+  <li class="hp-row">
+    <span class="hp-rank" aria-hidden="true">{rank}</span>
+    <a href={href} class="hp-row-img" tabindex="-1" aria-hidden="true">{image ? <img src={image} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" /> : <span class="hp-noimg" aria-hidden="true">🖼</span>}</a>
+    <a href={href} class="hp-row-title"><span class="hp-visually-hidden">{rank}. </span>{title}</a>
+    <span class="hp-row-price">{eur(price)}</span>
+  </li>
+)}

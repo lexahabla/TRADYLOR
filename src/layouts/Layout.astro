@@ -70,33 +70,34 @@ const headerHueOf = (index: number) => (index * 43) % 360;
 // si su ancla existe de verdad en la portada (ver lib/topSelections.ts), + las dos opciones fijas (ventas/valoración).
 const navTopSections = isBackend ? [] : resolveTopSelectionsNav().items;
 
-// HTML del panel de categorías del buscador de cabecera (inyectado con set:html).
+// HTML del panel de categorías del buscador de cabecera (inyectado con set:html). Escritorio: categorías a la izquierda y subcategorías a la derecha;
+// móvil: pantalla completa con acordeón. Una sola estructura (el CSS cambia la presentación). Usa las categorías y subcategorías REALES del administrador.
+const escHtml = (t: unknown) => String(t ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const headerCategoryPanelHtml = `
-  <div class="cat-panel-head">
-    <span class="cat-panel-title">Categorías</span>
-    <a href="/#catalogo" class="cat-panel-all">Ver todo el catálogo</a>
+  <div class="cm2-mobile-head">
+    <span class="cm2-mobile-title">Categorías</span>
+    <button type="button" class="cm2-close" data-cm-close aria-label="Cerrar categorías">✕</button>
   </div>
-  <div class="cat-panel-grid">
+  <div class="cm2-list" data-cm-list>
     ${headerRoots.map((root, i) => {
       const subs = headerSubsByParent.get(root.id) ?? [];
+      const sid = `cm2-sub-${escHtml(root.id)}`;
       return `
-        <div class="cat-group">
-          <a href="/?category=${root.slug}#catalogo" class="cat-card" style="--h: ${headerHueOf(i)}">
-            <span class="cat-card-icon">${root.icon}</span>
-            <div class="cat-card-text">
-              <span class="cat-card-name">${root.name}</span>
-              ${subs.length ? `<span class="cat-card-meta">${subs.length} subcategoría${subs.length > 1 ? 's' : ''}</span>` : ''}
-            </div>
-            <span class="cat-card-arrow">›</span>
-          </a>
-          ${subs.length ? `
-            <div class="cat-subs">
-              ${subs.map((sub) => `<a href="/?category=${sub.slug}#catalogo" class="cat-sub">${sub.icon ? `<span class="cat-sub-icon">${sub.icon}</span>` : ''}<span>${sub.name}</span></a>`).join('')}
-            </div>
-          ` : ''}
+        <div class="cm2-item${i === 0 ? ' is-open' : ''}" data-cm-item>
+          <button type="button" class="cm2-root" aria-expanded="${i === 0 ? 'true' : 'false'}" aria-controls="${sid}">
+            <span class="cm2-root-icon" aria-hidden="true">${escHtml(root.icon)}</span>
+            <span class="cm2-root-name">${escHtml(root.name)}</span>
+            <span class="cm2-root-caret" aria-hidden="true"></span>
+          </button>
+          <div class="cm2-sub" id="${sid}" role="region" aria-label="Subcategorías de ${escHtml(root.name)}">
+            <p class="cm2-sub-title">${escHtml(root.name)}</p>
+            ${subs.length ? `<ul class="cm2-sub-list">${subs.map((sub) => `<li><a href="/?category=${escHtml(sub.slug)}#catalogo" class="cm2-sub-link">${escHtml(sub.name)}</a></li>`).join('')}</ul>` : ''}
+            <a href="/?category=${escHtml(root.slug)}#catalogo" class="cm2-sub-all">Ver toda la categoría ›</a>
+          </div>
         </div>
       `;
     }).join('')}
+    <a href="/categorias" class="cm2-all">Ver todas las categorías <span aria-hidden="true">→</span></a>
   </div>
 `;
 ---
@@ -2850,6 +2851,55 @@ const headerCategoryPanelHtml = `
       }
     </style>
 
+    <!-- Panel de categorías (escritorio: dos columnas; móvil: pantalla completa con acordeón) -->
+    <style is:global>
+      .container.header-inner .category-panel.cm2-panel { padding: 0; overflow: hidden; border-radius: 16px; width: min(60rem, calc(100vw - 2rem)); max-height: none; }
+      .cm2-panel .cm2-mobile-head { display: none; }
+      .cm2-panel .cm2-list { display: grid; grid-template-columns: 16.5rem minmax(0, 1fr); grid-auto-rows: min-content; max-height: min(34rem, calc(100vh - 150px)); overflow-y: auto; background: linear-gradient(90deg, rgba(8, 12, 22, 0.98) 16.5rem, rgba(15, 22, 38, 0.98) 16.5rem); }
+      .cm2-panel .cm2-item { display: contents; }
+      .cm2-panel .cm2-root { grid-column: 1; display: flex; align-items: center; gap: 0.75rem; width: 100%; min-height: 48px; padding: 0.6rem 1rem; text-align: left; font: 600 0.92rem var(--font-body, inherit); color: #d1d5db; background: transparent; border: 0; border-left: 3px solid transparent; cursor: pointer; }
+      .cm2-panel .cm2-root:hover { background: rgba(255, 255, 255, 0.05); color: #ffffff; }
+      .cm2-panel .cm2-root[aria-expanded='true'] { background: rgba(37, 99, 235, 0.2); border-left-color: #3b82f6; color: #ffffff; }
+      .cm2-panel .cm2-root:focus-visible, .cm2-panel .cm2-sub a:focus-visible, .cm2-panel .cm2-all:focus-visible, .cm2-panel .cm2-close:focus-visible { outline: 3px solid #fbbf24; outline-offset: -3px; }
+      .cm2-panel .cm2-root-icon { display: grid; place-items: center; width: 30px; height: 30px; font-size: 1.05rem; border-radius: 8px; background: rgba(255, 255, 255, 0.07); flex: none; }
+      .cm2-panel .cm2-root-name { flex: 1; min-width: 0; }
+      .cm2-panel .cm2-root-caret { width: 0; height: 0; border-left: 5px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; opacity: 0.6; }
+      .cm2-panel .cm2-sub { display: none; grid-column: 2; grid-row: 1 / span 40; padding: 1.4rem 1.75rem; align-content: start; }
+      .cm2-panel .cm2-item.is-open .cm2-sub { display: grid; gap: 0.9rem; }
+      .cm2-panel .cm2-sub-title { margin: 0; font-family: var(--font-heading); font-size: 1.35rem; font-weight: 800; color: #ffffff; }
+      .cm2-panel .cm2-sub-list { list-style: none; margin: 0; padding: 0; columns: 3 12rem; column-gap: 1.75rem; }
+      .cm2-panel .cm2-sub-list li { break-inside: avoid; margin: 0 0 0.15rem; }
+      .cm2-panel .cm2-sub-link { display: block; padding: 0.4rem 0; color: #cbd5e1; font-size: 0.9rem; text-decoration: none; }
+      .cm2-panel .cm2-sub-link:hover { color: #ffffff; text-decoration: underline; }
+      .cm2-panel .cm2-sub-all { color: #60a5fa; font-weight: 700; font-size: 0.88rem; text-decoration: none; }
+      .cm2-panel .cm2-sub-all:hover { color: #93c5fd; text-decoration: underline; }
+      .cm2-panel .cm2-all { grid-column: 1; display: flex; align-items: center; justify-content: space-between; min-height: 48px; padding: 0.6rem 1rem; margin-top: 0.4rem; color: #60a5fa; font-weight: 700; font-size: 0.88rem; text-decoration: none; border-top: 1px solid rgba(255, 255, 255, 0.08); }
+      .cm2-panel .cm2-all:hover { background: rgba(255, 255, 255, 0.05); color: #93c5fd; }
+      @media (max-width: 960px) {
+        body.cm2-lock { overflow: hidden; }
+        .container.header-inner .category-panel.cm2-panel { position: fixed; inset: 0; top: 0; left: 0 !important; right: 0; width: 100% !important; max-width: none; height: 100vh; height: 100dvh; max-height: none; z-index: 900; border: 0; border-radius: 0; background: #0a0e17; overflow-y: auto; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+        .cm2-panel .cm2-mobile-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 1rem 1.25rem; background: #0a0e17; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+        .cm2-panel .cm2-mobile-title { font-family: var(--font-heading); font-size: 1.6rem; font-weight: 800; color: #ffffff; }
+        .cm2-panel .cm2-close { display: grid; place-items: center; width: 52px; height: 52px; font-size: 1.4rem; color: #ffffff; background: #151c2c; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 12px; cursor: pointer; }
+        .cm2-panel .cm2-list { display: block; max-height: none; overflow: visible; background: transparent; padding: 0.5rem 1.25rem 2rem; }
+        .cm2-panel .cm2-item { display: block; border-bottom: 1px solid rgba(255, 255, 255, 0.12); }
+        .cm2-panel .cm2-root { min-height: 60px; padding: 0.7rem 0; gap: 1rem; font-size: 1.12rem; font-weight: 700; color: #ffffff; border-left: 0; }
+        .cm2-panel .cm2-root:hover { background: transparent; }
+        .cm2-panel .cm2-root[aria-expanded='true'] { background: transparent; }
+        .cm2-panel .cm2-root-icon { width: 44px; height: 44px; font-size: 1.3rem; border-radius: 12px; background: #151c2c; }
+        .cm2-panel .cm2-root-caret { border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 6px solid currentColor; border-bottom: 0; transform: rotate(-90deg); opacity: 0.7; }
+        .cm2-panel .cm2-root[aria-expanded='true'] .cm2-root-caret { transform: none; }
+        .cm2-panel .cm2-sub { grid-column: auto; grid-row: auto; margin: 0 0 0.9rem 1.7rem; padding: 0 0 0 0; border-left: 3px solid rgba(255, 255, 255, 0.14); gap: 0; }
+        .cm2-panel .cm2-item.is-open .cm2-sub { display: block; }
+        .cm2-panel .cm2-sub-title { display: none; }
+        .cm2-panel .cm2-sub-list { columns: 1; }
+        .cm2-panel .cm2-sub-list li { margin: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .cm2-panel .cm2-sub-link { padding: 1rem 0 1rem 1.4rem; font-size: 1.05rem; color: #9ca3af; }
+        .cm2-panel .cm2-sub-all { display: block; padding: 1rem 0 0.6rem 1.4rem; font-size: 1.05rem; }
+        .cm2-panel .cm2-all { margin-top: 1rem; padding: 1rem 0; font-size: 1rem; border-top: 0; }
+      }
+    </style>
+
     <!-- Oculta el banner y el gadget del widget de Google Translate (sólo usamos
          el desplegable propio del header; la traducción la aplica la cookie). -->
     <style is:global>
@@ -2933,7 +2983,7 @@ const headerCategoryPanelHtml = `
               <!-- Sugerencias en vivo (vía /api/search) -->
               <div class="cm-search-drop" data-cm-search-drop hidden></div>
               <!-- Panel de categorías (desplegable bajo el botón) -->
-              <div id="header-category-panel" class="category-panel" hidden set:html={headerCategoryPanelHtml}></div>
+              <div id="header-category-panel" class="category-panel cm2-panel" hidden set:html={headerCategoryPanelHtml}></div>
             </form>
 
             <div class="header-actions">
@@ -3474,17 +3524,71 @@ const headerCategoryPanelHtml = `
 
         // --- Desplegable de categorías del buscador de cabecera ---
         if (headerCatBtn && headerCatPanel) {
+          const isDesk = () => window.innerWidth > 960;
+          const cmItems = Array.from(headerCatPanel.querySelectorAll('[data-cm-item]'));
+          // Escritorio: el panel ocupa el ancho del contenedor de la cabecera (debajo del buscador). Móvil: pantalla completa por CSS.
+          const placeCatPanel = () => {
+            if (!isDesk()) { headerCatPanel.style.width = ''; headerCatPanel.style.left = ''; return; }
+            const inner = headerCatBtn.closest('.header-inner');
+            const form = headerCatBtn.closest('.nav-search');
+            if (!inner || !form) return;
+            const r = inner.getBoundingClientRect();
+            const f = form.getBoundingClientRect();
+            const pad = parseFloat(getComputedStyle(inner).paddingLeft) || 0;
+            headerCatPanel.style.width = Math.min(r.width - pad * 2, window.innerWidth - 24) + 'px';
+            headerCatPanel.style.left = (r.left + pad - f.left) + 'px';
+          };
+          const setItemOpen = (item, open) => {
+            item.classList.toggle('is-open', open);
+            const b = item.querySelector('.cm2-root');
+            if (b) b.setAttribute('aria-expanded', String(open));
+          };
+          // Escritorio: siempre hay una categoría activa (subcategorías a la derecha). Móvil: acordeón (se puede cerrar todo).
+          const activateItem = (item) => {
+            if (isDesk()) { cmItems.forEach((it) => setItemOpen(it, it === item)); }
+            else setItemOpen(item, !item.classList.contains('is-open'));
+          };
+          // Escritorio: el panel se abre al pasar el ratón; pulsar el botón entonces lo FIJA (no lo cierra) y otra pulsación lo cierra.
+          let catHoverOpened = false;
+          let catPinned = false;
           const setCatPanelOpen = (open) => {
+            if (!open) { catHoverOpened = false; catPinned = false; }
             headerCatPanel.hidden = !open;
             headerCatBtn.setAttribute('aria-expanded', String(open));
+            document.body.classList.toggle('cm2-lock', open && !isDesk());
             if (open) {
+              placeCatPanel();
+              if (isDesk() && !cmItems.some((it) => it.classList.contains('is-open')) && cmItems[0]) setItemOpen(cmItems[0], true);
               siteHeader.classList.remove('scroll-hidden');
               closeNav();
             }
           };
+          headerCatPanel.querySelectorAll('.cm2-root').forEach((btn) => {
+            const item = btn.closest('[data-cm-item]');
+            btn.addEventListener('click', (e) => { e.stopPropagation(); if (item) activateItem(item); });
+            btn.addEventListener('mouseenter', () => { if (isDesk() && item) cmItems.forEach((it) => setItemOpen(it, it === item)); });
+            btn.addEventListener('keydown', (e) => {
+              const roots = Array.from(headerCatPanel.querySelectorAll('.cm2-root'));
+              const i = roots.indexOf(btn);
+              if (e.key === 'ArrowDown') { e.preventDefault(); const n = roots[(i + 1) % roots.length]; n.focus(); if (isDesk() && n.closest('[data-cm-item]')) activateItem(n.closest('[data-cm-item]')); }
+              else if (e.key === 'ArrowUp') { e.preventDefault(); const n = roots[(i - 1 + roots.length) % roots.length]; n.focus(); if (isDesk() && n.closest('[data-cm-item]')) activateItem(n.closest('[data-cm-item]')); }
+              else if (e.key === 'ArrowRight' && isDesk()) { const l = item && item.querySelector('.cm2-sub a'); if (l) { e.preventDefault(); l.focus(); } }
+            });
+          });
+          headerCatPanel.querySelectorAll('.cm2-sub a').forEach((a) => {
+            a.addEventListener('keydown', (e) => { if (e.key === 'ArrowLeft' && isDesk()) { const b = a.closest('[data-cm-item]')?.querySelector('.cm2-root'); if (b) { e.preventDefault(); b.focus(); } } });
+          });
+          const catClose = headerCatPanel.querySelector('[data-cm-close]');
+          if (catClose) catClose.addEventListener('click', (e) => { e.stopPropagation(); setCatPanelOpen(false); headerCatBtn.focus(); });
+          // En fase de captura: otro manejador de Escape (menú móvil) también oculta el panel y, si fuera después, ya no veríamos que estaba abierto.
+          document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !headerCatPanel.hidden) { setCatPanelOpen(false); headerCatBtn.focus(); } }, true);
+          window.addEventListener('resize', () => { if (!headerCatPanel.hidden) { placeCatPanel(); document.body.classList.toggle('cm2-lock', !isDesk()); } });
 
           headerCatBtn.addEventListener('click', (e) => {
             e.stopPropagation();
+            if (isDesk() && !headerCatPanel.hidden && catHoverOpened) { catHoverOpened = false; catPinned = true; return; }
+            catHoverOpened = false;
+            catPinned = false;
             setCatPanelOpen(headerCatPanel.hidden);
           });
 
@@ -3495,7 +3599,7 @@ const headerCategoryPanelHtml = `
             headerCatBtn.addEventListener('mouseenter', () => {
               if (window.innerWidth > 960) {
                 clearTimeout(catHoverTimer);
-                setCatPanelOpen(true);
+                if (headerCatPanel.hidden) { setCatPanelOpen(true); catHoverOpened = true; }
               }
             });
             headerCatPanel.addEventListener('mouseenter', () => {
@@ -3504,7 +3608,7 @@ const headerCategoryPanelHtml = `
               }
             });
             searchForm.addEventListener('mouseleave', () => {
-              if (window.innerWidth > 960) {
+              if (window.innerWidth > 960 && !catPinned) {
                 catHoverTimer = setTimeout(() => {
                   setCatPanelOpen(false);
                 }, 200);

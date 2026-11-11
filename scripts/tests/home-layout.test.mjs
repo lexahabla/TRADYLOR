@@ -114,7 +114,7 @@ test('documento: bloques con id único, límites y esquema; vacío por defecto y
   assert.equal(V.validateDocument(docWith(many)).ok, false);
   // un bloque nuevo (nueva modalidad) sólo requiere registrarlo: los registros son datos, no código del editor
   assert.deepEqual(Object.keys(V.MODALITY_REGISTRY).sort(), ['automatica', 'editorial', 'manual', 'seccion']);
-  assert.deepEqual(Object.keys(V.FORMAT_REGISTRY).sort(), ['banner', 'carrusel', 'cuadricula2x2']);
+  assert.deepEqual(Object.keys(V.FORMAT_REGISTRY).sort(), ['banner', 'carrusel', 'cuadricula2x2', 'lista']);
 });
 
 /* ───────── Almacenamiento ───────── */

@@ -33,6 +33,11 @@ import { checkStories, type Story } from './stories';
 import { isPublicSafeExternalUrl, isPublicSafeImage, isPublicSafePath } from './publicSafety';
 
 export interface PublicEditorial {
+  variant?: 'hero' | 'campaign' | 'guide' | 'trust';
+  eyebrow?: string;
+  kicker?: string;
+  imageUrl2?: string;
+  items?: Array<{ title: string; text?: string }>;
   headline: string;
   text?: string;
   imageUrl?: string;
@@ -53,7 +58,10 @@ export interface PublicBlock {
   featured?: boolean;
   section?: { id: string; description?: string; speed: string; position: 'above' | 'below' };
   editorial?: PublicEditorial;
-  categories?: Array<{ id: string; name: string; href: string }>;
+  categories?: Array<{ id: string; name: string; href: string; icon?: string; subs: number }>;
+  /** Rediseño: subtítulo y enlace «Ver todo ›» del título del bloque (sólo si el destino es válido). */
+  subtitle?: string;
+  seeAll?: string;
 }
 export interface PublicStoryScreen {
   image: string;
@@ -104,25 +112,33 @@ export function localImageExists(p: string): boolean {
 const productHref = (id: string) => `/producto/${encodeURIComponent(id)}`;
 const categoryHref = (slug: string) => `/?category=${encodeURIComponent(slug)}#destacados`;
 
+/** Destino público válido de un enlace del editor (o undefined). Mismo criterio para botones editoriales y «Ver todo ›». */
+function hrefOf(l: { type: string; target: string } | undefined, src: ReferenceSources): { href: string; external: boolean } | undefined {
+  if (!l) return undefined;
+  if (l.type === 'path' && isPublicSafePath(l.target)) return { href: l.target, external: false };
+  if (l.type === 'url' && isPublicSafeExternalUrl(l.target)) return { href: l.target, external: true };
+  if (l.type === 'product' && src.products.has(l.target)) return { href: productHref(l.target), external: false };
+  if (l.type === 'category') {
+    const c = findCategory(src, l.target);
+    if (c) return { href: categoryHref(c.slug), external: false };
+  }
+  if (l.type === 'section' && src.sections.get(l.target)?.published) return { href: `#section-${l.target}`, external: false };
+  return undefined;
+}
+
 function editorialOf(b: Block, src: ReferenceSources): PublicEditorial {
-  const cfg = b.config as { headline: string; text?: string; imageUrl?: string; buttonLabel?: string; link?: { type: string; target: string } };
+  const cfg = b.config as { headline: string; text?: string; imageUrl?: string; imageUrl2?: string; buttonLabel?: string; link?: { type: string; target: string }; variant?: string; eyebrow?: string; kicker?: string; items?: Array<{ title: string; text?: string }> };
   const out: PublicEditorial = { headline: cfg.headline };
+  if (cfg.variant && cfg.variant !== 'plain') out.variant = cfg.variant as PublicEditorial['variant'];
+  if (cfg.eyebrow) out.eyebrow = cfg.eyebrow;
+  if (cfg.kicker) out.kicker = cfg.kicker;
+  if (cfg.items?.length) out.items = cfg.items.slice(0, 4);
   if (cfg.text) out.text = cfg.text;
   if (cfg.imageUrl && isPublicSafeImage(cfg.imageUrl)) out.imageUrl = cfg.imageUrl;
-  const l = cfg.link;
-  let href: string | undefined;
-  let external = false;
-  if (l && cfg.buttonLabel) {
-    if (l.type === 'path' && isPublicSafePath(l.target)) href = l.target;
-    else if (l.type === 'url' && isPublicSafeExternalUrl(l.target)) {
-      href = l.target;
-      external = true;
-    } else if (l.type === 'product' && src.products.has(l.target)) href = productHref(l.target);
-    else if (l.type === 'category') {
-      const c = findCategory(src, l.target);
-      if (c) href = categoryHref(c.slug);
-    } else if (l.type === 'section' && src.sections.get(l.target)?.published) href = `#section-${l.target}`;
-  }
+  if (cfg.imageUrl2 && isPublicSafeImage(cfg.imageUrl2)) out.imageUrl2 = cfg.imageUrl2;
+  const target = cfg.buttonLabel ? hrefOf(cfg.link, src) : undefined;
+  const href = target?.href;
+  const external = target?.external ?? false;
   if (href) {
     out.href = href;
     out.buttonLabel = cfg.buttonLabel;
@@ -132,12 +148,20 @@ function editorialOf(b: Block, src: ReferenceSources): PublicEditorial {
 }
 
 function blockOf(b: Block, rb: ResolvedBlock, src: ReferenceSources, descriptions: Map<string, string>): PublicBlock | null {
+  const core = blockCore(b, rb, src, descriptions);
+  if (!core) return null;
+  // Rediseño: subtítulo y «Ver todo ›» (sólo con destino público válido).
+  const see = b.modality === 'editorial' ? undefined : hrefOf(b.link, src);
+  return { ...core, ...(b.subtitle && b.modality !== 'editorial' ? { subtitle: b.subtitle } : {}), ...(see ? { seeAll: see.href } : {}) };
+}
+
+function blockCore(b: Block, rb: ResolvedBlock, src: ReferenceSources, descriptions: Map<string, string>): PublicBlock | null {
   const base = { id: b.id, modality: b.modality, format: b.format, width: b.width, title: b.title, card: b.card };
   const presentable = (ids: string[]) => ids.filter((id) => {
     const p = src.products.get(id);
     return Boolean(p && p.title && p.price !== null);
   });
-  const limitFor = (ids: string[]) => (b.format === 'banner' ? ids.slice(0, 1) : b.format === 'cuadricula2x2' ? ids.slice(0, 4) : ids);
+  const limitFor = (ids: string[]) => (b.format === 'banner' ? ids.slice(0, 1) : b.format === 'cuadricula2x2' ? ids.slice(0, 4) : b.format === 'lista' ? ids.slice(0, 10) : ids);
 
   if (b.modality === 'editorial') return { ...base, productIds: [], editorial: editorialOf(b, src) };
   if (b.modality === 'seccion') {
@@ -157,7 +181,7 @@ function blockOf(b: Block, rb: ResolvedBlock, src: ReferenceSources, description
       .filter((r) => r.kind === 'category')
       .map((r) => findCategory(src, r.id))
       .filter((c): c is NonNullable<typeof c> => Boolean(c))
-      .map((c) => ({ id: c.id, name: c.name, href: categoryHref(c.slug) }));
+      .map((c) => ({ id: c.id, name: c.name, href: categoryHref(c.slug), ...(c.icon ? { icon: c.icon } : {}), subs: [...src.categories.values()].filter((x) => x.parentId === c.id).length }));
     return cats.length ? { ...base, productIds: [], categories: cats } : null;
   }
   if (b.card !== 'producto') return null;

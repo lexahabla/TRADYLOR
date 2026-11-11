@@ -23,7 +23,8 @@ export const MODALITIES = ['manual', 'automatica', 'seccion', 'editorial'] as co
 export type Modality = (typeof MODALITIES)[number];
 
 /** Formatos visuales provisionales: no son modalidades. */
-export const FORMATS = ['banner', 'cuadricula2x2', 'carrusel'] as const;
+/** `lista` (rediseño): lista numerada de hasta 10 productos (1, 2, 3…); en las tarjetas de categoría, cuadrícula de teselas. */
+export const FORMATS = ['banner', 'cuadricula2x2', 'carrusel', 'lista'] as const;
 export type Format = (typeof FORMATS)[number];
 
 /** Anchos sobre 12 columnas: ¼, ⅓, ½, ⅔, ¾ y completo. */
@@ -41,7 +42,8 @@ export interface ContentRef {
 }
 
 /** Criterios de la modalidad automática en la primera versión (solo con datos fiables). El motor NO existe todavía. */
-export const AUTO_ORDERS = ['recientes', 'precio_asc', 'precio_desc'] as const;
+/** `descuento_desc` (rediseño): mayor bajada VERIFICADA primero (sólo productos con descuento acreditado; nunca el «precio de lista» del comercio). */
+export const AUTO_ORDERS = ['recientes', 'precio_asc', 'precio_desc', 'descuento_desc'] as const;
 export type AutoOrder = (typeof AUTO_ORDERS)[number];
 export interface AutomaticRules {
   /** Categoría real del catálogo (id de categories.json). */
@@ -52,6 +54,8 @@ export interface AutomaticRules {
   order: AutoOrder;
   limit: number;
   onlyWithPrice?: boolean;
+  /** Rediseño: sólo productos con bajada de precio VERIFICADA (misma prueba que la insignia «-N %» y el filtro «Gangas»). */
+  onlyVerifiedDiscount?: boolean;
 }
 
 export type LinkType = 'path' | 'url' | 'product' | 'category' | 'section';
@@ -59,7 +63,24 @@ export interface EditorialLink {
   type: LinkType;
   target: string;
 }
+/** Variantes de presentación de un bloque editorial (rediseño). Sin `variant` = `plain` (el aspecto original). */
+export const EDITORIAL_VARIANTS = ['plain', 'hero', 'campaign', 'guide', 'trust'] as const;
+export type EditorialVariant = (typeof EDITORIAL_VARIANTS)[number];
+export interface EditorialItem {
+  title: string;
+  text?: string;
+}
 export interface EditorialConfig {
+  /** Rediseño (todos opcionales y aditivos): */
+  variant?: EditorialVariant;
+  /** Rótulo pequeño sobre el titular («SEMANA DE OFERTAS», «GUÍA DE COMPRA»…). */
+  eyebrow?: string;
+  /** Cifra o fecha grande de la variante `campaign` («27·11»). */
+  kicker?: string;
+  /** Segunda imagen de la variante `hero` (se muestra solapada con la primera). */
+  imageUrl2?: string;
+  /** Hasta 4 mensajes cortos de la variante `trust` (franja de confianza). */
+  items?: EditorialItem[];
   headline: string;
   text?: string;
   imageUrl?: string;
@@ -86,6 +107,9 @@ export interface Block {
   /** Contenido referenciado (manual: elementos elegidos; sección: una sección; automática y editorial: vacío). */
   refs: ContentRef[];
   visible: boolean;
+  /** Rediseño (opcionales): enlace «Ver todo ›» del título del bloque y subtítulo corto. */
+  link?: EditorialLink;
+  subtitle?: string;
 }
 
 export interface BlockSet {

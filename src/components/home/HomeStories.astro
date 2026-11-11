@@ -22,7 +22,7 @@ const json = JSON.stringify(stories).replace(/</g, '\\u003c').replace(/>/g, '\\u
         {stories.map((s, i) => (
           <li>
             <button type="button" class="hs-circle" data-story-open={i} aria-label={`Ver historia: ${s.name}`}>
-              <span class="hs-ring"><img src={s.cover} alt="" width="64" height="64" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></span>
+              <span class="hs-ring"><img src={s.cover} alt="" width="70" height="70" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></span>
               <span class="hs-name">{s.name}</span>
             </button>
           </li>
@@ -54,11 +54,11 @@ const json = JSON.stringify(stories).replace(/</g, '\\u003c').replace(/>/g, '\\u
 
 <style is:global>
   .hs-root { padding: 1.25rem 0 0; }
-  .hs-circles { list-style: none; margin: 0; padding: 0.25rem 0 0.5rem; display: flex; gap: 1rem; overflow-x: auto; scrollbar-width: thin; }
-  .hs-circle { display: grid; justify-items: center; gap: 0.35rem; width: 76px; min-height: 44px; background: transparent; border: 0; padding: 0; cursor: pointer; color: #e2e8f0; font: inherit; }
-  .hs-ring { display: block; width: 68px; height: 68px; border-radius: 50%; padding: 3px; background: conic-gradient(#f59e0b, #ec4899, #8b5cf6, #3b82f6, #f59e0b); }
+  .hs-circles { list-style: none; margin: 0; padding: 0.25rem 0 0.75rem; display: flex; gap: 0.9rem; overflow-x: auto; scrollbar-width: thin; }
+  .hs-circle { display: grid; justify-items: center; gap: 0.4rem; width: 92px; min-height: 44px; background: transparent; border: 0; padding: 0; cursor: pointer; color: #e2e8f0; font: inherit; }
+  .hs-ring { display: block; width: 76px; height: 76px; border-radius: 50%; padding: 3px; background: conic-gradient(#f59e0b, #ec4899, #8b5cf6, #3b82f6, #f59e0b); }
   .hs-ring img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 2px solid #0b1220; background: #111827; display: block; }
-  .hs-name { font-size: 0.75rem; max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hs-name { font-size: 0.72rem; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hs-circle:focus-visible, .hs-close:focus-visible, .hs-btn:focus-visible, .hs-tap:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
   .hs-viewer { border: 0; padding: 0; background: transparent; max-width: 100vw; max-height: 100dvh; width: 100%; height: 100%; margin: 0; overflow: hidden; }
   .hs-viewer:not([open]) { display: none; }

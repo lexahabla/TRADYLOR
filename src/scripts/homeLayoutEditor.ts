@@ -57,7 +57,8 @@ type Msg = { kind: 'ok' | 'error' | 'info'; text: string } | null;
 const WIDTH_LABEL: Record<number, string> = { 3: '¼', 4: '⅓', 6: '½', 8: '⅔', 9: '¾', 12: '1' };
 const WIDTH_NAME: Record<number, string> = { 3: 'un cuarto', 4: 'un tercio', 6: 'la mitad', 8: 'dos tercios', 9: 'tres cuartos', 12: 'el ancho completo' };
 const CARD_LABEL: Record<CardKind, string> = { producto: 'Tarjeta de producto', categoria: 'Tarjeta de categoría', promocion: 'Tarjeta de promoción' };
-const ORDER_LABEL: Record<string, string> = { recientes: 'Más recientes', precio_asc: 'Precio ascendente', precio_desc: 'Precio descendente' };
+const ORDER_LABEL: Record<string, string> = { recientes: 'Más recientes', precio_asc: 'Precio ascendente', precio_desc: 'Precio descendente', descuento_desc: 'Mayor bajada VERIFICADA' };
+const VARIANT_LABEL: Record<string, string> = { plain: 'Clásico (texto e imagen de fondo)', hero: 'Presentación (hero con dos imágenes)', campaign: 'Campaña (cifra o fecha grande)', guide: 'Banner de categoría/guía (texto + imagen)', trust: 'Franja de confianza (hasta 4 mensajes)' };
 const LINK_LABEL: Record<string, string> = { path: 'Ruta propia (/…)', url: 'URL externa (https)', product: 'Ficha de producto', category: 'Categoría', section: 'Sección' };
 
 /* ───────────────────────── Utilidades DOM (sin innerHTML) ───────────────────────── */
@@ -447,6 +448,19 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     ...items.map((o) => h('option', { value: o.value, selected: o.value === current }, o.label)),
   ];
 
+  /** Enlace «Ver todo ›» del título del bloque (opcional). */
+  function seeAllEditor(b: Block): HTMLElement {
+    const l = b.link;
+    const set = (type: string, target: string) => patch(b.id, { link: type ? ({ type, target } as Block['link']) : undefined });
+    const targetControl = !l ? null
+      : l.type === 'section' ? h('select', { onchange: (e: any) => set('section', e.target.value) }, ...optionList(catalog.sections.map((x) => ({ value: x.id, label: x.title })), l.target, 'Elige…'))
+      : l.type === 'category' ? h('select', { onchange: (e: any) => set('category', e.target.value) }, ...optionList(catalog.categories.map((x) => ({ value: x.id, label: `${x.parentId ? '— ' : ''}${x.name}` })), l.target, 'Elige…'))
+      : textInput(l.target, 600, (v) => set(l.type, v));
+    return h('div', { class: 'pe-two' },
+      field('Enlace «Ver todo ›»', h('select', { onchange: (e: any) => { set(e.target.value, ''); renderProps(); } }, ...optionList(Object.entries(LINK_LABEL).map(([value, label]) => ({ value, label })), l?.type, 'Sin enlace'))),
+      targetControl ? field('Destino', targetControl, l && (l.type === 'path') ? 'Ej.: /?category=sonido#catalogo' : undefined) : h('div', {}));
+  }
+
   function manualEditor(b: Block): HTMLElement {
     const wrap = h('div', {});
     const kind = b.card === 'categoria' ? 'category' : b.card === 'promocion' ? 'promotion' : 'product';
@@ -536,6 +550,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
       field('Comercio o plataforma', h('select', { onchange: (e: any) => patchRules(b.id, { merchant: e.target.value }) }, ...optionList(catalog.merchants.map((m) => ({ value: m.id, label: `${m.id} (${m.productCount})` })), rules.merchant, 'Cualquiera'))),
       field('Orden', h('select', { onchange: (e: any) => patchRules(b.id, { order: e.target.value }) }, ...optionList(Object.entries(ORDER_LABEL).map(([value, label]) => ({ value, label })), rules.order)), 'Solo criterios con datos fiables: no hay descuentos, bajadas de precio ni ventas. «Más recientes» sólo funciona si todos los productos tienen fecha de alta fiable.'),
       field(`Máximo de productos (1–${maxItemsFor(b.format)})`, h('input', { type: 'number', min: 1, max: maxItemsFor(b.format), value: rules.limit, oninput: (e: any) => patchRules(b.id, { limit: Number(e.target.value) }) })),
+      h('label', { class: 'pe-check' }, h('input', { type: 'checkbox', checked: (rules as { onlyVerifiedDiscount?: boolean }).onlyVerifiedDiscount === true, onchange: (e: any) => patchRules(b.id, { onlyVerifiedDiscount: e.target.checked ? true : undefined }) }), ' Solo con bajada de precio VERIFICADA (si no hay ninguna, el bloque no se muestra)'),
       h('label', { class: 'pe-check' }, h('input', { type: 'checkbox', checked: rules.onlyWithPrice === true, onchange: (e: any) => patchRules(b.id, { onlyWithPrice: e.target.checked ? true : undefined }) }), ' Solo productos con precio'));
   }
 
@@ -551,7 +566,23 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
       : link.type === 'section' ? h('select', { onchange: (e: any) => setLink('section', e.target.value) }, ...optionList(catalog.sections.map((s) => ({ value: s.id, label: s.title })), link.target, 'Elige…'))
       : link.type === 'category' ? h('select', { onchange: (e: any) => setLink('category', e.target.value) }, ...optionList(catalog.categories.map((x) => ({ value: x.id, label: `${x.parentId ? '— ' : ''}${x.name}` })), link.target, 'Elige…'))
       : textInput(link.target, 600, (v) => setLink(link.type, v));
+    const ec = b.config as { variant?: string; eyebrow?: string; kicker?: string; imageUrl2?: string; items?: Array<{ title: string; text?: string }> };
+    const variant = ec.variant ?? 'plain';
+    const setOpt = (key: string, v: string) => { const cfg: Record<string, unknown> = { ...(b.config as object) }; if (v.trim()) cfg[key] = v.trim(); else delete cfg[key]; patch(b.id, { config: cfg as Block['config'] }); };
+    const setItems = (items: Array<{ title: string; text?: string }>) => { const cfg: Record<string, unknown> = { ...(b.config as object) }; const clean = items.filter((x) => x.title.trim()); if (clean.length) cfg.items = clean; else delete cfg.items; patch(b.id, { config: cfg as Block['config'] }); };
+    const itemRows = Array.from({ length: 4 }, (_, i) => {
+      const it = ec.items?.[i] ?? { title: '', text: '' };
+      const cur = () => Array.from({ length: 4 }, (_, k) => ec.items?.[k] ?? { title: '', text: '' });
+      return h('div', { class: 'pe-two' },
+        field(`Mensaje ${i + 1} · título`, textInput(it.title, 40, (v) => { const a = cur(); a[i] = { ...a[i], title: v }; setItems(a); })),
+        field(`Mensaje ${i + 1} · texto`, textInput(it.text ?? '', 120, (v) => { const a = cur(); a[i] = { ...a[i], text: v || undefined }; setItems(a); })));
+    });
     return h('div', {},
+      field('Presentación del bloque', h('select', { onchange: (e: any) => { const cfg: Record<string, unknown> = { ...(b.config as object) }; if (e.target.value === 'plain') delete cfg.variant; else cfg.variant = e.target.value; patch(b.id, { config: cfg as Block['config'] }); renderProps(); } }, ...Object.entries(VARIANT_LABEL).map(([value, label]) => h('option', { value, selected: value === variant }, label)))),
+      variant !== 'plain' && variant !== 'trust' ? field('Rótulo pequeño (opcional)', textInput(ec.eyebrow ?? '', 40, (v) => setOpt('eyebrow', v))) : null,
+      variant === 'campaign' ? field('Cifra o fecha grande', textInput(ec.kicker ?? '', 16, (v) => setOpt('kicker', v)), 'Ej.: «27·11». Es texto libre: no se calcula ni se promete nada.') : null,
+      variant === 'hero' ? field('Segunda imagen (opcional)', textInput(ec.imageUrl2 ?? '', 600, (v) => setOpt('imageUrl2', v)), 'Ruta propia (/…) o URL https de una imagen jpg, png, webp, avif o gif.') : null,
+      variant === 'trust' ? h('div', {}, h('div', { class: 'pe-sub' }, 'Mensajes (hasta 4)'), ...itemRows) : null,
       field('Titular', textInput(c.headline, 120, (v) => patchConfig(b.id, { headline: v }))),
       field('Texto (opcional)', h('textarea', { maxlength: 400, oninput: (e: any) => { const v = e.target.value; const cfg: Record<string, unknown> = { ...c }; if (v.trim()) cfg.text = v; else delete cfg.text; patch(b.id, { config: cfg as Block['config'] }); } }, c.text ?? '')),
       field('Imagen (opcional)', textInput(c.imageUrl ?? '', 600, (v) => { const cfg: Record<string, unknown> = { ...c }; if (v.trim()) cfg.imageUrl = v.trim(); else delete cfg.imageUrl; patch(b.id, { config: cfg as Block['config'] }); }), 'Ruta propia (/…) o URL https.'),
@@ -579,6 +610,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
         ? field('Tarjeta (componente reutilizable)', h('select', { onchange: (e: any) => setBlocks(updateBlock(state.blocks, b.id, { card: e.target.value as CardKind, refs: [] })) }, ...cardsFor(b.modality).map((c) => h('option', { value: c, selected: c === b.card }, CARD_LABEL[c]))), 'Al cambiar de tarjeta se vacían los elementos.')
         : field('Tarjeta', h('span', { class: 'pe-static' }, CARD_LABEL[cardsFor(b.modality)[0]])),
       h('label', { class: 'pe-check' }, h('input', { type: 'checkbox', checked: b.visible, onchange: (e: any) => patch(b.id, { visible: e.target.checked }) }), ' Bloque visible (si se desmarca, queda en el borrador pero oculto)'),
+      ...(b.modality !== 'editorial' ? [field('Subtítulo (opcional)', textInput(b.subtitle ?? '', 120, (v) => patch(b.id, { subtitle: v.trim() ? v : undefined }))), seeAllEditor(b)] : []),
       b.modality === 'manual' ? manualEditor(b) : b.modality === 'seccion' ? sectionEditor(b) : b.modality === 'automatica' ? automaticEditor(b) : editorialEditor(b),
     );
   }
@@ -667,7 +699,7 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     msg: null as Msg,
     detail: null as null | { title: string; kind: 'preview' | 'compare'; blocks?: Block[]; changes?: DiffEntry[]; chip?: string; data?: PvData },
     busy: false,
-    initial: null as null | { available: boolean; reason?: string; message?: string; blocks: Array<{ id: string; title: string; modality: string; format: string; width: number }>; check: { canLoad: boolean; blocking: BlockingIssue[]; warnings: BlockingIssue[]; visibleBlocks: number; totalBlocks: number }; draftRevision: string; activationRevision: string; gates: { env: boolean } },
+    initial: null as null | { available: boolean; designAvailable?: boolean; reason?: string; message?: string; blocks: Array<{ id: string; title: string; modality: string; format: string; width: number }>; check: { canLoad: boolean; blocking: BlockingIssue[]; warnings: BlockingIssue[]; visibleBlocks: number; totalBlocks: number }; draftRevision: string; activationRevision: string; gates: { env: boolean } },
     act: null as null | { gates: { stage: boolean; env: boolean; adminFlag: boolean; activeFile: boolean; pinnedVersion: number | null }; revision: string; log: Array<{ at: string; by: string; action: string; version: number | null; result: string; note?: string }>; storage: { layout: string; activation: string } },
   };
   const dateTxt = (iso: string) => new Date(iso).toLocaleString('es-ES');
@@ -816,6 +848,14 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
   /* ---- Portada inicial: cargar, publicar y activar internamente (v1) en una sola acción ---- */
   function initialPanel(): HTMLElement {
     const ini = vs.initial;
+    if (ini && !ini.available && ini.designAvailable) {
+      const dbox = h('div', { class: 'pe-box pe-act' }, h('h3', {}, 'Nuevo diseño de la portada'));
+      dbox.append(h('p', { class: 'pe-note' }, 'Carga el nuevo diseño (hero, campaña, bajadas de precio verificadas, categorías, lista numerada, banner de categoría, carruseles y franja de confianza) como BORRADOR, con los productos y categorías reales del catálogo. No publica ni activa nada: revisa la vista previa, publica y activa cuando quieras; la versión actual sigue guardada y se puede recuperar. Sólo funciona si el borrador es la primera portada sin modificar.'));
+      dbox.append(h('ul', { class: 'pe-diff' }, ...ini.blocks.map((b) => h('li', {}, h('span', { class: 'pe-dk is-added', 'aria-hidden': 'true' }, '＋'), h('span', {}, `${b.title} (${b.modality}, ${b.format})`)))));
+      if (!ini.check.canLoad) dbox.append(h('div', {}, h('div', { class: 'pe-sub' }, `No se puede cargar con los datos actuales (${ini.check.blocking.length})`), issueList(ini.check.blocking)));
+      dbox.append(h('div', { class: 'pe-vact' }, h('button', { class: 'pe-btn pe-primary', type: 'button', disabled: vs.busy || !ini.check.canLoad || state.dirty, title: state.dirty ? 'Guarda o descarta antes los cambios del editor' : '', onclick: () => { void startDesign(); } }, 'Cargar el nuevo diseño como borrador…')));
+      return dbox;
+    }
     if (!ini || !ini.available) return h('div', { hidden: true });
     const box = h('div', { class: 'pe-box pe-act' }, h('h3', {}, 'Portada inicial'));
     box.append(h('p', { class: 'pe-note' }, 'Todavía no hay ninguna portada. Con un solo paso se cargan 7 bloques que se rellenan solos con los productos reales del catálogo (bienvenida, categorías y los más económicos), se publica la versión 1 y se deja activada internamente. Después podrás modificarlo todo en este editor. La web pública no cambia hasta que el servidor tenga HOME_LAYOUT_ENABLED=true.'));
@@ -842,6 +882,28 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     } else {
       await loadVersions();
       vsay({ kind: 'error', text: r.status === 409 ? 'Ya existe una portada o el estado cambió: no se ha sobrescrito nada.' : r.status === 422 ? 'Hay bloques que no se pueden mostrar con los datos actuales: no se ha cargado nada.' : r.status === 423 ? 'El almacenamiento está protegido: no se sobrescribe.' : 'No se pudo cargar la portada inicial. La web sigue como estaba.' });
+    }
+  }
+
+  async function startDesign() {
+    const ini = vs.initial;
+    if (vs.busy || !ini || !ini.designAvailable) return;
+    const body = h('div', { class: 'pe-confirm-body' },
+      h('p', { class: 'pe-note' }, `El borrador se sustituirá por el nuevo diseño (${ini.check.totalBlocks} bloques; ${ini.check.visibleBlocks} se mostrarían ahora). NO se publica ni se activa nada: la web pública no cambia. Podrás revisar las vistas previas, publicar la versión y activarla; la versión actual queda en el historial.`),
+      ini.check.warnings.length ? h('div', {}, h('div', { class: 'pe-sub' }, `Avisos (${ini.check.warnings.length}) — no bloquean`), issueList(ini.check.warnings)) : null);
+    if (!(await confirmBox('Cargar el nuevo diseño como borrador', 'Sólo sustituye el borrador; no publica ni activa nada.', 'Cargar como borrador', false, body, !ini.check.canLoad))) return;
+    vs.busy = true; renderVersions();
+    const r = await api('/api/admin/home-layout/initial', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Home-Layout-Editor': '1' }, body: JSON.stringify({ action: 'load_design', baseRevision: ini.draftRevision, confirm: true }) });
+    vs.busy = false;
+    if (r.status === 200 && r.body?.success) {
+      state.dirty = false;
+      await load();
+      await loadVersions();
+      await setTab('editor');
+      say({ kind: 'ok', text: 'Nuevo diseño cargado como borrador. Revisa las vistas previas y, cuando quieras, publícalo y actívalo desde «B · Publicación y versiones».' });
+    } else {
+      await loadVersions();
+      vsay({ kind: 'error', text: r.status === 409 ? 'El borrador tiene cambios propios o cambió mientras tanto: no se ha sobrescrito nada.' : r.status === 422 ? 'Hay bloques que no se pueden mostrar con los datos actuales: no se ha cargado nada.' : r.status === 423 ? 'El almacenamiento está protegido: no se sobrescribe.' : 'No se pudo cargar el nuevo diseño. La web sigue como estaba.' });
     }
   }
 

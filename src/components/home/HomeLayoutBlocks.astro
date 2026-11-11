@@ -1,12 +1,11 @@
 ---
 /**
- * Portada editable (etapa 6): pinta los bloques ya validados de `buildPublicHome()`.
- * Reutiliza `ProductCard` (carrusel/banner = layout compact, cuadrícula 2×2 = tarjeta completa) y el mismo marcado de carrusel que las
- * secciones de la portada (`feed-section`, `data-dynamic-section`, `data-carousel-*`), de modo que el script de carruseles de `index.astro`
- * (flechas, arrastre, auto-scroll, velocidad) funciona sin cambios. Los `id="section-<id>"` de las secciones se conservan (menú de navegación).
- * Sin enlaces de afiliado: sólo ids de producto y rutas internas ya comprobadas.
+ * Portada editable: pinta los bloques ya validados de `buildPublicHome()` con el diseño de las maquetas v4 (hero, campaña, bajadas, categorías en
+ * teselas, lista numerada, banner de guía, carruseles y franja de confianza). Tarjetas = `HomeProductCard` (datos reales; descuentos sólo
+ * verificados). Mismo marcado de carrusel (`data-dynamic-section`, `data-carousel-*`) que las secciones existentes para reutilizar su script, y los
+ * `id="section-<id>"` se conservan. Sin enlaces de afiliado: sólo ids y rutas internas ya comprobadas.
  */
-import ProductCard from '../ProductCard.astro';
+import HomeProductCard from './HomeProductCard.astro';
 import type { PublicBlock } from '../../lib/homeLayout/public';
 
 interface Props {
@@ -18,6 +17,7 @@ const { blocks, products, region } = Astro.props as Props;
 const cards = (b: PublicBlock) => b.productIds.map((id) => products[id]).filter(Boolean);
 const domId = (b: PublicBlock) => (b.section ? `section-${b.section.id}` : `bloque-${b.id}`);
 const rendered = blocks.filter((b) => b.modality === 'editorial' || b.categories?.length || cards(b).length > 0);
+const chevron = '›';
 ---
 
 {rendered.length > 0 && (
@@ -26,38 +26,116 @@ const rendered = blocks.filter((b) => b.modality === 'editorial' || b.categories
       <div class="hl-grid">
         {rendered.map((b) => {
           const list = cards(b);
-          const carousel = !b.editorial && !b.categories && b.format === 'carrusel';
           const style = `--span:${b.width}`;
           if (b.editorial) {
             const e = b.editorial;
+            const v = e.variant ?? 'plain';
+            const button = e.href && e.buttonLabel ? (
+              <a class="hl-btn" href={e.href} {...(e.external ? { target: '_blank', rel: 'noopener noreferrer nofollow' } : {})}>{e.buttonLabel}</a>
+            ) : null;
+            if (v === 'hero') {
+              return (
+                <section class="hl-cell hl-hero" style={style} id={domId(b)} aria-label={e.headline}>
+                  <div class="hl-hero-body">
+                    {e.eyebrow && <p class="hl-eyebrow">{e.eyebrow}</p>}
+                    <h2 class="hl-hero-title">{e.headline}</h2>
+                    {e.text && <p class="hl-hero-text">{e.text}</p>}
+                    {button}
+                  </div>
+                  {(e.imageUrl || e.imageUrl2) && (
+                    <div class="hl-hero-imgs" aria-hidden="true">
+                      {e.imageUrl && <span class="hl-hero-img"><img src={e.imageUrl} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></span>}
+                      {e.imageUrl2 && <span class="hl-hero-img is-second"><img src={e.imageUrl2} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></span>}
+                    </div>
+                  )}
+                </section>
+              );
+            }
+            if (v === 'campaign') {
+              return (
+                <section class="hl-cell hl-campaign" style={style} id={domId(b)} aria-label={e.headline}>
+                  {e.eyebrow && <p class="hl-campaign-eyebrow">{e.eyebrow}</p>}
+                  {e.kicker && <p class="hl-kicker" aria-hidden="true">{e.kicker}</p>}
+                  <h2 class="hl-campaign-title">{e.headline}</h2>
+                  {e.text && <p class="hl-campaign-text">{e.text}</p>}
+                  {button && <div class="hl-campaign-btn">{button}</div>}
+                </section>
+              );
+            }
+            if (v === 'guide') {
+              return (
+                <section class="hl-cell hl-guide" style={style} id={domId(b)} aria-label={e.headline}>
+                  <div class="hl-guide-body">
+                    {e.eyebrow && <p class="hl-guide-eyebrow">{e.eyebrow}</p>}
+                    <h2 class="hl-guide-title">{e.headline}</h2>
+                    {e.text && <p class="hl-guide-text">{e.text}</p>}
+                    {button}
+                  </div>
+                  {e.imageUrl && <div class="hl-guide-img" aria-hidden="true"><img src={e.imageUrl} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" /></div>}
+                </section>
+              );
+            }
+            if (v === 'trust') {
+              return (
+                <section class="hl-cell hl-trust" style={style} id={domId(b)} aria-label={e.headline}>
+                  <h2 class="hl-visually-hidden">{e.headline}</h2>
+                  <ul class="hl-trust-list">
+                    {(e.items ?? []).map((it) => (
+                      <li class="hl-trust-item"><strong>{it.title}</strong>{it.text && <span>{it.text}</span>}</li>
+                    ))}
+                  </ul>
+                </section>
+              );
+            }
             return (
               <section class={`hl-cell hl-promo${e.imageUrl ? ' has-img' : ''}`} style={style} id={domId(b)} aria-label={e.headline}>
                 {e.imageUrl && <img class="hl-promo-img" src={e.imageUrl} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />}
                 <div class="hl-promo-body">
                   <h2 class="hl-promo-title">{e.headline}</h2>
                   {e.text && <p class="hl-promo-text">{e.text}</p>}
-                  {e.href && e.buttonLabel && (
-                    <a class="hl-btn" href={e.href} {...(e.external ? { target: '_blank', rel: 'noopener noreferrer nofollow' } : {})}>
-                      {e.buttonLabel}
-                    </a>
-                  )}
+                  {button}
                 </div>
               </section>
             );
           }
+          const head = (
+            <div class="hl-head">
+              <div class="hl-head-text">
+                <h2 class="hl-title">{b.title}</h2>
+                {(b.subtitle || b.section?.description) && <p class="hl-sub">{b.subtitle || b.section?.description}</p>}
+              </div>
+              {b.seeAll && <a class="hl-seeall" href={b.seeAll}>{b.format === 'lista' ? 'Ver ranking' : 'Ver todo'} <span aria-hidden="true">{chevron}</span></a>}
+            </div>
+          );
           if (b.categories) {
             return (
-              <section class="hl-cell hl-cats" style={style} id={domId(b)} aria-label={b.title}>
-                <h2 class="hl-title">{b.title}</h2>
-                <ul class="hl-cat-list">
+              <section class="hl-cell hl-panel hl-cats" style={style} id={domId(b)} aria-label={b.title}>
+                {head}
+                <ul class={`hl-tiles hl-tiles-${b.categories.length}`}>
                   {b.categories.map((c) => (
-                    <li><a class="hl-cat" href={c.href}>{c.name}</a></li>
+                    <li>
+                      <a class="hl-tile" href={c.href}>
+                        {c.icon && <span class="hl-tile-icon" aria-hidden="true">{c.icon}</span>}
+                        <span class="hl-tile-name">{c.name}</span>
+                        {c.subs > 0 && <span class="hl-tile-meta">{c.subs} subcategoría{c.subs > 1 ? 's' : ''}</span>}
+                      </a>
+                    </li>
                   ))}
                 </ul>
               </section>
             );
           }
-          if (carousel) {
+          if (b.format === 'lista') {
+            return (
+              <section class="hl-cell hl-panel hl-ranking" style={style} id={domId(b)} aria-label={b.title}>
+                {head}
+                <ol class="hl-rank-list">
+                  {list.map((p, i) => <HomeProductCard product={p} variant="row" rank={i + 1} />)}
+                </ol>
+              </section>
+            );
+          }
+          if (b.format === 'carrusel') {
             return (
               <section
                 class="hl-cell feed-section hl-feed"
@@ -67,16 +145,13 @@ const rendered = blocks.filter((b) => b.modality === 'editorial' || b.categories
                 data-section-speed={b.section ? b.section.speed || 'normal' : 'none'}
                 aria-label={b.title}
               >
-                <div class="hl-head">
-                  <h2 class="hl-title">{b.title}</h2>
-                  {b.section?.description && <p class="hl-desc">{b.section.description}</p>}
-                </div>
+                {head}
                 <div class="feed-carousel">
                   <button type="button" class="feed-carousel-btn feed-carousel-prev" data-carousel-prev aria-label="Anteriores">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
                   </button>
-                  <div class="feed-carousel-track" data-carousel-track>
-                    {list.map((item) => <ProductCard product={item} layout="compact" />)}
+                  <div class="feed-carousel-track hl-track" data-carousel-track>
+                    {list.map((p) => <HomeProductCard product={p} />)}
                   </div>
                   <button type="button" class="feed-carousel-btn feed-carousel-next" data-carousel-next aria-label="Siguientes">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
@@ -85,12 +160,12 @@ const rendered = blocks.filter((b) => b.modality === 'editorial' || b.categories
               </section>
             );
           }
-          // banner (producto destacado a ancho completo del bloque) y cuadrícula 2×2
+          // banner (producto destacado) y cuadrícula 2×2
           return (
             <section class={`hl-cell ${b.format === 'banner' ? 'hl-banner' : 'hl-quad-wrap'}`} style={style} id={domId(b)} aria-label={b.title}>
-              <h2 class="hl-title">{b.title}</h2>
+              {head}
               <div class={b.format === 'banner' ? 'hl-featured' : 'hl-quad'}>
-                {list.map((item) => <ProductCard product={item} layout={b.format === 'banner' ? 'compact' : 'grid'} />)}
+                {list.map((p) => <HomeProductCard product={p} />)}
               </div>
             </section>
           );
@@ -101,59 +176,156 @@ const rendered = blocks.filter((b) => b.modality === 'editorial' || b.categories
 )}
 
 <style is:global>
-  .hl-root { padding: 2.5rem 0 1rem; }
-  .hl-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 2rem 1.5rem; align-items: start; }
+  .hl-root { padding: 1.25rem 0 0.5rem; }
+  .hl-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 1.5rem 1.25rem; align-items: stretch; }
   .hl-cell { grid-column: span var(--span, 12); min-width: 0; }
-  .hl-title { font-family: var(--font-heading); font-size: clamp(1.5rem, 3vw, 2.25rem); font-weight: 800; letter-spacing: -0.02em; color: #ffffff; margin: 0 0 0.75rem; }
-  .hl-desc { color: rgba(255, 255, 255, 0.7); font-size: 1rem; max-width: 700px; line-height: 1.6; margin: 0 0 1rem; }
-  .hl-head { margin-bottom: 1.25rem; }
+  .hl-visually-hidden, .hp-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-  /* Carrusel (mismo aspecto que las secciones de la portada) */
+  /* Cabecera de bloque: título, subtítulo y «Ver todo ›» */
+  .hl-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 0.9rem; }
+  .hl-head-text { min-width: 0; }
+  .hl-title { font-family: var(--font-heading); font-size: clamp(1.15rem, 2vw, 1.4rem); font-weight: 800; letter-spacing: -0.01em; color: #ffffff; margin: 0; line-height: 1.2; }
+  .hl-sub { color: rgba(255, 255, 255, 0.62); font-size: 0.82rem; margin: 0.2rem 0 0; }
+  .hl-seeall { flex: none; display: inline-flex; align-items: center; min-height: 44px; color: #60a5fa; font-size: 0.82rem; font-weight: 700; text-decoration: none; white-space: nowrap; }
+  .hl-seeall:hover { color: #93c5fd; text-decoration: underline; }
+
+  /* Paneles (categorías y lista numerada) */
+  .hl-panel { background: rgba(17, 24, 39, 0.72); border: 1px solid rgba(148, 163, 184, 0.16); border-radius: 18px; padding: 1.25rem; }
+  .hl-cats { display: flex; flex-direction: column; }
+  .hl-tiles { flex: 1; list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-auto-rows: 1fr; gap: 0.75rem; }
+  .hl-tiles-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hl-tiles > li { display: flex; }
+  .hl-tiles > li > .hl-tile { flex: 1; }
+  .hl-tile { display: grid; justify-items: center; align-content: center; gap: 0.3rem; min-height: 124px; padding: 0.9rem 0.5rem; text-align: center; text-decoration: none; color: #f3f4f6; background: rgba(2, 6, 23, 0.55); border: 1px solid rgba(148, 163, 184, 0.14); border-radius: 14px; transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease; }
+  .hl-tile:hover { border-color: rgba(96, 165, 250, 0.6); background: rgba(30, 58, 138, 0.28); transform: translateY(-2px); }
+  .hl-tile-icon { font-size: 1.6rem; line-height: 1; }
+  .hl-tile-name { font-weight: 700; font-size: 0.86rem; line-height: 1.25; }
+  .hl-tile-meta { font-size: 0.7rem; color: #9ca3af; }
+
+  .hl-rank-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.6rem; }
+  .hp-row { display: grid; grid-template-columns: 1.4rem 48px minmax(0, 1fr) auto; align-items: center; gap: 0.75rem; padding: 0.55rem 0.7rem; background: rgba(2, 6, 23, 0.55); border: 1px solid rgba(148, 163, 184, 0.14); border-radius: 12px; }
+  .hp-rank { font-family: var(--font-heading); font-weight: 800; color: #f59e0b; text-align: center; }
+  .hp-row-img { display: grid; place-items: center; width: 48px; height: 48px; background: #ffffff; border-radius: 9px; overflow: hidden; }
+  .hp-row-img img { width: 100%; height: 100%; object-fit: contain; }
+  .hp-row-title { color: #e5e7eb; font-size: 0.84rem; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hp-row-title:hover { color: #ffffff; text-decoration: underline; }
+  .hp-row-price { font-weight: 800; font-size: 0.9rem; color: #ffffff; white-space: nowrap; }
+
+  /* Tarjeta de producto de las maquetas */
+  .hp-card { position: relative; display: flex; flex-direction: column; gap: 0.55rem; min-width: 0; padding: 0.65rem; background: rgba(17, 24, 39, 0.78); border: 1px solid rgba(148, 163, 184, 0.16); border-radius: 16px; transition: border-color 0.2s ease, transform 0.2s ease; }
+  .hp-card:hover { border-color: rgba(96, 165, 250, 0.5); transform: translateY(-3px); }
+  .hp-img { position: relative; display: grid; place-items: center; aspect-ratio: 1 / 0.82; background: #ffffff; border-radius: 12px; overflow: hidden; }
+  .hp-img-link { display: grid; place-items: center; width: 100%; height: 100%; padding: 0.4rem; }
+  .hp-img img { max-width: 100%; max-height: 100%; width: 100%; height: 100%; object-fit: contain; }
+  .hp-noimg { font-size: 2rem; opacity: 0.4; }
+  .hp-pill { position: absolute; top: 8px; left: 8px; padding: 0.15rem 0.5rem; border-radius: 6px; background: #059669; color: #ffffff; font-size: 0.72rem; font-weight: 800; }
+  .hp-heart { position: absolute; top: 6px; right: 6px; display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 50%; border: 1px solid rgba(255, 255, 255, 0.18); background: rgba(10, 14, 23, 0.82); color: #e5e7eb; cursor: pointer; }
+  .hp-heart:hover { color: #ffffff; border-color: #60a5fa; }
+  .hp-heart.is-saved { color: #fb7185; border-color: #fb7185; }
+  .hp-heart.is-saved svg { fill: currentColor; }
+  .hp-heart:focus-visible, .hp-card a:focus-visible, .hl-tile:focus-visible, .hl-seeall:focus-visible, .hl-btn:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
+  .hp-title { margin: 0; font-size: 0.82rem; font-weight: 500; line-height: 1.35; color: #e5e7eb; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 2.2em; }
+  .hp-title a { color: inherit; text-decoration: none; }
+  .hp-title a::after { content: ''; position: absolute; inset: 0; z-index: 1; border-radius: 16px; }
+  .hp-heart { z-index: 2; }
+  .hp-price { margin: 0; display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap; }
+  .hp-price strong { font-family: var(--font-heading); font-size: 1.08rem; color: #ffffff; }
+  .hp-price s { font-size: 0.74rem; color: #6b7280; }
+  .hp-meta { margin: auto 0 0; display: flex; align-items: center; gap: 0.4rem; font-size: 0.72rem; color: #9ca3af; }
+  .hp-dot { width: 7px; height: 7px; border-radius: 50%; background: #6b7280; flex: none; }
+  .hp-dot.is-in_stock { background: #10b981; } .hp-dot.is-low_stock { background: #f59e0b; } .hp-dot.is-out_of_stock { background: #ef4444; }
+
+  /* Carrusel: 5 tarjetas visibles en escritorio (maqueta) */
   .hl-root .feed-section { padding: 0; }
   .hl-root .feed-carousel { position: relative; }
-  .hl-root .feed-carousel-track { display: flex; align-items: stretch; gap: 1rem; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; padding: 0.75rem 0 1rem; margin-top: -0.75rem; scrollbar-width: thin; scrollbar-color: rgba(96, 165, 250, 0.45) transparent; cursor: grab; }
+  .hl-root .feed-carousel-track { display: flex; align-items: stretch; gap: 1rem; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; padding: 0.4rem 0 0.9rem; scrollbar-width: thin; scrollbar-color: rgba(96, 165, 250, 0.45) transparent; cursor: grab; }
   .hl-root .feed-carousel-track.is-dragging-track { cursor: grabbing; scroll-behavior: auto !important; user-select: none; }
   .hl-root .feed-carousel-track.is-dragging-track a { pointer-events: none; }
   .hl-root .feed-carousel-track::-webkit-scrollbar { height: 8px; }
   .hl-root .feed-carousel-track::-webkit-scrollbar-track { background: rgba(2, 6, 23, 0.5); border-radius: 999px; }
   .hl-root .feed-carousel-track::-webkit-scrollbar-thumb { background: rgba(96, 165, 250, 0.45); border-radius: 999px; }
-  .hl-root .feed-carousel-btn { position: absolute; top: 50%; transform: translateY(-50%); z-index: 6; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; color: #93c5fd; background: rgba(2, 6, 23, 0.92); border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 50%; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); transition: all 0.2s ease; }
-  .hl-root .feed-carousel-btn:hover:not(:disabled) { color: #ffffff; background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95)); border-color: rgba(96, 165, 250, 0.7); }
-  .hl-root .feed-carousel-btn:focus-visible, .hl-btn:focus-visible, .hl-cat:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
+  .hl-track > .hp-card { flex: 0 0 calc((100% - 4rem) / 5); scroll-snap-align: start; }
+  .hl-root .feed-carousel-btn { position: absolute; top: 40%; transform: translateY(-50%); z-index: 6; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; color: #93c5fd; background: rgba(2, 6, 23, 0.92); border: 1px solid rgba(96, 165, 250, 0.4); border-radius: 50%; cursor: pointer; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45); transition: all 0.2s ease; }
+  .hl-root .feed-carousel-btn:hover:not(:disabled) { color: #ffffff; background: linear-gradient(135deg, rgba(59, 130, 246, 0.95), rgba(37, 99, 235, 0.95)); }
+  .hl-root .feed-carousel-btn:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
   .hl-root .feed-carousel-btn:disabled { opacity: 0.3; cursor: default; }
-  .hl-root .feed-carousel-prev { left: -0.5rem; }
-  .hl-root .feed-carousel-next { right: -0.5rem; }
+  .hl-root .feed-carousel-prev { left: -0.6rem; }
+  .hl-root .feed-carousel-next { right: -0.6rem; }
 
-  /* Cuadrícula 2×2 y banner con producto destacado */
   .hl-quad { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
-  .hl-featured { display: block; }
-  .hl-featured .product-card { width: 100%; }
+  .hl-featured { max-width: 340px; }
 
-  /* Editorial (campaña) */
+  /* Botones */
+  .hl-btn { justify-self: start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 1.25rem; border-radius: 10px; background: #2563eb; color: #ffffff; font-weight: 700; font-size: 0.9rem; text-decoration: none; }
+  .hl-btn:hover { background: #1d4ed8; }
+
+  /* Hero «SEMANA DE OFERTAS» */
+  .hl-hero { position: relative; display: flex; align-items: center; min-height: 240px; padding: 2rem 2.25rem; overflow: hidden; border-radius: 20px; border: 1px solid rgba(96, 165, 250, 0.22); background: radial-gradient(120% 140% at 85% 20%, rgba(37, 99, 235, 0.28), transparent 60%), linear-gradient(120deg, #101c3f 0%, #0c1530 60%, #0a1024 100%); }
+  .hl-hero-body { position: relative; z-index: 1; display: grid; gap: 0.7rem; justify-items: start; max-width: min(24rem, 50%); }
+  .hl-eyebrow { margin: 0; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #f59e0b; }
+  .hl-hero-title { margin: 0; font-family: var(--font-heading); font-size: clamp(1.7rem, 3.2vw, 2.4rem); font-weight: 800; line-height: 1.12; letter-spacing: -0.02em; color: #ffffff; }
+  .hl-hero-text { margin: 0; color: rgba(255, 255, 255, 0.82); font-size: 0.9rem; line-height: 1.5; }
+  .hl-hero-imgs { position: absolute; right: 1.25rem; top: 50%; transform: translateY(-50%); display: flex; align-items: center; z-index: 0; }
+  .hl-hero-img { display: grid; place-items: center; width: clamp(120px, 12.5vw, 170px); aspect-ratio: 1 / 0.92; background: #ffffff; border-radius: 16px; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45); transform: rotate(-3deg); overflow: hidden; padding: 0.5rem; }
+  .hl-hero-img.is-second { margin-left: -2rem; margin-top: 2.6rem; transform: rotate(3deg); }
+  .hl-hero-img img { width: 100%; height: 100%; object-fit: contain; }
+
+  /* Campaña («27·11») */
+  .hl-campaign { display: grid; align-content: center; justify-items: start; gap: 0.35rem; min-height: 240px; padding: 1.75rem; border-radius: 20px; border: 1px solid rgba(52, 211, 153, 0.25); background: linear-gradient(160deg, #0d3b2e 0%, #082018 70%, #06150f 100%); }
+  .hl-campaign-eyebrow { margin: 0; font-size: 0.78rem; color: rgba(255, 255, 255, 0.72); }
+  .hl-kicker { margin: 0; font-family: var(--font-heading); font-size: clamp(2.4rem, 5vw, 3.4rem); font-weight: 800; line-height: 1; color: #34d399; letter-spacing: -0.02em; }
+  .hl-campaign-title { margin: 0.2rem 0 0; font-family: var(--font-heading); font-size: 1.25rem; font-weight: 800; color: #ffffff; }
+  .hl-campaign-text { margin: 0; font-size: 0.84rem; color: rgba(255, 255, 255, 0.78); }
+  .hl-campaign-btn { margin-top: 0.7rem; }
+  .hl-campaign .hl-btn { background: #0a0e17; border: 1px solid rgba(255, 255, 255, 0.28); }
+  .hl-campaign .hl-btn:hover { background: #111827; }
+
+  /* Banner de guía (mitad texto, mitad imagen) */
+  .hl-guide { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-height: 230px; overflow: hidden; border-radius: 20px; background: linear-gradient(120deg, #2a1862 0%, #1a1042 100%); border: 1px solid rgba(167, 139, 250, 0.25); }
+  .hl-guide-body { display: grid; align-content: center; justify-items: start; gap: 0.7rem; padding: 2rem 2.25rem; }
+  .hl-guide-eyebrow { margin: 0; font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: #f59e0b; }
+  .hl-guide-title { margin: 0; font-family: var(--font-heading); font-size: clamp(1.4rem, 2.6vw, 2rem); font-weight: 800; line-height: 1.15; color: #ffffff; max-width: 22ch; }
+  .hl-guide-text { margin: 0; font-size: 0.88rem; color: rgba(255, 255, 255, 0.8); }
+  .hl-guide-img { display: grid; place-items: center; background: #ffffff; padding: 1rem; }
+  .hl-guide-img img { width: 100%; height: 100%; max-height: 260px; object-fit: contain; }
+
+  /* Franja de confianza */
+  .hl-trust-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.9rem; }
+  .hl-trust-item { display: grid; gap: 0.3rem; padding: 1rem 1.1rem; border: 1px solid rgba(148, 163, 184, 0.16); border-radius: 14px; background: rgba(17, 24, 39, 0.6); }
+  .hl-trust-item strong { color: #ffffff; font-size: 0.88rem; }
+  .hl-trust-item span { color: #9ca3af; font-size: 0.78rem; line-height: 1.4; }
+
+  /* Editorial clásico */
   .hl-promo { position: relative; overflow: hidden; border-radius: 16px; border: 1px solid rgba(148, 163, 184, 0.25); background: linear-gradient(135deg, #1e293b, #0f172a); min-height: 200px; display: flex; }
   .hl-promo-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .hl-promo.has-img::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(2, 6, 23, 0.88), rgba(2, 6, 23, 0.35)); }
   .hl-promo-body { position: relative; z-index: 1; padding: 1.75rem; display: grid; gap: 0.75rem; align-content: center; max-width: 640px; }
   .hl-promo-title { font-family: var(--font-heading); font-size: clamp(1.4rem, 3vw, 2rem); font-weight: 800; color: #ffffff; margin: 0; }
   .hl-promo-text { color: rgba(255, 255, 255, 0.88); line-height: 1.6; margin: 0; }
-  .hl-btn { justify-self: start; display: inline-flex; align-items: center; min-height: 44px; padding: 0 1.25rem; border-radius: 999px; background: #2563eb; color: #ffffff; font-weight: 700; text-decoration: none; }
-  .hl-btn:hover { background: #1d4ed8; }
 
-  /* Categorías */
-  .hl-cat-list { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.6rem; }
-  .hl-cat { display: inline-flex; align-items: center; min-height: 44px; padding: 0 1.1rem; border-radius: 999px; border: 1px solid rgba(96, 165, 250, 0.45); color: #dbeafe; text-decoration: none; font-weight: 600; background: rgba(15, 23, 42, 0.7); }
-  .hl-cat:hover { background: rgba(37, 99, 235, 0.35); }
-
+  @media (max-width: 1100px) { .hl-track > .hp-card { flex-basis: calc((100% - 3rem) / 4); } }
+  @media (max-width: 860px) { .hl-track > .hp-card { flex-basis: calc((100% - 2rem) / 3); } .hl-trust-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 768px) {
-    .hl-root { padding: 1.5rem 0 0.5rem; }
+    .hl-root { padding: 1rem 0 0.25rem; }
+    .hl-grid { gap: 1.25rem 1rem; }
     .hl-cell { grid-column: span 12; }
     .hl-root .feed-carousel-btn { display: none; }
+    .hl-track { gap: 0.75rem; }
+    .hl-track > .hp-card { flex-basis: 62%; }
+    .hl-hero { flex-direction: column-reverse; align-items: stretch; padding: 1.25rem; min-height: 0; }
+    .hl-hero-body { max-width: none; }
+    .hl-hero-imgs { position: static; transform: none; justify-content: center; margin-bottom: 0.5rem; }
+    .hl-hero-img { width: 40%; }
+    .hl-hero-img.is-second { margin-left: -1rem; margin-top: 1.4rem; }
+    .hl-campaign { min-height: 0; padding: 1.25rem; }
+    .hl-guide { grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); min-height: 0; }
+    .hl-guide-body { padding: 1.1rem; }
+    .hl-guide-img { padding: 0.5rem; }
     .hl-promo-body { padding: 1.25rem; }
+    .hl-panel { padding: 1rem; }
+    .hl-tile { min-height: 104px; padding: 0.7rem 0.3rem; }
+    .hl-tile-name { font-size: 0.78rem; }
   }
-  @media (max-width: 480px) {
-    .hl-quad { grid-template-columns: minmax(0, 1fr); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .hl-root .feed-carousel-btn { transition: none; }
-  }
+  @media (max-width: 480px) { .hl-quad { grid-template-columns: minmax(0, 1fr); } .hl-track > .hp-card { flex-basis: 64%; } }
+  @media (prefers-reduced-motion: reduce) { .hp-card, .hl-tile, .hl-root .feed-carousel-btn { transition: none; } .hp-card:hover, .hl-tile:hover { transform: none; } }
 </style>

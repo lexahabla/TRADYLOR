@@ -8,6 +8,7 @@
  * POST /api/admin/home-layout/initial   { action:'load_initial', baseRevision, baseActivation, confirm:true }
  *   Guarda los 7 bloques como borrador, publica la v1 y la FIJA/activa internamente (decisiones existentes: publish + activation). La web pública NO
  *   cambia hasta que el servidor tenga HOME_LAYOUT_ENABLED=true. SÓLO sobre una portada virgen (sin borrador, versiones ni activación): nunca sobrescribe.
+ * POST {action:'load_design', baseRevision, confirm:true}: carga el REDISEÑO como borrador (sólo si el borrador es la primera portada sin modificar). No publica ni activa.
  *   Si algún bloque no se puede mostrar con los datos reales → 422 sin escribir nada. Escritura: activación primero y portada después; si falla la
  *   segunda se deshace la primera. Seguridad: administrador (401), CSRF (sameOrigin + X-Home-Layout-Editor: 1 + JSON), cuerpo ≤ 2 KiB, 405 en otros métodos.
  * ==============================================================================
@@ -22,7 +23,7 @@ import { loadSources } from '../../../../lib/homeLayout/sources';
 import { resolveBlocks } from '../../../../lib/homeLayout/resolve';
 import { activationRevision, appendLog, checkForActivation } from '../../../../lib/homeLayout/activation';
 import { revisionOf } from '../../../../lib/homeLayout/draft';
-import { INITIAL_BLOCKS, MAX_INITIAL_BODY_BYTES, initialAvailability, planInitialLoad, type InitialReason } from '../../../../lib/homeLayout/initialLayout';
+import { MAX_INITIAL_BODY_BYTES, buildInitialBlocks, deriveInitialContext, designAvailability, initialAvailability, planDesignLoad, planInitialLoad, type InitialReason } from '../../../../lib/homeLayout/initialLayout';
 import type { Block } from '../../../../lib/homeLayout/types';
 
 export const prerender = false;
@@ -36,6 +37,8 @@ const STATUS: Record<InitialReason, number> = {
   referencias_bloqueantes: 422, archivo_protegido: 423, activacion_protegida: 423,
 };
 
+/** Bloques del diseño actual con los datos REALES de este momento (categorías e imágenes del catálogo). */
+const designBlocks = (): Block[] => buildInitialBlocks(deriveInitialContext(loadSources()));
 const checkBlocks = (blocks: readonly Block[]) => checkForActivation(blocks, resolveBlocks([...blocks], loadSources(), { runAutomatic: true }).blocks);
 
 export const GET: APIRoute = async ({ request }) => {
@@ -45,12 +48,16 @@ export const GET: APIRoute = async ({ request }) => {
     const layout = readHomeLayout();
     const act = readActivation();
     const av = initialAvailability(layout, act);
-    const chk = checkBlocks(INITIAL_BLOCKS);
+    const blocksNow = designBlocks();
+    const chk = checkBlocks(blocksNow);
+    const dv = designAvailability(layout);
     return json(200, {
       success: true,
       available: av.available,
       ...(av.available ? {} : { reason: av.reason, message: av.message }),
-      blocks: INITIAL_BLOCKS.map((b) => ({ id: b.id, title: b.title, modality: b.modality, format: b.format, width: b.width })),
+      designAvailable: dv.available,
+      ...(dv.available ? {} : { designReason: dv.reason }),
+      blocks: blocksNow.map((b) => ({ id: b.id, title: b.title, modality: b.modality, format: b.format, width: b.width })),
       check: { canLoad: chk.blocking.length === 0, blocking: chk.blocking, warnings: chk.warnings, visibleBlocks: chk.visibleBlocks, totalBlocks: chk.totalBlocks },
       draftRevision: revisionOf(layout.doc.draft.updatedAt),
       activationRevision: activationRevision(act.doc),
@@ -89,7 +96,15 @@ export const POST: APIRoute = async ({ request }) => {
     const layout = readHomeLayout();
     const act = readActivation();
     const now = new Date();
-    const plan = planInitialLoad(layout, act, body, checkBlocks, now, by);
+    if (typeof body === 'object' && body !== null && (body as { action?: unknown }).action === 'load_design') {
+      // Rediseño: sustituye SÓLO el borrador (si es la v1 sin modificar). No publica ni activa nada.
+      const dplan = planDesignLoad(layout, body, checkBlocks, now, designBlocks());
+      if (!dplan.ok) return fail(STATUS[dplan.reason], dplan.reason, dplan.errors[0] ?? 'Operación rechazada', { errors: dplan.errors, ...(dplan.blocking ? { blocking: dplan.blocking } : {}) });
+      const dw = writeHomeLayout(dplan.layout);
+      if (!dw.ok) return dw.reason === 'archivo_protegido' ? fail(423, 'archivo_protegido', dw.errors[0] ?? 'Archivo protegido') : fail(500, 'error_escritura', 'No se pudo guardar el borrador; no se cambió nada');
+      return json(200, { success: true, action: 'load_design', revision: dplan.revision, warnings: dplan.warnings, mode: resolveHomeMode() });
+    }
+    const plan = planInitialLoad(layout, act, body, checkBlocks, now, by, designBlocks());
     if (!plan.ok) return fail(STATUS[plan.reason], plan.reason, plan.errors[0] ?? 'Operación rechazada', { errors: plan.errors, ...(plan.blocking ? { blocking: plan.blocking } : {}) });
     const w1 = writeActivation(plan.activation);
     if (!w1.ok) return w1.reason === 'archivo_protegido' ? fail(423, 'activacion_protegida', w1.errors[0] ?? 'Archivo protegido') : fail(500, 'error_escritura', 'No se pudo guardar la activación; no se cambió nada');

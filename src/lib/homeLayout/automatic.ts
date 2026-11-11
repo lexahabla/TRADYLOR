@@ -35,6 +35,7 @@ export type AutoReason =
   | 'categoria_sin_productos'
   | 'comercio_sin_productos'
   | 'sin_productos_con_precio'
+  | 'sin_bajadas_verificadas'
   | 'recientes_sin_fecha_fiable'
   | 'categoria_no_existe'
   | 'subcategoria_no_valida'
@@ -139,9 +140,17 @@ export function runAutomatic(rules: AutomaticRules, src: ReferenceSources): Auto
     return { status: 'vacio', ids: [], reason: 'sin_productos_con_precio', message: 'Ninguno de los productos que cumplen las reglas tiene un precio utilizable.', stats };
   }
 
+  // 4 bis. Sólo con bajada de precio VERIFICADA (misma prueba que la insignia «-N %»; nunca el «precio de lista» del comercio).
+  if (rules.onlyVerifiedDiscount || rules.order === 'descuento_desc') list = list.filter((p) => (p.discountPct ?? 0) > 0);
+  if (!list.length) {
+    return { status: 'vacio', ids: [], reason: 'sin_bajadas_verificadas', message: 'Ahora mismo ningún producto de estas reglas tiene una bajada de precio verificada: el bloque no se muestra (no se inventan descuentos).', stats };
+  }
+
   // 5. Orden.
   const price = (p: ProductInfo) => p.price as number;
-  if (rules.order === 'precio_asc' || rules.order === 'precio_desc') {
+  if (rules.order === 'descuento_desc') {
+    list.sort((a, b) => ((b.discountPct ?? 0) - (a.discountPct ?? 0)) || (a.price === b.price ? cmpId(a.id, b.id) : (a.price ?? Infinity) - (b.price ?? Infinity)));
+  } else if (rules.order === 'precio_asc' || rules.order === 'precio_desc') {
     const dir = rules.order === 'precio_asc' ? 1 : -1;
     list.sort((a, b) => {
       if (a.price === null || b.price === null) return a.price === b.price ? cmpId(a.id, b.id) : a.price === null ? 1 : -1;

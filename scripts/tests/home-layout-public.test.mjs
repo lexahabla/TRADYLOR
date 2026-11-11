@@ -94,7 +94,7 @@ test('bloques manuales, automáticos, de sección y editoriales: reales, ordenad
   assert.deepEqual(by.sb.productIds, ['p3', 'p4'], 'sección: sólo productos existentes, en el orden de sections.json');
   assert.deepEqual([by.sb.section.id, by.sb.section.speed, by.sb.section.description], ['ofertas', 'fast', 'Desc ofertas']);
   assert.deepEqual(by.ed.editorial, { headline: 'Campaña', text: 'Texto', imageUrl: '/images/products/x.jpg', buttonLabel: 'Ir', href: '/guias/portatiles' });
-  assert.deepEqual(by.cats.categories, [{ id: 'sonido', name: 'Sonido', href: '/?category=sonido#destacados' }]);
+  assert.deepEqual(by.cats.categories, [{ id: 'sonido', name: 'Sonido', href: '/?category=sonido#destacados', icon: '🎧', subs: 0 }]);
   assert.doesNotMatch(JSON.stringify(home), /afiliado|secreto|affiliate/i, 'ningún enlace de afiliado');
 });
 

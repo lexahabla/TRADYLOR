@@ -120,7 +120,13 @@ export function setWidth(blocks: readonly Block[], id: string, width: Width): Bl
 }
 
 export function updateBlock(blocks: readonly Block[], id: string, patch: Partial<Omit<Block, 'id'>>): Block[] {
-  return blocks.map((b) => (b.id === id ? ({ ...clone(b), ...clone(patch) } as Block) : (clone(b) as Block)));
+  return blocks.map((b) => {
+    if (b.id !== id) return clone(b) as Block;
+    const next = { ...clone(b), ...clone(patch) } as Record<string, unknown>;
+    // Un valor `undefined` en el parche QUITA el campo opcional (enlace «Ver todo», subtítulo…): la copia por JSON lo habría ignorado.
+    for (const [k, v] of Object.entries(patch)) if (v === undefined) delete next[k];
+    return next as unknown as Block;
+  });
 }
 
 /** Cambia la modalidad: el contenido anterior no tiene sentido en la nueva, así que se reinicia (config, referencias y tarjeta). */

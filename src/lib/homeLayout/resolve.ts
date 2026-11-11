@@ -75,7 +75,7 @@ export interface ResolvedTotals {
 }
 
 /** Elementos presentables mínimos por formato para que el bloque se muestre. */
-export const FORMAT_MIN_ITEMS: Record<Format, number> = { banner: 1, cuadricula2x2: 4, carrusel: 1 };
+export const FORMAT_MIN_ITEMS: Record<Format, number> = { banner: 1, cuadricula2x2: 4, carrusel: 1, lista: 3 };
 
 const MAX_ISSUES_PER_BLOCK = 50;
 

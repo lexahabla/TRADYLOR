@@ -14,6 +14,7 @@ import {
   AUTO_ORDERS,
   CARD_KINDS,
   FORMATS,
+  EDITORIAL_VARIANTS,
   MODALITIES,
   SCHEMA_VERSION,
   WIDTHS,
@@ -69,6 +70,7 @@ export const FORMAT_REGISTRY: Record<Format, FormatSpec> = {
   banner: { label: 'Banner', maxItems: MAX_ITEMS },
   cuadricula2x2: { label: 'Cuadrícula 2×2', maxItems: 4 },
   carrusel: { label: 'Carrusel', maxItems: MAX_ITEMS },
+  lista: { label: 'Lista numerada', maxItems: 10 },
 };
 
 function parseRefs(raw: unknown, path: string, issues: Issues, allowed: readonly RefKind[], min: number, max: number): ContentRef[] {
@@ -119,7 +121,7 @@ export const MODALITY_REGISTRY: Record<Modality, ModalitySpec> = {
         issues.push(`${path}.config.rules: faltan las reglas`);
       } else {
         const rules = cfg.rules;
-        const allowed = new Set(['categoryId', 'subcategoryId', 'merchant', 'order', 'limit', 'onlyWithPrice']);
+        const allowed = new Set(['categoryId', 'subcategoryId', 'merchant', 'order', 'limit', 'onlyWithPrice', 'onlyVerifiedDiscount']);
         for (const key of Object.keys(rules)) {
           if (FORBIDDEN_AUTO_CRITERIA.includes(key)) issues.push(`${path}.config.rules.${key}: criterio no permitido (no hay datos verificables que lo respalden)`);
           else if (!allowed.has(key)) issues.push(`${path}.config.rules.${key}: criterio desconocido`);
@@ -134,6 +136,7 @@ export const MODALITY_REGISTRY: Record<Modality, ModalitySpec> = {
         }
         if (rules.subcategoryId !== undefined && rules.categoryId === undefined) issues.push(`${path}.config.rules.subcategoryId: requiere una categoría`);
         if (rules.onlyWithPrice !== undefined && typeof rules.onlyWithPrice !== 'boolean') issues.push(`${path}.config.rules.onlyWithPrice: debe ser verdadero o falso`);
+        if (rules.onlyVerifiedDiscount !== undefined && typeof rules.onlyVerifiedDiscount !== 'boolean') issues.push(`${path}.config.rules.onlyVerifiedDiscount: debe ser verdadero o falso`);
         out.rules = {
           order: (AUTO_ORDERS.includes(order as never) ? order : 'recientes') as AutomaticConfig['rules']['order'],
           limit: Number.isInteger(limit) ? limit : 1,
@@ -141,6 +144,7 @@ export const MODALITY_REGISTRY: Record<Modality, ModalitySpec> = {
           ...(typeof rules.subcategoryId === 'string' ? { subcategoryId: rules.subcategoryId } : {}),
           ...(typeof rules.merchant === 'string' ? { merchant: rules.merchant.toLowerCase() } : {}),
           ...(typeof rules.onlyWithPrice === 'boolean' ? { onlyWithPrice: rules.onlyWithPrice } : {}),
+          ...(typeof rules.onlyVerifiedDiscount === 'boolean' ? { onlyVerifiedDiscount: rules.onlyVerifiedDiscount } : {}),
         };
       }
       const refs = parseRefs(block.refs, `${path}.refs`, issues, [], 0, 0);
@@ -188,7 +192,37 @@ export const MODALITY_REGISTRY: Record<Modality, ModalitySpec> = {
           const link = parseLink(cfg.link, `${path}.config.link`, issues);
           if (link) out.link = link;
         }
-        const known = new Set(['headline', 'text', 'buttonLabel', 'imageUrl', 'link']);
+        // Rediseño (aditivo): variante, rótulo, cifra, segunda imagen y mensajes de la franja de confianza.
+        if (cfg.variant !== undefined) {
+          if (!(EDITORIAL_VARIANTS as readonly unknown[]).includes(cfg.variant)) issues.push(`${path}.config.variant: variante no válida`);
+          else if (cfg.variant !== 'plain') out.variant = cfg.variant as EditorialConfig['variant'];
+        }
+        for (const k of ['eyebrow', 'kicker'] as const) {
+          if (cfg[k] !== undefined) {
+            const t = str(cfg[k], k === 'eyebrow' ? 40 : 16);
+            if (!t) issues.push(`${path}.config.${k}: texto no válido (máx. ${k === 'eyebrow' ? 40 : 16} caracteres)`);
+            else out[k] = t;
+          }
+        }
+        if (cfg.imageUrl2 !== undefined) {
+          const u = typeof cfg.imageUrl2 === 'string' ? cfg.imageUrl2.trim() : '';
+          if (!isSafeImageUrl(u)) issues.push(`${path}.config.imageUrl2: debe ser una ruta propia (/…) o una URL https`);
+          else out.imageUrl2 = u;
+        }
+        if (cfg.items !== undefined) {
+          if (!Array.isArray(cfg.items) || cfg.items.length > 4) issues.push(`${path}.config.items: máximo 4 mensajes`);
+          else {
+            const items: Array<{ title: string; text?: string }> = [];
+            cfg.items.forEach((it, i) => {
+              const title = isObj(it) ? str(it.title, 40) : null;
+              const text = isObj(it) && it.text !== undefined ? str(it.text, 120) : undefined;
+              if (!isObj(it) || !title || (it.text !== undefined && !text) || Object.keys(it).some((k) => k !== 'title' && k !== 'text')) issues.push(`${path}.config.items[${i}]: mensaje no válido (título ≤ 40 y texto ≤ 120 caracteres)`);
+              else items.push({ title, ...(text ? { text } : {}) });
+            });
+            if (items.length) out.items = items;
+          }
+        }
+        const known = new Set(['headline', 'text', 'buttonLabel', 'imageUrl', 'link', 'variant', 'eyebrow', 'kicker', 'imageUrl2', 'items']);
         for (const k of Object.keys(cfg)) if (!known.has(k)) issues.push(`${path}.config.${k}: campo desconocido`);
         if (out.link && !out.buttonLabel) issues.push(`${path}.config.buttonLabel: un enlace necesita texto de botón`);
       }
@@ -250,7 +284,7 @@ export function validateBlock(raw: unknown, path = 'block'): ValidationResult<Bl
   const card = raw.card as CardKind;
   if (!CARD_KINDS.includes(card)) issues.push(`${path}.card: tarjeta no válida (${String(raw.card)})`);
   if (raw.visible !== undefined && typeof raw.visible !== 'boolean') issues.push(`${path}.visible: debe ser verdadero o falso`);
-  const known = new Set(['id', 'modality', 'format', 'width', 'title', 'card', 'config', 'refs', 'visible']);
+  const known = new Set(['id', 'modality', 'format', 'width', 'title', 'card', 'config', 'refs', 'visible', 'link', 'subtitle']);
   for (const k of Object.keys(raw)) if (!known.has(k)) issues.push(`${path}.${k}: campo desconocido`);
 
   let config: Block['config'] = {};
@@ -262,8 +296,16 @@ export function validateBlock(raw: unknown, path = 'block'): ValidationResult<Bl
     config = r.config;
     refs = r.refs;
   }
+  // Rediseño (aditivo): enlace «Ver todo ›» y subtítulo del bloque.
+  let link: Block['link'];
+  if (raw.link !== undefined) link = parseLink(raw.link, `${path}.link`, issues) as Block['link'];
+  let subtitle: string | undefined;
+  if (raw.subtitle !== undefined) {
+    subtitle = str(raw.subtitle, 120) ?? undefined;
+    if (!subtitle) issues.push(`${path}.subtitle: texto no válido (máx. 120 caracteres)`);
+  }
   if (issues.length) return { ok: false, errors: issues };
-  return { ok: true, value: { id, modality, format, width, title, card, config, refs, visible: raw.visible !== false } };
+  return { ok: true, value: { id, modality, format, width, title, card, config, refs, visible: raw.visible !== false, ...(link ? { link } : {}), ...(subtitle ? { subtitle } : {}) } };
 }
 
 export function validateBlocks(raw: unknown, path = 'blocks'): ValidationResult<Block[]> {

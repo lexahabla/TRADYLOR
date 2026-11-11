@@ -66,3 +66,11 @@ Sólo se muestran las **publicadas** sin errores contra el catálogo actual; los
 ## Pruebas
 
 `home-layout-public.test.mjs`, `home-layout-activation.test.mjs`, `home-layout-stories-public.test.mjs` (más las de las etapas 1-5 actualizadas). Recuperación probada contra el build de producción con errores inyectados en un entorno aislado (fallo en bloque superior, inferior, historias, archivos dañados o ausentes, versión inexistente): siempre 200, página completa e idéntica a la portada de siempre. `import-actions.test.mjs` ya no usa esperas fijas: `wait()` espera a que termine el flujo del cliente simulado (máx. 10 s) y `waitDebounce()`/`waitFor()` esperan al antirrebote y al sondeo; la incidencia intermitente (fallaba con la CPU saturada) quedó resuelta.
+
+## Rediseño de portada y navegación de categorías (11/11/2026, LOCAL, sin publicar)
+
+Rama `feature/rediseno-portada`. La cabecera y la navegación NO cambian; sólo el panel que abre el botón «Categorías» (`Layout.astro`, clases `cm2-*`): escritorio = categorías a la izquierda y subcategorías a la derecha (ratón, teclado, Esc, clic fuera, «Ver toda la categoría», «Ver todas las categorías»); móvil = acordeón a pantalla completa. Nueva página `/categorias` (`pages/categorias.astro`) con categorías y subcategorías reales e imagen de producto real o icono.
+
+Modelo (sólo campos opcionales aditivos; los bloques guardados siguen siendo válidos): formato `lista` (numerada, ≤ 10), variantes editoriales con `eyebrow`/`kicker`/`imageUrl2`/`items`, `Block.link` («Ver todo») y `Block.subtitle`, orden `descuento_desc` y regla «Solo con bajada VERIFICADA» (`onlyVerifiedDiscount`; sólo observaciones verificadas, nunca el precio anterior suelto). Tarjeta `home/HomeProductCard.astro`. Sin datos inventados: «Los 5 más económicos» ordena por precio, sin afirmar popularidad.
+
+Cargar el diseño: pestaña B → «Nuevo diseño de la portada» (`POST /api/admin/home-layout/initial {action:'load_design'}`) lo deja como BORRADOR sólo si el borrador es la v1 sin modificar; no publica ni activa. Restaurar la portada anterior: pestaña B → versiones → «Recuperar», o desactivar la portada nueva (vuelve la de siempre). Pruebas: `home-layout-design.test.mjs`.
