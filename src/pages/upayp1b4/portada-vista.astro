@@ -1,0 +1,79 @@
+---
+/**
+ * TREIDILOR — /upayp1b4/portada-vista: vista previa FIEL de la portada para el editor (se muestra dentro de un <iframe> del propio administrador).
+ * Pinta los bloques con la MISMA página y los MISMOS componentes que la web pública (`index.astro` + `HomeLayoutBlocks`, mismas reglas de visibilidad,
+ * selección automática, historias y enlaces: `composeHome`). No guarda, no publica y no activa nada; no cuenta visitas.
+ *
+ *  · POST (formulario del editor, campo `blocks` = JSON): previsualiza lo que hay en el editor aunque no esté guardado. Mismo origen obligatorio.
+ *  · GET ?source=draft|published | ?version=N: previsualiza lo guardado.
+ * Sólo administradores. Los enlaces y botones de la vista previa no navegan ni guardan nada (ver el script de aislamiento).
+ */
+export const prerender = false;
+
+import Index from '../index.astro';
+import { getSessionUser } from '../../lib/adminAuth';
+import { sameOrigin } from '../../lib/alertsHttp';
+import { readHomeLayout } from '../../lib/homeLayout/store';
+import { findVersion } from '../../lib/homeLayout/publish';
+import { validateBlocks } from '../../lib/homeLayout/validate';
+import type { Block } from '../../lib/homeLayout/types';
+
+const MAX_BYTES = 300 * 1024;
+Astro.response.headers.set('Cache-Control', 'no-store');
+Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+
+const user = getSessionUser(Astro.request);
+if (!user) return Astro.redirect('/upayp1b4');
+if (user.role !== 'admin') return new Response('Sólo administradores', { status: 403 });
+
+let blocks: Block[] | null = null;
+let problem = '';
+if (Astro.request.method === 'POST') {
+  if (!sameOrigin(Astro.request)) return new Response('Origen no permitido', { status: 403 });
+  const declared = Number(Astro.request.headers.get('content-length'));
+  if (Number.isFinite(declared) && declared > MAX_BYTES) return new Response('Contenido demasiado grande', { status: 413 });
+  try {
+    const form = await Astro.request.formData();
+    const raw = String(form.get('blocks') ?? '');
+    if (raw.length > MAX_BYTES) return new Response('Contenido demasiado grande', { status: 413 });
+    const parsed = validateBlocks(JSON.parse(raw));
+    if (parsed.ok) blocks = parsed.value;
+    else problem = 'Hay bloques que todavía no son válidos (complétalos en el editor para verlos aquí).';
+  } catch {
+    problem = 'No se pudo leer el contenido de la vista previa.';
+  }
+} else if (Astro.request.method === 'GET') {
+  const read = readHomeLayout();
+  const p = Astro.url.searchParams;
+  const v = p.get('version');
+  if (v !== null) {
+    const found = /^\d{1,4}$/.test(v) ? findVersion(read.doc, Number(v)) : null;
+    if (found) blocks = found.blocks;
+    else problem = 'Esa versión no existe.';
+  } else if (p.get('source') === 'published') {
+    if (read.doc.published) blocks = read.doc.published.blocks;
+    else problem = 'Todavía no hay ninguna versión publicada.';
+  } else blocks = read.doc.draft.blocks;
+} else return new Response('Método no permitido', { status: 405, headers: { Allow: 'GET, POST' } });
+
+const empty = !blocks || blocks.length === 0;
+---
+
+{
+  empty || !blocks ? (
+    <html lang="es">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="robots" content="noindex, nofollow" />
+        <title>Vista previa</title>
+        <style is:inline>{`body{margin:0;display:grid;place-items:center;min-height:100vh;background:#0b1020;color:#cbd5e1;font:15px/1.5 system-ui,sans-serif;text-align:center;padding:2rem}`}</style>
+      </head>
+      <body>
+        <p>{problem || 'No hay bloques que previsualizar.'}</p>
+      </body>
+    </html>
+  ) : (
+    <Index previewBlocks={blocks} />
+  )
+}

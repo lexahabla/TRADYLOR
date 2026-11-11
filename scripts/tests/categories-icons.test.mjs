@@ -66,7 +66,7 @@ test('la web pública no pinta icono en subcategorías (menú de categorías, li
 test('migas: INICIO / CATEGORÍA y, en una subcategoría, INICIO / CATEGORÍA PADRE / SUBCATEGORÍA con enlaces', () => {
   const index = read('src/pages/index.astro');
   assert.ok(index.includes('const parentCategory = activeCategory?.parentId'));
-  assert.ok(index.includes('href={`/?category=${encodeURIComponent(parentCategory.slug)}#catalogo`} class="section-crumb-link">{parentCategory.name}</a>'));
+  assert.ok(index.includes('href={`${catalogBase}?category=${encodeURIComponent(parentCategory.slug)}#catalogo`} class="section-crumb-link">{parentCategory.name}</a>'));
   assert.ok(index.includes('<span aria-current="page">{activeCategory.name}</span>'));
 });
 

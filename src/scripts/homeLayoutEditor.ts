@@ -616,72 +616,71 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
     );
   }
 
-  /* ---- Vista previa (de lo que hay en el editor, guardado o no) ---- */
-  function pvImg(src: string | null, alt = ''): HTMLElement {
-    return src ? h('img', { src, alt, loading: 'lazy', referrerpolicy: 'no-referrer', onerror: (e: any) => { e.target.replaceWith(document.createTextNode('🖼')); } }) : h('span', { class: 'pv-noimg' }, '🖼');
+  /* ---- Vista previa FIEL: la página real de la portada (los mismos componentes que la web) dentro de un iframe del propio administrador ---- */
+  // `/upayp1b4/portada-vista` recibe los bloques del editor por POST (guardados o no), los valida y los pinta con `index.astro` + `HomeLayoutBlocks`:
+  // mismas reglas de visibilidad, datos reales, tarjetas, carruseles y estilos que ve el visitante. Escritorio = 1280 px reales (escalados al ancho
+  // disponible); móvil = 390 px reales (los puntos de ruptura responden de verdad). Cada ventana se desplaza por sí sola hasta el último bloque.
+  const PV_URL = '/upayp1b4/portada-vista';
+  const PV_DESKTOP_W = 1280;
+  const PV_MOBILE_W = 390;
+  interface PvLive { box: HTMLElement; win: HTMLElement; frame: HTMLIFrameElement; form: HTMLFormElement; input: HTMLInputElement; mobile: boolean; sent: string; chip: HTMLElement }
+  let pvUid = 0;
+  function pvMake(label: string, mobile: boolean, chipText: string): PvLive {
+    const name = `pv-frame-${++pvUid}`;
+    const frame = h('iframe', { class: 'pe-pvframe', name, title: `${label}: portada tal y como la verá el visitante`, sandbox: 'allow-scripts allow-same-origin', referrerpolicy: 'no-referrer' }) as HTMLIFrameElement;
+    const input = h('input', { type: 'hidden', name: 'blocks' }) as HTMLInputElement;
+    const form = h('form', { method: 'post', action: PV_URL, target: name, hidden: true }, input) as HTMLFormElement;
+    const win = h('div', { class: `pe-pvwin pe-pvwin-if${mobile ? ' is-phone' : ''}` }, frame);
+    const chip = h('span', { class: 'pe-chip-s' }, chipText);
+    const box = h('div', { class: 'pe-pvbox' }, h('h3', {}, label, chip), win, form);
+    return { box, win, frame, form, input, mobile, sent: '', chip };
   }
-  function pvCard(it: { title: string; price?: number | null; image?: string | null; missing?: boolean }): HTMLElement {
-    return h('div', { class: `pv-card${it.missing ? ' is-missing' : ''}` }, h('div', { class: 'pv-im' }, pvImg(it.image ?? null)), h('div', { class: 'pv-tt' }, it.title), it.price ? h('div', { class: 'pv-pr' }, eur(it.price)) : null);
+  /** Escala el iframe al ancho de su ventana (nunca amplía). Hay que llamarla con la caja ya insertada y visible en el documento. */
+  function pvFit(p: PvLive) {
+    const nat = p.mobile ? PV_MOBILE_W : PV_DESKTOP_W;
+    const w = p.win.clientWidth;
+    const hh = p.win.clientHeight;
+    if (!w || !hh) return;
+    const sc = Math.min(1, w / nat);
+    p.frame.style.width = `${nat}px`;
+    p.frame.style.height = `${Math.round(hh / sc)}px`;
+    p.frame.style.transform = `scale(${sc})`;
+    p.frame.style.transformOrigin = '0 0';
   }
-  /** Elementos de un bloque: los del servidor (datos reales) y, mientras llegan, los que ya se conocen por etiqueta. */
-  function itemsOf(b: Block, data: PvData): { items: PItem[]; note?: string; auto?: BlockPreview['auto'] } {
-    const d = data[b.id];
-    if (d) return { items: d.auto ? d.auto.items : d.items, note: d.note, auto: d.auto };
-    if (b.modality === 'manual') return { items: b.refs.map((r) => ({ kind: r.kind === 'category' ? 'category' : 'product', id: r.id, title: labelOf(r), price: info.get(key(r))?.price ?? null, image: null, network: '', inStock: null }) as PItem) };
-    return { items: [] };
+  /** Envía los bloques a la vista previa (sólo si cambiaron) conservando la posición de desplazamiento. */
+  function pvSend(p: PvLive, blocks: Block[]) {
+    const json = JSON.stringify(blocks);
+    if (json === p.sent) return;
+    let y = 0;
+    try { y = p.frame.contentWindow?.scrollY ?? 0; } catch { y = 0; }
+    p.sent = json;
+    p.input.value = json;
+    const restore = () => { p.frame.removeEventListener('load', restore); try { p.frame.contentWindow?.scrollTo(0, y); } catch { /* sin acceso: se queda arriba */ } };
+    if (y > 0) p.frame.addEventListener('load', restore);
+    p.form.submit();
   }
-  function pvBlock(b: Block, mobile: boolean, data: PvData = state.pv): HTMLElement {
-    const span = mobile ? (b.width === 3 ? 6 : 12) : b.width;
-    const el = h('div', { class: `pv-bk${b.visible ? '' : ' is-off'}`, style: `grid-column: span ${span}` });
-    const title = b.modality === 'editorial' ? (b.config as { headline?: string }).headline || b.title : b.title;
-    if (!b.visible) el.append(h('div', { class: 'pv-hidden' }, `Oculto: ${b.title}`));
-    else if (b.modality === 'editorial') {
-      const c = b.config as { text?: string; buttonLabel?: string; imageUrl?: string };
-      el.append(h('div', { class: `pv-ban${c.imageUrl ? ' has-img' : ''}` }, c.imageUrl ? h('img', { class: 'pv-ban-img', src: c.imageUrl, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer', onerror: (e: any) => { e.target.remove(); } }) : null, h('h4', {}, title), c.text ? h('p', {}, c.text) : null, c.buttonLabel ? h('span', { class: 'pv-btn' }, c.buttonLabel) : null));
-    } else {
-      const { items, note, auto } = itemsOf(b, data);
-      const max = b.format === 'cuadricula2x2' ? 4 : 8;
-      el.append(h('div', { class: 'pv-bt' }, b.title));
-      if (b.modality === 'automatica') {
-        const r = (b.config as { rules: { categoryId?: string; merchant?: string; order: string; limit: number } }).rules;
-        el.append(h('div', { class: 'pv-auto' }, `Selección automática · ${r.categoryId ? labelOf({ kind: 'category', id: r.categoryId }) : 'todas las categorías'}${r.merchant ? ` · ${r.merchant}` : ''} · ${ORDER_LABEL[r.order] ?? r.order} · hasta ${r.limit}`));
-        if (auto && auto.status !== 'ok') { el.append(h('div', { class: 'pv-hidden' }, auto.message ?? 'La selección no devuelve productos')); return el; }
-      }
-      if (note) { el.append(h('div', { class: 'pv-hidden' }, note)); return el; }
-      const shown = items.slice(0, max);
-      if (!shown.length) { el.append(h('div', { class: 'pv-hidden' }, b.modality === 'seccion' && !b.refs.length ? 'Elige una sección' : b.modality === 'automatica' ? 'Calculando…' : 'Sin elementos')); return el; }
-      if (b.format !== 'cuadricula2x2' && shown.length < items.length) el.append(h('div', { class: 'pv-more' }, `+${items.length - shown.length}`));
-      el.append(h('div', { class: b.format === 'cuadricula2x2' ? 'pv-grid' : 'pv-rail' }, ...shown.map((it) => pvCard(it))));
-    }
-    return el;
+  const previewNote = () => h('p', { class: 'pe-note pe-pvnote' }, 'Vista previa fiel: es la propia portada, con los mismos componentes, estilos y datos reales que ve el visitante (sin cabecera ni pie). Desplázate dentro de cada ventana para recorrerla entera: los bloques que se ocultan por falta de datos no aparecen, igual que en la web. Los enlaces y botones de la vista no navegan ni guardan nada.');
+  /** Cajas de una versión guardada (pestaña B): mismo iframe, bloques fijos. */
+  function pvFrame(label: string, mobile: boolean, blocks: Block[] = state.blocks, chip: string = state.dirty ? 'con cambios sin guardar' : 'borrador guardado', _data?: PvData): HTMLElement {
+    const p = pvMake(label, mobile, chip);
+    requestAnimationFrame(() => { if (!p.box.isConnected) return; pvFit(p); pvSend(p, blocks); });
+    return p.box;
   }
-  function pvFrame(label: string, mobile: boolean, blocks: Block[] = state.blocks, chip: string = state.dirty ? 'con cambios sin guardar' : 'borrador guardado', data: PvData = state.pv): HTMLElement {
-    const inner = h('div', { class: `pv${mobile ? ' is-m' : ''}` },
-      h('div', { class: 'pv-hd' }, h('b', {}, 'Treidilor'), h('span', {}, '🔍 Buscar productos…')),
-      h('div', { class: 'pv-grid12' }, ...blocks.map((b) => pvBlock(b, mobile, data))));
-    const win = h('div', { class: `pe-pvwin${mobile ? ' is-phone' : ''}` }, inner);
-    return h('div', { class: 'pe-pvbox' }, h('h3', {}, label, h('span', { class: 'pe-chip-s' }, chip)), win);
-  }
-  const previewNote = () => h('p', { class: 'pe-note pe-pvnote' }, 'Vista aproximada con los datos reales del catálogo (imágenes, títulos, precios, orden, anchos y selección automática). En la web, las tarjetas de producto usan el diseño habitual del sitio.');
-  /** Escala: escritorio = 1200 px virtuales; móvil = 390 px virtuales. Hay que llamarla con las cajas ya insertadas en el documento. */
-  function scalePreviews(boxes: Array<[HTMLElement, number]>) {
-    for (const [box, nat] of boxes) {
-      const win = box.querySelector('.pe-pvwin') as HTMLElement;
-      const inner = win.firstElementChild as HTMLElement;
-      const w = Math.max(200, win.clientWidth || (nat === 390 ? 280 : 640));
-      const s = w / nat;
-      inner.style.width = `${nat}px`;
-      inner.style.transform = `scale(${s})`;
-      inner.style.transformOrigin = '0 0';
-      win.style.height = `${Math.min(inner.scrollHeight * s, 560)}px`;
-    }
-  }
+  let pvLive: { d: PvLive; m: PvLive } | null = null;
+  let pvTimer: number | undefined;
+  const pvChip = () => (state.dirty ? 'con cambios sin guardar' : 'borrador guardado');
   function renderPreviews() {
-    clear(previews);
-    const d = pvFrame('Vista previa · escritorio', false);
-    const m = pvFrame('Vista previa · móvil', true);
-    previews.append(d, m, previewNote());
-    scalePreviews([[d, 1200], [m, 390]]);
+    if (!pvLive || !previews.contains(pvLive.d.box)) {
+      clear(previews);
+      pvLive = { d: pvMake('Vista previa · escritorio', false, pvChip()), m: pvMake('Vista previa · móvil', true, pvChip()) };
+      previews.append(pvLive.d.box, pvLive.m.box, previewNote());
+      requestAnimationFrame(() => { if (!pvLive) return; for (const p of [pvLive.d, pvLive.m]) { pvFit(p); pvSend(p, state.blocks); } });
+      return;
+    }
+    const live = pvLive;
+    for (const p of [live.d, live.m]) { p.chip.textContent = pvChip(); pvFit(p); }
+    window.clearTimeout(pvTimer);
+    pvTimer = window.setTimeout(() => { for (const p of [live.d, live.m]) pvSend(p, state.blocks); }, 500);
   }
 
   /* ---- Pestaña B · Publicación y versiones (etapa 4) ---- */
@@ -1093,11 +1092,10 @@ export function initHomeLayoutEditor(root: HTMLElement): void {
         versionsPane.append(box);
       } else {
         const blocks = d.blocks ?? [];
-        const dsk = pvFrame('Escritorio', false, blocks, d.chip ?? '', d.data ?? {});
-        const mob = pvFrame('Móvil', true, blocks, d.chip ?? '', d.data ?? {});
+        const dsk = pvFrame('Escritorio', false, blocks, d.chip ?? '');
+        const mob = pvFrame('Móvil', true, blocks, d.chip ?? '');
         box.append(blocks.length ? h('div', { class: 'pe-previews' }, dsk, mob) : h('p', { class: 'pe-note' }, 'Esta versión no tiene bloques.'), previewNote());
         versionsPane.append(box);
-        scalePreviews([[dsk, 1200], [mob, 390]]);
       }
     }
   }

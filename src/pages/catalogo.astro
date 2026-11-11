@@ -1,0 +1,12 @@
+---
+/**
+ * TREIDILOR — /catalogo: el catálogo completo (productos, búsqueda, filtros, ordenación y paginación) como página independiente de la portada.
+ * Reutiliza el listado de `index.astro` (mismo código, mismos filtros y mismos enlaces a fichas) con `catalogPage`: sin módulos editoriales ni
+ * portada nueva. Los enlaces antiguos `/?q=…`, `/?category=…#catalogo` etc. siguen funcionando en `/`.
+ */
+export const prerender = false;
+
+import Index from './index.astro';
+---
+
+<Index catalogPage />

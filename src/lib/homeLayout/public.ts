@@ -79,7 +79,7 @@ export interface PublicStory {
 }
 export type PublicHome =
   | { mode: 'legacy'; reason: string }
-  | { mode: 'layout'; version: number; publishedAt: string; top: PublicBlock[]; bottom: PublicBlock[]; stories: PublicStory[] };
+  | { mode: 'layout'; version: number; publishedAt: string; top: PublicBlock[]; bottom: PublicBlock[]; stories: PublicStory[]; independent: boolean };
 
 export interface PublicDeps {
   env?: Record<string, string | undefined>;
@@ -107,6 +107,38 @@ export function localImageExists(p: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * ¿La portada es INDEPENDIENTE del catálogo? Lo es la portada del REDISEÑO: la que usa alguna presentación editorial del rediseño (hero, campaña,
+ * guía o confianza) o una lista numerada. Esa portada no pinta el listado general debajo: el catálogo completo vive en `/catalogo` y los enlaces
+ * `/?…#catalogo` (y `/#catalogo`) se reescriben a `/catalogo?…`. La portada de la v1 (sin esos elementos) conserva el catálogo debajo y su ancla
+ * `#catalogo`, exactamente como hasta ahora.
+ */
+export function isIndependentFromCatalog(blocks: readonly Block[]): boolean {
+  return blocks.some((b) => {
+    if (b.format === 'lista') return true;
+    if (b.modality !== 'editorial') return false;
+    const v = (b.config as { variant?: string }).variant;
+    return v === 'hero' || v === 'campaign' || v === 'guide' || v === 'trust';
+  });
+}
+
+/** `/?category=x#catalogo` → `/catalogo?category=x` (sólo rutas propias del listado; el resto no cambia). */
+export function toCatalogHref(href: string): string {
+  const m = /^\/\?([^#]*)(#.*)?$/.exec(href);
+  if (m) return `/catalogo${m[1] ? `?${m[1]}` : ''}`;
+  if (/^\/#catalogo$/.test(href)) return '/catalogo';
+  return href;
+}
+
+function mapHrefs(b: PublicBlock): PublicBlock {
+  return {
+    ...b,
+    ...(b.seeAll ? { seeAll: toCatalogHref(b.seeAll) } : {}),
+    ...(b.editorial?.href && !b.editorial.external ? { editorial: { ...b.editorial, href: toCatalogHref(b.editorial.href) } } : {}),
+    ...(b.categories ? { categories: b.categories.map((c) => ({ ...c, href: toCatalogHref(c.href) })) } : {}),
+  };
 }
 
 const productHref = (id: string) => `/producto/${encodeURIComponent(id)}`;
@@ -231,17 +263,29 @@ export function buildPublicHome(deps: PublicDeps = {}): PublicHome {
     const version: PublishedLayout | null = selectActiveVersion(read.doc, act.doc);
     if (!version) return legacy('version_fijada_no_disponible');
 
+    return composeHome(version.blocks, { version: version.version, publishedAt: version.publishedAt }, deps);
+  } catch {
+    return legacy('error_interno');
+  }
+}
+
+/**
+ * Compone el plan público de UNOS bloques concretos con la MISMA lógica que la web (visibilidad, selección automática, secciones, historias y
+ * enlaces). Lo usa `buildPublicHome` (versión fijada) y la vista previa del editor (bloques del borrador, guardados o no). No lanza ni escribe.
+ */
+export function composeHome(blocks: readonly Block[], meta: { version: number; publishedAt: string }, deps: PublicDeps = {}): PublicHome {
+  try {
     const src = (deps.sources ?? loadSources)();
     if (src.status.products.status === 'error') return legacy('catalogo_no_disponible');
     const descriptions = (deps.sectionDescriptions ?? (() => new Map(readSections().filter((s) => s.description).map((s) => [s.id, String(s.description)]))))();
-    const resolved = resolveBlocks(version.blocks, src, { runAutomatic: true }).blocks;
+    const resolved = resolveBlocks([...blocks], src, { runAutomatic: true }).blocks;
     const rbById = new Map(resolved.map((r) => [r.id, r]));
 
     const top: PublicBlock[] = [];
     const bottom: PublicBlock[] = [];
     const seenSections = new Set<string>();
     const referenced = new Set<string>();
-    for (const b of version.blocks) {
+    for (const b of blocks) {
       if (b.modality === 'seccion' && b.refs[0]) referenced.add(b.refs[0].id);
       const rb = rbById.get(b.id);
       if (!b.visible || !rb || rb.visible !== true) continue;
@@ -273,7 +317,9 @@ export function buildPublicHome(deps: PublicDeps = {}): PublicHome {
     } catch {
       stories = [];
     }
-    return { mode: 'layout', version: version.version, publishedAt: version.publishedAt, top, bottom, stories };
+    const independent = isIndependentFromCatalog(blocks);
+    const fin = (list: PublicBlock[]) => (independent ? list.map(mapHrefs) : list);
+    return { mode: 'layout', version: meta.version, publishedAt: meta.publishedAt, top: fin(top), bottom: fin(bottom), stories, independent };
   } catch {
     return legacy('error_interno');
   }

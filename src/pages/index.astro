@@ -6,7 +6,8 @@ import { getCatalogProducts } from '../lib/catalog';
 import { readSections } from '../lib/sections';
 import HomeLayoutBlocks from '../components/home/HomeLayoutBlocks.astro';
 import HomeStories from '../components/home/HomeStories.astro';
-import { buildPublicHome } from '../lib/homeLayout/public';
+import { buildPublicHome, composeHome } from '../lib/homeLayout/public';
+import type { Block } from '../lib/homeLayout/types';
 import { getCategoryById } from '../lib/categories';
 import CatalogFilters from '../components/CatalogFilters.astro';
 import { buildListing, hasActiveFilters, listingHref, makeCategoryResolver, parseListingParams } from '../lib/catalogListing';
@@ -14,6 +15,13 @@ import { applyCatalogDiversity } from '../lib/catalogDiversity';
 import { getGlobalCatalogSort, sortCatalogProducts, DIVERSITY_EXEMPT_SORTS } from '../lib/catalogSort';
 
 export const prerender = false;
+
+// Esta misma página sirve: `/` (portada), `/catalogo` (catálogo completo, prop `catalogPage`) y la vista previa del editor (`/upayp1b4/portada-vista`,
+// prop `previewBlocks`: los bloques del borrador pintados con los MISMOS componentes que la web pública).
+const pageProps = (Astro.props ?? {}) as { catalogPage?: boolean; previewBlocks?: Block[] };
+const catalogPage = Boolean(pageProps.catalogPage);
+const previewBlocks = Array.isArray(pageProps.previewBlocks) ? pageProps.previewBlocks : null;
+const catalogBase = catalogPage ? '/catalogo' : '/';
 
 const allProducts = getCatalogProducts();
 
@@ -50,7 +58,7 @@ const listingMode = Boolean(queryParam) || filtersActive;
 // Sólo con los TRES candados abiertos (código + HOME_LAYOUT_ENABLED + activación del administrador con versión fijada). `buildPublicHome`
 // nunca lanza: ante cualquier fallo devuelve «legacy» y se pinta la portada de siempre (secciones, catálogo, método). Con búsqueda o filtros
 // activos los resultados comerciales mandan, como hasta ahora: no se pinta nada editorial.
-const publicHome = listingMode ? null : buildPublicHome();
+const publicHome = catalogPage ? null : previewBlocks ? composeHome(previewBlocks, { version: 0, publishedAt: '' }) : listingMode ? null : buildPublicHome();
 let layoutHome = publicHome && publicHome.mode === 'layout' ? publicHome : null;
 const layoutProducts: Record<string, any> = {};
 if (layoutHome) {
@@ -71,7 +79,7 @@ if (layoutHome) {
     layoutHome = null;
   }
 }
-const belowSectionsToRender = layoutHome ? [] : belowCatalogSections;
+const belowSectionsToRender = layoutHome || catalogPage ? [] : belowCatalogSections;
 // El panel de filtros sólo aparece al buscar (buscador de la cabecera) o al elegir una categoría; con filtros ya en la URL también, para no ocultarlos.
 const showFilters = Boolean(queryParam) || listingParams.category.length > 0 || filtersActive;
 const visibleProducts = listing.filtered;
@@ -88,9 +96,9 @@ const rawActiveSort = userSortQuery || cookieSessionSort || globalDefaultSort;
 const normalizedActiveSort = rawActiveSort === 'precio-desc' ? 'precio_desc' : (rawActiveSort === 'precio-asc' ? 'precio_asc' : rawActiveSort);
 const activeSort = normalizedActiveSort || 'score';
 
-const sortHref = (sortKey: string) => listingHref(listingParams, { sort: sortKey });
+const sortHref = (sortKey: string) => listingHref(listingParams, { sort: sortKey, base: catalogBase });
 
-const pageHref = (page: number) => listingHref(listingParams, { sort: activeSort, page });
+const pageHref = (page: number) => listingHref(listingParams, { sort: activeSort, page, base: catalogBase });
 
 // ─── Ordenación con el motor centralizado ───────────────────────────────────
 const sorted = sortCatalogProducts(visibleProducts, activeSort);
@@ -135,12 +143,18 @@ const buildPageRange = (current: number, total: number) => {
 };
 const pageRange = buildPageRange(currentPage, totalPages);
 
-const aboveCatalogSections = listingMode ? [] : aboveCatalogSectionsAll;
+const aboveCatalogSections = listingMode || catalogPage ? [] : aboveCatalogSectionsAll;
 const aboveSectionsToRender = layoutHome ? [] : aboveCatalogSections;
-const rangeHrefs = (listing.price?.ranges ?? []).map((r) => listingHref({ ...listingParams, min: r.min, max: r.max }, { sort: listingParams.sort }));
-const clearHref = listingHref({ ...listingParams, category: [], brand: [], attrs: {}, min: undefined, max: undefined, deal: false });
+const rangeHrefs = (listing.price?.ranges ?? []).map((r) => listingHref({ ...listingParams, min: r.min, max: r.max }, { sort: listingParams.sort, base: catalogBase }));
+const clearHref = listingHref({ ...listingParams, category: [], brand: [], attrs: {}, min: undefined, max: undefined, deal: false }, { base: catalogBase });
 
-const pageTitle = "Treidilor | Portal de Curación, Análisis y Ofertas Verificadas";
+// Portada independiente del catálogo: no pinta el listado general (vive en /catalogo). Sólo si el diseño no enlaza a «#catalogo» de la propia portada.
+const showCatalog = previewBlocks ? Boolean(layoutHome && !layoutHome.independent) : !layoutHome || !layoutHome.independent;
+const previewNothing = Boolean(previewBlocks && !layoutHome);
+
+// Vista previa del editor (iframe del administrador): sin cabecera, pie ni widgets; los enlaces y botones no navegan ni guardan nada.
+const PREVIEW_CSS = `html{overscroll-behavior:contain}body{overscroll-behavior:contain}header,.site-header,footer,.site-footer,#aviso-legal,.anchor-offset,.asistente-fab,[data-asistente],#asistenteWidget,.cookie-banner,[data-cookie-banner],#radarDrawer,.nav-bar,#mainNav{display:none!important}body{padding-top:0!important}`;
+const pageTitle = catalogPage ? "Catálogo completo | Treidilor" : "Treidilor | Portal de Curación, Análisis y Ofertas Verificadas";
 const pageDescription = "Descubre las mejores selecciones y comparativas de producto. Análisis honestos, pros y contras objetivos y enlaces de compra verificados con las mejores ofertas.";
 
 const formatCurrency = (amount: number) =>
@@ -149,7 +163,9 @@ const formatCurrency = (amount: number) =>
 // (el contador de «ahorro total» se retiró: no es demostrable; los descuentos sólo se muestran si están verificados)
 ---
 
-<Layout title={pageTitle} description={pageDescription}>
+<Layout title={pageTitle} description={pageDescription} noindex={Boolean(previewBlocks)}>
+  {previewBlocks && <style is:inline set:html={PREVIEW_CSS}></style>}
+  {previewNothing && <p style="padding:2rem;text-align:center;color:#cbd5e1">Con este contenido no hay nada visible todavía (bloques ocultos o sin datos).</p>}
   {layoutHome && <HomeStories stories={layoutHome.stories} />}
   {layoutHome && <HomeLayoutBlocks blocks={layoutHome.top} products={layoutProducts} region="top" />}
   <!-- ============================================================
@@ -180,7 +196,9 @@ const formatCurrency = (amount: number) =>
   <!-- ============================================================
        1. SECCIÓN CATÁLOGO COMPLETO: Todos los Productos (paginado)
        ============================================================ -->
+  {showCatalog && (<>
   <section class="catalog-section" id="catalogo">
+    {catalogPage && <h1 style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap">Catálogo completo de productos</h1>}
     <div class="container">
       <div class="catalog-header-bar">
         <div class="section-header">
@@ -191,7 +209,7 @@ const formatCurrency = (amount: number) =>
                 <span class="section-crumb-sep" aria-hidden="true">/</span>
                 {parentCategory ? (
                   <>
-                    <a href={`/?category=${encodeURIComponent(parentCategory.slug)}#catalogo`} class="section-crumb-link">{parentCategory.name}</a>
+                    <a href={`${catalogBase}?category=${encodeURIComponent(parentCategory.slug)}#catalogo`} class="section-crumb-link">{parentCategory.name}</a>
                     <span class="section-crumb-sep" aria-hidden="true">/</span>
                     <span aria-current="page">{activeCategory.name}</span>
                   </>
@@ -212,7 +230,7 @@ const formatCurrency = (amount: number) =>
           {queryTerm && (
             <p class="filter-note">
               Resultados para <strong>«{queryParam}»</strong> ({diversified.length}) ·{' '}
-              <a href={listingHref({ ...listingParams, q: '' })}>Quitar búsqueda</a>
+              <a href={listingHref({ ...listingParams, q: '' }, { base: catalogBase })}>Quitar búsqueda</a>
             </p>
           )}
         </div>
@@ -220,6 +238,7 @@ const formatCurrency = (amount: number) =>
 
       <div class:list={['catalog-layout', { 'has-filters': showFilters }]}>
       {showFilters && <CatalogFilters
+        base={catalogBase}
         groups={listing.groups}
         price={listing.price}
         deals={listing.deals}
@@ -301,7 +320,7 @@ const formatCurrency = (amount: number) =>
                 <a href={clearHref}>Quitar todos los filtros</a>
               </>
             ) : (
-              <a href="/">Ver todo el catálogo</a>
+              <a href={catalogBase}>Ver todo el catálogo</a>
             )}
           </div>
         ) : paginatedProducts.map((item) => (
@@ -352,10 +371,12 @@ const formatCurrency = (amount: number) =>
       </div>
     </div>
   </section>
+  </>)}
 
   <!-- ============================================================
        2. HERO SECTION: Propuesta de Valor Estratégica (bajo el catálogo)
        ============================================================ -->
+  {showCatalog && !catalogPage && (
   <section class="hero-section">
     <div class="container hero-container">
       <div class="hero-badge">
@@ -388,11 +409,18 @@ const formatCurrency = (amount: number) =>
       </div>
     </div>
   </section>
+  )}
 
   <!-- ============================================================
        4. EL MÉTODO (3 pasos + herramientas integradas)
        ============================================================ -->
-  <MethodSection />
+  {!catalogPage && !previewNothing && showCatalog && <MethodSection />}
+  {layoutHome && layoutHome.independent && !previewBlocks && (
+    <script is:inline>
+      // La portada del rediseño no pinta «El método»: el enlace de la cabecera (#el-metodo) lleva a su página propia.
+      (function () { function go() { if (location.hash === '#el-metodo') location.replace('/metodologia'); } go(); window.addEventListener('hashchange', go); })();
+    </script>
+  )}
 
   <!-- ============================================================
        SECCIONES DINÁMICAS POR DEBAJO DEL CATÁLOGO (carrusel deslizable)
@@ -419,6 +447,20 @@ const formatCurrency = (amount: number) =>
       </div>
     </section>
   ))}
+  {previewBlocks && (
+    <script is:inline>
+      (function () {
+        // Vista previa: nada navega ni guarda. Los carruseles, las historias y el desplazamiento siguen funcionando.
+        window.addEventListener('click', function (e) {
+          var t = e.target; if (!(t && t.closest)) return;
+          if (t.closest('[data-radar-toggle],[data-stock-alert],[data-price-alert],[data-compare-toggle]')) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+          var a = t.closest('a[href]');
+          if (a) { e.preventDefault(); e.stopImmediatePropagation(); }
+        }, true);
+        window.addEventListener('submit', function (e) { e.preventDefault(); }, true);
+      })();
+    </script>
+  )}
 </Layout>
 
 <script>

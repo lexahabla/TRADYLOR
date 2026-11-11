@@ -258,8 +258,12 @@ const SPEED_TEXT: Record<string, string> = { slow: 'lenta', normal: 'normal', fa
   .pe-field select, .pe-field input { width: 100%; } .pe-static { font-size: .85rem; } .pe-sub { font-size: .8rem; font-weight: 700; margin-top: 12px; } .pe-check { display: flex; gap: .4rem; align-items: center; font-size: .82rem; margin-top: 10px; cursor: pointer; }
   .pe-refs, .pe-results { list-style: none; display: grid; gap: 6px; margin: 6px 0; } .pe-refs li, .pe-results li { display: flex; align-items: center; gap: 4px; background: var(--color-bg-body); border: 1px solid var(--color-border); border-radius: 9px; padding: 4px 8px; font-size: .8rem; }
   .pe-ref-l { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .pe-results { max-height: 220px; overflow-y: auto; }
-  .pe-previews { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px; margin-top: 16px; align-items: start; }
+  .pe-previews { display: grid; grid-template-columns: minmax(0, 1fr) 424px; gap: 14px; margin-top: 16px; align-items: start; }
   .pe-pvbox { border: 1px solid var(--color-border); border-radius: var(--border-radius-md); padding: 12px; background: rgba(255,255,255,.02); }
+  /* Vista previa fiel (iframe con la portada real): cada ventana tiene alto propio y se desplaza por sí sola. */
+  .pe-pvwin-if { height: clamp(440px, 78vh, 900px); overscroll-behavior: contain; }
+  .pe-pvwin-if.is-phone { box-sizing: border-box; width: min(100%, 396px); margin: 0 auto; height: clamp(480px, 78vh, 840px); }
+  .pe-pvframe { position: absolute; top: 0; left: 0; border: 0; background: #0b1020; display: block; max-width: none; }
   .pe-pvwin { position: relative; background: #0a0e17; border: 1px solid var(--color-border-hover); border-radius: 10px; overflow: hidden; } .pe-pvwin.is-phone { border-radius: 26px; border: 3px solid #2b3447; }
   .pv { position: absolute; top: 0; left: 0; color: #f3f4f6; font-family: var(--font-body); font-size: 15px; } .pv * { box-sizing: border-box; }
   .pv-hd { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid #1f2937; } .pv-hd span { flex: 1; border: 1px solid #374151; border-radius: 10px; padding: 8px 12px; color: #9ca3af; }

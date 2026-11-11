@@ -111,11 +111,11 @@ test('plan público: «Ver todo» sólo con destino válido, subtítulo, lista n
   const home = P.buildPublicHome({ env: { HOME_LAYOUT_ENABLED: 'true' }, stageEnabled: true, layout: () => ({ status: 'ok', doc, errors: [] }), activation: () => ({ status: 'ok', doc: { schemaVersion: 1, active: true, pinnedVersion: 1, updatedAt: 'x', log: [] }, errors: [] }), stories: () => ({ status: 'missing', doc: { schemaVersion: 1, draft: { stories: [], updatedAt: null } }, errors: [] }) });
   assert.equal(home.mode, 'layout');
   const by = Object.fromEntries([...home.top, ...home.bottom].map((b) => [b.id, b]));
-  assert.deepEqual([by.rk.format, by.rk.productIds.length, by.rk.subtitle, by.rk.seeAll], ['lista', 5, 'sub', '/?sort=precio_asc#catalogo']);
+  assert.deepEqual([by.rk.format, by.rk.productIds.length, by.rk.subtitle, by.rk.seeAll], ['lista', 5, 'sub', '/catalogo?sort=precio_asc']);
   assert.equal(by.bad.seeAll, undefined, 'un destino administrativo no se enlaza');
-  assert.deepEqual(by.cat.categories, [{ id: 'sonido', name: 'Sonido', href: '/?category=sonido#destacados', icon: '🎧', subs: 1 }]);
+  assert.deepEqual(by.cat.categories, [{ id: 'sonido', name: 'Sonido', href: '/catalogo?category=sonido', icon: '🎧', subs: 1 }]);
   assert.equal(by.cat.seeAll, '/categorias');
-  assert.deepEqual([by.hero.editorial.variant, by.hero.editorial.eyebrow, by.hero.editorial.imageUrl2, by.hero.editorial.href], ['hero', 'E', '/images/products/p2.jpg', '/?category=sonido#destacados']);
+  assert.deepEqual([by.hero.editorial.variant, by.hero.editorial.eyebrow, by.hero.editorial.imageUrl2, by.hero.editorial.href], ['hero', 'E', '/images/products/p2.jpg', '/catalogo?category=sonido']);
   assert.deepEqual(by.trust.editorial.items, [{ title: 'A', text: 'a' }]);
   assert.doesNotMatch(JSON.stringify(home), /afiliado|affiliate|x\/'/i);
 });

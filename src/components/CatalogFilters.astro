@@ -21,9 +21,11 @@ interface Props {
   clearHref: string;
   /** Enlaces ya construidos de cada tramo de precio (misma posición que `price.ranges`). */
   rangeHrefs: string[];
+  /** Ruta del listado a la que envía el formulario (`/` o `/catalogo`). */
+  base?: string;
 }
 
-const { groups, price, deals, params, total, activeCount, clearHref, rangeHrefs } = Astro.props;
+const { groups, price, deals, params, total, activeCount, clearHref, rangeHrefs, base = '/' } = Astro.props;
 
 const SEARCH_THRESHOLD = 8;
 const categoryGroup = groups.find((g) => g.key === 'category');
@@ -57,7 +59,7 @@ const hasAnything = Boolean(visibleCategory || visibleBrand || attrGroups.length
 <div class="cf-backdrop" id="cfBackdrop" data-cf-backdrop hidden></div>
 
 <aside id="cfPanel" class="cf-panel" aria-label="Filtros del catálogo" data-cf-panel>
-  <form id="cfForm" class="cf-form" method="get" action="/#catalogo" data-cf-form data-total={total}>
+  <form id="cfForm" class="cf-form" method="get" action={`${base}#catalogo`} data-cf-form data-total={total}>
     {params.q && <input type="hidden" name="q" value={params.q} />}
     {params.sort && <input type="hidden" name="sort" value={params.sort} />}
 

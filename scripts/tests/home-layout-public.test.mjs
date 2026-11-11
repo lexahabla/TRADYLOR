@@ -261,7 +261,7 @@ test('estático: index.astro protege el renderizado (render de prueba con el con
   assert.ok(idx.indexOf('layoutHome = null;') < idx.indexOf('const belowSectionsToRender'), 'la decisión final precede a las listas de secciones');
   assert.ok(idx.indexOf('layoutHome = null;') < idx.indexOf('<Layout title='), 'y al marcado de la página');
   // la portada de siempre sigue intacta (líneas originales presentes)
-  for (const t of ["const aboveCatalogSections = listingMode ? [] : aboveCatalogSectionsAll;", '<MethodSection />', 'class="hero-title"', 'id="catalogo"', 'const belowCatalogSections = publishedSections.filter']) assert.ok(idx.includes(t), t);
+  for (const t of ["const aboveCatalogSections = listingMode || catalogPage ? [] : aboveCatalogSectionsAll;", '<MethodSection />', 'class="hero-title"', 'id="catalogo"', 'const belowCatalogSections = publishedSections.filter']) assert.ok(idx.includes(t), t);
   const guard = idx.slice(idx.indexOf('Renderizado protegido'), idx.indexOf('layoutHome = null;'));
   assert.doesNotMatch(guard, /cache|memo|new Map|globalThis|setTimeout/i, 'sin caché adicional');
   assert.doesNotMatch(read('src/middleware.ts'), /homeLayout|home-layout|AstroContainer/, 'middleware.ts no se toca');

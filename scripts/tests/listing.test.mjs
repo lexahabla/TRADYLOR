@@ -270,7 +270,7 @@ const read = (p) => fs.readFileSync('d:/AXEL/WEBS/TRADYLOR/tradylor_web/' + p, '
 test('portada: filtros en la URL, diversidad desactivada con filtros, sin módulos editoriales sobre los resultados y orden de la URL sobre la cookie', () => {
   const index = read('src/pages/index.astro');
   assert.ok(index.includes('activeCategory || filtersActive'), 'la diversidad se omite con filtros');
-  assert.ok(index.includes('listingMode ? [] : aboveCatalogSectionsAll'), 'resultados antes que módulos editoriales');
+  assert.ok(index.includes('listingMode || catalogPage ? [] : aboveCatalogSectionsAll'), 'resultados antes que módulos editoriales');
   assert.ok(index.includes('const userSortQuery = listingParams.sort;') && index.includes('userSortQuery || cookieSessionSort'), 'la URL manda sobre la cookie');
   assert.ok(index.includes('<CatalogFilters') && index.includes('Quitar filtro: '));
   assert.ok(index.includes("history.scrollRestoration = 'manual'") && index.includes('back_forward'));

@@ -18,6 +18,8 @@ const cards = (b: PublicBlock) => b.productIds.map((id) => products[id]).filter(
 const domId = (b: PublicBlock) => (b.section ? `section-${b.section.id}` : `bloque-${b.id}`);
 const rendered = blocks.filter((b) => b.modality === 'editorial' || b.categories?.length || cards(b).length > 0);
 const chevron = '›';
+// La portada del rediseño no pinta la propuesta de valor antigua (que tenía el h1): el titular de la primera presentación (hero) pasa a ser el h1 de la página.
+const h1Id = region === 'top' ? rendered.find((b) => b.editorial?.variant === 'hero')?.id : undefined;
 ---
 
 {rendered.length > 0 && (
@@ -38,7 +40,7 @@ const chevron = '›';
                 <section class="hl-cell hl-hero" style={style} id={domId(b)} aria-label={e.headline}>
                   <div class="hl-hero-body">
                     {e.eyebrow && <p class="hl-eyebrow">{e.eyebrow}</p>}
-                    <h2 class="hl-hero-title">{e.headline}</h2>
+                    {b.id === h1Id ? <h1 class="hl-hero-title">{e.headline}</h1> : <h2 class="hl-hero-title">{e.headline}</h2>}
                     {e.text && <p class="hl-hero-text">{e.text}</p>}
                     {button}
                   </div>

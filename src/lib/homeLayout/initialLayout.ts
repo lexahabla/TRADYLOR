@@ -88,16 +88,16 @@ export function buildInitialBlocks(ctx: InitialContext): Block[] {
   blocks.push(editorial('hero', 'Portada · presentación', {
     variant: 'hero', eyebrow: 'Compara con datos', headline: 'Compra con datos, no con prisas',
     text: 'Precios con fecha de captura, historial real y alertas cuando baja lo que te interesa.',
-    buttonLabel: 'Ver el catálogo', link: { type: 'path', target: '/#catalogo' },
+    buttonLabel: 'Ver el catálogo', link: { type: 'path', target: '/catalogo' },
     ...(ctx.heroImages[0] ? { imageUrl: ctx.heroImages[0] } : {}), ...(ctx.heroImages[1] ? { imageUrl2: ctx.heroImages[1] } : {}),
   }, 8));
   blocks.push(editorial('campana', 'Portada · campaña', {
     variant: 'campaign', eyebrow: 'Próxima campaña', kicker: '27·11', headline: 'Black Friday con historial',
-    buttonLabel: 'Ver bajadas verificadas', link: { type: 'path', target: '/?deal=1#catalogo' },
+    buttonLabel: 'Ver bajadas verificadas', link: { type: 'path', target: '/catalogo?deal=1' },
   }, 4));
   blocks.push({
     id: 'bajadas', modality: 'automatica', format: 'carrusel', width: 12, title: 'Bajadas de precio', subtitle: 'Sólo bajadas verificadas, con su fecha de captura', card: 'producto', visible: true, refs: [],
-    config: { rules: { order: 'descuento_desc', onlyVerifiedDiscount: true, onlyWithPrice: true, limit: 10 } }, link: { type: 'path', target: '/?deal=1#catalogo' },
+    config: { rules: { order: 'descuento_desc', onlyVerifiedDiscount: true, onlyWithPrice: true, limit: 10 } }, link: { type: 'path', target: '/catalogo?deal=1' },
   });
   if (ctx.tiles.length) {
     blocks.push({
@@ -107,7 +107,7 @@ export function buildInitialBlocks(ctx: InitialContext): Block[] {
   }
   blocks.push({
     id: 'ranking', modality: 'automatica', format: 'lista', width: 6, title: 'Los 5 más económicos', card: 'producto', visible: true, refs: [],
-    config: { rules: { order: 'precio_asc', onlyWithPrice: true, limit: 5 } }, link: { type: 'path', target: '/?sort=precio_asc#catalogo' },
+    config: { rules: { order: 'precio_asc', onlyWithPrice: true, limit: 5 } }, link: { type: 'path', target: '/catalogo?sort=precio_asc' },
   });
   if (ctx.featured[0] && ctx.guideImage) {
     blocks.push(editorial('guia', 'Portada · categoría destacada', {

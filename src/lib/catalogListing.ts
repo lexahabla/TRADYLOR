@@ -78,7 +78,7 @@ export function hasActiveFilters(p: ListingParams): boolean {
 }
 
 /** URL del listado para unos parámetros. El orden sólo viaja si venía explícito. */
-export function listingHref(p: ListingParams, extra: { page?: number; sort?: string } = {}): string {
+export function listingHref(p: ListingParams, extra: { page?: number; sort?: string; base?: string } = {}): string {
   const out = new URLSearchParams();
   if (p.q) out.set('q', p.q);
   for (const c of p.category) out.append('category', c);
@@ -92,7 +92,7 @@ export function listingHref(p: ListingParams, extra: { page?: number; sort?: str
   const page = extra.page ?? 1;
   if (page > 1) out.set('page', String(page));
   const qs = out.toString();
-  return `/${qs ? `?${qs}` : ''}#catalogo`;
+  return `${extra.base ?? '/'}${qs ? `?${qs}` : ''}#catalogo`;
 }
 
 /* ───────────────────────────── BÚSQUEDA ───────────────────────────── */

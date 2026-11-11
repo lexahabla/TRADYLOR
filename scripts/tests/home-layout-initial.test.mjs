@@ -206,16 +206,16 @@ test('API: una acción carga, publica y activa internamente; la web NO cambia si
     const by = Object.fromEntries([...home.top, ...home.bottom].map((x) => [x.id, x]));
     assert.deepEqual(Object.keys(by), ['hero', 'campana', 'categorias', 'ranking', 'guia', 'cat-portabilidad', 'cat-informatica', 'cat-sonido', 'confianza'], '«bajadas» no se muestra porque no hay ninguna bajada verificada');
     assert.equal(by.hero.editorial.variant, 'hero');
-    assert.equal(by.hero.editorial.href, '/#catalogo');
+    assert.equal(by.hero.editorial.href, '/catalogo');
     assert.ok(by.hero.editorial.imageUrl && by.hero.editorial.imageUrl2, 'imágenes de productos reales');
     assert.equal(by.campana.editorial.kicker, '27·11');
     assert.equal(by.ranking.productIds.length, 5);
     assert.deepEqual(by.ranking.productIds.map((id) => Number(id.slice(1))), [...by.ranking.productIds.map((id) => Number(id.slice(1)))].sort((a, b) => (10 + a) - (10 + b)), 'por precio ascendente');
-    assert.equal(by.ranking.seeAll, '/?sort=precio_asc#catalogo');
+    assert.equal(by.ranking.seeAll, '/catalogo?sort=precio_asc');
     assert.equal(by.categorias.categories.length, 4);
     assert.ok(by.categorias.categories.every((c) => c.icon === '📦'));
     assert.equal(by.categorias.seeAll, '/categorias');
-    assert.equal(by['cat-portabilidad'].seeAll, '/?category=portabilidad#destacados');
+    assert.equal(by['cat-portabilidad'].seeAll, '/catalogo?category=portabilidad');
     assert.equal(by.guia.editorial.variant, 'guide');
     assert.equal(by.confianza.editorial.items.length, 4);
     // restauración: desactivar vuelve a la portada anterior sin borrar nada

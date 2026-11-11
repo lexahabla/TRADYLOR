@@ -55,6 +55,7 @@ scripts/tests/home-layout-activation.test.mjs
 scripts/tests/home-layout-backups.test.mjs
 scripts/tests/home-layout-design.test.mjs
 scripts/tests/home-layout-initial.test.mjs
+scripts/tests/home-layout-preview.test.mjs
 scripts/tests/home-layout-public.test.mjs
 scripts/tests/home-layout-stories-public.test.mjs
 scripts/tests/home-layout.test.mjs
@@ -415,6 +416,7 @@ src/pages/api/v1/products/delete-all.ts
 src/pages/api/v1/products/import.ts
 src/pages/api/v1/products/index.ts
 src/pages/categorias.astro
+src/pages/catalogo.astro
 src/pages/checkout/[id].astro
 src/pages/ejemplo-afiliados.astro
 src/pages/herramientas/comparador.astro
@@ -432,6 +434,7 @@ src/pages/upayp1b4.astro
 src/pages/upayp1b4/amazon-import.astro
 src/pages/upayp1b4/curation.astro
 src/pages/upayp1b4/portada.astro
+src/pages/upayp1b4/portada-vista.astro
 src/pages/upayp1b4/marketing/calendario.astro
 src/pages/upayp1b4/marketing/index.astro
 src/pages/upayp1b4/marketing/market-action.astro
