@@ -32,6 +32,8 @@ automation/dev/diagnostico-entorno-code.json
 automation/dev/docker-compose.n8n.yml
 automation/dev/prueba-data-tables/.env.example
 automation/dev/prueba-data-tables/docker-compose.yml
+automation/dev/prueba-data-tables/docker-compose.validacion.yml
+automation/dev/prueba-data-tables/sitio-prueba.mjs
 automation/dev/puente-tcp.mjs
 automation/docs/API-AUTOMATIZACION-DISENO.md
 automation/docs/AUDITOR-CONSUMO.md
@@ -85,6 +87,7 @@ scripts/automation/importar-local.mjs
 scripts/automation/lint-workflows.mjs
 scripts/automation/make-test-data.mjs
 scripts/automation/normalize-workflow.mjs
+scripts/automation/prueba-auditor-completo.mjs
 scripts/automation/prueba-data-tables.mjs
 scripts/automation/prueba-persistencia-2c.mjs
 scripts/automation/simulate-workflow.mjs
@@ -106,7 +109,9 @@ scripts/tests/automation-api.test.mjs
 scripts/tests/automation-consumo.test.mjs
 scripts/tests/automation-persistencia.test.mjs
 scripts/tests/automation-prueba-2c.test.mjs
+scripts/tests/automation-auditor-completo.test.mjs
 scripts/tests/automation-prueba-dt.test.mjs
+scripts/tests/automation-sitio-prueba.test.mjs
 scripts/tests/automation-seguimiento-integracion.test.mjs
 scripts/tests/automation-seguimiento.test.mjs
 scripts/tests/automation-seguridad.test.mjs

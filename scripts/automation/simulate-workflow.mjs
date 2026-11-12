@@ -116,7 +116,7 @@ export function simularWorkflow(wf, { fetchSimulado, ahora = '2026-11-12T10:00:0
       const envuelto = `(function () {\n${nodo.parameters.jsCode}\n})()`;
       const resultado = vm.runInContext(envuelto, contexto, { timeout: 5000 });
       if (!Array.isArray(resultado) || resultado.some((x) => !x || typeof x.json !== 'object')) throw new Error(`El nodo Code «${nombre}» debe devolver [{ json }]`);
-      salidas.set(nombre, resultado);
+      salidas.set(nombre, !resultado.length && nodo.alwaysOutputData ? [{ json: {} }] : resultado);
       continue;
     }
 

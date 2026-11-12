@@ -1,0 +1,46 @@
+# VARIANTE de validación integral del Auditor General en `tai-prueba-dt` (se aplica ENCIMA del compose base; NO se ha aplicado todavía):
+#
+#   docker compose -p tai-prueba-dt --env-file <env fuera del repo> -f automation/dev/prueba-data-tables/docker-compose.yml -f automation/dev/prueba-data-tables/docker-compose.validacion.yml up -d --pull never
+#
+# Qué cambia respecto al compose base (y NADA más):
+#   1) n8n puede cargar el nodo HTTP Request (se retira `httpRequest` de NODES_EXCLUDE): el Auditor lo necesita. Siguen excluidos executeCommand, ssh y readWriteFile.
+#   2) Un contenedor `sitio` (imagen node:22-bookworm-slim YA descargada) con el sitio de pruebas sintético, con el alias de red `puente-treidilor` en la red aislada para que la
+#      configuración LOCAL del Auditor (http://puente-treidilor:4350) funcione sin cambios.
+#
+# Lo que NO cambia (y se comprueba con pruebas automáticas y, al aplicar, con comprobaciones reales):
+#   · La red `tai-dt-aislada` sigue siendo `internal: true`: sin Internet, sin anfitrión, sin otros contenedores. Esta variante NO define redes ni vuelve a declararlas.
+#   · NO se publica ningún puerto nuevo (el único sigue siendo 127.0.0.1:5689 → editor de n8n, del compose base). El sitio y su control NO tienen `ports`.
+#   · El control del sitio escucha sólo en el loopback DEL CONTENEDOR: se maneja con `docker exec`.
+#   · Sin extra_hosts, sin network_mode, sin socket de Docker, sin privilegios; sistema de ficheros de sólo lectura; usuario sin privilegios; límites de memoria y CPU.
+#   · Credenciales: ninguna real. El token que usa el Auditor es FICTICIO y vive fuera del repositorio.
+services:
+  n8n:
+    environment:
+      NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.ssh","n8n-nodes-base.readWriteFile"]'
+      # Si la protección SSRF de n8n bloquease el acceso a `puente-treidilor` (una dirección privada), se ajustaría SÓLO aquí y SÓLO en este entorno aislado (se verifica al aplicar):
+      # N8N_SSRF_PROTECTION_ENABLED: "false"
+
+  sitio:
+    image: node:22-bookworm-slim
+    container_name: tai-dt-sitio
+    restart: "no"
+    read_only: true
+    user: node
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.25
+    labels:
+      com.treidilor.prueba: data-tables
+    networks:
+      aislada:
+        aliases:
+          - puente-treidilor
+    volumes:
+      - ./sitio-prueba.mjs:/app/sitio-prueba.mjs:ro
+    command: ["node", "/app/sitio-prueba.mjs"]
+    environment:
+      PUERTO: "4350"
+      PUERTO_CONTROL: "4351"
+      ESCENARIO_INICIAL: base
