@@ -133,14 +133,16 @@ function nodoDt(nombre, pos, cfg, operacion) {
       ...base, onError: 'continueRegularOutput', alwaysOutputData: true, retryOnFail: false,
     };
   }
-  // insertar: SIN reintentos automáticos (un reintento podría duplicar la fila); un fallo no detiene el informe
+  // insertar: SIN reintentos automáticos (un reintento podría duplicar la fila). Con `continueErrorOutput` los errores de n8n (p. ej. tabla inexistente) salen por la segunda salida;
+  // pero la Data table devuelve SIN error el elemento de entrada cuando falla una validación (columna desconocida), así que la escritura sólo se da por buena con la fila devuelta
+  // (nodo «Confirmar escritura», que recibe las dos salidas). Un fallo no detiene el informe.
   return {
     parameters: {
       resource: 'row', operation: 'insert', dataTableId: refTabla(tabla),
       columns: { mappingMode: 'defineBelow', value: Object.fromEntries(COLUMNAS_INSTANTANEAS.map((c) => [c, `={{ $json.${c} }}`])), matchingColumns: [], schema: esquemaDt },
       options: {},
     },
-    ...base, onError: 'continueRegularOutput', retryOnFail: false,
+    ...base, onError: 'continueErrorOutput', retryOnFail: false,
   };
 }
 
@@ -175,6 +177,8 @@ function auditor(entorno) {
     ? "objetivosCatalogo: nodo('Páginas de catálogo'), respuestasCatalogo: nodo('Pedir catálogo'), objetivosCatalogoResto: nodo('Páginas restantes'), respuestasCatalogoResto: nodo('Pedir catálogo (resto)'), objetivosFichas: nodo('Fichas de muestra'), respuestasFichas: nodo('Pedir fichas'),"
     : '';
   // Memoria (2c): comprobar la tabla → un solo elemento → leer el historial → Informe → quedarse sólo con la fila a guardar → insertarla.
+  // «Uno tabla»: List se ejecuta UNA VEZ POR CADA elemento de entrada (la entrada son las respuestas de todos los enlaces): sin este Code devolvería la tabla repetida N veces.
+  pasos.push(['Uno tabla', 'return [{ json: {} }];', undefined, 'pequeno']);
   pasos.push(['Comprobar tabla', null, undefined, 'dt-listar']);
   pasos.push(['Uno historial', 'return [{ json: {} }];', undefined, 'pequeno']);
   pasos.push(['Leer historial', null, undefined, 'dt-leer']);
@@ -189,6 +193,8 @@ function auditor(entorno) {
 return [{ json: resultado.informe }].concat(resultado.fila ? [{ json: Object.assign({ tipo: 'fila' }, resultado.fila) }] : []);`]);
   pasos.push(['Solo la fila', "return $input.all().filter((i) => i.json.tipo === 'fila');", undefined, 'pequeno']);
   pasos.push(['Guardar instantánea', null, undefined, 'dt-insertar']);
+  // Confirmar escritura: recibe las DOS salidas del Insert (correcta y de error) y completa el informe con el resultado real de la escritura.
+  pasos.push(['Confirmar escritura', "const informe = nodo('Informe')[0];\nreturn [{ json: confirmarEscritura(informe, $input.all().map((i) => i.json)) }];"]);
   const nombre = `Treidilor AI · Auditor General v0 (${entorno})`;
   const nodos = [nodoManual([0, 0]), nota(`${AVISO_BASE}\nEntorno: ${entorno} · modo: ${cfg.modo}.${completo ? '\nCredencial necesaria (sólo lectura): «' + cfg.credencialCatalogo + '» (Header Auth).' : '\nSin credenciales.'}\nMEMORIA: lee e inserta instantáneas en la Data Table «${cfg.seguimiento.tabla}» de n8n (créala antes con el workflow «Auditor · crear tabla de instantáneas»). No escribe en Treidilor.`, [0, -300])];
   pasos.forEach(([n, js, cred, tipo], i) => {
@@ -199,7 +205,9 @@ return [{ json: resultado.informe }].concat(resultado.fila ? [{ json: Object.ass
     else if (tipo === 'pequeno') nodos.push(nodoCode(n, js, pos));
     else nodos.push(js === null ? nodoHttp(n, 'auditor-general', pos, cred ?? null) : nodoCode(n, codigo('auditor', cfg, js), pos));
   });
-  return { name: nombre, nodes: nodos, connections: cadena(['Ejecutar a mano', ...pasos.map((p) => p[0])]), active: false, settings: AJUSTES, tags: [] };
+  const conexiones = cadena(['Ejecutar a mano', ...pasos.map((p) => p[0])]);
+  conexiones['Guardar instantánea'] = { main: [[{ node: 'Confirmar escritura', type: 'main', index: 0 }], [{ node: 'Confirmar escritura', type: 'main', index: 0 }]] };
+  return { name: nombre, nodes: nodos, connections: conexiones, active: false, settings: AJUSTES, tags: [] };
 }
 
 /** Workflow de PREPARACIÓN (se ejecuta una vez a mano en cada n8n): crea la tabla de instantáneas, con las columnas del historial, si no existe. */

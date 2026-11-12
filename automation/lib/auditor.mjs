@@ -556,7 +556,11 @@ function markdownSeguimiento(s, p) {
     if (p.tabla.estado !== 'ok') l.push(`- ⚠ **Sin memoria persistente:** tabla «${p.tabla.nombre || '—'}» ${MOTIVOS_TABLA[p.tabla.estado] ?? p.tabla.estado}. Esta auditoría no compara ni guarda.`);
     else {
       l.push(`- Lectura: ${p.lectura.filas} filas (${p.lectura.validas} válidas${p.lectura.duplicadas ? `, ${p.lectura.duplicadas} duplicadas` : ''}${p.lectura.descartadas ? `, ${p.lectura.descartadas} descartadas` : ''})${p.lectura.ultimaInstantanea ? `; última instantánea válida: ${fecha2(p.lectura.ultimaInstantanea)} UTC` : ''}.`);
-      l.push(`- Escritura: ${p.escritura.guardar ? `**se guardará** una instantánea (origen ${p.escritura.origen})` : `**no se guarda** (${MOTIVOS_GUARDADO[p.escritura.motivo] ?? p.escritura.motivo})`}.`);
+      const e = p.escritura;
+      if (e.resultado === 'guardada') l.push(`- Escritura: **guardada** (fila ${e.filaId}, origen ${e.origen}).`);
+      else if (e.resultado === 'fallida') l.push(`- ⚠ **Escritura FALLIDA: la instantánea NO se guardó** (${e.error}). El informe es válido, pero esta auditoría no quedó en la memoria.`);
+      else if (e.guardar) l.push(`- Escritura: **pendiente** — se intentará guardar una instantánea (origen ${e.origen}); el resultado se confirma después del Insert, en el nodo «Confirmar escritura».`);
+      else l.push(`- Escritura: **no se guarda** (${MOTIVOS_GUARDADO[e.motivo] ?? e.motivo}).`);
     }
   }
   l.push('');
@@ -598,6 +602,27 @@ export function informeMarkdown(informe) {
 }
 
 /** Construye el informe completo. `entrada` agrupa lo que devolvieron los nodos HTTP (stateless: se recalcula todo desde lo bruto). */
+/**
+ * CONFIRMACIÓN de la escritura (2c). El informe se genera ANTES del Insert, así que sólo puede decir que la escritura está «pendiente». Este paso se ejecuta DESPUÉS y recibe
+ * lo que devolvieron las dos salidas del Insert. Se confirma SÓLO si el Insert devolvió la fila guardada (un `id` numérico y NUESTRO `idEjecucion`): que no haya error no basta,
+ * porque la Data table de n8n puede devolver el elemento de entrada sin guardarlo y sin ningún error (p. ej. una columna desconocida). Devuelve el MISMO informe con
+ * `persistencia.escritura.resultado` = «guardada» (con `filaId`) o «fallida» (con `motivoFallo` y `error`) y el Markdown regenerado. Si no había nada que guardar, lo devuelve sin cambios.
+ */
+export function confirmarEscritura(informe, salidaInsert) {
+  const p = informe && informe.persistencia;
+  if (!p || !p.escritura || !p.escritura.guardar) return informe;
+  const lista = (Array.isArray(salidaInsert) ? salidaInsert : []).filter((x) => x && typeof x === 'object');
+  const fila = lista.find((x) => Number.isFinite(Number(x.id)) && x.idEjecucion === p.escritura.idEjecucion);
+  const conError = lista.find((x) => x.error !== undefined && x.error !== null);
+  const textoError = conError ? recortar(typeof conError.error === 'string' ? conError.error : (conError.error && conError.error.message) || JSON.stringify(conError.error), 200) : '';
+  const escritura = fila
+    ? { ...p.escritura, resultado: 'guardada', filaId: Number(fila.id) }
+    : { ...p.escritura, resultado: 'fallida', motivoFallo: conError ? 'error_insert' : 'sin_confirmacion', error: conError ? textoError : 'el Insert no devolvió la fila guardada (la Data table no confirmó la escritura)' };
+  const nuevo = { ...informe, persistencia: { ...p, escritura } };
+  nuevo.markdown = informeMarkdown(nuevo);
+  return nuevo;
+}
+
 /** Informe del Auditor (compatible con todas las versiones anteriores). La fila de historial, si la hay, sólo la devuelve `construirInformeYFila`. */
 export function construirInformeAuditor(entrada) {
   return construirInformeYFila(entrada).informe;
@@ -686,7 +711,8 @@ export function construirInformeYFila(entrada) {
     informe.persistencia = {
       tabla: { nombre: nombre || '', estado: lecturaConError && tabla === 'ok' ? 'error_lectura' : tabla },
       lectura: r ? { filas: r.previo.leidas, validas: r.previo.validas, duplicadas: r.previo.duplicadas, descartadas: r.previo.descartadas.length, ultimaInstantanea: r.previo.ultimaGeneradoEn } : { filas: 0, validas: 0, duplicadas: 0, descartadas: 0, ultimaInstantanea: null },
-      escritura: { guardar: Boolean(r && r.guardar), motivo: r ? r.motivoGuardado : 'persistencia_no_disponible', origen: String(per.origen), idEjecucion: String(per.idEjecucion) },
+      // `guardar` = se DECIDIÓ guardar; `resultado` = qué ocurrió: «pendiente» hasta que el nodo «Confirmar escritura» lo verifica con lo que devolvió el Insert.
+      escritura: { guardar: Boolean(r && r.guardar), motivo: r ? r.motivoGuardado : 'persistencia_no_disponible', origen: String(per.origen), idEjecucion: String(per.idEjecucion), resultado: r && r.guardar ? 'pendiente' : 'no_procede' },
     };
   } else {
     const ia = entrada.instantaneaAnterior;

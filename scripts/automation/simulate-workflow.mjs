@@ -5,6 +5,10 @@
 // el HTTP Request con `onError: continueRegularOutput` devuelve `{ error }`; sólo se admite la URL `={{ $json.url }}`.
 // Entrega 2c: simula las operaciones «Data table» que usa el Auditor (listar tablas, leer filas, insertar filas, crear tabla) sobre un almacén en memoria (`almacen`), con
 // `onError`/`alwaysOutputData` y `$execution.mode`/`$execution.id` (opción `ejecucion`). NO sustituye a la prueba con las Data Tables reales de n8n.
+// Comportamientos REALES de n8n 2.38.6 que reproduce (medidos en `tai-prueba-dt`): List y Get se ejecutan UNA VEZ POR CADA elemento de entrada (con N elementos devuelven N copias);
+// un Insert con `continueErrorOutput` manda a la 2ª salida los errores de n8n (p. ej. tabla inexistente), pero una validación fallida (columna desconocida) NO da error: devuelve el
+// elemento de entrada envuelto (`{json:{json,pairedItem},pairedItem}`) sin guardar nada (`almacen.falloInsert = true`; `'tabla'` simula la tabla inexistente). Los nodos con varias salidas
+// (`onError: continueErrorOutput`) entregan cada salida por separado a los nodos conectados a ella.
 import vm from 'node:vm';
 
 /** Almacén en memoria para los nodos «Data table» simulados. `tablas`: nombres de tablas que ya existen. Las banderas simulan fallos de la tabla. */
@@ -24,7 +28,8 @@ function simularDataTable(nodo, entrada, almacen) {
     if (p.operation === 'list') {
       if (alm.falloLectura) throw new Error('Could not list data tables');
       const filtro = String(p.options?.filterName ?? '').toLowerCase();
-      return Object.values(alm.tablas).filter((x) => x.nombre.toLowerCase().includes(filtro)).map((x) => ({ json: { id: x.id, name: x.nombre } }));
+      const una = Object.values(alm.tablas).filter((x) => x.nombre.toLowerCase().includes(filtro)).map((x) => ({ json: { id: x.id, name: x.nombre } }));
+      return entrada.flatMap(() => una.map((i) => ({ json: { ...i.json } }))); // una copia por cada elemento de entrada (comportamiento real de n8n)
     }
     if (p.operation === 'create') {
       const existente = alm.tablas[p.tableName];
@@ -39,17 +44,18 @@ function simularDataTable(nodo, entrada, almacen) {
   const tabla = buscar(ref.value);
   if (p.operation === 'get') {
     if (alm.falloLectura) throw new Error('Could not read data table');
-    if (!tabla) throw new Error('Data table not found');
+    if (!tabla) throw new Error(`Data table with name "${ref.value}" not found`);
     let filas = tabla.filas.filter((fila) => (p.filters?.conditions ?? []).every((c) => c.condition === 'eq' && fila[c.keyName] === c.keyValue));
     const col = p.orderBy ? p.orderByColumn : 'id';
     const dir = p.orderBy ? p.orderByDirection : 'ASC';
     filas = [...filas].sort((a, b) => (a[col] < b[col] ? -1 : a[col] > b[col] ? 1 : a.id - b.id) * (dir === 'DESC' ? -1 : 1));
     if (!p.returnAll) filas = filas.slice(0, p.limit);
-    return filas.map((fila) => ({ json: { ...fila } }));
+    return entrada.flatMap(() => filas.map((fila) => ({ json: { ...fila } }))); // una lectura por cada elemento de entrada
   }
   if (p.operation === 'insert') {
-    if (alm.falloInsert) throw new Error('Could not insert rows');
-    if (!tabla) throw new Error('Data table not found');
+    if (alm.falloInsert === 'tabla' || !tabla) throw new Error(`Data table with name "${ref.value}" not found`);
+    // Validación fallida (columna desconocida): n8n NO da error; devuelve el elemento de entrada envuelto y no guarda nada.
+    if (alm.falloInsert) return entrada.map((it, i) => ({ json: { json: it.json, pairedItem: { item: i } }, pairedItem: { item: i } }));
     const salida = [];
     for (const it of entrada) {
       const valores = Object.fromEntries(Object.entries(p.columns.value).map(([k, v]) => [k, evaluar(v, it.json)]));
@@ -66,15 +72,16 @@ export function simularWorkflow(wf, { fetchSimulado, ahora = '2026-11-12T10:00:0
   const salidas = new Map(); // nombre → items
   const peticiones = [];
   const porNombre = new Map(wf.nodes.map((n) => [n.name, n]));
-  const entradas = new Map(wf.nodes.map((n) => [n.name, []]));
-  for (const [de, ramas] of Object.entries(wf.connections ?? {})) for (const grupo of ramas.main ?? []) for (const c of grupo ?? []) entradas.get(c.node)?.push(de);
+  const entradas = new Map(wf.nodes.map((n) => [n.name, []])); // nombre → [{ de, idx }]: nodo de origen y nº de salida
+  const porSalida = new Map(); // nombre → [items de la salida 0, items de la salida 1…] (sólo nodos con varias salidas)
+  for (const [de, ramas] of Object.entries(wf.connections ?? {})) (ramas.main ?? []).forEach((grupo, idx) => { for (const c of grupo ?? []) entradas.get(c.node)?.push({ de, idx }); });
   // orden topológico simple (los workflows del piloto son cadenas)
   const orden = [];
   const hechos = new Set();
   const visitar = (n) => {
     if (hechos.has(n)) return;
     hechos.add(n);
-    for (const d of entradas.get(n) ?? []) visitar(d);
+    for (const d of entradas.get(n) ?? []) visitar(d.de);
     orden.push(n);
   };
   for (const n of wf.nodes) visitar(n.name);
@@ -86,7 +93,7 @@ export function simularWorkflow(wf, { fetchSimulado, ahora = '2026-11-12T10:00:0
     const previos = entradas.get(nombre) ?? [];
     let entrada = [];
     if (nodo.type === 'n8n-nodes-base.manualTrigger') entrada = [{ json: {} }];
-    else for (const p of previos) entrada.push(...(salidas.get(p) ?? []));
+    else for (const { de, idx } of previos) entrada.push(...(porSalida.has(de) ? porSalida.get(de)[idx] ?? [] : idx === 0 ? salidas.get(de) ?? [] : []));
     if (!entrada.length && nodo.type !== 'n8n-nodes-base.manualTrigger') { salidas.set(nombre, []); continue; } // sin elementos → no se ejecuta
     if (nodo.type === 'n8n-nodes-base.manualTrigger') { salidas.set(nombre, entrada); continue; }
 
@@ -134,15 +141,18 @@ export function simularWorkflow(wf, { fetchSimulado, ahora = '2026-11-12T10:00:0
       continue;
     }
     if (nodo.type === 'n8n-nodes-base.dataTable') {
-      let out;
+      let ok = [];
+      let errores = [];
       try {
-        out = simularDataTable(nodo, entrada, almacen ?? crearAlmacenSimulado());
+        ok = simularDataTable(nodo, entrada, almacen ?? crearAlmacenSimulado());
       } catch (e) {
-        if (nodo.onError !== 'continueRegularOutput') throw e;
-        out = [{ json: { error: e.message } }];
+        if (nodo.onError === 'continueErrorOutput') errores = [{ json: { error: e.message }, error: { message: e.message } }]; // forma real
+        else if (nodo.onError === 'continueRegularOutput') ok = [{ json: { error: e.message } }];
+        else throw e;
       }
-      if (!out.length && nodo.alwaysOutputData) out = [{ json: {} }];
-      salidas.set(nombre, out);
+      if (!ok.length && !errores.length && nodo.alwaysOutputData) ok = [{ json: {} }];
+      salidas.set(nombre, ok);
+      if (nodo.onError === 'continueErrorOutput') porSalida.set(nombre, [ok, errores]);
       continue;
     }
     throw new Error(`Tipo de nodo no soportado por el simulador: ${nodo.type}`);

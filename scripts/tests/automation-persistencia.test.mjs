@@ -48,7 +48,8 @@ function correr(spec, { n = 0, horas = 0, almacen = nuevoAlmacen(), mode = 'test
   if (maxEnlaces !== undefined) for (const nodo of wf.nodes) if (nodo.type === 'n8n-nodes-base.code') nodo.parameters.jsCode = nodo.parameters.jsCode.replace(/"maxEnlaces": \d+/, `"maxEnlaces": ${maxEnlaces}`);
   const r = simularWorkflow(wf, { fetchSimulado: sitio(spec), ahora: dia(n, horas), hostsPermitidos: PROD.hostsPermitidos, almacen, ejecucion: { mode, id: id ?? `${n}-${horas}-${almacen.seq}` } });
   const salida = plano(r.salida);
-  return { informe: salida[0].json, fila: salida[1]?.json ?? null, salida, almacen, salidas: r.salidas, peticiones: r.peticiones };
+  const confirmar = r.salidas.get('Confirmar escritura');
+  return { informe: salida[0].json, final: plano(confirmar?.[0]?.json ?? salida[0].json), confirmado: Boolean(confirmar?.length), fila: salida[1]?.json ?? null, salida, almacen, salidas: r.salidas, peticiones: r.peticiones };
 }
 const operaciones = (almacen) => almacen.operaciones.map((o) => `${o.recurso}/${o.operacion}`);
 
@@ -75,7 +76,13 @@ test('primera ejecución con la tabla vacía: línea base, una fila guardada con
   const inst = JSON.parse(columnas.payload);
   assert.deepEqual([inst.esquema, inst.generadoEn, inst.calidad.estado], [1, dia(0), 'completa']);
   assert.match(r.informe.markdown, /### Historial \(memoria del Auditor\)/);
-  assert.match(r.informe.markdown, /\*\*se guardará\*\* una instantánea \(origen manual\)/);
+  assert.equal(r.informe.persistencia.escritura.resultado, 'pendiente', 'antes del Insert sólo puede decir «pendiente»');
+  assert.match(r.informe.markdown, /Escritura: \*\*pendiente\*\* — se intentará guardar una instantánea \(origen manual\)/);
+  assert.doesNotMatch(r.informe.markdown, /guardada/);
+  assert.equal(r.confirmado, true);
+  assert.deepEqual([r.final.persistencia.escritura.resultado, r.final.persistencia.escritura.filaId], ['guardada', guardadas[0].id]);
+  assert.match(r.final.markdown, new RegExp(`Escritura: \\*\\*guardada\\*\\* \\(fila ${guardadas[0].id}, origen manual\\)`));
+  assert.deepEqual(validarEsquema(r.final, ESQ.informe()), []);
 });
 
 test('ejecuciones sucesivas: nuevas, persistentes, resueltas y reaparecidas salen del HISTORIAL guardado, y cada ejecución completa añade una fila', () => {
@@ -139,17 +146,128 @@ test('tabla ambigua (otra tabla con ese texto en el nombre) o ilegible: no se us
   assert.equal(filas(ilegible).length, 0);
 });
 
-test('si el Insert falla, el informe se genera igualmente (el fallo no detiene el workflow) y no se reintenta', () => {
-  const almacen = nuevoAlmacen();
-  almacen.falloInsert = true;
-  const r = correr(DIA0, { almacen });
-  assert.equal(r.informe.persistencia.escritura.guardar, true, 'el informe indica que quería guardar');
-  assert.equal(filas(almacen).length, 0);
-  assert.equal(operaciones(almacen).filter((o) => o === 'row/insert').length, 1, 'un solo intento (sin reintentos automáticos)');
-  const salidaInsert = r.salidas.get('Guardar instantánea');
-  assert.match(salidaInsert[0].json.error, /Could not insert/);
+test('si el Insert falla (validación silenciosa o error de n8n), el informe se conserva y la escritura figura como FALLIDA, nunca como correcta', () => {
+  // a) validación fallida: la Data table devuelve el elemento de entrada SIN error y sin guardar (comportamiento real medido en n8n 2.38.6)
+  const silencioso = nuevoAlmacen();
+  silencioso.falloInsert = true;
+  const a = correr(DIA0, { almacen: silencioso });
+  assert.equal(filas(silencioso).length, 0);
+  assert.equal(operaciones(silencioso).filter((o) => o === 'row/insert').length, 1, 'un solo intento (sin reintentos automáticos)');
+  assert.equal(a.informe.persistencia.escritura.resultado, 'pendiente', 'el informe del nodo «Informe» sólo promete un intento');
+  const ea = a.final.persistencia.escritura;
+  assert.deepEqual([ea.resultado, ea.motivoFallo, ea.guardar], ['fallida', 'sin_confirmacion', true]);
+  assert.match(ea.error, /no devolvió la fila guardada/);
+  assert.match(a.final.markdown, /⚠ \*\*Escritura FALLIDA: la instantánea NO se guardó\*\*/);
+  assert.doesNotMatch(a.final.markdown, /Escritura: \*\*guardada/);
+  assert.deepEqual(validarEsquema(a.final, ESQ.informe()), []);
+  // el informe se conserva ENTERO: sólo cambian la escritura y el Markdown
+  const { persistencia: pa, markdown: ma, ...restoFinal } = a.final;
+  const { persistencia: pb, markdown: mb, ...restoInforme } = a.informe;
+  assert.deepEqual(restoFinal, restoInforme, 'incidencias, seguimiento, alcance y consumo intactos');
+  assert.deepEqual({ ...pa, escritura: undefined }, { ...pb, escritura: undefined });
+  // b) error de n8n (tabla inexistente para el Insert): sale por la 2ª salida con su mensaje
+  const tabla = nuevoAlmacen();
+  tabla.falloInsert = 'tabla';
+  const b = correr(DIA0, { almacen: tabla });
+  const eb = b.final.persistencia.escritura;
+  assert.deepEqual([eb.resultado, eb.motivoFallo], ['fallida', 'error_insert']);
+  assert.match(eb.error, /Data table with name "auditor_general_instantaneas" not found/);
+  assert.deepEqual([b.salidas.get('Guardar instantánea').length, filas(tabla).length], [0, 0], 'la salida correcta queda vacía y no hay fila');
+  assert.match(b.final.markdown, /Escritura FALLIDA/);
+  // c) el informe sigue disponible y es el mismo en los tres casos
+  assert.deepEqual(plano(b.final.incidencias), plano(a.final.incidencias));
+  assert.equal(b.final.persistencia.tabla.estado, 'ok');
 });
 
+test('confirmarEscritura: sólo confirma con la fila devuelta (id numérico y NUESTRO idEjecucion); que no haya error no basta', () => {
+  const base = correr(DIA0, { id: '9' }).informe; // un informe REAL con la escritura pendiente
+  assert.deepEqual([base.persistencia.escritura.idEjecucion, base.persistencia.escritura.resultado], ['ex-9', 'pendiente']);
+  const con = (items) => aud.confirmarEscritura(base, items).persistencia.escritura;
+  assert.deepEqual([con([{ id: 12, idEjecucion: 'ex-9', createdAt: 'x' }]).resultado, con([{ id: 12, idEjecucion: 'ex-9' }]).filaId], ['guardada', 12]);
+  assert.equal(con([{ id: '7', idEjecucion: 'ex-9' }]).resultado, 'guardada', 'id numérico en texto');
+  for (const items of [[], [{ idEjecucion: 'ex-9' }], [{ id: 5, idEjecucion: 'ex-otra' }], [{ json: { entorno: 'produccion' }, pairedItem: { item: 0 } }], [{ tipo: 'fila', idEjecucion: 'ex-9' }], null, undefined, ['texto', 3, null]]) {
+    const e = con(items);
+    assert.deepEqual([e.resultado, e.motivoFallo], ['fallida', 'sin_confirmacion'], JSON.stringify(items));
+  }
+  assert.deepEqual([con([{ error: 'Data table with name "x" not found', error2: 1 }]).resultado, con([{ error: 'boom' }]).motivoFallo], ['fallida', 'error_insert']);
+  assert.equal(con([{ error: { message: 'Mensaje anidado' } }]).error, 'Mensaje anidado');
+  assert.ok(con([{ error: 'x'.repeat(500) }]).error.length <= 200);
+  assert.equal(con([{ error: 'x' }, { id: 1, idEjecucion: 'ex-9' }]).resultado, 'guardada', 'si la fila vuelve, está guardada');
+  // sin nada que guardar o sin persistencia: el informe no cambia
+  const sin = { ...base, persistencia: { ...base.persistencia, escritura: { ...base.persistencia.escritura, guardar: false, resultado: 'no_procede' } } };
+  assert.equal(aud.confirmarEscritura(sin, []), sin);
+  assert.equal(aud.confirmarEscritura({ markdown: 'x' }, []).markdown, 'x');
+  assert.equal(aud.confirmarEscritura(null, []), null);
+});
+
+test('si no se decide guardar (parcial, fallida…) el Insert no se ejecuta, no hay confirmación y el informe dice «no procede»', () => {
+  const almacen = nuevoAlmacen();
+  const r = correr({ enlaces: ['/a', '/b', '/c'], '/a': { timeout: true }, '/b': { timeout: true }, '/c': { timeout: true } }, { almacen });
+  assert.deepEqual([r.informe.persistencia.escritura.guardar, r.informe.persistencia.escritura.resultado, r.confirmado], [false, 'no_procede', false]);
+  assert.deepEqual(r.final, r.informe);
+  assert.match(r.informe.markdown, /Escritura: \*\*no se guarda\*\*/);
+});
+
+/* ───────────────────────── Regresión: List se ejecuta una vez por elemento de entrada ───────────────────────── */
+const enlacesN = (n) => ({ enlaces: Array.from({ length: n }, (_, i) => `/e/${String(i).padStart(2, '0')}`), '/e/00': { status: 404 } });
+
+test('REGRESIÓN: con 3 y con 33 enlaces la tabla es ÚNICA y la memoria se usa (List se ejecuta una sola vez gracias a «Uno tabla»)', () => {
+  for (const n of [1, 3, 33, 40]) {
+    const almacen = nuevoAlmacen();
+    const r = correr(enlacesN(n), { almacen });
+    assert.deepEqual(r.informe.persistencia.tabla, { nombre: TABLA, estado: 'ok' }, `${n} enlaces`);
+    assert.equal(r.salidas.get('Comprobar tabla').length, 1, `${n} enlaces: List devuelve UNA tabla`);
+    assert.equal(r.salidas.get('Uno tabla').length, 1);
+    assert.equal(r.final.persistencia.escritura.resultado, 'guardada', `${n} enlaces: se guarda`);
+    assert.equal(filas(almacen).length, 1);
+    // y la segunda auditoría ya compara con el historial
+    const r2 = correr(enlacesN(n), { n: 1, almacen });
+    assert.deepEqual([r2.informe.seguimiento.origenReferencia, r2.informe.persistencia.lectura.validas], ['historial', 1], `${n} enlaces`);
+  }
+});
+
+test('REGRESIÓN: el simulador reproduce el fallo real — sin «Uno tabla» List devuelve una copia por enlace; la tabla sigue siendo «ok» porque se distingue por id', () => {
+  const wf = J('automation/workflows/auditor-general.produccion.json');
+  const sin = plano(wf);
+  sin.nodes = sin.nodes.filter((n) => n.name !== 'Uno tabla');
+  sin.connections['Pedir enlaces'] = { main: [[{ node: 'Comprobar tabla', type: 'main', index: 0 }]] };
+  delete sin.connections['Uno tabla'];
+  for (const n of [3, 33]) {
+    const almacen = nuevoAlmacen();
+    const r = simularWorkflow(sin, { fetchSimulado: sitio(enlacesN(n)), ahora: dia(0), hostsPermitidos: PROD.hostsPermitidos, almacen, ejecucion: { mode: 'test', id: 'x' } });
+    assert.equal(r.salidas.get('Comprobar tabla').length, n, `List devuelve ${n} copias (una por elemento de entrada), como en n8n real`);
+    const informe = plano(r.salida)[0].json;
+    assert.equal(informe.persistencia.tabla.estado, 'ok', 'aun así la memoria funciona (defensa en profundidad)');
+  }
+  // y con DOS tablas realmente distintas sigue siendo ambigua, con cualquier número de copias
+  const dos = nuevoAlmacen([TABLA, `${TABLA}_antigua`]);
+  const r = simularWorkflow(sin, { fetchSimulado: sitio(enlacesN(3)), ahora: dia(0), hostsPermitidos: PROD.hostsPermitidos, almacen: dos, ejecucion: { mode: 'test', id: 'x' } });
+  assert.equal(plano(r.salida)[0].json.persistencia.tabla.estado, 'ambigua');
+});
+
+test('estadoDeTabla: la misma tabla repetida no es ambigua; dos tablas distintas (mismo nombre con otro id, o nombres que contienen el buscado) sí', () => {
+  const t = (id, name = TABLA) => ({ id, name, projectId: 'p', columns: [] });
+  assert.equal(seg.estadoDeTabla(Array.from({ length: 33 }, () => t('T1')), TABLA), 'ok');
+  assert.equal(seg.estadoDeTabla([t('T1')], TABLA), 'ok');
+  assert.equal(seg.estadoDeTabla([t('T1'), t('T2')], TABLA), 'ambigua', 'mismo nombre, otro id');
+  assert.equal(seg.estadoDeTabla([t('T1'), t('T2', `${TABLA}_antigua`), t('T2', `${TABLA}_antigua`)], TABLA), 'ambigua');
+  assert.equal(seg.estadoDeTabla([t('T2', `${TABLA}_antigua`)], TABLA), 'ambigua', 'sólo existe otra tabla cuyo nombre contiene el buscado');
+  assert.equal(seg.estadoDeTabla([{ name: TABLA }, { name: TABLA }], TABLA), 'ok', 'sin id se distingue por nombre');
+  assert.equal(seg.estadoDeTabla([{ name: TABLA }, { name: `${TABLA}_x` }], TABLA), 'ambigua');
+  assert.equal(seg.estadoDeTabla([{}], TABLA), 'no_encontrada');
+  assert.equal(seg.estadoDeTabla([], TABLA), 'no_encontrada');
+  assert.equal(seg.estadoDeTabla([{ error: 'x' }, t('T1')], TABLA), 'error_lectura');
+  assert.equal(seg.estadoDeTabla(null, TABLA), 'no_encontrada');
+});
+
+test('el simulador reproduce List y Get por cada elemento de entrada y las dos salidas del Insert (comportamiento real de n8n)', () => {
+  const almacen = nuevoAlmacen();
+  almacen.tablas[TABLA].filas.push({ id: 1, entorno: 'produccion' }, { id: 2, entorno: 'produccion' });
+  const nodo = (operacion, extra = {}) => ({ name: operacion, type: 'n8n-nodes-base.dataTable', parameters: { resource: operacion === 'list' ? 'table' : 'row', operation: operacion, returnAll: true, options: { filterName: TABLA }, dataTableId: { __rl: true, mode: 'name', value: TABLA }, filters: { conditions: [] }, ...extra } });
+  const wf = (...nodos) => ({ nodes: [{ name: 'Ejecutar a mano', type: 'n8n-nodes-base.manualTrigger', parameters: {} }, { name: 'Tres', type: 'n8n-nodes-base.code', parameters: { jsCode: 'return [{ json: {} }, { json: {} }, { json: {} }];' } }, ...nodos], connections: { 'Ejecutar a mano': { main: [[{ node: 'Tres', type: 'main', index: 0 }]] }, Tres: { main: [[{ node: nodos[0].name, type: 'main', index: 0 }]] } } });
+  assert.equal(simularWorkflow(wf(nodo('list')), { almacen }).salidas.get('list').length, 3, 'List: 3 elementos de entrada → 3 copias');
+  assert.equal(simularWorkflow(wf(nodo('get')), { almacen }).salidas.get('get').length, 6, 'Get: 3 entradas × 2 filas');
+});
 /* ───────────────────────── Calidad, orden y protecciones ───────────────────────── */
 test('no se guardan auditorías FALLIDAS ni PARCIALES, y la última referencia válida queda intacta', () => {
   const almacen = nuevoAlmacen();
@@ -355,11 +473,17 @@ test('workflows generados: tabla por NOMBRE (sin ids de ninguna instalación), I
     assert.deepEqual(comprobarWorkflow(wf, { nombreArchivo: f }).errores, [], f);
     const dt = wf.nodes.filter((n) => n.type === 'n8n-nodes-base.dataTable');
     assert.deepEqual(dt.map((n) => n.name), ['Comprobar tabla', 'Leer historial', 'Guardar instantánea']);
+    // «Uno tabla» antes de List; «Confirmar escritura» recibe las DOS salidas del Insert
+    const orden = (nombre) => Object.entries(wf.connections).filter(([, c]) => c.main.some((g) => g.some((x) => x.node === nombre))).map(([d]) => d);
+    assert.deepEqual(orden('Comprobar tabla'), ['Uno tabla']);
+    assert.equal(wf.nodes.find((n) => n.name === 'Uno tabla').parameters.jsCode, 'return [{ json: {} }];');
+    assert.deepEqual(wf.connections['Guardar instantánea'].main.map((g) => g.map((x) => x.node)), [['Confirmar escritura'], ['Confirmar escritura']]);
+    assert.ok(wf.nodes.find((n) => n.name === 'Confirmar escritura').parameters.jsCode.includes('confirmarEscritura('));
     const texto = JSON.stringify(wf);
     assert.ok(!/"mode":"(id|list)"|dataTableId":"[^{]/.test(texto), 'ninguna referencia por id o lista');
     assert.ok(!/tabla-\d|prueba_dt|tai_prueba|"projectId"/.test(texto), 'nada específico de una instalación');
     const ins = dt.find((n) => n.parameters.operation === 'insert');
-    assert.deepEqual([ins.retryOnFail, ins.onError, ins.parameters.options], [false, 'continueRegularOutput', {}]);
+    assert.deepEqual([ins.retryOnFail, ins.onError, ins.parameters.options], [false, 'continueErrorOutput', {}]);
     assert.deepEqual(Object.keys(ins.parameters.columns.value).sort(), [...seg.COLUMNAS_INSTANTANEAS].sort());
     // la fila sólo llega al Insert a través del nodo «Solo la fila»
     const entradas = Object.entries(wf.connections).filter(([, c]) => c.main[0].some((x) => x.node === 'Guardar instantánea')).map(([d]) => d);

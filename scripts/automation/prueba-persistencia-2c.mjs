@@ -24,6 +24,8 @@ export const ESCENARIOS = {
   s1: { enlaces: ['/a', '/b', '/c'], paginas: { '/b': { status: 500 }, '/c': { status: 404 } } },
   s2: { enlaces: ['/a', '/b', '/c'], paginas: { '/a': { status: 404 }, '/c': { status: 404 } } },
   ok: { enlaces: ['/a', '/b', '/c'], paginas: {} },
+  // 33 enlaces (como en producción) con uno roto: comprueba que List se ejecuta UNA vez aunque haya muchas respuestas de enlaces
+  e33: { enlaces: Array.from({ length: 33 }, (_, i) => '/e/' + String(i).padStart(2, '0')), paginas: { '/e/00': { status: 404 } } },
   parcial: { enlaces: ['/a', '/b', '/c'], paginas: { '/a': { timeout: true }, '/b': { timeout: true }, '/c': { timeout: true } } },
   caida: { todoCaido: true, enlaces: [], paginas: {} },
 };

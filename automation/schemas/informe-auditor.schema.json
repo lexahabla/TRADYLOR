@@ -1223,6 +1223,27 @@
             },
             "idEjecucion": {
               "type": "string"
+            },
+            "resultado": {
+              "enum": [
+                "no_procede",
+                "pendiente",
+                "guardada",
+                "fallida"
+              ]
+            },
+            "filaId": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "motivoFallo": {
+              "enum": [
+                "error_insert",
+                "sin_confirmacion"
+              ]
+            },
+            "error": {
+              "type": "string"
             }
           }
         }

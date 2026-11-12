@@ -141,6 +141,7 @@ export function comprobarWorkflow(wf, ctx = {}) {
       if (p.resource === 'table' && p.operation === 'create' && typeof p.tableName === 'string') tablasDt.add(p.tableName);
       if (op === 'row/insert') {
         if (n.retryOnFail === true) err(`${etiqueta}: el Insert no puede reintentar automáticamente (duplicaría filas)`);
+        if (n.onError !== 'continueErrorOutput') err(`${etiqueta}: el Insert debe usar onError = continueErrorOutput (los errores salen por la segunda salida y el informe los recibe)`);
         const columnas = Object.keys(p.columns?.value ?? {});
         if (!columnas.length || columnas.some((c) => !COLUMNAS_INSTANTANEAS.includes(c))) err(`${etiqueta}: el Insert sólo puede escribir las columnas del historial (${COLUMNAS_INSTANTANEAS.join(', ')})`);
         if (p.options && p.options.optimizeBulk === true) avisos.push(`${etiqueta}: optimizeBulk no devuelve las filas insertadas`);
@@ -188,6 +189,13 @@ export function comprobarWorkflow(wf, ctx = {}) {
     if (n.type !== 'n8n-nodes-base.dataTable' || n.parameters?.operation !== 'insert') continue;
     const entradas = aristas.filter(([, a]) => a === n.name).map(([d]) => d);
     if (!entradas.length || entradas.some((d) => tipoDe[d] !== 'n8n-nodes-base.code')) err(`Nodo «${n.name}»: el Insert sólo puede recibir datos de nodos Code (que deciden qué fila se guarda)`);
+  }
+  // El Insert tiene DOS salidas (correcta y de error) y las dos deben llegar a un nodo Code que confirme la escritura (que no haya error no prueba que se guardó).
+  for (const n of wf.nodes) {
+    if (n.type !== 'n8n-nodes-base.dataTable' || n.parameters?.operation !== 'insert') continue;
+    const salidasN = wf.connections?.[n.name]?.main ?? [];
+    const destinos = (i) => (salidasN[i] ?? []).map((c) => c.node);
+    for (const i of [0, 1]) if (!destinos(i).length || destinos(i).some((d) => tipoDe[d] !== 'n8n-nodes-base.code')) err(`Nodo «${n.name}»: la salida ${i === 0 ? 'correcta' : 'de error'} del Insert debe ir a un nodo Code que confirme la escritura`);
   }
   const grado = new Map([...nombres].map((x) => [x, 0]));
   for (const [, a] of aristas) grado.set(a, (grado.get(a) ?? 0) + 1);

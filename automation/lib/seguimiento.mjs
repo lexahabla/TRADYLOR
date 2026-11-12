@@ -439,7 +439,11 @@ export function estadoDeTabla(tablas, nombre) {
   if (lista.some((t) => segEsObjeto(t) && t.error !== undefined)) return 'error_lectura';
   const conNombre = lista.filter((t) => segEsObjeto(t) && typeof t.name === 'string');
   if (!conNombre.length) return 'no_encontrada';
-  return conNombre.length === 1 && conNombre[0].name === nombre ? 'ok' : 'ambigua';
+  // La MISMA tabla repetida (el nodo List devuelve una copia por cada elemento de entrada) no es ambigüedad: las tablas se distinguen por `id` (o por nombre si no hay id).
+  const distintas = new Map();
+  for (const t of conNombre) distintas.set(t.id !== undefined && t.id !== null ? `id:${t.id}` : `nombre:${t.name}`, t);
+  const unicas = [...distintas.values()];
+  return unicas.length === 1 && unicas[0].name === nombre ? 'ok' : 'ambigua';
 }
 
 /** Fila a insertar para una instantánea: sólo texto, sólo las columnas permitidas. Nada de evidencias, textos ni datos sensibles (la instantánea ya sólo lleva claves y fechas). */

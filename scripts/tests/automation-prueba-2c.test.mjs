@@ -55,7 +55,7 @@ test('workflows auxiliares: siembra con el Insert REAL, reinicio sólo de la tab
   const real = J('automation/workflows/auditor-general.produccion.json').nodes.find((n) => n.name === 'Guardar instantánea');
   const siembra = g.workflowSembrar().nodes.find((n) => n.name === 'Insertar filas');
   assert.deepEqual(plano(siembra.parameters), plano(real.parameters));
-  assert.deepEqual([siembra.retryOnFail, siembra.onError], [false, 'continueRegularOutput']);
+  assert.deepEqual([siembra.retryOnFail, siembra.onError], [false, 'continueErrorOutput']);
   const borrar = g.workflowReiniciar().nodes.find((n) => n.parameters?.operation === 'deleteRows');
   assert.equal(borrar.parameters.dataTableId.value, g.TABLA_2C);
   assert.ok(borrar.parameters.filters.conditions.length > 0, 'Delete exige filtro');

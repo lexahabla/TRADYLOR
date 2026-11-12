@@ -58,7 +58,7 @@ Estado (12/11/2026): implementada y probada **solo en local**. Los workflows se 
 - **Contenido**: el motor usa `alcance.contenido` (si existe) para resolver `sin_titulo`, `h1`, `contenido_minimo` y `error_interno_200`: una página que redirige, no es HTML o da error HTTP deja esas incidencias como **no verificadas** (`analisis_incompleto` / `pagina_con_error`).
 - **Tamaño de los nodos Code**: para mantenerlos bajo el límite del linter (80 kB), el constructor ya no incrusta los comentarios que ocupan líneas enteras (mismo código ejecutado). Tamaño máximo actual por nodo ≈ 68 kB; workflow de producción ≈ 208 kB.
 - **Sin cambios** en el límite de **40 enlaces**, en la política de URLs ni en el aislamiento. El alcance y el seguimiento no añaden peticiones.
-- Huella nueva del diagnóstico (`automation/dev/diagnostico-auditor-produccion.json`, SHA-256 LF `b5cf6b1ecab1c5efde37754d46435b4c14d6ab8617f910e3b11b766050f2a8be` (huella de la 2c; la de la 2b era `06d7dc90…`); comprobable con `node scripts/automation/verificar-fichero-diagnostico.mjs`). El ejecutado en producción el 12/11/2026 fue el de la huella original `e1e5e34a…` (commit `bf20454`).
+- Huella nueva del diagnóstico (`automation/dev/diagnostico-auditor-produccion.json`, SHA-256 LF `946f70483e70b8e7eb89ba015b8e93feb1b66315c0709c34f04fdee536237587` (huella tras las correcciones de 2c; la de la 2b era `06d7dc90…`); comprobable con `node scripts/automation/verificar-fichero-diagnostico.mjs`). El ejecutado en producción el 12/11/2026 fue el de la huella original `e1e5e34a…` (commit `bf20454`).
 
 ## 9. Entrega 2c — memoria persistente con instantáneas inmutables (Data Table de n8n)
 
@@ -67,16 +67,17 @@ Estado (12/11/2026): **implementada y probada en local con el simulador; NO desp
 ### 9.1 Arquitectura
 ```
 Manual → Objetivos → Pedir rutas → Enlaces a revisar → Pedir enlaces → [catálogo y fichas, sólo local]
-       → Comprobar tabla (Data table › List, filtro por nombre) → Uno historial (Code mínimo: un solo elemento)
+       → Uno tabla (Code mínimo) → Comprobar tabla (Data table › List, filtro por nombre) → Uno historial (Code mínimo)
        → Leer historial (Data table › Get: entorno = X, ORDEN generadoEn DESC, LÍMITE maxHistorial)
-       → Informe (Code: informe + fila a guardar) → Solo la fila (Code mínimo) → Guardar instantánea (Data table › Insert)
+       → Informe (Code: informe + fila a guardar) → Solo la fila (Code mínimo) → Guardar instantánea (Data table › Insert, 2 salidas)
+       → Confirmar escritura (Code: recibe las DOS salidas del Insert y completa el informe con el resultado real)
 ```
 - **Memoria = tabla de SOLO INSERCIONES.** Cada auditoría completa añade una fila inmutable; nada se actualiza ni se borra. El estado se **reconstruye** en cada ejecución leyendo las últimas filas: se deduplica por `(entorno, idEjecucion)` conservando la de menor `id`, se ordena por `(generadoEn, idEjecucion)` y se pliega con el motor de 2a/2b (`reconstruirEstado`, sin duplicar lógica). El resultado depende del *conjunto* de filas y no del orden de inserción: dos ejecuciones simultáneas o fuera de orden **convergen** sin necesidad de atomicidad.
 - **Motor** (`seguimiento.mjs`, puro): `reconstruirEstado`, `ejecutarSeguimientoConHistorial`, `filaDeInstantanea`, `deduplicarFilas`, `ordenarFilas`, `estadoDeTabla`, `origenDeModo`. **Integración** (`auditor.mjs`): `construirInformeYFila(entrada)` (la antigua `construirInformeAuditor` es un envoltorio compatible). **Nodos**: `scripts/automation/build-workflows.mjs` (los tres nodos Data table + dos Code mínimos). La persistencia (leer/insertar) la hacen **solo los nodos Data table**; los Code no acceden a la tabla.
 - **Columnas** (todas texto): `entorno`, `host`, `generadoEn`, `idEjecucion`, `origen`, `calidad`, `huella`, `payload` (la instantánea compacta en JSON: claves estables, gravedades, fechas y el alcance; **sin evidencias, títulos, HTML ni secretos**; ≤ 60 KiB).
 - **Qué se guarda y qué no.** Se guarda solo una auditoría **completa** y comparable (o línea base). **No** se guarda: ejecución fallida o parcial; fecha no posterior a la última válida (ejecución antigua o tardía: `orden_invalido`); origen no permitido (`origen_no_valido`); sin identificador de ejecución; instantánea demasiado grande; ejecución ya guardada (reintento: `ya_guardada`). Filas con fecha > 30 días en el futuro se descartan al leer (no bloquean).
 - **Origen** con `$execution.mode`: `test` → `manual`, `production` → `programada` (otro valor se conserva y, por defecto, **no** actualiza el historial; `seguimiento.origenesValidos` en la configuración). `idEjecucion` = `ex-<$execution.id>`.
-- **Sin reintentos** en el Insert (`retryOnFail: false`); un fallo del Insert o de la lectura **no detiene** el informe (`onError: continueRegularOutput`) y el informe lo refleja en `persistencia`.
+- **Sin reintentos** en el Insert (`retryOnFail: false`). Un fallo de la lectura o de la escritura **no detiene** el informe, y el informe lo refleja en `persistencia` (ver «Resultado de la escritura»).
 - **Informe**: nuevo campo `persistencia` (`tabla.estado`: `ok | no_encontrada | ambigua | error_lectura | sin_configurar`; `lectura`; `escritura`) y apartado Markdown «Historial». El `seguimiento` mantiene nuevas, persistentes, resueltas, reaparecidas, no verificadas e indeterminadas (`origenReferencia: 'historial'`).
 - **Tamaño de los nodos**: el constructor ya **poda** las bibliotecas: cada nodo Code incrusta solo lo que alcanza (además de quitar comentarios y sangrías). Nodo Informe ≈ 69 kB (límite del linter 80 kB); el resto < 9 kB; Investigador ≈ 14 kB.
 
@@ -119,3 +120,22 @@ El n8n de la prueba excluye `httpRequest` y no tiene salida: para ejecutar el Au
 11. **V8 fallos de la tabla**: renombrar/borrar la tabla y comprobar `no_encontrada`; (opcional) llenar la cuota. El informe sale siempre.
 12. Registrar resultados en `INFORMES/` y **conservar** el entorno hasta nueva autorización; la limpieza sigue el procedimiento exclusivo de `PRUEBA-DATA-TABLES-LOCAL.md` §6.
 Criterio de aceptación: todos los puntos ✔ sin cambiar la arquitectura; si algo exige cambiarla, se consulta antes.
+
+### 9.8 Correcciones tras la integración real (12/11/2026) — resultado de la escritura
+La prueba real en `tai-prueba-dt` (informe `INFORMES/2026-11-12/…_10_…`) descubrió dos fallos que el simulador no reproducía. Corregidos y revalidados con las Data Tables reales (49/49):
+1. **List se ejecuta una vez por cada elemento de entrada** (la entrada eran las respuestas de todos los enlaces): devolvía la tabla repetida N veces y se interpretaba como «ambigua», así que la memoria **nunca** se usaba. Corrección: Code mínimo **«Uno tabla»** antes de «Comprobar tabla» y `estadoDeTabla` distingue las tablas por `id` (la misma tabla repetida ya no es ambigua; dos tablas realmente distintas —mismo nombre con otro id, o un nombre que contiene el buscado— sí lo son).
+2. **Un Insert que falla puede no dar ningún error.** Medido en n8n 2.38.6: con `continueErrorOutput` los errores de n8n (p. ej. tabla inexistente) salen por la **segunda salida** con su mensaje, pero una **validación fallida (columna desconocida) NO da error**: el nodo termina «success», no guarda nada y devuelve el elemento de entrada envuelto (`{json:{json:…,pairedItem},pairedItem}`) por la salida correcta. Cambiar `onError` por sí solo no basta.
+
+**Resultado de la escritura (`persistencia.escritura.resultado`).** El informe se genera ANTES del Insert, así que solo puede decir:
+- `no_procede`: no se decidió guardar (parcial, fallida, antigua, origen no permitido, tabla no disponible…). No hay Insert ni confirmación.
+- `pendiente`: se decidió guardar; el resultado real lo confirma el nodo posterior.
+Después, el nodo **«Confirmar escritura»** (Code) recibe las **dos salidas** del Insert y devuelve **el mismo informe** con `resultado`:
+- `guardada` (con `filaId`) **solo si el Insert devolvió la fila guardada**: un `id` numérico y **nuestro** `idEjecucion`. Que no haya error no prueba que se guardó.
+- `fallida`: `motivoFallo = error_insert` (llegó un error por la segunda salida; se guarda su mensaje, ≤ 200 caracteres) o `sin_confirmacion` (el Insert no devolvió la fila: p. ej. validación silenciosa).
+El Markdown se regenera («Escritura **guardada** (fila N…)» o «⚠ **Escritura FALLIDA: la instantánea NO se guardó** (…)»). El informe se conserva **entero**; solo cambian la escritura y su línea de Markdown.
+
+**Dónde está el informe definitivo.** Si hubo intento de guardar, en la salida de «Confirmar escritura»; si no (`no_procede`), en la de «Informe» (que ya es definitivo). La salida de «Informe» nunca promete que se guardará.
+
+**Límites conocidos.** Con la validación silenciosa n8n no devuelve el motivo: el informe dice `sin_confirmacion`. Si el Insert no produjera ninguna salida, «Confirmar escritura» no se ejecuta y el informe queda en `pendiente` (no se presenta como guardado). La tabla no se poda automáticamente.
+
+**Pruebas.** Simulador: List y Get por elemento de entrada, dos salidas del Insert, validación silenciosa y error de tabla (comportamiento real medido). Regresión: 1, 3, 33 y 40 enlaces, `estadoDeTabla`, `confirmarEscritura` y fallos del Insert (`automation-persistencia.test.mjs`). Real: List con 3 y 33 enlaces, tablas ambiguas, escritura confirmada con el id real de la fila, error forzado de validación y de tabla, y conservación del informe (`INFORMES/…_11_…`).
