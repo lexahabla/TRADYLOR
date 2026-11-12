@@ -3,7 +3,7 @@
  * Se incrusta en los nodos «Code» del workflow de n8n (sin imports reales; los `import` de abajo los resuelve el constructor).
  * Toda la entrada de red llega ya hecha por los nodos HTTP de n8n; aquí sólo se decide qué pedir y cómo interpretar lo recibido.
  */
-import { diasEntre, estadoGlobal, fechaValida, ordenarIncidencias, plegar, recortar, resumenIncidencias } from './common.mjs';
+import { diasEntre, estadoGlobal, fechaValida, ordenarIncidencias, plegar, precioAnteriorDeclarado, recortar, resumenIncidencias } from './common.mjs';
 import { RUTA_CATALOGO_AUTOMATIZACION, evaluarUrl, normalizarUrl } from './urlPolicy.mjs';
 
 export const VERSION_AUDITOR = '0.2.0';
@@ -316,8 +316,8 @@ export function analizarCatalogo(catalogo, cfg, ahoraIso) {
   const precio = (p) => Number(p.price);
   grupo('sin_precio', 'alta', 'Productos sin precio utilizable', 'Precio ausente, cero o negativo.', idsDe((p) => !(precio(p) > 0)), 'Retirar o corregir la ficha.');
   grupo('precio_extremo', 'media', 'Precios extremadamente altos', 'Precio superior a 100.000 €.', idsDe((p) => precio(p) > 100000), 'Comprobar el dato de origen.');
-  grupo('precio_anterior_menor', 'media', 'Precio anterior inferior al actual', 'originalPrice < price: el descuento declarado no tiene sentido.', idsDe((p) => p.originalPrice != null && Number(p.originalPrice) > 0 && Number(p.originalPrice) < precio(p)), 'Revisar el precio anterior.');
-  grupo('descuento_sospechoso', 'media', 'Descuentos declarados superiores al 80 %', 'Precio anterior más de 5 veces el actual (dato declarado, no verificado).', idsDe((p) => precio(p) > 0 && Number(p.originalPrice) > precio(p) * 5), 'No mostrar como descuento sin verificación.');
+  grupo('precio_anterior_menor', 'media', 'Precio anterior inferior al actual', 'El precio anterior declarado es menor que el actual: el descuento no tiene sentido.', idsDe((p) => precioAnteriorDeclarado(p) !== null && precioAnteriorDeclarado(p) < precio(p)), 'Revisar el precio anterior.');
+  grupo('descuento_sospechoso', 'media', 'Descuentos declarados superiores al 80 %', 'Precio anterior más de 5 veces el actual (dato declarado, no verificado).', idsDe((p) => precio(p) > 0 && precioAnteriorDeclarado(p) !== null && precioAnteriorDeclarado(p) > precio(p) * 5), 'No mostrar como descuento sin verificación.');
   grupo('sin_imagen', 'media', 'Productos sin imagen', 'Falta la imagen principal.', idsDe((p) => !p.image), 'Añadir imagen.');
   grupo('imagen_no_segura', 'media', 'Imágenes con dirección no admisible', 'La imagen no es https ni una ruta propia.', idsDe((p) => p.image && !imagenAceptable(p.image)), 'Corregir la URL de la imagen.');
   grupo('sin_categoria', 'media', 'Productos sin categoría', 'Falta la categoría.', idsDe((p) => !String(p.category ?? '').trim()), 'Asignar categoría.');
@@ -408,8 +408,7 @@ export function construirInformeAuditor(entrada) {
   const contador = resumenIncidencias(incidencias);
   const { omitidos } = planificarRutas(cfg);
   const noRevisado = [
-    'Programadores internos de Treidilor (precios, alertas, recordatorios): no exponen estado de sólo lectura (se cubrirá con la API de automatización)',
-    'Programadores internos y estado de las actualizaciones: pendientes de un endpoint de estado en la API de automatización',
+    'Programadores internos de Treidilor (precios, alertas, recordatorios) y estado de las actualizaciones: pendientes de un endpoint de estado en la API de automatización',
     ...(cfg.modo === 'publico' ? ['Fichas de producto y feed del catálogo: no se piden en producción (cada visita cuenta en la analítica y el feed exige un token)'] : []),
     ...omitidos.map((o) => `${o.etiqueta}: omitida por la política de URLs (${o.motivo})`),
   ];

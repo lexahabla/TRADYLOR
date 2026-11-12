@@ -42,6 +42,9 @@ const salida = JSON.parse(docker('inspect', SALIDA))[0];
 comprobar('la pasarela de salida no publica puertos', Object.values(salida.NetworkSettings.Ports ?? {}).every((v) => !v || v.length === 0));
 comprobar('n8n no tiene variables de producción (claves, tokens)', !(n8n.Config.Env ?? []).some((e) => /^(TRADYLOR_|OPENAI|ANTHROPIC|GROQ|GEMINI|FLUX|SCRAPER|APIFY|GITHUB|ADMIN_)/i.test(e)));
 
+const lista = intentar('exec', N8N, 'n8n', 'list:workflow');
+comprobar('el n8n de pruebas NO contiene workflows de producción', lista.ok && !/producci[oó]n/i.test(lista.salida), lista.ok ? '' : 'no se pudo listar');
+
 // 2) Pruebas reales desde dentro de n8n: NADA ajeno debe responder
 for (const url of ['https://treidilor.com/api/health', 'https://www.treidilor.com/', 'http://treidilor.com/', 'https://1.1.1.1/', 'http://93.184.216.34/', 'https://example.com/']) {
   comprobar(`SIN salida a ${url}`, !pedir(url).ok);

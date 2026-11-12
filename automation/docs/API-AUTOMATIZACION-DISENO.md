@@ -1,4 +1,6 @@
-# Diseño de la API de automatización de Treidilor (Etapa 2.2) — SIN IMPLEMENTAR
+# Diseño de la API de automatización de Treidilor (Etapa 2.2)
+
+> **Estado 12/11/2026:** implementada en local la parte de LECTURA (`catalog:read`, `me`, administración de clientes, límites, auditoría); desactivada por defecto. Ver `docs/api-automatizacion.md`. Lo demás de este diseño (propuestas, borradores, simulación de importación, estado de programadores) **sigue sin implementar**.
 
 Objetivo: que n8n y los agentes **nunca necesiten `TRADYLOR_API_TOKEN`**, con permisos mínimos, límites, auditoría y aprobaciones.
 

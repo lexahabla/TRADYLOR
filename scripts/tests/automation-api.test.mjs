@@ -306,3 +306,28 @@ test('límite de clientes activos', async () => {
   assert.equal(r.status, 409);
   assert.equal(r.code, 'limite_clientes');
 });
+
+/* ───────── Contrato: el feed REAL alimenta a los agentes ───────── */
+test('contrato: lo que devuelve la API (projectProduct) lo entienden los agentes — candidatos, calidad y valoración por defecto', async () => {
+  const inv = await import('../../automation/lib/researcher.mjs');
+  const aud = await import('../../automation/lib/auditor.mjs');
+  const cfg = JSON.parse(fs.readFileSync(new URL('../../automation/config/local.json', import.meta.url), 'utf8'));
+  const feed = [
+    prod(301, { price: 100, originalPrice: 150 }),
+    prod(302, { price: 100, originalPrice: 150, inStock: false }), // agotado: no es candidato
+    prod(303, { price: 100, originalPrice: 700 }), // descuento poco creíble
+    prod(304, { price: 100, originalPrice: undefined }),
+    prod(305, { price: 100, originalPrice: 150, description: 'corta' }),
+    prod(306, { price: 20, originalPrice: undefined, network: 'aliexpress', rating: 4.8, reviewsCount: 100 }),
+  ].map(C.projectProduct);
+  const r = inv.buscarCandidatos(feed, cfg);
+  assert.deepEqual(r.candidatos.map((c) => c.id).sort(), ['p301', 'p305'], 'el precio anterior declarado del feed real se interpreta; el agotado se excluye');
+  assert.deepEqual(r.sospechosos.map((c) => c.id), ['p303']);
+  const calidad = inv.problemasCalidad(feed);
+  assert.ok(calidad.ejemplos.some((q) => q.id === 'p305' && q.faltan.includes('descripción')), 'usa descriptionLength del feed');
+  const cat = aud.analizarCatalogo({ productos: feed, total: feed.length, totalPaginas: 1, errores: [] }, cfg, '2026-11-12T10:00:00.000Z');
+  const ids = cat.map((i) => i.id);
+  assert.ok(ids.some((i) => i.startsWith('catalogo:valoracion_por_defecto')), 'detecta la valoración por defecto con ratingFlag');
+  assert.ok(ids.some((i) => i.startsWith('catalogo:descuento_sospechoso')), 'detecta el descuento sospechoso con declaredPreviousPrice');
+  assert.ok(!ids.some((i) => /sin_precio|sin_imagen|precio_anterior_menor/.test(i)));
+});

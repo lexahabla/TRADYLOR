@@ -26,10 +26,13 @@ automation/agents/README.md
 automation/config/local.json
 automation/config/produccion.json
 automation/dev/.env.n8n.example
+automation/dev/diagnostico-aislamiento.json
 automation/dev/diagnostico-entorno-code.json
 automation/dev/docker-compose.n8n.yml
+automation/dev/puente-tcp.mjs
 automation/docs/API-AUTOMATIZACION-DISENO.md
 automation/docs/FALTA-PARA-EJECUTAR.md
+automation/docs/MCP-N8N.md
 automation/docs/PROCEDIMIENTOS.md
 automation/lib/auditor.mjs
 automation/lib/common.mjs
@@ -43,6 +46,7 @@ automation/workflows/investigador-comercial.local.json
 chat.js
 deploy.ps1
 docker/entrypoint.sh
+docs/api-automatizacion.md
 docs/api-v1.md
 docs/actualizacion-precios-activacion.md
 docs/deploy-easypanel.md
@@ -59,6 +63,10 @@ postcss.config.mjs
 public/favicon.svg
 public/site.webmanifest
 scripts/automation/build-workflows.mjs
+scripts/automation/comprobar-aislamiento.mjs
+scripts/automation/crear-cliente.mjs
+scripts/automation/ejecutar-local.mjs
+scripts/automation/importar-local.mjs
 scripts/automation/lint-workflows.mjs
 scripts/automation/make-test-data.mjs
 scripts/automation/normalize-workflow.mjs
@@ -76,6 +84,7 @@ scripts/tests/ai-console-guard.test.mjs
 scripts/tests/amazon-link.test.mjs
 scripts/tests/analytics-memo.test.mjs
 scripts/tests/automation-agents.test.mjs
+scripts/tests/automation-api.test.mjs
 scripts/tests/automation-seguridad.test.mjs
 scripts/tests/catalog-concurrency.test.mjs
 scripts/tests/categories-cache.test.mjs
@@ -221,6 +230,8 @@ src/lib/analyticsMonths.ts
 src/lib/analyticsOptimo.ts
 src/lib/apiAuth.ts
 src/lib/apify/categoryExtraction.ts
+src/lib/automationApi.ts
+src/lib/automationCatalog.ts
 src/lib/brandResolve.ts
 src/lib/buildCatalog/job.ts
 src/lib/catalog.ts
@@ -366,6 +377,7 @@ src/pages/api/admin/analytics/ignored-ips.ts
 src/pages/api/admin/analytics/months.ts
 src/pages/api/admin/analytics/reset.ts
 src/pages/api/admin/auto-curate/index.ts
+src/pages/api/admin/automation-clients.ts
 src/pages/api/admin/catalog-sort.ts
 src/pages/api/admin/catalog/clear-cache.ts
 src/pages/api/admin/catalog/index.ts
@@ -416,6 +428,8 @@ src/pages/api/alertas-precio/preferencias.ts
 src/pages/api/alertas-precio/resumen.ts
 src/pages/api/analytics/event.ts
 src/pages/api/asistente-ia.ts
+src/pages/api/automation/v1/catalog.ts
+src/pages/api/automation/v1/me.ts
 src/pages/api/catalogo/facets.ts
 src/pages/api/categories/[id].ts
 src/pages/api/categories/index.ts

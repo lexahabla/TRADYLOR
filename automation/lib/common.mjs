@@ -16,6 +16,12 @@ export function recortar(texto, max = 120) {
   return t.length <= max ? t : `${t.slice(0, Math.max(0, max - 1))}…`;
 }
 
+/** Precio anterior DECLARADO por la fuente (feed de automatización: `declaredPreviousPrice`; feed antiguo: `originalPrice`). null si no consta. */
+export function precioAnteriorDeclarado(p) {
+  const n = Number(p?.declaredPreviousPrice ?? p?.originalPrice);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export function mediana(numeros) {
   const v = numeros.filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
   if (!v.length) return null;

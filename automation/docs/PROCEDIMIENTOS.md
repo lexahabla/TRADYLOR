@@ -13,52 +13,48 @@
 **Workflows creados o modificados en n8n** (con Claude conectado a la instancia de pruebas): exportarlos con `n8n export:workflow` (o por MCP/API), pasarlos por `normalize-workflow.mjs --write` y por el comprobador antes de guardarlos. Si algo del JSON no se puede generar desde `lib`, se documenta aquí.
 
 ## 2. Entorno de pruebas local (requiere autorización: C1, C2, C3)
+
+**Regla de oro: el n8n de pruebas está aislado por RED (no por advertencias).** Vive en una red de Docker `internal`, sin ruta a Internet. Su única salida es una pasarela TCP que solo reenvía a `host.docker.internal:4350` (el Treidilor de pruebas) y su única entrada es `127.0.0.1:5678`. Por eso ningún workflow, expresión, redirección, CLI, MCP o API puede llegar a `treidilor.com`. Tras arrancar, **siempre** `node scripts/automation/comprobar-aislamiento.mjs` (pruebas reales desde dentro del contenedor). Los scripts de importación y ejecución lo repiten antes de actuar y se niegan a seguir si falla.
+
 ### 2.1 Treidilor de pruebas con datos saneados
 ```bash
-node scripts/automation/make-test-data.mjs --from <carpeta de datos local> --out <carpeta nueva, p. ej. D:/treidilor-pruebas/datos>
+node scripts/automation/make-test-data.mjs --from src/data --out D:/treidilor-pruebas/datos     # genera también un token general desechable (no se usa)
 npm run build
-# arrancar (variables sólo para este proceso; el token desechable está en <carpeta>/.token-pruebas):
-TRADYLOR_DATA_DIR=<carpeta nueva> TRADYLOR_API_TOKEN="$(cat <carpeta nueva>/.token-pruebas)" PORT=4350 HOST=127.0.0.1 node dist/server/entry.mjs
+# arrancar con el entorno VACÍO (sin claves de IA, SMTP ni tokens de producción) y la API de automatización activada SOLO aquí:
+#   TRADYLOR_DATA_DIR=D:/treidilor-pruebas/datos PORT=4350 HOST=127.0.0.1 AUTOMATION_API_ENABLED=true node dist/server/entry.mjs
+node --experimental-transform-types --import ./scripts/register-ts.mjs scripts/automation/crear-cliente.mjs \
+     --datos D:/treidilor-pruebas/datos --nombre n8n-pilotos --dias 7 --salida D:/treidilor-pruebas/token-automatizacion.txt
 ```
-- La carpeta de datos de pruebas sólo contiene productos, categorías, secciones y retirados. **Nunca** usuarios, Mi Radar, credenciales, claves, analítica ni portada.
-- `HOST=127.0.0.1`: en Docker Desktop, `host.docker.internal` suele alcanzar servicios del anfitrión ligados a loopback (**por comprobar**). Si no, usar `HOST=0.0.0.0` **sólo** con el cortafuegos de Windows bloqueando entradas externas al puerto 4350.
-- Parar: cerrar el proceso. Borrar: eliminar la carpeta de pruebas.
+- La carpeta de pruebas solo contiene productos, categorías, secciones y retirados. **Nunca** usuarios, Mi Radar, credenciales, claves, analítica ni portada.
+- `HOST=127.0.0.1` basta: la pasarela llega al anfitrión por `host.docker.internal` aunque el servicio escuche solo en loopback.
+- El token de automatización se escribe **fuera del repositorio** (el script lo exige) y no se imprime.
 
 ### 2.2 n8n de pruebas
 ```bash
-cp automation/dev/.env.n8n.example automation/dev/.env.n8n     # rellenar N8N_VERSION (exacta) y N8N_ENCRYPTION_KEY (sólo de pruebas)
+cp automation/dev/.env.n8n.example automation/dev/.env.n8n     # N8N_VERSION exacta (2.46.6 en el piloto) y N8N_ENCRYPTION_KEY aleatoria SOLO de pruebas
 docker compose --env-file automation/dev/.env.n8n -f automation/dev/docker-compose.n8n.yml up -d
-# abrir http://127.0.0.1:5678 → crear el propietario local
+node scripts/automation/comprobar-aislamiento.mjs
+node scripts/automation/importar-local.mjs --token D:/treidilor-pruebas/token-automatizacion.txt     # workflows *.local.* + credencial «Treidilor automatización (solo lectura)»
+node scripts/automation/ejecutar-local.mjs --nombre "Auditor General" --salida D:/treidilor-pruebas/salidas --datos D:/treidilor-pruebas/datos
+node scripts/automation/ejecutar-local.mjs --nombre "Investigador comercial" --salida D:/treidilor-pruebas/salidas --datos D:/treidilor-pruebas/datos
 ```
-- Sólo escucha en `127.0.0.1`, sin telemetría, sin nodos de comunidad, sin `Execute Command`, límites de CPU/RAM.
-- Crear la credencial **«Treidilor automatización (solo lectura)»** (tipo *Header Auth*; nombre de cabecera `Authorization`; valor `Bearer <contenido de .token-pruebas>`). El nombre debe terminar en «(solo lectura)»: lo exige el comprobador.
-- Importar los workflows locales (`auditor-general.local.json`, `investigador-comercial.local.json`): *Workflows → Import from file*. Quedan **desactivados**. Asignar la credencial en el nodo «Pedir catálogo».
-- Ejecutar a mano («Execute workflow»). Verificar el informe en la salida del nodo «Informe».
-- Parar: `docker compose -f automation/dev/docker-compose.n8n.yml down`. Borrar TODO lo de pruebas: `… down -v`.
+- Parar: `docker compose -f automation/dev/docker-compose.n8n.yml down`. Borrar TODO lo de pruebas: `… down -v` (+ borrar `D:\treidilor-pruebas`).
+- `importar-local.mjs` solo admite `*.local.json`, conserva los ids (sobrescribe, no duplica) y nunca importa `*.produccion.*`. `ejecutar-local.mjs` solo ejecuta workflows cuyo nombre lleve «(local)», guarda el informe fuera del repositorio y falla si cambia cualquier fichero de datos de pruebas (huella SHA-256 antes/después).
+- **Nunca** importar ni ejecutar `auditor-general.produccion.json` en pruebas: apunta a `https://treidilor.com`. (La red lo impide; además el comprobador de aislamiento falla si el n8n de pruebas contiene un workflow de producción.)
 
-### 2.2 bis Procedimiento por línea de comandos (el usado en el piloto del 12/11/2026, n8n 2.46.6)
-Sin interfaz ni propietario: sirve para repetir las pruebas de forma automática. En Git Bash de Windows anteponer `MSYS_NO_PATHCONV=1` (si no, `/tmp/…` se convierte en una ruta de Windows).
-```bash
-docker cp automation/workflows treidilor-n8n-pruebas:/tmp/wfN          # usar una carpeta NUEVA cada vez (no se puede sobrescribir)
-docker exec treidilor-n8n-pruebas n8n import:workflow --separate --input=/tmp/wfN
-docker exec treidilor-n8n-pruebas n8n import:credentials --input=/tmp/cred.json   # [{id:"REEMPLAZAR_AL_IMPORTAR",name:"Treidilor automatización (solo lectura)",type:"httpHeaderAuth",data:{name:"Authorization",value:"Bearer <token de pruebas>"}}]
-docker exec -e N8N_RUNNERS_BROKER_PORT=5690 treidilor-n8n-pruebas n8n execute --id=<id del workflow>
-```
-- `N8N_RUNNERS_BROKER_PORT=5690` es necesario: el CLI arranca su propio broker de tareas y choca con el de la instancia (5679).
-- Para sobrescribir un workflow ya importado hay que incluir su `id` en el JSON (si no, se duplica).
-- `make-test-data.mjs` genera un token nuevo cada vez: tras regenerar los datos hay que reimportar la credencial.
-- Diagnóstico del entorno Code (qué globales existen): importar `automation/dev/diagnostico-entorno-code.json` y ejecutarlo. En n8n 2.46.6: **no existen `URL`, `URLSearchParams` ni `structuredClone`**; sí `Intl`, `Date`, `require` (limitado). El código de `automation/lib` no puede usarlos (el comprobador lo rechaza).
-- El nodo HTTP (v4.2, respuesta completa + texto) entrega `{ data, headers, statusCode, statusMessage }` (no `body`).
-- Los workflows se importan con `tags: []`: el CLI falla (`workflows_tags.tagId`) con etiquetas en forma de texto.
-- **Ojo:** `auditor-general.produccion.json` apunta a `https://treidilor.com`; ejecutarlo hace peticiones reales al sitio. No ejecutarlo en pruebas locales.
-- Las fichas de producto NO se visitan por defecto (`maxFichas: 0` en `local.json`): cada visita escribe `priceHistory` en `products.json` y un `page_view` en `analytics.json`.
+### 2.2 bis Hallazgos del n8n real (n8n 2.46.6)
+- Entorno Code: **no existen `URL`, `URLSearchParams` ni `structuredClone`**; sí `Intl`, `Date`. El comprobador de seguridad rechaza esos globales. Diagnóstico: importar y ejecutar `automation/dev/diagnostico-entorno-code.json`.
+- Nodo HTTP (v4.2, respuesta completa + texto): entrega `{ data, headers, statusCode, statusMessage }` (no `body`).
+- Los workflows se generan con `tags: []` (el CLI falla con etiquetas en forma de texto).
+- `n8n execute` necesita `N8N_RUNNERS_BROKER_PORT` distinto del de la instancia (lo hace `ejecutar-local.mjs`).
+- Git Bash de Windows: anteponer `MSYS_NO_PATHCONV=1` a `docker cp/exec` con rutas `/tmp/…` (los scripts ya lo hacen).
+- Las fichas de producto NO se visitan por defecto (`maxFichas: 0`): cada visita escribe `priceHistory` y un `page_view`.
+- El feed se pide por páginas SOLO si existen (`totalPages` de la primera respuesta); los nodos «Pedir … (resto)» reciben un marcador `/api/health` cuando no hay más páginas.
+- `diagnostico-aislamiento.json` (en `automation/dev/`): comprueba desde el nodo HTTP (con redirecciones activadas) que la pasarela responde y que `example.com`, una IP externa y `localhost` fallan.
 
-### 2.3 Conectar a Claude al n8n de pruebas (C3)
-Opción preferida (si la versión es ≥ 2.13): en n8n *Settings → Instance-level MCP → Enable MCP access* y marcar «Available in MCP» sólo los workflows de prueba; luego, en Claude Code:
-```bash
-claude mcp add --transport http n8n-pruebas http://127.0.0.1:5678/mcp-server/http     # ámbito local; autorizar por OAuth
-```
-Alternativa: API key de la instancia **de pruebas** guardada fuera del repositorio. En una instalación Community la clave tiene control total de esa instancia (no hay alcances): por eso sólo se usa contra el n8n de pruebas y nunca contra producción. Verificar que la extensión de Claude en Antigravity ve el servidor MCP (si no, usar la CLI `claude` desde su terminal).
+### 2.3 Propietario y MCP del n8n de pruebas (C3)
+- El propietario se creó por la API de configuración con un correo ficticio (`pruebas@example.com`) y una contraseña aleatoria guardada en `D:\treidilor-pruebas\n8n-propietario.txt` (fuera del repositorio). Se puede cambiar en *Settings → Personal* al entrar en `http://127.0.0.1:5678`.
+- MCP: ver `MCP-N8N.md` (mecanismo, herramientas, **limitaciones**: la clave MCP no tiene alcances). Solo contra el n8n local.
 
 ## 3. Despliegue controlado al n8n de producción del VPS (requiere autorización: C6, C9)
 **Puerta 0 — antes de nada:** n8n y Treidilor verificados (`FALTA-PARA-EJECUTAR.md`), copia reciente y **restauración probada**.

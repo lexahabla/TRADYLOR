@@ -1,33 +1,28 @@
-# Qué falta para ejecutar los dos primeros agentes
+# Estado y requisitos para el primer despliegue controlado
 
-Estado actual (12/11/2026): los dos agentes **se han ejecutado en un n8n real de pruebas (2.46.6, local)** contra un Treidilor de pruebas con datos saneados, sin escrituras. La sección A de abajo está HECHA; quedan la B (VPS) y el MCP opcional. Resultados e incidencias: `INFORMES/2026-11-12/2026-11-12_05_*.md` y `PROCEDIMIENTOS.md` §2.2 bis.
+Estado (12/11/2026): los dos agentes **funcionan en un n8n real de pruebas (2.46.6, local)** aislado por red, contra un Treidilor de pruebas con datos saneados y **sin escrituras**. La API de automatización (etapa 2.2) está implementada y probada **solo en local**, desactivada por defecto. Claude está conectado por MCP **solo** al n8n local.
 
-## A. Ejecutarlos EN LOCAL (n8n de pruebas en tu PC)
-| # | Qué falta | Quién | Autorización |
-|---|---|---|---|
-| 1 | **Arrancar Docker Desktop** (hoy el motor está parado) | tú | C1 |
-| 2 | Elegir la **versión exacta de n8n** (la de producción cuando se conozca; mientras tanto una versión estable reciente fijada) y crear `automation/dev/.env.n8n` (con una clave de cifrado SÓLO de pruebas) | Claude con tu visto bueno | C1 |
-| 3 | `docker compose … up -d` (descarga ≈ 1 GB, sin coste), crear el propietario local en `http://127.0.0.1:5678` | tú (2 minutos) | C1 |
-| 4 | Crear los **datos de prueba saneados** y arrancar el **Treidilor de pruebas** en `127.0.0.1:4350` con su token desechable | Claude | C2 |
-| 5 | En n8n: crear la credencial «Treidilor automatización (solo lectura)» e **importar** los dos workflows locales | tú / Claude (si se conecta MCP) | C1–C3 |
-| 6 | **Ejecución manual** del Auditor (local) y del Investigador; revisar informes y contrastarlos con el catálogo local | Claude + tú | — |
-| 7 | (Opcional) conectar Claude al n8n de pruebas por MCP/API para iterar | Claude | C3 |
+## A. Hecho en local
+- n8n de pruebas aislado por red (`internal`), con comprobación real de aislamiento (`comprobar-aislamiento.mjs`).
+- Auditor General v0.2 (feed por páginas bajo demanda, avisos del entorno local aparte, clasificación) e Investigador comercial v0.2 usando el feed de la **API de automatización con token propio** (nunca el token general).
+- Informes JSON + Markdown validados por esquema; datos de prueba idénticos antes y después (SHA-256).
+- MCP verificado (ver `MCP-N8N.md`).
 
-**Verificaciones que sólo se podrán hacer en este paso** (el simulador no las cubre): que el código de los nodos Code funcione en el entorno real de n8n (`URL`, `Intl`, `Date`), que el nodo HTTP con la configuración de ritmo, redirecciones y «continuar ante error» produzca los campos esperados (`statusCode`, `body`, `error`), que `host.docker.internal` llegue al Treidilor de pruebas y que la credencial de cabecera funcione. Si algo difiere, se corrige en `automation/lib` o en el constructor y se regenera.
-
-**Criterio de aceptación:** el Auditor genera un informe con incidencias reales del catálogo local y **cero escrituras** (los ficheros de datos de pruebas tienen las mismas sumas antes y después); el Investigador genera su informe; ambos cumplen el esquema de `automation/schemas`.
-
-## B. Trasladarlos al n8n del VPS (Hostinger)
-| Agente | ¿Puede ir a producción ya? | Qué falta |
+## B. Para el primer despliegue controlado al VPS (nada de esto se ha hecho ni autorizado)
+| # | Requisito | Quién |
 |---|---|---|
-| **Auditor General** (`auditor-general.produccion.json`) | **Sí, tras la fase A**: sólo lee `/api/health` y páginas públicas por HTTPS, sin credenciales | (1) Versión y edición de n8n del VPS; (2) acceso saliente a `https://treidilor.com` desde ese n8n; (3) importar el JSON, ejecutarlo a mano y comprobar el informe; (4) elegir horario y activar (autorización C9); (5) canal de avisos (opcional); (6) **copia y restauración probadas** antes de activar |
-| **Investigador comercial** | **No todavía** | Necesita el feed del catálogo con un **token de lectura propio** (no `TRADYLOR_API_TOKEN`): la Etapa 2.2 (API de automatización, aprobada y desplegada) o, como alternativa interina, ejecutarlo sólo en local |
+| 1 | Datos del n8n del VPS: **versión y edición**, tipo de instalación en Easy Panel, base de datos, red compartida con Treidilor, RAM/CPU/disco, copias/snapshots, exposición y 2FA (sin pegar secretos) | Axel |
+| 2 | Ejecutar allí `automation/dev/diagnostico-entorno-code.json` (mismas globales que en 2.46.6: sin `URL`) | Axel / con autorización |
+| 3 | Salida del n8n del VPS a `https://treidilor.com` (o URL interna) y, si cambia, ajustar `config/produccion.json` | Axel + Claude |
+| 4 | **Copia y restauración probadas** (volumen de Treidilor y datos de n8n incl. clave de cifrado) | Axel + Claude |
+| 5 | Importar `auditor-general.produccion.json` **desactivado**, ejecutar a mano, revisar el informe y las ejecuciones (solo GET a páginas públicas) | con autorización (C6) |
+| 6 | Programación diaria fuera de horas punta, primera semana con revisión diaria | con autorización (C9) |
+| 7 | **Investigador en producción**: desplegar la API de automatización con `AUTOMATION_API_ENABLED=true` (decisión aparte), crear un cliente `catalog:read` desde el panel (token mostrado una vez), crearlo como credencial en el n8n del VPS y crear la variante `investigador-comercial.produccion` | con autorización aparte |
+| 8 | Decidir canal de avisos del Auditor (correo/Telegram): credenciales nuevas | Axel |
 
-### Información del VPS/n8n que sigue pendiente (ver informe 02, §2)
-Versión y edición de n8n · tipo de instalación en Easy Panel · base de datos (SQLite/PostgreSQL) · si n8n y Treidilor comparten red (nombre del servicio) · RAM/CPU/disco disponibles · volúmenes · copias/snapshots · exposición y 2FA · API pública y MCP activos · workflows existentes. **No pegues secretos**: sólo nombres y valores no sensibles.
-
-### Decisiones que necesito de ti
-1. Autorizar **C1+C2** para arrancar Docker y ejecutar el piloto en local (ver `PROCEDIMIENTOS.md` §2).
-2. Que me indiques la **versión de n8n de producción** (para fijar la misma en pruebas).
-3. Si quieres que el Auditor de producción avise por correo/Telegram (requiere credenciales nuevas y autorización aparte).
-4. Prioridad tras el piloto: ¿Etapa 2.2 (API de automatización) para habilitar al Investigador en producción?
+## C. Pendientes técnicos conocidos
+- Variante de producción del Investigador (no existe todavía; la política exige modo `completo` solo en local).
+- Endpoint de estado de programadores internos (precios, alertas) para el Auditor.
+- Interfaz del panel para gestionar clientes de la API (hoy: endpoint de administración y script local).
+- Límites de la API en memoria (se reinician con el servicio); revisión de `X-Forwarded-For` detrás del proxy.
+- Etapa 2.2 completa: propuestas con aprobación, borradores, simulación de importación (no iniciadas).

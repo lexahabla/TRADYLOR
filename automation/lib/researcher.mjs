@@ -6,7 +6,7 @@
  * LIMITACIÓN CONOCIDA de la v0: el feed no incluye observaciones verificadas, stock, subcategoría ni estado del enlace. Por eso
  * un «descuento» aquí es sólo el DECLARADO por la fuente (originalPrice > price) y se marca siempre como NO VERIFICADO.
  */
-import { contarPor, euros, mediana, plegar, recortar } from './common.mjs';
+import { contarPor, euros, mediana, plegar, recortar, precioAnteriorDeclarado } from './common.mjs';
 import { leerCatalogo, longitudDescripcion } from './auditor.mjs';
 
 export const VERSION_INVESTIGADOR = '0.2.0';
@@ -25,8 +25,9 @@ export function buscarCandidatos(productos, cfg) {
   const sospechosos = [];
   for (const p of productos) {
     const precio = Number(p.price);
-    const previo = Number(p.originalPrice);
-    if (!(precio > 0) || !(previo > precio)) continue;
+    const previo = precioAnteriorDeclarado(p);
+    if (!(precio > 0) || previo === null || !(previo > precio)) continue;
+    if (p.stock === 'out_of_stock') continue; // un producto agotado no es candidato a destacar
     const pct = Math.round(((previo - precio) / previo) * 100);
     if (pct < minPct) continue;
     if (pct > maxPct) {
