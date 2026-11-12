@@ -29,3 +29,6 @@ nixpacks.toml
 
 # Treidilor AI: automatización (workflows, agentes y documentación); no forma parte de la imagen de producción
 automation/
+
+# Secretos operativos y informes: nunca a la imagen
+INFORMES/

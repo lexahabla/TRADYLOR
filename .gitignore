@@ -103,3 +103,7 @@ automation/reports/
 automation/dev/.env.n8n
 automation/dev/*.local.*
 automation/exports/
+
+# Secretos operativos (token de runners de n8n): nunca al repositorio
+INFORMES/N8N TOKEN/
+**/n8n-runners-auth-token.txt
