@@ -77,6 +77,6 @@ export function simularWorkflow(wf, { fetchSimulado, ahora = '2026-11-12T10:00:0
     }
     throw new Error(`Tipo de nodo no soportado por el simulador: ${nodo.type}`);
   }
-  const ultimo = orden.filter((n) => porNombre.get(n).type !== 'n8n-nodes-base.stickyNote').pop();
+  const ultimo = orden.filter((n) => porNombre.get(n).type !== 'n8n-nodes-base.stickyNote' && !porNombre.get(n).disabled).pop();
   return { salida: salidas.get(ultimo) ?? [], salidas, peticiones };
 }

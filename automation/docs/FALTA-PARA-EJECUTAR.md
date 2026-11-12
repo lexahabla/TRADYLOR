@@ -8,7 +8,7 @@ Estado (12/11/2026): los dos agentes **funcionan en un n8n real de pruebas (2.46
 - Informes JSON + Markdown validados por esquema; datos de prueba idénticos antes y después (SHA-256).
 - MCP verificado (ver `MCP-N8N.md`).
 
-## B. Para el primer despliegue controlado al VPS (nada de esto se ha hecho ni autorizado)
+## B. Para el primer despliegue controlado al VPS (nada de esto se ha hecho ni autorizado; guía paso a paso en `GUIA-DESPLIEGUE-AUDITOR-PRODUCCION.md`)
 | # | Requisito | Quién |
 |---|---|---|
 | 1 | Datos del n8n del VPS: **versión y edición**, tipo de instalación en Easy Panel, base de datos, red compartida con Treidilor, RAM/CPU/disco, copias/snapshots, exposición y 2FA (sin pegar secretos) | Axel |

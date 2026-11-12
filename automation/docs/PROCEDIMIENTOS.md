@@ -57,6 +57,8 @@ node scripts/automation/ejecutar-local.mjs --nombre "Investigador comercial" --s
 - MCP: ver `MCP-N8N.md` (mecanismo, herramientas, **limitaciones**: la clave MCP no tiene alcances). Solo contra el n8n local.
 
 ## 3. Despliegue controlado al n8n de producción del VPS (requiere autorización: C6, C9)
+
+> **La guía vigente es `GUIA-DESPLIEGUE-AUDITOR-PRODUCCION.md`** (n8n de producción 2.38.6, PostgreSQL, task runner externo; importación por la interfaz, sin CLI). Lo que sigue es el esquema general anterior.
 **Puerta 0 — antes de nada:** n8n y Treidilor verificados (`FALTA-PARA-EJECUTAR.md`), copia reciente y **restauración probada**.
 1. Elegir el workflow a desplegar y comprobar que `auditor-general.produccion.json` (o el que toque) está sincronizado y limpio de errores: `lint-workflows.mjs` y `build-workflows.mjs --check`.
 2. **Exportar** el estado actual de producción como punto de retorno (`n8n export:workflow --backup --output=…`).

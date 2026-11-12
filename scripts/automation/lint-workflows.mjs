@@ -84,7 +84,7 @@ export function comprobarWorkflow(wf, ctx = {}) {
   if (!(Number(settings.executionTimeout) > 0 && Number(settings.executionTimeout) <= 1800)) err('settings.executionTimeout debe estar entre 1 y 1800 segundos');
 
   const nombres = new Set();
-  const esProduccion = /\.produccion\./i.test(ctx.nombreArchivo ?? '') || /producci[oó]n/i.test(String(wf.name ?? ''));
+  const esProduccion = /[.-]produccion\./i.test(ctx.nombreArchivo ?? '') || /producci[oó]n/i.test(String(wf.name ?? ''));
   let hayHttp = false;
   let hayPolitica = false;
   for (const n of wf.nodes) {
@@ -155,6 +155,7 @@ export function comprobarWorkflow(wf, ctx = {}) {
   for (const n of wf.nodes) {
     if (n.type !== 'n8n-nodes-base.httpRequest') continue;
     const entradas = aristas.filter(([, a]) => a === n.name).map(([d]) => d);
+    if (n.disabled === true && !entradas.length) continue; // deshabilitado y sin conexiones: no se ejecuta (sirve para validar versiones de nodo al importar)
     if (!entradas.length || entradas.some((d) => tipoDe[d] !== 'n8n-nodes-base.code')) err(`Nodo «${n.name}»: sólo puede recibir datos de nodos Code`);
   }
   const grado = new Map([...nombres].map((x) => [x, 0]));

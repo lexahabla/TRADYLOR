@@ -174,7 +174,7 @@
           "parameters": [
             {
               "name": "User-Agent",
-              "value": "TreidilorAI-auditor-general/0.1 (solo lectura)"
+              "value": "TreidilorAI-auditor-general/0.2 (solo lectura)"
             },
             {
               "name": "X-Treidilor-Agente",
@@ -238,7 +238,7 @@
           "parameters": [
             {
               "name": "User-Agent",
-              "value": "TreidilorAI-auditor-general/0.1 (solo lectura)"
+              "value": "TreidilorAI-auditor-general/0.2 (solo lectura)"
             },
             {
               "name": "X-Treidilor-Agente",
@@ -309,7 +309,7 @@
           "parameters": [
             {
               "name": "User-Agent",
-              "value": "TreidilorAI-auditor-general/0.1 (solo lectura)"
+              "value": "TreidilorAI-auditor-general/0.2 (solo lectura)"
             },
             {
               "name": "X-Treidilor-Agente",
@@ -380,7 +380,7 @@
           "parameters": [
             {
               "name": "User-Agent",
-              "value": "TreidilorAI-auditor-general/0.1 (solo lectura)"
+              "value": "TreidilorAI-auditor-general/0.2 (solo lectura)"
             },
             {
               "name": "X-Treidilor-Agente",
@@ -444,7 +444,7 @@
           "parameters": [
             {
               "name": "User-Agent",
-              "value": "TreidilorAI-auditor-general/0.1 (solo lectura)"
+              "value": "TreidilorAI-auditor-general/0.2 (solo lectura)"
             },
             {
               "name": "X-Treidilor-Agente",

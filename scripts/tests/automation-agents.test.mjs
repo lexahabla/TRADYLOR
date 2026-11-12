@@ -322,3 +322,81 @@ test('Auditor v0.2: los avisos del entorno local se listan aparte y no cuentan; 
   assert.equal(aud.clasificarIncidencia({ ...sinHuella, id: 'catalogo:sin_precio', area: 'catalogo' }, LOCAL).ambito, 'datos', 'un problema de datos no es un aviso de entorno');
   assert.equal(aud.clasificarIncidencia({ ...sinHuella, id: 'ruta:error_servidor:/', area: 'ruta' }, LOCAL).clase, 'disponibilidad');
 });
+
+/* ───────── Despliegue controlado del Auditor en producción: revisión del workflow ───────── */
+test('auditor-general.produccion: revisión estática — sólo GET públicos, sin credenciales, sin MCP, sin nada local', () => {
+  const wf = J('automation/workflows/auditor-general.produccion.json');
+  const texto = JSON.stringify(wf);
+  assert.equal(wf.active, false);
+  assert.ok(!('pinData' in wf) && !('credentials' in wf));
+  const tipos = wf.nodes.map((n) => n.type);
+  assert.deepEqual([...new Set(tipos)].sort(), ['n8n-nodes-base.code', 'n8n-nodes-base.httpRequest', 'n8n-nodes-base.manualTrigger', 'n8n-nodes-base.stickyNote']);
+  assert.ok(!tipos.some((t) => /schedule|webhook|cron|mcp|executeCommand|ssh|postgres|emailSend|slack|telegram/i.test(t)), 'sin programación, webhooks, MCP ni salidas');
+  assert.ok(wf.nodes.every((n) => !n.credentials), 'ningún nodo referencia credenciales');
+  const http = wf.nodes.filter((n) => n.type === 'n8n-nodes-base.httpRequest');
+  assert.equal(http.length, 2);
+  for (const n of http) {
+    const p = n.parameters;
+    assert.equal(p.method, 'GET');
+    assert.equal(p.url, '={{ $json.url }}');
+    assert.equal(p.authentication, 'none');
+    assert.ok(!p.sendBody && !p.sendQuery && !p.jsonBody && !p.bodyParameters, 'sin cuerpo ni parámetros añadidos');
+    assert.deepEqual(p.headerParameters.parameters.map((h) => h.name).sort(), ['User-Agent', 'X-Treidilor-Agente'], 'sólo dos cabeceras, sin Authorization ni cookies');
+    assert.match(p.headerParameters.parameters.find((h) => h.name === 'User-Agent').value, /^TreidilorAI-auditor-general\/0\.2 \(solo lectura\)$/);
+    assert.equal(p.options.redirect.redirect.followRedirects, false);
+    assert.equal(p.options.batching.batch.batchSize, 1);
+    assert.ok(p.options.batching.batch.batchInterval >= 700);
+    assert.ok(p.options.timeout <= 15000);
+    assert.equal(n.retryOnFail, false);
+  }
+  // La política embebe la lista de hosts locales SOLO para RECHAZARLOS en producción (lista de denegación): se excluye esa línea exacta.
+  const sinListaDenegacion = texto.replace(/const HOSTS_LOCALES = \[[^\]]*\];/g, '');
+  assert.ok(!/availableInMCP|mcp|localhost|127\.0\.0\.1|host\.docker\.internal|puente-treidilor|n8n-pruebas|\.local\b|5678|4350|Bearer|TRADYLOR_API_TOKEN|tai_[0-9a-f]{16}/i.test(sinListaDenegacion), 'nada del entorno local, de MCP ni de tokens');
+  assert.ok(texto.includes("const HOSTS_LOCALES = ['localhost', '127.0.0.1', 'puente-treidilor'];"),'la única mención local es la lista de denegación');
+  const hosts = new Set(texto.match(/https?:\/\/[A-Za-z0-9.:-]+/g));
+  assert.deepEqual([...hosts], ['https://treidilor.com'], 'el único host que aparece es el del sitio público');
+  assert.ok(wf.settings.executionTimeout <= 900);
+  assert.ok(!('availableInMCP' in wf.settings));
+});
+
+test('auditor-general.produccion: simulación — todas las peticiones son GET https a páginas públicas de treidilor.com, dentro del tope y sin efectos', () => {
+  const { peticiones, informe } = simular('auditor-general.produccion.json', PROD);
+  assert.ok(peticiones.length >= 2 && peticiones.length <= 1 + PROD.rutas.length + PROD.maxEnlaces, `peticiones: ${peticiones.length}`);
+  const vistas = new Set();
+  for (const p of peticiones) {
+    assert.equal(p.metodo, 'GET');
+    assert.ok(!p.credencial, 'sin credencial');
+    const u = new URL(p.url);
+    assert.equal(u.protocol, 'https:');
+    assert.equal(u.host, 'treidilor.com');
+    assert.ok(!u.username && !u.password && !u.hash);
+    assert.ok(u.pathname === '/api/health' || !u.pathname.startsWith('/api'), `única ruta /api: salud (${u.pathname})`);
+    for (const re of PROHIBIDAS) assert.doesNotMatch(u.pathname, re, `ruta prohibida: ${p.url}`);
+    assert.doesNotMatch(u.pathname, /^\/producto(s)?(\/|$)/, 'ninguna ficha: cada visita cuenta en la analítica');
+    assert.ok(!/[?&](token|key|secret|password|session|email)=/i.test(u.search));
+    assert.ok(!vistas.has(p.url), `URL repetida: ${p.url}`);
+    vistas.add(p.url);
+  }
+  assert.equal(informe.modo, 'publico');
+  assert.ok(informe.cobertura.noRevisado.some((x) => /Fichas de producto y feed/.test(x)), 'declara que no revisa fichas ni feed');
+});
+
+test('diagnóstico del entorno (autocontenido): sin red, sin credenciales, sincronizado, comprobado por el linter y OK en el simulador', async () => {
+  const { construirDiagnosticos } = await import('../automation/build-workflows.mjs');
+  const { comprobarWorkflow } = await import('../automation/lint-workflows.mjs');
+  const f = 'diagnostico-auditor-produccion.json';
+  assert.equal(fs.readFileSync(path.join(RAIZ, 'automation/dev', f), 'utf8').replace(/\r\n/g, '\n'), construirDiagnosticos()[f], 'sincronizado con automation/lib');
+  const wf = J(`automation/dev/${f}`);
+  assert.deepEqual(comprobarWorkflow(wf, { nombreArchivo: f }).errores, []);
+  assert.equal(wf.active, false);
+  assert.ok(wf.nodes.every((n) => !n.credentials));
+  const http = wf.nodes.filter((n) => n.type === 'n8n-nodes-base.httpRequest');
+  assert.ok(http.every((n) => n.disabled === true), 'el único nodo HTTP está deshabilitado');
+  assert.ok(!Object.values(wf.connections).some((c) => JSON.stringify(c).includes('Prueba de versión')), 'y sin conexiones');
+  const r = simularWorkflow(wf, { fetchSimulado: () => { throw new Error('el diagnóstico no debe hacer ninguna petición'); }, ahora: NOW, hostsPermitidos: PROD.hostsPermitidos });
+  const out = plano(r.salida[0].json);
+  assert.equal(out.resultado, 'OK', JSON.stringify(out.fallos));
+  assert.equal(out.sinRed, true);
+  assert.equal(r.peticiones.length, 0);
+  assert.ok(out.total >= 30);
+});

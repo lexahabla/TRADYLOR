@@ -16,7 +16,7 @@ const CONFIG = path.join(RAIZ, 'automation', 'config');
 const SALIDA = path.join(RAIZ, 'automation', 'workflows');
 
 /** Módulos que se incrustan, en orden de dependencia. */
-const ORDEN = { auditor: ['common', 'urlPolicy', 'auditor'], investigador: ['common', 'urlPolicy', 'auditor', 'researcher'] };
+const ORDEN = { auditor: ['common', 'urlPolicy', 'auditor'], investigador: ['common', 'urlPolicy', 'auditor', 'researcher'], diagnostico: ['common', 'urlPolicy', 'auditor', 'diagnostico'] };
 
 /** Lee un módulo de `automation/lib` y le quita `import` y `export` para poder concatenarlo dentro de un nodo Code. */
 export function fuenteModulo(nombre, lib = LIB) {
@@ -51,7 +51,7 @@ function nodoHttp(nombre, agente, pos, credencial) {
       authentication: credencial ? 'genericCredentialType' : 'none',
       ...(credencial ? { genericAuthType: 'httpHeaderAuth' } : {}),
       sendHeaders: true,
-      headerParameters: { parameters: [{ name: 'User-Agent', value: `TreidilorAI-${agente}/0.1 (solo lectura)` }, { name: 'X-Treidilor-Agente', value: agente }] },
+      headerParameters: { parameters: [{ name: 'User-Agent', value: `TreidilorAI-${agente}/0.2 (solo lectura)` }, { name: 'X-Treidilor-Agente', value: agente }] },
       options: {
         timeout: 15000,
         redirect: { redirect: { followRedirects: false } },
@@ -126,6 +126,25 @@ function investigador(entorno) {
   return { name: nombre, nodes: nodos, connections: cadena(['Ejecutar a mano', 'Páginas de catálogo', 'Pedir catálogo', 'Páginas restantes', 'Pedir catálogo (resto)', 'Informe']), active: false, settings: AJUSTES, tags: [] };
 }
 
+/**
+ * Diagnóstico previo a importar el Auditor en una instancia de n8n (autocontenido: SIN red ni credenciales). Un nodo Code ejecuta el código real del
+ * Auditor con respuestas sintéticas. Incluye un nodo HTTP DESHABILITADO y sin conexiones: no se ejecuta, pero al importar permite ver si esa versión de
+ * n8n reconoce los tipos/versiones de nodo que usa el Auditor (un nodo desconocido se muestra con «?»).
+ */
+function diagnosticoAuditorProduccion() {
+  const cfg = leerConfig('produccion');
+  const nodos = [
+    nodoManual([0, 0]),
+    nota('TREIDILOR AI · DIAGNÓSTICO DEL ENTORNO (sin red, sin credenciales).\nEjecuta el código del Auditor con datos sintéticos. NO hace ninguna petición.\nResultado en el nodo «Diagnóstico»: campo «resultado» = OK, y «fallos» vacío.\nEl nodo «Prueba de versión (deshabilitado)» no se ejecuta: sólo comprueba que esta versión de n8n reconoce el nodo HTTP 4.2 (si aparece con «?», NO es compatible).', [0, -300]),
+    nodoCode('Diagnóstico', codigo('diagnostico', cfg, 'return [{ json: ejecutarDiagnostico(CONFIG, new Date().toISOString()) }];'), [260, 0]),
+    { ...nodoHttp('Prueba de versión (deshabilitado)', 'auditor-general', [260, 260], null), disabled: true },
+  ];
+  return { name: 'Treidilor AI · Diagnóstico del entorno (Auditor, sin red)', nodes: nodos, connections: cadena(['Ejecutar a mano', 'Diagnóstico']), active: false, settings: AJUSTES, tags: [] };
+}
+
+export const DIAGNOSTICOS = { 'diagnostico-auditor-produccion.json': () => diagnosticoAuditorProduccion() };
+export const construirDiagnosticos = () => Object.fromEntries(Object.entries(DIAGNOSTICOS).map(([f, fn]) => [f, serializar(normalizarWorkflow(fn()))]));
+
 export const FABRICA = {
   'auditor-general.local.json': () => auditor('local'),
   'auditor-general.produccion.json': () => auditor('produccion'),
@@ -152,6 +171,17 @@ if (process.argv[1]?.endsWith('build-workflows.mjs')) {
     } else {
       console.error('Uso: build-workflows.mjs --write | --check');
       process.exit(2);
+    }
+  }
+  const SALIDA_DEV = path.join(RAIZ, 'automation', 'dev');
+  for (const [f, texto] of Object.entries(construirDiagnosticos())) {
+    const destino = path.join(SALIDA_DEV, f);
+    if (modo === '--write') {
+      fs.writeFileSync(destino, texto);
+      console.log(`escrito ${path.relative(RAIZ, destino)} (${texto.length} bytes)`);
+    } else {
+      const actual = fs.existsSync(destino) ? fs.readFileSync(destino, 'utf8').replace(/\r\n/g, '\n') : null;
+      if (actual !== texto) { console.error(`✖ ${f}: desincronizado con automation/lib (ejecuta --write)`); fallos++; } else console.log(`✔ ${f}`);
     }
   }
   process.exit(fallos ? 1 : 0);
