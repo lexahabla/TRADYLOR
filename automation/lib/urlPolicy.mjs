@@ -21,7 +21,10 @@ export const RUTAS_PROHIBIDAS = [
   /^\/ejemplo-afiliados(\/|$)/i,
 ];
 
-const HOSTS_LOCALES = ['localhost', '127.0.0.1', 'host.docker.internal'];
+/** Ruta del feed de lectura para agentes (API de automatización, token propio con alcance catalog:read). NUNCA el token general ni /api/v1. */
+export const RUTA_CATALOGO_AUTOMATIZACION = '/api/automation/v1/catalog';
+
+export const HOSTS_LOCALES = ['localhost', '127.0.0.1', 'puente-treidilor'];
 
 const PUERTOS_POR_DEFECTO = { 'http:': '80', 'https:': '443' };
 
@@ -72,12 +75,39 @@ export function normalizarUrl(valor, base) {
 }
 
 /**
+ * Valida el AISLAMIENTO de una configuración (lista de errores; vacía = correcta). Se ejecuta al principio de cada workflow:
+ * si falla, el workflow se detiene antes de hacer ninguna petición.
+ *  · local: la URL base y todos los hosts permitidos son locales (HOSTS_LOCALES) y nunca contienen «treidilor.com».
+ *  · produccion: https y ningún host local.
+ */
+export function validarAislamiento(cfg) {
+  const errores = [];
+  const base = normalizarUrl(cfg?.baseUrl, undefined);
+  if (!base) return ['baseUrl no válida'];
+  const hosts = (cfg.hostsPermitidos ?? []).map((h) => String(h).split(':')[0].toLowerCase());
+  if (cfg.entorno === 'local') {
+    if (!HOSTS_LOCALES.includes(base.hostname)) errores.push(`entorno local con baseUrl no local (${base.hostname})`);
+    for (const h of hosts) if (!HOSTS_LOCALES.includes(h) || /treidilor\.com/.test(h)) errores.push(`entorno local con host no local (${h})`);
+  } else if (cfg.entorno === 'produccion') {
+    if (base.protocol !== 'https:') errores.push('producción exige https');
+    for (const h of [base.hostname, ...hosts]) if (HOSTS_LOCALES.includes(h)) errores.push(`producción con host local (${h})`);
+  } else {
+    errores.push(`entorno desconocido (${cfg.entorno})`);
+  }
+  return errores;
+}
+
+/**
  * ¿Puede un agente pedir esta URL? `tipo`: 'salud' | 'ruta' | 'enlace' | 'catalogo' | 'ficha'.
  * Devuelve { ok, motivo, url } (url = cadena normalizada si ok).
  */
 export function evaluarUrl(valor, tipo, cfg) {
   const u = normalizarUrl(valor, cfg.baseUrl);
   if (!u) return { ok: false, motivo: 'url_no_valida' };
+  // Aislamiento: un agente de entorno local NUNCA pide nada que no sea un host local (jamás producción), venga la URL de donde venga
+  // (enlaces de una página, redirecciones, valores de datos…). El bloqueo de red del Compose es la barrera real; esta es la segunda.
+  if (cfg.entorno === 'local' && !HOSTS_LOCALES.includes(u.hostname)) return { ok: false, motivo: 'entorno_local_solo_hosts_locales' };
+  if (cfg.entorno === 'produccion' && HOSTS_LOCALES.includes(u.hostname)) return { ok: false, motivo: 'entorno_produccion_sin_hosts_locales' };
   if (u.username || u.password) return { ok: false, motivo: 'credenciales_en_url' };
   if (!cfg.hostsPermitidos.includes(u.host)) return { ok: false, motivo: 'host_no_permitido' };
   const local = HOSTS_LOCALES.includes(u.hostname);
@@ -87,7 +117,7 @@ export function evaluarUrl(valor, tipo, cfg) {
   if (tipo === 'salud') return ruta === '/api/health' ? { ok: true, url: u.toString() } : { ok: false, motivo: 'salud_solo_api_health' };
   if (tipo === 'catalogo') {
     if (cfg.modo !== 'completo') return { ok: false, motivo: 'catalogo_solo_modo_completo' };
-    return ruta === '/api/v1/products' ? { ok: true, url: u.toString() } : { ok: false, motivo: 'catalogo_ruta_no_permitida' };
+    return ruta === RUTA_CATALOGO_AUTOMATIZACION ? { ok: true, url: u.toString() } : { ok: false, motivo: 'catalogo_ruta_no_permitida' };
   }
   if (RUTAS_PROHIBIDAS.some((r) => r.test(ruta))) return { ok: false, motivo: 'ruta_con_efectos' };
   if (tipo === 'ficha') {

@@ -31,7 +31,7 @@ docker compose --env-file automation/dev/.env.n8n -f automation/dev/docker-compo
 # abrir http://127.0.0.1:5678 → crear el propietario local
 ```
 - Sólo escucha en `127.0.0.1`, sin telemetría, sin nodos de comunidad, sin `Execute Command`, límites de CPU/RAM.
-- Crear la credencial **«Treidilor pruebas (solo lectura)»** (tipo *Header Auth*; nombre de cabecera `Authorization`; valor `Bearer <contenido de .token-pruebas>`). El nombre debe terminar en «(solo lectura)»: lo exige el comprobador.
+- Crear la credencial **«Treidilor automatización (solo lectura)»** (tipo *Header Auth*; nombre de cabecera `Authorization`; valor `Bearer <contenido de .token-pruebas>`). El nombre debe terminar en «(solo lectura)»: lo exige el comprobador.
 - Importar los workflows locales (`auditor-general.local.json`, `investigador-comercial.local.json`): *Workflows → Import from file*. Quedan **desactivados**. Asignar la credencial en el nodo «Pedir catálogo».
 - Ejecutar a mano («Execute workflow»). Verificar el informe en la salida del nodo «Informe».
 - Parar: `docker compose -f automation/dev/docker-compose.n8n.yml down`. Borrar TODO lo de pruebas: `… down -v`.
@@ -41,7 +41,7 @@ Sin interfaz ni propietario: sirve para repetir las pruebas de forma automática
 ```bash
 docker cp automation/workflows treidilor-n8n-pruebas:/tmp/wfN          # usar una carpeta NUEVA cada vez (no se puede sobrescribir)
 docker exec treidilor-n8n-pruebas n8n import:workflow --separate --input=/tmp/wfN
-docker exec treidilor-n8n-pruebas n8n import:credentials --input=/tmp/cred.json   # [{id:"REEMPLAZAR_AL_IMPORTAR",name:"Treidilor pruebas (solo lectura)",type:"httpHeaderAuth",data:{name:"Authorization",value:"Bearer <token de pruebas>"}}]
+docker exec treidilor-n8n-pruebas n8n import:credentials --input=/tmp/cred.json   # [{id:"REEMPLAZAR_AL_IMPORTAR",name:"Treidilor automatización (solo lectura)",type:"httpHeaderAuth",data:{name:"Authorization",value:"Bearer <token de pruebas>"}}]
 docker exec -e N8N_RUNNERS_BROKER_PORT=5690 treidilor-n8n-pruebas n8n execute --id=<id del workflow>
 ```
 - `N8N_RUNNERS_BROKER_PORT=5690` es necesario: el CLI arranca su propio broker de tareas y choca con el de la instancia (5679).

@@ -9,7 +9,7 @@ Estado actual (12/11/2026): los dos agentes **se han ejecutado en un n8n real de
 | 2 | Elegir la **versión exacta de n8n** (la de producción cuando se conozca; mientras tanto una versión estable reciente fijada) y crear `automation/dev/.env.n8n` (con una clave de cifrado SÓLO de pruebas) | Claude con tu visto bueno | C1 |
 | 3 | `docker compose … up -d` (descarga ≈ 1 GB, sin coste), crear el propietario local en `http://127.0.0.1:5678` | tú (2 minutos) | C1 |
 | 4 | Crear los **datos de prueba saneados** y arrancar el **Treidilor de pruebas** en `127.0.0.1:4350` con su token desechable | Claude | C2 |
-| 5 | En n8n: crear la credencial «Treidilor pruebas (solo lectura)» e **importar** los dos workflows locales | tú / Claude (si se conecta MCP) | C1–C3 |
+| 5 | En n8n: crear la credencial «Treidilor automatización (solo lectura)» e **importar** los dos workflows locales | tú / Claude (si se conecta MCP) | C1–C3 |
 | 6 | **Ejecución manual** del Auditor (local) y del Investigador; revisar informes y contrastarlos con el catálogo local | Claude + tú | — |
 | 7 | (Opcional) conectar Claude al n8n de pruebas por MCP/API para iterar | Claude | C3 |
 

@@ -4,9 +4,9 @@
  * Toda la entrada de red llega ya hecha por los nodos HTTP de n8n; aquí sólo se decide qué pedir y cómo interpretar lo recibido.
  */
 import { diasEntre, estadoGlobal, fechaValida, ordenarIncidencias, plegar, recortar, resumenIncidencias } from './common.mjs';
-import { evaluarUrl, normalizarUrl } from './urlPolicy.mjs';
+import { RUTA_CATALOGO_AUTOMATIZACION, evaluarUrl, normalizarUrl } from './urlPolicy.mjs';
 
-export const VERSION_AUDITOR = '0.1.0';
+export const VERSION_AUDITOR = '0.2.0';
 
 const incidencia = (area, codigo, gravedad, titulo, detalle, evidencia, accionSugerida, clave = '') => ({
   id: `${area}:${codigo}${clave ? `:${clave}` : ''}`.slice(0, 200),
@@ -17,6 +17,33 @@ const incidencia = (area, codigo, gravedad, titulo, detalle, evidencia, accionSu
   evidencia: evidencia ?? {},
   accionSugerida,
 });
+
+/**
+ * CLASIFICACIÓN (v0.2). `clase` = qué tipo de problema es; `ambito` = de quién es:
+ *  · «produccion»     incidencia real del sitio/servicio que se audita (cuenta para el estado).
+ *  · «datos»          problema del catálogo/datos auditados (cuenta para el estado).
+ *  · «entorno_local»  AVISO que sólo describe el entorno de pruebas (build sin huella, SMTP sin configurar, reinicio reciente, muestra pequeña…):
+ *                     se lista aparte y NO cuenta como incidencia ni cambia el estado. En entorno de producción estos mismos hallazgos SÍ son incidencias.
+ */
+const CLASE_POR_CODIGO = {
+  'salud:sin_respuesta': 'disponibilidad', 'salud:http': 'disponibilidad', 'salud:no_json': 'disponibilidad', 'salud:estado': 'disponibilidad', 'salud:sin_volumen': 'integridad_datos',
+  'salud:sin_huella': 'configuracion', 'salud:sin_smtp': 'configuracion', 'salud:reinicio_reciente': 'operacion', 'salud:sin_datos': 'disponibilidad',
+  'catalogo:feed_no_disponible': 'disponibilidad', 'catalogo:feed_parcial': 'disponibilidad', 'catalogo:vacio': 'integridad_datos', 'catalogo:revision_parcial': 'cobertura',
+  'catalogo:ids_duplicados': 'integridad_datos', 'catalogo:sin_precio': 'integridad_datos', 'catalogo:precio_extremo': 'integridad_datos', 'catalogo:precio_anterior_menor': 'integridad_datos',
+  'catalogo:descuento_sospechoso': 'honestidad_comercial', 'catalogo:valoracion_por_defecto': 'honestidad_comercial', 'catalogo:imagen_no_segura': 'seguridad', 'catalogo:sin_imagen': 'calidad_datos',
+  'catalogo:titulos_repetidos': 'calidad_datos', 'catalogo:sin_categoria': 'calidad_datos', 'catalogo:sin_descripcion': 'calidad_datos', 'catalogo:titulo_largo': 'calidad_datos',
+  'catalogo:sin_comercio': 'calidad_datos', 'catalogo:categorias_escasas': 'calidad_datos', 'catalogo:concentracion_comercio': 'calidad_datos',
+};
+/** Hallazgos que, en el entorno local, describen el entorno y no el sitio real. */
+const SOLO_AVISO_LOCAL = new Set(['salud:sin_huella', 'salud:sin_smtp', 'salud:reinicio_reciente', 'catalogo:revision_parcial', 'catalogo:categorias_escasas', 'catalogo:concentracion_comercio']);
+
+export function clasificarIncidencia(inc, cfg) {
+  const base = inc.id.split(':').slice(0, 2).join(':');
+  let clase = CLASE_POR_CODIGO[base];
+  if (!clase) clase = inc.area === 'ruta' || inc.area === 'ficha' ? (/^(ruta|ficha):(sin_titulo|h1|contenido_minimo)/.test(inc.id) ? 'seo_contenido' : 'disponibilidad') : inc.area === 'enlace' ? 'enlaces' : 'calidad_datos';
+  const aviso = cfg.entorno === 'local' && SOLO_AVISO_LOCAL.has(base);
+  return { ...inc, clase, ambito: aviso ? 'entorno_local' : inc.area === 'catalogo' ? 'datos' : 'produccion' };
+}
 
 /** Un objetivo «marcador» garantiza que el nodo HTTP siguiente siempre recibe al menos un elemento (no se analiza). */
 const marcador = (cfg) => ({ id: 'marcador', tipo: 'marcador', marcador: true, url: `${cfg.baseUrl.replace(/\/$/, '')}/api/health` });
@@ -92,13 +119,25 @@ export function crearObjetivosEnlaces(objetivos, respuestas, cfg) {
   return objetivosEnlaces.length ? objetivosEnlaces : [marcador(cfg)];
 }
 
-/** Páginas del feed del catálogo (sólo modo completo). */
+const urlCatalogo = (cfg, pagina) => evaluarUrl(`${cfg.baseUrl.replace(/\/$/, '')}${RUTA_CATALOGO_AUTOMATIZACION}?limit=${cfg.limitePorPagina}&page=${pagina}`, 'catalogo', cfg);
+
+/** Primera página del feed del catálogo (sólo modo completo). Las demás sólo se piden si hacen falta: ver `crearObjetivosCatalogoResto`. */
 export function crearObjetivosCatalogo(cfg) {
-  const base = cfg.baseUrl.replace(/\/$/, '');
   const out = [];
-  if (cfg.modo === 'completo') {
-    for (let p = 1; p <= cfg.maxPaginasCatalogo; p++) {
-      const e = evaluarUrl(`${base}/api/v1/products?limit=${cfg.limitePorPagina}&page=${p}`, 'catalogo', cfg);
+  if (cfg.modo === 'completo' && cfg.maxPaginasCatalogo >= 1) {
+    const e = urlCatalogo(cfg, 1);
+    if (e.ok) out.push({ id: 'catalogo:1', tipo: 'catalogo', url: e.url, pagina: 1 });
+  }
+  return out.length ? out : [marcador(cfg)];
+}
+
+/** Páginas 2..N del feed, SÓLO las que existen (según `totalPages` de la primera respuesta) y con el tope `maxPaginasCatalogo`. */
+export function crearObjetivosCatalogoResto(objetivos, respuestas, cfg) {
+  const primera = leerCatalogo(objetivos, respuestas);
+  const out = [];
+  if (cfg.modo === 'completo' && Number.isInteger(primera.totalPaginas)) {
+    for (let p = 2; p <= Math.min(primera.totalPaginas, cfg.maxPaginasCatalogo); p++) {
+      const e = urlCatalogo(cfg, p);
       if (e.ok) out.push({ id: `catalogo:${p}`, tipo: 'catalogo', url: e.url, pagina: p });
     }
   }
@@ -282,10 +321,10 @@ export function analizarCatalogo(catalogo, cfg, ahoraIso) {
   grupo('sin_imagen', 'media', 'Productos sin imagen', 'Falta la imagen principal.', idsDe((p) => !p.image), 'Añadir imagen.');
   grupo('imagen_no_segura', 'media', 'Imágenes con dirección no admisible', 'La imagen no es https ni una ruta propia.', idsDe((p) => p.image && !imagenAceptable(p.image)), 'Corregir la URL de la imagen.');
   grupo('sin_categoria', 'media', 'Productos sin categoría', 'Falta la categoría.', idsDe((p) => !String(p.category ?? '').trim()), 'Asignar categoría.');
-  grupo('sin_descripcion', 'baja', 'Descripción ausente o muy corta', 'Menos de 40 caracteres.', idsDe((p) => String(p.description ?? '').trim().length < 40), 'Completar la ficha.');
+  grupo('sin_descripcion', 'baja', 'Descripción ausente o muy corta', 'Menos de 40 caracteres.', idsDe((p) => longitudDescripcion(p) < 40), 'Completar la ficha.');
   grupo('titulo_largo', 'baja', 'Títulos de más de 120 caracteres', 'Títulos difíciles de leer.', idsDe((p) => String(p.title ?? '').length > 120), 'Acortar el título.');
   grupo('sin_comercio', 'baja', 'Productos sin comercio', 'Falta el nombre del comercio.', idsDe((p) => !String(p.merchant ?? '').trim()), 'Completar el comercio.');
-  grupo('valoracion_por_defecto', 'info', 'Valoración «4,8 / 100 reseñas» (valor por defecto)', 'No es una valoración real; no debe presentarse como tal.', idsDe((p) => Number(p.rating) === 4.8 && Number(p.reviewsCount) === 100), 'Ocultar o sustituir por dato real.');
+  grupo('valoracion_por_defecto', 'info', 'Valoración «4,8 / 100 reseñas» (valor por defecto)', 'No es una valoración real; no debe presentarse como tal.', idsDe((p) => p.ratingFlag === 'por_defecto' || (Number(p.rating) === 4.8 && Number(p.reviewsCount) === 100)), 'Ocultar o sustituir por dato real.');
 
   const porCat = new Map();
   for (const p of productos) {
@@ -309,6 +348,9 @@ export function analizarCatalogo(catalogo, cfg, ahoraIso) {
 
 /* ───────────────────────── Informe ───────────────────────── */
 
+/** El feed de automatización entrega sólo la longitud de la descripción (dato estrictamente necesario); el feed antiguo, el texto. */
+export const longitudDescripcion = (p) => (Number.isFinite(Number(p.descriptionLength)) ? Number(p.descriptionLength) : String(p.description ?? '').trim().length);
+
 const ETIQUETA_GRAVEDAD = { critica: 'Crítica', alta: 'Alta', media: 'Media', baja: 'Baja', info: 'Información' };
 
 export function informeMarkdown(informe) {
@@ -317,15 +359,20 @@ export function informeMarkdown(informe) {
   l.push('');
   l.push(`**Estado:** ${informe.resumen.estado.toUpperCase()} · **Sólo lectura** · versión ${informe.version} · modo ${informe.modo}`);
   const c = informe.resumen.incidencias;
-  l.push(`**Incidencias:** crítica ${c.critica} · alta ${c.alta} · media ${c.media} · baja ${c.baja} · info ${c.info}`);
+  l.push(`**Incidencias:** crítica ${c.critica} · alta ${c.alta} · media ${c.media} · baja ${c.baja} · info ${c.info}` + (informe.avisosEntorno?.length ? ` · **avisos del entorno local:** ${informe.avisosEntorno.length} (no cuentan)` : ''));
   l.push(`**Peticiones realizadas:** ${informe.resumen.peticiones} (rutas ${informe.resumen.rutasRevisadas}, enlaces ${informe.resumen.enlacesRevisados}, fichas ${informe.resumen.fichasRevisadas}, páginas de catálogo ${informe.resumen.paginasCatalogo})`);
   l.push('');
   for (const g of ['critica', 'alta', 'media', 'baja', 'info']) {
     const lista = informe.incidencias.filter((i) => i.gravedad === g);
     if (!lista.length) continue;
     l.push(`## ${ETIQUETA_GRAVEDAD[g]} (${lista.length})`);
-    for (const i of lista.slice(0, 30)) l.push(`- **${i.titulo}** — ${i.detalle} _Acción: ${i.accionSugerida}_`);
+    for (const i of lista.slice(0, 30)) l.push(`- **${i.titulo}** — ${i.detalle} _[${i.clase}] Acción: ${i.accionSugerida}_`);
     if (lista.length > 30) l.push(`- … y ${lista.length - 30} más (ver JSON).`);
+    l.push('');
+  }
+  if (informe.avisosEntorno?.length) {
+    l.push(`## Avisos del entorno local (${informe.avisosEntorno.length}) — no son incidencias del sitio real`);
+    for (const i of informe.avisosEntorno) l.push(`- ${i.titulo} — ${i.detalle}`);
     l.push('');
   }
   if (!informe.incidencias.length) l.push('Sin incidencias.\n');
@@ -337,26 +384,32 @@ export function informeMarkdown(informe) {
 
 /** Construye el informe completo. `entrada` agrupa lo que devolvieron los nodos HTTP (stateless: se recalcula todo desde lo bruto). */
 export function construirInformeAuditor(entrada) {
-  const { cfg, objetivosRutas = [], respuestasRutas = [], objetivosEnlaces = [], respuestasEnlaces = [], objetivosCatalogo = [], respuestasCatalogo = [], objetivosFichas = [], respuestasFichas = [], ahoraIso } = entrada;
+  const { cfg, objetivosRutas = [], respuestasRutas = [], objetivosEnlaces = [], respuestasEnlaces = [], objetivosCatalogo: objCat1 = [], respuestasCatalogo: resCat1 = [], objetivosCatalogoResto = [], respuestasCatalogoResto = [], objetivosFichas = [], respuestasFichas = [], ahoraIso } = entrada;
+  // Primera página + las siguientes (sólo las que existen); los marcadores se ignoran al emparejar.
+  const objetivosCatalogo = [...objCat1, ...objetivosCatalogoResto];
+  const respuestasCatalogo = [...resCat1, ...respuestasCatalogoResto];
   const salud = analizarSalud(objetivosRutas, respuestasRutas);
   const rutas = analizarRutas(objetivosRutas, respuestasRutas);
   const enlaces = analizarEnlaces(objetivosEnlaces, respuestasEnlaces);
   const catalogo = leerCatalogo(objetivosCatalogo, respuestasCatalogo);
   const fichas = analizarFichas(objetivosFichas, respuestasFichas);
-  const incidencias = ordenarIncidencias([
+  const todas = ordenarIncidencias([
     ...salud.incidencias,
     ...rutas.incidencias,
     ...enlaces.incidencias,
     ...(cfg.modo === 'completo' ? analizarCatalogo(catalogo, cfg, ahoraIso) : []),
     ...fichas.incidencias,
-  ]);
+  ].map((i) => clasificarIncidencia(i, cfg)));
+  // Los avisos del entorno local se listan aparte: no son incidencias del sitio ni cambian el estado.
+  const avisosEntorno = todas.filter((i) => i.ambito === 'entorno_local');
+  const incidencias = todas.filter((i) => i.ambito !== 'entorno_local');
   const paginasCatalogo = emparejar(objetivosCatalogo, respuestasCatalogo).filter((x) => x.t.tipo === 'catalogo').length;
   const peticiones = [objetivosRutas, objetivosEnlaces, objetivosCatalogo, objetivosFichas].reduce((n, l) => n + l.filter((t) => !t.marcador).length, 0);
   const contador = resumenIncidencias(incidencias);
   const { omitidos } = planificarRutas(cfg);
   const noRevisado = [
     'Programadores internos de Treidilor (precios, alertas, recordatorios): no exponen estado de sólo lectura (se cubrirá con la API de automatización)',
-    'Descuentos verificados y observaciones de precio: el feed de lectura no las incluye',
+    'Programadores internos y estado de las actualizaciones: pendientes de un endpoint de estado en la API de automatización',
     ...(cfg.modo === 'publico' ? ['Fichas de producto y feed del catálogo: no se piden en producción (cada visita cuenta en la analítica y el feed exige un token)'] : []),
     ...omitidos.map((o) => `${o.etiqueta}: omitida por la política de URLs (${o.motivo})`),
   ];
@@ -370,6 +423,7 @@ export function construirInformeAuditor(entrada) {
     resumen: {
       estado: estadoGlobal(contador),
       incidencias: contador,
+      avisosEntorno: avisosEntorno.length,
       peticiones,
       rutasRevisadas: rutas.revisadas,
       enlacesRevisados: enlaces.revisados,
@@ -377,6 +431,7 @@ export function construirInformeAuditor(entrada) {
       paginasCatalogo,
     },
     incidencias,
+    avisosEntorno,
     cobertura: {
       revisado: [
         `salud (${salud.datos ? 'datos recibidos' : 'sin datos'})`,

@@ -1,14 +1,14 @@
 {
   "entorno": "local",
-  "baseUrl": "http://host.docker.internal:4350",
-  "hostsPermitidos": ["host.docker.internal:4350"],
+  "baseUrl": "http://puente-treidilor:4350",
+  "hostsPermitidos": ["puente-treidilor:4350"],
   "modo": "completo",
   "rutas": ["/", "/catalogo", "/categorias", "/metodologia", "/alertas-precio"],
   "maxEnlaces": 60,
   "maxPaginasCatalogo": 5,
   "limitePorPagina": 100,
   "maxFichas": 0,
-  "credencialCatalogo": "Treidilor pruebas (solo lectura)",
+  "credencialCatalogo": "Treidilor automatización (solo lectura)",
   "umbrales": {
     "minProductosPorCategoria": 3,
     "maxConcentracionComercio": 0.8,

@@ -6,6 +6,7 @@
 //   salida 0 = correcto · 1 = hay errores · 2 = uso incorrecto
 import fs from 'node:fs';
 import path from 'node:path';
+import { validarAislamiento } from '../../automation/lib/urlPolicy.mjs';
 
 export const TIPOS_PERMITIDOS = new Set([
   'n8n-nodes-base.manualTrigger',
@@ -105,6 +106,19 @@ export function comprobarWorkflow(wf, ctx = {}) {
       if (!js.trim()) err(`${etiqueta}: código vacío`);
       if (Buffer.byteLength(js) > MAX_CODE_BYTES) err(`${etiqueta}: código demasiado grande`);
       for (const [re, que] of PATRONES_CODIGO) if (re.test(js)) err(`${etiqueta}: código con ${que}`);
+      // AISLAMIENTO (segunda barrera; la primera es la red del Compose): la configuración incrustada debe ser coherente con el tipo de archivo.
+      const mc = js.match(/const CONFIG = (\{[\s\S]*?\n\});/);
+      if (mc) {
+        let cfg = null;
+        try { cfg = JSON.parse(mc[1]); } catch { err(`${etiqueta}: CONFIG incrustada ilegible`); }
+        if (cfg) {
+          for (const e of validarAislamiento(cfg)) err(`${etiqueta}: aislamiento — ${e}`);
+          if (esProduccion && cfg.entorno !== 'produccion') err(`${etiqueta}: aislamiento — un workflow de producción debe llevar la configuración de producción`);
+          if (!esProduccion && cfg.entorno !== 'local') err(`${etiqueta}: aislamiento — un workflow local debe llevar la configuración local`);
+          if (!esProduccion && /treidilor\.com/i.test(JSON.stringify(cfg))) err(`${etiqueta}: aislamiento — un workflow local no puede mencionar treidilor.com`);
+        }
+        if (!/validarAislamiento\(CONFIG\)/.test(js)) err(`${etiqueta}: falta la guardia de aislamiento al inicio del nodo`);
+      }
       if (/function\s+evaluarUrl\b/.test(js) && /hostsPermitidos/.test(js)) hayPolitica = true;
     }
     if (n.type === 'n8n-nodes-base.httpRequest') {

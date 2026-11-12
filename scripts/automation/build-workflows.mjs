@@ -36,7 +36,8 @@ const leerConfig = (entorno) => JSON.parse(fs.readFileSync(path.join(CONFIG, `${
 const AYUDA = "const nodo = (n) => { try { return $(n).all().map((i) => i.json); } catch (e) { return []; } };\nconst items = (lista) => lista.map((t) => ({ json: t }));";
 
 function codigo(agente, cfg, adaptador) {
-  return `${empaquetar(agente)}\n\n// ── adaptador del nodo ──\nconst CONFIG = ${JSON.stringify(cfg, null, 2)};\n${AYUDA}\n${adaptador}\n`;
+  const guardia = "{ const errAislamiento = validarAislamiento(CONFIG); if (errAislamiento.length) throw new Error('AISLAMIENTO: ' + errAislamiento.join('; ')); }";
+  return `${empaquetar(agente)}\n\n// ── adaptador del nodo ──\nconst CONFIG = ${JSON.stringify(cfg, null, 2)};\n${guardia}\n${AYUDA}\n${adaptador}\n`;
 }
 
 const nodoCode = (nombre, js, pos) => ({ parameters: { jsCode: js }, name: nombre, type: 'n8n-nodes-base.code', typeVersion: 2, position: pos });
@@ -91,11 +92,13 @@ function auditor(entorno) {
   if (completo) {
     pasos.push(['Páginas de catálogo', 'return items(crearObjetivosCatalogo(CONFIG));']);
     pasos.push(['Pedir catálogo', null, cfg.credencialCatalogo]);
-    pasos.push(['Fichas de muestra', "const cat = leerCatalogo(nodo('Páginas de catálogo'), nodo('Pedir catálogo'));\nreturn items(crearObjetivosFichas(cat.productos, CONFIG));"]);
+    pasos.push(['Páginas restantes', "return items(crearObjetivosCatalogoResto(nodo('Páginas de catálogo'), nodo('Pedir catálogo'), CONFIG));"]);
+    pasos.push(['Pedir catálogo (resto)', null, cfg.credencialCatalogo]);
+    pasos.push(['Fichas de muestra', "const cat = leerCatalogo([...nodo('Páginas de catálogo'), ...nodo('Páginas restantes')], [...nodo('Pedir catálogo'), ...nodo('Pedir catálogo (resto)')]);\nreturn items(crearObjetivosFichas(cat.productos, CONFIG));"]);
     pasos.push(['Pedir fichas', null]);
   }
   const lecturas = completo
-    ? "objetivosCatalogo: nodo('Páginas de catálogo'), respuestasCatalogo: nodo('Pedir catálogo'), objetivosFichas: nodo('Fichas de muestra'), respuestasFichas: nodo('Pedir fichas'),"
+    ? "objetivosCatalogo: nodo('Páginas de catálogo'), respuestasCatalogo: nodo('Pedir catálogo'), objetivosCatalogoResto: nodo('Páginas restantes'), respuestasCatalogoResto: nodo('Pedir catálogo (resto)'), objetivosFichas: nodo('Fichas de muestra'), respuestasFichas: nodo('Pedir fichas'),"
     : '';
   pasos.push(['Informe', `const informe = construirInformeAuditor({\n  cfg: CONFIG,\n  objetivosRutas: nodo('Objetivos'), respuestasRutas: nodo('Pedir rutas'),\n  objetivosEnlaces: nodo('Enlaces a revisar'), respuestasEnlaces: nodo('Pedir enlaces'),\n  ${lecturas}\n  ahoraIso: new Date().toISOString(),\n});\nreturn [{ json: informe }];`]);
   const nombre = `Treidilor AI · Auditor General v0 (${entorno})`;
@@ -116,9 +119,11 @@ function investigador(entorno) {
     nota(`${AVISO_BASE}\nEntorno: ${entorno}. Credencial necesaria (sólo lectura): «${cfg.credencialCatalogo}» (Header Auth).\nLos descuentos que muestra son los DECLARADOS por la fuente y NO están verificados.`, [0, -300]),
     nodoCode('Páginas de catálogo', codigo('investigador', cfg, 'return items(crearObjetivosCatalogo(CONFIG));'), [260, 0]),
     nodoHttp('Pedir catálogo', 'investigador-comercial', [520, 0], cfg.credencialCatalogo),
-    nodoCode('Informe', codigo('investigador', cfg, "const informe = construirInformeInvestigador({ cfg: CONFIG, objetivosCatalogo: nodo('Páginas de catálogo'), respuestasCatalogo: nodo('Pedir catálogo'), ahoraIso: new Date().toISOString() });\nreturn [{ json: informe }];"), [780, 0]),
+    nodoCode('Páginas restantes', codigo('investigador', cfg, "return items(crearObjetivosCatalogoResto(nodo('Páginas de catálogo'), nodo('Pedir catálogo'), CONFIG));"), [780, 0]),
+    nodoHttp('Pedir catálogo (resto)', 'investigador-comercial', [1040, 0], cfg.credencialCatalogo),
+    nodoCode('Informe', codigo('investigador', cfg, "const informe = construirInformeInvestigador({ cfg: CONFIG, objetivosCatalogo: nodo('Páginas de catálogo'), respuestasCatalogo: nodo('Pedir catálogo'), objetivosCatalogoResto: nodo('Páginas restantes'), respuestasCatalogoResto: nodo('Pedir catálogo (resto)'), ahoraIso: new Date().toISOString() });\nreturn [{ json: informe }];"), [1300, 0]),
   ];
-  return { name: nombre, nodes: nodos, connections: cadena(['Ejecutar a mano', 'Páginas de catálogo', 'Pedir catálogo', 'Informe']), active: false, settings: AJUSTES, tags: [] };
+  return { name: nombre, nodes: nodos, connections: cadena(['Ejecutar a mano', 'Páginas de catálogo', 'Pedir catálogo', 'Páginas restantes', 'Pedir catálogo (resto)', 'Informe']), active: false, settings: AJUSTES, tags: [] };
 }
 
 export const FABRICA = {

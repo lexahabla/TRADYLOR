@@ -1,21 +1,40 @@
-# n8n de PRUEBAS para Treidilor AI — NO SE HA ARRANCADO NUNCA (requiere autorización expresa).
-# Aislado: sólo escucha en 127.0.0.1, sin credenciales reales, sin telemetría, sin nodos de comunidad, sin acceso a variables de entorno desde
-# los nodos y sin el nodo «Execute Command». La versión se FIJA con N8N_VERSION (la misma que la de producción cuando se conozca).
+# n8n de PRUEBAS para Treidilor AI. Aislado POR RED, no por advertencias:
+#
+#   · n8n vive SÓLO en la red `aislada` (internal: true) → el contenedor NO tiene ruta a Internet ni a la red local. Da igual cómo se
+#     construya la URL (nodo HTTP, expresión, redirección, Code, CLI, MCP o API): no hay camino hacia treidilor.com ni hacia nada ajeno.
+#   · La única salida es `puente-treidilor`, una pasarela TCP que reenvía SOLO a host.docker.internal:4350 (el Treidilor de pruebas).
+#   · La única entrada es `puente-entrada`, que publica SOLO 127.0.0.1:5678 y reenvía a n8n:5678 (editor, API y MCP).
+#   · Comprobación obligatoria tras arrancar: node scripts/automation/comprobar-aislamiento.mjs
 #
 # Uso (cuando se autorice):
-#   1) cp automation/dev/.env.n8n.example automation/dev/.env.n8n   (y rellenar N8N_VERSION y N8N_ENCRYPTION_KEY de PRUEBAS; el fichero está ignorado por git)
+#   1) cp automation/dev/.env.n8n.example automation/dev/.env.n8n   (rellenar N8N_VERSION y N8N_ENCRYPTION_KEY de PRUEBAS; ignorado por git)
 #   2) docker compose --env-file automation/dev/.env.n8n -f automation/dev/docker-compose.n8n.yml up -d
-#   3) parar: docker compose -f automation/dev/docker-compose.n8n.yml down      (los datos quedan en el volumen)
-#   4) borrar TODO lo de pruebas: docker compose -f automation/dev/docker-compose.n8n.yml down -v
+#   3) node scripts/automation/comprobar-aislamiento.mjs
+#   4) parar: docker compose -f automation/dev/docker-compose.n8n.yml down      (los datos quedan en el volumen)
+#   5) borrar TODO lo de pruebas: docker compose -f automation/dev/docker-compose.n8n.yml down -v
 name: treidilor-ai-pruebas
+
+x-puente: &puente
+  image: node:22-bookworm-slim
+  restart: "no"
+  read_only: true
+  user: node
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  mem_limit: 128m
+  cpus: 0.25
+  volumes:
+    - ./puente-tcp.mjs:/app/puente-tcp.mjs:ro
+  command: ["node", "/app/puente-tcp.mjs"]
 
 services:
   n8n:
     image: n8nio/n8n:${N8N_VERSION:?define N8N_VERSION con la versión exacta (nunca latest)}
     container_name: treidilor-n8n-pruebas
     restart: "no"
-    ports:
-      - "127.0.0.1:5678:5678"
+    # SIN `ports`: no se publica nada desde aquí. La entrada es `puente-entrada`.
+    networks: [aislada]
     environment:
       N8N_HOST: localhost
       N8N_PORT: "5678"
@@ -26,6 +45,7 @@ services:
       N8N_PERSONALIZATION_ENABLED: "false"
       N8N_HIRING_BANNER_ENABLED: "false"
       N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+      N8N_TEMPLATES_ENABLED: "false"
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
       N8N_SECURE_COOKIE: "false"            # sólo porque es http://127.0.0.1; en producción va con HTTPS
       NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.ssh","n8n-nodes-base.readWriteFile"]'
@@ -34,8 +54,6 @@ services:
       DB_TYPE: sqlite
       GENERIC_TIMEZONE: Europe/Madrid
       TZ: Europe/Madrid
-    extra_hosts:
-      - "host.docker.internal:host-gateway"   # para llegar al Treidilor de pruebas del PC (http://host.docker.internal:4350)
     volumes:
       - n8n_pruebas_datos:/home/node/.n8n
     mem_limit: 1g
@@ -47,6 +65,40 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
+
+  # Única salida: SOLO hacia el Treidilor de pruebas del PC. Sin puertos publicados.
+  puente-treidilor:
+    <<: *puente
+    container_name: treidilor-puente-salida
+    networks: [aislada, salida]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      PUENTE_NOMBRE: salida
+      PUENTE_ESCUCHA: "4350"
+      PUENTE_DESTINO_HOST: host.docker.internal
+      PUENTE_DESTINO_PUERTO: "4350"
+
+  # Única entrada: SOLO 127.0.0.1:5678 del PC hacia n8n.
+  puente-entrada:
+    <<: *puente
+    container_name: treidilor-puente-entrada
+    networks: [aislada, salida]
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      PUENTE_NOMBRE: entrada
+      PUENTE_ESCUCHA: "5678"
+      PUENTE_DESTINO_HOST: n8n
+      PUENTE_DESTINO_PUERTO: "5678"
+    depends_on:
+      - n8n
+
+networks:
+  aislada:
+    internal: true          # sin ruta a Internet ni al anfitrión
+  salida:
+    driver: bridge          # sólo la usan las dos pasarelas
 
 volumes:
   n8n_pruebas_datos:

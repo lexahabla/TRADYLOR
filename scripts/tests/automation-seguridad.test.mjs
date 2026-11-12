@@ -165,14 +165,15 @@ test('constructor: el código de los nodos es el de automation/lib sin imports n
 
 test('esquemas: el validador acepta un informe correcto y rechaza campos de más, de menos o con valores inválidos', () => {
   const esquema = J('automation/schemas/informe-auditor.schema.json');
-  const bueno = { agente: 'auditor-general', version: '0.1.0', entorno: 'local', modo: 'completo', generadoEn: '2026-11-12T10:00:00.000Z', soloLectura: true, resumen: { estado: 'ok', incidencias: { critica: 0, alta: 0, media: 0, baja: 0, info: 0 }, peticiones: 1, rutasRevisadas: 1, enlacesRevisados: 0, fichasRevisadas: 0, paginasCatalogo: 0 }, incidencias: [], cobertura: { revisado: [], noRevisado: [] }, markdown: '# x' };
+  const bueno = { agente: 'auditor-general', version: '0.1.0', entorno: 'local', modo: 'completo', generadoEn: '2026-11-12T10:00:00.000Z', soloLectura: true, resumen: { estado: 'ok', incidencias: { critica: 0, alta: 0, media: 0, baja: 0, info: 0 }, peticiones: 1, rutasRevisadas: 1, enlacesRevisados: 0, fichasRevisadas: 0, paginasCatalogo: 0, avisosEntorno: 0 }, incidencias: [], avisosEntorno: [], cobertura: { revisado: [], noRevisado: [] }, markdown: '# x' };
   assert.deepEqual(validarEsquema(bueno, esquema), []);
   assert.ok(validarEsquema({ ...bueno, soloLectura: false }, esquema).length);
   assert.ok(validarEsquema({ ...bueno, extra: 1 }, esquema).length);
   assert.ok(validarEsquema({ ...bueno, version: 'x' }, esquema).length);
   const { markdown, ...sin } = bueno;
   assert.ok(validarEsquema(sin, esquema).some((e) => /markdown/.test(e)));
-  assert.ok(validarEsquema({ ...bueno, incidencias: [{ id: 'a', gravedad: 'enorme', area: 'x', titulo: 't', detalle: '', evidencia: {}, accionSugerida: '' }] }, esquema).length);
+  assert.ok(validarEsquema({ ...bueno, incidencias: [{ id: 'a', gravedad: 'enorme', area: 'x', titulo: 't', detalle: '', evidencia: {}, accionSugerida: '', clase: 'calidad_datos', ambito: 'datos' }] }, esquema).length);
+  assert.ok(validarEsquema({ ...bueno, incidencias: [{ id: 'a', gravedad: 'baja', area: 'catalogo', titulo: 't', detalle: '', evidencia: {}, accionSugerida: '', clase: 'inventada', ambito: 'datos' }] }, esquema).length, 'clase fuera del catálogo');
 });
 
 /* ───────── datos de prueba saneados ───────── */
@@ -232,7 +233,22 @@ test('Docker Compose de pruebas: sólo 127.0.0.1, versión fijada, sin secretos,
   assert.match(sinComentarios, /NODES_EXCLUDE:.*executeCommand/);
   assert.doesNotMatch(sinComentarios, /(password|secret|api[_-]?key|token)\s*:\s*[^$\s"'][^\s]{7,}/i, 'sin secretos incrustados');
   assert.doesNotMatch(sinComentarios, /\/var\/run\/docker\.sock|privileged:|network_mode:\s*host|pid:\s*host/, 'sin acceso al motor de Docker ni a la red del anfitrión');
-  assert.doesNotMatch(sinComentarios, /^\s*-\s*(\.{1,2}\/|\/|[A-Za-z]:)[^\n]*:/m, 'no monta carpetas del anfitrión (sólo un volumen propio)');
+  // Montajes del anfitrión: SOLO el script de la pasarela, en sólo lectura (nada más).
+  const montajes = sinComentarios.split('\n').filter((l) => /^\s*-\s*(\.{1,2}\/|\/|[A-Za-z]:)[^\n]*:/.test(l)).map((l) => l.trim());
+  assert.deepEqual(montajes, ['- ./puente-tcp.mjs:/app/puente-tcp.mjs:ro'], 'no monta carpetas del anfitrión (sólo el script de la pasarela, en sólo lectura)');
+  // Aislamiento por RED (no por advertencias): n8n sólo en la red interna, sin puertos; una sola entrada y una sola salida fijas.
+  assert.match(sinComentarios, /aislada:\s*\n\s*internal: true/, 'la red de n8n es internal (sin Internet)');
+  const bloque = (nombre) => (sinComentarios.match(new RegExp(`^  ${nombre}:\\n([\\s\\S]*?)(?=^  [a-z-]+:\\n|^[a-z]+:|$(?![\\s\\S]))`, 'm')) ?? [])[1] ?? '';
+  const n8n = bloque('n8n');
+  assert.match(n8n, /networks: \[aislada\]/, 'n8n sólo está en la red aislada');
+  assert.doesNotMatch(n8n, /^\s*ports:/m, 'n8n no publica puertos');
+  assert.match(bloque('puente-entrada'), /PUENTE_DESTINO_HOST: n8n/);
+  assert.match(bloque('puente-entrada'), /- "127\.0\.0\.1:5678:5678"/);
+  const salida = bloque('puente-treidilor');
+  assert.match(salida, /PUENTE_DESTINO_HOST: host\.docker\.internal/);
+  assert.match(salida, /PUENTE_DESTINO_PUERTO: "4350"/);
+  assert.doesNotMatch(salida, /^\s*ports:/m, 'la pasarela de salida no publica puertos');
+  assert.equal((sinComentarios.match(/^\s*ports:/gm) ?? []).length, 1, 'sólo la pasarela de entrada publica un puerto');
   const ejemplo = leer('automation/dev/.env.n8n.example');
   assert.match(ejemplo, /^N8N_VERSION=$/m);
   assert.match(ejemplo, /^N8N_ENCRYPTION_KEY=$/m, 'el ejemplo no trae valores');
@@ -255,4 +271,47 @@ test('higiene: nada de secretos en automation/, salidas locales ignoradas por gi
   for (const f of recorrer(path.join(RAIZ, 'automation/lib'))) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /\b(POST|PUT|PATCH|DELETE)\b|delete-all|build-catalog|\/import\b/, path.relative(RAIZ, f));
   // no se tocó producción: la configuración de producción es pública y sin credenciales
   assert.equal(J('automation/config/produccion.json').credencialCatalogo, '');
+});
+
+/* ───────── AISLAMIENTO: los workflows locales no pueden apuntar a producción ───────── */
+test('aislamiento: un workflow local con la configuración de producción (o que mencione treidilor.com) es rechazado por el comprobador', () => {
+  const prod = JSON.parse(leer('automation/config/produccion.json'));
+  const local = JSON.parse(leer('automation/config/local.json'));
+  for (const f of ['auditor-general.local.json', 'investigador-comercial.local.json']) {
+    for (const [nombre, cambio] of [
+      ['config de producción', (js) => js.replace(/const CONFIG = \{[\s\S]*?\n\};/, `const CONFIG = ${JSON.stringify(prod, null, 2)};`)],
+      ['baseUrl a treidilor.com', (js) => js.split(local.baseUrl).join('https://treidilor.com')],
+      ['sin guardia', (js) => js.replace('validarAislamiento(CONFIG)', 'true')],
+    ]) {
+      const w = clon(f);
+      for (const n of w.nodes.filter((x) => x.type === 'n8n-nodes-base.code')) n.parameters.jsCode = cambio(n.parameters.jsCode);
+      const r = comprobarWorkflow(w, { nombreArchivo: f });
+      assert.ok(r.errores.length > 0, `${f}: «${nombre}» debe rechazarse`);
+    }
+  }
+  // y al revés: producción con host local
+  const w = clon('auditor-general.produccion.json');
+  for (const n of w.nodes.filter((x) => x.type === 'n8n-nodes-base.code')) n.parameters.jsCode = n.parameters.jsCode.split('"https://treidilor.com"').join(`"${local.baseUrl}"`).replace('"treidilor.com"', `"${local.hostsPermitidos[0]}"`);
+  assert.ok(comprobarWorkflow(w, { nombreArchivo: 'auditor-general.produccion.json' }).errores.length > 0, 'producción con host local debe rechazarse');
+});
+
+test('aislamiento: la política rechaza en tiempo de ejecución cualquier host no local en el entorno local (enlaces, redirecciones, datos)', async () => {
+  const politica = await import('../../automation/lib/urlPolicy.mjs');
+  const local = JSON.parse(leer('automation/config/local.json'));
+  assert.deepEqual(politica.validarAislamiento(local), []);
+  for (const mala of [
+    { ...local, baseUrl: 'https://treidilor.com' },
+    { ...local, hostsPermitidos: [...local.hostsPermitidos, 'treidilor.com'] },
+    { ...local, hostsPermitidos: ['www.treidilor.com'] },
+    { ...local, entorno: 'otro' },
+  ]) assert.ok(politica.validarAislamiento(mala).length > 0);
+  for (const url of ['https://treidilor.com/', 'https://www.treidilor.com/catalogo', 'http://treidilor.com/api/health', `${local.baseUrl}/redirect?to=https://treidilor.com`.replace('/redirect?to=', '@'), '//treidilor.com/', 'https://1.1.1.1/', 'http://localhost:5678/rest/login', 'http://127.0.0.1:5678/']) {
+    for (const tipo of ['salud', 'ruta', 'enlace', 'catalogo']) {
+      const r = politica.evaluarUrl(url, tipo, { ...local, hostsPermitidos: ['treidilor.com', 'www.treidilor.com', ...local.hostsPermitidos] });
+      assert.equal(r.ok, false, `${url} (${tipo}) debe rechazarse en el entorno local aunque el host figure como permitido`);
+    }
+  }
+  const prod = JSON.parse(leer('automation/config/produccion.json'));
+  assert.deepEqual(politica.validarAislamiento(prod), []);
+  assert.ok(politica.validarAislamiento({ ...prod, baseUrl: local.baseUrl, hostsPermitidos: local.hostsPermitidos }).length > 0);
 });

@@ -7,9 +7,9 @@
  * un «descuento» aquí es sólo el DECLARADO por la fuente (originalPrice > price) y se marca siempre como NO VERIFICADO.
  */
 import { contarPor, euros, mediana, plegar, recortar } from './common.mjs';
-import { leerCatalogo } from './auditor.mjs';
+import { leerCatalogo, longitudDescripcion } from './auditor.mjs';
 
-export const VERSION_INVESTIGADOR = '0.1.0';
+export const VERSION_INVESTIGADOR = '0.2.0';
 
 /** Candidatos a revisar para destacar (no son recomendaciones: son productos que merece la pena mirar). */
 export function buscarCandidatos(productos, cfg) {
@@ -35,7 +35,7 @@ export function buscarCandidatos(productos, cfg) {
     }
     const motivos = [`Descuento DECLARADO por la fuente: ${pct} % (${euros(previo)} → ${euros(precio)}); NO verificado`];
     let puntos = Math.min(pct, 50);
-    if (String(p.description ?? '').trim().length >= 120) { puntos += 10; motivos.push('Descripción completa'); }
+    if (longitudDescripcion(p) >= 120) { puntos += 10; motivos.push('Descripción completa'); }
     if (p.image) { puntos += 10; motivos.push('Con imagen'); }
     if (String(p.merchant ?? '').trim()) { puntos += 5; motivos.push(`Comercio: ${p.merchant}`); }
     const med = mediana(porCat.get(String(p.category ?? '').trim()) ?? []);
@@ -65,7 +65,7 @@ export function problemasCalidad(productos) {
   for (const p of productos) {
     const faltan = [];
     if (!p.image) faltan.push('imagen');
-    if (String(p.description ?? '').trim().length < 40) faltan.push('descripción');
+    if (longitudDescripcion(p) < 40) faltan.push('descripción');
     if (!String(p.category ?? '').trim()) faltan.push('categoría');
     if (!String(p.merchant ?? '').trim()) faltan.push('comercio');
     if (!(Number(p.price) > 0)) faltan.push('precio');
@@ -124,8 +124,8 @@ export function informeMarkdownInvestigador(inf) {
 
 /** Construye el informe del investigador a partir del feed (stateless). */
 export function construirInformeInvestigador(entrada) {
-  const { cfg, objetivosCatalogo = [], respuestasCatalogo = [], ahoraIso } = entrada;
-  const cat = leerCatalogo(objetivosCatalogo, respuestasCatalogo);
+  const { cfg, objetivosCatalogo = [], respuestasCatalogo = [], objetivosCatalogoResto = [], respuestasCatalogoResto = [], ahoraIso } = entrada;
+  const cat = leerCatalogo([...objetivosCatalogo, ...objetivosCatalogoResto], [...respuestasCatalogo, ...respuestasCatalogoResto]);
   const c = buscarCandidatos(cat.productos, cfg);
   const inf = {
     agente: 'investigador-comercial',
