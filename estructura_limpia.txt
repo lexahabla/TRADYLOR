@@ -86,6 +86,7 @@ scripts/automation/lint-workflows.mjs
 scripts/automation/make-test-data.mjs
 scripts/automation/normalize-workflow.mjs
 scripts/automation/prueba-data-tables.mjs
+scripts/automation/prueba-persistencia-2c.mjs
 scripts/automation/simulate-workflow.mjs
 scripts/automation/validate-schema.mjs
 scripts/automation/verificar-fichero-diagnostico.mjs
@@ -104,6 +105,7 @@ scripts/tests/automation-agents.test.mjs
 scripts/tests/automation-api.test.mjs
 scripts/tests/automation-consumo.test.mjs
 scripts/tests/automation-persistencia.test.mjs
+scripts/tests/automation-prueba-2c.test.mjs
 scripts/tests/automation-prueba-dt.test.mjs
 scripts/tests/automation-seguimiento-integracion.test.mjs
 scripts/tests/automation-seguimiento.test.mjs
