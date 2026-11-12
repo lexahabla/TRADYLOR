@@ -140,7 +140,9 @@ El Markdown se regenera («Escritura **guardada** (fila N…)» o «⚠ **Escrit
 
 **Pruebas.** Simulador: List y Get por elemento de entrada, dos salidas del Insert, validación silenciosa y error de tabla (comportamiento real medido). Regresión: 1, 3, 33 y 40 enlaces, `estadoDeTabla`, `confirmarEscritura` y fallos del Insert (`automation-persistencia.test.mjs`). Real: List con 3 y 33 enlaces, tablas ambiguas, escritura confirmada con el id real de la fila, error forzado de validación y de tabla, y conservación del informe (`INFORMES/…_11_…`).
 
-### 9.9 Validación integral del Auditor completo en `tai-prueba-dt` (PREPARADA, NO ejecutada; 12/11/2026)
+### 9.9 Validación integral del Auditor completo en `tai-prueba-dt` (preparada y EJECUTADA en local; 12/11/2026)
+
+> **Actualización:** la validación se ejecutó (ejecuciones 129–152, filas 87–94) y está aceptada en local; resultados, hallazgo P9 y decisión de no aplicar `alwaysOutputData` en `AUDITOR-VALIDACION-INTEGRAL.md`. `pendiente` = escritura NO confirmada. Lo que sigue sin probarse en producción está en su §6. El texto de abajo describe la preparación original.
 
 Archivos (sólo herramientas de prueba; el Auditor, los workflows y 2c NO se modifican): `automation/dev/prueba-data-tables/sitio-prueba.mjs` (sitio sintético con rutas, catálogo con paginación y token ficticio, 7 escenarios —base, arreglado, mixto, parcial, caída, catálogo roto, muchos enlaces— y registro de solicitudes), `docker-compose.validacion.yml` (override: sólo retira `httpRequest` de `NODES_EXCLUDE` y añade el contenedor `tai-dt-sitio` en la red aislada con el alias `puente-treidilor`; sin puertos nuevos), `scripts/automation/prueba-auditor-completo.mjs` (artefactos, ensayo en simulador, verificación del registro del sitio, comandos del siguiente paso y ejecutor real SIN probar) y las pruebas `automation-sitio-prueba.test.mjs` y `automation-auditor-completo.test.mjs`. La credencial es ficticia, se compone en ejecución y los artefactos se generan FUERA del repositorio (la CLI rechaza rutas dentro de él).
 

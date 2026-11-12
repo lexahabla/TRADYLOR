@@ -81,3 +81,62 @@ A1–A5 anotados · B1b ✔ (gzip, 1× «dump complete», SHA-256 anotado) · B2
 ## Actualización 12/11/2026 (B1b superado y consumo del Auditor)
 - **B1b — SUPERADO**: integridad gzip correcta (`gzip-OK`), formato **PostgreSQL custom dump** y estructura reconocida por `pg_restore -l` (`BACKUP-ESTRUCTURA-OK`). Esto verifica que el archivo es íntegro y legible; **la restauración real sigue pendiente** (punto C). Nota: la comprobación descrita arriba (conteos con `zcat | grep`) presupone un volcado SQL de texto; al ser un volcado en formato custom, la validación válida es `pg_restore -l`, y el punto C debe usar `pg_restore` (no `psql`).
 - **D2**: el peso por ejecución del Auditor ya está calculado y documentado en `AUDITOR-CONSUMO.md` (tope de 40 enlaces: ≈ 9,3 millones de bytes por ejecución; ≈ 62 MB con 7 días de retención a 1 ejecución diaria). F3 sigue bloqueada hasta completar el resto de pendientes.
+
+## Actualización 12/11/2026 (validación integral local completada) — plan para cerrar F2B
+Fuente: `AUDITOR-VALIDACION-INTEGRAL.md`. **Esta actualización es solo documental: no se ha accedido al VPS ni a producción, ni se ha ejecutado ninguna comprobación de F2B.** F3 sigue BLOQUEADA.
+
+### 1. Qué cambia y qué no con la validación local
+- **No sustituye ningún punto de F2B**: A, B y C se refieren al servidor de producción y a la restauración de su copia; la validación se hizo en un n8n 2.38.6 + PostgreSQL 17 aislado y con datos sintéticos.
+- **Aporta evidencia** para D2 (consumo y retención: `AUDITOR-CONSUMO.md`) y un ensayo del procedimiento (Data Table, programación, desactivación, sin repetir ejecuciones).
+- **Aporta un requisito nuevo** para F3: crear la Data Table `auditor_general_instantaneas` **vacía** en el n8n de producción (con autorización) y comprobar que existe antes de la primera ejecución.
+
+### 2. Requisitos pendientes, evidencia disponible y acción necesaria
+| Punto | Estado | Evidencia disponible | Acción necesaria | ¿Modifica producción? |
+|---|---|---|---|---|
+| A1 versiones | ✔ anotado (n8n y runner 2.38.6, PG 17) | Actualización F2C | Ninguna | No |
+| A2 retención visible | Pendiente | `EXECUTIONS_DATA_PRUNE=true` verificado; `MAX_AGE`/`MAX_COUNT` sin anotar | Anotar desde EasyPanel | No (lectura) |
+| A3 variables del runner | Pendiente de anotar | `N8N_RUNNERS_MODE=external` confirmado (F2C) | Anotar solo los nombres `N8N_RUNNERS_*` | No (lectura) |
+| A4 configuración de copias | Pendiente de anotar | Diaria 02:00, 7 copias, Local Disk, copia 14:38 (134 kB) | Captura/lista desde EasyPanel | No (lectura) |
+| A5 ventana del diagnóstico | Pendiente de anotar | Diagnóstico F2 tras rotación: 17:10:33 | Anotar hora exacta y zona | No (lectura) |
+| A6 logs del runner | Cubierto en la práctica | F2C: actividad 17:10:33 y cierre por inactividad | Anotar como ✔ (B3 es la confirmación fiable) | No (lectura) |
+| A7 disco | Pendiente de anotar | 12 % usado | Anotar el valor de hoy | No (lectura) |
+| B1 localizar volcado | Hecho en la práctica | Ruta localizada al verificar B1b | Anotar la ruta (sin contenido) | No (lectura SSH) |
+| **B1b integridad** | **✔ SUPERADO** | gzip-OK, formato custom, `pg_restore -l` correcto | Anotar SHA-256 | No |
+| B1c rol dueño | Pendiente | — | Inspeccionar el rol sin leer datos (`pg_restore -l`) | No (lectura SSH) |
+| **B2 retención efectiva** | Pendiente | — | `printenv` con nombres concretos | No (lectura SSH) |
+| **B3 runner** | **✔ Cubierto** (F2C) | `N8N_RUNNERS_MODE=external` + actividad 17:10:33 | Anotar como ✔ | No |
+| **B4 clave de cifrado** | Pendiente | — | Comparar huellas de 12 caracteres (gestor vs. contenedor), sin mostrar la clave | No (lectura SSH) |
+| B5 tamaños | Pendiente | Copia de 134 kB ⇒ base casi vacía | `pg_database_size`, `df -h`, `docker system df` | No (lectura SSH) |
+| **B6 / D1 copia fuera del VPS** | Pendiente | — | `scp` del volcado a tu PC (cifrado) y decidir periodicidad / S3 | `scp`: no; destino S3 en EasyPanel: **sí** |
+| **C restauración aislada** | Pendiente (🔒) | Procedimiento escrito; PG 17; el ciclo Compose + PG 17 ya se ejercitó en local | C1–C6 en el PC con `pg_restore`, `--network none`, **o** aplazar con motivo expreso | No (el PC); requiere autorización para descargar la imagen y manejar el volcado |
+| **D1** copia fuera del VPS | Decidir | Recomendación: descarga cifrada semanal | Decidir | — |
+| **D2** retención explícita | Decidir | `AUDITOR-CONSUMO.md`: ≈ 9,3 MB/ejec. a 40 enlaces; ≈ 62 MB a 7 días y 1 ejec./día | Decidir si fijar `EXECUTIONS_DATA_MAX_AGE` (p. ej. 168 h) | Sí, si se fija en EasyPanel |
+| **D3** responsable del informe | Pendiente | — | Nombrarlo antes de programar (F7) | No |
+
+### 3. Qué se puede hacer sin modificar producción y qué exige autorización expresa
+**Sin modificar producción** (lo ejecuta el administrador; Claude no tiene acceso):
+- Lecturas de EasyPanel (A2–A5, A7) y lecturas SSH de solo lectura (B1, B1b, B1c, B2, B4, B5).
+- B6: copiar el volcado a tu PC con `scp` (el archivo es sensible: ni al repositorio ni al chat).
+- C en el PC: restauración aislada y destruida (autorización para descargar `postgres:17` y manejar el volcado).
+- Decisiones D1, D2 y D3 (documentales).
+
+**Exigen autorización expresa:**
+- Fijar `EXECUTIONS_DATA_MAX_AGE` o cualquier variable de n8n (D2) y configurar un destino S3 (D1 como servicio).
+- F3: importar `auditor-general.produccion.json` **desactivado** y crear la Data Table vacía en el n8n de producción.
+- Cualquier ejecución del Auditor contra `treidilor.com`, activar programación (F7), canal de avisos, API 2.2 / Investigador.
+- «C+» (n8n sobre una copia restaurada): requiere diseño aparte.
+
+### 4. Secuencia mínima propuesta para cerrar F2B
+Ya superado y **no se repite**: F2 (34/34), B1b, A1, B3 / rotación F2C, 2FA, prune, recursos y la validación integral local del Auditor.
+1. **Lote 1 – EasyPanel (solo lectura):** A2, A3, A4, A5, A7. Solo nombres, horas y cifras.
+2. **Lote 2 – SSH (solo lectura):** B1c, B2, B4, B5 y anotar el SHA-256 de B1b.
+3. **Decisiones D1, D2, D3**, con la tabla de consumo a la vista (autorización aparte solo si se elige fijar retención o un destino S3).
+4. **B6:** volcado a tu PC, verificar SHA-256 y guardarlo cifrado.
+5. **C:** restauración con `pg_restore` en contenedor sin red; registrar el tiempo; destruir (o aplazarla de forma expresa y justificada).
+6. **Cierre documental:** rellenar el «Registro de resultados» y pedir F3 solo con todo ✔ según el criterio de cierre.
+
+Después de F2B (fuera de este cierre): F3 = crear Data Table vacía + importar el Auditor **desactivado** + una ejecución manual, con autorizaciones separadas. `AUDITOR-VALIDACION-INTEGRAL.md` §6 lista lo que se verificaría por primera vez en producción.
+
+### 5. Reglas heredadas de la validación para F3
+- No se aplica `alwaysOutputData` al Insert (decisión del 12/11/2026, hallazgo P9).
+- `pendiente` = escritura **no confirmada**: tras la primera ejecución en producción hay que comprobar en la tabla que la fila existe antes de dar por buena la línea base.

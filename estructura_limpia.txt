@@ -38,6 +38,7 @@ automation/dev/puente-tcp.mjs
 automation/docs/API-AUTOMATIZACION-DISENO.md
 automation/docs/AUDITOR-CONSUMO.md
 automation/docs/AUDITOR-SEGUIMIENTO.md
+automation/docs/AUDITOR-VALIDACION-INTEGRAL.md
 automation/docs/F2-DIAGNOSTICO-PRODUCCION.md
 automation/docs/F2B-CIERRE-PENDIENTES-ANTES-DE-F3.md
 automation/docs/F2C-ROTACION-TOKEN-RUNNER.md
