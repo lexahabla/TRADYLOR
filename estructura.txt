@@ -33,6 +33,7 @@ automation/dev/docker-compose.n8n.yml
 automation/dev/puente-tcp.mjs
 automation/docs/API-AUTOMATIZACION-DISENO.md
 automation/docs/AUDITOR-CONSUMO.md
+automation/docs/AUDITOR-SEGUIMIENTO.md
 automation/docs/F2-DIAGNOSTICO-PRODUCCION.md
 automation/docs/F2B-CIERRE-PENDIENTES-ANTES-DE-F3.md
 automation/docs/F2C-ROTACION-TOKEN-RUNNER.md
@@ -44,9 +45,12 @@ automation/lib/auditor.mjs
 automation/lib/common.mjs
 automation/lib/diagnostico.mjs
 automation/lib/researcher.mjs
+automation/lib/seguimiento.mjs
 automation/lib/urlPolicy.mjs
+automation/schemas/estado-auditor.schema.json
 automation/schemas/informe-auditor.schema.json
 automation/schemas/informe-investigador.schema.json
+automation/schemas/seguimiento-auditor.schema.json
 automation/workflows/auditor-general.local.json
 automation/workflows/auditor-general.produccion.json
 automation/workflows/investigador-comercial.local.json
@@ -94,6 +98,7 @@ scripts/tests/analytics-memo.test.mjs
 scripts/tests/automation-agents.test.mjs
 scripts/tests/automation-api.test.mjs
 scripts/tests/automation-consumo.test.mjs
+scripts/tests/automation-seguimiento.test.mjs
 scripts/tests/automation-seguridad.test.mjs
 scripts/tests/catalog-concurrency.test.mjs
 scripts/tests/categories-cache.test.mjs
