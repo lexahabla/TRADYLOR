@@ -30,6 +30,8 @@ automation/dev/diagnostico-aislamiento.json
 automation/dev/diagnostico-auditor-produccion.json
 automation/dev/diagnostico-entorno-code.json
 automation/dev/docker-compose.n8n.yml
+automation/dev/prueba-data-tables/.env.example
+automation/dev/prueba-data-tables/docker-compose.yml
 automation/dev/puente-tcp.mjs
 automation/docs/API-AUTOMATIZACION-DISENO.md
 automation/docs/AUDITOR-CONSUMO.md
@@ -40,6 +42,7 @@ automation/docs/F2C-ROTACION-TOKEN-RUNNER.md
 automation/docs/FALTA-PARA-EJECUTAR.md
 automation/docs/GUIA-DESPLIEGUE-AUDITOR-PRODUCCION.md
 automation/docs/MCP-N8N.md
+automation/docs/PRUEBA-DATA-TABLES-LOCAL.md
 automation/docs/PROCEDIMIENTOS.md
 automation/lib/auditor.mjs
 automation/lib/common.mjs
@@ -81,6 +84,7 @@ scripts/automation/importar-local.mjs
 scripts/automation/lint-workflows.mjs
 scripts/automation/make-test-data.mjs
 scripts/automation/normalize-workflow.mjs
+scripts/automation/prueba-data-tables.mjs
 scripts/automation/simulate-workflow.mjs
 scripts/automation/validate-schema.mjs
 scripts/automation/verificar-fichero-diagnostico.mjs
@@ -98,6 +102,7 @@ scripts/tests/analytics-memo.test.mjs
 scripts/tests/automation-agents.test.mjs
 scripts/tests/automation-api.test.mjs
 scripts/tests/automation-consumo.test.mjs
+scripts/tests/automation-prueba-dt.test.mjs
 scripts/tests/automation-seguimiento-integracion.test.mjs
 scripts/tests/automation-seguimiento.test.mjs
 scripts/tests/automation-seguridad.test.mjs

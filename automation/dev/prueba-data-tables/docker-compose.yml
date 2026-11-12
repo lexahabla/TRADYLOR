@@ -1,0 +1,129 @@
+# PRUEBA AISLADA de las Data Tables de n8n 2.38.6 con PostgreSQL 17 (como producción). COMPLETAMENTE SEPARADA de Treidilor y del n8n de pruebas de los agentes:
+#
+#   · Proyecto Compose propio (`tai-prueba-dt`), contenedores `tai-dt-*`, red `tai-dt-aislada` y volúmenes `tai_dt_*`. No comparte NADA con `treidilor-*`.
+#   · n8n y PostgreSQL viven SÓLO en una red `internal: true`: sin ruta a Internet, al anfitrión ni al resto de contenedores. No hay puente de salida.
+#   · La única entrada es `tai-dt-puente-entrada`, que publica SOLO 127.0.0.1:5689 (el editor, para la prueba manual) y reenvía a n8n:5678.
+#   · Base de datos NUEVA y vacía: ninguna conexión con la de Treidilor, con la de producción ni con el volumen de otros n8n. Claves y contraseñas: SOLO de pruebas.
+#   · Todo lleva la etiqueta `com.treidilor.prueba=data-tables` para poder listar y borrar exclusivamente esto.
+#
+# NADA de esto se arranca sin autorización expresa. Procedimiento: automation/docs/PRUEBA-DATA-TABLES-LOCAL.md
+#   up:    docker compose -p tai-prueba-dt --env-file <env fuera del repo> -f automation/dev/prueba-data-tables/docker-compose.yml up -d
+#   borrar: docker compose -p tai-prueba-dt -f automation/dev/prueba-data-tables/docker-compose.yml down -v
+name: tai-prueba-dt
+
+x-etiqueta: &etiqueta
+  com.treidilor.prueba: data-tables
+
+services:
+  db:
+    image: postgres:17
+    container_name: tai-dt-db
+    restart: "no"
+    networks: [aislada]
+    labels: *etiqueta
+    environment:
+      POSTGRES_USER: n8n_prueba
+      POSTGRES_PASSWORD: ${PRUEBA_DT_PG_PASSWORD:?define una contraseña SOLO de pruebas (aleatoria)}
+      POSTGRES_DB: n8n_prueba
+    volumes:
+      - tai_dt_pg:/var/lib/postgresql/data
+    mem_limit: 512m
+    cpus: 1
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U n8n_prueba -d n8n_prueba"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  n8n:
+    image: n8nio/n8n:${PRUEBA_DT_N8N_VERSION:-2.38.6}
+    container_name: tai-dt-n8n
+    restart: "no"
+    networks: [aislada]
+    labels: *etiqueta
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: http
+      N8N_ENCRYPTION_KEY: ${PRUEBA_DT_ENCRYPTION_KEY:?define una clave de cifrado SOLO de pruebas (distinta de la de producción)}
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: db
+      DB_POSTGRESDB_PORT: "5432"
+      DB_POSTGRESDB_DATABASE: n8n_prueba
+      DB_POSTGRESDB_USER: n8n_prueba
+      DB_POSTGRESDB_PASSWORD: ${PRUEBA_DT_PG_PASSWORD:?define una contraseña SOLO de pruebas (aleatoria)}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_HIRING_BANNER_ENABLED: "false"
+      N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+      N8N_TEMPLATES_ENABLED: "false"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+      N8N_SECURE_COOKIE: "false"            # sólo porque es http://127.0.0.1
+      NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.ssh","n8n-nodes-base.readWriteFile","n8n-nodes-base.httpRequest"]'
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "24"
+      GENERIC_TIMEZONE: Europe/Madrid
+      TZ: Europe/Madrid
+      # Se deja el límite de almacenamiento de Data Tables en su valor por defecto (200 MiB) a propósito: es el que rige en producción.
+    volumes:
+      - tai_dt_n8n:/home/node/.n8n
+    mem_limit: 1g
+    cpus: 1.5
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # Única entrada: SOLO 127.0.0.1:5689 del PC hacia el editor de n8n. Reutiliza la pasarela TCP ya existente y la imagen node que ya está en el PC.
+  puente-entrada:
+    image: node:22-bookworm-slim
+    container_name: tai-dt-puente-entrada
+    restart: "no"
+    read_only: true
+    user: node
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    cpus: 0.25
+    labels: *etiqueta
+    networks: [aislada, entrada]
+    ports:
+      - "127.0.0.1:5689:5678"
+    volumes:
+      - ../puente-tcp.mjs:/app/puente-tcp.mjs:ro
+    command: ["node", "/app/puente-tcp.mjs"]
+    environment:
+      PUENTE_NOMBRE: entrada-dt
+      PUENTE_ESCUCHA: "5678"
+      PUENTE_DESTINO_HOST: n8n
+      PUENTE_DESTINO_PUERTO: "5678"
+    depends_on:
+      - n8n
+
+networks:
+  aislada:
+    name: tai-dt-aislada
+    internal: true          # sin ruta a Internet, al anfitrión ni a otros contenedores
+    labels: *etiqueta
+  entrada:
+    name: tai-dt-entrada
+    driver: bridge          # sólo la usa la pasarela de entrada para publicar 127.0.0.1:5689
+    labels: *etiqueta
+
+volumes:
+  tai_dt_pg:
+    name: tai_dt_pg
+    labels: *etiqueta
+  tai_dt_n8n:
+    name: tai_dt_n8n
+    labels: *etiqueta
