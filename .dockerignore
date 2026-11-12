@@ -26,3 +26,6 @@ nixpacks.toml
 
 # NOTA: .git, AGENTS.md, opencode.json y docs SÍ van a la imagen:
 # permiten desarrollar con opencode/git dentro del contenedor de Easy Panel.
+
+# Treidilor AI: automatización (workflows, agentes y documentación); no forma parte de la imagen de producción
+automation/

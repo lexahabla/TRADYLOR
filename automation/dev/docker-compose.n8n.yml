@@ -1,0 +1,53 @@
+# n8n de PRUEBAS para Treidilor AI — NO SE HA ARRANCADO NUNCA (requiere autorización expresa).
+# Aislado: sólo escucha en 127.0.0.1, sin credenciales reales, sin telemetría, sin nodos de comunidad, sin acceso a variables de entorno desde
+# los nodos y sin el nodo «Execute Command». La versión se FIJA con N8N_VERSION (la misma que la de producción cuando se conozca).
+#
+# Uso (cuando se autorice):
+#   1) cp automation/dev/.env.n8n.example automation/dev/.env.n8n   (y rellenar N8N_VERSION y N8N_ENCRYPTION_KEY de PRUEBAS; el fichero está ignorado por git)
+#   2) docker compose --env-file automation/dev/.env.n8n -f automation/dev/docker-compose.n8n.yml up -d
+#   3) parar: docker compose -f automation/dev/docker-compose.n8n.yml down      (los datos quedan en el volumen)
+#   4) borrar TODO lo de pruebas: docker compose -f automation/dev/docker-compose.n8n.yml down -v
+name: treidilor-ai-pruebas
+
+services:
+  n8n:
+    image: n8nio/n8n:${N8N_VERSION:?define N8N_VERSION con la versión exacta (nunca latest)}
+    container_name: treidilor-n8n-pruebas
+    restart: "no"
+    ports:
+      - "127.0.0.1:5678:5678"
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: "5678"
+      N8N_PROTOCOL: http
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?define una clave de cifrado SOLO de pruebas}
+      N8N_DIAGNOSTICS_ENABLED: "false"
+      N8N_VERSION_NOTIFICATIONS_ENABLED: "false"
+      N8N_PERSONALIZATION_ENABLED: "false"
+      N8N_HIRING_BANNER_ENABLED: "false"
+      N8N_COMMUNITY_PACKAGES_ENABLED: "false"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "true"
+      N8N_SECURE_COOKIE: "false"            # sólo porque es http://127.0.0.1; en producción va con HTTPS
+      NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.ssh","n8n-nodes-base.readWriteFile"]'
+      EXECUTIONS_DATA_PRUNE: "true"
+      EXECUTIONS_DATA_MAX_AGE: "168"
+      DB_TYPE: sqlite
+      GENERIC_TIMEZONE: Europe/Madrid
+      TZ: Europe/Madrid
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # para llegar al Treidilor de pruebas del PC (http://host.docker.internal:4350)
+    volumes:
+      - n8n_pruebas_datos:/home/node/.n8n
+    mem_limit: 1g
+    cpus: 1.5
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  n8n_pruebas_datos:
+    name: treidilor_n8n_pruebas_datos

@@ -97,3 +97,9 @@ src/data/home-layout-draft-backups.json
 src/data/home-layout-activation.json
 src/data/home-stories.json
 src/data/nav-top-sections.json
+
+# Treidilor AI: salidas locales, exportaciones y variables del n8n de pruebas (nunca al repositorio)
+automation/reports/
+automation/dev/.env.n8n
+automation/dev/*.local.*
+automation/exports/

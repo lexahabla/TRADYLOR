@@ -174,6 +174,12 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
   - `nixpacks.toml` - Build pack alternativo (Easy Panel / Railway)
   - `docs/deploy-easypanel.md` - Guía paso a paso del despliegue en Hostinger
 
+## Treidilor AI (automatización y agentes; Fase 2.0, sólo local)
+
+- `automation/` (documentación, `PLAN-MAESTRO.md`, fichas de agentes, `lib/` = código PURO de los agentes, `config/`, `workflows/` = JSON de n8n GENERADOS, `schemas/`, `dev/docker-compose.n8n.yml` del n8n de pruebas) y `scripts/automation/` (`build-workflows`, `lint-workflows`, `normalize-workflow`, `simulate-workflow`, `make-test-data`, `validate-schema`). Pruebas: `scripts/tests/automation-*.test.mjs`. No entra en la imagen Docker (`.dockerignore`).
+- Reglas: workflows de SÓLO LECTURA (GET a URLs fijadas por la política `lib/urlPolicy.mjs`: nunca salida de afiliado, API con efectos, panel ni, en producción, fichas de producto: cada visita cuenta en la analítica); `active:false` siempre; ningún agente usa `TRADYLOR_API_TOKEN`; credenciales por nombre y sin secretos en el repositorio. Tras cambiar `automation/lib`: `node scripts/automation/build-workflows.mjs --write`.
+- NADA se arranca ni se despliega sin autorización expresa (Docker, n8n, MCP, VPS). Procedimientos en `automation/docs/PROCEDIMIENTOS.md`; pendientes en `automation/docs/FALTA-PARA-EJECUTAR.md`.
+
 ## Variables de entorno
 
 - Copiar `.env.example` a `.env` para desarrollo local.

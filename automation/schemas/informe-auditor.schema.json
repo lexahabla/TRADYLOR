@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Informe del Auditor General (Treidilor AI)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agente", "version", "entorno", "modo", "generadoEn", "soloLectura", "resumen", "incidencias", "cobertura", "markdown"],
+  "properties": {
+    "agente": { "enum": ["auditor-general"] },
+    "version": { "type": "string", "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$" },
+    "entorno": { "type": "string", "minLength": 1 },
+    "modo": { "enum": ["completo", "publico"] },
+    "generadoEn": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T" },
+    "soloLectura": { "enum": [true] },
+    "resumen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["estado", "incidencias", "peticiones", "rutasRevisadas", "enlacesRevisados", "fichasRevisadas", "paginasCatalogo"],
+      "properties": {
+        "estado": { "enum": ["ok", "atencion", "critico"] },
+        "incidencias": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["critica", "alta", "media", "baja", "info"],
+          "properties": {
+            "critica": { "type": "integer", "minimum": 0 }, "alta": { "type": "integer", "minimum": 0 }, "media": { "type": "integer", "minimum": 0 },
+            "baja": { "type": "integer", "minimum": 0 }, "info": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "peticiones": { "type": "integer", "minimum": 0 },
+        "rutasRevisadas": { "type": "integer", "minimum": 0 },
+        "enlacesRevisados": { "type": "integer", "minimum": 0 },
+        "fichasRevisadas": { "type": "integer", "minimum": 0 },
+        "paginasCatalogo": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "incidencias": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "gravedad", "area", "titulo", "detalle", "evidencia", "accionSugerida"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "gravedad": { "enum": ["critica", "alta", "media", "baja", "info"] },
+          "area": { "enum": ["salud", "ruta", "enlace", "ficha", "catalogo"] },
+          "titulo": { "type": "string", "minLength": 1 },
+          "detalle": { "type": "string" },
+          "evidencia": { "type": "object" },
+          "accionSugerida": { "type": "string" }
+        }
+      }
+    },
+    "cobertura": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revisado", "noRevisado"],
+      "properties": { "revisado": { "type": "array", "items": { "type": "string" } }, "noRevisado": { "type": "array", "items": { "type": "string" } } }
+    },
+    "markdown": { "type": "string", "minLength": 1 }
+  }
+}
