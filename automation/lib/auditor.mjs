@@ -102,8 +102,8 @@ export function extraerEnlaces(html, baseUrl) {
   return out;
 }
 
-/** Enlaces internos de las páginas revisadas que la política permite pedir (máx. `maxEnlaces`, orden estable). */
-export function crearObjetivosEnlaces(objetivos, respuestas, cfg) {
+/** TODOS los enlaces internos que la política permite pedir, sin tope: [url, origen] en orden estable (alfabético por URL). */
+export function descubrirEnlaces(objetivos, respuestas, cfg) {
   const yaPedidos = new Set(objetivos.filter((t) => !t.marcador).map((t) => t.url));
   const vistos = new Map();
   for (const { t, r } of emparejar(objetivos, respuestas)) {
@@ -114,7 +114,12 @@ export function crearObjetivosEnlaces(objetivos, respuestas, cfg) {
       vistos.set(e.url, t.etiqueta);
     }
   }
-  const lista = [...vistos.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(0, cfg.maxEnlaces);
+  return [...vistos.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+/** Enlaces internos de las páginas revisadas que la política permite pedir (máx. `maxEnlaces`, orden estable). */
+export function crearObjetivosEnlaces(objetivos, respuestas, cfg) {
+  const lista = descubrirEnlaces(objetivos, respuestas, cfg).slice(0, cfg.maxEnlaces);
   const objetivosEnlaces = lista.map(([url, origen]) => ({ id: `enlace:${url}`, tipo: 'enlace', url, origen }));
   return objetivosEnlaces.length ? objetivosEnlaces : [marcador(cfg)];
 }
@@ -346,12 +351,117 @@ export function analizarCatalogo(catalogo, cfg, ahoraIso) {
   return inc;
 }
 
+/* ───────────────────────── Consumo ───────────────────────── */
+
+/** Límites de enlaces que se comparan en los escenarios del informe. */
+export const LIMITES_ESCENARIO = [10, 20, 40];
+
+/** Bytes UTF-8 de un texto. Sin `TextEncoder` ni `Buffer`: el entorno Code de n8n no los garantiza. */
+export function bytesUtf8(texto) {
+  const t = String(texto ?? '');
+  let n = 0;
+  for (let i = 0; i < t.length; i++) {
+    const c = t.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < t.length && t.charCodeAt(i + 1) >= 0xdc00 && t.charCodeAt(i + 1) <= 0xdfff) { n += 4; i++; }
+    else n += 3;
+  }
+  return n;
+}
+
+/** Tamaño (bytes UTF-8) del JSON de un valor. */
+const tamanoJson = (x) => { try { return bytesUtf8(JSON.stringify(x)); } catch (e) { return 0; } };
+
+const familiaDeUrl = (url) => { const u = normalizarUrl(url, undefined); const seg = u ? u.pathname.split('/').filter(Boolean)[0] : ''; return seg || '/'; };
+
+/** «12,3 KB» / «1,25 MB» (formato fijo, sin depender del entorno). */
+export function formatearBytes(n) {
+  const v = Number(n) || 0;
+  if (v < 1024) return `${v} B`;
+  if (v < 1048576) return `${(v / 1024).toFixed(1).replace('.', ',')} KB`;
+  return `${(v / 1048576).toFixed(2).replace('.', ',')} MB`;
+}
+
+/**
+ * Consumo de UNA ejecución. Separa lo MEDIDO de lo ESTIMADO:
+ *  · medido    → bytes del cuerpo de cada respuesta (UTF-8, ya descomprimida por n8n). Lo que viajó por la red puede ser menos (compresión) y el workflow no lo ve.
+ *  · estimado  → lo que n8n podría guardar en su historial: suma del tamaño JSON de la salida de los nodos HTTP, de las listas de objetivos y del informe.
+ *                n8n no publica cuánto guarda de verdad (formato interno): es una ESTIMACIÓN y debe contrastarse con el tamaño real de la ejecución.
+ *  · escenarios→ con los límites de enlaces 10/20/40, calculados con las respuestas REALES de esta ejecución (los enlaces se piden en orden estable, así que el
+ *                subconjunto de los N primeros es exactamente el que se habría pedido). `calculable:false` si esta ejecución pidió menos enlaces que el límite y había más.
+ */
+export function calcularConsumo(entrada) {
+  const { cfg, objetivosRutas = [], respuestasRutas = [], objetivosEnlaces = [], respuestasEnlaces = [], objetivosCatalogo = [], respuestasCatalogo = [], objetivosFichas = [], respuestasFichas = [], tamanoInforme = 0 } = entrada;
+  const grupos = [[objetivosRutas, respuestasRutas], [objetivosEnlaces, respuestasEnlaces], [objetivosCatalogo, respuestasCatalogo], [objetivosFichas, respuestasFichas]];
+  const paginas = [];
+  for (const [objetivos, respuestas] of grupos) {
+    for (const { t, r } of emparejar(objetivos, respuestas)) {
+      paginas.push({ tipo: t.tipo, destino: t.url, bytes: bytesUtf8(cuerpoTexto(r)), serializado: tamanoJson(r), estado: r.error ? 'error' : r.statusCode });
+    }
+  }
+  const sobrecarga = grupos.reduce((n, [o]) => n + tamanoJson(o), 0) + tamanoInforme;
+  const suma = (lista, k) => lista.reduce((n, p) => n + p[k], 0);
+  const porTipo = {};
+  for (const p of paginas) {
+    porTipo[p.tipo] = porTipo[p.tipo] ?? { peticiones: 0, bytes: 0 };
+    porTipo[p.tipo].peticiones++;
+    porTipo[p.tipo].bytes += p.bytes;
+  }
+  const masPesadas = [...paginas].sort((a, b) => b.bytes - a.bytes || a.destino.localeCompare(b.destino)).slice(0, 5).map((p) => ({ tipo: p.tipo, destino: p.destino, bytes: p.bytes, estado: p.estado }));
+
+  // Escenarios de enlaces.
+  const descubiertos = descubrirEnlaces(objetivosRutas, respuestasRutas, cfg);
+  const enlaces = paginas.filter((p) => p.tipo === 'enlace'); // en el orden en que se pidieron (alfabético)
+  const fijas = paginas.filter((p) => p.tipo !== 'enlace');
+  const familiasTodas = new Set(descubiertos.map(([u]) => familiaDeUrl(u)));
+  const escenarios = LIMITES_ESCENARIO.map((limite) => {
+    const n = Math.min(limite, descubiertos.length);
+    const calculable = n <= enlaces.length;
+    const e = { maxEnlaces: limite, calculable, enlaces: n };
+    if (!calculable) return e;
+    const subconjunto = enlaces.slice(0, n);
+    const todas = [...fijas, ...subconjunto];
+    return { ...e, peticiones: todas.length, bytesRecibidos: suma(todas, 'bytes'), bytesHistorialEstimado: suma(todas, 'serializado') + sobrecarga, familiasCubiertas: new Set(subconjunto.map((p) => familiaDeUrl(p.destino))).size, familiasDescubiertas: familiasTodas.size };
+  });
+
+  return {
+    peticiones: paginas.length,
+    medido: {
+      bytesRecibidos: suma(paginas, 'bytes'),
+      porTipo,
+      paginasMasPesadas: masPesadas,
+      nota: 'Medido: bytes UTF-8 del cuerpo de cada respuesta, ya descomprimida. Lo que viajó por la red puede ser menor.',
+    },
+    estimado: {
+      esEstimacion: true,
+      bytesHistorial: suma(paginas, 'serializado') + sobrecarga,
+      metodo: 'ESTIMACIÓN, no medición: suma del tamaño JSON de la salida de los nodos HTTP, de las listas de objetivos y del informe. n8n no publica lo que guarda de verdad; contrástese con el tamaño real de la ejecución.',
+    },
+    presupuesto: { maxEnlaces: cfg.maxEnlaces, enlacesDescubiertos: descubiertos.length, enlacesPedidos: enlaces.length, enlacesOmitidosPorTope: Math.max(0, descubiertos.length - enlaces.length) },
+    escenarios,
+  };
+}
+
 /* ───────────────────────── Informe ───────────────────────── */
 
 /** El feed de automatización entrega sólo la longitud de la descripción (dato estrictamente necesario); el feed antiguo, el texto. */
 export const longitudDescripcion = (p) => (Number.isFinite(Number(p.descriptionLength)) ? Number(p.descriptionLength) : String(p.description ?? '').trim().length);
 
 const ETIQUETA_GRAVEDAD = { critica: 'Crítica', alta: 'Alta', media: 'Media', baja: 'Baja', info: 'Información' };
+
+/** Apartado «Consumo» del informe (los informes anteriores no lo tienen: sólo se pinta si existe). */
+function markdownConsumo(c) {
+  const l = ['## Consumo'];
+  l.push(`- **Medido:** ${c.peticiones} peticiones · ${formatearBytes(c.medido.bytesRecibidos)} de cuerpo recibido (descomprimido; por la red puede ser menos).`);
+  if (c.medido.paginasMasPesadas.length) l.push(`- **Páginas más pesadas:** ${c.medido.paginasMasPesadas.map((p) => `${p.destino} (${formatearBytes(p.bytes)})`).join('; ')}`);
+  l.push(`- **Estimado (NO medido):** ≈ ${formatearBytes(c.estimado.bytesHistorial)} en el historial de n8n por ejecución. Es una estimación del tamaño JSON de las salidas; contrastar con el tamaño real de la ejecución.`);
+  const p = c.presupuesto;
+  l.push(`- **Enlaces internos:** ${p.enlacesPedidos} pedidos de ${p.enlacesDescubiertos} descubiertos (tope ${p.maxEnlaces}${p.enlacesOmitidosPorTope ? `; ${p.enlacesOmitidosPorTope} omitidos por el tope` : ''}).`);
+  for (const e of c.escenarios) l.push(e.calculable ? `  - Con tope ${e.maxEnlaces}: ${e.peticiones} peticiones · ${formatearBytes(e.bytesRecibidos)} recibidos · ≈ ${formatearBytes(e.bytesHistorialEstimado)} estimados en el historial · ${e.familiasCubiertas}/${e.familiasDescubiertas} secciones del sitio cubiertas` : `  - Con tope ${e.maxEnlaces}: no calculable con esta ejecución (se pidieron menos enlaces que ese tope)`);
+  l.push('');
+  return l;
+}
 
 export function informeMarkdown(informe) {
   const l = [];
@@ -376,6 +486,7 @@ export function informeMarkdown(informe) {
     l.push('');
   }
   if (!informe.incidencias.length) l.push('Sin incidencias.\n');
+  if (informe.consumo) l.push(...markdownConsumo(informe.consumo));
   l.push('## Cobertura');
   l.push(`- Revisado: ${informe.cobertura.revisado.join('; ') || '—'}`);
   l.push(`- **No revisado:** ${informe.cobertura.noRevisado.join('; ') || '—'}`);
@@ -442,6 +553,9 @@ export function construirInformeAuditor(entrada) {
     },
     markdown: '',
   };
+  informe.markdown = informeMarkdown(informe);
+  // Consumo: se calcula con el tamaño del informe ya construido (sin el propio apartado) y se añade después al informe y a su Markdown.
+  informe.consumo = calcularConsumo({ cfg, objetivosRutas, respuestasRutas, objetivosEnlaces, respuestasEnlaces, objetivosCatalogo, respuestasCatalogo, objetivosFichas, respuestasFichas, tamanoInforme: tamanoJson(informe) });
   informe.markdown = informeMarkdown(informe);
   return informe;
 }

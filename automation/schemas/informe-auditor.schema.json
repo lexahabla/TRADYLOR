@@ -302,6 +302,171 @@
           }
         }
       }
+    },
+    "consumo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "peticiones",
+        "medido",
+        "estimado",
+        "presupuesto",
+        "escenarios"
+      ],
+      "properties": {
+        "peticiones": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "medido": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bytesRecibidos",
+            "porTipo",
+            "paginasMasPesadas",
+            "nota"
+          ],
+          "properties": {
+            "bytesRecibidos": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "porTipo": {
+              "type": "object"
+            },
+            "paginasMasPesadas": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "tipo",
+                  "destino",
+                  "bytes",
+                  "estado"
+                ],
+                "properties": {
+                  "tipo": {
+                    "type": "string"
+                  },
+                  "destino": {
+                    "type": "string"
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "estado": {}
+                }
+              }
+            },
+            "nota": {
+              "type": "string"
+            }
+          }
+        },
+        "estimado": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "esEstimacion",
+            "bytesHistorial",
+            "metodo"
+          ],
+          "properties": {
+            "esEstimacion": {
+              "enum": [
+                true
+              ]
+            },
+            "bytesHistorial": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "metodo": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "presupuesto": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "maxEnlaces",
+            "enlacesDescubiertos",
+            "enlacesPedidos",
+            "enlacesOmitidosPorTope"
+          ],
+          "properties": {
+            "maxEnlaces": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "enlacesDescubiertos": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "enlacesPedidos": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "enlacesOmitidosPorTope": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "escenarios": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "maxEnlaces",
+              "calculable",
+              "enlaces"
+            ],
+            "properties": {
+              "maxEnlaces": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "calculable": {
+                "enum": [
+                  true,
+                  false
+                ]
+              },
+              "enlaces": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "peticiones": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "bytesRecibidos": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "bytesHistorialEstimado": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "familiasCubiertas": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "familiasDescubiertas": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

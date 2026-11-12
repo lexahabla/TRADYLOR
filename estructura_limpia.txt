@@ -32,6 +32,7 @@ automation/dev/diagnostico-entorno-code.json
 automation/dev/docker-compose.n8n.yml
 automation/dev/puente-tcp.mjs
 automation/docs/API-AUTOMATIZACION-DISENO.md
+automation/docs/AUDITOR-CONSUMO.md
 automation/docs/F2-DIAGNOSTICO-PRODUCCION.md
 automation/docs/F2B-CIERRE-PENDIENTES-ANTES-DE-F3.md
 automation/docs/F2C-ROTACION-TOKEN-RUNNER.md
@@ -92,6 +93,7 @@ scripts/tests/amazon-link.test.mjs
 scripts/tests/analytics-memo.test.mjs
 scripts/tests/automation-agents.test.mjs
 scripts/tests/automation-api.test.mjs
+scripts/tests/automation-consumo.test.mjs
 scripts/tests/automation-seguridad.test.mjs
 scripts/tests/catalog-concurrency.test.mjs
 scripts/tests/categories-cache.test.mjs
