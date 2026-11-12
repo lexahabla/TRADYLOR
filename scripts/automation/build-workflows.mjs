@@ -142,9 +142,7 @@ if (process.argv[1]?.endsWith('build-workflows.mjs')) {
       fs.writeFileSync(destino, texto);
       console.log(`escrito ${path.relative(RAIZ, destino)} (${texto.length} bytes)`);
     } else if (modo === '--check') {
-      const actual = fs.existsSync(destino) ? fs.readFileSync(destino, 'utf8').replace(/
-/g, '
-') : null; // Git puede convertir saltos de línea al extraer
+      const actual = fs.existsSync(destino) ? fs.readFileSync(destino, 'utf8').replace(/\r\n/g, '\n') : null; // Git puede convertir saltos de línea al extraer
       if (actual !== texto) { console.error(`✖ ${f}: desincronizado con automation/lib (ejecuta --write)`); fallos++; } else console.log(`✔ ${f}`);
     } else {
       console.error('Uso: build-workflows.mjs --write | --check');

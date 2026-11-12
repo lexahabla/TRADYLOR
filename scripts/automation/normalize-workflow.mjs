@@ -52,9 +52,7 @@ if (import.meta.url === `file://${process.argv[1].replace(/\\/g, '/')}` || proce
     console.error('Uso: normalize-workflow.mjs <fichero.json> [--write|--check]');
     process.exit(2);
   }
-  const actual = fs.readFileSync(fichero, 'utf8').replace(/
-/g, '
-');
+  const actual = fs.readFileSync(fichero, 'utf8').replace(/\r\n/g, '\n');
   const nuevo = serializar(normalizarWorkflow(JSON.parse(actual)));
   if (modo === '--write') {
     fs.writeFileSync(fichero, nuevo);
