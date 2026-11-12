@@ -72,3 +72,8 @@ A1–A5 anotados · B1b ✔ (gzip, 1× «dump complete», SHA-256 anotado) · B2
 | B5 tamaño BD / disco | | |
 | B6 copia fuera del VPS | | |
 | C (restauración aislada) | | |
+
+## Actualización 12/11/2026 (tras la rotación F2C)
+- **B3 (runner externo)**: `N8N_RUNNERS_MODE=external` confirmado en `n8n` y la ejecución de F2 tras la rotación coincide con actividad del runner (17:10:33; cierre por inactividad 15 s después, por diseño). Se considera **cubierto**; B3 puede anotarse como ✔ (ver `F2C-ROTACION-TOKEN-RUNNER.md`).
+- **A1**: n8n y runner 2.38.6, PostgreSQL 17 (anotado).
+- **Siguen pendientes y F3 sigue BLOQUEADA** hasta completarlos: B1b (integridad del volcado), B2 (valores efectivos de retención), B4 (huella de la clave de cifrado), B5 (tamaños), B6 / D1 (copia fuera del VPS), C (restauración aislada, con PostgreSQL 17) o decisión expresa de aplazarla, D2 (retención explícita), D3 (responsable).

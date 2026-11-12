@@ -89,3 +89,27 @@ No hay datos que restaurar: la rotación no toca la base ni los workflows; la co
 | V4 diagnóstico 34/34 | | |
 | V4b prueba con runner detenido | no realizada / falla y recupera | |
 | P6 conversación y captura borradas | | |
+
+## Resultado de la ejecución (12/11/2026, por el administrador; sin valores)
+| Punto | Resultado |
+|---|---|
+| Rotación en `n8n` y `n8n-runner`, desplegada | hecha; ambos servicios en verde |
+| V3 coincidencia entre servicios (configuración de Docker Swarm, sin mostrar valores) | coincide |
+| V1/V2 errores de autenticación (sin nuevos HTTP 403 en los registros revisados) | sin errores |
+| V4 diagnóstico F2 tras la rotación | 34/34, `resultado: OK`, `fallos: []`, `sinRed: true` |
+| Registro del runner a las 17:10:33, durante F2 | `ExperimentalWarning: localStorage is not available because --localstorage-file was not provided` |
+| Registro del runner a las 17:10:48 | `Runner process exited on idle timeout` |
+
+### Análisis de los dos mensajes (inocuos; no requieren corrección)
+- **`ExperimentalWarning: localStorage …`**: aviso de Node.js (las versiones recientes incluyen Web Storage y avisan al acceder a `localStorage` sin `--localstorage-file`). Aparece cuando el proceso del runner prepara el contexto de ejecución de una tarea Code y recorre las globales; no es un fallo ni afecta al resultado (F2 dio OK). Es de aviso, no de error: no se corrige ni se silencia. Su presencia **a la hora de F2** es, de hecho, evidencia de que el Code se ejecutó en el runner externo.
+- **`Runner process exited on idle timeout`**: comportamiento **por diseño** del lanzador del runner: el proceso del runner se cierra tras un periodo sin tareas (por defecto 15 s) y el lanzador lo vuelve a arrancar cuando llega la siguiente. Entre 17:10:33 y 17:10:48 pasan exactamente 15 s, que coincide con ese valor por defecto. No indica caída ni pérdida de conexión con el broker.
+- Habría que investigar solo si: (a) el cierre ocurre **durante** una tarea en curso, (b) tras él no se vuelve a ver actividad con la siguiente tarea, o (c) aparecen errores de autenticación, de conexión al broker o de memoria asociados. Ninguna de las tres cosas consta.
+
+### Cierre de F2C
+Técnicamente **cerrable**: servicios sanos, token coincidente, sin errores de autenticación, prueba funcional OK y evidencia positiva del runner.
+Housekeeping pendiente (no bloquea el cierre técnico):
+1. **Huella contra el valor guardado**: que el valor desplegado es el del gestor/archivo local (tercera huella de V3, calculada en el PC con lectura oculta o sobre el archivo sin mostrarlo). Así, si hiciera falta reaplicarlo, el valor guardado es el bueno.
+2. **P6**: borrar la conversación de ChatGPT y la captura del token anterior.
+3. Mover el token a tu gestor y decidir si se conserva `INFORMES/N8N TOKEN/n8n-runners-auth-token.txt` (excluido de Git y de la imagen).
+4. Dejar anotado qué se hizo con el workflow de diagnóstico (borrado o inactivo) y que los 3 workflows siguen sin publicar.
+V4b (parar el runner) **no se realiza** por decisión del administrador; la evidencia anterior la hace innecesaria.
