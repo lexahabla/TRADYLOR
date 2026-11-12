@@ -1,5 +1,8 @@
 # F2 — Diagnóstico de compatibilidad en el n8n de producción (2.38.6) — instrucciones para hacerlo desde la interfaz
 
+> ## ESTADO: HECHA (12/11/2026) — resultado **OK**
+> Ejecutado por el administrador desde la interfaz, una sola vez: `resultado: OK`, `total: 34`, `fallos: []`, `sinRed: true`, `versionAgente: 0.2.0`; el nodo HTTP 4.2 deshabilitado se cargó sin errores visibles; sin peticiones externas. Conclusión: el entorno Code, los tipos/versiones de nodo y el flujo del Auditor son compatibles con n8n 2.38.6. **Sin verificar aún**: que la ejecución usara el runner externo (se confirma en `F2B-CIERRE-PENDIENTES-ANTES-DE-F3.md`, B3) y los valores efectivos de retención. Siguiente: cerrar los pendientes de `F2B-…` antes de pedir F3.
+
 Alcance autorizado: **solo** importar (desactivado) y ejecutar **una vez, a mano** `automation/dev/diagnostico-auditor-produccion.json`. No activar, no programar, no ejecutar `auditor-general.produccion`, no tocar Treidilor, PostgreSQL, EasyPanel, el VPS ni n8n (ni actualizar). Claude no tiene acceso al n8n de producción y no lo ha buscado.
 
 ## 0. Verificación previa del fichero (hecha, en local)

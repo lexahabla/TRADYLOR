@@ -2,6 +2,8 @@
 
 Estado (12/11/2026): los dos agentes **funcionan en un n8n real de pruebas (2.46.6, local)** aislado por red, contra un Treidilor de pruebas con datos saneados y **sin escrituras**. La API de automatización (etapa 2.2) está implementada y probada **solo en local**, desactivada por defecto. Claude está conectado por MCP **solo** al n8n local.
 
+**Producción (12/11/2026):** F2 (diagnóstico en n8n 2.38.6) **hecha, OK**. Siguiente: cerrar `F2B-CIERRE-PENDIENTES-ANTES-DE-F3.md` (integridad del volcado, restauración aislada, runner, retención, clave) y pedir autorización para F3.
+
 ## A. Hecho en local
 - n8n de pruebas aislado por red (`internal`), con comprobación real de aislamiento (`comprobar-aislamiento.mjs`).
 - Auditor General v0.2 (feed por páginas bajo demanda, avisos del entorno local aparte, clasificación) e Investigador comercial v0.2 usando el feed de la **API de automatización con token propio** (nunca el token general).

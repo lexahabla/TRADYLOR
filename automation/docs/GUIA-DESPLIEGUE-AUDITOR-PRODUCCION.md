@@ -4,6 +4,16 @@
 
 Datos ya verificados por ti: n8n de producción **2.38.6** · proyecto EasyPanel `practice_project_n8n` con `n8n`, `n8n-db` (PostgreSQL) y `n8n-runner` · Treidilor en el proyecto `tradylor` · n8n local de pruebas **2.46.6**. Copias y recursos: pendientes de que los verifiques.
 
+## Estado de las fases (actualizado 12/11/2026)
+| Fase | Estado |
+|---|---|
+| F0 verificación de infraestructura | Parcial: recursos, 2FA, retención activada y copias configuradas verificados; faltan integridad del volcado, restauración aislada, comportamiento del runner, valores de retención y clave (ver `F2B-CIERRE-PENDIENTES-ANTES-DE-F3.md`) |
+| F1 punto de retorno | Sin cambios que revertir; copia de PostgreSQL manual hecha (14:38 UTC), sin verificar |
+| **F2 diagnóstico en producción** | **HECHA, OK** (34/34; ver `F2-DIAGNOSTICO-PRODUCCION.md`) |
+| F3 importar el Auditor desactivado | **Pendiente de autorización**, tras cerrar `F2B-…` |
+| F4–F6 ejecución manual, revisión, reversión | No iniciadas |
+| Programación diaria | No autorizada |
+
 ## 1. Qué se despliega y por qué es el candidato más seguro
 Un solo workflow: `automation/workflows/auditor-general.produccion.json`. Solo lee `/api/health` y páginas públicas por `https://treidilor.com`. No necesita credenciales, red interna compartida, MCP, API de Treidilor ni cambios en Treidilor. **No hace falta que los proyectos `tradylor` y `practice_project_n8n` compartan red**: el Auditor sale a Internet y entra por el dominio público.
 
@@ -17,7 +27,7 @@ Un solo workflow: `automation/workflows/auditor-general.produccion.json`. Solo l
 | Opciones HTTP | `batching`, `redirect`, `response.fullResponse` | mismas claves desde 4.1 |
 | JSON | sin `id`, `versionId`, `tags: []`, `active: false`, sin credenciales, sin `availableInMCP` | formato mínimo de importación |
 | Código (task runner) | sin `URL`, `URLSearchParams`, `structuredClone`, `require`, `process`; solo `Intl`, `Date`, `String`… | probado en 2.46.6 (runner interno) |
-**Lo que NO se ha podido verificar** (no hay 2.38.6 localmente y no se ha descargado nada): que 2.38.6 acepte HTTP 4.2 con esas opciones y que **tu `n8n-runner` (modo externo)** tenga las mismas globales. Por eso el primer paso real es el **diagnóstico (§4)**, que lo comprueba sin tocar la red: si el nodo HTTP deshabilitado del diagnóstico se importa con «?», o el diagnóstico falla, **no se continúa** y se me pasa el resultado. No se prepara ninguna actualización de n8n.
+**Resultado real (12/11/2026): el diagnóstico F2 dio OK en 2.38.6** (34/34, nodo HTTP 4.2 cargado sin errores). Queda por confirmar solo que la ejecución usó el runner externo (`F2B-…`, B3). Antecedente — lo que no se podía verificar sin ejecutarlo (no había 2.38.6 localmente): que 2.38.6 acepte HTTP 4.2 con esas opciones y que el runner tenga las mismas globales. El diagnóstico (§4) lo comprobaba sin tocar la red: si el nodo HTTP deshabilitado del diagnóstico se importa con «?», o el diagnóstico falla, **no se continúa** y se me pasa el resultado. No se prepara ninguna actualización de n8n.
 
 ## 3. Checklist de verificación de infraestructura (🔒 las consultas en el VPS; todas de solo lectura)
 Anota solo lo que pone en la columna «Anotar». «No copiar» = no lo pegues ni lo captures.
