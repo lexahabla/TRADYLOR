@@ -330,8 +330,16 @@ test('auditor-general.produccion: revisión estática — sólo GET públicos, s
   assert.equal(wf.active, false);
   assert.ok(!('pinData' in wf) && !('credentials' in wf));
   const tipos = wf.nodes.map((n) => n.type);
-  assert.deepEqual([...new Set(tipos)].sort(), ['n8n-nodes-base.code', 'n8n-nodes-base.httpRequest', 'n8n-nodes-base.manualTrigger', 'n8n-nodes-base.stickyNote']);
+  // 2c: la única novedad es la memoria del Auditor en una Data Table de n8n (almacén interno de n8n, no de Treidilor)
+  assert.deepEqual([...new Set(tipos)].sort(), ['n8n-nodes-base.code', 'n8n-nodes-base.dataTable', 'n8n-nodes-base.httpRequest', 'n8n-nodes-base.manualTrigger', 'n8n-nodes-base.stickyNote']);
   assert.ok(!tipos.some((t) => /schedule|webhook|cron|mcp|executeCommand|ssh|postgres|emailSend|slack|telegram/i.test(t)), 'sin programación, webhooks, MCP ni salidas');
+  const dt = wf.nodes.filter((n) => n.type === 'n8n-nodes-base.dataTable');
+  assert.deepEqual(dt.map((n) => `${n.parameters.resource}/${n.parameters.operation}`).sort(), ['row/get', 'row/insert', 'table/list'], 'sólo listar tablas, leer e insertar filas');
+  for (const n of dt) {
+    assert.ok(!n.credentials);
+    assert.equal(n.retryOnFail, false, 'sin reintentos automáticos');
+    if (n.parameters.resource === 'row') assert.deepEqual(n.parameters.dataTableId, { __rl: true, mode: 'name', value: PROD.seguimiento.tabla }, 'referencia por nombre, sin ids de ninguna instalación');
+  }
   assert.ok(wf.nodes.every((n) => !n.credentials), 'ningún nodo referencia credenciales');
   const http = wf.nodes.filter((n) => n.type === 'n8n-nodes-base.httpRequest');
   assert.equal(http.length, 2);

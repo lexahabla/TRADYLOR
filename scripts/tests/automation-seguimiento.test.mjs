@@ -460,7 +460,9 @@ test('workflows regenerados (2b): sincronizados con su código y con el motor de
   const generado = construirTodo();
   for (const [f, texto] of Object.entries(generado)) {
     assert.equal(fs.readFileSync(path.join(RAIZ, 'automation/workflows', f), 'utf8').replace(/\r\n/g, '\n'), texto, `${f} sincronizado`);
-    assert.ok(texto.includes('compararConEstado') && texto.includes('calcularAlcance'), `${f} incrusta el seguimiento y el alcance`);
+    // el Auditor incrusta el seguimiento y el alcance; el Investigador no necesita nada de eso y el constructor lo poda
+    if (f.startsWith('auditor-general')) assert.ok(texto.includes('compararConEstado') && texto.includes('calcularAlcance'), `${f} incrusta el seguimiento y el alcance`);
+    else assert.ok(!texto.includes('compararConEstado'), `${f} no incrusta el seguimiento`);
   }
   for (const [f, texto] of Object.entries(construirDiagnosticos())) {
     assert.equal(fs.readFileSync(path.join(RAIZ, 'automation/dev', f), 'utf8').replace(/\r\n/g, '\n'), texto, `${f} sincronizado`);

@@ -492,6 +492,7 @@
       "enum": [
         "estado",
         "instantanea",
+        "historial",
         "ninguna"
       ]
     }

@@ -3,9 +3,66 @@
 // Sirve para probar el JSON GENERADO de punta a punta con respuestas de ejemplo, sin red y sin n8n.
 // Comportamientos de n8n que reproduce: los nodos que no reciben elementos no se ejecutan; `$()` falla si el nodo no se ejecutó;
 // el HTTP Request con `onError: continueRegularOutput` devuelve `{ error }`; sólo se admite la URL `={{ $json.url }}`.
+// Entrega 2c: simula las operaciones «Data table» que usa el Auditor (listar tablas, leer filas, insertar filas, crear tabla) sobre un almacén en memoria (`almacen`), con
+// `onError`/`alwaysOutputData` y `$execution.mode`/`$execution.id` (opción `ejecucion`). NO sustituye a la prueba con las Data Tables reales de n8n.
 import vm from 'node:vm';
 
-export function simularWorkflow(wf, { fetchSimulado, ahora = '2026-11-12T10:00:00.000Z', hostsPermitidos } = {}) {
+/** Almacén en memoria para los nodos «Data table» simulados. `tablas`: nombres de tablas que ya existen. Las banderas simulan fallos de la tabla. */
+export function crearAlmacenSimulado(tablas = []) {
+  const almacen = { tablas: {}, operaciones: [], falloInsert: false, falloLectura: false, seq: 0 };
+  for (const nombre of tablas) almacen.tablas[nombre] = { id: `tabla-${Object.keys(almacen.tablas).length + 1}`, nombre, filas: [] };
+  return almacen;
+}
+
+function simularDataTable(nodo, entrada, almacen) {
+  const p = nodo.parameters;
+  const alm = almacen;
+  alm.operaciones.push({ nodo: nodo.name, recurso: p.resource, operacion: p.operation });
+  const evaluar = (valor, json) => { const m = String(valor).match(/^=\{\{\s*\$json\.(\w+)\s*\}\}$/); return m ? json[m[1]] : valor; };
+  const buscar = (valor) => Object.values(alm.tablas).find((x) => x.nombre.toLowerCase().includes(String(valor).toLowerCase()));
+  if (p.resource === 'table') {
+    if (p.operation === 'list') {
+      if (alm.falloLectura) throw new Error('Could not list data tables');
+      const filtro = String(p.options?.filterName ?? '').toLowerCase();
+      return Object.values(alm.tablas).filter((x) => x.nombre.toLowerCase().includes(filtro)).map((x) => ({ json: { id: x.id, name: x.nombre } }));
+    }
+    if (p.operation === 'create') {
+      const existente = alm.tablas[p.tableName];
+      if (!existente) alm.tablas[p.tableName] = { id: `tabla-${Object.keys(alm.tablas).length + 1}`, nombre: p.tableName, filas: [], columnas: (p.columns?.column ?? []).map((c) => c.name) };
+      return [{ json: { id: alm.tablas[p.tableName].id, name: p.tableName } }];
+    }
+    throw new Error(`operación de tabla no simulada: ${p.operation}`);
+  }
+  if (p.resource !== 'row') throw new Error(`recurso no simulado: ${p.resource}`);
+  const ref = p.dataTableId;
+  if (!ref || ref.__rl !== true || ref.mode !== 'name') throw new Error('el simulador sólo admite la referencia por nombre');
+  const tabla = buscar(ref.value);
+  if (p.operation === 'get') {
+    if (alm.falloLectura) throw new Error('Could not read data table');
+    if (!tabla) throw new Error('Data table not found');
+    let filas = tabla.filas.filter((fila) => (p.filters?.conditions ?? []).every((c) => c.condition === 'eq' && fila[c.keyName] === c.keyValue));
+    const col = p.orderBy ? p.orderByColumn : 'id';
+    const dir = p.orderBy ? p.orderByDirection : 'ASC';
+    filas = [...filas].sort((a, b) => (a[col] < b[col] ? -1 : a[col] > b[col] ? 1 : a.id - b.id) * (dir === 'DESC' ? -1 : 1));
+    if (!p.returnAll) filas = filas.slice(0, p.limit);
+    return filas.map((fila) => ({ json: { ...fila } }));
+  }
+  if (p.operation === 'insert') {
+    if (alm.falloInsert) throw new Error('Could not insert rows');
+    if (!tabla) throw new Error('Data table not found');
+    const salida = [];
+    for (const it of entrada) {
+      const valores = Object.fromEntries(Object.entries(p.columns.value).map(([k, v]) => [k, evaluar(v, it.json)]));
+      const fila = { id: ++alm.seq, ...valores, createdAt: '2026-11-12T10:00:00.000Z', updatedAt: '2026-11-12T10:00:00.000Z' };
+      tabla.filas.push(fila);
+      salida.push({ json: { ...fila } });
+    }
+    return salida;
+  }
+  throw new Error(`operación de fila no simulada: ${p.operation}`);
+}
+
+export function simularWorkflow(wf, { fetchSimulado, ahora = '2026-11-12T10:00:00.000Z', hostsPermitidos, almacen = null, ejecucion = {} } = {}) {
   const salidas = new Map(); // nombre → items
   const peticiones = [];
   const porNombre = new Map(wf.nodes.map((n) => [n.name, n]));
@@ -41,6 +98,7 @@ export function simularWorkflow(wf, { fetchSimulado, ahora = '2026-11-12T10:00:0
       const contexto = {
         $: (n) => ({ all: () => todo(n), first: () => todo(n)[0] }),
         $input: { all: () => entrada, first: () => entrada[0] },
+        $execution: { mode: ejecucion.mode ?? 'test', id: String(ejecucion.id ?? '1') },
         Date: class extends RealDate {
           constructor(...a) { super(...(a.length ? a : [ahora])); }
           static now() { return new RealDate(ahora).getTime(); }
@@ -75,8 +133,21 @@ export function simularWorkflow(wf, { fetchSimulado, ahora = '2026-11-12T10:00:0
       salidas.set(nombre, out);
       continue;
     }
+    if (nodo.type === 'n8n-nodes-base.dataTable') {
+      let out;
+      try {
+        out = simularDataTable(nodo, entrada, almacen ?? crearAlmacenSimulado());
+      } catch (e) {
+        if (nodo.onError !== 'continueRegularOutput') throw e;
+        out = [{ json: { error: e.message } }];
+      }
+      if (!out.length && nodo.alwaysOutputData) out = [{ json: {} }];
+      salidas.set(nombre, out);
+      continue;
+    }
     throw new Error(`Tipo de nodo no soportado por el simulador: ${nodo.type}`);
   }
-  const ultimo = orden.filter((n) => porNombre.get(n).type !== 'n8n-nodes-base.stickyNote' && !porNombre.get(n).disabled).pop();
+  // El resultado es la salida del nodo «Informe» si existe (en 2c el último nodo es el que guarda la instantánea); si no, la del último nodo.
+  const ultimo = porNombre.has('Informe') ? 'Informe' : orden.filter((n) => porNombre.get(n).type !== 'n8n-nodes-base.stickyNote' && !porNombre.get(n).disabled).pop();
   return { salida: salidas.get(ultimo) ?? [], salidas, peticiones };
 }

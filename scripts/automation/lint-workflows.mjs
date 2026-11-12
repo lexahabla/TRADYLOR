@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { validarAislamiento } from '../../automation/lib/urlPolicy.mjs';
+import { COLUMNAS_INSTANTANEAS } from '../../automation/lib/seguimiento.mjs';
 
 export const TIPOS_PERMITIDOS = new Set([
   'n8n-nodes-base.manualTrigger',
@@ -15,6 +16,7 @@ export const TIPOS_PERMITIDOS = new Set([
   'n8n-nodes-base.httpRequest',
   'n8n-nodes-base.noOp',
   'n8n-nodes-base.stickyNote',
+  'n8n-nodes-base.dataTable', // memoria del Auditor (2c): sólo listar tablas, leer filas e insertar filas (y crear la tabla en el workflow de preparación)
 ]);
 const MAX_NODOS = 30;
 const MAX_CODE_BYTES = 80_000;
@@ -35,7 +37,7 @@ export const PATRONES_CODIGO = [
   [/\bglobalThis\b|__proto__|constructor\s*\.\s*constructor/, 'escape del entorno'],
   [/\bsetTimeout\b|\bsetInterval\b/, 'temporizadores'],
   [/while\s*\(\s*true\s*\)|for\s*\(\s*;\s*;\s*\)/, 'bucle infinito'],
-  [/\$execution\.|\$workflow\.|\$getWorkflowStaticData|helpers\.httpRequest|\$helpers/, 'API interna de n8n con efectos'],
+  [/\$execution\.(?!mode\b|id\b)|\$workflow\.|\$getWorkflowStaticData|helpers\.httpRequest|\$helpers/, 'API interna de n8n con efectos (sólo se permiten $execution.mode y $execution.id, de lectura)'],
 ];
 
 const PATRONES_SECRETO = [
@@ -87,6 +89,8 @@ export function comprobarWorkflow(wf, ctx = {}) {
   const esProduccion = /[.-]produccion\./i.test(ctx.nombreArchivo ?? '') || /producci[oó]n/i.test(String(wf.name ?? ''));
   let hayHttp = false;
   let hayPolitica = false;
+  const tablasDt = new Set();
+  let tablaConfig = null;
   for (const n of wf.nodes) {
     const etiqueta = `Nodo «${n?.name ?? '?'}»`;
     if (!n || typeof n !== 'object' || typeof n.name !== 'string' || !n.name) { err('Hay un nodo sin nombre'); continue; }
@@ -116,10 +120,31 @@ export function comprobarWorkflow(wf, ctx = {}) {
           if (esProduccion && cfg.entorno !== 'produccion') err(`${etiqueta}: aislamiento — un workflow de producción debe llevar la configuración de producción`);
           if (!esProduccion && cfg.entorno !== 'local') err(`${etiqueta}: aislamiento — un workflow local debe llevar la configuración local`);
           if (!esProduccion && /treidilor\.com/i.test(JSON.stringify(cfg))) err(`${etiqueta}: aislamiento — un workflow local no puede mencionar treidilor.com`);
+          if (cfg.seguimiento && typeof cfg.seguimiento.tabla === 'string') tablaConfig = cfg.seguimiento.tabla;
         }
         if (!/validarAislamiento\(CONFIG\)/.test(js)) err(`${etiqueta}: falta la guardia de aislamiento al inicio del nodo`);
       }
       if (/function\s+evaluarUrl\b/.test(js) && /hostsPermitidos/.test(js)) hayPolitica = true;
+    }
+    if (n.type === 'n8n-nodes-base.dataTable') {
+      const p = n.parameters ?? {};
+      const op = `${p.resource}/${p.operation}`;
+      const permitidas = new Set(['table/list', 'row/get', 'row/insert']);
+      if (/crear-tabla/.test(ctx.nombreArchivo ?? '')) permitidas.add('table/create');
+      if (!permitidas.has(op)) err(`${etiqueta}: operación de Data table no permitida (${op}); sólo listar tablas, leer e insertar filas`);
+      if (p.resource === 'row') {
+        const ref = p.dataTableId;
+        if (!ref || ref.__rl !== true || ref.mode !== 'name' || typeof ref.value !== 'string' || !ref.value || ref.value.startsWith('=')) err(`${etiqueta}: la tabla debe referenciarse por NOMBRE fijo (modo «name»), nunca por id, lista ni expresión`);
+        else tablasDt.add(ref.value);
+      }
+      if (p.resource === 'table' && p.operation === 'list' && typeof p.options?.filterName === 'string') tablasDt.add(p.options.filterName);
+      if (p.resource === 'table' && p.operation === 'create' && typeof p.tableName === 'string') tablasDt.add(p.tableName);
+      if (op === 'row/insert') {
+        if (n.retryOnFail === true) err(`${etiqueta}: el Insert no puede reintentar automáticamente (duplicaría filas)`);
+        const columnas = Object.keys(p.columns?.value ?? {});
+        if (!columnas.length || columnas.some((c) => !COLUMNAS_INSTANTANEAS.includes(c))) err(`${etiqueta}: el Insert sólo puede escribir las columnas del historial (${COLUMNAS_INSTANTANEAS.join(', ')})`);
+        if (p.options && p.options.optimizeBulk === true) avisos.push(`${etiqueta}: optimizeBulk no devuelve las filas insertadas`);
+      }
     }
     if (n.type === 'n8n-nodes-base.httpRequest') {
       hayHttp = true;
@@ -140,6 +165,7 @@ export function comprobarWorkflow(wf, ctx = {}) {
     }
   }
   if (hayHttp && !hayPolitica) err('Hay nodos HTTP pero ningún nodo Code incluye la política de URLs (evaluarUrl + hostsPermitidos)');
+  if (tablaConfig && [...tablasDt].some((x) => x !== tablaConfig)) err(`Los nodos Data table deben usar sólo la tabla de la configuración («${tablaConfig}»)`);
 
   // Conexiones: nodos existentes, sin ciclos, y cada HTTP debe recibir de un Code (que fija la URL con la política)
   const conexiones = wf.connections ?? {};
@@ -157,6 +183,11 @@ export function comprobarWorkflow(wf, ctx = {}) {
     const entradas = aristas.filter(([, a]) => a === n.name).map(([d]) => d);
     if (n.disabled === true && !entradas.length) continue; // deshabilitado y sin conexiones: no se ejecuta (sirve para validar versiones de nodo al importar)
     if (!entradas.length || entradas.some((d) => tipoDe[d] !== 'n8n-nodes-base.code')) err(`Nodo «${n.name}»: sólo puede recibir datos de nodos Code`);
+  }
+  for (const n of wf.nodes) {
+    if (n.type !== 'n8n-nodes-base.dataTable' || n.parameters?.operation !== 'insert') continue;
+    const entradas = aristas.filter(([, a]) => a === n.name).map(([d]) => d);
+    if (!entradas.length || entradas.some((d) => tipoDe[d] !== 'n8n-nodes-base.code')) err(`Nodo «${n.name}»: el Insert sólo puede recibir datos de nodos Code (que deciden qué fila se guarda)`);
   }
   const grado = new Map([...nombres].map((x) => [x, 0]));
   for (const [, a] of aristas) grado.set(a, (grado.get(a) ?? 0) + 1);

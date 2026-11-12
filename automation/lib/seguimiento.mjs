@@ -410,3 +410,125 @@ export function ejecutarSeguimiento(estadoPrevio, informe, opciones) {
   const siguiente = siguienteEstado(estadoPrevio, instantanea, seguimiento, opciones);
   return { instantanea, seguimiento, siguiente };
 }
+
+/* ───────────────────────── Historial de instantáneas INMUTABLES (entrega 2c) ─────────────────────────
+ * La memoria del Auditor es una tabla de n8n (Data Table) de SOLO INSERCIONES: cada auditoría completa añade una fila con su instantánea y nunca se modifica ni se borra.
+ * El estado se RECONSTRUYE leyendo las últimas filas: se deduplica por (entorno, idEjecucion) conservando la de menor `id`, se ordena por (generadoEn, idEjecucion) y se pliega
+ * con el motor de 2a. Como el resultado depende sólo del CONJUNTO de filas y no del orden de inserción, dos ejecuciones simultáneas o que terminan fuera de orden convergen al mismo
+ * estado, sin necesidad de actualizaciones atómicas. Este módulo sigue siendo PURO: la lectura y la escritura las hacen los nodos Data Table del workflow.
+ */
+export const COLUMNAS_INSTANTANEAS = ['entorno', 'host', 'generadoEn', 'idEjecucion', 'origen', 'calidad', 'huella', 'payload'];
+export const LIMITES_PERSISTENCIA = {
+  maxBytesInstantanea: 61440, // una instantánea mayor no se guarda
+  maxHistorial: 60, // filas que se leen (las más recientes)
+  toleranciaFuturoMs: 30 * 86400000, // una fila fechada más de 30 días en el futuro es un dato erróneo (reloj roto): se descarta y no bloquea las siguientes. Una auditoría anterior a la última válida (ejecución antigua o tardía) NO se guarda (orden_invalido)
+  origenesValidos: ['manual', 'programada'], // orígenes de ejecución que pueden actualizar el historial
+};
+const segLimitesPers = (opciones) => ({ ...LIMITES_PERSISTENCIA, ...((opciones && opciones.persistencia) || {}) });
+const segIdNum = (f) => (Number.isFinite(Number(f.id)) ? Number(f.id) : Infinity);
+const segEsFila = (f) => segEsObjeto(f) && typeof f.idEjecucion === 'string' && f.idEjecucion !== '' && typeof f.entorno === 'string';
+
+/** Origen de la ejecución a partir de `$execution.mode` de n8n: «test» = manual (editor), «production» = programada; otro valor se conserva tal cual. */
+export function origenDeModo(modo) {
+  return modo === 'production' ? 'programada' : modo === 'test' ? 'manual' : String(modo);
+}
+
+/** Estado de la tabla a partir del resultado del nodo «Data table → List» (filtrado por nombre: coincidencia por subcadena): ok | no_encontrada | ambigua | error_lectura. */
+export function estadoDeTabla(tablas, nombre) {
+  const lista = Array.isArray(tablas) ? tablas : [];
+  if (lista.some((t) => segEsObjeto(t) && t.error !== undefined)) return 'error_lectura';
+  const conNombre = lista.filter((t) => segEsObjeto(t) && typeof t.name === 'string');
+  if (!conNombre.length) return 'no_encontrada';
+  return conNombre.length === 1 && conNombre[0].name === nombre ? 'ok' : 'ambigua';
+}
+
+/** Fila a insertar para una instantánea: sólo texto, sólo las columnas permitidas. Nada de evidencias, textos ni datos sensibles (la instantánea ya sólo lleva claves y fechas). */
+export function filaDeInstantanea(inst, datos) {
+  return {
+    entorno: inst.entorno,
+    host: inst.host || '',
+    generadoEn: inst.generadoEn,
+    idEjecucion: String(datos.idEjecucion),
+    origen: String(datos.origen),
+    calidad: inst.calidad.estado,
+    huella: segHash(inst.incidencias.map((i) => i.clave).join('|')),
+    payload: JSON.stringify(inst),
+  };
+}
+
+/** Deduplica por (entorno, idEjecucion) conservando la fila de MENOR `id` (la primera insertada). */
+export function deduplicarFilas(filas) {
+  const porClave = new Map();
+  for (const f of Array.isArray(filas) ? filas : []) {
+    if (!segEsFila(f)) continue;
+    const k = `${f.entorno}\u0001${f.idEjecucion}`;
+    const previa = porClave.get(k);
+    if (!previa || segIdNum(f) < segIdNum(previa)) porClave.set(k, f);
+  }
+  return [...porClave.values()];
+}
+
+/** Orden determinista: (generadoEn, idEjecucion, id). */
+export function ordenarFilas(filas) {
+  return [...filas].sort((a, b) => segCmp(String(a.generadoEn), String(b.generadoEn)) || segCmp(a.idEjecucion, b.idEjecucion) || segIdNum(a) - segIdNum(b));
+}
+
+/**
+ * RECONSTRUYE el estado del seguimiento a partir de las filas leídas. Ignora lo que no es una fila (elementos vacíos o de error del nodo Get) y las de otro entorno; descarta, con
+ * su motivo, las filas inválidas (JSON ilegible, esquema o entorno incoherente, calidad no completa, fecha incoherente o futura). Devuelve { estado, pasos, leidas, validas, duplicadas, descartadas, ultimaGeneradoEn }.
+ */
+export function reconstruirEstado(filas, opciones) {
+  const L = segLimitesPers(opciones);
+  const entorno = opciones && opciones.entorno;
+  const tope = opciones && opciones.ahoraIso ? segFechaMs(opciones.ahoraIso) + L.toleranciaFuturoMs : Infinity;
+  const propias = (Array.isArray(filas) ? filas : []).filter((f) => segEsFila(f) && (entorno === undefined || f.entorno === entorno));
+  const unicas = deduplicarFilas(propias);
+  const descartadas = [];
+  const validas = [];
+  for (const f of ordenarFilas(unicas)) {
+    let inst = null;
+    try { inst = typeof f.payload === 'string' && bytesUtf8(f.payload) <= L.maxBytesInstantanea ? JSON.parse(f.payload) : null; } catch (e) { inst = null; }
+    const motivo = !inst ? 'payload_invalido'
+      : inst.esquema !== ESQUEMA_SEGUIMIENTO || !Array.isArray(inst.incidencias) ? 'esquema_incompatible'
+      : inst.entorno !== f.entorno || inst.generadoEn !== f.generadoEn ? 'fila_incoherente'
+      : !inst.calidad || inst.calidad.estado !== 'completa' ? 'calidad_no_completa'
+      : Number.isNaN(segFechaMs(f.generadoEn)) ? 'fecha_invalida'
+      : segFechaMs(f.generadoEn) > tope ? 'fecha_futura' : null;
+    if (motivo) descartadas.push({ idEjecucion: f.idEjecucion, motivo }); else validas.push(inst);
+  }
+  let estado = null;
+  const pasos = [];
+  for (const inst of validas) {
+    const comparacion = compararConEstado(estado, inst, opciones);
+    const siguiente = siguienteEstado(estado, inst, comparacion, opciones);
+    pasos.push(`${comparacion.modo}${comparacion.motivo ? `:${comparacion.motivo}` : ''}${siguiente.guardar ? '+guardar' : ''}`);
+    if (siguiente.guardar) estado = siguiente.estado;
+  }
+  return { estado, pasos, leidas: propias.length, validas: validas.length, duplicadas: propias.length - unicas.length, descartadas, ultimaGeneradoEn: validas.length ? validas[validas.length - 1].generadoEn : null };
+}
+
+/**
+ * Seguimiento con HISTORIAL: informe + filas leídas → comparación, y la fila a guardar (o ninguna). Decide NO guardar si la ejecución es fallida o incompleta (parcial), si su fecha no es posterior
+ * a la última válida (ejecución antigua o tardía), si el origen no está permitido, si no hay `idEjecucion`, si la instantánea excede el tamaño máximo o si esa ejecución ya está guardada (reintento).
+ * Devuelve { instantanea, seguimiento, previo, guardar, motivoGuardado, fila }.
+ */
+export function ejecutarSeguimientoConHistorial(filas, informe, opciones) {
+  const L = segLimitesPers(opciones);
+  const instantanea = resumirInstantanea(informe, opciones);
+  const previo = reconstruirEstado(filas, { ...opciones, entorno: instantanea.entorno, ahoraIso: instantanea.generadoEn });
+  const seguimiento = compararConEstado(previo.estado, instantanea, opciones);
+  const siguiente = siguienteEstado(previo.estado, instantanea, seguimiento, opciones);
+  const idEjecucion = opciones && typeof opciones.idEjecucion === 'string' ? opciones.idEjecucion : '';
+  let guardar = siguiente.guardar;
+  let motivoGuardado = guardar ? 'ok' : siguiente.motivo;
+  const rechazo = (m) => { guardar = false; motivoGuardado = m; };
+  if (guardar && !L.origenesValidos.includes(opciones && opciones.origen)) rechazo('origen_no_valido');
+  if (guardar && !idEjecucion) rechazo('sin_id_ejecucion');
+  if (guardar && (Array.isArray(filas) ? filas : []).some((f) => segEsFila(f) && f.entorno === instantanea.entorno && f.idEjecucion === idEjecucion)) rechazo('ya_guardada');
+  let fila = null;
+  if (guardar) {
+    fila = filaDeInstantanea(instantanea, { idEjecucion, origen: opciones.origen });
+    if (bytesUtf8(fila.payload) > L.maxBytesInstantanea) { fila = null; rechazo('instantanea_demasiado_grande'); }
+  }
+  return { instantanea, seguimiento, previo, guardar, motivoGuardado, fila };
+}

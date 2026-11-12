@@ -107,7 +107,7 @@ test('primera ejecución: el informe trae el seguimiento como LÍNEA BASE (nada 
   assert.deepEqual(validarEsquema(s, ESQ.seguimiento()), []);
   assert.match(informe.markdown, /## Seguimiento/);
   assert.match(informe.markdown, /\*\*Línea base\*\* — primera ejecución/);
-  assert.match(informe.markdown, /No se proporcionó estado anterior/);
+  assert.match(informe.markdown, /Sin memoria persistente/, 'sin la tabla de n8n, el informe lo dice (la memoria se prueba en automation-persistencia.test.mjs)');
   assert.doesNotMatch(informe.markdown, /### Nuevas/);
   assert.equal(peticiones.length, 9, 'el alcance y el seguimiento no añaden peticiones: salud + 4 rutas + 4 enlaces');
 });
@@ -288,8 +288,8 @@ test('se conservan los límites de consumo y las políticas de aislamiento', () 
   }
   const wf = J('automation/workflows/auditor-general.produccion.json');
   assert.equal(wf.active, false);
-  assert.ok(!wf.nodes.some((n) => /schedule|webhook|dataTable|postgres|executeCommand|emailSend/i.test(n.type)), 'sin persistencia, programación ni salidas');
+  assert.ok(!wf.nodes.some((n) => /schedule|webhook|postgres|executeCommand|emailSend/i.test(n.type)), 'sin programación ni salidas (la memoria es una Data Table de n8n: ver automation-persistencia.test.mjs)');
   assert.ok(wf.nodes.every((n) => !n.credentials));
   const texto = JSON.stringify(wf);
-  assert.ok(!/\$getWorkflowStaticData|\$execution|dataTable/.test(texto), 'el workflow no escribe estado');
+  assert.ok(!/\$getWorkflowStaticData|\$execution\.(?!mode\b|id\b)/.test(texto), 'el workflow sólo lee $execution.mode e $execution.id y no usa datos estáticos');
 });

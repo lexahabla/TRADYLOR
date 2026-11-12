@@ -56,6 +56,7 @@ automation/schemas/informe-investigador.schema.json
 automation/schemas/seguimiento-auditor.schema.json
 automation/workflows/auditor-general.local.json
 automation/workflows/auditor-general.produccion.json
+automation/workflows/auditor-instantaneas-crear-tabla.json
 automation/workflows/investigador-comercial.local.json
 chat.js
 deploy.ps1
@@ -102,6 +103,7 @@ scripts/tests/analytics-memo.test.mjs
 scripts/tests/automation-agents.test.mjs
 scripts/tests/automation-api.test.mjs
 scripts/tests/automation-consumo.test.mjs
+scripts/tests/automation-persistencia.test.mjs
 scripts/tests/automation-prueba-dt.test.mjs
 scripts/tests/automation-seguimiento-integracion.test.mjs
 scripts/tests/automation-seguimiento.test.mjs

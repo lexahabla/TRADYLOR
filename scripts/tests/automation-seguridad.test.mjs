@@ -22,7 +22,7 @@ const nodo = (wf, nombre) => wf.nodes.find((n) => n.name === nombre);
 const hay = (r, re) => r.errores.some((e) => re.test(e));
 
 test('los workflows del repositorio pasan el comprobador y están normalizados y sincronizados con automation/lib', () => {
-  assert.deepEqual(FICHEROS, ['auditor-general.local.json', 'auditor-general.produccion.json', 'investigador-comercial.local.json']);
+  assert.deepEqual(FICHEROS, ['auditor-general.local.json', 'auditor-general.produccion.json', 'auditor-instantaneas-crear-tabla.json', 'investigador-comercial.local.json']);
   const esperado = construirTodo();
   for (const f of FICHEROS) {
     const texto = leer(`automation/workflows/${f}`);
@@ -78,13 +78,17 @@ test('comprobador: rechaza escritura, comandos, red directa, secretos, URLs libr
 });
 
 test('comprobador: código peligroso en nodos Code', () => {
-  const peligros = ['require("fs")', 'process.env.X', 'eval("1")', 'new Function("return 1")()', '$env.HOLA', 'fetch("https://x")', 'const x = import("fs")', 'child_process.exec("ls")', 'globalThis.x = 1', 'setTimeout(() => 1, 1)', 'while (true) {}', 'x.constructor.constructor("return 1")', 'new WebSocket("wss://x")', '$execution.id', 'this.helpers.httpRequest({})', 'a.__proto__.b = 1'];
+  const peligros = ['require("fs")', 'process.env.X', 'eval("1")', 'new Function("return 1")()', '$env.HOLA', 'fetch("https://x")', 'const x = import("fs")', 'child_process.exec("ls")', 'globalThis.x = 1', 'setTimeout(() => 1, 1)', 'while (true) {}', 'x.constructor.constructor("return 1")', 'new WebSocket("wss://x")', '$execution.customData.set("a", 1)', '$workflow.id', '$getWorkflowStaticData("global")', 'this.helpers.httpRequest({})', 'a.__proto__.b = 1'];
   for (const codigo of peligros) {
     const w = clon('auditor-general.produccion.json');
     nodo(w, 'Informe').parameters.jsCode += `\n${codigo};`;
     const r = comprobarWorkflow(w, { nombreArchivo: 'auditor-general.produccion.json' });
     assert.ok(hay(r, /código con/), `código no rechazado: ${codigo}`);
   }
+  // 2c: de $execution sólo se permite LEER el modo y el identificador (origen de la ejecución e idempotencia de la fila)
+  const lectura = clon('auditor-general.produccion.json');
+  nodo(lectura, 'Informe').parameters.jsCode += '\nconst m = $execution.mode; const i = $execution.id;';
+  assert.ok(!hay(comprobarWorkflow(lectura, { nombreArchivo: 'auditor-general.produccion.json' }), /código con/), '$execution.mode y $execution.id son de sólo lectura');
   const w = clon('auditor-general.produccion.json');
   nodo(w, 'Informe').parameters.jsCode = '';
   assert.ok(hay(comprobarWorkflow(w, {}), /código vacío/));
@@ -157,7 +161,7 @@ test('constructor: el código de los nodos es el de automation/lib sin imports n
   const aud = J('automation/workflows/auditor-general.produccion.json');
   const js = nodo(aud, 'Informe').parameters.jsCode;
   assert.match(js, /function evaluarUrl\(/);
-  assert.match(js, /construirInformeAuditor\(/);
+  assert.match(js, /construirInformeYFila\(/);
   assert.doesNotMatch(js, /researcher|buscarCandidatos/, 'el auditor no lleva el código del investigador');
   const inv = J('automation/workflows/investigador-comercial.local.json');
   assert.match(nodo(inv, 'Informe').parameters.jsCode, /construirInformeInvestigador\(/);

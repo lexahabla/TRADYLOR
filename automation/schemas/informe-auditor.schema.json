@@ -1129,8 +1129,102 @@
           "enum": [
             "estado",
             "instantanea",
+            "historial",
             "ninguna"
           ]
+        }
+      }
+    },
+    "persistencia": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tabla",
+        "lectura",
+        "escritura"
+      ],
+      "properties": {
+        "tabla": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "nombre",
+            "estado"
+          ],
+          "properties": {
+            "nombre": {
+              "type": "string"
+            },
+            "estado": {
+              "enum": [
+                "ok",
+                "no_encontrada",
+                "ambigua",
+                "error_lectura",
+                "sin_configurar"
+              ]
+            }
+          }
+        },
+        "lectura": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "filas",
+            "validas",
+            "duplicadas",
+            "descartadas",
+            "ultimaInstantanea"
+          ],
+          "properties": {
+            "filas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "validas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "duplicadas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "descartadas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ultimaInstantanea": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "escritura": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "guardar",
+            "motivo",
+            "origen",
+            "idEjecucion"
+          ],
+          "properties": {
+            "guardar": {
+              "type": "boolean"
+            },
+            "motivo": {
+              "type": "string",
+              "minLength": 1
+            },
+            "origen": {
+              "type": "string"
+            },
+            "idEjecucion": {
+              "type": "string"
+            }
+          }
         }
       }
     }

@@ -5,7 +5,7 @@
  */
 import { bytesUtf8, diasEntre, estadoGlobal, fechaValida, ordenarIncidencias, plegar, precioAnteriorDeclarado, recortar, resumenIncidencias } from './common.mjs';
 import { RUTA_CATALOGO_AUTOMATIZACION, evaluarUrl, normalizarUrl } from './urlPolicy.mjs';
-import { ejecutarSeguimiento, estadoDesdeInstantanea, resumirInstantanea } from './seguimiento.mjs';
+import { ejecutarSeguimiento, ejecutarSeguimientoConHistorial, estadoDeTabla, estadoDesdeInstantanea, resumirInstantanea } from './seguimiento.mjs';
 
 export const VERSION_AUDITOR = '0.2.0';
 
@@ -524,13 +524,13 @@ const MOTIVOS_SEGUIMIENTO = {
 };
 
 /** Apartado «Seguimiento» (los informes anteriores no lo tienen: sólo se pinta si existe). Muestra claves estables, no textos. */
-function markdownSeguimiento(s) {
+function markdownSeguimiento(s, p) {
   const l = ['## Seguimiento'];
   const fecha = (iso) => String(iso).slice(0, 16).replace('T', ' ');
   const motivo = (m) => MOTIVOS_SEGUIMIENTO[m] ?? m;
   if (s.modo === 'linea_base') {
     l.push(`**Línea base** — ${motivo(s.motivo)}. Esta auditoría pasa a ser la referencia y **no** se clasifica ninguna incidencia como nueva (${s.resumen.actuales} incidencias actuales).`);
-    if (s.origenReferencia === 'ninguna') l.push('_No se proporcionó estado anterior: el almacenamiento del estado llega en una entrega posterior._');
+    if (s.origenReferencia === 'ninguna' && !p) l.push('_No se proporcionó estado anterior._');
   } else if (s.modo === 'sin_comparar') {
     l.push(`**Sin comparar** — ${motivo(s.motivo)}.`);
   } else {
@@ -550,9 +550,21 @@ function markdownSeguimiento(s) {
     bloque('Indeterminadas', s.indeterminadas, (x) => ` — ${x.gravedad}; ${motivo(x.motivo)}`);
     bloque('Caducadas', s.caducadas, (x) => ` — ${motivo(x.motivo)}`);
   }
+  if (p) {
+    const fecha2 = (iso) => String(iso).slice(0, 16).replace('T', ' ');
+    l.push('### Historial (memoria del Auditor)');
+    if (p.tabla.estado !== 'ok') l.push(`- ⚠ **Sin memoria persistente:** tabla «${p.tabla.nombre || '—'}» ${MOTIVOS_TABLA[p.tabla.estado] ?? p.tabla.estado}. Esta auditoría no compara ni guarda.`);
+    else {
+      l.push(`- Lectura: ${p.lectura.filas} filas (${p.lectura.validas} válidas${p.lectura.duplicadas ? `, ${p.lectura.duplicadas} duplicadas` : ''}${p.lectura.descartadas ? `, ${p.lectura.descartadas} descartadas` : ''})${p.lectura.ultimaInstantanea ? `; última instantánea válida: ${fecha2(p.lectura.ultimaInstantanea)} UTC` : ''}.`);
+      l.push(`- Escritura: ${p.escritura.guardar ? `**se guardará** una instantánea (origen ${p.escritura.origen})` : `**no se guarda** (${MOTIVOS_GUARDADO[p.escritura.motivo] ?? p.escritura.motivo})`}.`);
+    }
+  }
   l.push('');
   return l;
 }
+
+const MOTIVOS_TABLA = { no_encontrada: 'no existe (créala con el workflow «Auditor · crear tabla de instantáneas»)', ambigua: 'es ambigua: hay varias tablas cuyo nombre contiene ese texto', error_lectura: 'no se pudo leer', sin_configurar: 'no está configurada' };
+const MOTIVOS_GUARDADO = { ejecucion_parcial: 'ejecución parcial o incompleta', ejecucion_fallida: 'ejecución fallida', orden_invalido: 'la auditoría no es posterior a la última guardada', origen_no_valido: 'origen de ejecución no permitido', sin_id_ejecucion: 'sin identificador de ejecución', ya_guardada: 'esta ejecución ya estaba guardada', instantanea_demasiado_grande: 'la instantánea excede el tamaño máximo', persistencia_no_disponible: 'memoria no disponible', instantanea_invalida: 'la auditoría no se pudo resumir' };
 
 export function informeMarkdown(informe) {
   const l = [];
@@ -577,7 +589,7 @@ export function informeMarkdown(informe) {
     l.push('');
   }
   if (!informe.incidencias.length) l.push('Sin incidencias.\n');
-  if (informe.seguimiento) l.push(...markdownSeguimiento(informe.seguimiento));
+  if (informe.seguimiento) l.push(...markdownSeguimiento(informe.seguimiento, informe.persistencia));
   if (informe.consumo) l.push(...markdownConsumo(informe.consumo));
   l.push('## Cobertura');
   l.push(`- Revisado: ${informe.cobertura.revisado.join('; ') || '—'}`);
@@ -586,7 +598,13 @@ export function informeMarkdown(informe) {
 }
 
 /** Construye el informe completo. `entrada` agrupa lo que devolvieron los nodos HTTP (stateless: se recalcula todo desde lo bruto). */
+/** Informe del Auditor (compatible con todas las versiones anteriores). La fila de historial, si la hay, sólo la devuelve `construirInformeYFila`. */
 export function construirInformeAuditor(entrada) {
+  return construirInformeYFila(entrada).informe;
+}
+
+/** Igual que `construirInformeAuditor`, pero devuelve además la FILA que el workflow debe insertar en el historial (o null si no procede guardar). */
+export function construirInformeYFila(entrada) {
   const { cfg, objetivosRutas = [], respuestasRutas = [], objetivosEnlaces = [], respuestasEnlaces = [], objetivosCatalogo: objCat1 = [], respuestasCatalogo: resCat1 = [], objetivosCatalogoResto = [], respuestasCatalogoResto = [], objetivosFichas = [], respuestasFichas = [], ahoraIso } = entrada;
   // Primera página + las siguientes (sólo las que existen); los marcadores se ignoran al emparejar.
   const objetivosCatalogo = [...objCat1, ...objetivosCatalogoResto];
@@ -649,14 +667,35 @@ export function construirInformeAuditor(entrada) {
     },
     markdown: '',
   };
-  // Seguimiento (motor de seguimiento.mjs): la referencia anterior es OPCIONAL. `estadoAnterior` = estado guardado (lo aportará la persistencia, entrega 2c);
-  // `instantaneaAnterior` = instantánea (o informe) anterior para pruebas y simulaciones. Sin ninguna de las dos → línea base: nada se clasifica como nuevo.
-  const ia = entrada.instantaneaAnterior;
-  const referencia = entrada.estadoAnterior ?? (ia ? estadoDesdeInstantanea(ia.esquema === 1 ? ia : resumirInstantanea(ia)) : null);
-  informe.seguimiento = { ...ejecutarSeguimiento(referencia, informe, { host: alcance.host }).seguimiento, origenReferencia: entrada.estadoAnterior ? 'estado' : ia ? 'instantanea' : 'ninguna' };
+  // Seguimiento (motor de seguimiento.mjs). Tres fuentes de referencia, de más a menos real:
+  //  · `entrada.persistencia` (2c): el historial leído de la Data Table (instantáneas inmutables) → estado reconstruido, y la fila a guardar.
+  //  · `entrada.estadoAnterior` / `entrada.instantaneaAnterior`: pruebas y simulaciones (2b).
+  //  · ninguna → línea base: nada se clasifica como nuevo.
+  let fila = null;
+  const per = entrada.persistencia;
+  if (per) {
+    const nombre = cfg.seguimiento && cfg.seguimiento.tabla;
+    const tabla = nombre ? estadoDeTabla(per.tablas, nombre) : 'sin_configurar';
+    const lecturaConError = (per.historial || []).some((x) => x && x.error !== undefined && x.idEjecucion === undefined);
+    const usable = tabla === 'ok' && !lecturaConError;
+    const opc = { host: alcance.host, idEjecucion: per.idEjecucion, origen: per.origen, persistencia: { origenesValidos: cfg.seguimiento && cfg.seguimiento.origenesValidos } };
+    if (!opc.persistencia.origenesValidos) delete opc.persistencia.origenesValidos;
+    const r = usable ? ejecutarSeguimientoConHistorial(per.historial, informe, opc) : null;
+    fila = r ? r.fila : null;
+    informe.seguimiento = r ? { ...r.seguimiento, origenReferencia: r.previo.estado ? 'historial' : 'ninguna' } : { ...ejecutarSeguimiento(null, informe, { host: alcance.host }).seguimiento, origenReferencia: 'ninguna' };
+    informe.persistencia = {
+      tabla: { nombre: nombre || '', estado: lecturaConError && tabla === 'ok' ? 'error_lectura' : tabla },
+      lectura: r ? { filas: r.previo.leidas, validas: r.previo.validas, duplicadas: r.previo.duplicadas, descartadas: r.previo.descartadas.length, ultimaInstantanea: r.previo.ultimaGeneradoEn } : { filas: 0, validas: 0, duplicadas: 0, descartadas: 0, ultimaInstantanea: null },
+      escritura: { guardar: Boolean(r && r.guardar), motivo: r ? r.motivoGuardado : 'persistencia_no_disponible', origen: String(per.origen), idEjecucion: String(per.idEjecucion) },
+    };
+  } else {
+    const ia = entrada.instantaneaAnterior;
+    const referencia = entrada.estadoAnterior ?? (ia ? estadoDesdeInstantanea(ia.esquema === 1 ? ia : resumirInstantanea(ia)) : null);
+    informe.seguimiento = { ...ejecutarSeguimiento(referencia, informe, { host: alcance.host }).seguimiento, origenReferencia: entrada.estadoAnterior ? 'estado' : ia ? 'instantanea' : 'ninguna' };
+  }
   informe.markdown = informeMarkdown(informe);
   // Consumo: se calcula con el tamaño del informe ya construido (sin el propio apartado) y se añade después al informe y a su Markdown.
   informe.consumo = calcularConsumo({ cfg, objetivosRutas, respuestasRutas, objetivosEnlaces, respuestasEnlaces, objetivosCatalogo, respuestasCatalogo, objetivosFichas, respuestasFichas, tamanoInforme: tamanoJson(informe) });
   informe.markdown = informeMarkdown(informe);
-  return informe;
+  return { informe, fila };
 }

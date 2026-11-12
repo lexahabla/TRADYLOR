@@ -22,6 +22,9 @@ Estado (12/11/2026): los dos agentes **funcionan en un n8n real de pruebas (2.46
 | 7 | **Investigador en producción**: desplegar la API de automatización con `AUTOMATION_API_ENABLED=true` (decisión aparte), crear un cliente `catalog:read` desde el panel (token mostrado una vez), crearlo como credencial en el n8n del VPS y crear la variante `investigador-comercial.produccion` | con autorización aparte |
 | 8 | Decidir canal de avisos del Auditor (correo/Telegram): credenciales nuevas | Axel |
 
+## B2. Memoria del Auditor (entrega 2c, implementada en local, sin desplegar)
+- Antes de programar el Auditor en un n8n: importar y ejecutar a mano `auditor-instantaneas-crear-tabla.json` (crea la Data Table `auditor_general_instantaneas`), comprobar que ninguna otra tabla contiene ese nombre y validar 2c en el entorno aislado (`AUDITOR-SEGUIMIENTO.md` §9.7). La CLI de n8n no sirve para este workflow (las Data Tables solo funcionan en el servidor).
+
 ## C. Pendientes técnicos conocidos
 - Variante de producción del Investigador (no existe todavía; la política exige modo `completo` solo en local).
 - Endpoint de estado de programadores internos (precios, alertas) para el Auditor.

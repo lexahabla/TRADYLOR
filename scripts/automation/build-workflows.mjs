@@ -9,6 +9,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { normalizarWorkflow, serializar } from './normalize-workflow.mjs';
+import { COLUMNAS_INSTANTANEAS } from '../../automation/lib/seguimiento.mjs';
 
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const LIB = path.join(RAIZ, 'automation', 'lib');
@@ -18,21 +19,57 @@ const SALIDA = path.join(RAIZ, 'automation', 'workflows');
 /** Módulos que se incrustan, en orden de dependencia. */
 const ORDEN = { auditor: ['common', 'urlPolicy', 'seguimiento', 'auditor'], investigador: ['common', 'urlPolicy', 'seguimiento', 'auditor', 'researcher'], diagnostico: ['common', 'urlPolicy', 'seguimiento', 'auditor', 'diagnostico'] };
 
-/** Lee un módulo de `automation/lib` y le quita `import` y `export` para poder concatenarlo dentro de un nodo Code. */
-export function fuenteModulo(nombre, lib = LIB) {
+/** Lee un módulo de `automation/lib` y le quita `import`, `export` y los comentarios de línea completa (documentación del módulo; no cambian el comportamiento). */
+function leerModulo(nombre, lib = LIB) {
   const texto = fs.readFileSync(path.join(lib, `${nombre}.mjs`), 'utf8').replace(/\r\n/g, '\n');
   return texto
     .replace(/^import\s+[^;]*?from\s+'\.\/[A-Za-z]+\.mjs';\s*$/gm, '')
     .replace(/^export\s+(?=(?:async\s+)?(?:function|const|let|class)\b)/gm, '')
-    // Los comentarios que ocupan líneas enteras (bloques JSDoc y `//`) no se incrustan: son documentación del módulo y no cambian el comportamiento. Así cada nodo Code
-    // (que lleva su propia copia de las bibliotecas) se mantiene por debajo del límite del linter. El código ejecutado es el mismo que prueban las pruebas.
     .replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\n?/gm, '')
-    .replace(/^[ \t]*\/\/.*\n?/gm, '')
-    .trim();
+    .replace(/^[ \t]*\/\/.*\n?/gm, '');
 }
 
-export function empaquetar(agente, lib = LIB) {
-  return ORDEN[agente].map((m) => `// ── ${m}.mjs ──\n${fuenteModulo(m, lib)}`).join('\n\n');
+/**
+ * Sin sangrías, espacios finales ni líneas en blanco (los módulos no tienen plantillas ni cadenas multilínea: hay una prueba que lo comprueba). Cada nodo Code lleva su propia copia
+ * de lo que necesita y debe quedar bajo el límite de 80 kB del linter; el código ejecutado es el mismo.
+ */
+const compactar = (texto) => texto.replace(/^[ \t]+/gm, '').replace(/[ \t]+$/gm, '').replace(/\n{2,}/g, '\n').trim();
+
+export function fuenteModulo(nombre, lib = LIB) {
+  return compactar(leerModulo(nombre, lib));
+}
+
+/**
+ * PODA: de las bibliotecas sólo se incrusta en cada nodo Code lo que ese nodo alcanza. Se parte el paquete en declaraciones de primer nivel (líneas en columna 0 que empiezan por
+ * function, const, let o class) y se conservan las que se mencionan, directa o indirectamente, desde el código propio del nodo («raíces»). Es CONSERVADORA: cualquier aparición de un
+ * nombre (también dentro de una cadena o como propiedad) cuenta como referencia, de modo que sólo se descarta lo que seguro no se usa.
+ */
+export function podar(paquete, raices) {
+  const re = /^(?:async\s+)?(?:function\*?\s+([A-Za-z_$][\w$]*)|(?:const|let|class)\s+([A-Za-z_$][\w$]*))/;
+  const bloques = [];
+  let actual = { nombre: null, lineas: [] };
+  for (const linea of paquete.split('\n')) {
+    const m = linea.match(re);
+    if (m) { bloques.push(actual); actual = { nombre: m[1] ?? m[2], lineas: [linea] }; } else actual.lineas.push(linea);
+  }
+  bloques.push(actual);
+  const nombres = new Set(bloques.filter((b) => b.nombre).map((b) => b.nombre));
+  const mencionados = (texto) => (texto.match(/[A-Za-z_$][\w$]*/g) ?? []).filter((x) => nombres.has(x));
+  const vivos = new Set();
+  const pila = [...mencionados(raices)];
+  while (pila.length) {
+    const n = pila.pop();
+    if (vivos.has(n)) continue;
+    vivos.add(n);
+    for (const b of bloques) if (b.nombre === n) pila.push(...mencionados(b.lineas.join('\n')).filter((x) => !vivos.has(x)));
+  }
+  return bloques.filter((b) => !b.nombre || vivos.has(b.nombre)).map((b) => b.lineas.join('\n')).join('\n');
+}
+
+/** Paquete de módulos de un agente. Con `raices` (el código propio del nodo) se poda lo que el nodo no alcanza; sin ellas se incrusta todo. */
+export function empaquetar(agente, raices = null, lib = LIB) {
+  const crudo = ORDEN[agente].map((m) => leerModulo(m, lib)).join('\n\n');
+  return compactar(raices === null ? crudo : podar(crudo, raices));
 }
 
 const leerConfig = (entorno) => JSON.parse(fs.readFileSync(path.join(CONFIG, `${entorno}.json`), 'utf8'));
@@ -41,7 +78,7 @@ const AYUDA = "const nodo = (n) => { try { return $(n).all().map((i) => i.json);
 
 function codigo(agente, cfg, adaptador) {
   const guardia = "{ const errAislamiento = validarAislamiento(CONFIG); if (errAislamiento.length) throw new Error('AISLAMIENTO: ' + errAislamiento.join('; ')); }";
-  return `${empaquetar(agente)}\n\n// ── adaptador del nodo ──\nconst CONFIG = ${JSON.stringify(cfg, null, 2)};\n${guardia}\n${AYUDA}\n${adaptador}\n`;
+  return `${empaquetar(agente, `${guardia}\n${AYUDA}\n${adaptador}`)}\n\n// ── adaptador del nodo ──\nconst CONFIG = ${JSON.stringify(cfg, null, 2)};\n${guardia}\n${AYUDA}\n${adaptador}\n`;
 }
 
 const nodoCode = (nombre, js, pos) => ({ parameters: { jsCode: js }, name: nombre, type: 'n8n-nodes-base.code', typeVersion: 2, position: pos });
@@ -74,6 +111,39 @@ function nodoHttp(nombre, agente, pos, credencial) {
   return n;
 }
 
+/**
+ * Nodos «Data table» de n8n (memoria del Auditor, entrega 2c). La tabla se referencia SIEMPRE por NOMBRE (nunca por id: los ids son de cada instalación) y sólo se usan tres operaciones:
+ * listar tablas (comprobar que la tabla existe y es única), leer filas (Get) e insertar filas (Insert). Nada de update, upsert, borrado ni vaciado.
+ */
+const TIPO_DT = 'n8n-nodes-base.dataTable';
+const VERSION_DT = 1.1;
+const refTabla = (nombre) => ({ __rl: true, mode: 'name', value: nombre });
+const esquemaDt = COLUMNAS_INSTANTANEAS.map((id) => ({ id, displayName: id, required: false, defaultMatch: false, display: true, type: 'string', canBeUsedToMatch: true }));
+function nodoDt(nombre, pos, cfg, operacion) {
+  const tabla = cfg.seguimiento.tabla;
+  const base = { name: nombre, type: TIPO_DT, typeVersion: VERSION_DT, position: pos };
+  if (operacion === 'listar') return { parameters: { resource: 'table', operation: 'list', returnAll: true, options: { filterName: tabla } }, ...base, onError: 'continueRegularOutput', alwaysOutputData: true, retryOnFail: false };
+  if (operacion === 'leer') {
+    return {
+      parameters: {
+        resource: 'row', operation: 'get', dataTableId: refTabla(tabla), matchType: 'allConditions',
+        filters: { conditions: [{ keyName: 'entorno', condition: 'eq', keyValue: cfg.entorno }] },
+        returnAll: false, limit: cfg.seguimiento.maxHistorial, orderBy: true, orderByColumn: 'generadoEn', orderByDirection: 'DESC',
+      },
+      ...base, onError: 'continueRegularOutput', alwaysOutputData: true, retryOnFail: false,
+    };
+  }
+  // insertar: SIN reintentos automáticos (un reintento podría duplicar la fila); un fallo no detiene el informe
+  return {
+    parameters: {
+      resource: 'row', operation: 'insert', dataTableId: refTabla(tabla),
+      columns: { mappingMode: 'defineBelow', value: Object.fromEntries(COLUMNAS_INSTANTANEAS.map((c) => [c, `={{ $json.${c} }}`])), matchingColumns: [], schema: esquemaDt },
+      options: {},
+    },
+    ...base, onError: 'continueRegularOutput', retryOnFail: false,
+  };
+}
+
 function cadena(nombres) {
   const c = {};
   nombres.slice(0, -1).forEach((n, i) => { c[n] = { main: [[{ node: nombres[i + 1], type: 'main', index: 0 }]] }; });
@@ -104,14 +174,43 @@ function auditor(entorno) {
   const lecturas = completo
     ? "objetivosCatalogo: nodo('Páginas de catálogo'), respuestasCatalogo: nodo('Pedir catálogo'), objetivosCatalogoResto: nodo('Páginas restantes'), respuestasCatalogoResto: nodo('Pedir catálogo (resto)'), objetivosFichas: nodo('Fichas de muestra'), respuestasFichas: nodo('Pedir fichas'),"
     : '';
-  pasos.push(['Informe', `const informe = construirInformeAuditor({\n  cfg: CONFIG,\n  objetivosRutas: nodo('Objetivos'), respuestasRutas: nodo('Pedir rutas'),\n  objetivosEnlaces: nodo('Enlaces a revisar'), respuestasEnlaces: nodo('Pedir enlaces'),\n  ${lecturas}\n  ahoraIso: new Date().toISOString(),\n});\nreturn [{ json: informe }];`]);
+  // Memoria (2c): comprobar la tabla → un solo elemento → leer el historial → Informe → quedarse sólo con la fila a guardar → insertarla.
+  pasos.push(['Comprobar tabla', null, undefined, 'dt-listar']);
+  pasos.push(['Uno historial', 'return [{ json: {} }];', undefined, 'pequeno']);
+  pasos.push(['Leer historial', null, undefined, 'dt-leer']);
+  pasos.push(['Informe', `const resultado = construirInformeYFila({
+  cfg: CONFIG,
+  objetivosRutas: nodo('Objetivos'), respuestasRutas: nodo('Pedir rutas'),
+  objetivosEnlaces: nodo('Enlaces a revisar'), respuestasEnlaces: nodo('Pedir enlaces'),
+  ${lecturas}
+  ahoraIso: new Date().toISOString(),
+  persistencia: { tablas: nodo('Comprobar tabla'), historial: nodo('Leer historial'), idEjecucion: 'ex-' + String($execution.id), origen: origenDeModo($execution.mode) },
+});
+return [{ json: resultado.informe }].concat(resultado.fila ? [{ json: Object.assign({ tipo: 'fila' }, resultado.fila) }] : []);`]);
+  pasos.push(['Solo la fila', "return $input.all().filter((i) => i.json.tipo === 'fila');", undefined, 'pequeno']);
+  pasos.push(['Guardar instantánea', null, undefined, 'dt-insertar']);
   const nombre = `Treidilor AI · Auditor General v0 (${entorno})`;
-  const nodos = [nodoManual([0, 0]), nota(`${AVISO_BASE}\nEntorno: ${entorno} · modo: ${cfg.modo}.${completo ? '\nCredencial necesaria (sólo lectura): «' + cfg.credencialCatalogo + '» (Header Auth).' : '\nSin credenciales.'}`, [0, -300])];
-  pasos.forEach(([n, js, cred], i) => {
+  const nodos = [nodoManual([0, 0]), nota(`${AVISO_BASE}\nEntorno: ${entorno} · modo: ${cfg.modo}.${completo ? '\nCredencial necesaria (sólo lectura): «' + cfg.credencialCatalogo + '» (Header Auth).' : '\nSin credenciales.'}\nMEMORIA: lee e inserta instantáneas en la Data Table «${cfg.seguimiento.tabla}» de n8n (créala antes con el workflow «Auditor · crear tabla de instantáneas»). No escribe en Treidilor.`, [0, -300])];
+  pasos.forEach(([n, js, cred, tipo], i) => {
     const pos = [260 * (i + 1), 0];
-    nodos.push(js === null ? nodoHttp(n, 'auditor-general', pos, cred ?? null) : nodoCode(n, codigo('auditor', cfg, js), pos));
+    if (tipo === 'dt-listar') nodos.push(nodoDt(n, pos, cfg, 'listar'));
+    else if (tipo === 'dt-leer') nodos.push(nodoDt(n, pos, cfg, 'leer'));
+    else if (tipo === 'dt-insertar') nodos.push(nodoDt(n, pos, cfg, 'insertar'));
+    else if (tipo === 'pequeno') nodos.push(nodoCode(n, js, pos));
+    else nodos.push(js === null ? nodoHttp(n, 'auditor-general', pos, cred ?? null) : nodoCode(n, codigo('auditor', cfg, js), pos));
   });
   return { name: nombre, nodes: nodos, connections: cadena(['Ejecutar a mano', ...pasos.map((p) => p[0])]), active: false, settings: AJUSTES, tags: [] };
+}
+
+/** Workflow de PREPARACIÓN (se ejecuta una vez a mano en cada n8n): crea la tabla de instantáneas, con las columnas del historial, si no existe. */
+function crearTablaInstantaneas() {
+  const cfg = leerConfig('produccion');
+  const nodos = [
+    nodoManual([0, 0]),
+    nota('TREIDILOR AI · PREPARACIÓN de la memoria del Auditor.\nCrea (si no existe) la Data Table «' + cfg.seguimiento.tabla + '» con las columnas del historial de instantáneas.\nSe ejecuta UNA vez a mano en cada instalación de n8n. No hace peticiones, no usa credenciales y no borra nada.', [0, -300]),
+    { parameters: { resource: 'table', operation: 'create', tableName: cfg.seguimiento.tabla, columns: { column: COLUMNAS_INSTANTANEAS.map((name) => ({ name, type: 'string' })) }, options: { createIfNotExists: true } }, name: 'Crear tabla de instantáneas', type: TIPO_DT, typeVersion: VERSION_DT, position: [260, 0], retryOnFail: false },
+  ];
+  return { name: 'Treidilor AI · Auditor · crear tabla de instantáneas', nodes: nodos, connections: cadena(['Ejecutar a mano', 'Crear tabla de instantáneas']), active: false, settings: AJUSTES, tags: [] };
 }
 
 function investigador(entorno) {
@@ -153,6 +252,7 @@ export const FABRICA = {
   'auditor-general.local.json': () => auditor('local'),
   'auditor-general.produccion.json': () => auditor('produccion'),
   'investigador-comercial.local.json': () => investigador('local'),
+  'auditor-instantaneas-crear-tabla.json': () => crearTablaInstantaneas(),
 };
 
 export function construirTodo() {

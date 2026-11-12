@@ -99,5 +99,14 @@ export function validarConfig(cfg) {
     if (!Number.isInteger(cfg[k]) || cfg[k] < 0 || cfg[k] > 500) errores.push(`${k} debe ser un entero entre 0 y 500`);
   }
   if (!cfg.umbrales || typeof cfg.umbrales !== 'object') errores.push('umbrales es obligatorio');
+  if (cfg.seguimiento !== undefined) {
+    const s = cfg.seguimiento;
+    if (!s || typeof s !== 'object') errores.push('seguimiento debe ser un objeto');
+    else {
+      if (typeof s.tabla !== 'string' || !/^[a-z][a-z0-9_]{5,62}$/.test(s.tabla)) errores.push('seguimiento.tabla debe ser un nombre de tabla en minúsculas (6-63 caracteres, a-z, 0-9 y _)');
+      if (!Number.isInteger(s.maxHistorial) || s.maxHistorial < 1 || s.maxHistorial > 200) errores.push('seguimiento.maxHistorial debe ser un entero entre 1 y 200');
+      if (!Array.isArray(s.origenesValidos) || !s.origenesValidos.length || s.origenesValidos.some((o) => !['manual', 'programada'].includes(o))) errores.push('seguimiento.origenesValidos debe ser una lista con «manual» y/o «programada»');
+    }
+  }
   return errores;
 }

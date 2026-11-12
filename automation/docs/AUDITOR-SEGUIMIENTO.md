@@ -1,6 +1,6 @@
-# Auditor General v0.2 — seguimiento de incidencias (entregas 2a: motor puro y 2b: integración)
+# Auditor General v0.2 — seguimiento de incidencias (entregas 2a: motor, 2b: integración y 2c: memoria persistente)
 
-Estado (12/11/2026): entrega 2a (motor) y 2b (integración en el informe, ver §8) hechas y probadas en local. No hay persistencia; los workflows se regeneraron en la 2b pero **no se ha importado ni desplegado nada**, y la web y el VPS no se han tocado. La persistencia (2c, diseño en §9) requiere autorización aparte.
+Estado (12/11/2026): entrega 2a (motor) y 2b (integración en el informe, ver §8) hechas y probadas en local. Los workflows se han regenerado, pero **no se ha importado ni desplegado nada** y la web y el VPS no se han tocado. La memoria persistente (2c) está implementada en local, ver §9; NO desplegada.
 
 ## 1. Qué hace
 Distingue, entre dos auditorías, las incidencias **nuevas**, **persistentes**, **resueltas**, **no verificadas** y **reaparecidas**.
@@ -58,28 +58,64 @@ Estado (12/11/2026): implementada y probada **solo en local**. Los workflows se 
 - **Contenido**: el motor usa `alcance.contenido` (si existe) para resolver `sin_titulo`, `h1`, `contenido_minimo` y `error_interno_200`: una página que redirige, no es HTML o da error HTTP deja esas incidencias como **no verificadas** (`analisis_incompleto` / `pagina_con_error`).
 - **Tamaño de los nodos Code**: para mantenerlos bajo el límite del linter (80 kB), el constructor ya no incrusta los comentarios que ocupan líneas enteras (mismo código ejecutado). Tamaño máximo actual por nodo ≈ 68 kB; workflow de producción ≈ 208 kB.
 - **Sin cambios** en el límite de **40 enlaces**, en la política de URLs ni en el aislamiento. El alcance y el seguimiento no añaden peticiones.
-- Huella nueva del diagnóstico (`automation/dev/diagnostico-auditor-produccion.json`, SHA-256 LF `06d7dc902bf6102f206618eb9e2535b9e9d5488f6c88083aefa8777eb95c94a8`; comprobable con `node scripts/automation/verificar-fichero-diagnostico.mjs`). El ejecutado en producción el 12/11/2026 fue el de la huella original `e1e5e34a…` (commit `bf20454`).
+- Huella nueva del diagnóstico (`automation/dev/diagnostico-auditor-produccion.json`, SHA-256 LF `b5cf6b1ecab1c5efde37754d46435b4c14d6ab8617f910e3b11b766050f2a8be` (huella de la 2c; la de la 2b era `06d7dc90…`); comprobable con `node scripts/automation/verificar-fichero-diagnostico.mjs`). El ejecutado en producción el 12/11/2026 fue el de la huella original `e1e5e34a…` (commit `bf20454`).
 
-## 9. Diseño de la entrega 2c (persistencia): cómo se introducirá y guardará el estado
-**Nada de esto está implementado ni verificado.** Es el diseño propuesto, sujeto a verificación en el almacenamiento real.
+## 9. Entrega 2c — memoria persistente con instantáneas inmutables (Data Table de n8n)
 
-**Flujo del workflow** (manual primero, programación después y con autorización):
-1. `Ejecutar a mano` → **`Leer estado`** (nodo Data Table de n8n, «get» de la fila `auditor-general:<entorno>`; debe devolver salida vacía si no existe, sin fallar).
-2. Nodos existentes (rutas, enlaces…).
-3. **`Informe`** (Code): `estadoAnterior = JSON.parse(fila.estado)` dentro de un `try/catch` (cualquier fallo → `null`, y el informe lo dirá como `estado_invalido` o primera ejecución). Llama a `construirInformeAuditor({..., estadoAnterior})`: **ya está hecho en 2b**.
-4. **`Preparar estado`** (Code): `ejecutarSeguimiento(estadoAnterior, informe).siguiente` → `{guardar, motivo, estado, revisionBase}`. Es determinista, así que recalcular aquí da el mismo resultado que el informe.
-5. **`¿Guardar?`** (IF) → **`Guardar estado`** (Data Table, actualización **condicionada**: `clave = … AND revision = revisionBase`; si no existe la fila, inserción con `revision = 1`).
+Estado (12/11/2026): **implementada y probada en local con el simulador; NO desplegada, NO importada en ningún n8n de producción, sin programación.** La validación con las Data Tables reales se hace en el entorno aislado `tai-prueba-dt` (§9.7), con autorización. Arquitectura acordada tras la prueba T1–T7 (`PRUEBA-DATA-TABLES-LOCAL.md`, resultados en `INFORMES/2026-11-12/…_09_…`).
 
-**Formato almacenado**: una fila por entorno con `clave` (única), `revision` (entero), `actualizadoEn` y `estado` (el JSON del estado, ≤ 64 KiB; esquema `estado-auditor.schema.json`). Solo claves públicas, gravedades y fechas.
+### 9.1 Arquitectura
+```
+Manual → Objetivos → Pedir rutas → Enlaces a revisar → Pedir enlaces → [catálogo y fichas, sólo local]
+       → Comprobar tabla (Data table › List, filtro por nombre) → Uno historial (Code mínimo: un solo elemento)
+       → Leer historial (Data table › Get: entorno = X, ORDEN generadoEn DESC, LÍMITE maxHistorial)
+       → Informe (Code: informe + fila a guardar) → Solo la fila (Code mínimo) → Guardar instantánea (Data table › Insert)
+```
+- **Memoria = tabla de SOLO INSERCIONES.** Cada auditoría completa añade una fila inmutable; nada se actualiza ni se borra. El estado se **reconstruye** en cada ejecución leyendo las últimas filas: se deduplica por `(entorno, idEjecucion)` conservando la de menor `id`, se ordena por `(generadoEn, idEjecucion)` y se pliega con el motor de 2a/2b (`reconstruirEstado`, sin duplicar lógica). El resultado depende del *conjunto* de filas y no del orden de inserción: dos ejecuciones simultáneas o fuera de orden **convergen** sin necesidad de atomicidad.
+- **Motor** (`seguimiento.mjs`, puro): `reconstruirEstado`, `ejecutarSeguimientoConHistorial`, `filaDeInstantanea`, `deduplicarFilas`, `ordenarFilas`, `estadoDeTabla`, `origenDeModo`. **Integración** (`auditor.mjs`): `construirInformeYFila(entrada)` (la antigua `construirInformeAuditor` es un envoltorio compatible). **Nodos**: `scripts/automation/build-workflows.mjs` (los tres nodos Data table + dos Code mínimos). La persistencia (leer/insertar) la hacen **solo los nodos Data table**; los Code no acceden a la tabla.
+- **Columnas** (todas texto): `entorno`, `host`, `generadoEn`, `idEjecucion`, `origen`, `calidad`, `huella`, `payload` (la instantánea compacta en JSON: claves estables, gravedades, fechas y el alcance; **sin evidencias, títulos, HTML ni secretos**; ≤ 60 KiB).
+- **Qué se guarda y qué no.** Se guarda solo una auditoría **completa** y comparable (o línea base). **No** se guarda: ejecución fallida o parcial; fecha no posterior a la última válida (ejecución antigua o tardía: `orden_invalido`); origen no permitido (`origen_no_valido`); sin identificador de ejecución; instantánea demasiado grande; ejecución ya guardada (reintento: `ya_guardada`). Filas con fecha > 30 días en el futuro se descartan al leer (no bloquean).
+- **Origen** con `$execution.mode`: `test` → `manual`, `production` → `programada` (otro valor se conserva y, por defecto, **no** actualiza el historial; `seguimiento.origenesValidos` en la configuración). `idEjecucion` = `ex-<$execution.id>`.
+- **Sin reintentos** en el Insert (`retryOnFail: false`); un fallo del Insert o de la lectura **no detiene** el informe (`onError: continueRegularOutput`) y el informe lo refleja en `persistencia`.
+- **Informe**: nuevo campo `persistencia` (`tabla.estado`: `ok | no_encontrada | ambigua | error_lectura | sin_configurar`; `lectura`; `escritura`) y apartado Markdown «Historial». El `seguimiento` mantiene nuevas, persistentes, resueltas, reaparecidas, no verificadas e indeterminadas (`origenReferencia: 'historial'`).
+- **Tamaño de los nodos**: el constructor ya **poda** las bibliotecas: cada nodo Code incrusta solo lo que alcanza (además de quitar comentarios y sangrías). Nodo Informe ≈ 69 kB (límite del linter 80 kB); el resto < 9 kB; Investigador ≈ 14 kB.
 
-**Concurrencia — qué está diseñado y qué NO está verificado**: el motor da `revisionBase` y `validarEscritura(almacenado, resultado)` (compare-and-set conceptual). **No se afirma protección transaccional** hasta comprobar en el almacenamiento real que la actualización condicionada es atómica y que devuelve cuántas filas cambió. Si no lo es, se mitiga con una sola ejecución a la vez (programación diaria, sin solapes) y con la comprobación posterior de `revision`. Ante un conflicto (0 filas actualizadas): releer, recalcular con el mismo informe (determinista) y reintentar una vez; si vuelve a fallar, **no sobrescribir** y registrar el conflicto en el informe.
+### 9.2 Cómo se configura la tabla (sin identificadores de la instalación)
+1. El **nombre** de la tabla vive en `automation/config/{produccion,local}.json` → `seguimiento.tabla` (por defecto `auditor_general_instantaneas`) junto a `maxHistorial` (60) y `origenesValidos`. Cambiarlo exige regenerar: `node scripts/automation/build-workflows.mjs --write`.
+2. Los workflows **referencian la tabla por nombre** (`dataTableId = {"__rl": true, "mode": "name", "value": "<nombre>"}`), nunca por id ni por lista: no llevan ningún identificador de ninguna instalación y se pueden importar tal cual en cualquier n8n. El linter lo exige.
+3. En cada n8n, **una sola vez**: importar y ejecutar a mano `auditor-instantaneas-crear-tabla.json` (workflow «Auditor · crear tabla de instantáneas», único donde se permite crear tablas, idempotente: `createIfNotExists`). Alternativa manual: crear en la pestaña *Data tables* del proyecto una tabla con ese nombre y estas 8 columnas de tipo texto.
+4. **El nombre debe ser único.** n8n resuelve el nombre por *subcadena*: si existiera otra tabla cuyo nombre **contiene** ese texto, la referencia es ambigua. El nodo «Comprobar tabla» lo detecta (`tabla.estado = ambigua`), el informe lo avisa y **no se lee ni se escribe**.
+5. Las Data Tables son del **proyecto**: el workflow debe vivir en el mismo proyecto (p. ej. Personal) que la tabla.
 
-**Qué hay que verificar antes de escribir 2c** (cada paso requiere autorización):
-1. Que n8n 2.38.6 incluye el nodo Data Table y cargan sus operaciones (nodo deshabilitado dentro de un diagnóstico, como en F2: si aparece con «?», no existe).
-2. En un n8n local (necesita arrancar Docker): lectura de fila inexistente, inserción, actualización condicionada y su atomicidad, límite de tamaño de una celda de texto, comportamiento en ejecución manual y con el runner externo.
-3. Qué ocurre con la fila al importar de nuevo el workflow (no debería tocarse: viven en n8n, no en el workflow).
-4. Si la Data Table no sirve: alternativa de datos de trabajo en el propio workflow (`$getWorkflowStaticData`, solo en ejecuciones de producción) o el modo manual (el informe incluye lo necesario para recalcular el estado y pasarlo a mano a la ejecución siguiente).
+### 9.3 Concurrencia y consistencia (honestidad)
+No hay actualizaciones: no hay carreras de escritura que proteger. Lo que se garantiza (y se prueba en el simulador) es la **convergencia**: el mismo conjunto de filas da el mismo estado con cualquier orden de inserción y con duplicados. Lo que **no** se afirma: transaccionalidad entre la lectura y la escritura de una misma ejecución (dos ejecuciones simultáneas ven el mismo historial y ambas insertan; el estado reconstruido después las incluye a las dos en orden cronológico).
 
-**Decisiones pendientes (suyas)**: si una ejecución **manual** puede actualizar la referencia o solo las programadas; cuántas ejecuciones se conservan en el historial; procedimiento de reinicio (borrar la fila = nueva línea base, sin pérdida de datos de Treidilor).
+### 9.4 Límites, validación y privacidad
+Historial leído: últimas `maxHistorial` (60) filas por entorno (con una al día, ≈ 2 meses; el seguimiento de una incidencia solo ve esa ventana). Filas inválidas (JSON ilegible, esquema o entorno incoherente, calidad no completa, fecha incoherente o futura, > 60 KiB) se descartan **con motivo** y se cuentan en `persistencia.lectura.descartadas`. Una instantánea > 60 KiB no se guarda. La tabla no se poda: ≈ 1–16 KB por auditoría (≈ 6 MB al año); la cuota global de Data Tables (200 MiB por defecto) es muy superior. Los textos del informe (títulos, detalles, evidencias) **no** se guardan.
 
-**Recuperación**: el estado es derivable y descartable. Perderlo o corromperlo solo provoca una nueva línea base; no afecta a Treidilor ni a n8n.
+### 9.5 Riesgos pendientes
+- Verificar con las Data Tables reales el nodo **List** con `filterName` (no probado todavía), `alwaysOutputData` y la salida de error de Get/Insert; el generador escribe los parámetros según el código fuente y la descripción real del nodo, no desde un nodo creado en el editor.
+- Modo de un **disparador programado** (`$execution.mode = production`) no probado: solo `manual` (editor) lo está.
+- La CLI `n8n execute` **no** puede usar Data Tables («module is disabled»): las ejecuciones deben pasar por el servidor (manual o programada). `importar-local.mjs`/`ejecutar-local.mjs` (CLI) no sirven para este workflow.
+- Un fallo silencioso del Insert deja sin guardar esa auditoría: el siguiente informe compara con la última guardada.
+- La tabla crece sin poda automática (workflow de poda no implementado).
+- Una incidencia solo se sigue dentro de la ventana de `maxHistorial` filas.
+
+### 9.6 Qué NO cambia
+Ni el límite de 40 enlaces, ni la política de URLs, ni los nodos HTTP, ni el aislamiento, ni las peticiones; no hay programación ni activación; el Auditor sigue siendo de solo lectura respecto a Treidilor (la única escritura es en la Data Table de n8n).
+
+### 9.7 Procedimiento previsto para validar 2c en el entorno aislado `tai-prueba-dt` (a autorizar; NO ejecutado)
+El n8n de la prueba excluye `httpRequest` y no tiene salida: para ejecutar el Auditor hacen falta un **sitio de pruebas local** y levantar esa exclusión (cambios solo en `tai-prueba-dt`, sin tocar `treidilor-*`).
+1. **Preparar (sin Docker)**: `automation/dev/prueba-data-tables/sitio-prueba.mjs` (servidor Node mínimo con páginas, `/api/health` y el feed del catálogo, con un endpoint local para cambiar el escenario) y `docker-compose.validacion.yml` (servicio `sitio` con la imagen `node:22-bookworm-slim` ya descargada, alias `puente-treidilor` y puerto 4350 en la red `tai-dt-aislada`; `NODES_EXCLUDE` sin `httpRequest`). Credencial **ficticia** «Treidilor automatización (solo lectura)» (Header Auth con un valor inventado) para el nodo de catálogo.
+2. 🔒 Aplicar la variante (recrea `tai-dt-n8n`; los datos se conservan en `tai_dt_pg`) y comprobar el aislamiento otra vez (sin salida a Internet; el sitio solo es alcanzable dentro de la red).
+3. 🔒 Importar `auditor-instantaneas-crear-tabla.json` y `auditor-general.local.json`; ejecutar a mano el primero. ✔ La tabla existe con 8 columnas `text`.
+4. **V1 primera auditoría**: ✔ línea base, una fila (`origen = manual`), `persistencia.tabla.estado = ok`; verificar en PostgreSQL columnas y `payload` (tamaño, JSON válido, sin textos ni evidencias).
+5. **V2 auditorías sucesivas** cambiando el escenario del sitio: ✔ nuevas, persistentes, resueltas, reaparecidas y no verificadas coinciden con lo esperado, y cada ejecución completa añade una fila.
+6. **V3 parcial/fallida**: sitio con tiempos de espera y sitio caído: ✔ no se guarda nada; la última referencia queda intacta.
+7. **V4 antigua/tardía y reintento**: (lectura directa del historial) ✔ orden inválido y `ya_guardada`.
+8. **V5 concurrencia**: dos ejecuciones manuales simultáneas: ✔ dos filas con ids distintos; la siguiente auditoría compara con ambas.
+9. **V6 tabla ambigua**: crear una segunda tabla cuyo nombre contenga el de la primera: ✔ `ambigua`, no se lee ni se escribe; borrarla después.
+10. **V7 origen programado**: copia temporal del workflow con un disparador de programación cada minuto, activada 2 minutos y desactivada: ✔ `origen = programada` y el modo `production` leído.
+11. **V8 fallos de la tabla**: renombrar/borrar la tabla y comprobar `no_encontrada`; (opcional) llenar la cuota. El informe sale siempre.
+12. Registrar resultados en `INFORMES/` y **conservar** el entorno hasta nueva autorización; la limpieza sigue el procedimiento exclusivo de `PRUEBA-DATA-TABLES-LOCAL.md` §6.
+Criterio de aceptación: todos los puntos ✔ sin cambiar la arquitectura; si algo exige cambiarla, se consulta antes.

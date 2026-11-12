@@ -1,9 +1,17 @@
 {
   "entorno": "local",
   "baseUrl": "http://puente-treidilor:4350",
-  "hostsPermitidos": ["puente-treidilor:4350"],
+  "hostsPermitidos": [
+    "puente-treidilor:4350"
+  ],
   "modo": "completo",
-  "rutas": ["/", "/catalogo", "/categorias", "/metodologia", "/alertas-precio"],
+  "rutas": [
+    "/",
+    "/catalogo",
+    "/categorias",
+    "/metodologia",
+    "/alertas-precio"
+  ],
   "maxEnlaces": 60,
   "maxPaginasCatalogo": 5,
   "limitePorPagina": 100,
@@ -15,5 +23,13 @@
     "descuentoMinimoCandidato": 5,
     "descuentoMaximoCreible": 70,
     "maxCandidatos": 20
+  },
+  "seguimiento": {
+    "tabla": "auditor_general_instantaneas",
+    "maxHistorial": 60,
+    "origenesValidos": [
+      "manual",
+      "programada"
+    ]
   }
 }
