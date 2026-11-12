@@ -124,9 +124,11 @@ test('Auditor local: recorre salud, rutas, enlaces, feed y fichas; detecta lo re
   }
   const ids = informe.incidencias.map((i) => i.id);
   assert.ok(ids.includes('enlace:roto:http://host.docker.internal:4350/roto'), 'enlace roto detectado');
-  assert.ok(ids.some((i) => i.startsWith('ficha:error_servidor')), 'ficha con error 500 detectada');
+  assert.ok(!peticiones.some((p) => p.url.includes('/producto/')), 'por defecto NO se visitan fichas (cada visita escribe historial y analítica)');
+  const ficha = { id: 'ficha:x', tipo: 'ficha', url: `${LOCAL.baseUrl}/producto/x`, productoId: 'x' };
+  assert.ok(aud.analizarFichas([ficha], [{ statusCode: 500, headers: {}, data: 'x' }]).incidencias.some((i) => i.id.startsWith('ficha:error_servidor')), 'ficha con error 500 detectada');
   for (const c of ['catalogo:ids_duplicados', 'catalogo:sin_precio', 'catalogo:sin_imagen', 'catalogo:sin_categoria', 'catalogo:titulos_repetidos', 'catalogo:precio_anterior_menor', 'catalogo:descuento_sospechoso', 'catalogo:imagen_no_segura', 'catalogo:valoracion_por_defecto']) assert.ok(ids.includes(c), `falta ${c}`);
-  assert.equal(informe.resumen.estado, 'critico');
+  assert.equal(informe.resumen.estado, 'atencion');
   assert.match(informe.markdown, /Auditor General/);
   assert.ok(informe.cobertura.noRevisado.some((x) => /verificados/.test(x)), 'declara lo que NO revisa');
   // no pidió el enlace con efectos aunque aparecieran en la home
@@ -248,4 +250,38 @@ test('estadísticas básicas: mediana, plegado de texto y recorte', () => {
   assert.equal(common.mediana([]), null);
   assert.equal(common.plegar('  ÁrBol  Ñandú '), 'arbol nandu');
   assert.equal(common.recortar('a'.repeat(300), 10).length, 10);
+});
+
+// Hallazgos de la primera ejecución en n8n real (12/11/2026): el entorno Code NO tiene URL ni URLSearchParams.
+test('política de URLs sin `URL` global (entorno Code de n8n): mismas decisiones y extracción de enlaces sin <script>', async () => {
+  const vm = await import('node:vm');
+  const src = fs.readFileSync(new URL('../../automation/lib/urlPolicy.mjs', import.meta.url), 'utf8').replace(/^export\s+/gm, '');
+  const ctx = vm.createContext({});
+  vm.runInContext(`${src}\nglobalThis.__p = { normalizarUrl, evaluarUrl };`, ctx);
+  const p = ctx.__p;
+  assert.equal(vm.runInContext('typeof URL', ctx), 'undefined');
+  const cfg = JSON.parse(JSON.stringify({ ...LOCAL }));
+  const ok = (u, t = 'enlace') => p.evaluarUrl(u, t, cfg).ok;
+  assert.equal(ok(`${cfg.baseUrl}/catalogo?category=sonido#x`), true);
+  assert.equal(ok('/catalogo'), true);
+  assert.equal(ok('//evil.example/x'), false);
+  assert.equal(ok('javascript:alert(1)'), false);
+  assert.equal(ok('/a/../upayp1b4'), false);
+  assert.equal(ok('/api/redirect?id=1'), false);
+  assert.equal(ok(`${cfg.baseUrl}/api/health`, 'salud'), true);
+  assert.equal(ok(`${cfg.baseUrl.replace('://', '://u:p@')}/`), false);
+  assert.equal(ok(`${cfg.baseUrl}\@evil.example/`), false);
+  const html = '<a href="/catalogo">x</a><script>const h = `<a href="/${escapeHtml(c.url)}">`;</script><!-- <a href="/oculto"> --><a href="/${y}">z</a>';
+  const enl = aud.extraerEnlaces(html, `${LOCAL.baseUrl}/`);
+  assert.equal(enl.length, 1);
+  assert.match(enl[0], /\/catalogo$/);
+});
+
+test('el cuerpo de la respuesta HTTP se lee de `data` (n8n real) o `body` (simulador)', () => {
+  const t = { id: 'salud', tipo: 'salud', url: `${LOCAL.baseUrl}/api/health` };
+  for (const campo of ['data', 'body']) {
+    const r = { statusCode: 200, headers: {}, [campo]: JSON.stringify({ status: 'ok', sourceHash: 'x', env: {} }) };
+    const inc = aud.analizarSalud([t], [r]).incidencias;
+    assert.ok(!inc.some((i) => i.id === 'salud:sin_datos'), `campo ${campo}`);
+  }
 });

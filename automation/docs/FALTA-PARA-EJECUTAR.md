@@ -1,6 +1,6 @@
 # Qué falta para ejecutar los dos primeros agentes
 
-Estado actual (Fase 2.0, rama local): lógica, workflows, comprobador de seguridad, datos de prueba y Compose **construidos y probados con un simulador**. **Todavía no se han ejecutado en n8n real.**
+Estado actual (12/11/2026): los dos agentes **se han ejecutado en un n8n real de pruebas (2.46.6, local)** contra un Treidilor de pruebas con datos saneados, sin escrituras. La sección A de abajo está HECHA; quedan la B (VPS) y el MCP opcional. Resultados e incidencias: `INFORMES/2026-11-12/2026-11-12_05_*.md` y `PROCEDIMIENTOS.md` §2.2 bis.
 
 ## A. Ejecutarlos EN LOCAL (n8n de pruebas en tu PC)
 | # | Qué falta | Quién | Autorización |

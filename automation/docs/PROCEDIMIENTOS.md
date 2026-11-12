@@ -36,6 +36,23 @@ docker compose --env-file automation/dev/.env.n8n -f automation/dev/docker-compo
 - Ejecutar a mano («Execute workflow»). Verificar el informe en la salida del nodo «Informe».
 - Parar: `docker compose -f automation/dev/docker-compose.n8n.yml down`. Borrar TODO lo de pruebas: `… down -v`.
 
+### 2.2 bis Procedimiento por línea de comandos (el usado en el piloto del 12/11/2026, n8n 2.46.6)
+Sin interfaz ni propietario: sirve para repetir las pruebas de forma automática. En Git Bash de Windows anteponer `MSYS_NO_PATHCONV=1` (si no, `/tmp/…` se convierte en una ruta de Windows).
+```bash
+docker cp automation/workflows treidilor-n8n-pruebas:/tmp/wfN          # usar una carpeta NUEVA cada vez (no se puede sobrescribir)
+docker exec treidilor-n8n-pruebas n8n import:workflow --separate --input=/tmp/wfN
+docker exec treidilor-n8n-pruebas n8n import:credentials --input=/tmp/cred.json   # [{id:"REEMPLAZAR_AL_IMPORTAR",name:"Treidilor pruebas (solo lectura)",type:"httpHeaderAuth",data:{name:"Authorization",value:"Bearer <token de pruebas>"}}]
+docker exec -e N8N_RUNNERS_BROKER_PORT=5690 treidilor-n8n-pruebas n8n execute --id=<id del workflow>
+```
+- `N8N_RUNNERS_BROKER_PORT=5690` es necesario: el CLI arranca su propio broker de tareas y choca con el de la instancia (5679).
+- Para sobrescribir un workflow ya importado hay que incluir su `id` en el JSON (si no, se duplica).
+- `make-test-data.mjs` genera un token nuevo cada vez: tras regenerar los datos hay que reimportar la credencial.
+- Diagnóstico del entorno Code (qué globales existen): importar `automation/dev/diagnostico-entorno-code.json` y ejecutarlo. En n8n 2.46.6: **no existen `URL`, `URLSearchParams` ni `structuredClone`**; sí `Intl`, `Date`, `require` (limitado). El código de `automation/lib` no puede usarlos (el comprobador lo rechaza).
+- El nodo HTTP (v4.2, respuesta completa + texto) entrega `{ data, headers, statusCode, statusMessage }` (no `body`).
+- Los workflows se importan con `tags: []`: el CLI falla (`workflows_tags.tagId`) con etiquetas en forma de texto.
+- **Ojo:** `auditor-general.produccion.json` apunta a `https://treidilor.com`; ejecutarlo hace peticiones reales al sitio. No ejecutarlo en pruebas locales.
+- Las fichas de producto NO se visitan por defecto (`maxFichas: 0` en `local.json`): cada visita escribe `priceHistory` en `products.json` y un `page_view` en `analytics.json`.
+
 ### 2.3 Conectar a Claude al n8n de pruebas (C3)
 Opción preferida (si la versión es ≥ 2.13): en n8n *Settings → Instance-level MCP → Enable MCP access* y marcar «Available in MCP» sólo los workflows de prueba; luego, en Claude Code:
 ```bash

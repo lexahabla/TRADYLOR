@@ -104,7 +104,7 @@ function auditor(entorno) {
     const pos = [260 * (i + 1), 0];
     nodos.push(js === null ? nodoHttp(n, 'auditor-general', pos, cred ?? null) : nodoCode(n, codigo('auditor', cfg, js), pos));
   });
-  return { name: nombre, nodes: nodos, connections: cadena(['Ejecutar a mano', ...pasos.map((p) => p[0])]), active: false, settings: AJUSTES, tags: ['treidilor-ai', 'solo-lectura'] };
+  return { name: nombre, nodes: nodos, connections: cadena(['Ejecutar a mano', ...pasos.map((p) => p[0])]), active: false, settings: AJUSTES, tags: [] };
 }
 
 function investigador(entorno) {
@@ -118,7 +118,7 @@ function investigador(entorno) {
     nodoHttp('Pedir catálogo', 'investigador-comercial', [520, 0], cfg.credencialCatalogo),
     nodoCode('Informe', codigo('investigador', cfg, "const informe = construirInformeInvestigador({ cfg: CONFIG, objetivosCatalogo: nodo('Páginas de catálogo'), respuestasCatalogo: nodo('Pedir catálogo'), ahoraIso: new Date().toISOString() });\nreturn [{ json: informe }];"), [780, 0]),
   ];
-  return { name: nombre, nodes: nodos, connections: cadena(['Ejecutar a mano', 'Páginas de catálogo', 'Pedir catálogo', 'Informe']), active: false, settings: AJUSTES, tags: ['treidilor-ai', 'solo-lectura'] };
+  return { name: nombre, nodes: nodos, connections: cadena(['Ejecutar a mano', 'Páginas de catálogo', 'Pedir catálogo', 'Informe']), active: false, settings: AJUSTES, tags: [] };
 }
 
 export const FABRICA = {

@@ -56,16 +56,19 @@ export function emparejar(objetivos, respuestas) {
   return out;
 }
 
-const cuerpoTexto = (r) => (typeof r.body === 'string' ? r.body : '');
+// El nodo HTTP Request de n8n (con «respuesta completa» y formato texto) entrega el cuerpo en `data`; el simulador lo entrega en `body`.
+const cuerpoTexto = (r) => (typeof r.data === 'string' ? r.data : typeof r.body === 'string' ? r.body : '');
 const errorTexto = (r) => (r.error ? recortar(typeof r.error === 'string' ? r.error : r.error.message ?? JSON.stringify(r.error), 200) : '');
 const esHtml = (r) => /html/i.test(String((r.headers ?? {})['content-type'] ?? '')) || /<html|<!doctype/i.test(cuerpoTexto(r).slice(0, 400));
 
 /** Enlaces <a href> de una página, como URL absolutas (sin fragmento). */
 export function extraerEnlaces(html, baseUrl) {
   const out = [];
-  for (const m of String(html ?? '').matchAll(/<a\s[^>]*?href\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+  // Se ignoran <script>, <style> y comentarios: contienen plantillas JS (`${…}`) que no son enlaces reales.
+  const limpio = String(html ?? '').replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
+  for (const m of limpio.matchAll(/<a\s[^>]*?href\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
     const crudo = (m[1] ?? m[2] ?? '').replace(/&amp;/g, '&').trim();
-    if (!crudo || crudo.startsWith('#') || /^(mailto:|tel:|javascript:|data:)/i.test(crudo)) continue;
+    if (!crudo || crudo.includes('${') || crudo.includes('{{') || crudo.startsWith('#') || /^(mailto:|tel:|javascript:|data:)/i.test(crudo)) continue;
     const u = normalizarUrl(crudo, baseUrl);
     if (u) out.push(u.toString());
   }

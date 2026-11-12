@@ -45,7 +45,7 @@ export function simularWorkflow(wf, { fetchSimulado, ahora = '2026-11-12T10:00:0
           constructor(...a) { super(...(a.length ? a : [ahora])); }
           static now() { return new RealDate(ahora).getTime(); }
         },
-        URL, JSON, Math, Number, String, Array, Object, Map, Set, RegExp, Error, Intl,
+        JSON, Math, Number, String, Array, Object, Map, Set, RegExp, Error, Intl,
       };
       vm.createContext(contexto);
       const envuelto = `(function () {\n${nodo.parameters.jsCode}\n})()`;
@@ -67,7 +67,7 @@ export function simularWorkflow(wf, { fetchSimulado, ahora = '2026-11-12T10:00:0
         if (hostsPermitidos && !hostsPermitidos.includes(new URL(url).host)) throw new Error(`Host no permitido en la simulación: ${new URL(url).host}`);
         try {
           const r = fetchSimulado({ url, metodo, nodo: nombre, credencial: Object.keys(nodo.credentials ?? {}).length > 0 });
-          out.push({ json: { statusCode: r.statusCode ?? 200, headers: r.headers ?? { 'content-type': 'text/html' }, body: typeof r.body === 'string' ? r.body : JSON.stringify(r.body ?? ''), ...(r.error ? { error: r.error } : {}) } });
+          out.push({ json: { statusCode: r.statusCode ?? 200, headers: r.headers ?? { 'content-type': 'text/html' }, data: typeof r.body === 'string' ? r.body : JSON.stringify(r.body ?? ''), ...(r.error ? { error: r.error } : {}) } });
         } catch (e) {
           out.push({ json: { error: e.message } });
         }

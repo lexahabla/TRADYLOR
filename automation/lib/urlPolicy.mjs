@@ -23,16 +23,52 @@ export const RUTAS_PROHIBIDAS = [
 
 const HOSTS_LOCALES = ['localhost', '127.0.0.1', 'host.docker.internal'];
 
-/** Resuelve `valor` respecto a `base` y quita el fragmento. Devuelve null si no es una URL http(s) válida. */
-export function normalizarUrl(valor, base) {
-  try {
-    const u = new URL(String(valor), base);
-    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
-    u.hash = '';
-    return u;
-  } catch {
-    return null;
+const PUERTOS_POR_DEFECTO = { 'http:': '80', 'https:': '443' };
+
+/** Analiza una URL ABSOLUTA http(s). Sin `URL` (el entorno Code de n8n no la tiene). Devuelve null si no es válida. */
+function analizarAbsoluta(texto) {
+  const m = texto.match(/^(https?):\/\/([^/?#]*)([^?#]*)(\?[^#]*)?(#.*)?$/i);
+  if (!m) return null;
+  const protocol = `${m[1].toLowerCase()}:`;
+  let autoridad = m[2];
+  let username = '';
+  let password = '';
+  const arroba = autoridad.lastIndexOf('@');
+  if (arroba >= 0) {
+    const info = autoridad.slice(0, arroba);
+    autoridad = autoridad.slice(arroba + 1);
+    const dos = info.indexOf(':');
+    username = dos >= 0 ? info.slice(0, dos) : info;
+    password = dos >= 0 ? info.slice(dos + 1) : '';
+    if (!username && !password) username = '@';
   }
+  const h = autoridad.match(/^([A-Za-z0-9.-]+)(?::(\d*))?$/);
+  if (!h || !h[1]) return null;
+  const hostname = h[1].toLowerCase();
+  const port = h[2] && h[2] !== PUERTOS_POR_DEFECTO[protocol] ? h[2] : '';
+  const pathname = m[3] || '/';
+  const search = m[4] && m[4] !== '?' ? m[4] : '';
+  const host = port ? `${hostname}:${port}` : hostname;
+  const userinfo = username || password ? `${username}${password ? `:${password}` : ''}@` : '';
+  return { protocol, username, password, host, hostname, port, pathname, search, hash: '', toString: () => `${protocol}//${userinfo}${host}${pathname}${search}` };
+}
+
+/**
+ * Resuelve `valor` respecto a `base` y quita el fragmento. Devuelve null si no es una URL http(s) válida.
+ * No resuelve los segmentos «..»: se conservan en `pathname` y `evaluarUrl` los rechaza.
+ */
+export function normalizarUrl(valor, base) {
+  const v = String(valor ?? '').replace(/[\t\r\n]/g, '').trim();
+  if (!v || /[\\\s]/.test(v)) return null;
+  const b = analizarAbsoluta(String(base ?? ''));
+  if (/^[a-z][a-z0-9+.-]*:/i.test(v)) return analizarAbsoluta(v);
+  if (!b) return null;
+  if (v.startsWith('//')) return analizarAbsoluta(`${b.protocol}${v}`);
+  const origen = `${b.protocol}//${b.host}`;
+  if (v.startsWith('/')) return analizarAbsoluta(`${origen}${v}`);
+  if (v.startsWith('?')) return analizarAbsoluta(`${origen}${b.pathname}${v}`);
+  if (v.startsWith('#')) return analizarAbsoluta(`${origen}${b.pathname}${b.search}`);
+  return analizarAbsoluta(`${origen}${b.pathname.slice(0, b.pathname.lastIndexOf('/') + 1)}${v}`);
 }
 
 /**
@@ -58,6 +94,6 @@ export function evaluarUrl(valor, tipo, cfg) {
     if (cfg.modo !== 'completo') return { ok: false, motivo: 'fichas_solo_modo_completo' };
     return /^\/producto\/[A-Za-z0-9_.~-]{1,160}$/.test(ruta) ? { ok: true, url: u.toString() } : { ok: false, motivo: 'ficha_ruta_no_valida' };
   }
-  if (/^\/producto(\/|$)/i.test(ruta) && cfg.modo !== 'completo') return { ok: false, motivo: 'ficha_visita_cuenta_en_analitica' };
+  if (/^\/producto(\/|$)/i.test(ruta)) return { ok: false, motivo: 'ficha_visita_cuenta_en_analitica' };
   return { ok: true, url: u.toString() };
 }

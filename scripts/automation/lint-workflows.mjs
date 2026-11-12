@@ -29,6 +29,7 @@ export const PATRONES_CODIGO = [
   [/\bnew\s+Function\b|\bFunction\s*\(/, 'Function()'],
   [/\$env\b|\$\{?\s*env\./, 'acceso a variables de entorno'],
   [/\bfetch\s*\(/, 'fetch()'],
+  [/\bnew\s+URL\b|\bURLSearchParams\b|\bstructuredClone\b/, 'URL/URLSearchParams/structuredClone (no existen en el entorno Code de n8n)'],
   [/XMLHttpRequest|WebSocket|EventSource/, 'red directa'],
   [/\bglobalThis\b|__proto__|constructor\s*\.\s*constructor/, 'escape del entorno'],
   [/\bsetTimeout\b|\bsetInterval\b/, 'temporizadores'],

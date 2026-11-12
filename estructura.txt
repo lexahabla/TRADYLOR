@@ -26,6 +26,7 @@ automation/agents/README.md
 automation/config/local.json
 automation/config/produccion.json
 automation/dev/.env.n8n.example
+automation/dev/diagnostico-entorno-code.json
 automation/dev/docker-compose.n8n.yml
 automation/docs/API-AUTOMATIZACION-DISENO.md
 automation/docs/FALTA-PARA-EJECUTAR.md

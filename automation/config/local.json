@@ -7,7 +7,7 @@
   "maxEnlaces": 60,
   "maxPaginasCatalogo": 5,
   "limitePorPagina": 100,
-  "maxFichas": 20,
+  "maxFichas": 0,
   "credencialCatalogo": "Treidilor pruebas (solo lectura)",
   "umbrales": {
     "minProductosPorCategoria": 3,
