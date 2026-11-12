@@ -518,6 +518,122 @@
               "type": "boolean"
             }
           }
+        },
+        "contenido": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rutas",
+            "fichas"
+          ],
+          "properties": {
+            "rutas": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "fichas": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "sinRespuesta": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tipo",
+              "destino",
+              "motivo"
+            ],
+            "properties": {
+              "tipo": {
+                "enum": [
+                  "ruta",
+                  "enlace",
+                  "ficha"
+                ]
+              },
+              "destino": {
+                "type": "string"
+              },
+              "motivo": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "incompletas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tipo",
+              "destino",
+              "motivo"
+            ],
+            "properties": {
+              "tipo": {
+                "enum": [
+                  "ruta",
+                  "enlace",
+                  "ficha"
+                ]
+              },
+              "destino": {
+                "type": "string"
+              },
+              "motivo": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "resumen": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "solicitadas",
+            "respondieron",
+            "correctas",
+            "sinRespuesta",
+            "incompletas",
+            "noVisitados"
+          ],
+          "properties": {
+            "solicitadas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "respondieron": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "correctas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sinRespuesta": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "incompletas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "noVisitados": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
         }
       }
     },
@@ -627,6 +743,10 @@
               "minimum": 0
             },
             "caducadas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "indeterminadas": {
               "type": "integer",
               "minimum": 0
             }
@@ -957,6 +1077,60 @@
               }
             }
           }
+        },
+        "indeterminadas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "clave",
+              "area",
+              "codigo",
+              "gravedad",
+              "cantidad",
+              "motivo"
+            ],
+            "properties": {
+              "clave": {
+                "type": "string",
+                "minLength": 1
+              },
+              "area": {
+                "type": "string",
+                "minLength": 1
+              },
+              "codigo": {
+                "type": "string"
+              },
+              "gravedad": {
+                "enum": [
+                  "critica",
+                  "alta",
+                  "media",
+                  "baja",
+                  "info"
+                ]
+              },
+              "cantidad": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "motivo": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "origenReferencia": {
+          "enum": [
+            "estado",
+            "instantanea",
+            "ninguna"
+          ]
         }
       }
     }

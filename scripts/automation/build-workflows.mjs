@@ -16,7 +16,7 @@ const CONFIG = path.join(RAIZ, 'automation', 'config');
 const SALIDA = path.join(RAIZ, 'automation', 'workflows');
 
 /** Módulos que se incrustan, en orden de dependencia. */
-const ORDEN = { auditor: ['common', 'urlPolicy', 'auditor'], investigador: ['common', 'urlPolicy', 'auditor', 'researcher'], diagnostico: ['common', 'urlPolicy', 'auditor', 'diagnostico'] };
+const ORDEN = { auditor: ['common', 'urlPolicy', 'seguimiento', 'auditor'], investigador: ['common', 'urlPolicy', 'seguimiento', 'auditor', 'researcher'], diagnostico: ['common', 'urlPolicy', 'seguimiento', 'auditor', 'diagnostico'] };
 
 /** Lee un módulo de `automation/lib` y le quita `import` y `export` para poder concatenarlo dentro de un nodo Code. */
 export function fuenteModulo(nombre, lib = LIB) {
@@ -24,6 +24,10 @@ export function fuenteModulo(nombre, lib = LIB) {
   return texto
     .replace(/^import\s+[^;]*?from\s+'\.\/[A-Za-z]+\.mjs';\s*$/gm, '')
     .replace(/^export\s+(?=(?:async\s+)?(?:function|const|let|class)\b)/gm, '')
+    // Los comentarios que ocupan líneas enteras (bloques JSDoc y `//`) no se incrustan: son documentación del módulo y no cambian el comportamiento. Así cada nodo Code
+    // (que lleva su propia copia de las bibliotecas) se mantiene por debajo del límite del linter. El código ejecutado es el mismo que prueban las pruebas.
+    .replace(/^[ \t]*\/\*[\s\S]*?\*\/[ \t]*\n?/gm, '')
+    .replace(/^[ \t]*\/\/.*\n?/gm, '')
     .trim();
 }
 

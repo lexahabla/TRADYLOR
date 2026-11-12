@@ -1,7 +1,7 @@
 /**
  * SEGUIMIENTO de incidencias del Auditor General (entrega 2a): MOTOR PURO. Sin red, sin disco, sin reloj, sin variables de entorno, sin persistencia.
  * Compara la auditoría actual con el estado de la anterior y distingue incidencias NUEVAS, PERSISTENTES, RESUELTAS, NO VERIFICADAS y REAPARECIDAS.
- * Está escrito para poder incrustarse más adelante en un nodo «Code» de n8n (sin imports reales, sin `URL`, sin `structuredClone`); las funciones
+ * Está escrito para poder incrustarse más adelante en un nodo «Code» de n8n (sin imports reales ni globales que el entorno Code de n8n no tenga); las funciones
  * son deterministas: el mismo estado y la misma auditoría dan siempre el mismo resultado (el «ahora» es SIEMPRE `generadoEn` de la auditoría).
  *
  * Capas (cada una la puede sustituir/probar por separado):
@@ -16,9 +16,8 @@
  *  · La primera ejecución (o cualquier reinicio de la referencia) es LÍNEA BASE: no genera incidencias «nuevas».
  *  · Una ejecución FALLIDA no se compara ni se guarda; una PARCIAL se compara pero no sustituye la última referencia válida.
  */
-import { ORDEN_GRAVEDAD } from './common.mjs';
+import { ORDEN_GRAVEDAD, bytesUtf8 } from './common.mjs';
 import { normalizarUrl } from './urlPolicy.mjs';
-import { bytesUtf8 } from './auditor.mjs';
 
 export const ESQUEMA_SEGUIMIENTO = 1;
 
@@ -35,7 +34,7 @@ export const LIMITES_SEGUIMIENTO = {
 
 const SEG_DIA_MS = 86400000;
 const SEG_PARAMETROS_IGNORADOS = /^(utm_[a-z0-9_]+|fbclid|gclid|msclkid|mc_cid|mc_eid|_ga|igshid)$/i;
-const SEG_CODIGOS_CONTENIDO = ['sin_titulo', 'h1', 'contenido_minimo'];
+const SEG_CODIGOS_CONTENIDO = ['sin_titulo', 'h1', 'contenido_minimo', 'error_interno_200'];
 const SEG_CODIGOS_ERROR_HTTP = ['error_servidor', 'no_encontrada', 'error_cliente'];
 
 const segLimites = (opciones) => ({ ...LIMITES_SEGUIMIENTO, ...((opciones && opciones.limites) || {}) });
@@ -129,6 +128,8 @@ function segNormalizarAlcance(al, L) {
     rutas: lista(al.rutas),
     enlaces: lista(al.enlaces),
     fichas: lista(al.fichas),
+    // Rutas y fichas cuyo HTML se analizó entero (título, h1, longitud). Opcional: sin esta lista se aplica la regla anterior (basta con que respondieran).
+    contenido: segEsObjeto(al.contenido) ? { rutas: lista(al.contenido.rutas), fichas: lista(al.contenido.fichas) } : null,
     catalogo: { leido: cat.leido === true, completo: cat.completo === true },
   };
 }
@@ -220,8 +221,12 @@ function segVerificable(clave, actual, conjuntos, erroresHttp) {
   const conjunto = conjuntos[area];
   if (!conjunto) return { ok: false, motivo: 'area_desconocida' };
   if (!conjunto.has(destino)) return { ok: false, motivo: 'objetivo_no_revisado' };
-  // El contenido (título, h1, longitud) sólo se evalúa si la página responde 200: con un error HTTP no se puede afirmar que se arregló.
-  if (SEG_CODIGOS_CONTENIDO.includes(codigo) && erroresHttp.has(`${area}:${destino}`)) return { ok: false, motivo: 'pagina_con_error' };
+  // El contenido (título, h1, longitud) sólo se evalúa si la página responde 200 con HTML: con un error HTTP, una redirección o un cuerpo no analizable no se puede afirmar que se arregló.
+  if (SEG_CODIGOS_CONTENIDO.includes(codigo)) {
+    if (erroresHttp.has(`${area}:${destino}`)) return { ok: false, motivo: 'pagina_con_error' };
+    const analizadas = conjuntos.contenido && conjuntos.contenido[area];
+    if (conjuntos.contenido && !(analizadas && analizadas.has(destino))) return { ok: false, motivo: 'analisis_incompleto' };
+  }
   return { ok: true };
 }
 
@@ -240,12 +245,13 @@ export function compararConEstado(estado, actual, opciones) {
     motivo,
     comparadoCon: null,
     calidad: actual && actual.calidad ? actual.calidad : null,
-    resumen: { actuales: nActuales, nuevas: 0, persistentes: 0, resueltas: 0, noVerificadas: 0, reaparecidas: 0, caducadas: 0 },
+    resumen: { actuales: nActuales, nuevas: 0, persistentes: 0, resueltas: 0, noVerificadas: 0, reaparecidas: 0, indeterminadas: 0, caducadas: 0 },
     nuevas: [],
     persistentes: [],
     resueltas: [],
     noVerificadas: [],
     reaparecidas: [],
+    indeterminadas: [],
     caducadas: [],
   });
   const genMs = segFechaMs(actual && actual.generadoEn);
@@ -263,7 +269,9 @@ export function compararConEstado(estado, actual, opciones) {
   const salida = vacio('comparacion', null);
   salida.comparadoCon = estado.ultimaInstantanea.generadoEn;
   const al = actual.alcance;
-  const conjuntos = al ? { ruta: new Set(al.rutas), enlace: new Set(al.enlaces), ficha: new Set(al.fichas) } : {};
+  const conjuntos = al ? { ruta: new Set(al.rutas), enlace: new Set(al.enlaces), ficha: new Set(al.fichas), contenido: al.contenido ? { ruta: new Set(al.contenido.rutas), ficha: new Set(al.contenido.fichas) } : null } : {};
+  // Si el estado anterior se guardó RECORTADO, una incidencia ausente de él pudo haberse omitido: no se puede demostrar que sea nueva.
+  const estadoRecortado = Boolean(estado.recortado && estado.recortado.omitidas > 0);
   const erroresHttp = new Set(actual.incidencias.filter((i) => (i.area === 'ruta' || i.area === 'ficha') && SEG_CODIGOS_ERROR_HTTP.includes(i.codigo)).map((i) => `${i.area}:${segPartesClave(i.clave).destino}`));
   const recientes = new Map((Array.isArray(estado.resueltasRecientes) ? estado.resueltasRecientes : []).filter((r) => segEsObjeto(r) && typeof r.clave === 'string').map((r) => [r.clave, r]));
   const vistas = new Set();
@@ -279,6 +287,8 @@ export function compararConEstado(estado, actual, opciones) {
     const r = recientes.get(i.clave);
     if (r && (genMs - segFechaMs(r.resueltaEn)) / SEG_DIA_MS <= L.diasReaparicion) {
       salida.reaparecidas.push({ ...comun, resueltaEn: r.resueltaEn, reapariciones: (r.reapariciones || 0) + 1 });
+    } else if (estadoRecortado) {
+      salida.indeterminadas.push({ ...comun, motivo: 'estado_recortado' });
     } else {
       salida.nuevas.push(comun);
     }
@@ -298,8 +308,8 @@ export function compararConEstado(estado, actual, opciones) {
     }
   }
 
-  for (const k of ['nuevas', 'persistentes', 'reaparecidas', 'resueltas', 'noVerificadas', 'caducadas']) salida[k].sort(segPorGravedadYClave);
-  salida.resumen = { actuales: nActuales, nuevas: salida.nuevas.length, persistentes: salida.persistentes.length, resueltas: salida.resueltas.length, noVerificadas: salida.noVerificadas.length, reaparecidas: salida.reaparecidas.length, caducadas: salida.caducadas.length };
+  for (const k of ['nuevas', 'persistentes', 'reaparecidas', 'indeterminadas', 'resueltas', 'noVerificadas', 'caducadas']) salida[k].sort(segPorGravedadYClave);
+  salida.resumen = { actuales: nActuales, nuevas: salida.nuevas.length, persistentes: salida.persistentes.length, resueltas: salida.resueltas.length, noVerificadas: salida.noVerificadas.length, reaparecidas: salida.reaparecidas.length, indeterminadas: salida.indeterminadas.length, caducadas: salida.caducadas.length };
   return salida;
 }
 

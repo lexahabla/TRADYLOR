@@ -108,6 +108,10 @@
         "caducadas": {
           "type": "integer",
           "minimum": 0
+        },
+        "indeterminadas": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -436,6 +440,60 @@
           }
         }
       }
+    },
+    "indeterminadas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clave",
+          "area",
+          "codigo",
+          "gravedad",
+          "cantidad",
+          "motivo"
+        ],
+        "properties": {
+          "clave": {
+            "type": "string",
+            "minLength": 1
+          },
+          "area": {
+            "type": "string",
+            "minLength": 1
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "gravedad": {
+            "enum": [
+              "critica",
+              "alta",
+              "media",
+              "baja",
+              "info"
+            ]
+          },
+          "cantidad": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "motivo": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "origenReferencia": {
+      "enum": [
+        "estado",
+        "instantanea",
+        "ninguna"
+      ]
     }
   }
 }

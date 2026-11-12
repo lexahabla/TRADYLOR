@@ -3,8 +3,9 @@
  * Se incrusta en los nodos «Code» del workflow de n8n (sin imports reales; los `import` de abajo los resuelve el constructor).
  * Toda la entrada de red llega ya hecha por los nodos HTTP de n8n; aquí sólo se decide qué pedir y cómo interpretar lo recibido.
  */
-import { diasEntre, estadoGlobal, fechaValida, ordenarIncidencias, plegar, precioAnteriorDeclarado, recortar, resumenIncidencias } from './common.mjs';
+import { bytesUtf8, diasEntre, estadoGlobal, fechaValida, ordenarIncidencias, plegar, precioAnteriorDeclarado, recortar, resumenIncidencias } from './common.mjs';
 import { RUTA_CATALOGO_AUTOMATIZACION, evaluarUrl, normalizarUrl } from './urlPolicy.mjs';
+import { ejecutarSeguimiento, estadoDesdeInstantanea, resumirInstantanea } from './seguimiento.mjs';
 
 export const VERSION_AUDITOR = '0.2.0';
 
@@ -356,21 +357,7 @@ export function analizarCatalogo(catalogo, cfg, ahoraIso) {
 /** Límites de enlaces que se comparan en los escenarios del informe. */
 export const LIMITES_ESCENARIO = [10, 20, 40];
 
-/** Bytes UTF-8 de un texto. Sin `TextEncoder` ni `Buffer`: el entorno Code de n8n no los garantiza. */
-export function bytesUtf8(texto) {
-  const t = String(texto ?? '');
-  let n = 0;
-  for (let i = 0; i < t.length; i++) {
-    const c = t.charCodeAt(i);
-    if (c < 0x80) n += 1;
-    else if (c < 0x800) n += 2;
-    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < t.length && t.charCodeAt(i + 1) >= 0xdc00 && t.charCodeAt(i + 1) <= 0xdfff) { n += 4; i++; }
-    else n += 3;
-  }
-  return n;
-}
-
-/** Tamaño (bytes UTF-8) del JSON de un valor. */
+/** Tamaño (bytes UTF-8) del JSON de un valor (`bytesUtf8` vive en common.mjs, compartido con seguimiento.mjs). */
 const tamanoJson = (x) => { try { return bytesUtf8(JSON.stringify(x)); } catch (e) { return 0; } };
 
 const familiaDeUrl = (url) => { const u = normalizarUrl(url, undefined); const seg = u ? u.pathname.split('/').filter(Boolean)[0] : ''; return seg || '/'; };
@@ -443,6 +430,58 @@ export function calcularConsumo(entrada) {
   };
 }
 
+/* ───────────────────────── Alcance ───────────────────────── */
+
+/**
+ * ALCANCE de la auditoría: qué destinos se revisaron DE VERDAD. Es la evidencia con la que `seguimiento.mjs` puede declarar «resuelta» una incidencia.
+ * Distingue tres niveles por página (rutas, enlaces y fichas):
+ *  · solicitada        → se pidió (cuenta en `resumen.solicitadas`).
+ *  · respondió         → llegó un estado HTTP, cualquiera (también 404/500): va a `rutas` / `enlaces` / `fichas`. Si no hubo respuesta (error de red, tiempo agotado,
+ *                        nodo sin datos) → `sinRespuesta` con su motivo.
+ *  · análisis completo → sólo rutas y fichas: respondió 200 con HTML con contenido, así que se pudo evaluar título, h1 y longitud: va a `contenido`. Si respondió pero el
+ *                        contenido no se pudo analizar (error HTTP, redirección, no es HTML, cuerpo vacío) → `incompletas` con su motivo.
+ * Haber PEDIDO una URL nunca basta para dar por resuelta una incidencia. Los destinos son los mismos que usan las claves de seguimiento
+ * (ruta = etiqueta, enlace = URL, ficha = id de producto); `seguimiento.mjs` los normaliza.
+ */
+export function calcularAlcance(entrada, datosSalud, catalogo) {
+  const { cfg, objetivosRutas = [], respuestasRutas = [], objetivosEnlaces = [], respuestasEnlaces = [], objetivosFichas = [], respuestasFichas = [] } = entrada;
+  const base = normalizarUrl(cfg.baseUrl, undefined);
+  const CLAVE = { ruta: 'rutas', enlace: 'enlaces', ficha: 'fichas' };
+  const alcance = { host: base ? base.host : null, salud: Boolean(datosSalud), rutas: [], enlaces: [], fichas: [], contenido: { rutas: [], fichas: [] }, catalogo: { leido: false, completo: false }, sinRespuesta: [], incompletas: [] };
+  let solicitadas = 0;
+  let respondieron = 0;
+  let correctas = 0;
+  for (const [objetivos, respuestas] of [[objetivosRutas, respuestasRutas], [objetivosEnlaces, respuestasEnlaces], [objetivosFichas, respuestasFichas]]) {
+    objetivos.forEach((t, i) => {
+      if (!t || t.marcador || !CLAVE[t.tipo]) return;
+      const r = respuestas[i] ?? {};
+      const destino = t.tipo === 'ruta' ? t.etiqueta : t.tipo === 'ficha' ? t.productoId : t.url;
+      solicitadas++;
+      if (r.error || typeof r.statusCode !== 'number') {
+        alcance.sinRespuesta.push({ tipo: t.tipo, destino, motivo: r.error ? (/timeout|timed out|ETIMEDOUT|ESOCKETTIMEDOUT|tiempo/i.test(errorTexto(r)) ? 'tiempo_agotado' : 'error_de_red') : 'sin_datos' });
+        return;
+      }
+      respondieron++;
+      alcance[CLAVE[t.tipo]].push(destino);
+      if (r.statusCode >= 200 && r.statusCode < 300) correctas++;
+      if (t.tipo === 'enlace') return; // de un enlace sólo importa su estado HTTP
+      if (r.statusCode === 200) {
+        if (!esHtml(r)) alcance.incompletas.push({ tipo: t.tipo, destino, motivo: 'respuesta_no_html' });
+        else if (!cuerpoTexto(r).trim()) alcance.incompletas.push({ tipo: t.tipo, destino, motivo: 'cuerpo_vacio' });
+        else alcance.contenido[CLAVE[t.tipo]].push(destino);
+      } else {
+        alcance.incompletas.push({ tipo: t.tipo, destino, motivo: r.statusCode >= 400 ? 'error_http' : r.statusCode >= 300 ? 'redireccion' : 'estado_inesperado' });
+      }
+    });
+  }
+  const leido = catalogo.productos.length > 0;
+  alcance.catalogo = { leido, completo: leido && !catalogo.errores.length && (!Number.isInteger(catalogo.total) || catalogo.productos.length >= catalogo.total) };
+  const pedidosEnlaces = objetivosEnlaces.filter((t) => t && !t.marcador).length;
+  const noVisitados = Math.max(0, descubrirEnlaces(objetivosRutas, respuestasRutas, cfg).length - pedidosEnlaces);
+  alcance.resumen = { solicitadas, respondieron, correctas, sinRespuesta: alcance.sinRespuesta.length, incompletas: alcance.incompletas.length, noVisitados };
+  return alcance;
+}
+
 /* ───────────────────────── Informe ───────────────────────── */
 
 /** El feed de automatización entrega sólo la longitud de la descripción (dato estrictamente necesario); el feed antiguo, el texto. */
@@ -459,6 +498,58 @@ function markdownConsumo(c) {
   const p = c.presupuesto;
   l.push(`- **Enlaces internos:** ${p.enlacesPedidos} pedidos de ${p.enlacesDescubiertos} descubiertos (tope ${p.maxEnlaces}${p.enlacesOmitidosPorTope ? `; ${p.enlacesOmitidosPorTope} omitidos por el tope` : ''}).`);
   for (const e of c.escenarios) l.push(e.calculable ? `  - Con tope ${e.maxEnlaces}: ${e.peticiones} peticiones · ${formatearBytes(e.bytesRecibidos)} recibidos · ≈ ${formatearBytes(e.bytesHistorialEstimado)} estimados en el historial · ${e.familiasCubiertas}/${e.familiasDescubiertas} secciones del sitio cubiertas` : `  - Con tope ${e.maxEnlaces}: no calculable con esta ejecución (se pidieron menos enlaces que ese tope)`);
+  l.push('');
+  return l;
+}
+
+const MOTIVOS_SEGUIMIENTO = {
+  primera_ejecucion: 'primera ejecución: todavía no hay una auditoría anterior',
+  estado_invalido: 'el estado anterior no es válido',
+  esquema_incompatible: 'el estado anterior tiene un formato no compatible',
+  entorno_distinto: 'el estado anterior es de otro entorno',
+  host_distinto: 'el estado anterior es de otro sitio',
+  anterior_antiguo: 'la auditoría anterior es demasiado antigua para compararla',
+  ejecucion_fallida: 'esta ejecución no obtuvo respuestas suficientes: no se compara ni se guarda',
+  orden_invalido: 'la fecha de esta auditoría no es posterior a la anterior',
+  instantanea_invalida: 'la auditoría no se pudo resumir',
+  sin_alcance: 'el informe no declara qué se revisó',
+  objetivo_no_revisado: 'no se visitó o no respondió en esta ejecución',
+  salud_no_leida: 'no se pudo leer la salud',
+  catalogo_no_leido_completo: 'el catálogo no se leyó completo',
+  pagina_con_error: 'la página responde con error',
+  analisis_incompleto: 'la página respondió pero su contenido no se pudo analizar',
+  area_desconocida: 'área sin comprobación definida',
+  sin_verificar_demasiado_tiempo: 'lleva demasiadas ejecuciones sin poder verificarse',
+  estado_recortado: 'el estado anterior estaba recortado: no se puede demostrar que fuera nueva',
+};
+
+/** Apartado «Seguimiento» (los informes anteriores no lo tienen: sólo se pinta si existe). Muestra claves estables, no textos. */
+function markdownSeguimiento(s) {
+  const l = ['## Seguimiento'];
+  const fecha = (iso) => String(iso).slice(0, 16).replace('T', ' ');
+  const motivo = (m) => MOTIVOS_SEGUIMIENTO[m] ?? m;
+  if (s.modo === 'linea_base') {
+    l.push(`**Línea base** — ${motivo(s.motivo)}. Esta auditoría pasa a ser la referencia y **no** se clasifica ninguna incidencia como nueva (${s.resumen.actuales} incidencias actuales).`);
+    if (s.origenReferencia === 'ninguna') l.push('_No se proporcionó estado anterior: el almacenamiento del estado llega en una entrega posterior._');
+  } else if (s.modo === 'sin_comparar') {
+    l.push(`**Sin comparar** — ${motivo(s.motivo)}.`);
+  } else {
+    const r = s.resumen;
+    l.push(`Comparado con la auditoría del ${fecha(s.comparadoCon)} UTC. **Nuevas:** ${r.nuevas} · **Persistentes:** ${r.persistentes} · **Resueltas:** ${r.resueltas} · **No verificadas:** ${r.noVerificadas} · **Reaparecidas:** ${r.reaparecidas}` + (r.indeterminadas ? ` · **Indeterminadas:** ${r.indeterminadas}` : '') + (r.caducadas ? ` · **Caducadas:** ${r.caducadas}` : ''));
+    const bloque = (titulo, lista, texto) => {
+      if (!lista || !lista.length) return;
+      l.push(`### ${titulo} (${lista.length})`);
+      for (const x of lista.slice(0, 15)) l.push(`- \`${x.clave}\`${texto(x)}`);
+      if (lista.length > 15) l.push(`- … y ${lista.length - 15} más (ver JSON).`);
+    };
+    bloque('Nuevas', s.nuevas, (x) => ` — ${x.gravedad}`);
+    bloque('Reaparecidas', s.reaparecidas, (x) => ` — ${x.gravedad}; resuelta el ${fecha(x.resueltaEn)}`);
+    bloque('Persistentes', s.persistentes, (x) => ` — ${x.gravedad}${x.cambioGravedad ? ` (${x.cambioGravedad === 'empeora' ? 'empeora' : 'mejora'}, antes ${x.gravedadAnterior})` : ''}; ${x.ejecuciones} ejecuciones seguidas, desde ${fecha(x.desde)}`);
+    bloque('Resueltas', s.resueltas, (x) => ` — estaba ${x.gravedadAnterior}; abierta ${x.diasAbierta} día(s); su destino se revisó en esta ejecución`);
+    bloque('No verificadas (no se pueden dar por resueltas)', s.noVerificadas, (x) => ` — ${motivo(x.motivo)}`);
+    bloque('Indeterminadas', s.indeterminadas, (x) => ` — ${x.gravedad}; ${motivo(x.motivo)}`);
+    bloque('Caducadas', s.caducadas, (x) => ` — ${motivo(x.motivo)}`);
+  }
   l.push('');
   return l;
 }
@@ -486,6 +577,7 @@ export function informeMarkdown(informe) {
     l.push('');
   }
   if (!informe.incidencias.length) l.push('Sin incidencias.\n');
+  if (informe.seguimiento) l.push(...markdownSeguimiento(informe.seguimiento));
   if (informe.consumo) l.push(...markdownConsumo(informe.consumo));
   l.push('## Cobertura');
   l.push(`- Revisado: ${informe.cobertura.revisado.join('; ') || '—'}`);
@@ -518,8 +610,10 @@ export function construirInformeAuditor(entrada) {
   const peticiones = [objetivosRutas, objetivosEnlaces, objetivosCatalogo, objetivosFichas].reduce((n, l) => n + l.filter((t) => !t.marcador).length, 0);
   const contador = resumenIncidencias(incidencias);
   const { omitidos } = planificarRutas(cfg);
+  const alcance = calcularAlcance(entrada, salud.datos, catalogo);
   const noRevisado = [
     'Programadores internos de Treidilor (precios, alertas, recordatorios) y estado de las actualizaciones: pendientes de un endpoint de estado en la API de automatización',
+    ...(alcance.resumen.noVisitados ? [`${alcance.resumen.noVisitados} enlaces internos descubiertos no se visitaron (tope de ${cfg.maxEnlaces}): sus incidencias anteriores no se pueden dar por resueltas`] : []),
     ...(cfg.modo === 'publico' ? ['Fichas de producto y feed del catálogo: no se piden en producción (cada visita cuenta en la analítica y el feed exige un token)'] : []),
     ...omitidos.map((o) => `${o.etiqueta}: omitida por la política de URLs (${o.motivo})`),
   ];
@@ -542,17 +636,24 @@ export function construirInformeAuditor(entrada) {
     },
     incidencias,
     avisosEntorno,
+    alcance,
     cobertura: {
       revisado: [
         `salud (${salud.datos ? 'datos recibidos' : 'sin datos'})`,
         `${rutas.revisadas} rutas`,
         `${enlaces.revisados} enlaces internos`,
+        `${alcance.resumen.respondieron} de ${alcance.resumen.solicitadas} páginas respondieron (${alcance.resumen.sinRespuesta} sin respuesta, ${alcance.resumen.incompletas} con el análisis de contenido incompleto)`,
         ...(cfg.modo === 'completo' ? [`${catalogo.productos.length} productos del feed`, `${fichas.revisadas} fichas`] : []),
       ],
       noRevisado,
     },
     markdown: '',
   };
+  // Seguimiento (motor de seguimiento.mjs): la referencia anterior es OPCIONAL. `estadoAnterior` = estado guardado (lo aportará la persistencia, entrega 2c);
+  // `instantaneaAnterior` = instantánea (o informe) anterior para pruebas y simulaciones. Sin ninguna de las dos → línea base: nada se clasifica como nuevo.
+  const ia = entrada.instantaneaAnterior;
+  const referencia = entrada.estadoAnterior ?? (ia ? estadoDesdeInstantanea(ia.esquema === 1 ? ia : resumirInstantanea(ia)) : null);
+  informe.seguimiento = { ...ejecutarSeguimiento(referencia, informe, { host: alcance.host }).seguimiento, origenReferencia: entrada.estadoAnterior ? 'estado' : ia ? 'instantanea' : 'ninguna' };
   informe.markdown = informeMarkdown(informe);
   // Consumo: se calcula con el tamaño del informe ya construido (sin el propio apartado) y se añade después al informe y a su Markdown.
   informe.consumo = calcularConsumo({ cfg, objetivosRutas, respuestasRutas, objetivosEnlaces, respuestasEnlaces, objetivosCatalogo, respuestasCatalogo, objetivosFichas, respuestasFichas, tamanoInforme: tamanoJson(informe) });

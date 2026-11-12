@@ -98,6 +98,7 @@ scripts/tests/analytics-memo.test.mjs
 scripts/tests/automation-agents.test.mjs
 scripts/tests/automation-api.test.mjs
 scripts/tests/automation-consumo.test.mjs
+scripts/tests/automation-seguimiento-integracion.test.mjs
 scripts/tests/automation-seguimiento.test.mjs
 scripts/tests/automation-seguridad.test.mjs
 scripts/tests/catalog-concurrency.test.mjs

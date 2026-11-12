@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const J = (p) => JSON.parse(fs.readFileSync(path.join(RAIZ, p), 'utf8'));
 const aud = await import('../../automation/lib/auditor.mjs');
+const common = await import('../../automation/lib/common.mjs');
 const { simularWorkflow } = await import('../automation/simulate-workflow.mjs');
 const { validarEsquema } = await import('../automation/validate-schema.mjs');
 
@@ -52,10 +53,10 @@ function ejecutarProduccion(fetchSimulado, { maxEnlaces } = {}) {
 
 test('bytesUtf8 coincide con Buffer.byteLength (ASCII, tildes, símbolos, emoji y sustitutos sueltos)', () => {
   for (const s of ['', 'abc', 'Cómo trabajamos — Catálogo', '€ 12,50 · ñandú', '日本語', 'emoji 😀🎧 fin', 'suelto \ud83d fin', 'x'.repeat(5000)]) {
-    assert.equal(aud.bytesUtf8(s), bytesDe(s), JSON.stringify(s).slice(0, 30));
+    assert.equal(common.bytesUtf8(s), bytesDe(s), JSON.stringify(s).slice(0, 30));
   }
-  assert.equal(aud.bytesUtf8(null), 0);
-  assert.equal(aud.bytesUtf8(undefined), 0);
+  assert.equal(common.bytesUtf8(null), 0);
+  assert.equal(common.bytesUtf8(undefined), 0);
 });
 
 test('formatearBytes: formato fijo en B, KB y MB', () => {

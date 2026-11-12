@@ -6,6 +6,20 @@
 export const GRAVEDADES = ['critica', 'alta', 'media', 'baja', 'info'];
 export const ORDEN_GRAVEDAD = { critica: 0, alta: 1, media: 2, baja: 3, info: 4 };
 
+/** Bytes UTF-8 de un texto. Sin `TextEncoder` ni `Buffer`: el entorno Code de n8n no los garantiza. */
+export function bytesUtf8(texto) {
+  const t = String(texto ?? '');
+  let n = 0;
+  for (let i = 0; i < t.length; i++) {
+    const c = t.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff && i + 1 < t.length && t.charCodeAt(i + 1) >= 0xdc00 && t.charCodeAt(i + 1) <= 0xdfff) { n += 4; i++; }
+    else n += 3;
+  }
+  return n;
+}
+
 /** Minúsculas sin tildes ni espacios sobrantes. */
 export function plegar(texto) {
   return String(texto ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();

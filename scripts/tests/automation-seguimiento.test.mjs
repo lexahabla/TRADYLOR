@@ -121,7 +121,7 @@ test('primera ejecución: línea base SIN incidencias nuevas, y se guarda como r
   const r = seg.ejecutarSeguimiento(null, informe(dia(0), [roto('/a'), roto('/b'), inc('ruta', 'h1', '/', 'baja')]));
   assert.equal(r.seguimiento.modo, 'linea_base');
   assert.equal(r.seguimiento.motivo, 'primera_ejecucion');
-  assert.deepEqual(r.seguimiento.resumen, { actuales: 3, nuevas: 0, persistentes: 0, resueltas: 0, noVerificadas: 0, reaparecidas: 0, caducadas: 0 });
+  assert.deepEqual(r.seguimiento.resumen, { actuales: 3, nuevas: 0, persistentes: 0, resueltas: 0, noVerificadas: 0, reaparecidas: 0, indeterminadas: 0, caducadas: 0 });
   assert.equal(r.siguiente.guardar, true);
   assert.equal(r.siguiente.revisionBase, 0);
   assert.equal(r.siguiente.estado.revision, 1);
@@ -440,7 +440,7 @@ test('el módulo es incrustable en un nodo Code (sin URL, structuredClone ni Buf
   const fuente = fs.readFileSync(path.join(RAIZ, 'automation/lib/seguimiento.mjs'), 'utf8');
   const sinComentarios = fuente.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   for (const prohibido of [/\bnew\s+URL\b/, /URLSearchParams/, /structuredClone/, /\bBuffer\b/, /\bTextEncoder\b/, /\brequire\s*\(/, /\bprocess\b/, /\bfetch\s*\(/, /\bDate\.now\b/, /\bnew\s+Date\b/, /Math\.random/, /export\s+default/]) assert.doesNotMatch(sinComentarios, prohibido, String(prohibido));
-  const paquete = ['common', 'urlPolicy', 'auditor', 'seguimiento'].map((m) => `// ── ${m} ──\n${fuenteModulo(m)}`).join('\n\n');
+  const paquete = ['common', 'urlPolicy', 'seguimiento', 'auditor'].map((m) => `// ── ${m} ──\n${fuenteModulo(m)}`).join('\n\n');
   const contexto = { JSON, Math, Number, String, Array, Object, Map, Set, RegExp, Error, Date, Intl, Boolean };
   vm.createContext(contexto);
   const f = vm.runInContext(`(function () {\n${paquete}\nreturn { ejecutarSeguimiento, resumirInstantanea, claveSeguimiento };\n})()`, contexto, { timeout: 5000 });
@@ -456,14 +456,13 @@ test('el módulo es incrustable en un nodo Code (sin URL, structuredClone ni Buf
   assert.equal(f.claveSeguimiento({ id: 'enlace:roto:https://x.example/a/?utm_source=1', area: 'enlace' }), 'enlace:roto:/a');
 });
 
-test('workflows existentes SIN modificar: el motor no está incrustado y los JSON siguen sincronizados con su código', () => {
+test('workflows regenerados (2b): sincronizados con su código y con el motor de seguimiento incrustado en el Auditor y el diagnóstico', () => {
   const generado = construirTodo();
   for (const [f, texto] of Object.entries(generado)) {
     assert.equal(fs.readFileSync(path.join(RAIZ, 'automation/workflows', f), 'utf8').replace(/\r\n/g, '\n'), texto, `${f} sincronizado`);
-    assert.ok(!texto.includes('compararConEstado') && !texto.includes('claveSeguimiento') && !texto.includes('siguienteEstado'), `${f} no incrusta el seguimiento`);
+    assert.ok(texto.includes('compararConEstado') && texto.includes('calcularAlcance'), `${f} incrusta el seguimiento y el alcance`);
   }
   for (const [f, texto] of Object.entries(construirDiagnosticos())) {
     assert.equal(fs.readFileSync(path.join(RAIZ, 'automation/dev', f), 'utf8').replace(/\r\n/g, '\n'), texto, `${f} sincronizado`);
-    assert.ok(!texto.includes('compararConEstado'));
   }
 });
