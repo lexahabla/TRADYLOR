@@ -1,5 +1,7 @@
 # Cierre de pendientes antes de F3 (importar el Auditor en producción)
 
+> **13/11/2026: F2B cerrada con reservas. El estado vigente está en la sección «CIERRE DE F2B» al final de este documento (restauración C omitida; F3 no autorizada).**
+
 Estado a 12/11/2026. **Nada de esto lo ejecuta Claude**: no tiene acceso a producción. Lo hace el administrador; Claude revisa los resultados que se le pasen. Ninguna restauración se ejecuta todavía.
 Regla común: **solo nombres y resultados, nunca valores secretos**; el volcado de la base de datos **es sensible** (contiene credenciales cifradas de n8n, hashes de contraseñas de usuarios y datos de workflows): no se pega, no se sube al repositorio, no se envía por chat.
 
@@ -140,3 +142,101 @@ Después de F2B (fuera de este cierre): F3 = crear Data Table vacía + importar 
 ### 5. Reglas heredadas de la validación para F3
 - No se aplica `alwaysOutputData` al Insert (decisión del 12/11/2026, hallazgo P9).
 - `pendiente` = escritura **no confirmada**: tras la primera ejecución en producción hay que comprobar en la tabla que la fila existe antes de dar por buena la línea base.
+
+## CIERRE DE F2B (13/11/2026) — estado final y preparación de F3
+Esta sección **sustituye** al estado de las tablas anteriores (se conservan como historial). Es solo documental: no se ha modificado producción, variables, credenciales, workflows, PostgreSQL ni contenedores, y no se ha ejecutado ningún despliegue.
+Procedencia de la evidencia: lo marcado «(usuario)» lo comprobó el administrador en EasyPanel/SSH/su PC y lo comunicó por escrito; Claude **no tiene acceso a producción** y no lo ha reverificado. No se registran contraseñas, claves ni huellas.
+
+Leyenda: **VERIFICADO** · **PENDIENTE** · **OMITIDO** (por decisión del usuario) · **N/A** (no aplicable).
+
+### 1. Estado por punto
+| Punto | Estado | Evidencia | Observaciones |
+|---|---|---|---|
+| A1 versiones | VERIFICADO | n8n y runner 2.38.6; PostgreSQL 17 | Documentado en F2C |
+| A2 retención visible | VERIFICADO | `EXECUTIONS_DATA_PRUNE=true`; `EXECUTIONS_DATA_MAX_AGE` y `EXECUTIONS_DATA_PRUNE_MAX_COUNT` **no definidas** en EasyPanel (usuario) | Rigen los valores por defecto (ver §2) |
+| A3 variables del runner | VERIFICADO | Existen `N8N_RUNNERS_MODE`, `N8N_RUNNERS_AUTH_TOKEN`, `N8N_RUNNERS_BROKER_LISTEN_ADDRESS` (solo nombres) (usuario) | Valores no consultados |
+| A4 copias | VERIFICADO | Copias habilitadas, cron `0 2 * * *`, retención 7, Local Disk, una copia registrada correctamente (usuario) | Local Disk = mismo VPS (ver riesgos) |
+| A5 ventana del diagnóstico | VERIFICADO (hora); **zona horaria efectiva PENDIENTE de confirmar** | Diagnóstico ID 11, Success; 12/11/2026 18:10:29 según la interfaz de n8n; **verificado por SQL (administrador): `startedAt` UTC = 2026-11-12 17:10:29** | La diferencia de 1 h es coherente con Europe/Madrid (UTC+1 en noviembre), pero la configuración efectiva (`GENERIC_TIMEZONE`/`TZ` del contenedor) no se ha confirmado. Impacto bajo; confirmarla antes de programar (R5) |
+| A6 logs del runner | VERIFICADO (cubierto por F2C/B3) | Actividad del runner en la ejecución F2 posterior a la rotación | — |
+| A7 disco | VERIFICADO | 12,1 % (11,6 GB de 95,8 GB); memoria 20,4 % en la revisión (usuario) | Línea base para comparar tras las primeras ejecuciones |
+| B1 volcado localizado | VERIFICADO | `2026-11-12T14:38:14.009Z.sql.gz` (usuario) | — |
+| B1b integridad | VERIFICADO | gzip correcto, legible con `pg_restore -l`; SHA-256 calculado (usuario) | No equivale a una restauración (ver C) |
+| B1c estructura / rol dueño del volcado | VERIFICADO parcialmente | El administrador examinó el contenido **estructural** del backup con `pg_restore -l` | **No equivale a una prueba de restauración.** El rol dueño no se ha registrado; solo sería necesario para C y no bloquea F3 |
+| B2 retención efectiva | VERIFICADO por documentación, **no** por consulta en el contenedor | A2 + valores por defecto acreditados (ver §2) | La consulta `printenv` en el contenedor no consta; se considera suficiente mientras no se fije un valor explícito |
+| B3 runner externo | VERIFICADO | `N8N_RUNNERS_MODE=external` y actividad en la ejecución F2 | — |
+| B4 clave de cifrado | VERIFICADO | `N8N_ENCRYPTION_KEY` definida en el contenedor; huellas SHA-256 del servidor y de la copia externa comparadas localmente: coinciden; clave sin cambiar ni rotar (usuario) | Ver riesgo R6 (la copia externa depende de la contraseña de WinRAR) |
+| B5 tamaños | VERIFICADO (administrador) | Disco 12,1 % y memoria 20,4 %; tamaño de PostgreSQL ≈ **16 MB**; ejecutado `docker system df` (solo lectura) | Las cifras de `docker system df` no se han incorporado a este documento. La base es pequeña (≈ 16 MB); el volcado comprimido de 134 kB corresponde a esa base |
+| B6 copia fuera del VPS | VERIFICADO | Copia descargada al disco externo (Windows 11); SHA-256 de origen y destino coinciden; archivo protegido con WinRAR y comprobado que se abre (usuario) | Es una copia puntual (12/11); no hay rutina de copia externa periódica (ver D1) |
+| **C restauración aislada** | **OMITIDO** | — | **No se ha restaurado ningún backup.** La integridad del archivo y su lectura estructural no equivalen a una restauración satisfactoria; la restauración completa **NO está validada** |
+| D1 copia externa periódica | PENDIENTE de decisión | Hay una copia externa puntual | Sin periodicidad ni destino definidos |
+| D2 retención definitiva | **OMITIDO / PENDIENTE de decisión** | Rigen los valores por defecto | Sin cambios de configuración por decisión del usuario |
+| D3 responsable de revisar informes | PENDIENTE de decisión | — | Obligatorio antes de programar |
+| Frecuencia de revisión, notificaciones, respuesta ante incidencias | PENDIENTE de decisión | — | No se inventa ninguna decisión; obligatorias antes de programar |
+
+### 2. Valores por defecto de retención
+Acreditados localmente leyendo el paquete de **n8n 2.38.6** (el mismo que producción), `@n8n/config/dist/configs/executions.config.js`: `pruneData = true`, **`pruneDataMaxAge = 336` h (14 días)**, **`pruneDataMaxCount = 10 000`**, `pruneDataHardDeleteBuffer = 1`. Como en producción no están definidas, rigen estos valores. No se ha confirmado el valor efectivo dentro del contenedor de producción (no es necesario salvo que se fije uno explícito).
+Con el Auditor a 40 enlaces (≈ 9,3 MB/ejecución, `AUDITOR-CONSUMO.md`): 14 días a 1 ejecución diaria ≈ 130 MB; 7 días ≈ 65 MB. Asumible sobre 84 GB libres.
+
+### 3. Comprobaciones omitidas y qué implican
+- **C — restauración aislada de PostgreSQL: omitida por decisión del usuario.** Consecuencia: no hay prueba de que la copia se restaure y arranque; lo verificado es integridad del archivo (gzip), legibilidad estructural (`pg_restore -l`), copia externa íntegra y clave de cifrado conservada. Tampoco se ha medido el tiempo de restauración (no hay plan de recuperación con tiempos).
+- **D — retención y supervisión**: sin cambios ni pruebas adicionales; decisiones pendientes (abajo).
+- **B1c**: solo se examinó la estructura del backup con `pg_restore -l` (no es una restauración); el rol dueño no se registró y solo sirve a C.
+
+### 4. Riesgos residuales
+| # | Riesgo | Efecto | Mitigación / estado |
+|---|---|---|---|
+| R1 | **Restauración no probada** | Si la base de n8n se corrompiera o se perdiera el VPS, no hay garantía de recuperar workflows, credenciales y la Data Table; no hay tiempo de recuperación medido | Abierto. Atenuado: la base actual es pequeña (≈ 16 MB; volcado comprimido de 134 kB), la clave de cifrado está verificada y conservada fuera del VPS, la copia externa es íntegra y los snapshots semanales del VPS cubren la pérdida del servidor completo. Aceptación expresa necesaria para F3 (§6) |
+| R2 | Copias automáticas en Local Disk (mismo VPS) | No protegen frente a la pérdida del VPS | Parcialmente mitigado por snapshots semanales y la copia externa puntual; sin rutina periódica (D1) |
+| R3 | Retención por defecto (14 días / 10 000), sin decisión explícita | Crecimiento controlado, pero no es una política decidida | Pendiente D2; asumible por cifras |
+| R4 | Sin responsable, frecuencia ni canal de revisión del informe | Un informe «crítico» puede pasar inadvertido | Pendiente D3; bloquea la **programación**, no la importación ni la primera ejecución manual |
+| R5 | Configuración efectiva de la zona horaria del servidor/n8n sin confirmar (la ejecución 11 es coherente con Europe/Madrid, verificada por SQL: 17:10:29 UTC) | Horarios de la programación podrían desfasar 1 h | Pendiente; confirmar `GENERIC_TIMEZONE`/`TZ` antes de programar (la programación se fija a mano en n8n) |
+| R6 | La copia de la clave y del volcado externo dependen de una contraseña de WinRAR y de un único disco externo | Pérdida del disco o de la contraseña ⇒ sin copia utilizable | Recomendado: segunda copia independiente de la clave (gestor de contraseñas ya verificada por huella); no se pide ahora |
+| R7 | **Nuevo, detectado al preparar F3: el Auditor de producción ya no es «sin cambios en n8n».** `auditor-general.produccion.json` incluye 3 nodos `dataTable` (memoria 2c) y por tanto **necesita la Data Table `auditor_general_instantaneas`**, que hay que crear en el n8n de producción (con el workflow `auditor-instantaneas-crear-tabla.json`) | Es una escritura en la base de n8n de producción; si la tabla no existe, el Auditor informa `no_encontrada` y no guarda (sin daño) | **La creación de `auditor_general_instantaneas` requiere autorización expresa.** Una vez creada y con filas, **no se elimina sin revisar antes sus datos** y sin autorización expresa (las instantáneas son el historial del seguimiento). Ver plan F3. La `GUIA-DESPLIEGUE-AUDITOR-PRODUCCION.md` (§1, §10) lo describe como solo lectura: actualizada con un aviso |
+| R8 | Se desconoce si `NODES_EXCLUDE` del n8n de producción excluye `httpRequest` o `dataTable` | El workflow cargaría con «?» y no podría ejecutarse | Comprobar el nombre/valor de `NODES_EXCLUDE` (no es secreto) antes de importar; el diagnóstico F2 cargó el nodo HTTP 4.2 deshabilitado sin errores, lo que sugiere que no está excluido, pero no es prueba de ejecución |
+| R9 | Rutas reales de `treidilor.com` (latencia, WAF, redirecciones, tamaño de páginas) nunca auditadas por este Auditor | Falsos positivos o bloqueos | Se resuelve en la primera ejecución manual supervisada |
+| R10 | Concurrencia en la tabla (dos ejecuciones simultáneas) diseñada pero no probada | Doble escritura de una instantánea | Una sola ejecución manual cada vez; sin programación solapada |
+
+### 5. Decisiones pendientes del usuario
+1. **Aceptar o no el riesgo R1** (restauración no probada) para F3, con la condición propuesta en §6, o realizar C antes.
+2. D1: periodicidad y destino de la copia externa.
+3. D2: retención definitiva (mantener los valores por defecto o fijar p. ej. 168 h).
+4. D3: responsable de revisar informes; frecuencia de revisión; canal de avisos; procedimiento ante incidencias (qué se hace con un informe `critico`).
+5. Autorizar la creación de la Data Table en el n8n de producción (R7) y su método (workflow de preparación o creación manual desde la interfaz).
+6. Confirmar la zona horaria (R5).
+
+### 6. Condiciones para iniciar F3
+**Obligatorias:**
+- Autorización expresa y por escrito del administrador para F3, **incluyendo** la aceptación explícita de R1 (restauración no validada) o la decisión de ejecutar C antes.
+- Una **copia manual nueva de PostgreSQL justo antes** de F3 (EasyPanel), con comprobación de que aparece en la lista; opcionalmente su SHA-256. No es necesario descargarla.
+- Comprobar `NODES_EXCLUDE` (R8) y que el espacio en disco sigue holgado (A7).
+- Autorización específica para crear la Data Table (R7).
+- Reglas heredadas de la validación local: no se aplica `alwaysOutputData` al Insert, y **`pendiente` = escritura no confirmada** (comprobar en la tabla que la fila existe antes de dar por buena la línea base).
+
+**No obligatorias para F3 pero SÍ antes de programar (F7):** D3 y las decisiones de supervisión (§5.4), zona horaria confirmada, ≥ 3 ejecuciones manuales en días distintos y retención aceptada, según `GUIA-DESPLIEGUE-AUDITOR-PRODUCCION.md` §8. **La programación no debe activarse mientras C siga sin hacerse, salvo aceptación expresa y reiterada del riesgo.**
+
+### 7. Evaluación: ¿la falta de restauración impide recomendar F3?
+**No la impide, pero justifica un despliegue condicionado y limitado.** Razones:
+- F3 solo añade a n8n un workflow **inactivo** y una Data Table y permite **una** ejecución manual de solo lectura sobre páginas públicas. No cambia Treidilor, variables, servicios ni credenciales de otros workflows.
+- El impacto de perder la base de n8n hoy es bajo: la base es pequeña (≈ 16 MB; volcado comprimido de 134 kB), la clave de cifrado está verificada y conservada fuera del VPS y hay snapshots semanales del VPS y una copia externa íntegra.
+- La reversión es sencilla para el workflow (borrarlo); la tabla, mientras esté vacía, también. **Si ya contiene filas, no se elimina sin revisar antes sus datos y sin autorización expresa.**
+- En cambio, **no se recomienda programar** (F7) sin restauración probada: allí la base empieza a acumular el historial que justifica la memoria del Auditor y el riesgo R1 deja de ser «de bajo impacto».
+Esta valoración es una recomendación; la decisión es del administrador.
+
+### 8. Plan de entrada a F3 (despliegue gradual; cada paso 🔒 requiere autorización expresa; nada autorizado todavía)
+| Paso | Qué | Verificación | Parada / reversión |
+|---|---|---|---|
+| F3.0 Revisión previa de dependencias (solo lectura) | Releer `auditor-general.produccion.json` y `GUIA-…` §2/§5; comprobar `NODES_EXCLUDE` y que el n8n de producción es 2.38.6; confirmar que `maxEnlaces` es 40 y que no hay credenciales en el JSON (hoy: 7 Code, 3 dataTable, 2 httpRequest, manualTrigger, sin credenciales) | Linter/pruebas del repositorio en verde; huella del archivo anotada | Si el JSON no coincide con lo validado, parar |
+| F3.1 Respaldo | Copia manual de PostgreSQL desde EasyPanel; anotar hora y que aparece en la lista. Exportar los workflows existentes de n8n (si hay) | Copia visible; exportación guardada fuera del repositorio | Si la copia falla, no continuar |
+| F3.2 Crear la Data Table | Importar `auditor-instantaneas-crear-tabla.json` **inactivo**, ejecutarlo **una vez** a mano, comprobar que aparece `auditor_general_instantaneas` **vacía**, y borrar el workflow de preparación | Una sola tabla con ese nombre; 0 filas; columnas correctas | Borrar el workflow de preparación; la tabla solo si está vacía y con autorización expresa |
+| F3.3 Importar el Auditor | Importar `auditor-general.produccion.json` **desactivado** | Interruptor Inactive; ningún nodo con «?»; sin credenciales pendientes; nombre «… (produccion)» | Borrar el workflow |
+| F3.4 Primera ejecución manual supervisada | Una ejecución en horas de poco tráfico, monitorizando RAM y disco | Peticiones solo GET a `https://treidilor.com`, ≤ 45; estado, cobertura, tamaño de la ejecución (MB); registros de acceso de Treidilor sin 5xx ni escrituras | Parada inmediata ante 5xx en Treidilor, memoria del VPS > 85 %, peticiones fuera de la lista o valores sensibles visibles |
+| F3.5 Persistencia | Comprobar `persistencia.escritura.resultado = guardada` con `filaId` real; la tabla tiene exactamente 1 fila (línea base); `pendiente`/`fallida` ⇒ no se da por buena | Fila existe en la tabla; sin duplicados | Si no se guardó, no repetir a ciegas: diagnosticar |
+| F3.6 Segunda ejecución manual (otro día) | Debe compararse con la fila anterior (`modo comparacion`), origen `manual`, sin duplicados | Seguimiento coherente | Borrar filas de prueba solo con autorización |
+| F3.7 Revisión y decisión | Informe final de F3 con tamaño por ejecución, crecimiento de la base y disco | Criterios de §8 de la guía | Reversión: desactivar (ya lo está), borrar el workflow y sus ejecuciones; la tabla **solo tras revisar sus datos y con autorización expresa** |
+| F7 Programación (fase aparte) | Solo tras ≥ 3 ejecuciones manuales en días distintos, D3 decidido, zona horaria confirmada y decisión sobre R1/C; crear el Schedule **a mano** en n8n | Primera semana con revisión diaria | Desactivar el workflow |
+
+### 9. Primera acción propuesta para F3
+**F3.0 (solo lectura, sin tocar producción):** releer en el repositorio local el workflow de producción y la guía, verificar con el linter y las pruebas que coincide con lo validado en `tai-prueba-dt`, y pedirte que compruebes en EasyPanel el nombre y el valor de `NODES_EXCLUDE` (no es secreto). Después, y solo con tu autorización expresa, F3.1 (copia manual nueva).
+
+### Estado final de F2B
+**F2B CERRADA CON RESERVAS.** Verificados: A1–A4, A6, A7, B1, B1b, B3, B4, B5, B6 (y B2 por documentación). Parciales: A5 (hora verificada por SQL; zona horaria efectiva sin confirmar) y B1c (estructura examinada con `pg_restore -l`, que no es una restauración). B5 verificado por el administrador (≈ 16 MB). **Omitida: C (restauración no validada).** Pendientes de decisión: D1, D2, D3 y supervisión. F3 **no está autorizada**; se recomienda solo como despliegue condicionado y sin programación (§7).

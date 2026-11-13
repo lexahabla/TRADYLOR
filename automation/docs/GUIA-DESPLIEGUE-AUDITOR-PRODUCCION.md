@@ -14,6 +14,8 @@ Datos ya verificados por ti: n8n de producción **2.38.6** · proyecto EasyPanel
 | F4–F6 ejecución manual, revisión, reversión | No iniciadas |
 | Programación diaria | No autorizada |
 
+> **Aviso 13/11/2026 (corrige §1, §6 y §10):** desde la entrega 2c, `auditor-general.produccion.json` incluye 3 nodos `dataTable` y **necesita la Data Table `auditor_general_instantaneas`** en el n8n de producción (escritura en su base). Ya no es «sin cambios en n8n»: ver el plan de F3 y el riesgo R7 al final de `F2B-CIERRE-PENDIENTES-ANTES-DE-F3.md`. Estado F2B: cerrada con reservas (restauración C omitida; F3 no autorizada).
+
 ## 1. Qué se despliega y por qué es el candidato más seguro
 Un solo workflow: `automation/workflows/auditor-general.produccion.json`. Solo lee `/api/health` y páginas públicas por `https://treidilor.com`. No necesita credenciales, red interna compartida, MCP, API de Treidilor ni cambios en Treidilor. **No hace falta que los proyectos `tradylor` y `practice_project_n8n` compartan red**: el Auditor sale a Internet y entra por el dominio público.
 
