@@ -3,7 +3,7 @@ import { chatComplete, hasTextCredentials, type ChatMessage } from '../../../lib
 import { asesorIaSystemPrompt, withSkills } from '../../../lib/aiPersonas';
 import { getSkillsForPersona } from '../../../lib/aiSkillsStore';
 import { getRadarSessionUser } from '../../../lib/radarAuth';
-import { aiAssistantPerIp, aiAssistantPerUser } from '../../../lib/rateLimit';
+import { aiAssistantPerIp, aiAssistantPerUser, clientIp } from '../../../lib/rateLimit';
 import { chatCompleteGrounded, isGroundingAvailable } from '../../../lib/geminiGrounded';
 
 /**
@@ -50,7 +50,7 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   const user = getRadarSessionUser(request);
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  const ip = clientIp(request);
   const limiter = user ? aiAssistantPerUser : aiAssistantPerIp;
   if (!limiter.hit(user ? user.id : ip)) {
     return json({ success: false, message: 'Has hecho demasiadas preguntas seguidas. Espera unos minutos y vuelve a intentarlo.' }, 429);

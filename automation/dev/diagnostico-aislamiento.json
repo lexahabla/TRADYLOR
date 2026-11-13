@@ -1,0 +1,29 @@
+{
+  "name": "diagnostico-aislamiento (local)",
+  "active": false,
+  "nodes": [
+    { "id": "aaaaaaaa-0000-4000-8000-000000000001", "name": "Ejecutar a mano", "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [0, 0], "parameters": {} },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000002", "name": "Destinos", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [240, 0],
+      "parameters": { "jsCode": "return [\n  { json: { url: 'http://puente-treidilor:4350/api/health', esperado: 'responde' } },\n  { json: { url: 'https://example.com/', esperado: 'bloqueado' } },\n  { json: { url: 'http://93.184.216.34/', esperado: 'bloqueado' } },\n  { json: { url: 'http://localhost:9/', esperado: 'bloqueado' } }\n];" }
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000003", "name": "Pedir", "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [480, 0], "onError": "continueRegularOutput",
+      "parameters": {
+        "method": "GET", "url": "={{ $json.url }}", "authentication": "none",
+        "options": { "timeout": 6000, "redirect": { "redirect": { "followRedirects": true, "maxRedirects": 3 } }, "response": { "response": { "fullResponse": true, "neverError": true, "responseFormat": "text" } } }
+      }
+    },
+    {
+      "id": "aaaaaaaa-0000-4000-8000-000000000004", "name": "Resultado", "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [720, 0],
+      "parameters": { "jsCode": "const destinos = $('Destinos').all().map((i) => i.json);\nconst respuestas = $('Pedir').all().map((i) => i.json);\nreturn [{ json: { filas: destinos.map((d, i) => ({ url: d.url, esperado: d.esperado, statusCode: respuestas[i]?.statusCode ?? null, error: String(respuestas[i]?.error?.message ?? respuestas[i]?.error ?? '').slice(0, 120), ok: d.esperado === 'responde' ? respuestas[i]?.statusCode === 200 : !respuestas[i]?.statusCode })) } }];" }
+    }
+  ],
+  "connections": {
+    "Ejecutar a mano": { "main": [[{ "node": "Destinos", "type": "main", "index": 0 }]] },
+    "Destinos": { "main": [[{ "node": "Pedir", "type": "main", "index": 0 }]] },
+    "Pedir": { "main": [[{ "node": "Resultado", "type": "main", "index": 0 }]] }
+  },
+  "settings": {},
+  "tags": []
+}

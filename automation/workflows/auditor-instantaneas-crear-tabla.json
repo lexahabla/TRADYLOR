@@ -1,0 +1,109 @@
+{
+  "active": false,
+  "connections": {
+    "Ejecutar a mano": {
+      "main": [
+        [
+          {
+            "index": 0,
+            "node": "Crear tabla de instantáneas",
+            "type": "main"
+          }
+        ]
+      ]
+    }
+  },
+  "name": "Treidilor AI · Auditor · crear tabla de instantáneas",
+  "nodes": [
+    {
+      "id": "1783d54e-4206-4cc9-ad7e-9cc254f73fed",
+      "name": "Ejecutar a mano",
+      "parameters": {},
+      "position": [
+        0,
+        0
+      ],
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1
+    },
+    {
+      "id": "9f20b38d-109c-485c-a399-35c997acedce",
+      "name": "Aviso",
+      "parameters": {
+        "content": "TREIDILOR AI · PREPARACIÓN de la memoria del Auditor.\nCrea (si no existe) la Data Table «auditor_general_instantaneas» con las columnas del historial de instantáneas.\nSe ejecuta UNA vez a mano en cada instalación de n8n. No hace peticiones, no usa credenciales y no borra nada.",
+        "height": 220,
+        "width": 420
+      },
+      "position": [
+        0,
+        -300
+      ],
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1
+    },
+    {
+      "id": "f0654202-75ac-457d-a569-4c3c94582ae7",
+      "name": "Crear tabla de instantáneas",
+      "parameters": {
+        "columns": {
+          "column": [
+            {
+              "name": "entorno",
+              "type": "string"
+            },
+            {
+              "name": "host",
+              "type": "string"
+            },
+            {
+              "name": "generadoEn",
+              "type": "string"
+            },
+            {
+              "name": "idEjecucion",
+              "type": "string"
+            },
+            {
+              "name": "origen",
+              "type": "string"
+            },
+            {
+              "name": "calidad",
+              "type": "string"
+            },
+            {
+              "name": "huella",
+              "type": "string"
+            },
+            {
+              "name": "payload",
+              "type": "string"
+            }
+          ]
+        },
+        "operation": "create",
+        "options": {
+          "createIfNotExists": true
+        },
+        "resource": "table",
+        "tableName": "auditor_general_instantaneas"
+      },
+      "position": [
+        260,
+        0
+      ],
+      "retryOnFail": false,
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1
+    }
+  ],
+  "settings": {
+    "executionOrder": "v1",
+    "executionTimeout": 900,
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "timezone": "Europe/Madrid"
+  },
+  "tags": []
+}

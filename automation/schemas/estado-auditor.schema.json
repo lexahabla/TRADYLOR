@@ -1,0 +1,132 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Estado del seguimiento de incidencias del Auditor General (Treidilor AI)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "esquema",
+    "agente",
+    "entorno",
+    "host",
+    "revision",
+    "actualizadoEn",
+    "ultimaInstantanea",
+    "incidencias",
+    "resueltasRecientes"
+  ],
+  "properties": {
+    "esquema": {
+      "enum": [
+        1
+      ]
+    },
+    "agente": {
+      "enum": [
+        "auditor-general"
+      ]
+    },
+    "entorno": {
+      "type": "string",
+      "minLength": 1
+    },
+    "host": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "actualizadoEn": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+    },
+    "ultimaInstantanea": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "generadoEn",
+        "version",
+        "calidad",
+        "huella"
+      ],
+      "properties": {
+        "generadoEn": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+        },
+        "version": {
+          "type": "string"
+        },
+        "calidad": {
+          "enum": [
+            "completa",
+            "parcial",
+            "fallida"
+          ]
+        },
+        "huella": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$"
+        },
+        "idEjecucion": {
+          "type": "string"
+        }
+      }
+    },
+    "incidencias": {
+      "type": "object"
+    },
+    "resueltasRecientes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clave",
+          "resueltaEn",
+          "primeraVez",
+          "reapariciones"
+        ],
+        "properties": {
+          "clave": {
+            "type": "string",
+            "minLength": 1
+          },
+          "resueltaEn": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+          },
+          "primeraVez": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+          },
+          "reapariciones": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "recortado": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "conservadas",
+        "omitidas"
+      ],
+      "properties": {
+        "conservadas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "omitidas": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

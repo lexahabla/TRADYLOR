@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Informe del Investigador comercial (Treidilor AI)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["agente", "version", "entorno", "generadoEn", "soloLectura", "resumen", "candidatos", "sospechosos", "calidad", "huecos", "duplicados", "distribucion", "limitaciones", "markdown"],
+  "properties": {
+    "agente": { "enum": ["investigador-comercial"] },
+    "version": { "type": "string", "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$" },
+    "entorno": { "type": "string", "minLength": 1 },
+    "generadoEn": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T" },
+    "soloLectura": { "enum": [true] },
+    "resumen": { "type": "object", "required": ["productosAnalizados", "candidatosElegibles", "errores"], "properties": { "productosAnalizados": { "type": "integer", "minimum": 0 }, "candidatosElegibles": { "type": "integer", "minimum": 0 }, "errores": { "type": "array", "items": { "type": "string" } } } },
+    "candidatos": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "titulo", "categoria", "comercio", "precio", "precioAnteriorDeclarado", "descuentoDeclaradoPct", "puntuacion", "confianza", "motivos", "advertencias"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 }, "titulo": { "type": "string" }, "categoria": { "type": "string" }, "comercio": { "type": "string" },
+          "precio": { "type": "number", "minimum": 0 }, "precioAnteriorDeclarado": { "type": "number", "minimum": 0 },
+          "descuentoDeclaradoPct": { "type": "integer", "minimum": 1, "maximum": 99 }, "puntuacion": { "type": "number", "minimum": 0 },
+          "confianza": { "enum": ["baja"] },
+          "motivos": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+          "advertencias": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+        }
+      }
+    },
+    "sospechosos": { "type": "array" },
+    "calidad": { "type": "object", "required": ["total", "ejemplos"] },
+    "huecos": { "type": "array" },
+    "duplicados": { "type": "array" },
+    "distribucion": { "type": "object", "required": ["porCategoria", "porComercio"] },
+    "limitaciones": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+    "markdown": { "type": "string", "minLength": 1 }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "entorno": "produccion",
+  "baseUrl": "https://treidilor.com",
+  "hostsPermitidos": [
+    "treidilor.com"
+  ],
+  "modo": "publico",
+  "rutas": [
+    "/",
+    "/catalogo",
+    "/categorias",
+    "/metodologia"
+  ],
+  "maxEnlaces": 40,
+  "maxPaginasCatalogo": 0,
+  "limitePorPagina": 100,
+  "maxFichas": 0,
+  "credencialCatalogo": "",
+  "umbrales": {
+    "minProductosPorCategoria": 3,
+    "maxConcentracionComercio": 0.8,
+    "descuentoMinimoCandidato": 5,
+    "descuentoMaximoCreible": 70,
+    "maxCandidatos": 20
+  },
+  "seguimiento": {
+    "tabla": "auditor_general_instantaneas",
+    "maxHistorial": 60,
+    "origenesValidos": [
+      "manual",
+      "programada"
+    ]
+  }
+}

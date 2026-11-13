@@ -1,0 +1,727 @@
+/**
+ * Agente AUDITOR GENERAL v0 — lógica PURA y determinista (sin IA, sin coste, SOLO LECTURA).
+ * Se incrusta en los nodos «Code» del workflow de n8n (sin imports reales; los `import` de abajo los resuelve el constructor).
+ * Toda la entrada de red llega ya hecha por los nodos HTTP de n8n; aquí sólo se decide qué pedir y cómo interpretar lo recibido.
+ */
+import { bytesUtf8, diasEntre, estadoGlobal, fechaValida, ordenarIncidencias, plegar, precioAnteriorDeclarado, recortar, resumenIncidencias } from './common.mjs';
+import { RUTA_CATALOGO_AUTOMATIZACION, evaluarUrl, normalizarUrl } from './urlPolicy.mjs';
+import { ejecutarSeguimiento, ejecutarSeguimientoConHistorial, estadoDeTabla, estadoDesdeInstantanea, resumirInstantanea } from './seguimiento.mjs';
+
+export const VERSION_AUDITOR = '0.2.0';
+
+const incidencia = (area, codigo, gravedad, titulo, detalle, evidencia, accionSugerida, clave = '') => ({
+  id: `${area}:${codigo}${clave ? `:${clave}` : ''}`.slice(0, 200),
+  gravedad,
+  area,
+  titulo,
+  detalle,
+  evidencia: evidencia ?? {},
+  accionSugerida,
+});
+
+/**
+ * CLASIFICACIÓN (v0.2). `clase` = qué tipo de problema es; `ambito` = de quién es:
+ *  · «produccion»     incidencia real del sitio/servicio que se audita (cuenta para el estado).
+ *  · «datos»          problema del catálogo/datos auditados (cuenta para el estado).
+ *  · «entorno_local»  AVISO que sólo describe el entorno de pruebas (build sin huella, SMTP sin configurar, reinicio reciente, muestra pequeña…):
+ *                     se lista aparte y NO cuenta como incidencia ni cambia el estado. En entorno de producción estos mismos hallazgos SÍ son incidencias.
+ */
+const CLASE_POR_CODIGO = {
+  'salud:sin_respuesta': 'disponibilidad', 'salud:http': 'disponibilidad', 'salud:no_json': 'disponibilidad', 'salud:estado': 'disponibilidad', 'salud:sin_volumen': 'integridad_datos',
+  'salud:sin_huella': 'configuracion', 'salud:sin_smtp': 'configuracion', 'salud:reinicio_reciente': 'operacion', 'salud:sin_datos': 'disponibilidad',
+  'catalogo:feed_no_disponible': 'disponibilidad', 'catalogo:feed_parcial': 'disponibilidad', 'catalogo:vacio': 'integridad_datos', 'catalogo:revision_parcial': 'cobertura',
+  'catalogo:ids_duplicados': 'integridad_datos', 'catalogo:sin_precio': 'integridad_datos', 'catalogo:precio_extremo': 'integridad_datos', 'catalogo:precio_anterior_menor': 'integridad_datos',
+  'catalogo:descuento_sospechoso': 'honestidad_comercial', 'catalogo:valoracion_por_defecto': 'honestidad_comercial', 'catalogo:imagen_no_segura': 'seguridad', 'catalogo:sin_imagen': 'calidad_datos',
+  'catalogo:titulos_repetidos': 'calidad_datos', 'catalogo:sin_categoria': 'calidad_datos', 'catalogo:sin_descripcion': 'calidad_datos', 'catalogo:titulo_largo': 'calidad_datos',
+  'catalogo:sin_comercio': 'calidad_datos', 'catalogo:categorias_escasas': 'calidad_datos', 'catalogo:concentracion_comercio': 'calidad_datos',
+};
+/** Hallazgos que, en el entorno local, describen el entorno y no el sitio real. */
+const SOLO_AVISO_LOCAL = new Set(['salud:sin_huella', 'salud:sin_smtp', 'salud:reinicio_reciente', 'catalogo:revision_parcial', 'catalogo:categorias_escasas', 'catalogo:concentracion_comercio']);
+
+export function clasificarIncidencia(inc, cfg) {
+  const base = inc.id.split(':').slice(0, 2).join(':');
+  let clase = CLASE_POR_CODIGO[base];
+  if (!clase) clase = inc.area === 'ruta' || inc.area === 'ficha' ? (/^(ruta|ficha):(sin_titulo|h1|contenido_minimo)/.test(inc.id) ? 'seo_contenido' : 'disponibilidad') : inc.area === 'enlace' ? 'enlaces' : 'calidad_datos';
+  const aviso = cfg.entorno === 'local' && SOLO_AVISO_LOCAL.has(base);
+  return { ...inc, clase, ambito: aviso ? 'entorno_local' : inc.area === 'catalogo' ? 'datos' : 'produccion' };
+}
+
+/** Un objetivo «marcador» garantiza que el nodo HTTP siguiente siempre recibe al menos un elemento (no se analiza). */
+const marcador = (cfg) => ({ id: 'marcador', tipo: 'marcador', marcador: true, url: `${cfg.baseUrl.replace(/\/$/, '')}/api/health` });
+
+/* ───────────────────────── Objetivos a pedir ───────────────────────── */
+
+/** Salud + rutas configuradas. Las URL que la política rechaza se omiten y se informan. */
+export function planificarRutas(cfg) {
+  const objetivos = [];
+  const omitidos = [];
+  const base = cfg.baseUrl.replace(/\/$/, '');
+  const salud = evaluarUrl(`${base}/api/health`, 'salud', cfg);
+  if (salud.ok) objetivos.push({ id: 'salud', tipo: 'salud', url: salud.url, etiqueta: '/api/health' });
+  else omitidos.push({ etiqueta: '/api/health', motivo: salud.motivo });
+  for (const r of cfg.rutas) {
+    const e = evaluarUrl(`${base}${r}`, 'ruta', cfg);
+    if (e.ok) objetivos.push({ id: `ruta:${r}`, tipo: 'ruta', url: e.url, etiqueta: r });
+    else omitidos.push({ etiqueta: r, motivo: e.motivo });
+  }
+  return { objetivos, omitidos };
+}
+export function crearObjetivosRutas(cfg) {
+  const { objetivos } = planificarRutas(cfg);
+  return objetivos.length ? objetivos : [marcador(cfg)];
+}
+
+/** Respuestas con datos (descarta los elementos vacíos y los marcadores). */
+export function emparejar(objetivos, respuestas) {
+  const out = [];
+  for (let i = 0; i < objetivos.length; i++) {
+    const t = objetivos[i];
+    const r = respuestas[i] ?? {};
+    if (!t || t.marcador) continue;
+    if (r.statusCode === undefined && !r.error) continue;
+    out.push({ t, r });
+  }
+  return out;
+}
+
+// El nodo HTTP Request de n8n (con «respuesta completa» y formato texto) entrega el cuerpo en `data`; el simulador lo entrega en `body`.
+const cuerpoTexto = (r) => (typeof r.data === 'string' ? r.data : typeof r.body === 'string' ? r.body : '');
+const errorTexto = (r) => (r.error ? recortar(typeof r.error === 'string' ? r.error : r.error.message ?? JSON.stringify(r.error), 200) : '');
+const esHtml = (r) => /html/i.test(String((r.headers ?? {})['content-type'] ?? '')) || /<html|<!doctype/i.test(cuerpoTexto(r).slice(0, 400));
+
+/** Enlaces <a href> de una página, como URL absolutas (sin fragmento). */
+export function extraerEnlaces(html, baseUrl) {
+  const out = [];
+  // Se ignoran <script>, <style> y comentarios: contienen plantillas JS (`${…}`) que no son enlaces reales.
+  const limpio = String(html ?? '').replace(/<script[\s\S]*?<\/script>/gi, ' ').replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
+  for (const m of limpio.matchAll(/<a\s[^>]*?href\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
+    const crudo = (m[1] ?? m[2] ?? '').replace(/&amp;/g, '&').trim();
+    if (!crudo || crudo.includes('${') || crudo.includes('{{') || crudo.startsWith('#') || /^(mailto:|tel:|javascript:|data:)/i.test(crudo)) continue;
+    const u = normalizarUrl(crudo, baseUrl);
+    if (u) out.push(u.toString());
+  }
+  return out;
+}
+
+/** TODOS los enlaces internos que la política permite pedir, sin tope: [url, origen] en orden estable (alfabético por URL). */
+export function descubrirEnlaces(objetivos, respuestas, cfg) {
+  const yaPedidos = new Set(objetivos.filter((t) => !t.marcador).map((t) => t.url));
+  const vistos = new Map();
+  for (const { t, r } of emparejar(objetivos, respuestas)) {
+    if (t.tipo !== 'ruta' || r.statusCode !== 200 || !esHtml(r)) continue;
+    for (const href of extraerEnlaces(cuerpoTexto(r), t.url)) {
+      const e = evaluarUrl(href, 'enlace', cfg);
+      if (!e.ok || yaPedidos.has(e.url) || vistos.has(e.url)) continue;
+      vistos.set(e.url, t.etiqueta);
+    }
+  }
+  return [...vistos.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+/** Enlaces internos de las páginas revisadas que la política permite pedir (máx. `maxEnlaces`, orden estable). */
+export function crearObjetivosEnlaces(objetivos, respuestas, cfg) {
+  const lista = descubrirEnlaces(objetivos, respuestas, cfg).slice(0, cfg.maxEnlaces);
+  const objetivosEnlaces = lista.map(([url, origen]) => ({ id: `enlace:${url}`, tipo: 'enlace', url, origen }));
+  return objetivosEnlaces.length ? objetivosEnlaces : [marcador(cfg)];
+}
+
+const urlCatalogo = (cfg, pagina) => evaluarUrl(`${cfg.baseUrl.replace(/\/$/, '')}${RUTA_CATALOGO_AUTOMATIZACION}?limit=${cfg.limitePorPagina}&page=${pagina}`, 'catalogo', cfg);
+
+/** Primera página del feed del catálogo (sólo modo completo). Las demás sólo se piden si hacen falta: ver `crearObjetivosCatalogoResto`. */
+export function crearObjetivosCatalogo(cfg) {
+  const out = [];
+  if (cfg.modo === 'completo' && cfg.maxPaginasCatalogo >= 1) {
+    const e = urlCatalogo(cfg, 1);
+    if (e.ok) out.push({ id: 'catalogo:1', tipo: 'catalogo', url: e.url, pagina: 1 });
+  }
+  return out.length ? out : [marcador(cfg)];
+}
+
+/** Páginas 2..N del feed, SÓLO las que existen (según `totalPages` de la primera respuesta) y con el tope `maxPaginasCatalogo`. */
+export function crearObjetivosCatalogoResto(objetivos, respuestas, cfg) {
+  const primera = leerCatalogo(objetivos, respuestas);
+  const out = [];
+  if (cfg.modo === 'completo' && Number.isInteger(primera.totalPaginas)) {
+    for (let p = 2; p <= Math.min(primera.totalPaginas, cfg.maxPaginasCatalogo); p++) {
+      const e = urlCatalogo(cfg, p);
+      if (e.ok) out.push({ id: `catalogo:${p}`, tipo: 'catalogo', url: e.url, pagina: p });
+    }
+  }
+  return out.length ? out : [marcador(cfg)];
+}
+
+/** Interpreta las páginas del feed. */
+export function leerCatalogo(objetivos, respuestas) {
+  const productos = [];
+  const errores = [];
+  let total = null;
+  let totalPaginas = null;
+  for (const { t, r } of emparejar(objetivos, respuestas)) {
+    if (t.tipo !== 'catalogo') continue;
+    if (r.error || r.statusCode !== 200) {
+      errores.push(`página ${t.pagina}: ${r.error ? errorTexto(r) : `HTTP ${r.statusCode}`}`);
+      continue;
+    }
+    try {
+      const j = JSON.parse(cuerpoTexto(r));
+      if (!Array.isArray(j.products)) throw new Error('sin lista de productos');
+      productos.push(...j.products);
+      if (Number.isInteger(j.total)) total = j.total;
+      if (Number.isInteger(j.totalPages)) totalPaginas = j.totalPages;
+    } catch (e) {
+      errores.push(`página ${t.pagina}: respuesta no válida (${recortar(e.message, 80)})`);
+    }
+  }
+  return { productos, total, totalPaginas, errores };
+}
+
+/** Fichas de muestra (sólo modo completo, instancia local): orden estable por id. */
+export function crearObjetivosFichas(productos, cfg) {
+  const base = cfg.baseUrl.replace(/\/$/, '');
+  const out = [];
+  if (cfg.modo === 'completo') {
+    const ids = [...new Set(productos.map((p) => String(p.id ?? '')).filter(Boolean))].sort().slice(0, cfg.maxFichas);
+    for (const id of ids) {
+      const e = evaluarUrl(`${base}/producto/${id}`, 'ficha', cfg);
+      if (e.ok) out.push({ id: `ficha:${id}`, tipo: 'ficha', url: e.url, productoId: id });
+    }
+  }
+  return out.length ? out : [marcador(cfg)];
+}
+
+/* ───────────────────────── Análisis ───────────────────────── */
+
+export function analizarSalud(objetivos, respuestas) {
+  const inc = [];
+  const par = emparejar(objetivos, respuestas).find((x) => x.t.tipo === 'salud');
+  let datos = null;
+  if (!par) {
+    inc.push(incidencia('salud', 'sin_datos', 'critica', 'No se pudo comprobar la salud del servidor', 'No hay respuesta de /api/health.', {}, 'Comprobar que el servidor está en marcha y que el agente llega a él.'));
+    return { incidencias: inc, datos };
+  }
+  const { r } = par;
+  if (r.error) inc.push(incidencia('salud', 'sin_respuesta', 'critica', 'El servidor no responde', errorTexto(r), {}, 'Comprobar el contenedor y la red.'));
+  else if (r.statusCode !== 200) inc.push(incidencia('salud', 'http', 'critica', `/api/health devuelve HTTP ${r.statusCode}`, 'El healthcheck no es correcto.', { statusCode: r.statusCode }, 'Revisar los registros del servicio.'));
+  else {
+    try {
+      datos = JSON.parse(cuerpoTexto(r));
+    } catch {
+      inc.push(incidencia('salud', 'no_json', 'alta', '/api/health no devuelve JSON válido', 'La respuesta no se puede interpretar.', {}, 'Revisar el servicio.'));
+    }
+  }
+  if (datos) {
+    if (datos.status !== 'ok') inc.push(incidencia('salud', 'estado', 'critica', `Estado de salud: ${datos.status}`, 'El servicio no declara «ok».', { status: datos.status }, 'Revisar registros.'));
+    if (datos.dataDirExists === false) inc.push(incidencia('salud', 'sin_volumen', 'critica', 'No existe el directorio de datos', 'El volumen persistente no está disponible.', {}, 'Revisar el volumen del servicio.'));
+    if (!datos.sourceHash) inc.push(incidencia('salud', 'sin_huella', 'media', 'El despliegue no declara su huella de código (sourceHash)', 'No se puede comprobar qué código se está ejecutando.', {}, 'Revisar el build.'));
+    if (Number.isFinite(datos.uptimeSeconds) && datos.uptimeSeconds < 300) inc.push(incidencia('salud', 'reinicio_reciente', 'info', 'El servicio se reinició hace menos de 5 minutos', `Tiempo de actividad: ${datos.uptimeSeconds} s.`, { uptimeSeconds: datos.uptimeSeconds }, 'Comprobar si fue un despliegue previsto.'));
+    if (datos.env && datos.env.smtp === false) inc.push(incidencia('salud', 'sin_smtp', 'baja', 'El correo (SMTP) no está configurado', 'Los correos de la plataforma no se enviarán por SMTP.', {}, 'Revisar la configuración si se esperan correos.'));
+  }
+  return { incidencias: inc, datos };
+}
+
+function analizarPagina(par, area) {
+  const { t, r } = par;
+  const inc = [];
+  const ev = { url: t.url, statusCode: r.statusCode ?? null };
+  const clave = t.etiqueta ?? t.productoId ?? t.url;
+  if (r.error) {
+    inc.push(incidencia(area, 'sin_respuesta', area === 'ruta' ? 'critica' : 'alta', `Sin respuesta: ${clave}`, errorTexto(r), ev, 'Comprobar la ruta y el servidor.', clave));
+    return inc;
+  }
+  if (r.statusCode >= 500) inc.push(incidencia(area, 'error_servidor', 'critica', `Error ${r.statusCode} en ${clave}`, 'El servidor devuelve un error.', ev, 'Revisar registros.', clave));
+  else if (r.statusCode === 404 || r.statusCode === 410) inc.push(incidencia(area, 'no_encontrada', 'alta', `No existe: ${clave}`, `HTTP ${r.statusCode}.`, ev, 'Corregir el enlace o restaurar la página.', clave));
+  else if (r.statusCode >= 400) inc.push(incidencia(area, 'error_cliente', 'media', `HTTP ${r.statusCode} en ${clave}`, 'La página no es accesible para un visitante anónimo.', ev, 'Revisar si es esperado.', clave));
+  else if (r.statusCode === 200) {
+    const cuerpo = cuerpoTexto(r);
+    if (/internal server error/i.test(cuerpo)) inc.push(incidencia(area, 'error_interno_200', 'critica', `Error interno oculto tras un 200 en ${clave}`, 'La página devuelve 200 pero contiene «Internal server error».', ev, 'Revisar registros y el componente que falla.', clave));
+    if (esHtml(r)) {
+      if (!/<title>[^<]{2,}<\/title>/i.test(cuerpo)) inc.push(incidencia(area, 'sin_titulo', 'media', `Sin <title> en ${clave}`, 'Falta el título de la página (SEO).', ev, 'Añadir título.', clave));
+      const h1 = (cuerpo.match(/<h1[\s>]/gi) ?? []).length;
+      if (h1 !== 1) inc.push(incidencia(area, 'h1', 'baja', `${h1 === 0 ? 'Sin' : 'Varios'} <h1> en ${clave}`, `Hay ${h1} elementos h1.`, { ...ev, h1 }, 'Dejar un único h1.', clave));
+      if (cuerpo.length < 2000) inc.push(incidencia(area, 'contenido_minimo', 'media', `Contenido muy corto en ${clave}`, `Sólo ${cuerpo.length} caracteres.`, { ...ev, caracteres: cuerpo.length }, 'Comprobar que la página se genera completa.', clave));
+    }
+  }
+  return inc;
+}
+
+export function analizarRutas(objetivos, respuestas) {
+  const inc = [];
+  let revisadas = 0;
+  for (const par of emparejar(objetivos, respuestas)) {
+    if (par.t.tipo !== 'ruta') continue;
+    revisadas++;
+    inc.push(...analizarPagina(par, 'ruta'));
+  }
+  return { incidencias: inc, revisadas };
+}
+
+export function analizarEnlaces(objetivos, respuestas) {
+  const inc = [];
+  let revisados = 0;
+  for (const { t, r } of emparejar(objetivos, respuestas)) {
+    if (t.tipo !== 'enlace') continue;
+    revisados++;
+    const ev = { url: t.url, origen: t.origen, statusCode: r.statusCode ?? null };
+    if (r.error) inc.push(incidencia('enlace', 'sin_respuesta', 'media', `Enlace sin respuesta: ${t.url}`, errorTexto(r), ev, 'Comprobar el destino.', t.url));
+    else if (r.statusCode >= 400) inc.push(incidencia('enlace', 'roto', 'alta', `Enlace interno roto: ${t.url}`, `HTTP ${r.statusCode}; aparece en ${t.origen}.`, ev, 'Corregir o retirar el enlace.', t.url));
+  }
+  return { incidencias: inc, revisados };
+}
+
+export function analizarFichas(objetivos, respuestas) {
+  const inc = [];
+  let revisadas = 0;
+  for (const par of emparejar(objetivos, respuestas)) {
+    if (par.t.tipo !== 'ficha') continue;
+    revisadas++;
+    inc.push(...analizarPagina(par, 'ficha'));
+  }
+  return { incidencias: inc, revisadas };
+}
+
+const imagenAceptable = (u) => typeof u === 'string' && (/^https:\/\//i.test(u) || /^\/[^/]/.test(u));
+
+/** Integridad básica del catálogo a partir del feed de lectura. Agrupa por código (un aviso por problema, con ejemplos). */
+export function analizarCatalogo(catalogo, cfg, ahoraIso) {
+  const inc = [];
+  const { productos, total, errores } = catalogo;
+  const um = cfg.umbrales ?? {};
+  const grupo = (codigo, gravedad, titulo, detalle, ids, accion) => {
+    if (!ids.length) return;
+    inc.push(incidencia('catalogo', codigo, gravedad, `${titulo} (${ids.length})`, detalle, { total: ids.length, ejemplos: ids.slice(0, 10) }, accion));
+  };
+  if (errores.length && !productos.length) {
+    inc.push(incidencia('catalogo', 'feed_no_disponible', 'alta', 'No se pudo leer el catálogo', errores.join(' · '), { errores }, 'Comprobar el token de lectura de la instancia y la URL.'));
+    return inc;
+  }
+  if (errores.length) inc.push(incidencia('catalogo', 'feed_parcial', 'media', 'Algunas páginas del catálogo no se pudieron leer', errores.join(' · '), { errores }, 'Repetir la ejecución y revisar el servicio.'));
+  if (!productos.length) {
+    inc.push(incidencia('catalogo', 'vacio', 'alta', 'El catálogo está vacío', 'El feed no devuelve productos.', { total }, 'Comprobar el volumen de datos.'));
+    return inc;
+  }
+  if (Number.isInteger(total) && total > productos.length) inc.push(incidencia('catalogo', 'revision_parcial', 'info', `Se revisaron ${productos.length} de ${total} productos`, 'El límite de páginas del agente impide revisar todo el catálogo.', { revisados: productos.length, total }, 'Subir maxPaginasCatalogo si se desea una revisión completa.'));
+
+  const porId = new Map();
+  const dup = [];
+  for (const p of productos) {
+    const id = String(p.id ?? '');
+    if (porId.has(id)) dup.push(id);
+    porId.set(id, p);
+  }
+  grupo('ids_duplicados', 'alta', 'Identificadores repetidos', 'Dos productos comparten identificador.', [...new Set(dup)], 'Revisar el origen de la importación.');
+
+  const porTitulo = new Map();
+  for (const p of productos) {
+    const k = plegar(p.title);
+    if (k.length >= 12) porTitulo.set(k, [...(porTitulo.get(k) ?? []), String(p.id)]);
+  }
+  const titulosRepetidos = [...porTitulo.values()].filter((v) => v.length > 1).map((v) => v.slice(0, 3).join(' = '));
+  grupo('titulos_repetidos', 'media', 'Títulos idénticos en productos distintos', 'Posibles duplicados (mismo título normalizado).', titulosRepetidos, 'Revisar si es el mismo anuncio con otro vendedor o un duplicado.');
+
+  const idsDe = (fn) => productos.filter(fn).map((p) => String(p.id));
+  const precio = (p) => Number(p.price);
+  grupo('sin_precio', 'alta', 'Productos sin precio utilizable', 'Precio ausente, cero o negativo.', idsDe((p) => !(precio(p) > 0)), 'Retirar o corregir la ficha.');
+  grupo('precio_extremo', 'media', 'Precios extremadamente altos', 'Precio superior a 100.000 €.', idsDe((p) => precio(p) > 100000), 'Comprobar el dato de origen.');
+  grupo('precio_anterior_menor', 'media', 'Precio anterior inferior al actual', 'El precio anterior declarado es menor que el actual: el descuento no tiene sentido.', idsDe((p) => precioAnteriorDeclarado(p) !== null && precioAnteriorDeclarado(p) < precio(p)), 'Revisar el precio anterior.');
+  grupo('descuento_sospechoso', 'media', 'Descuentos declarados superiores al 80 %', 'Precio anterior más de 5 veces el actual (dato declarado, no verificado).', idsDe((p) => precio(p) > 0 && precioAnteriorDeclarado(p) !== null && precioAnteriorDeclarado(p) > precio(p) * 5), 'No mostrar como descuento sin verificación.');
+  grupo('sin_imagen', 'media', 'Productos sin imagen', 'Falta la imagen principal.', idsDe((p) => !p.image), 'Añadir imagen.');
+  grupo('imagen_no_segura', 'media', 'Imágenes con dirección no admisible', 'La imagen no es https ni una ruta propia.', idsDe((p) => p.image && !imagenAceptable(p.image)), 'Corregir la URL de la imagen.');
+  grupo('sin_categoria', 'media', 'Productos sin categoría', 'Falta la categoría.', idsDe((p) => !String(p.category ?? '').trim()), 'Asignar categoría.');
+  grupo('sin_descripcion', 'baja', 'Descripción ausente o muy corta', 'Menos de 40 caracteres.', idsDe((p) => longitudDescripcion(p) < 40), 'Completar la ficha.');
+  grupo('titulo_largo', 'baja', 'Títulos de más de 120 caracteres', 'Títulos difíciles de leer.', idsDe((p) => String(p.title ?? '').length > 120), 'Acortar el título.');
+  grupo('sin_comercio', 'baja', 'Productos sin comercio', 'Falta el nombre del comercio.', idsDe((p) => !String(p.merchant ?? '').trim()), 'Completar el comercio.');
+  grupo('valoracion_por_defecto', 'info', 'Valoración «4,8 / 100 reseñas» (valor por defecto)', 'No es una valoración real; no debe presentarse como tal.', idsDe((p) => p.ratingFlag === 'por_defecto' || (Number(p.rating) === 4.8 && Number(p.reviewsCount) === 100)), 'Ocultar o sustituir por dato real.');
+
+  const porCat = new Map();
+  for (const p of productos) {
+    const c = String(p.category ?? '').trim();
+    if (c) porCat.set(c, (porCat.get(c) ?? 0) + 1);
+  }
+  const escasas = [...porCat.entries()].filter(([, n]) => n < (um.minProductosPorCategoria ?? 3)).map(([c, n]) => `${c} (${n})`).sort();
+  grupo('categorias_escasas', 'baja', 'Categorías con muy pocos productos', `Menos de ${um.minProductosPorCategoria ?? 3} productos.`, escasas, 'Ampliar o fusionar la categoría.');
+
+  const porComercio = new Map();
+  for (const p of productos) porComercio.set(String(p.merchant ?? '—'), (porComercio.get(String(p.merchant ?? '—')) ?? 0) + 1);
+  const [topComercio, topN] = [...porComercio.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['—', 0];
+  if (productos.length >= 10 && topN / productos.length > (um.maxConcentracionComercio ?? 0.8)) {
+    inc.push(incidencia('catalogo', 'concentracion_comercio', 'baja', `El ${Math.round((topN / productos.length) * 100)} % del catálogo es de ${topComercio}`, 'Dependencia de un único comercio.', { comercio: topComercio, productos: topN, total: productos.length }, 'Diversificar fuentes.'));
+  }
+  void ahoraIso;
+  void diasEntre;
+  void fechaValida;
+  return inc;
+}
+
+/* ───────────────────────── Consumo ───────────────────────── */
+
+/** Límites de enlaces que se comparan en los escenarios del informe. */
+export const LIMITES_ESCENARIO = [10, 20, 40];
+
+/** Tamaño (bytes UTF-8) del JSON de un valor (`bytesUtf8` vive en common.mjs, compartido con seguimiento.mjs). */
+const tamanoJson = (x) => { try { return bytesUtf8(JSON.stringify(x)); } catch (e) { return 0; } };
+
+const familiaDeUrl = (url) => { const u = normalizarUrl(url, undefined); const seg = u ? u.pathname.split('/').filter(Boolean)[0] : ''; return seg || '/'; };
+
+/** «12,3 KB» / «1,25 MB» (formato fijo, sin depender del entorno). */
+export function formatearBytes(n) {
+  const v = Number(n) || 0;
+  if (v < 1024) return `${v} B`;
+  if (v < 1048576) return `${(v / 1024).toFixed(1).replace('.', ',')} KB`;
+  return `${(v / 1048576).toFixed(2).replace('.', ',')} MB`;
+}
+
+/**
+ * Consumo de UNA ejecución. Separa lo MEDIDO de lo ESTIMADO:
+ *  · medido    → bytes del cuerpo de cada respuesta (UTF-8, ya descomprimida por n8n). Lo que viajó por la red puede ser menos (compresión) y el workflow no lo ve.
+ *  · estimado  → lo que n8n podría guardar en su historial: suma del tamaño JSON de la salida de los nodos HTTP, de las listas de objetivos y del informe.
+ *                n8n no publica cuánto guarda de verdad (formato interno): es una ESTIMACIÓN y debe contrastarse con el tamaño real de la ejecución.
+ *  · escenarios→ con los límites de enlaces 10/20/40, calculados con las respuestas REALES de esta ejecución (los enlaces se piden en orden estable, así que el
+ *                subconjunto de los N primeros es exactamente el que se habría pedido). `calculable:false` si esta ejecución pidió menos enlaces que el límite y había más.
+ */
+export function calcularConsumo(entrada) {
+  const { cfg, objetivosRutas = [], respuestasRutas = [], objetivosEnlaces = [], respuestasEnlaces = [], objetivosCatalogo = [], respuestasCatalogo = [], objetivosFichas = [], respuestasFichas = [], tamanoInforme = 0 } = entrada;
+  const grupos = [[objetivosRutas, respuestasRutas], [objetivosEnlaces, respuestasEnlaces], [objetivosCatalogo, respuestasCatalogo], [objetivosFichas, respuestasFichas]];
+  const paginas = [];
+  for (const [objetivos, respuestas] of grupos) {
+    for (const { t, r } of emparejar(objetivos, respuestas)) {
+      paginas.push({ tipo: t.tipo, destino: t.url, bytes: bytesUtf8(cuerpoTexto(r)), serializado: tamanoJson(r), estado: r.error ? 'error' : r.statusCode });
+    }
+  }
+  const sobrecarga = grupos.reduce((n, [o]) => n + tamanoJson(o), 0) + tamanoInforme;
+  const suma = (lista, k) => lista.reduce((n, p) => n + p[k], 0);
+  const porTipo = {};
+  for (const p of paginas) {
+    porTipo[p.tipo] = porTipo[p.tipo] ?? { peticiones: 0, bytes: 0 };
+    porTipo[p.tipo].peticiones++;
+    porTipo[p.tipo].bytes += p.bytes;
+  }
+  const masPesadas = [...paginas].sort((a, b) => b.bytes - a.bytes || a.destino.localeCompare(b.destino)).slice(0, 5).map((p) => ({ tipo: p.tipo, destino: p.destino, bytes: p.bytes, estado: p.estado }));
+
+  // Escenarios de enlaces.
+  const descubiertos = descubrirEnlaces(objetivosRutas, respuestasRutas, cfg);
+  const enlaces = paginas.filter((p) => p.tipo === 'enlace'); // en el orden en que se pidieron (alfabético)
+  const fijas = paginas.filter((p) => p.tipo !== 'enlace');
+  const familiasTodas = new Set(descubiertos.map(([u]) => familiaDeUrl(u)));
+  const escenarios = LIMITES_ESCENARIO.map((limite) => {
+    const n = Math.min(limite, descubiertos.length);
+    const calculable = n <= enlaces.length;
+    const e = { maxEnlaces: limite, calculable, enlaces: n };
+    if (!calculable) return e;
+    const subconjunto = enlaces.slice(0, n);
+    const todas = [...fijas, ...subconjunto];
+    return { ...e, peticiones: todas.length, bytesRecibidos: suma(todas, 'bytes'), bytesHistorialEstimado: suma(todas, 'serializado') + sobrecarga, familiasCubiertas: new Set(subconjunto.map((p) => familiaDeUrl(p.destino))).size, familiasDescubiertas: familiasTodas.size };
+  });
+
+  return {
+    peticiones: paginas.length,
+    medido: {
+      bytesRecibidos: suma(paginas, 'bytes'),
+      porTipo,
+      paginasMasPesadas: masPesadas,
+      nota: 'Medido: bytes UTF-8 del cuerpo de cada respuesta, ya descomprimida. Lo que viajó por la red puede ser menor.',
+    },
+    estimado: {
+      esEstimacion: true,
+      bytesHistorial: suma(paginas, 'serializado') + sobrecarga,
+      metodo: 'ESTIMACIÓN, no medición: suma del tamaño JSON de la salida de los nodos HTTP, de las listas de objetivos y del informe. n8n no publica lo que guarda de verdad; contrástese con el tamaño real de la ejecución.',
+    },
+    presupuesto: { maxEnlaces: cfg.maxEnlaces, enlacesDescubiertos: descubiertos.length, enlacesPedidos: enlaces.length, enlacesOmitidosPorTope: Math.max(0, descubiertos.length - enlaces.length) },
+    escenarios,
+  };
+}
+
+/* ───────────────────────── Alcance ───────────────────────── */
+
+/**
+ * ALCANCE de la auditoría: qué destinos se revisaron DE VERDAD. Es la evidencia con la que `seguimiento.mjs` puede declarar «resuelta» una incidencia.
+ * Distingue tres niveles por página (rutas, enlaces y fichas):
+ *  · solicitada        → se pidió (cuenta en `resumen.solicitadas`).
+ *  · respondió         → llegó un estado HTTP, cualquiera (también 404/500): va a `rutas` / `enlaces` / `fichas`. Si no hubo respuesta (error de red, tiempo agotado,
+ *                        nodo sin datos) → `sinRespuesta` con su motivo.
+ *  · análisis completo → sólo rutas y fichas: respondió 200 con HTML con contenido, así que se pudo evaluar título, h1 y longitud: va a `contenido`. Si respondió pero el
+ *                        contenido no se pudo analizar (error HTTP, redirección, no es HTML, cuerpo vacío) → `incompletas` con su motivo.
+ * Haber PEDIDO una URL nunca basta para dar por resuelta una incidencia. Los destinos son los mismos que usan las claves de seguimiento
+ * (ruta = etiqueta, enlace = URL, ficha = id de producto); `seguimiento.mjs` los normaliza.
+ */
+export function calcularAlcance(entrada, datosSalud, catalogo) {
+  const { cfg, objetivosRutas = [], respuestasRutas = [], objetivosEnlaces = [], respuestasEnlaces = [], objetivosFichas = [], respuestasFichas = [] } = entrada;
+  const base = normalizarUrl(cfg.baseUrl, undefined);
+  const CLAVE = { ruta: 'rutas', enlace: 'enlaces', ficha: 'fichas' };
+  const alcance = { host: base ? base.host : null, salud: Boolean(datosSalud), rutas: [], enlaces: [], fichas: [], contenido: { rutas: [], fichas: [] }, catalogo: { leido: false, completo: false }, sinRespuesta: [], incompletas: [] };
+  let solicitadas = 0;
+  let respondieron = 0;
+  let correctas = 0;
+  for (const [objetivos, respuestas] of [[objetivosRutas, respuestasRutas], [objetivosEnlaces, respuestasEnlaces], [objetivosFichas, respuestasFichas]]) {
+    objetivos.forEach((t, i) => {
+      if (!t || t.marcador || !CLAVE[t.tipo]) return;
+      const r = respuestas[i] ?? {};
+      const destino = t.tipo === 'ruta' ? t.etiqueta : t.tipo === 'ficha' ? t.productoId : t.url;
+      solicitadas++;
+      if (r.error || typeof r.statusCode !== 'number') {
+        alcance.sinRespuesta.push({ tipo: t.tipo, destino, motivo: r.error ? (/timeout|timed out|ETIMEDOUT|ESOCKETTIMEDOUT|tiempo/i.test(errorTexto(r)) ? 'tiempo_agotado' : 'error_de_red') : 'sin_datos' });
+        return;
+      }
+      respondieron++;
+      alcance[CLAVE[t.tipo]].push(destino);
+      if (r.statusCode >= 200 && r.statusCode < 300) correctas++;
+      if (t.tipo === 'enlace') return; // de un enlace sólo importa su estado HTTP
+      if (r.statusCode === 200) {
+        if (!esHtml(r)) alcance.incompletas.push({ tipo: t.tipo, destino, motivo: 'respuesta_no_html' });
+        else if (!cuerpoTexto(r).trim()) alcance.incompletas.push({ tipo: t.tipo, destino, motivo: 'cuerpo_vacio' });
+        else alcance.contenido[CLAVE[t.tipo]].push(destino);
+      } else {
+        alcance.incompletas.push({ tipo: t.tipo, destino, motivo: r.statusCode >= 400 ? 'error_http' : r.statusCode >= 300 ? 'redireccion' : 'estado_inesperado' });
+      }
+    });
+  }
+  const leido = catalogo.productos.length > 0;
+  alcance.catalogo = { leido, completo: leido && !catalogo.errores.length && (!Number.isInteger(catalogo.total) || catalogo.productos.length >= catalogo.total) };
+  const pedidosEnlaces = objetivosEnlaces.filter((t) => t && !t.marcador).length;
+  const noVisitados = Math.max(0, descubrirEnlaces(objetivosRutas, respuestasRutas, cfg).length - pedidosEnlaces);
+  alcance.resumen = { solicitadas, respondieron, correctas, sinRespuesta: alcance.sinRespuesta.length, incompletas: alcance.incompletas.length, noVisitados };
+  return alcance;
+}
+
+/* ───────────────────────── Informe ───────────────────────── */
+
+/** El feed de automatización entrega sólo la longitud de la descripción (dato estrictamente necesario); el feed antiguo, el texto. */
+export const longitudDescripcion = (p) => (Number.isFinite(Number(p.descriptionLength)) ? Number(p.descriptionLength) : String(p.description ?? '').trim().length);
+
+const ETIQUETA_GRAVEDAD = { critica: 'Crítica', alta: 'Alta', media: 'Media', baja: 'Baja', info: 'Información' };
+
+/** Apartado «Consumo» del informe (los informes anteriores no lo tienen: sólo se pinta si existe). */
+function markdownConsumo(c) {
+  const l = ['## Consumo'];
+  l.push(`- **Medido:** ${c.peticiones} peticiones · ${formatearBytes(c.medido.bytesRecibidos)} de cuerpo recibido (descomprimido; por la red puede ser menos).`);
+  if (c.medido.paginasMasPesadas.length) l.push(`- **Páginas más pesadas:** ${c.medido.paginasMasPesadas.map((p) => `${p.destino} (${formatearBytes(p.bytes)})`).join('; ')}`);
+  l.push(`- **Estimado (NO medido):** ≈ ${formatearBytes(c.estimado.bytesHistorial)} en el historial de n8n por ejecución. Es una estimación del tamaño JSON de las salidas; contrastar con el tamaño real de la ejecución.`);
+  const p = c.presupuesto;
+  l.push(`- **Enlaces internos:** ${p.enlacesPedidos} pedidos de ${p.enlacesDescubiertos} descubiertos (tope ${p.maxEnlaces}${p.enlacesOmitidosPorTope ? `; ${p.enlacesOmitidosPorTope} omitidos por el tope` : ''}).`);
+  for (const e of c.escenarios) l.push(e.calculable ? `  - Con tope ${e.maxEnlaces}: ${e.peticiones} peticiones · ${formatearBytes(e.bytesRecibidos)} recibidos · ≈ ${formatearBytes(e.bytesHistorialEstimado)} estimados en el historial · ${e.familiasCubiertas}/${e.familiasDescubiertas} secciones del sitio cubiertas` : `  - Con tope ${e.maxEnlaces}: no calculable con esta ejecución (se pidieron menos enlaces que ese tope)`);
+  l.push('');
+  return l;
+}
+
+const MOTIVOS_SEGUIMIENTO = {
+  primera_ejecucion: 'primera ejecución: todavía no hay una auditoría anterior',
+  estado_invalido: 'el estado anterior no es válido',
+  esquema_incompatible: 'el estado anterior tiene un formato no compatible',
+  entorno_distinto: 'el estado anterior es de otro entorno',
+  host_distinto: 'el estado anterior es de otro sitio',
+  anterior_antiguo: 'la auditoría anterior es demasiado antigua para compararla',
+  ejecucion_fallida: 'esta ejecución no obtuvo respuestas suficientes: no se compara ni se guarda',
+  orden_invalido: 'la fecha de esta auditoría no es posterior a la anterior',
+  instantanea_invalida: 'la auditoría no se pudo resumir',
+  sin_alcance: 'el informe no declara qué se revisó',
+  objetivo_no_revisado: 'no se visitó o no respondió en esta ejecución',
+  salud_no_leida: 'no se pudo leer la salud',
+  catalogo_no_leido_completo: 'el catálogo no se leyó completo',
+  pagina_con_error: 'la página responde con error',
+  analisis_incompleto: 'la página respondió pero su contenido no se pudo analizar',
+  area_desconocida: 'área sin comprobación definida',
+  sin_verificar_demasiado_tiempo: 'lleva demasiadas ejecuciones sin poder verificarse',
+  estado_recortado: 'el estado anterior estaba recortado: no se puede demostrar que fuera nueva',
+};
+
+/** Apartado «Seguimiento» (los informes anteriores no lo tienen: sólo se pinta si existe). Muestra claves estables, no textos. */
+function markdownSeguimiento(s, p) {
+  const l = ['## Seguimiento'];
+  const fecha = (iso) => String(iso).slice(0, 16).replace('T', ' ');
+  const motivo = (m) => MOTIVOS_SEGUIMIENTO[m] ?? m;
+  if (s.modo === 'linea_base') {
+    l.push(`**Línea base** — ${motivo(s.motivo)}. Esta auditoría pasa a ser la referencia y **no** se clasifica ninguna incidencia como nueva (${s.resumen.actuales} incidencias actuales).`);
+    if (s.origenReferencia === 'ninguna' && !p) l.push('_No se proporcionó estado anterior._');
+  } else if (s.modo === 'sin_comparar') {
+    l.push(`**Sin comparar** — ${motivo(s.motivo)}.`);
+  } else {
+    const r = s.resumen;
+    l.push(`Comparado con la auditoría del ${fecha(s.comparadoCon)} UTC. **Nuevas:** ${r.nuevas} · **Persistentes:** ${r.persistentes} · **Resueltas:** ${r.resueltas} · **No verificadas:** ${r.noVerificadas} · **Reaparecidas:** ${r.reaparecidas}` + (r.indeterminadas ? ` · **Indeterminadas:** ${r.indeterminadas}` : '') + (r.caducadas ? ` · **Caducadas:** ${r.caducadas}` : ''));
+    const bloque = (titulo, lista, texto) => {
+      if (!lista || !lista.length) return;
+      l.push(`### ${titulo} (${lista.length})`);
+      for (const x of lista.slice(0, 15)) l.push(`- \`${x.clave}\`${texto(x)}`);
+      if (lista.length > 15) l.push(`- … y ${lista.length - 15} más (ver JSON).`);
+    };
+    bloque('Nuevas', s.nuevas, (x) => ` — ${x.gravedad}`);
+    bloque('Reaparecidas', s.reaparecidas, (x) => ` — ${x.gravedad}; resuelta el ${fecha(x.resueltaEn)}`);
+    bloque('Persistentes', s.persistentes, (x) => ` — ${x.gravedad}${x.cambioGravedad ? ` (${x.cambioGravedad === 'empeora' ? 'empeora' : 'mejora'}, antes ${x.gravedadAnterior})` : ''}; ${x.ejecuciones} ejecuciones seguidas, desde ${fecha(x.desde)}`);
+    bloque('Resueltas', s.resueltas, (x) => ` — estaba ${x.gravedadAnterior}; abierta ${x.diasAbierta} día(s); su destino se revisó en esta ejecución`);
+    bloque('No verificadas (no se pueden dar por resueltas)', s.noVerificadas, (x) => ` — ${motivo(x.motivo)}`);
+    bloque('Indeterminadas', s.indeterminadas, (x) => ` — ${x.gravedad}; ${motivo(x.motivo)}`);
+    bloque('Caducadas', s.caducadas, (x) => ` — ${motivo(x.motivo)}`);
+  }
+  if (p) {
+    const fecha2 = (iso) => String(iso).slice(0, 16).replace('T', ' ');
+    l.push('### Historial (memoria del Auditor)');
+    if (p.tabla.estado !== 'ok') l.push(`- ⚠ **Sin memoria persistente:** tabla «${p.tabla.nombre || '—'}» ${MOTIVOS_TABLA[p.tabla.estado] ?? p.tabla.estado}. Esta auditoría no compara ni guarda.`);
+    else {
+      l.push(`- Lectura: ${p.lectura.filas} filas (${p.lectura.validas} válidas${p.lectura.duplicadas ? `, ${p.lectura.duplicadas} duplicadas` : ''}${p.lectura.descartadas ? `, ${p.lectura.descartadas} descartadas` : ''})${p.lectura.ultimaInstantanea ? `; última instantánea válida: ${fecha2(p.lectura.ultimaInstantanea)} UTC` : ''}.`);
+      const e = p.escritura;
+      if (e.resultado === 'guardada') l.push(`- Escritura: **guardada** (fila ${e.filaId}, origen ${e.origen}).`);
+      else if (e.resultado === 'fallida') l.push(`- ⚠ **Escritura FALLIDA: la instantánea NO se guardó** (${e.error}). El informe es válido, pero esta auditoría no quedó en la memoria.`);
+      else if (e.guardar) l.push(`- Escritura: **pendiente** — se intentará guardar una instantánea (origen ${e.origen}); el resultado se confirma después del Insert, en el nodo «Confirmar escritura».`);
+      else l.push(`- Escritura: **no se guarda** (${MOTIVOS_GUARDADO[e.motivo] ?? e.motivo}).`);
+    }
+  }
+  l.push('');
+  return l;
+}
+
+const MOTIVOS_TABLA = { no_encontrada: 'no existe (créala con el workflow «Auditor · crear tabla de instantáneas»)', ambigua: 'es ambigua: hay varias tablas cuyo nombre contiene ese texto', error_lectura: 'no se pudo leer', sin_configurar: 'no está configurada' };
+const MOTIVOS_GUARDADO = { ejecucion_parcial: 'ejecución parcial o incompleta', ejecucion_fallida: 'ejecución fallida', orden_invalido: 'la auditoría no es posterior a la última guardada', origen_no_valido: 'origen de ejecución no permitido', sin_id_ejecucion: 'sin identificador de ejecución', ya_guardada: 'esta ejecución ya estaba guardada', instantanea_demasiado_grande: 'la instantánea excede el tamaño máximo', persistencia_no_disponible: 'memoria no disponible', instantanea_invalida: 'la auditoría no se pudo resumir' };
+
+export function informeMarkdown(informe) {
+  const l = [];
+  l.push(`# Auditor General — ${informe.entorno} (${informe.generadoEn.slice(0, 16).replace('T', ' ')} UTC)`);
+  l.push('');
+  l.push(`**Estado:** ${informe.resumen.estado.toUpperCase()} · **Sólo lectura** · versión ${informe.version} · modo ${informe.modo}`);
+  const c = informe.resumen.incidencias;
+  l.push(`**Incidencias:** crítica ${c.critica} · alta ${c.alta} · media ${c.media} · baja ${c.baja} · info ${c.info}` + (informe.avisosEntorno?.length ? ` · **avisos del entorno local:** ${informe.avisosEntorno.length} (no cuentan)` : ''));
+  l.push(`**Peticiones realizadas:** ${informe.resumen.peticiones} (rutas ${informe.resumen.rutasRevisadas}, enlaces ${informe.resumen.enlacesRevisados}, fichas ${informe.resumen.fichasRevisadas}, páginas de catálogo ${informe.resumen.paginasCatalogo})`);
+  l.push('');
+  for (const g of ['critica', 'alta', 'media', 'baja', 'info']) {
+    const lista = informe.incidencias.filter((i) => i.gravedad === g);
+    if (!lista.length) continue;
+    l.push(`## ${ETIQUETA_GRAVEDAD[g]} (${lista.length})`);
+    for (const i of lista.slice(0, 30)) l.push(`- **${i.titulo}** — ${i.detalle} _[${i.clase}] Acción: ${i.accionSugerida}_`);
+    if (lista.length > 30) l.push(`- … y ${lista.length - 30} más (ver JSON).`);
+    l.push('');
+  }
+  if (informe.avisosEntorno?.length) {
+    l.push(`## Avisos del entorno local (${informe.avisosEntorno.length}) — no son incidencias del sitio real`);
+    for (const i of informe.avisosEntorno) l.push(`- ${i.titulo} — ${i.detalle}`);
+    l.push('');
+  }
+  if (!informe.incidencias.length) l.push('Sin incidencias.\n');
+  if (informe.seguimiento) l.push(...markdownSeguimiento(informe.seguimiento, informe.persistencia));
+  if (informe.consumo) l.push(...markdownConsumo(informe.consumo));
+  l.push('## Cobertura');
+  l.push(`- Revisado: ${informe.cobertura.revisado.join('; ') || '—'}`);
+  l.push(`- **No revisado:** ${informe.cobertura.noRevisado.join('; ') || '—'}`);
+  return l.join('\n');
+}
+
+/** Construye el informe completo. `entrada` agrupa lo que devolvieron los nodos HTTP (stateless: se recalcula todo desde lo bruto). */
+/**
+ * CONFIRMACIÓN de la escritura (2c). El informe se genera ANTES del Insert, así que sólo puede decir que la escritura está «pendiente». Este paso se ejecuta DESPUÉS y recibe
+ * lo que devolvieron las dos salidas del Insert. Se confirma SÓLO si el Insert devolvió la fila guardada (un `id` numérico y NUESTRO `idEjecucion`): que no haya error no basta,
+ * porque la Data table de n8n puede devolver el elemento de entrada sin guardarlo y sin ningún error (p. ej. una columna desconocida). Devuelve el MISMO informe con
+ * `persistencia.escritura.resultado` = «guardada» (con `filaId`) o «fallida» (con `motivoFallo` y `error`) y el Markdown regenerado. Si no había nada que guardar, lo devuelve sin cambios.
+ */
+export function confirmarEscritura(informe, salidaInsert) {
+  const p = informe && informe.persistencia;
+  if (!p || !p.escritura || !p.escritura.guardar) return informe;
+  const lista = (Array.isArray(salidaInsert) ? salidaInsert : []).filter((x) => x && typeof x === 'object');
+  const fila = lista.find((x) => Number.isFinite(Number(x.id)) && x.idEjecucion === p.escritura.idEjecucion);
+  const conError = lista.find((x) => x.error !== undefined && x.error !== null);
+  const textoError = conError ? recortar(typeof conError.error === 'string' ? conError.error : (conError.error && conError.error.message) || JSON.stringify(conError.error), 200) : '';
+  const escritura = fila
+    ? { ...p.escritura, resultado: 'guardada', filaId: Number(fila.id) }
+    : { ...p.escritura, resultado: 'fallida', motivoFallo: conError ? 'error_insert' : 'sin_confirmacion', error: conError ? textoError : 'el Insert no devolvió la fila guardada (la Data table no confirmó la escritura)' };
+  const nuevo = { ...informe, persistencia: { ...p, escritura } };
+  nuevo.markdown = informeMarkdown(nuevo);
+  return nuevo;
+}
+
+/** Informe del Auditor (compatible con todas las versiones anteriores). La fila de historial, si la hay, sólo la devuelve `construirInformeYFila`. */
+export function construirInformeAuditor(entrada) {
+  return construirInformeYFila(entrada).informe;
+}
+
+/** Igual que `construirInformeAuditor`, pero devuelve además la FILA que el workflow debe insertar en el historial (o null si no procede guardar). */
+export function construirInformeYFila(entrada) {
+  const { cfg, objetivosRutas = [], respuestasRutas = [], objetivosEnlaces = [], respuestasEnlaces = [], objetivosCatalogo: objCat1 = [], respuestasCatalogo: resCat1 = [], objetivosCatalogoResto = [], respuestasCatalogoResto = [], objetivosFichas = [], respuestasFichas = [], ahoraIso } = entrada;
+  // Primera página + las siguientes (sólo las que existen); los marcadores se ignoran al emparejar.
+  const objetivosCatalogo = [...objCat1, ...objetivosCatalogoResto];
+  const respuestasCatalogo = [...resCat1, ...respuestasCatalogoResto];
+  const salud = analizarSalud(objetivosRutas, respuestasRutas);
+  const rutas = analizarRutas(objetivosRutas, respuestasRutas);
+  const enlaces = analizarEnlaces(objetivosEnlaces, respuestasEnlaces);
+  const catalogo = leerCatalogo(objetivosCatalogo, respuestasCatalogo);
+  const fichas = analizarFichas(objetivosFichas, respuestasFichas);
+  const todas = ordenarIncidencias([
+    ...salud.incidencias,
+    ...rutas.incidencias,
+    ...enlaces.incidencias,
+    ...(cfg.modo === 'completo' ? analizarCatalogo(catalogo, cfg, ahoraIso) : []),
+    ...fichas.incidencias,
+  ].map((i) => clasificarIncidencia(i, cfg)));
+  // Los avisos del entorno local se listan aparte: no son incidencias del sitio ni cambian el estado.
+  const avisosEntorno = todas.filter((i) => i.ambito === 'entorno_local');
+  const incidencias = todas.filter((i) => i.ambito !== 'entorno_local');
+  const paginasCatalogo = emparejar(objetivosCatalogo, respuestasCatalogo).filter((x) => x.t.tipo === 'catalogo').length;
+  const peticiones = [objetivosRutas, objetivosEnlaces, objetivosCatalogo, objetivosFichas].reduce((n, l) => n + l.filter((t) => !t.marcador).length, 0);
+  const contador = resumenIncidencias(incidencias);
+  const { omitidos } = planificarRutas(cfg);
+  const alcance = calcularAlcance(entrada, salud.datos, catalogo);
+  const noRevisado = [
+    'Programadores internos de Treidilor (precios, alertas, recordatorios) y estado de las actualizaciones: pendientes de un endpoint de estado en la API de automatización',
+    ...(alcance.resumen.noVisitados ? [`${alcance.resumen.noVisitados} enlaces internos descubiertos no se visitaron (tope de ${cfg.maxEnlaces}): sus incidencias anteriores no se pueden dar por resueltas`] : []),
+    ...(cfg.modo === 'publico' ? ['Fichas de producto y feed del catálogo: no se piden en producción (cada visita cuenta en la analítica y el feed exige un token)'] : []),
+    ...omitidos.map((o) => `${o.etiqueta}: omitida por la política de URLs (${o.motivo})`),
+  ];
+  const informe = {
+    agente: 'auditor-general',
+    version: VERSION_AUDITOR,
+    entorno: cfg.entorno,
+    modo: cfg.modo,
+    generadoEn: ahoraIso,
+    soloLectura: true,
+    resumen: {
+      estado: estadoGlobal(contador),
+      incidencias: contador,
+      avisosEntorno: avisosEntorno.length,
+      peticiones,
+      rutasRevisadas: rutas.revisadas,
+      enlacesRevisados: enlaces.revisados,
+      fichasRevisadas: fichas.revisadas,
+      paginasCatalogo,
+    },
+    incidencias,
+    avisosEntorno,
+    alcance,
+    cobertura: {
+      revisado: [
+        `salud (${salud.datos ? 'datos recibidos' : 'sin datos'})`,
+        `${rutas.revisadas} rutas`,
+        `${enlaces.revisados} enlaces internos`,
+        `${alcance.resumen.respondieron} de ${alcance.resumen.solicitadas} páginas respondieron (${alcance.resumen.sinRespuesta} sin respuesta, ${alcance.resumen.incompletas} con el análisis de contenido incompleto)`,
+        ...(cfg.modo === 'completo' ? [`${catalogo.productos.length} productos del feed`, `${fichas.revisadas} fichas`] : []),
+      ],
+      noRevisado,
+    },
+    markdown: '',
+  };
+  // Seguimiento (motor de seguimiento.mjs). Tres fuentes de referencia, de más a menos real:
+  //  · `entrada.persistencia` (2c): el historial leído de la Data Table (instantáneas inmutables) → estado reconstruido, y la fila a guardar.
+  //  · `entrada.estadoAnterior` / `entrada.instantaneaAnterior`: pruebas y simulaciones (2b).
+  //  · ninguna → línea base: nada se clasifica como nuevo.
+  let fila = null;
+  const per = entrada.persistencia;
+  if (per) {
+    const nombre = cfg.seguimiento && cfg.seguimiento.tabla;
+    const tabla = nombre ? estadoDeTabla(per.tablas, nombre) : 'sin_configurar';
+    const lecturaConError = (per.historial || []).some((x) => x && x.error !== undefined && x.idEjecucion === undefined);
+    const usable = tabla === 'ok' && !lecturaConError;
+    const opc = { host: alcance.host, idEjecucion: per.idEjecucion, origen: per.origen, persistencia: { origenesValidos: cfg.seguimiento && cfg.seguimiento.origenesValidos } };
+    if (!opc.persistencia.origenesValidos) delete opc.persistencia.origenesValidos;
+    const r = usable ? ejecutarSeguimientoConHistorial(per.historial, informe, opc) : null;
+    fila = r ? r.fila : null;
+    informe.seguimiento = r ? { ...r.seguimiento, origenReferencia: r.previo.estado ? 'historial' : 'ninguna' } : { ...ejecutarSeguimiento(null, informe, { host: alcance.host }).seguimiento, origenReferencia: 'ninguna' };
+    informe.persistencia = {
+      tabla: { nombre: nombre || '', estado: lecturaConError && tabla === 'ok' ? 'error_lectura' : tabla },
+      lectura: r ? { filas: r.previo.leidas, validas: r.previo.validas, duplicadas: r.previo.duplicadas, descartadas: r.previo.descartadas.length, ultimaInstantanea: r.previo.ultimaGeneradoEn } : { filas: 0, validas: 0, duplicadas: 0, descartadas: 0, ultimaInstantanea: null },
+      // `guardar` = se DECIDIÓ guardar; `resultado` = qué ocurrió: «pendiente» hasta que el nodo «Confirmar escritura» lo verifica con lo que devolvió el Insert.
+      escritura: { guardar: Boolean(r && r.guardar), motivo: r ? r.motivoGuardado : 'persistencia_no_disponible', origen: String(per.origen), idEjecucion: String(per.idEjecucion), resultado: r && r.guardar ? 'pendiente' : 'no_procede' },
+    };
+  } else {
+    const ia = entrada.instantaneaAnterior;
+    const referencia = entrada.estadoAnterior ?? (ia ? estadoDesdeInstantanea(ia.esquema === 1 ? ia : resumirInstantanea(ia)) : null);
+    informe.seguimiento = { ...ejecutarSeguimiento(referencia, informe, { host: alcance.host }).seguimiento, origenReferencia: entrada.estadoAnterior ? 'estado' : ia ? 'instantanea' : 'ninguna' };
+  }
+  informe.markdown = informeMarkdown(informe);
+  // Consumo: se calcula con el tamaño del informe ya construido (sin el propio apartado) y se añade después al informe y a su Markdown.
+  informe.consumo = calcularConsumo({ cfg, objetivosRutas, respuestasRutas, objetivosEnlaces, respuestasEnlaces, objetivosCatalogo, respuestasCatalogo, objetivosFichas, respuestasFichas, tamanoInforme: tamanoJson(informe) });
+  informe.markdown = informeMarkdown(informe);
+  return { informe, fila };
+}

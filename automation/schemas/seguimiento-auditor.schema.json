@@ -1,0 +1,500 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Seguimiento de incidencias del Auditor General (sección del informe)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "esquema",
+    "modo",
+    "motivo",
+    "comparadoCon",
+    "calidad",
+    "resumen",
+    "nuevas",
+    "persistentes",
+    "resueltas",
+    "noVerificadas",
+    "reaparecidas",
+    "caducadas"
+  ],
+  "properties": {
+    "esquema": {
+      "enum": [
+        1
+      ]
+    },
+    "modo": {
+      "enum": [
+        "comparacion",
+        "linea_base",
+        "sin_comparar"
+      ]
+    },
+    "motivo": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "comparadoCon": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "calidad": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "estado",
+        "motivos"
+      ],
+      "properties": {
+        "estado": {
+          "enum": [
+            "completa",
+            "parcial",
+            "fallida"
+          ]
+        },
+        "motivos": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "resumen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "actuales",
+        "nuevas",
+        "persistentes",
+        "resueltas",
+        "noVerificadas",
+        "reaparecidas",
+        "caducadas"
+      ],
+      "properties": {
+        "actuales": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nuevas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "persistentes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "resueltas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "noVerificadas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reaparecidas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "caducadas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "indeterminadas": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "nuevas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clave",
+          "area",
+          "codigo",
+          "gravedad",
+          "cantidad"
+        ],
+        "properties": {
+          "clave": {
+            "type": "string",
+            "minLength": 1
+          },
+          "area": {
+            "type": "string",
+            "minLength": 1
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "gravedad": {
+            "enum": [
+              "critica",
+              "alta",
+              "media",
+              "baja",
+              "info"
+            ]
+          },
+          "cantidad": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "persistentes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clave",
+          "area",
+          "codigo",
+          "gravedad",
+          "cantidad",
+          "gravedadAnterior",
+          "cambioGravedad",
+          "variacionCantidad",
+          "desde",
+          "ejecuciones"
+        ],
+        "properties": {
+          "clave": {
+            "type": "string",
+            "minLength": 1
+          },
+          "area": {
+            "type": "string",
+            "minLength": 1
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "gravedad": {
+            "enum": [
+              "critica",
+              "alta",
+              "media",
+              "baja",
+              "info"
+            ]
+          },
+          "cantidad": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "gravedadAnterior": {
+            "enum": [
+              "critica",
+              "alta",
+              "media",
+              "baja",
+              "info"
+            ]
+          },
+          "cambioGravedad": {
+            "enum": [
+              "mejora",
+              "empeora",
+              null
+            ]
+          },
+          "variacionCantidad": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "desde": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+          },
+          "ejecuciones": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "resueltas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clave",
+          "area",
+          "codigo",
+          "gravedadAnterior",
+          "desde",
+          "resueltaEn",
+          "diasAbierta",
+          "reapariciones"
+        ],
+        "properties": {
+          "clave": {
+            "type": "string",
+            "minLength": 1
+          },
+          "area": {
+            "type": "string",
+            "minLength": 1
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "gravedadAnterior": {
+            "enum": [
+              "critica",
+              "alta",
+              "media",
+              "baja",
+              "info"
+            ]
+          },
+          "desde": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+          },
+          "resueltaEn": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+          },
+          "diasAbierta": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reapariciones": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "noVerificadas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clave",
+          "area",
+          "codigo",
+          "gravedadAnterior",
+          "desde",
+          "motivo",
+          "sinVerificar"
+        ],
+        "properties": {
+          "clave": {
+            "type": "string",
+            "minLength": 1
+          },
+          "area": {
+            "type": "string",
+            "minLength": 1
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "gravedadAnterior": {
+            "enum": [
+              "critica",
+              "alta",
+              "media",
+              "baja",
+              "info"
+            ]
+          },
+          "desde": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+          },
+          "motivo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sinVerificar": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "reaparecidas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clave",
+          "area",
+          "codigo",
+          "gravedad",
+          "cantidad",
+          "resueltaEn",
+          "reapariciones"
+        ],
+        "properties": {
+          "clave": {
+            "type": "string",
+            "minLength": 1
+          },
+          "area": {
+            "type": "string",
+            "minLength": 1
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "gravedad": {
+            "enum": [
+              "critica",
+              "alta",
+              "media",
+              "baja",
+              "info"
+            ]
+          },
+          "cantidad": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "resueltaEn": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+          },
+          "reapariciones": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "caducadas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clave",
+          "area",
+          "codigo",
+          "gravedadAnterior",
+          "desde",
+          "motivo",
+          "sinVerificar"
+        ],
+        "properties": {
+          "clave": {
+            "type": "string",
+            "minLength": 1
+          },
+          "area": {
+            "type": "string",
+            "minLength": 1
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "gravedadAnterior": {
+            "enum": [
+              "critica",
+              "alta",
+              "media",
+              "baja",
+              "info"
+            ]
+          },
+          "desde": {
+            "type": "string",
+            "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+          },
+          "motivo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sinVerificar": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "indeterminadas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "clave",
+          "area",
+          "codigo",
+          "gravedad",
+          "cantidad",
+          "motivo"
+        ],
+        "properties": {
+          "clave": {
+            "type": "string",
+            "minLength": 1
+          },
+          "area": {
+            "type": "string",
+            "minLength": 1
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "gravedad": {
+            "enum": [
+              "critica",
+              "alta",
+              "media",
+              "baja",
+              "info"
+            ]
+          },
+          "cantidad": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "motivo": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "origenReferencia": {
+      "enum": [
+        "estado",
+        "instantanea",
+        "historial",
+        "ninguna"
+      ]
+    }
+  }
+}

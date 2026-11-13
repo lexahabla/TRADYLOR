@@ -1,0 +1,1253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Informe del Auditor General (Treidilor AI)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "agente",
+    "version",
+    "entorno",
+    "modo",
+    "generadoEn",
+    "soloLectura",
+    "resumen",
+    "incidencias",
+    "cobertura",
+    "markdown",
+    "avisosEntorno"
+  ],
+  "properties": {
+    "agente": {
+      "enum": [
+        "auditor-general"
+      ]
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+[.][0-9]+[.][0-9]+$"
+    },
+    "entorno": {
+      "type": "string",
+      "minLength": 1
+    },
+    "modo": {
+      "enum": [
+        "completo",
+        "publico"
+      ]
+    },
+    "generadoEn": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+    },
+    "soloLectura": {
+      "enum": [
+        true
+      ]
+    },
+    "resumen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "estado",
+        "incidencias",
+        "peticiones",
+        "rutasRevisadas",
+        "enlacesRevisados",
+        "fichasRevisadas",
+        "paginasCatalogo",
+        "avisosEntorno"
+      ],
+      "properties": {
+        "estado": {
+          "enum": [
+            "ok",
+            "atencion",
+            "critico"
+          ]
+        },
+        "incidencias": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "critica",
+            "alta",
+            "media",
+            "baja",
+            "info"
+          ],
+          "properties": {
+            "critica": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "alta": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "media": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "baja": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "info": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "peticiones": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rutasRevisadas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "enlacesRevisados": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fichasRevisadas": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "paginasCatalogo": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "avisosEntorno": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "incidencias": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "gravedad",
+          "area",
+          "titulo",
+          "detalle",
+          "evidencia",
+          "accionSugerida",
+          "clase",
+          "ambito"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gravedad": {
+            "enum": [
+              "critica",
+              "alta",
+              "media",
+              "baja",
+              "info"
+            ]
+          },
+          "area": {
+            "enum": [
+              "salud",
+              "ruta",
+              "enlace",
+              "ficha",
+              "catalogo"
+            ]
+          },
+          "titulo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "detalle": {
+            "type": "string"
+          },
+          "evidencia": {
+            "type": "object"
+          },
+          "accionSugerida": {
+            "type": "string"
+          },
+          "clase": {
+            "enum": [
+              "disponibilidad",
+              "integridad_datos",
+              "calidad_datos",
+              "honestidad_comercial",
+              "seguridad",
+              "configuracion",
+              "operacion",
+              "cobertura",
+              "seo_contenido",
+              "enlaces"
+            ]
+          },
+          "ambito": {
+            "enum": [
+              "produccion",
+              "datos",
+              "entorno_local"
+            ]
+          }
+        }
+      }
+    },
+    "cobertura": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revisado",
+        "noRevisado"
+      ],
+      "properties": {
+        "revisado": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "noRevisado": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "markdown": {
+      "type": "string",
+      "minLength": 1
+    },
+    "avisosEntorno": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "gravedad",
+          "area",
+          "titulo",
+          "detalle",
+          "evidencia",
+          "accionSugerida",
+          "clase",
+          "ambito"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "gravedad": {
+            "enum": [
+              "critica",
+              "alta",
+              "media",
+              "baja",
+              "info"
+            ]
+          },
+          "area": {
+            "enum": [
+              "salud",
+              "ruta",
+              "enlace",
+              "ficha",
+              "catalogo"
+            ]
+          },
+          "titulo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "detalle": {
+            "type": "string"
+          },
+          "evidencia": {
+            "type": "object"
+          },
+          "accionSugerida": {
+            "type": "string"
+          },
+          "clase": {
+            "enum": [
+              "disponibilidad",
+              "integridad_datos",
+              "calidad_datos",
+              "honestidad_comercial",
+              "seguridad",
+              "configuracion",
+              "operacion",
+              "cobertura",
+              "seo_contenido",
+              "enlaces"
+            ]
+          },
+          "ambito": {
+            "enum": [
+              "produccion",
+              "datos",
+              "entorno_local"
+            ]
+          }
+        }
+      }
+    },
+    "consumo": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "peticiones",
+        "medido",
+        "estimado",
+        "presupuesto",
+        "escenarios"
+      ],
+      "properties": {
+        "peticiones": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "medido": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "bytesRecibidos",
+            "porTipo",
+            "paginasMasPesadas",
+            "nota"
+          ],
+          "properties": {
+            "bytesRecibidos": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "porTipo": {
+              "type": "object"
+            },
+            "paginasMasPesadas": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "tipo",
+                  "destino",
+                  "bytes",
+                  "estado"
+                ],
+                "properties": {
+                  "tipo": {
+                    "type": "string"
+                  },
+                  "destino": {
+                    "type": "string"
+                  },
+                  "bytes": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "estado": {}
+                }
+              }
+            },
+            "nota": {
+              "type": "string"
+            }
+          }
+        },
+        "estimado": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "esEstimacion",
+            "bytesHistorial",
+            "metodo"
+          ],
+          "properties": {
+            "esEstimacion": {
+              "enum": [
+                true
+              ]
+            },
+            "bytesHistorial": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "metodo": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "presupuesto": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "maxEnlaces",
+            "enlacesDescubiertos",
+            "enlacesPedidos",
+            "enlacesOmitidosPorTope"
+          ],
+          "properties": {
+            "maxEnlaces": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "enlacesDescubiertos": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "enlacesPedidos": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "enlacesOmitidosPorTope": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "escenarios": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "maxEnlaces",
+              "calculable",
+              "enlaces"
+            ],
+            "properties": {
+              "maxEnlaces": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "calculable": {
+                "enum": [
+                  true,
+                  false
+                ]
+              },
+              "enlaces": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "peticiones": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "bytesRecibidos": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "bytesHistorialEstimado": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "familiasCubiertas": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "familiasDescubiertas": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "alcance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "salud",
+        "rutas",
+        "enlaces",
+        "fichas",
+        "catalogo"
+      ],
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "salud": {
+          "type": "boolean"
+        },
+        "rutas": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "enlaces": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fichas": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "catalogo": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "leido",
+            "completo"
+          ],
+          "properties": {
+            "leido": {
+              "type": "boolean"
+            },
+            "completo": {
+              "type": "boolean"
+            }
+          }
+        },
+        "contenido": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "rutas",
+            "fichas"
+          ],
+          "properties": {
+            "rutas": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "fichas": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "sinRespuesta": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tipo",
+              "destino",
+              "motivo"
+            ],
+            "properties": {
+              "tipo": {
+                "enum": [
+                  "ruta",
+                  "enlace",
+                  "ficha"
+                ]
+              },
+              "destino": {
+                "type": "string"
+              },
+              "motivo": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "incompletas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "tipo",
+              "destino",
+              "motivo"
+            ],
+            "properties": {
+              "tipo": {
+                "enum": [
+                  "ruta",
+                  "enlace",
+                  "ficha"
+                ]
+              },
+              "destino": {
+                "type": "string"
+              },
+              "motivo": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "resumen": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "solicitadas",
+            "respondieron",
+            "correctas",
+            "sinRespuesta",
+            "incompletas",
+            "noVisitados"
+          ],
+          "properties": {
+            "solicitadas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "respondieron": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "correctas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sinRespuesta": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "incompletas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "noVisitados": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "seguimiento": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "esquema",
+        "modo",
+        "motivo",
+        "comparadoCon",
+        "calidad",
+        "resumen",
+        "nuevas",
+        "persistentes",
+        "resueltas",
+        "noVerificadas",
+        "reaparecidas",
+        "caducadas"
+      ],
+      "properties": {
+        "esquema": {
+          "enum": [
+            1
+          ]
+        },
+        "modo": {
+          "enum": [
+            "comparacion",
+            "linea_base",
+            "sin_comparar"
+          ]
+        },
+        "motivo": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "comparadoCon": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "calidad": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "estado",
+            "motivos"
+          ],
+          "properties": {
+            "estado": {
+              "enum": [
+                "completa",
+                "parcial",
+                "fallida"
+              ]
+            },
+            "motivos": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "resumen": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "actuales",
+            "nuevas",
+            "persistentes",
+            "resueltas",
+            "noVerificadas",
+            "reaparecidas",
+            "caducadas"
+          ],
+          "properties": {
+            "actuales": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "nuevas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "persistentes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "resueltas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "noVerificadas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reaparecidas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "caducadas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "indeterminadas": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "nuevas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "clave",
+              "area",
+              "codigo",
+              "gravedad",
+              "cantidad"
+            ],
+            "properties": {
+              "clave": {
+                "type": "string",
+                "minLength": 1
+              },
+              "area": {
+                "type": "string",
+                "minLength": 1
+              },
+              "codigo": {
+                "type": "string"
+              },
+              "gravedad": {
+                "enum": [
+                  "critica",
+                  "alta",
+                  "media",
+                  "baja",
+                  "info"
+                ]
+              },
+              "cantidad": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "persistentes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "clave",
+              "area",
+              "codigo",
+              "gravedad",
+              "cantidad",
+              "gravedadAnterior",
+              "cambioGravedad",
+              "variacionCantidad",
+              "desde",
+              "ejecuciones"
+            ],
+            "properties": {
+              "clave": {
+                "type": "string",
+                "minLength": 1
+              },
+              "area": {
+                "type": "string",
+                "minLength": 1
+              },
+              "codigo": {
+                "type": "string"
+              },
+              "gravedad": {
+                "enum": [
+                  "critica",
+                  "alta",
+                  "media",
+                  "baja",
+                  "info"
+                ]
+              },
+              "cantidad": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "gravedadAnterior": {
+                "enum": [
+                  "critica",
+                  "alta",
+                  "media",
+                  "baja",
+                  "info"
+                ]
+              },
+              "cambioGravedad": {
+                "enum": [
+                  "mejora",
+                  "empeora",
+                  null
+                ]
+              },
+              "variacionCantidad": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "desde": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+              },
+              "ejecuciones": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "resueltas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "clave",
+              "area",
+              "codigo",
+              "gravedadAnterior",
+              "desde",
+              "resueltaEn",
+              "diasAbierta",
+              "reapariciones"
+            ],
+            "properties": {
+              "clave": {
+                "type": "string",
+                "minLength": 1
+              },
+              "area": {
+                "type": "string",
+                "minLength": 1
+              },
+              "codigo": {
+                "type": "string"
+              },
+              "gravedadAnterior": {
+                "enum": [
+                  "critica",
+                  "alta",
+                  "media",
+                  "baja",
+                  "info"
+                ]
+              },
+              "desde": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+              },
+              "resueltaEn": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+              },
+              "diasAbierta": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "reapariciones": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "noVerificadas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "clave",
+              "area",
+              "codigo",
+              "gravedadAnterior",
+              "desde",
+              "motivo",
+              "sinVerificar"
+            ],
+            "properties": {
+              "clave": {
+                "type": "string",
+                "minLength": 1
+              },
+              "area": {
+                "type": "string",
+                "minLength": 1
+              },
+              "codigo": {
+                "type": "string"
+              },
+              "gravedadAnterior": {
+                "enum": [
+                  "critica",
+                  "alta",
+                  "media",
+                  "baja",
+                  "info"
+                ]
+              },
+              "desde": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+              },
+              "motivo": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sinVerificar": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "reaparecidas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "clave",
+              "area",
+              "codigo",
+              "gravedad",
+              "cantidad",
+              "resueltaEn",
+              "reapariciones"
+            ],
+            "properties": {
+              "clave": {
+                "type": "string",
+                "minLength": 1
+              },
+              "area": {
+                "type": "string",
+                "minLength": 1
+              },
+              "codigo": {
+                "type": "string"
+              },
+              "gravedad": {
+                "enum": [
+                  "critica",
+                  "alta",
+                  "media",
+                  "baja",
+                  "info"
+                ]
+              },
+              "cantidad": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "resueltaEn": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+              },
+              "reapariciones": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "caducadas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "clave",
+              "area",
+              "codigo",
+              "gravedadAnterior",
+              "desde",
+              "motivo",
+              "sinVerificar"
+            ],
+            "properties": {
+              "clave": {
+                "type": "string",
+                "minLength": 1
+              },
+              "area": {
+                "type": "string",
+                "minLength": 1
+              },
+              "codigo": {
+                "type": "string"
+              },
+              "gravedadAnterior": {
+                "enum": [
+                  "critica",
+                  "alta",
+                  "media",
+                  "baja",
+                  "info"
+                ]
+              },
+              "desde": {
+                "type": "string",
+                "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+              },
+              "motivo": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sinVerificar": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "indeterminadas": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "clave",
+              "area",
+              "codigo",
+              "gravedad",
+              "cantidad",
+              "motivo"
+            ],
+            "properties": {
+              "clave": {
+                "type": "string",
+                "minLength": 1
+              },
+              "area": {
+                "type": "string",
+                "minLength": 1
+              },
+              "codigo": {
+                "type": "string"
+              },
+              "gravedad": {
+                "enum": [
+                  "critica",
+                  "alta",
+                  "media",
+                  "baja",
+                  "info"
+                ]
+              },
+              "cantidad": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "motivo": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "origenReferencia": {
+          "enum": [
+            "estado",
+            "instantanea",
+            "historial",
+            "ninguna"
+          ]
+        }
+      }
+    },
+    "persistencia": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tabla",
+        "lectura",
+        "escritura"
+      ],
+      "properties": {
+        "tabla": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "nombre",
+            "estado"
+          ],
+          "properties": {
+            "nombre": {
+              "type": "string"
+            },
+            "estado": {
+              "enum": [
+                "ok",
+                "no_encontrada",
+                "ambigua",
+                "error_lectura",
+                "sin_configurar"
+              ]
+            }
+          }
+        },
+        "lectura": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "filas",
+            "validas",
+            "duplicadas",
+            "descartadas",
+            "ultimaInstantanea"
+          ],
+          "properties": {
+            "filas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "validas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "duplicadas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "descartadas": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ultimaInstantanea": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "escritura": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "guardar",
+            "motivo",
+            "origen",
+            "idEjecucion"
+          ],
+          "properties": {
+            "guardar": {
+              "type": "boolean"
+            },
+            "motivo": {
+              "type": "string",
+              "minLength": 1
+            },
+            "origen": {
+              "type": "string"
+            },
+            "idEjecucion": {
+              "type": "string"
+            },
+            "resultado": {
+              "enum": [
+                "no_procede",
+                "pendiente",
+                "guardada",
+                "fallida"
+              ]
+            },
+            "filaId": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "motivoFallo": {
+              "enum": [
+                "error_insert",
+                "sin_confirmacion"
+              ]
+            },
+            "error": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

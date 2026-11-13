@@ -97,3 +97,17 @@ src/data/home-layout-draft-backups.json
 src/data/home-layout-activation.json
 src/data/home-stories.json
 src/data/nav-top-sections.json
+
+# Treidilor AI: salidas locales, exportaciones y variables del n8n de pruebas (nunca al repositorio)
+automation/reports/
+automation/dev/.env.n8n
+automation/dev/*.local.*
+automation/exports/
+
+# Secretos operativos (token de runners de n8n): nunca al repositorio
+INFORMES/N8N TOKEN/
+**/n8n-runners-auth-token.txt
+
+# Entorno de la prueba aislada de Data Tables (claves de pruebas): nunca al repositorio
+.env.prueba-dt
+automation/dev/prueba-data-tables/.env
