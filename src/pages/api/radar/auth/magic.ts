@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { requestMagicLogin, RadarAuthError, publicOrigin } from '../../../../lib/radarAuth';
-import { magicLinkRequestsPerIp } from '../../../../lib/rateLimit';
+import { clientIp, magicLinkRequestsPerIp } from '../../../../lib/rateLimit';
 
 export const prerender = false;
 
@@ -16,7 +16,7 @@ const json = (body: unknown, status: number) =>
  */
 export const POST: APIRoute = async ({ request }) => {
   try {
-    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+    const ip = clientIp(request);
     if (!magicLinkRequestsPerIp.hit(ip)) {
       return json({ success: false, message: 'Demasiadas solicitudes. Inténtalo en unos minutos.' }, 429);
     }

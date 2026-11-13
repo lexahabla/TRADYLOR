@@ -117,6 +117,7 @@ scripts/tests/automation-seguimiento-integracion.test.mjs
 scripts/tests/automation-seguimiento.test.mjs
 scripts/tests/automation-seguridad.test.mjs
 scripts/tests/catalog-concurrency.test.mjs
+scripts/tests/client-ip.test.mjs
 scripts/tests/categories-cache.test.mjs
 scripts/tests/categories-icons.test.mjs
 scripts/tests/category-extract.test.mjs
@@ -272,6 +273,7 @@ src/lib/catalogOffers.ts
 src/lib/catalogRepair.ts
 src/lib/catalogSort.ts
 src/lib/catalogStore.ts
+src/lib/clientIp.ts
 src/lib/categories.ts
 src/lib/commercialClaims.ts
 src/lib/comparableOffers.ts

@@ -213,9 +213,13 @@ test('límites: por minuto (429 con Retry-After), cuota diaria y bloqueo de IP t
   assert.equal((await cat('/api/automation/v1/catalog?limit=1', { token: cuota.token })).status, 200);
   assert.equal((await cat('/api/automation/v1/catalog?limit=1', { token: cuota.token })).status, 429);
   A.resetAutomationLimits();
+  // El bloqueo por IP (con proxies de confianza declarados) sólo afecta a quien NO presenta un token válido; detalle y falsificación en client-ip.test.mjs.
+  process.env.TRUSTED_PROXY_HOPS = '1';
   for (let i = 0; i < 20; i++) assert.equal((await cat('/api/automation/v1/catalog', { token: 'tai_malo', ip: '203.0.113.9' })).status, 401);
-  assert.equal((await cat('/api/automation/v1/catalog', { token: TOKEN, ip: '203.0.113.9' })).status, 429, 'IP bloqueada tras 20 fallos');
-  assert.equal((await cat('/api/automation/v1/catalog', { token: TOKEN, ip: '198.51.100.7' })).status, 200, 'otra IP no se ve afectada');
+  assert.equal((await cat('/api/automation/v1/catalog', { token: 'tai_malo', ip: '203.0.113.9' })).status, 429, 'IP bloqueada tras 20 fallos');
+  assert.equal((await cat('/api/automation/v1/catalog', { token: TOKEN, ip: '203.0.113.9' })).status, 200, 'un token válido NO queda bloqueado por los fallos de su IP');
+  assert.equal((await cat('/api/automation/v1/catalog', { token: 'tai_malo', ip: '198.51.100.7' })).status, 401, 'otra IP no se ve afectada');
+  delete process.env.TRUSTED_PROXY_HOPS;
   A.resetAutomationLimits();
 });
 

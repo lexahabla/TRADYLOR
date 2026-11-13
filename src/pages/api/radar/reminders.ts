@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getRadarSessionUser } from '../../../lib/radarAuth';
+import { clientIp } from '../../../lib/rateLimit';
 import { cancelReminder, getRadar, setReminder } from '../../../lib/radarStore';
 import {
   REMINDER_MAX_HORIZON_MS,
@@ -21,8 +22,8 @@ const RATE_MAX = 10;
 const hits = new Map<string, { count: number; resetAt: number }>();
 
 function clientKey(request: Request): string {
-  const forwarded = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
-  return forwarded || request.headers.get('x-real-ip') || 'unknown';
+  const ip = clientIp(request); // punto único (clientIp.ts); `unknown` = sin cabecera de proxy
+  return ip !== 'unknown' ? ip : request.headers.get('x-real-ip') || 'unknown';
 }
 
 function allow(key: string): boolean {

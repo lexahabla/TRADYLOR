@@ -19,6 +19,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { dataFile } from './paths';
 import { createRateLimiter, type RateLimiter } from './rateLimit';
+import { resolveClientIp } from './clientIp';
 
 export const AUTOMATION_SCOPES = ['catalog:read'] as const;
 export type AutomationScope = (typeof AUTOMATION_SCOPES)[number];
@@ -213,6 +214,28 @@ export function audit(entry: AuditEntry): void {
   }
 }
 
+/**
+ * Denegaciones (401/403/429): con tope por minuto para que una inundación de peticiones sin token no llene la auditoría ni expulse el historial
+ * legítimo (rota a 2 MiB con una sola copia). Pasado el tope se cuentan y, al cambiar de ventana, se escribe UNA línea `denegados_suprimidos`.
+ * Las peticiones correctas y las altas/revocaciones se registran siempre.
+ */
+const DENIAL_AUDIT_PER_MINUTE = 10;
+const denialWindow = { start: 0, written: 0, suppressed: 0 };
+function auditDenial(entry: AuditEntry, now = Date.now()): void {
+  if (now - denialWindow.start >= 60000) {
+    if (denialWindow.suppressed > 0) audit({ event: 'denegados_suprimidos', detail: `n=${denialWindow.suppressed}` });
+    denialWindow.start = now;
+    denialWindow.written = 0;
+    denialWindow.suppressed = 0;
+  }
+  if (denialWindow.written >= DENIAL_AUDIT_PER_MINUTE) {
+    denialWindow.suppressed += 1;
+    return;
+  }
+  denialWindow.written += 1;
+  audit(entry);
+}
+
 export function readAudit(limit = 100): Array<Record<string, unknown>> {
   try {
     const lines = fs.readFileSync(auditPath(), 'utf8').split('\n').filter(Boolean);
@@ -233,6 +256,9 @@ export function resetAutomationLimits(): void {
   perClient.clear();
   daily.clear();
   failures.clear();
+  denialWindow.start = 0;
+  denialWindow.written = 0;
+  denialWindow.suppressed = 0;
 }
 
 const blockedIp = (ip: string, now: number) => {
@@ -246,52 +272,62 @@ function noteFailure(ip: string, now: number): void {
   else f.count += 1;
 }
 
+/** IP del cliente (modo estricto: no se confía en la cabecera de proxy salvo con `TRUSTED_PROXY_HOPS`; ver `clientIp.ts`). */
 export function clientIpOf(request: Request): string {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  return resolveClientIp(request, 'strict').ip;
 }
 
 export type AuthResult = { ok: true; client: AutomationClient } | (Fail & { retryAfter?: number; clientId?: string | null; reason: string });
 
-/** Comprueba la API desactivada → 404; token → 401; alcance → 403; límites → 429. Registra el resultado en la auditoría. */
+/**
+ * Comprueba la API desactivada → 404; token → 401; alcance → 403; límites → 429. Registra el resultado en la auditoría.
+ * El bloqueo temporal por IP sólo afecta a quien NO presenta un token válido: un cliente con token válido nunca queda bloqueado por los fallos
+ * de otros (aunque falseen su IP). Sus límites son los de su propio token (por minuto y por día).
+ */
 export function authenticate(request: Request, scope: AutomationScope, now = Date.now()): AuthResult {
   const ip = clientIpOf(request);
-  const denied = (status: number, code: string, message: string, reason: string, clientId: string | null = null, retryAfter?: number): AuthResult => {
-    if (status === 401) noteFailure(ip, now);
-    audit({ event: status === 429 ? 'limite' : 'denegado', clientId, scope, method: request.method, path: new URL(request.url).pathname, status, reason, ip });
+  const result = (status: number, code: string, message: string, reason: string, clientId: string | null, retryAfter?: number): AuthResult => {
+    auditDenial({ event: status === 429 ? 'limite' : 'denegado', clientId, scope, method: request.method, path: new URL(request.url).pathname, status, reason, ip }, now);
     return { ok: false, status, code, message, reason, clientId, ...(retryAfter ? { retryAfter } : {}) };
   };
+  /** Fallo de AUTENTICACIÓN (token ausente, inválido, revocado o caducado): cuenta contra la IP y, superado el umbral, responde 429. */
+  const unauthenticated = (reason: string, clientId: string | null = null): AuthResult => {
+    if (blockedIp(ip, now)) return result(429, 'demasiados_intentos', 'Demasiados intentos fallidos. Espera un minuto.', 'ip_bloqueada', clientId, 60);
+    noteFailure(ip, now);
+    return result(401, 'no_autorizado', 'Token ausente o inválido.', reason, clientId);
+  };
 
-  if (blockedIp(ip, now)) return denied(429, 'demasiados_intentos', 'Demasiados intentos fallidos. Espera un minuto.', 'ip_bloqueada', null, 60);
   const header = request.headers.get('authorization') ?? '';
   const m = header.match(/^Bearer\s+(\S+)$/i);
   const parsed = m ? TOKEN_RE.exec(m[1]) : null;
   const read = readStore();
   if (!parsed || read.status !== 'ok') {
-    if (read.status !== 'ok') return denied(401, 'no_autorizado', 'Token ausente o inválido.', 'almacen_ilegible');
+    if (read.status !== 'ok') return unauthenticated('almacen_ilegible');
     // Trabajo equivalente para no revelar por tiempo si el formato era válido.
     hashSecret('0'.repeat(32), m?.[1] ?? '');
-    return denied(401, 'no_autorizado', 'Token ausente o inválido.', m ? 'formato_invalido' : 'sin_token');
+    return unauthenticated(m ? 'formato_invalido' : 'sin_token');
   }
   const [, id, secret] = parsed;
   const client = read.doc.clients.find((c) => c.id === id);
   const expected = Buffer.from(client?.secretHash ?? '0'.repeat(64), 'hex');
   const given = Buffer.from(hashSecret(client?.salt ?? '0'.repeat(32), secret), 'hex');
-  if (!client || expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) return denied(401, 'no_autorizado', 'Token ausente o inválido.', 'token_incorrecto');
-  if (client.revokedAt) return denied(401, 'no_autorizado', 'Token ausente o inválido.', 'revocado', client.id);
-  if (Date.parse(client.expiresAt) <= now) return denied(401, 'no_autorizado', 'Token ausente o inválido.', 'caducado', client.id);
-  if (!client.scopes.includes(scope)) return denied(403, 'alcance_insuficiente', `El token no tiene el alcance «${scope}».`, 'alcance', client.id);
+  if (!client || expected.length !== given.length || !crypto.timingSafeEqual(expected, given)) return unauthenticated('token_incorrecto');
+  if (client.revokedAt) return unauthenticated('revocado', client.id);
+  if (Date.parse(client.expiresAt) <= now) return unauthenticated('caducado', client.id);
+  // A partir de aquí el token es AUTÉNTICO y está vigente: ni el bloqueo por IP ni los fallos de otros le afectan.
+  if (!client.scopes.includes(scope)) return result(403, 'alcance_insuficiente', `El token no tiene el alcance «${scope}».`, 'alcance', client.id);
 
   let limiter = perClient.get(client.id);
   if (!limiter) {
     limiter = createRateLimiter(client.ratePerMinute, 60000);
     perClient.set(client.id, limiter);
   }
-  if (!limiter.hit(client.id)) return denied(429, 'limite_por_minuto', 'Límite de peticiones por minuto superado.', 'limite_minuto', client.id, 60);
+  if (!limiter.hit(client.id)) return result(429, 'limite_por_minuto', 'Límite de peticiones por minuto superado.', 'limite_minuto', client.id, 60);
   const day = `${client.id}:${new Date(now).toISOString().slice(0, 10)}`;
   const used = (daily.get(day) ?? 0) + 1;
   if (daily.size > 500) daily.clear();
   daily.set(day, used);
-  if (used > client.dailyQuota) return denied(429, 'cuota_diaria', 'Cuota diaria superada.', 'limite_dia', client.id, 3600);
+  if (used > client.dailyQuota) return result(429, 'cuota_diaria', 'Cuota diaria superada.', 'limite_dia', client.id, 3600);
   return { ok: true, client };
 }
 

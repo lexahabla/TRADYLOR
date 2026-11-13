@@ -4,6 +4,8 @@
  * proceso; basta para frenar la fuerza bruta de la contraseña actual y el envío
  * masivo de correos de confirmación a terceros.
  */
+import { resolveClientIp } from './clientIp';
+
 export interface RateLimiter {
   /** Cuenta un intento para la clave; false si ya superó el máximo de la ventana. */
   hit(key: string): boolean;
@@ -67,9 +69,13 @@ export function createRateLimiter(max: number, windowMs: number): RateLimiter {
   };
 }
 
-/** IP del cliente tras el proxy (primer valor de x-forwarded-for). */
+/**
+ * IP del cliente para los límites por IP. Punto único: `resolveClientIp` (`clientIp.ts`). Modo `legacy`: mientras no se defina
+ * `TRUSTED_PROXY_HOPS` conserva el comportamiento anterior (primer valor de x-forwarded-for, falsificable); con ella usa sólo la IP que añadió el proxy
+ * de confianza. Cambiarlo a «estricto» sin configurar los proxies juntaría a todos los usuarios en la dirección del proxy y bloquearía el login.
+ */
 export function clientIp(request: Request): string {
-  return request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  return resolveClientIp(request, 'legacy').ip;
 }
 
 /** Intentos de login: 20 por hora y IP, y 10 por hora y email (fuerza bruta de contraseñas). */

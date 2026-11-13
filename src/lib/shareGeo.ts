@@ -17,6 +17,7 @@
  */
 
 import { isIP } from 'node:net';
+import { resolveClientIp, trustedProxyHops } from './clientIp';
 import type { ShareLangCode } from '../utils/share';
 
 /** Comunidades autónomas (ISO 3166-2:ES, sin el prefijo "ES-") → idiomas cooficiales. */
@@ -97,6 +98,11 @@ function normalizeIp(raw: string | null | undefined): string | undefined {
 /** IP del cliente tras el proxy (misma convención que el resto de la web). */
 export function clientIp(request: Request): string | undefined {
   const headers = request.headers;
+  // Con TRUSTED_PROXY_HOPS definida, sólo la IP que añadió el proxy de confianza (punto único: clientIp.ts); sin ella, comportamiento anterior.
+  if (trustedProxyHops() !== null) {
+    const r = resolveClientIp(request, 'strict');
+    return r.ip === 'unknown' ? undefined : normalizeIp(r.ip);
+  }
   return (
     normalizeIp(headers.get('x-forwarded-for')?.split(',')[0]) ??
     normalizeIp(headers.get('x-real-ip')) ??

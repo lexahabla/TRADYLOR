@@ -190,6 +190,7 @@ Admitad, Tradedoubler, Kwanko, Etsy) y enlaza a los programas de afiliación.
 - Copiar `.env.example` a `.env` para desarrollo local.
 - `ADMIN_USERNAME` / `ADMIN_PASSWORD`: credenciales del panel admin.
 - `TRADYLOR_API_TOKEN`: token Bearer para la API pública v1.
+- `TRUSTED_PROXY_HOPS` (opcional, 0-5): nº de proxies propios entre Internet y la aplicación; **sin definir NO se confía en `X-Forwarded-For`** en la API de automatización (usa el par TCP) y los límites por IP del resto de la web conservan su comportamiento anterior (primer valor, falsificable). Definirla sólo tras comprobar la infraestructura (`src/lib/clientIp.ts`, `docs/api-automatizacion.md`). Pruebas: `client-ip.test.mjs`.
 - `N8N_CLICK_WEBHOOK_URL`: webhook opcional que recibe el evento `delegated_checkout_exit` en cada salida
   (sólo telemetría; el alta de productos ya no depende de n8n).
 - **Mi Radar (opcional)**: `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` activan el login con Google

@@ -55,7 +55,7 @@ Identidad del token (id, nombre, alcances, caducidad, límites). Sin datos del c
 - Los contadores de límite por minuto y por día viven en memoria: se reinician al reiniciar el servicio.
 - La auditoría registra el acceso, no el contenido devuelto.
 - No hay aún endpoint de estado de los programadores internos (precios, alertas) ni de propuestas: previstos en el diseño.
-- Detrás de un proxy, la IP se toma de `X-Forwarded-For` (primer valor): comprobar la configuración del proxy antes de confiar en el bloqueo por IP.
+- **IP del cliente (E0.1, 13/11/2026):** ya no se confía en el primer valor de `X-Forwarded-For` (el cliente puede falsearlo). Punto único: `src/lib/clientIp.ts`. Sin `TRUSTED_PROXY_HOPS` la API usa la dirección del par TCP (tras un proxy, todos los clientes comparten la del proxy: el bloqueo por IP es global para quien NO presenta token válido). Con `TRUSTED_PROXY_HOPS=N` (0-5, nº de proxies propios delante) usa la entrada N contando desde la DERECHA de la cabecera. **Bloqueo pendiente en producción:** cuántos proxies hay (Easy Panel/Traefik, ¿CDN?) y si el puerto 4321 es accesible sin pasar por ellos NO consta en el repositorio; hay que comprobarlo (solo lectura) antes de definir la variable. Un token válido nunca se bloquea por IP; sus límites son los de su propio token. Las denegaciones se auditan con un tope de 10 por minuto y una línea `denegados_suprimidos` (la auditoría no se llena con inundaciones). Pruebas: `client-ip.test.mjs`.
 
 ## Pruebas
 `scripts/tests/automation-api.test.mjs` (desactivada por defecto, alta, rechazo de tokens, caducidad/revocación, límites, parámetros, ausencia de escrituras, auditoría, almacén dañado, contrato con los agentes).
